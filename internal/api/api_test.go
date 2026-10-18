@@ -271,17 +271,21 @@ func (f *fakeVNFManager) CleanupLegacyNetwork(networkID int64) {
 }
 
 type fakeNAT44 struct {
-	bvis       []int64
-	addedIPs   []string
-	hostIfs    []string
-	applied    []string
-	removed    []string
-	deletedBVI []string
-	sessions   []string
-	ensureErr  error
-	applyErr   error
-	removeErr  error
-	sessionErr error
+	bvis          []int64
+	addedIPs      []string
+	hostIfs       []string
+	applied       []string
+	removed       []string
+	deletedBVI    []string
+	sessions      []string
+	staticVNFID   int64
+	staticRules   []store.DNATRule
+	removedStatic []int64
+	ensureErr     error
+	applyErr      error
+	removeErr     error
+	sessionErr    error
+	staticErr     error
 }
 
 func (f *fakeNAT44) EnsureBVI(_ context.Context, networkID int64, _ uint32) (string, uint32, error) {
@@ -332,6 +336,27 @@ func (f *fakeNAT44) RemoveNAT44(_ context.Context, bvi, outside, _ string) error
 		return f.removeErr
 	}
 	f.removed = append(f.removed, bvi+"/"+outside)
+	return nil
+}
+
+func (f *fakeNAT44) ApplyNAT44StaticMappings(_ context.Context, _ string, vnfID int64, rules []store.DNATRule) error {
+	if f.staticErr != nil {
+		return f.staticErr
+	}
+	f.staticVNFID = vnfID
+	f.staticRules = append([]store.DNATRule(nil), rules...)
+	return nil
+}
+
+func (f *fakeNAT44) RemoveNAT44StaticMappings(_ context.Context, _ string, vnfID int64) error {
+	if f.staticErr != nil {
+		return f.staticErr
+	}
+	f.removedStatic = append(f.removedStatic, vnfID)
+	if f.staticVNFID == vnfID {
+		f.staticVNFID = 0
+		f.staticRules = nil
+	}
 	return nil
 }
 
@@ -2100,6 +2125,10 @@ func TestNAT44VNFAndDHCPIntegration(t *testing.T) {
 			"outside_interface": "enp9s0",
 			"outside_address":   "198.51.100.10/24",
 			"outside_gateway":   "198.51.100.1",
+			"dnat_rules": []map[string]any{
+				{"protocol": "tcp", "external_port": 8080, "local_ip": "10.20.0.100", "local_port": 80},
+				{"protocol": "udp", "external_port": 5353, "local_ip": "10.20.0.101", "local_port": 53},
+			},
 		},
 	}
 	recorder := do(t, handler, http.MethodPost, "/api/vnfs", payload)
@@ -2112,6 +2141,13 @@ func TestNAT44VNFAndDHCPIntegration(t *testing.T) {
 	}
 	if len(env.nat.bvis) != 1 || len(env.nat.hostIfs) != 1 || len(env.nat.applied) != 1 {
 		t.Fatalf("NAT calls: bvis=%v host=%v applied=%v", env.nat.bvis, env.nat.hostIfs, env.nat.applied)
+	}
+	if len(nat.Config.DNATRules) != 2 || len(env.nat.staticRules) != 2 {
+		t.Fatalf("DNAT rules were not applied: config=%+v applied=%+v", nat.Config.DNATRules, env.nat.staticRules)
+	}
+	if env.nat.staticRules[0].Protocol != "tcp" || env.nat.staticRules[0].ExternalPort != 8080 ||
+		env.nat.staticRules[0].LocalIP != "10.20.0.100" || env.nat.staticRules[0].LocalPort != 80 {
+		t.Fatalf("applied DNAT rules = %+v", env.nat.staticRules)
 	}
 	gotNetwork, err := env.store.GetNetwork(context.Background(), network.ID)
 	if err != nil {
@@ -2153,6 +2189,9 @@ func TestNAT44VNFAndDHCPIntegration(t *testing.T) {
 	disabled := decode[store.VNF](t, recorder)
 	if disabled.Enabled || len(env.nat.removed) != 1 {
 		t.Fatalf("disabled nat44 = %+v, removed = %v", disabled, env.nat.removed)
+	}
+	if len(env.nat.removedStatic) == 0 || len(env.nat.staticRules) != 0 {
+		t.Fatalf("NAT44 DNAT rules were not removed: removed=%v applied=%+v", env.nat.removedStatic, env.nat.staticRules)
 	}
 
 	recorder = do(t, handler, http.MethodDelete, fmt.Sprintf("/api/vnfs/%d", nat.ID), nil)
@@ -2237,6 +2276,50 @@ func TestNAT44OutsideFailureDoesNotLeaveBVI(t *testing.T) {
 	}
 }
 
+func TestNAT44DNATFailureRollsBack(t *testing.T) {
+	env := newTestAPI(t)
+	env.nat.staticErr = errors.New("DNAT mapping rejected")
+	network := createNetworkAPI(t, env.handler, "nat-lab")
+	recorder := do(t, env.handler, http.MethodPost, "/api/vnfs", map[string]any{
+		"name":       "nat44",
+		"network_id": network.ID,
+		"type":       store.VNFTypeNAT44,
+		"enabled":    true,
+		"config": map[string]any{
+			"gateway":           "10.20.0.1/24",
+			"outside_interface": "enp9s0",
+			"outside_address":   "198.51.100.10/24",
+			"outside_gateway":   "198.51.100.1",
+			"dnat_rules": []map[string]any{
+				{"protocol": "tcp", "external_port": 8080, "local_ip": "10.20.0.100", "local_port": 80},
+			},
+		},
+	})
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("create nat44 status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if len(env.nat.applied) != 1 || len(env.nat.removed) != 1 {
+		t.Fatalf("NAT44 was not rolled back: applied=%v removed=%v", env.nat.applied, env.nat.removed)
+	}
+	if len(env.nat.deletedBVI) != 1 {
+		t.Fatalf("BVI was not rolled back: %v", env.nat.deletedBVI)
+	}
+	got, err := env.store.GetNetwork(context.Background(), network.ID)
+	if err != nil {
+		t.Fatalf("get network: %v", err)
+	}
+	if got.BVIHostName != "" || got.IPv4Gateway != "" {
+		t.Fatalf("failed DNAT activation left network BVI: %+v", got)
+	}
+	vnfs, err := env.store.ListVNFs(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("list vnfs: %v", err)
+	}
+	if len(vnfs) != 0 {
+		t.Fatalf("failed DNAT activation left VNF records: %+v", vnfs)
+	}
+}
+
 func TestNAT44Validation(t *testing.T) {
 	handler := newTestHandler(t)
 	network := createNetworkAPI(t, handler, "nat-lab")
@@ -2264,6 +2347,37 @@ func TestNAT44Validation(t *testing.T) {
 		{name: "outside gateway outside subnet", mutate: func(m map[string]any) { m["config"].(map[string]any)["outside_gateway"] = "203.0.113.1" }},
 		{name: "zero outside prefix", mutate: func(m map[string]any) { m["config"].(map[string]any)["outside_address"] = "0.0.0.0/0" }},
 		{name: "bad pool", mutate: func(m map[string]any) { m["config"].(map[string]any)["nat44_pool"] = "nope" }},
+		{name: "dnat bad protocol", mutate: func(m map[string]any) {
+			m["config"].(map[string]any)["dnat_rules"] = []map[string]any{
+				{"protocol": "sctp", "external_port": 8080, "local_ip": "10.20.0.100", "local_port": 80},
+			}
+		}},
+		{name: "dnat bad external port", mutate: func(m map[string]any) {
+			m["config"].(map[string]any)["dnat_rules"] = []map[string]any{
+				{"protocol": "tcp", "external_port": 0, "local_ip": "10.20.0.100", "local_port": 80},
+			}
+		}},
+		{name: "dnat bad local port", mutate: func(m map[string]any) {
+			m["config"].(map[string]any)["dnat_rules"] = []map[string]any{
+				{"protocol": "tcp", "external_port": 8080, "local_ip": "10.20.0.100", "local_port": 70000},
+			}
+		}},
+		{name: "dnat local ip outside subnet", mutate: func(m map[string]any) {
+			m["config"].(map[string]any)["dnat_rules"] = []map[string]any{
+				{"protocol": "tcp", "external_port": 8080, "local_ip": "10.21.0.100", "local_port": 80},
+			}
+		}},
+		{name: "dnat local ip network address", mutate: func(m map[string]any) {
+			m["config"].(map[string]any)["dnat_rules"] = []map[string]any{
+				{"protocol": "tcp", "external_port": 8080, "local_ip": "10.20.0.0", "local_port": 80},
+			}
+		}},
+		{name: "dnat duplicate external port", mutate: func(m map[string]any) {
+			m["config"].(map[string]any)["dnat_rules"] = []map[string]any{
+				{"protocol": "tcp", "external_port": 8080, "local_ip": "10.20.0.100", "local_port": 80},
+				{"protocol": "tcp", "external_port": 8080, "local_ip": "10.20.0.101", "local_port": 80},
+			}
+		}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -2288,6 +2402,67 @@ func TestNAT44Validation(t *testing.T) {
 	}
 }
 
+func TestNAT44DNATRulesPersistWhenDisabled(t *testing.T) {
+	env := newTestAPI(t)
+	network := createNetworkAPI(t, env.handler, "nat-lab")
+	recorder := do(t, env.handler, http.MethodPost, "/api/vnfs", map[string]any{
+		"name":       "nat44",
+		"network_id": network.ID,
+		"type":       store.VNFTypeNAT44,
+		"enabled":    false,
+		"config": map[string]any{
+			"gateway":           "10.20.0.1/24",
+			"outside_interface": "enp9s0",
+			"dnat_rules": []map[string]any{
+				{"protocol": "tcp", "external_port": 8443, "local_ip": "10.20.0.50", "local_port": 443},
+			},
+		},
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create nat44 status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	nat := decode[store.VNF](t, recorder)
+	if len(nat.Config.DNATRules) != 1 || nat.Config.DNATRules[0].LocalIP != "10.20.0.50" {
+		t.Fatalf("DNAT rules were not saved: %+v", nat.Config.DNATRules)
+	}
+	if len(env.nat.staticRules) != 0 {
+		t.Fatalf("disabled NAT44 applied DNAT rules: %+v", env.nat.staticRules)
+	}
+	stored, err := env.store.GetVNF(context.Background(), nat.ID)
+	if err != nil {
+		t.Fatalf("get nat44: %v", err)
+	}
+	if len(stored.Config.DNATRules) != 1 || stored.Config.DNATRules[0].ExternalPort != 8443 {
+		t.Fatalf("stored DNAT rules = %+v", stored.Config.DNATRules)
+	}
+}
+
+func TestNAT44DNATRulesAllowSamePortPerProtocol(t *testing.T) {
+	env := newTestAPI(t)
+	network := createNetworkAPI(t, env.handler, "nat-lab")
+	recorder := do(t, env.handler, http.MethodPost, "/api/vnfs", map[string]any{
+		"name":       "nat44",
+		"network_id": network.ID,
+		"type":       store.VNFTypeNAT44,
+		"enabled":    false,
+		"config": map[string]any{
+			"gateway":           "10.20.0.1/24",
+			"outside_interface": "enp9s0",
+			"dnat_rules": []map[string]any{
+				{"protocol": "tcp", "external_port": 53, "local_ip": "10.20.0.53", "local_port": 53},
+				{"protocol": "udp", "external_port": 53, "local_ip": "10.20.0.53", "local_port": 53},
+			},
+		},
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create nat44 status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	nat := decode[store.VNF](t, recorder)
+	if len(nat.Config.DNATRules) != 2 {
+		t.Fatalf("DNAT rules = %+v", nat.Config.DNATRules)
+	}
+}
+
 func TestNAT44Reconcile(t *testing.T) {
 	env := newTestAPI(t)
 	network := createNetworkAPI(t, env.handler, "nat-lab")
@@ -2301,6 +2476,9 @@ func TestNAT44Reconcile(t *testing.T) {
 			OutsideInterface: "enp9s0",
 			OutsideAddress:   "198.51.100.10/24",
 			OutsideGateway:   "198.51.100.1",
+			DNATRules: []store.DNATRule{
+				{Protocol: "tcp", ExternalPort: 8443, LocalIP: "10.20.0.50", LocalPort: 443},
+			},
 		},
 	})
 	if err != nil {
@@ -2311,6 +2489,9 @@ func TestNAT44Reconcile(t *testing.T) {
 	}
 	if !env.nat.bvisContain(network.ID) || len(env.nat.applied) == 0 {
 		t.Fatalf("NAT44 was not reconciled: bvis=%v applied=%v", env.nat.bvis, env.nat.applied)
+	}
+	if len(env.nat.staticRules) != 1 || env.nat.staticRules[0].ExternalPort != 8443 {
+		t.Fatalf("NAT44 DNAT rules were not reconciled: %+v", env.nat.staticRules)
 	}
 	recorder := do(t, env.handler, http.MethodGet, fmt.Sprintf("/api/vnfs/%d", nat.ID), nil)
 	if recorder.Code != http.StatusOK {

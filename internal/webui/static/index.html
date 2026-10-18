@@ -973,6 +973,17 @@
           <span class="field-label">NAT44 pool <em>optional</em></span>
           <input id="vnf-nat44-pool" type="text" placeholder="203.0.113.10-203.0.113.20" autocomplete="off" spellcheck="false">
         </label>
+
+        <div class="field field-wide">
+          <div class="panel-head acl-rules-head">
+            <div>
+              <span class="field-label">DNAT / port forwarding <em>optional</em></span>
+              <span class="field-hint">Expose services inside this network on the NAT44 outside address. Saving restarts NAT44.</span>
+            </div>
+            <button class="button ghost" id="add-vnf-dnat-rule" type="button">Add rule</button>
+          </div>
+          <div id="vnf-dnat-rows" class="acl-rule-rows"></div>
+        </div>
       </div>
 
       <label class="field field-wide checkbox-field">

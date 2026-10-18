@@ -1445,6 +1445,27 @@ textarea:disabled {
   max-width: 860px;
 }
 
+#vnf-dialog {
+  width: min(780px, calc(100vw - 2rem));
+  max-width: 780px;
+}
+
+.dnat-field-protocol {
+  grid-column: span 2;
+}
+
+.dnat-field-external-port {
+  grid-column: span 2;
+}
+
+.dnat-field-local-ip {
+  grid-column: span 5;
+}
+
+.dnat-field-local-port {
+  grid-column: span 3;
+}
+
 .acl-rule-fields {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -1531,6 +1552,16 @@ textarea:disabled {
   .acl-field-acl-rule-destination-start {
     grid-column: span 2;
   }
+
+  .dnat-field-protocol,
+  .dnat-field-external-port {
+    grid-column: span 1;
+  }
+
+  .dnat-field-local-ip,
+  .dnat-field-local-port {
+    grid-column: span 2;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1545,6 +1576,13 @@ textarea:disabled {
   .acl-field-acl-rule-description,
   .acl-field-acl-rule-source-start,
   .acl-field-acl-rule-destination-start {
+    grid-column: span 1;
+  }
+
+  .dnat-field-protocol,
+  .dnat-field-external-port,
+  .dnat-field-local-ip,
+  .dnat-field-local-port {
     grid-column: span 1;
   }
 }

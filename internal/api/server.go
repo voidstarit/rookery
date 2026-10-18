@@ -77,6 +77,8 @@ type NAT44Provisioner interface {
 	EnsureHostInterface(ctx context.Context, nic string) (string, error)
 	ApplyNAT44(ctx context.Context, bviName, outsideName, outsideAddress, outsideGateway, pool string) error
 	RemoveNAT44(ctx context.Context, bviName, outsideName, pool string) error
+	ApplyNAT44StaticMappings(ctx context.Context, outsideName string, vnfID int64, rules []store.DNATRule) error
+	RemoveNAT44StaticMappings(ctx context.Context, outsideName string, vnfID int64) error
 	NAT44Sessions(ctx context.Context) ([]string, error)
 }
 

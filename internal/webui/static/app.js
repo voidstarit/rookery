@@ -241,6 +241,8 @@
     vnfOutsideAddress: document.getElementById("vnf-outside-address"),
     vnfOutsideGateway: document.getElementById("vnf-outside-gateway"),
     vnfNAT44Pool: document.getElementById("vnf-nat44-pool"),
+    vnfDNATRows: document.getElementById("vnf-dnat-rows"),
+    addVNFDNATRule: document.getElementById("add-vnf-dnat-rule"),
     vnfDNS: document.getElementById("vnf-dns"),
     vnfRangeStart: document.getElementById("vnf-range-start"),
     vnfRangeEnd: document.getElementById("vnf-range-end"),
@@ -1720,9 +1722,10 @@
     name.textContent = vnf.name;
     nameCell.append(name);
     if (vnf.type === "nat44" && vnf.config?.outside_interface) {
+      const dnatCount = Array.isArray(vnf.config.dnat_rules) ? vnf.config.dnat_rules.length : 0;
       const outside = document.createElement("span");
       outside.className = "vm-description";
-      outside.textContent = `outside ${vnf.config.outside_interface}`;
+      outside.textContent = `outside ${vnf.config.outside_interface}${dnatCount ? ` · ${dnatCount} DNAT` : ""}`;
       nameCell.append(outside);
     } else if (vnf.tap_host_name) {
       const tap = document.createElement("span");
@@ -3112,6 +3115,128 @@
     setVNFFieldsForType();
   }
 
+  function renumberVNFDNATRules() {
+    const rows = [...els.vnfDNATRows.querySelectorAll(".dnat-rule")];
+    rows.forEach((row, index) => {
+      const title = row.querySelector(".dnat-rule-title");
+      if (title) {
+        title.textContent = `Rule ${index + 1}`;
+      }
+    });
+  }
+
+  function addVNFDNATRule(rule = {}) {
+    const row = document.createElement("div");
+    row.className = "acl-rule dnat-rule";
+
+    const head = document.createElement("div");
+    head.className = "acl-rule-head";
+    const title = document.createElement("span");
+    title.className = "dnat-rule-title";
+    title.textContent = "Rule";
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "row-action danger";
+    remove.dataset.removeDnatRule = "";
+    remove.textContent = "Remove";
+    head.append(title, remove);
+
+    const fields = document.createElement("div");
+    fields.className = "acl-rule-fields";
+
+    const protocol = document.createElement("label");
+    protocol.className = "field dnat-field-protocol";
+    const protocolLabel = document.createElement("span");
+    protocolLabel.className = "field-label";
+    protocolLabel.textContent = "Protocol";
+    const protocolSelect = document.createElement("select");
+    protocolSelect.dataset.dnatField = "protocol";
+    for (const value of ["tcp", "udp"]) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = value.toUpperCase();
+      protocolSelect.append(option);
+    }
+    protocolSelect.value = rule.protocol === "udp" ? "udp" : "tcp";
+    protocol.append(protocolLabel, protocolSelect);
+
+    const externalPort = document.createElement("label");
+    externalPort.className = "field dnat-field-external-port";
+    const externalPortLabel = document.createElement("span");
+    externalPortLabel.className = "field-label";
+    externalPortLabel.textContent = "External port";
+    const externalPortInput = document.createElement("input");
+    externalPortInput.type = "number";
+    externalPortInput.min = "1";
+    externalPortInput.max = "65535";
+    externalPortInput.step = "1";
+    externalPortInput.required = true;
+    externalPortInput.inputMode = "numeric";
+    externalPortInput.placeholder = "8080";
+    externalPortInput.dataset.dnatField = "external-port";
+    externalPortInput.value = rule.external_port > 0 ? String(rule.external_port) : "";
+    externalPort.append(externalPortLabel, externalPortInput);
+
+    const localIP = document.createElement("label");
+    localIP.className = "field dnat-field-local-ip";
+    const localIPLabel = document.createElement("span");
+    localIPLabel.className = "field-label";
+    localIPLabel.textContent = "Internal address";
+    const localIPInput = document.createElement("input");
+    localIPInput.type = "text";
+    localIPInput.required = true;
+    localIPInput.autocomplete = "off";
+    localIPInput.spellcheck = false;
+    localIPInput.inputMode = "decimal";
+    localIPInput.placeholder = "10.20.0.100";
+    localIPInput.dataset.dnatField = "local-ip";
+    localIPInput.value = rule.local_ip || "";
+    localIP.append(localIPLabel, localIPInput);
+
+    const localPort = document.createElement("label");
+    localPort.className = "field dnat-field-local-port";
+    const localPortLabel = document.createElement("span");
+    localPortLabel.className = "field-label";
+    localPortLabel.textContent = "Internal port";
+    const localPortInput = document.createElement("input");
+    localPortInput.type = "number";
+    localPortInput.min = "1";
+    localPortInput.max = "65535";
+    localPortInput.step = "1";
+    localPortInput.required = true;
+    localPortInput.inputMode = "numeric";
+    localPortInput.placeholder = "80";
+    localPortInput.dataset.dnatField = "local-port";
+    localPortInput.value = rule.local_port > 0 ? String(rule.local_port) : "";
+    localPort.append(localPortLabel, localPortInput);
+
+    fields.append(protocol, externalPort, localIP, localPort);
+    row.append(head, fields);
+    els.vnfDNATRows.append(row);
+    renumberVNFDNATRules();
+    return row;
+  }
+
+  function renderVNFDNATRules(rules) {
+    els.vnfDNATRows.replaceChildren();
+    const list = Array.isArray(rules) ? rules : [];
+    for (const rule of list) {
+      addVNFDNATRule(rule);
+    }
+  }
+
+  function readVNFDNATRules() {
+    return [...els.vnfDNATRows.querySelectorAll(".dnat-rule")].map((row) => {
+      const value = (name) => row.querySelector(`[data-dnat-field="${name}"]`)?.value || "";
+      return {
+        protocol: value("protocol"),
+        external_port: Number(value("external-port")),
+        local_ip: value("local-ip").trim(),
+        local_port: Number(value("local-port")),
+      };
+    });
+  }
+
   function openCreateVNF(networkID = null) {
     if (networks.length === 0) {
       showToast("Create a Nerd's Network before adding a VNF.", true);
@@ -3119,6 +3244,7 @@
     }
     editingVNFID = null;
     els.vnfForm.reset();
+    renderVNFDNATRules([]);
     els.vnfNetwork.disabled = false;
     els.vnfType.disabled = false;
     populateVNFNetworkOptions(networkID ?? networks[0].id);
@@ -3137,6 +3263,7 @@
   function openEditVNF(vnf) {
     editingVNFID = vnf.id;
     els.vnfForm.reset();
+    renderVNFDNATRules(vnf.config?.dnat_rules || []);
     els.vnfID.value = String(vnf.id);
     els.vnfName.value = vnf.name;
     populateVNFNetworkOptions(vnf.network_id);
@@ -4168,6 +4295,7 @@
           outside_address: els.vnfOutsideAddress.value.trim(),
           outside_gateway: els.vnfOutsideGateway.value.trim(),
           nat44_pool: els.vnfNAT44Pool.value.trim(),
+          dnat_rules: readVNFDNATRules(),
         }
       : {
           gateway: els.vnfGateway.value.trim(),
@@ -4627,6 +4755,18 @@
     }
   });
   els.vnfOutsideInterface.addEventListener("change", updateOutsideInterfaceHint);
+  els.addVNFDNATRule.addEventListener("click", () => {
+    const row = addVNFDNATRule();
+    row.querySelector('[data-dnat-field="external-port"]')?.focus();
+  });
+  els.vnfDNATRows.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-remove-dnat-rule]");
+    if (!button) {
+      return;
+    }
+    button.closest(".dnat-rule")?.remove();
+    renumberVNFDNATRules();
+  });
   els.vnfEnabled.addEventListener("change", setVNFFieldsForType);
   els.vmInterfaceAdd.addEventListener("click", () => {
     const id = Number(els.vmInterfaceSelect.value);

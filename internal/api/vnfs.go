@@ -35,16 +35,24 @@ type vnfUpdatePayload struct {
 }
 
 type vnfConfigPayload struct {
-	Gateway          string `json:"gateway"`
-	RangeStart       string `json:"range_start"`
-	RangeEnd         string `json:"range_end"`
-	DNS              string `json:"dns"`
-	LeaseTime        string `json:"lease_time"`
-	BindIP           string `json:"bind_ip"`
-	OutsideInterface string `json:"outside_interface"`
-	OutsideAddress   string `json:"outside_address"`
-	OutsideGateway   string `json:"outside_gateway"`
-	NAT44Pool        string `json:"nat44_pool"`
+	Gateway          string            `json:"gateway"`
+	RangeStart       string            `json:"range_start"`
+	RangeEnd         string            `json:"range_end"`
+	DNS              string            `json:"dns"`
+	LeaseTime        string            `json:"lease_time"`
+	BindIP           string            `json:"bind_ip"`
+	OutsideInterface string            `json:"outside_interface"`
+	OutsideAddress   string            `json:"outside_address"`
+	OutsideGateway   string            `json:"outside_gateway"`
+	NAT44Pool        string            `json:"nat44_pool"`
+	DNATRules        []dnatRulePayload `json:"dnat_rules"`
+}
+
+type dnatRulePayload struct {
+	Protocol     string `json:"protocol"`
+	ExternalPort int    `json:"external_port"`
+	LocalIP      string `json:"local_ip"`
+	LocalPort    int    `json:"local_port"`
 }
 
 type vnfView struct {
@@ -189,13 +197,68 @@ func normalizeNAT44Config(p vnfConfigPayload) (store.VNFConfig, error) {
 	if pool != "" && !validNAT44Pool(pool) {
 		return store.VNFConfig{}, errors.New("config.nat44_pool must be a single IPv4 address or start-end range")
 	}
+	dnatRules, err := normalizeDNATRules(p.DNATRules, ipnet)
+	if err != nil {
+		return store.VNFConfig{}, err
+	}
 	return store.VNFConfig{
 		Gateway:          fmt.Sprintf("%s/%d", gateway4.String(), ones),
 		OutsideInterface: outsideInterface,
 		OutsideAddress:   outsideAddress,
 		OutsideGateway:   outsideGateway,
 		NAT44Pool:        pool,
+		DNATRules:        dnatRules,
 	}, nil
+}
+
+const maxDNATRules = 256
+
+func normalizeDNATRules(payload []dnatRulePayload, subnet *net.IPNet) ([]store.DNATRule, error) {
+	if len(payload) > maxDNATRules {
+		return nil, fmt.Errorf("config.dnat_rules can contain at most %d rules", maxDNATRules)
+	}
+	if len(payload) == 0 {
+		return nil, nil
+	}
+	network4 := subnet.IP.To4()
+	broadcast := broadcastIPv4(subnet)
+	seenExternal := make(map[string]int, len(payload))
+	rules := make([]store.DNATRule, 0, len(payload))
+	for i, rule := range payload {
+		prefix := fmt.Sprintf("config.dnat_rules[%d]", i)
+		protocol := strings.ToLower(strings.TrimSpace(rule.Protocol))
+		if protocol != "tcp" && protocol != "udp" {
+			return nil, fmt.Errorf("%s.protocol must be tcp or udp", prefix)
+		}
+		if rule.ExternalPort < 1 || rule.ExternalPort > 65535 {
+			return nil, fmt.Errorf("%s.external_port must be between 1 and 65535", prefix)
+		}
+		if rule.LocalPort < 1 || rule.LocalPort > 65535 {
+			return nil, fmt.Errorf("%s.local_port must be between 1 and 65535", prefix)
+		}
+		localIP := net.ParseIP(strings.TrimSpace(rule.LocalIP)).To4()
+		if localIP == nil {
+			return nil, fmt.Errorf("%s.local_ip must be a valid IPv4 address", prefix)
+		}
+		if !subnet.Contains(localIP) {
+			return nil, fmt.Errorf("%s.local_ip must be inside the NAT44 subnet %s", prefix, subnet)
+		}
+		if localIP.Equal(network4) || localIP.Equal(broadcast) {
+			return nil, fmt.Errorf("%s.local_ip must be a usable host address", prefix)
+		}
+		externalKey := fmt.Sprintf("%s/%d", protocol, rule.ExternalPort)
+		if previous, exists := seenExternal[externalKey]; exists {
+			return nil, fmt.Errorf("%s duplicates the %s external port %d from config.dnat_rules[%d]", prefix, protocol, rule.ExternalPort, previous)
+		}
+		seenExternal[externalKey] = i
+		rules = append(rules, store.DNATRule{
+			Protocol:     protocol,
+			ExternalPort: rule.ExternalPort,
+			LocalIP:      localIP.String(),
+			LocalPort:    rule.LocalPort,
+		})
+	}
+	return rules, nil
 }
 
 func validNAT44Pool(value string) bool {

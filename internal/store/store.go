@@ -200,6 +200,20 @@ type VNFConfig struct {
 	OutsideAddress   string `json:"outside_address,omitempty"`
 	OutsideGateway   string `json:"outside_gateway,omitempty"`
 	NAT44Pool        string `json:"nat44_pool,omitempty"`
+
+	// DNATRules expose services on the NAT44 network to clients on the
+	// outside interface. The external address is the outside interface's
+	// address, so rules keep working when the address is DHCP-assigned.
+	DNATRules []DNATRule `json:"dnat_rules,omitempty"`
+}
+
+// DNATRule forwards one external TCP or UDP port to an address inside a NAT44
+// network.
+type DNATRule struct {
+	Protocol     string `json:"protocol"`
+	ExternalPort int    `json:"external_port"`
+	LocalIP      string `json:"local_ip"`
+	LocalPort    int    `json:"local_port"`
 }
 
 // VNF is a network function attached to a Nerd's Network.

@@ -61,7 +61,14 @@ func (s *Server) activateNAT44(ctx context.Context, vnf store.VNF) (store.VNF, e
 		rollbackBVI()
 		return vnf, err
 	}
+	if err := s.nat.ApplyNAT44StaticMappings(ctx, outside, vnf.ID, vnf.Config.DNATRules); err != nil {
+		_ = s.nat.RemoveNAT44StaticMappings(ctx, outside, vnf.ID)
+		_ = s.nat.RemoveNAT44(ctx, bviName, outside, vnf.Config.NAT44Pool)
+		rollbackBVI()
+		return vnf, fmt.Errorf("apply NAT44 DNAT rules: %w", err)
+	}
 	if err := s.configureDHCPv4ForNAT(ctx, network, vnf.Config.Gateway); err != nil {
+		_ = s.nat.RemoveNAT44StaticMappings(ctx, outside, vnf.ID)
 		_ = s.nat.RemoveNAT44(ctx, bviName, outside, vnf.Config.NAT44Pool)
 		return vnf, err
 	}
@@ -71,6 +78,7 @@ func (s *Server) activateNAT44(ctx context.Context, vnf store.VNF) (store.VNF, e
 	vnf.TapHostName = ""
 	updated, err := s.store.UpdateVNF(ctx, vnf.ID, vnf)
 	if err != nil {
+		_ = s.nat.RemoveNAT44StaticMappings(ctx, outside, vnf.ID)
 		_ = s.nat.RemoveNAT44(ctx, bviName, outside, vnf.Config.NAT44Pool)
 		return vnf, err
 	}
@@ -93,6 +101,11 @@ func (s *Server) stopNAT44(ctx context.Context, vnf store.VNF) error {
 	outside := ""
 	if strings.TrimSpace(vnf.Config.OutsideInterface) != "" {
 		outside = "host-" + strings.TrimSpace(vnf.Config.OutsideInterface)
+	}
+	if outside != "" && (vnf.Enabled || network.BVIHostName != "") {
+		if err := s.nat.RemoveNAT44StaticMappings(ctx, outside, vnf.ID); err != nil {
+			return err
+		}
 	}
 	if network.BVIHostName != "" && outside != "" {
 		if err := s.nat.RemoveNAT44(ctx, network.BVIHostName, outside, vnf.Config.NAT44Pool); err != nil {

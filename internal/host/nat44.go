@@ -11,12 +11,16 @@ import (
 	"strings"
 	"time"
 
+	govppapi "go.fd.io/govpp/api"
 	"go.fd.io/govpp/binapi/interface"
 	"go.fd.io/govpp/binapi/interface_types"
+	"go.fd.io/govpp/binapi/ip_types"
 	"go.fd.io/govpp/binapi/l2"
 	"go.fd.io/govpp/binapi/nat44_ed"
 	"go.fd.io/govpp/binapi/nat_types"
 	"go.fd.io/govpp/core"
+
+	"github.com/voidstarit/rookery/internal/store"
 )
 
 // HostInterface is a Linux network interface available for NAT outside use.
@@ -359,6 +363,249 @@ func (v *VPPNetwork) RemoveNAT44(ctx context.Context, bviName, outsideName, pool
 		_, _ = v.runCLI(ctx, "nat44", "add", "address", pool, "del")
 	}
 	return nil
+}
+
+// ApplyNAT44StaticMappings installs DNAT rules as VPP NAT44 static mappings.
+// Rules are tagged with the VNF ID so they can be replaced independently of
+// mappings created by other NAT44 VNFs. The external address follows the
+// outside interface's address, including when it is assigned by DHCP.
+func (v *VPPNetwork) ApplyNAT44StaticMappings(ctx context.Context, outsideName string, vnfID int64, rules []store.DNATRule) error {
+	if vnfID < 1 {
+		return errors.New("invalid VNF id")
+	}
+	outsideName = strings.TrimSpace(outsideName)
+	if outsideName == "" {
+		return errors.New("NAT44 outside interface is required")
+	}
+	prepared := make([]nat44StaticMappingRule, 0, len(rules))
+	for i, rule := range rules {
+		protocol, err := nat44ProtocolNumber(rule.Protocol)
+		if err != nil {
+			return fmt.Errorf("DNAT rule %d: %w", i+1, err)
+		}
+		if rule.LocalPort < 1 || rule.LocalPort > 65535 {
+			return fmt.Errorf("DNAT rule %d: local port must be between 1 and 65535", i+1)
+		}
+		if rule.ExternalPort < 1 || rule.ExternalPort > 65535 {
+			return fmt.Errorf("DNAT rule %d: external port must be between 1 and 65535", i+1)
+		}
+		localIP := net.ParseIP(strings.TrimSpace(rule.LocalIP)).To4()
+		if localIP == nil {
+			return fmt.Errorf("DNAT rule %d: local address must be IPv4", i+1)
+		}
+		var localAddress ip_types.IP4Address
+		copy(localAddress[:], localIP)
+		prepared = append(prepared, nat44StaticMappingRule{
+			protocol:     protocol,
+			localAddress: localAddress,
+			localPort:    uint16(rule.LocalPort),
+			externalPort: uint16(rule.ExternalPort),
+			tag:          nat44StaticMappingTag(vnfID, i),
+		})
+	}
+	conn, err := v.connect()
+	if err != nil {
+		return err
+	}
+	defer conn.Disconnect()
+	outsideIndex, err := findInterface(ctx, conn, outsideName)
+	if err != nil {
+		return fmt.Errorf("find NAT44 outside interface %s: %w", outsideName, err)
+	}
+	client := nat44_ed.NewServiceClient(conn)
+	if err := removeNAT44StaticMappings(ctx, client, outsideIndex, vnfID); err != nil {
+		return err
+	}
+	for _, rule := range prepared {
+		reply, err := client.Nat44AddDelStaticMappingV2(ctx, &nat44_ed.Nat44AddDelStaticMappingV2{
+			IsAdd:             true,
+			Flags:             nat_types.NAT_IS_NONE,
+			LocalIPAddress:    rule.localAddress,
+			Protocol:          rule.protocol,
+			LocalPort:         rule.localPort,
+			ExternalPort:      rule.externalPort,
+			ExternalSwIfIndex: interface_types.InterfaceIndex(outsideIndex),
+			Tag:               rule.tag,
+		})
+		if err != nil {
+			_ = removeNAT44StaticMappings(ctx, client, outsideIndex, vnfID)
+			return fmt.Errorf("add NAT44 static mapping %s/%d: %w", nat44ProtocolName(rule.protocol), rule.externalPort, err)
+		}
+		if err := checkVPPRetval("add NAT44 static mapping", reply.Retval); err != nil {
+			_ = removeNAT44StaticMappings(ctx, client, outsideIndex, vnfID)
+			return fmt.Errorf("add NAT44 static mapping %s/%d: %w", nat44ProtocolName(rule.protocol), rule.externalPort, err)
+		}
+	}
+	return nil
+}
+
+type nat44StaticMappingRule struct {
+	protocol     uint8
+	localAddress ip_types.IP4Address
+	localPort    uint16
+	externalPort uint16
+	tag          string
+}
+
+// RemoveNAT44StaticMappings deletes the static mappings owned by one VNF.
+func (v *VPPNetwork) RemoveNAT44StaticMappings(ctx context.Context, outsideName string, vnfID int64) error {
+	if vnfID < 1 {
+		return errors.New("invalid VNF id")
+	}
+	conn, err := v.connect()
+	if err != nil {
+		return err
+	}
+	defer conn.Disconnect()
+	var outsideIndex uint32
+	if name := strings.TrimSpace(outsideName); name != "" {
+		index, err := findInterface(ctx, conn, name)
+		switch {
+		case err == nil:
+			outsideIndex = index
+		case errors.Is(err, errVPPInterfaceNotFound):
+			// The outside interface may already be gone; fall back to the
+			// address recorded in each static mapping.
+		case err != nil:
+			return fmt.Errorf("find NAT44 outside interface %s: %w", name, err)
+		}
+	}
+	return removeNAT44StaticMappings(ctx, nat44_ed.NewServiceClient(conn), outsideIndex, vnfID)
+}
+
+type nat44StaticMappingClient interface {
+	Nat44StaticMappingDump(context.Context, *nat44_ed.Nat44StaticMappingDump) (nat44_ed.RPCService_Nat44StaticMappingDumpClient, error)
+	Nat44AddDelStaticMappingV2(context.Context, *nat44_ed.Nat44AddDelStaticMappingV2) (*nat44_ed.Nat44AddDelStaticMappingV2Reply, error)
+}
+
+func removeNAT44StaticMappings(ctx context.Context, client nat44StaticMappingClient, outsideIndex uint32, vnfID int64) error {
+	stream, err := client.Nat44StaticMappingDump(ctx, &nat44_ed.Nat44StaticMappingDump{})
+	if err != nil {
+		if nat44Unavailable(err) {
+			return nil
+		}
+		return fmt.Errorf("dump NAT44 static mappings: %w", err)
+	}
+	prefix := nat44StaticMappingTagPrefix(vnfID)
+	var errs []error
+	for {
+		details, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			if nat44Unavailable(err) {
+				return errors.Join(errs...)
+			}
+			return errors.Join(append(errs, fmt.Errorf("read NAT44 static mapping dump: %w", err))...)
+		}
+		if !strings.HasPrefix(details.Tag, prefix) {
+			continue
+		}
+		if err := deleteNAT44StaticMapping(ctx, client, outsideIndex, details); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func deleteNAT44StaticMapping(ctx context.Context, client nat44StaticMappingClient, outsideIndex uint32, details *nat44_ed.Nat44StaticMappingDetails) error {
+	// Prefer deleting through the outside interface. Interface-bound mappings
+	// keep an internal resolve record after the address is known, and deleting
+	// by address alone leaves that record behind.
+	swIfIndex := outsideIndex
+	if swIfIndex == 0 && details.ExternalSwIfIndex != interface_types.InterfaceIndex(^uint32(0)) {
+		swIfIndex = uint32(details.ExternalSwIfIndex)
+	}
+	var retval int32
+	if swIfIndex != 0 {
+		ret, err := nat44DeleteStaticMapping(ctx, client, swIfIndex, ip_types.IP4Address{}, details)
+		if err != nil {
+			return err
+		}
+		if ret == 0 {
+			return nil
+		}
+		retval = ret
+	}
+	ret, err := nat44DeleteStaticMapping(ctx, client, ^uint32(0), details.ExternalIPAddress, details)
+	if err != nil {
+		return err
+	}
+	if ret == 0 || vppRetvalNoSuchEntry(ret) || vppRetvalNoSuchEntry(retval) {
+		return nil
+	}
+	return fmt.Errorf("delete NAT44 static mapping %s/%d: VPP returned retval %d", nat44ProtocolName(details.Protocol), details.ExternalPort, ret)
+}
+
+func vppRetvalNoSuchEntry(retval int32) bool {
+	return govppapi.VPPApiError(retval) == govppapi.NO_SUCH_ENTRY
+}
+
+func nat44DeleteStaticMapping(ctx context.Context, client nat44StaticMappingClient, externalSwIfIndex uint32, externalAddress ip_types.IP4Address, details *nat44_ed.Nat44StaticMappingDetails) (int32, error) {
+	reply, err := client.Nat44AddDelStaticMappingV2(ctx, &nat44_ed.Nat44AddDelStaticMappingV2{
+		IsAdd:             false,
+		Flags:             nat_types.NAT_IS_NONE,
+		LocalIPAddress:    details.LocalIPAddress,
+		ExternalIPAddress: externalAddress,
+		Protocol:          details.Protocol,
+		LocalPort:         details.LocalPort,
+		ExternalPort:      details.ExternalPort,
+		ExternalSwIfIndex: interface_types.InterfaceIndex(externalSwIfIndex),
+		VrfID:             details.VrfID,
+	})
+	if err != nil {
+		// The generated service client turns a non-zero VPP retval into an
+		// error. Preserve the retval so callers can distinguish "already
+		// gone" from a real failure.
+		var vppErr govppapi.VPPApiError
+		if errors.As(err, &vppErr) {
+			return int32(vppErr), nil
+		}
+		return 0, err
+	}
+	return reply.Retval, nil
+}
+
+func nat44StaticMappingTagPrefix(vnfID int64) string {
+	return fmt.Sprintf("nerds-vms:%d:", vnfID)
+}
+
+func nat44StaticMappingTag(vnfID int64, ruleIndex int) string {
+	return fmt.Sprintf("%s%d", nat44StaticMappingTagPrefix(vnfID), ruleIndex)
+}
+
+func nat44ProtocolNumber(protocol string) (uint8, error) {
+	switch strings.ToLower(strings.TrimSpace(protocol)) {
+	case "tcp":
+		return 6, nil
+	case "udp":
+		return 17, nil
+	default:
+		return 0, fmt.Errorf("protocol must be tcp or udp")
+	}
+}
+
+func nat44ProtocolName(protocol uint8) string {
+	switch protocol {
+	case 6:
+		return "tcp"
+	case 17:
+		return "udp"
+	default:
+		return fmt.Sprintf("protocol %d", protocol)
+	}
+}
+
+func nat44Unavailable(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return isVPPNotFound(err) ||
+		strings.Contains(message, "not enabled") ||
+		strings.Contains(message, "feature disabled") ||
+		strings.Contains(message, "plugin disabled")
 }
 
 // NAT44Sessions returns the VPP NAT44 session table text.
