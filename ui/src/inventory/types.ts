@@ -146,6 +146,25 @@ export type VirtualInterface = {
   updated_at: string;
 };
 
+export type VPPGraphNode = {
+  id: string;
+  label: string;
+  width?: number;
+  font_size?: number;
+  fill?: number;
+};
+
+export type VPPGraphEdge = {
+  source: string;
+  target: string;
+};
+
+export type VPPGraph = {
+  nodes: VPPGraphNode[];
+  edges: VPPGraphEdge[];
+  generated_at: string;
+};
+
 export type ACLRule = {
   action: string;
   description?: string;
@@ -184,11 +203,17 @@ export type VNFConfig = {
   dns?: string;
   lease_time?: string;
   bind_ip?: string;
+  static_assignments?: DHCPStaticAssignment[];
   outside_interface?: string;
   outside_address?: string;
   outside_gateway?: string;
   nat44_pool?: string;
   dnat_rules?: DNATRule[];
+};
+
+export type DHCPStaticAssignment = {
+  mac: string;
+  ip: string;
 };
 
 export type VNF = {

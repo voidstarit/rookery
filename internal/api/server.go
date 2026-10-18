@@ -64,6 +64,7 @@ type NetworkProvisioner interface {
 	Ping(ctx context.Context) error
 	Identity() (string, error)
 	InterfaceCounters(ctx context.Context, names []string) (map[string]host.InterfaceCounters, error)
+	VPPNodeGraph(ctx context.Context) (host.VPPGraph, error)
 	EnsureVPPACL(ctx context.Context, aclID int64, rules []store.ACLRule) (uint32, error)
 	DeleteVPPACL(ctx context.Context, index uint32) error
 	SetInterfaceACLs(ctx context.Context, swIfIndex uint32, ingress, egress uint32) error
@@ -164,6 +165,7 @@ func New(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMControll
 	mux.HandleFunc("GET /api/vnfs/{id}/leases", s.handleListVNFLeases)
 	mux.HandleFunc("GET /api/vnfs/{id}/sessions", s.handleListVNFSessions)
 	mux.HandleFunc("GET /api/host/interfaces", s.handleListHostInterfaces)
+	mux.HandleFunc("GET /api/troubleshoot/vpp-graph", s.handleVPPNodeGraph)
 	mux.HandleFunc("GET /api/acls", s.handleListACLs)
 	mux.HandleFunc("POST /api/acls", s.handleCreateACL)
 	mux.HandleFunc("GET /api/acls/{id}", s.handleGetACL)
@@ -293,6 +295,8 @@ func allowedMethods(path string) (string, bool) {
 			}
 		}
 	case path == "/api/host/interfaces":
+		return "GET, HEAD", true
+	case path == "/api/troubleshoot/vpp-graph":
 		return "GET, HEAD", true
 	case path == "/api/vnfs":
 		return "GET, HEAD, POST", true

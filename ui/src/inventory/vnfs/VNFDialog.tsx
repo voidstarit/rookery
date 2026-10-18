@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
-import type { DNATRule, HostInterface, Network, VNF, VNFConfig, VNFType } from "../types";
+import type {
+  DHCPStaticAssignment,
+  DNATRule,
+  HostInterface,
+  Network,
+  VNF,
+  VNFConfig,
+  VNFType,
+} from "../types";
 
 type VNFDialogProps = {
   vnf: VNF | null;
@@ -26,6 +34,7 @@ type FormState = {
   outsideGateway: string;
   nat44Pool: string;
   dnatRules: DNATRule[];
+  staticAssignments: DHCPStaticAssignment[];
 };
 
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._-]*";
@@ -48,6 +57,9 @@ function defaultForm(vnf: VNF | null, networks: Network[], vppReady: boolean, in
     outsideGateway: config.outside_gateway ?? "",
     nat44Pool: config.nat44_pool ?? "",
     dnatRules: Array.isArray(config.dnat_rules) ? config.dnat_rules.map((rule) => ({ ...rule })) : [],
+    staticAssignments: Array.isArray(config.static_assignments)
+      ? config.static_assignments.map((assignment) => ({ ...assignment }))
+      : [],
   };
 }
 
@@ -214,6 +226,14 @@ export function VNFDialog({ vnf, networks, vppReady, initialNetworkID, onClose, 
           range_end: form.rangeEnd.trim(),
           dns: form.dns.trim(),
           lease_time: form.leaseTime.trim() || "12h",
+          ...(form.type === "dhcpv4"
+            ? {
+                static_assignments: form.staticAssignments.map((assignment) => ({
+                  mac: assignment.mac.trim(),
+                  ip: assignment.ip.trim(),
+                })),
+              }
+            : {}),
         };
 
     const payload: Record<string, unknown> = {
@@ -263,6 +283,33 @@ export function VNFDialog({ vnf, networks, vppReady, initialNetworkID, onClose, 
     setForm((current) => ({
       ...current,
       dnatRules: current.dnatRules.filter((_, index_) => index_ !== index),
+    }));
+  };
+
+  const addStaticAssignment = () => {
+    setForm((current) => ({
+      ...current,
+      staticAssignments: [...current.staticAssignments, { mac: "", ip: "" }],
+    }));
+  };
+
+  const updateStaticAssignment = <K extends keyof DHCPStaticAssignment>(
+    index: number,
+    key: K,
+    value: DHCPStaticAssignment[K]
+  ) => {
+    setForm((current) => ({
+      ...current,
+      staticAssignments: current.staticAssignments.map((assignment, index_) =>
+        index_ === index ? { ...assignment, [key]: value } : assignment
+      ),
+    }));
+  };
+
+  const removeStaticAssignment = (index: number) => {
+    setForm((current) => ({
+      ...current,
+      staticAssignments: current.staticAssignments.filter((_, index_) => index_ !== index),
     }));
   };
 
@@ -373,6 +420,7 @@ export function VNFDialog({ vnf, networks, vppReady, initialNetworkID, onClose, 
         </div>
 
         {!nat44 ? (
+          <>
           <div class="form-grid">
             <label class="field">
               <span class="field-label">DNS servers <em>optional</em></span>
@@ -424,6 +472,72 @@ export function VNFDialog({ vnf, networks, vppReady, initialNetworkID, onClose, 
               />
             </label>
           </div>
+          {form.type === "dhcpv4" ? (
+            <div class="form-grid">
+              <div class="field field-wide">
+                <div class="panel-head acl-rules-head">
+                  <div>
+                    <span class="field-label">Static assignments <em>optional</em></span>
+                    <span class="field-hint">
+                      Reserve an IPv4 address for a MAC address. Reserved addresses are excluded
+                      from the dynamic pool and can be inside or outside the DHCP range.
+                    </span>
+                  </div>
+                  <button class="button ghost" type="button" onClick={addStaticAssignment}>
+                    Add assignment
+                  </button>
+                </div>
+                <div class="acl-rule-rows">
+                  {form.staticAssignments.map((assignment, index) => (
+                    <div class="acl-rule" key={index}>
+                      <div class="acl-rule-head">
+                        <span class="dnat-rule-title">Assignment {index + 1}</span>
+                        <button
+                          class="row-action danger"
+                          type="button"
+                          onClick={() => removeStaticAssignment(index)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <div class="acl-rule-fields">
+                        <label class="field dhcp-static-field">
+                          <span class="field-label">MAC address</span>
+                          <input
+                            type="text"
+                            required
+                            autocomplete="off"
+                            spellcheck={false}
+                            placeholder="02:00:00:00:00:01"
+                            value={assignment.mac}
+                            onInput={(event) =>
+                              updateStaticAssignment(index, "mac", event.currentTarget.value)
+                            }
+                          />
+                        </label>
+                        <label class="field dhcp-static-field">
+                          <span class="field-label">IP address</span>
+                          <input
+                            type="text"
+                            required
+                            autocomplete="off"
+                            spellcheck={false}
+                            inputMode="decimal"
+                            placeholder="10.20.0.50"
+                            value={assignment.ip}
+                            onInput={(event) =>
+                              updateStaticAssignment(index, "ip", event.currentTarget.value)
+                            }
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+          </>
         ) : (
           <div class="form-grid">
             <label class="field">

@@ -349,6 +349,14 @@ func buildDHCPv4Config(vnf store.VNF, hostIf, leasePath string, port int) (*core
 	if err != nil {
 		return nil, err
 	}
+	staticArg := ""
+	if len(vnf.Config.StaticAssignments) > 0 {
+		data, err := json.Marshal(vnf.Config.StaticAssignments)
+		if err != nil {
+			return nil, fmt.Errorf("encode DHCP static assignments: %w", err)
+		}
+		staticArg = string(data)
+	}
 
 	return &coredhcpconfig.Config{
 		Server4: &coredhcpconfig.ServerConfig{
@@ -369,6 +377,7 @@ func buildDHCPv4Config(vnf store.VNF, hostIf, leasePath string, port int) (*core
 					leaseTime.String(),
 					broadcast.String(),
 					dhcpServerIP(vnf.Config).String(),
+					staticArg,
 				},
 			}},
 		},

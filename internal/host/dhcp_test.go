@@ -146,6 +146,61 @@ func TestCoreDHCPAllocationAndRelease(t *testing.T) {
 	}
 }
 
+func TestCoreDHCPStaticAssignments(t *testing.T) {
+	staticArg := `[{"mac":"02:00:00:00:00:01","ip":"10.20.0.50"},{"mac":"02:00:00:00:00:02","ip":"10.20.0.100"}]`
+	h, err := setupCoreDHCP(
+		testDHCPGateway,
+		testDHCPMask,
+		testDHCPStart,
+		testDHCPEnd,
+		testDHCPDNS,
+		filepath.Join(t.TempDir(), "1.coredhcp.json"),
+		coreDHCPLeaseTime.String(),
+		testDHCPBroad,
+		testDHCPGateway,
+		staticArg,
+	)
+	if err != nil {
+		t.Fatalf("setup CoreDHCP: %v", err)
+	}
+
+	staticMAC := dhcpTestMAC(t, "02:00:00:00:00:01")
+	offer, stop := dhcpTestExchange(t, h, dhcpTestRequest(t, dhcpv4.MessageTypeDiscover, staticMAC))
+	if stop || offer == nil || offer.YourIPAddr.String() != "10.20.0.50" {
+		t.Fatalf("static offer = %v, stop=%v", offer, stop)
+	}
+
+	request := dhcpTestRequest(t, dhcpv4.MessageTypeRequest, staticMAC,
+		dhcpv4.WithOption(dhcpv4.OptRequestedIPAddress(net.ParseIP("10.20.0.50"))),
+		dhcpv4.WithOption(dhcpv4.OptServerIdentifier(net.ParseIP(testDHCPGateway))),
+	)
+	ack, stop := dhcpTestExchange(t, h, request)
+	if stop || ack == nil || ack.MessageType() != dhcpv4.MessageTypeAck || ack.YourIPAddr.String() != "10.20.0.50" {
+		t.Fatalf("static ack = %v, stop=%v", ack, stop)
+	}
+
+	reservedMAC := dhcpTestMAC(t, "02:00:00:00:00:02")
+	reservedOffer, _ := dhcpTestExchange(t, h, dhcpTestRequest(t, dhcpv4.MessageTypeDiscover, reservedMAC))
+	if reservedOffer == nil || reservedOffer.YourIPAddr.String() != "10.20.0.100" {
+		t.Fatalf("reserved offer = %v, want 10.20.0.100", reservedOffer)
+	}
+
+	dynamicMAC := dhcpTestMAC(t, "02:00:00:00:00:03")
+	reservedRequest := dhcpTestRequest(t, dhcpv4.MessageTypeRequest, dynamicMAC,
+		dhcpv4.WithOption(dhcpv4.OptRequestedIPAddress(net.ParseIP("10.20.0.100"))),
+		dhcpv4.WithOption(dhcpv4.OptServerIdentifier(net.ParseIP(testDHCPGateway))),
+	)
+	nak, stop := dhcpTestExchange(t, h, reservedRequest)
+	if !stop || nak == nil || nak.MessageType() != dhcpv4.MessageTypeNak {
+		t.Fatalf("reserved-IP request returned stop=%v response=%v, want NAK", stop, nak)
+	}
+
+	dynamicOffer, _ := dhcpTestExchange(t, h, dhcpTestRequest(t, dhcpv4.MessageTypeDiscover, dynamicMAC))
+	if dynamicOffer == nil || dynamicOffer.YourIPAddr.String() != "10.20.0.101" {
+		t.Fatalf("dynamic offer = %v, want 10.20.0.101 (reserved .100 skipped)", dynamicOffer)
+	}
+}
+
 func TestCoreDHCPExhaustion(t *testing.T) {
 	h, err := setupCoreDHCP(
 		testDHCPGateway,
@@ -429,6 +484,7 @@ func TestCoreDHCPConfigValidation(t *testing.T) {
 		coreDHCPLeaseTime.String(),
 		testDHCPBroad,
 		testDHCPGateway,
+		"",
 	}
 
 	tests := []struct {
@@ -444,6 +500,19 @@ func TestCoreDHCPConfigValidation(t *testing.T) {
 		{name: "bad lease time", mutate: func(args []string) []string { args[6] = "forever"; return args }},
 		{name: "bad broadcast", mutate: func(args []string) []string { args[7] = "nope"; return args }},
 		{name: "bad server ID", mutate: func(args []string) []string { args[8] = "nope"; return args }},
+		{name: "bad static JSON", mutate: func(args []string) []string { args[9] = "nope"; return args }},
+		{name: "bad static MAC", mutate: func(args []string) []string {
+			args[9] = `[{"mac":"nope","ip":"10.20.0.50"}]`
+			return args
+		}},
+		{name: "static IP outside subnet", mutate: func(args []string) []string {
+			args[9] = `[{"mac":"02:00:00:00:00:01","ip":"10.21.0.50"}]`
+			return args
+		}},
+		{name: "duplicate static IP", mutate: func(args []string) []string {
+			args[9] = `[{"mac":"02:00:00:00:00:01","ip":"10.20.0.50"},{"mac":"02:00:00:00:00:02","ip":"10.20.0.50"}]`
+			return args
+		}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

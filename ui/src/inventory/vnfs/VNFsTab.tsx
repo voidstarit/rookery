@@ -256,7 +256,14 @@ export function VNFsTab() {
                             {dnatCount ? ` · ${dnatCount} DNAT` : ""}
                           </span>
                         ) : vnf.tap_host_name ? (
-                          <span class="vm-description">{vnf.tap_host_name}</span>
+                          <span class="vm-description">
+                            {vnf.tap_host_name}
+                            {vnf.type === "dhcpv4" &&
+                            Array.isArray(vnf.config.static_assignments) &&
+                            vnf.config.static_assignments.length > 0
+                              ? ` · ${vnf.config.static_assignments.length} static`
+                              : ""}
+                          </span>
                         ) : null}
                       </td>
                       <td class="mono">{typeLabel}</td>

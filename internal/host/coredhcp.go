@@ -17,6 +17,8 @@ import (
 	"github.com/coredhcp/coredhcp/plugins"
 	"github.com/coredhcp/coredhcp/plugins/allocators/bitmap"
 	"github.com/insomniacslk/dhcp/dhcpv4"
+
+	"github.com/voidstarit/rookery/internal/store"
 )
 
 const coreDHCPLeaseTime = 12 * time.Hour
@@ -52,6 +54,9 @@ type coreDHCPState struct {
 	end    uint32
 	leases map[string]*coreDHCPLease
 	byIP   map[string]string
+
+	static       map[string]net.IP
+	reservedByIP map[string]string
 }
 
 type coreDHCPLease struct {
@@ -63,10 +68,11 @@ type coreDHCPLease struct {
 
 // setupCoreDHCP is a CoreDHCP plugin setup function. Arguments are, in order:
 // gateway IPv4, netmask, range start, range end, comma-separated DNS servers,
-// lease file path, lease duration, broadcast address, and server identifier.
+// lease file path, lease duration, broadcast address, server identifier, and an
+// optional JSON array of static MAC-to-IPv4 assignments.
 func setupCoreDHCP(args ...string) (handler.Handler4, error) {
-	if len(args) != 9 {
-		return nil, fmt.Errorf("CoreDHCP setup: want 9 arguments, got %d", len(args))
+	if len(args) != 9 && len(args) != 10 {
+		return nil, fmt.Errorf("CoreDHCP setup: want 9 or 10 arguments, got %d", len(args))
 	}
 
 	gateway := net.ParseIP(args[0]).To4()
@@ -125,20 +131,62 @@ func setupCoreDHCP(args ...string) (handler.Handler4, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create DHCP address allocator: %w", err)
 	}
+	static := make(map[string]net.IP)
+	reservedByIP := make(map[string]string)
+	if len(args) == 10 && strings.TrimSpace(args[9]) != "" {
+		var assignments []store.DHCPStaticAssignment
+		if err := json.Unmarshal([]byte(args[9]), &assignments); err != nil {
+			return nil, fmt.Errorf("parse DHCP static assignments: %w", err)
+		}
+		network := subnet.IP.To4()
+		for _, assignment := range assignments {
+			mac, err := net.ParseMAC(strings.TrimSpace(assignment.MAC))
+			if err != nil || len(mac) != 6 {
+				return nil, fmt.Errorf("invalid static assignment MAC %q", assignment.MAC)
+			}
+			ip := net.ParseIP(strings.TrimSpace(assignment.IP)).To4()
+			if ip == nil || !subnet.Contains(ip) {
+				return nil, fmt.Errorf("static assignment IP %q is outside %s", assignment.IP, subnet)
+			}
+			if ip.Equal(network) || ip.Equal(broadcast) || ip.Equal(gateway) || ip.Equal(serverID) {
+				return nil, fmt.Errorf("static assignment IP %s is not a usable host address", ip)
+			}
+			key := strings.ToLower(mac.String())
+			if previous, exists := reservedByIP[ip.String()]; exists && previous != key {
+				return nil, fmt.Errorf("static assignment IP %s is used by multiple MAC addresses", ip)
+			}
+			if previous, exists := static[key]; exists && !previous.Equal(ip) {
+				return nil, fmt.Errorf("static assignment MAC %s has multiple IP addresses", key)
+			}
+			static[key] = ip
+			reservedByIP[ip.String()] = key
+		}
+	}
 
 	state := &coreDHCPState{
-		gateway:   gateway,
-		serverID:  serverID,
-		mask:      mask,
-		broadcast: broadcast,
-		dns:       dns,
-		leaseTime: leaseTime,
-		leasePath: args[5],
-		alloc:     alloc,
-		start:     binary.BigEndian.Uint32(startIP),
-		end:       binary.BigEndian.Uint32(endIP),
-		leases:    make(map[string]*coreDHCPLease),
-		byIP:      make(map[string]string),
+		gateway:      gateway,
+		serverID:     serverID,
+		mask:         mask,
+		broadcast:    broadcast,
+		dns:          dns,
+		leaseTime:    leaseTime,
+		leasePath:    args[5],
+		alloc:        alloc,
+		start:        binary.BigEndian.Uint32(startIP),
+		end:          binary.BigEndian.Uint32(endIP),
+		leases:       make(map[string]*coreDHCPLease),
+		byIP:         make(map[string]string),
+		static:       static,
+		reservedByIP: reservedByIP,
+	}
+	for ip := range reservedByIP {
+		addr := net.ParseIP(ip).To4()
+		if !state.inRange(addr) {
+			continue
+		}
+		if _, err := alloc.Allocate(net.IPNet{IP: addr, Mask: net.CIDRMask(32, 32)}); err != nil {
+			return nil, fmt.Errorf("reserve static DHCP address %s: %w", ip, err)
+		}
 	}
 	if err := state.loadLeases(); err != nil {
 		return nil, err
@@ -198,15 +246,22 @@ func (s *coreDHCPState) handle(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) 
 			hint = req.ClientIPAddr
 		}
 		record := s.leaseForLocked(clientID, now)
+		staticIP, hasStatic := s.static[clientID]
 
 		if req.MessageType() == dhcpv4.MessageTypeRequest && hint != nil {
-			if !s.inRange(hint) {
+			if hasStatic && !hint.Equal(staticIP) {
+				return s.nak(resp)
+			}
+			if !hasStatic && !s.inRange(hint) {
 				return s.nak(resp)
 			}
 			if record != nil && !hint.Equal(record.Address) {
 				return s.nak(resp)
 			}
 			if owner, ok := s.byIP[hint.String()]; ok && owner != clientID {
+				return s.nak(resp)
+			}
+			if owner, reserved := s.reservedByIP[hint.String()]; reserved && owner != clientID {
 				return s.nak(resp)
 			}
 		}
@@ -285,10 +340,28 @@ func (s *coreDHCPState) renewLocked(record *coreDHCPLease, hostname string, now 
 }
 
 func (s *coreDHCPState) allocateLocked(clientID string, hint net.IP, hostname string, now time.Time) (*coreDHCPLease, error) {
+	if staticIP, ok := s.static[clientID]; ok {
+		if owner, used := s.byIP[staticIP.String()]; used && owner != clientID {
+			return nil, fmt.Errorf("static DHCP address %s is already in use", staticIP)
+		}
+		record := &coreDHCPLease{
+			ClientID: clientID,
+			Address:  staticIP,
+			Expires:  now.Add(s.leaseTime),
+			Hostname: hostname,
+		}
+		s.leases[clientID] = record
+		s.byIP[staticIP.String()] = clientID
+		s.saveLocked()
+		return record, nil
+	}
+
 	hintNet := net.IPNet{}
 	if hint4 := hint.To4(); hint4 != nil && s.inRange(hint4) {
 		if _, taken := s.byIP[hint4.String()]; !taken {
-			hintNet = net.IPNet{IP: hint4, Mask: net.CIDRMask(32, 32)}
+			if owner, reserved := s.reservedByIP[hint4.String()]; !reserved || owner == clientID {
+				hintNet = net.IPNet{IP: hint4, Mask: net.CIDRMask(32, 32)}
+			}
 		}
 	}
 
@@ -324,6 +397,9 @@ func (s *coreDHCPState) purgeExpiredLocked(now time.Time) {
 func (s *coreDHCPState) freeLocked(record *coreDHCPLease) {
 	delete(s.leases, record.ClientID)
 	delete(s.byIP, record.Address.String())
+	if _, reserved := s.reservedByIP[record.Address.String()]; reserved {
+		return
+	}
 	_ = s.alloc.Free(net.IPNet{IP: record.Address, Mask: net.CIDRMask(32, 32)})
 }
 
@@ -363,18 +439,31 @@ func (s *coreDHCPState) loadLeases() error {
 			continue
 		}
 		ip := net.ParseIP(lease.Address).To4()
-		if ip == nil || !s.inRange(ip) || !lease.Expires.After(now) {
+		if ip == nil || !lease.Expires.After(now) {
 			continue
 		}
-		key := mac.String()
+		key := strings.ToLower(mac.String())
+		staticIP, hasStatic := s.static[key]
+		if hasStatic {
+			if !ip.Equal(staticIP) {
+				continue
+			}
+		} else if !s.inRange(ip) {
+			continue
+		}
+		if owner, reserved := s.reservedByIP[ip.String()]; reserved && owner != key {
+			continue
+		}
 		if _, exists := s.leases[key]; exists {
 			continue
 		}
 		if _, exists := s.byIP[ip.String()]; exists {
 			continue
 		}
-		if _, err := s.alloc.Allocate(net.IPNet{IP: ip, Mask: net.CIDRMask(32, 32)}); err != nil {
-			continue
+		if !hasStatic {
+			if _, err := s.alloc.Allocate(net.IPNet{IP: ip, Mask: net.CIDRMask(32, 32)}); err != nil {
+				continue
+			}
 		}
 		s.leases[key] = &coreDHCPLease{
 			ClientID: key,

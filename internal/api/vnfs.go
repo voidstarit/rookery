@@ -35,17 +35,23 @@ type vnfUpdatePayload struct {
 }
 
 type vnfConfigPayload struct {
-	Gateway          string            `json:"gateway"`
-	RangeStart       string            `json:"range_start"`
-	RangeEnd         string            `json:"range_end"`
-	DNS              string            `json:"dns"`
-	LeaseTime        string            `json:"lease_time"`
-	BindIP           string            `json:"bind_ip"`
-	OutsideInterface string            `json:"outside_interface"`
-	OutsideAddress   string            `json:"outside_address"`
-	OutsideGateway   string            `json:"outside_gateway"`
-	NAT44Pool        string            `json:"nat44_pool"`
-	DNATRules        []dnatRulePayload `json:"dnat_rules"`
+	Gateway           string                        `json:"gateway"`
+	RangeStart        string                        `json:"range_start"`
+	RangeEnd          string                        `json:"range_end"`
+	DNS               string                        `json:"dns"`
+	LeaseTime         string                        `json:"lease_time"`
+	BindIP            string                        `json:"bind_ip"`
+	StaticAssignments []dhcpStaticAssignmentPayload `json:"static_assignments"`
+	OutsideInterface  string                        `json:"outside_interface"`
+	OutsideAddress    string                        `json:"outside_address"`
+	OutsideGateway    string                        `json:"outside_gateway"`
+	NAT44Pool         string                        `json:"nat44_pool"`
+	DNATRules         []dnatRulePayload             `json:"dnat_rules"`
+}
+
+type dhcpStaticAssignmentPayload struct {
+	MAC string `json:"mac"`
+	IP  string `json:"ip"`
 }
 
 type dnatRulePayload struct {
@@ -96,6 +102,9 @@ func (p vnfConfigPayload) toConfig(vnfType string) (store.VNFConfig, error) {
 	if gateway == "" {
 		return store.VNFConfig{}, errors.New("config.gateway is required")
 	}
+	if vnfType != store.VNFTypeDHCPv4 && len(p.StaticAssignments) > 0 {
+		return store.VNFConfig{}, errors.New("config.static_assignments is supported for DHCPv4 only")
+	}
 
 	switch vnfType {
 	case store.VNFTypeDHCPv4, store.VNFTypeDHCPv6:
@@ -127,13 +136,22 @@ func (p vnfConfigPayload) toConfig(vnfType string) (store.VNFConfig, error) {
 				return store.VNFConfig{}, errors.New("bind_ip cannot be inside the DHCP range")
 			}
 		}
+		var staticAssignments []store.DHCPStaticAssignment
+		if vnfType == store.VNFTypeDHCPv4 {
+			gatewayIP, subnet, _ := net.ParseCIDR(normalizedGateway)
+			staticAssignments, err = normalizeDHCPv4StaticAssignments(p.StaticAssignments, gatewayIP.To4(), subnet, bindIP)
+			if err != nil {
+				return store.VNFConfig{}, err
+			}
+		}
 		return store.VNFConfig{
-			Gateway:    normalizedGateway,
-			RangeStart: normalizedStart,
-			RangeEnd:   normalizedEnd,
-			DNS:        dns,
-			LeaseTime:  leaseTime,
-			BindIP:     bindIP,
+			Gateway:           normalizedGateway,
+			RangeStart:        normalizedStart,
+			RangeEnd:          normalizedEnd,
+			DNS:               dns,
+			LeaseTime:         leaseTime,
+			BindIP:            bindIP,
+			StaticAssignments: staticAssignments,
 		}, nil
 	case store.VNFTypeNAT44:
 		return normalizeNAT44Config(p)
@@ -259,6 +277,63 @@ func normalizeDNATRules(payload []dnatRulePayload, subnet *net.IPNet) ([]store.D
 		})
 	}
 	return rules, nil
+}
+
+func normalizeDHCPv4StaticAssignments(payload []dhcpStaticAssignmentPayload, gateway net.IP, subnet *net.IPNet, bindIP string) ([]store.DHCPStaticAssignment, error) {
+	const maxStaticAssignments = 256
+	if len(payload) > maxStaticAssignments {
+		return nil, fmt.Errorf("config.static_assignments can contain at most %d entries", maxStaticAssignments)
+	}
+	if len(payload) == 0 {
+		return nil, nil
+	}
+	network := subnet.IP.To4()
+	broadcast := broadcastIPv4(subnet)
+	var bind net.IP
+	if strings.TrimSpace(bindIP) != "" {
+		bind, _, _ = net.ParseCIDR(strings.TrimSpace(bindIP))
+	}
+	seenMAC := make(map[string]int, len(payload))
+	seenIP := make(map[string]int, len(payload))
+	assignments := make([]store.DHCPStaticAssignment, 0, len(payload))
+	for i, assignment := range payload {
+		prefix := fmt.Sprintf("config.static_assignments[%d]", i)
+		mac, err := net.ParseMAC(strings.TrimSpace(assignment.MAC))
+		if err != nil || len(mac) != 6 {
+			return nil, fmt.Errorf("%s.mac must be a valid Ethernet MAC address", prefix)
+		}
+		ip := net.ParseIP(strings.TrimSpace(assignment.IP)).To4()
+		if ip == nil {
+			return nil, fmt.Errorf("%s.ip must be a valid IPv4 address", prefix)
+		}
+		if !subnet.Contains(ip) {
+			return nil, fmt.Errorf("%s.ip must be inside the DHCP subnet %s", prefix, subnet)
+		}
+		if ip.Equal(network) || ip.Equal(broadcast) {
+			return nil, fmt.Errorf("%s.ip must be a usable host address", prefix)
+		}
+		if ip.Equal(gateway) {
+			return nil, fmt.Errorf("%s.ip cannot be the DHCP gateway", prefix)
+		}
+		if bind != nil && ip.Equal(bind) {
+			return nil, fmt.Errorf("%s.ip cannot be the DHCP service address", prefix)
+		}
+		macKey := strings.ToLower(mac.String())
+		if previous, exists := seenMAC[macKey]; exists {
+			return nil, fmt.Errorf("%s.mac duplicates config.static_assignments[%d]", prefix, previous)
+		}
+		ipKey := ip.String()
+		if previous, exists := seenIP[ipKey]; exists {
+			return nil, fmt.Errorf("%s.ip duplicates config.static_assignments[%d]", prefix, previous)
+		}
+		seenMAC[macKey] = i
+		seenIP[ipKey] = i
+		assignments = append(assignments, store.DHCPStaticAssignment{
+			MAC: mac.String(),
+			IP:  ip.String(),
+		})
+	}
+	return assignments, nil
 }
 
 func validNAT44Pool(value string) bool {

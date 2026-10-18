@@ -195,6 +195,9 @@ type VNFConfig struct {
 	// BVI can own the .1 gateway.
 	BindIP string `json:"bind_ip,omitempty"`
 
+	// StaticAssignments reserve IPv4 addresses for specific MAC addresses.
+	StaticAssignments []DHCPStaticAssignment `json:"static_assignments,omitempty"`
+
 	// NAT44 configuration.
 	OutsideInterface string `json:"outside_interface,omitempty"`
 	OutsideAddress   string `json:"outside_address,omitempty"`
@@ -205,6 +208,12 @@ type VNFConfig struct {
 	// outside interface. The external address is the outside interface's
 	// address, so rules keep working when the address is DHCP-assigned.
 	DNATRules []DNATRule `json:"dnat_rules,omitempty"`
+}
+
+// DHCPStaticAssignment reserves one IPv4 address for a MAC address.
+type DHCPStaticAssignment struct {
+	MAC string `json:"mac"`
+	IP  string `json:"ip"`
 }
 
 // DNATRule forwards one external TCP or UDP port to an address inside a NAT44

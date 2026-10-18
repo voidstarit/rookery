@@ -405,6 +405,21 @@ The editor and assignment dialog both show the full effective ACL text,
 including the implicit deny. An ACL cannot be deleted while assigned to an
 interface.
 
+The **Network** tab includes a **Troubleshoot** section. It currently renders
+the active VPP packet-processing graph from `vppctl show vlib graphviz filter`;
+node size is cycles/packet and color is packets/call. Interface-related nodes
+(`*-input`, `*-output`, `*-tx`, BVI/VNF/host nodes) have a blue ring. The graph is
+laid out top-to-bottom with input nodes at the top and terminal/drop nodes at the
+bottom; feedback edges are dashed. Use the **Focus** picker to focus the
+graph on one interface or packet feature (ACL plugin, NAT44, DHCP) and its
+directly related nodes, or choose **All nodes**.
+Drag to pan, scroll or use the `+`/`-` buttons to zoom, and use **Fit** to reset
+the view. **Labels** shows all node names, while hovering a node isolates that
+node and its directly connected neighbors. The graph is refreshed on demand, and
+nodes are only shown if they were active since the last VPP stats clear. Interface
+nodes appear only after the interface has processed traffic. Trace and packet
+capture are planned follow-ups.
+
 Network functions (**VNFs**) are attached to Rookery Networks. The **VNFs** tab
 supports `dhcpv4`, `dhcpv6`, and `nat44` functions; the VNF record has a type,
 network, enable flag, and type-specific configuration. A network can have one
@@ -415,7 +430,12 @@ in-process CoreDHCP server bound to that tap.
 DHCPv4 uses CoreDHCP's DHCPv4 server with a per-VNF bitmap allocator. DHCPv6
 uses CoreDHCP's DHCPv6 server with stateful IA_NA allocation from the configured
 IPv6 range; it does not provide router advertisements or prefix delegation, so
-clients must be configured to request DHCPv6. Lease files live under
+clients must be configured to request DHCPv6. DHCPv4 VNFs can also define
+`static_assignments`, a list of unique MAC/IPv4 pairs. The reserved address may
+be inside or outside the dynamic range, but it must be a usable host in the
+DHCP subnet and cannot be the gateway or service address. Reserved addresses
+are kept out of the dynamic allocator, so a client MAC always receives its
+assigned address. Static assignments are DHCPv4-only. Lease files live under
 `<run-dir>/vnfs/<vnf-id>.json`, and the **Leases** action shows client ID,
 address, hostname, expiry, and active state. The server does not use CoreDHCP's
 `range` plugin because that plugin imports the CGO `mattn/go-sqlite3` driver;
@@ -561,6 +581,7 @@ Set `-addr :8080` to expose the server beyond localhost.
 | `GET`    | `/api/networks/{id}` | Get one network                 |
 | `DELETE` | `/api/networks/{id}` | Delete an empty network and its VNFs |
 | `GET`    | `/api/host/interfaces` | List host NICs for NAT44 outside selection |
+| `GET`    | `/api/troubleshoot/vpp-graph` | Active VPP packet-processing node graph |
 | `GET`    | `/api/vnfs`        | List VNFs (`?network_id=<id>` optional) |
 | `POST`   | `/api/vnfs`        | Create a DHCPv4, DHCPv6, or NAT44 VNF |
 | `GET`    | `/api/vnfs/{id}`   | Get one VNF                       |

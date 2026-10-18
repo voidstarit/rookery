@@ -1,12 +1,13 @@
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../../shared/api";
 import { showToast } from "../../shared/toast";
-import type { ACL, Network, StatusResponse, VirtualInterface, VM, VNF } from "../types";
+import type { ACL, Network, StatusResponse, VirtualInterface, VM, VNF, VPPGraph } from "../types";
 import { ACLDialog } from "./ACLDialog";
 import { AttachDialog } from "./AttachDialog";
 import { InterfaceACLDialog } from "./InterfaceACLDialog";
 import { InterfaceDialog } from "./InterfaceDialog";
 import { NetworkDialog } from "./NetworkDialog";
+import { VPPGraphView } from "./VPPGraph";
 import { aclAssignments } from "./acl";
 
 function formatDate(value: string | undefined): string {
@@ -28,6 +29,15 @@ type BackendData = {
   vnfs: VNF[];
 };
 
+type Section = "networks" | "interfaces" | "acl" | "troubleshoot";
+
+const SECTIONS: Array<{ id: Section; label: string }> = [
+  { id: "networks", label: "Networks" },
+  { id: "interfaces", label: "Interfaces" },
+  { id: "acl", label: "ACLs" },
+  { id: "troubleshoot", label: "Troubleshoot" },
+];
+
 export function NetworksTab() {
   const [networks, setNetworks] = useState<Network[]>([]);
   const [interfaces, setInterfaces] = useState<VirtualInterface[]>([]);
@@ -44,6 +54,10 @@ export function NetworksTab() {
   const [attachIface, setAttachIface] = useState<VirtualInterface | null>(null);
   const [aclDialog, setAclDialog] = useState<{ acl: ACL | null } | null>(null);
   const [interfaceACLIface, setInterfaceACLIface] = useState<VirtualInterface | null>(null);
+  const [section, setSection] = useState<Section>("networks");
+  const [graph, setGraph] = useState<VPPGraph | null>(null);
+  const [graphError, setGraphError] = useState("");
+  const [graphLoading, setGraphLoading] = useState(false);
 
   const setData = (partial: Partial<BackendData>) => {
     if (partial.networks) {
@@ -156,6 +170,27 @@ export function NetworksTab() {
     ]);
     setLoading(false);
   };
+
+  const loadGraph = async () => {
+    setGraphLoading(true);
+    try {
+      const data = await api<VPPGraph>("/api/troubleshoot/vpp-graph");
+      setGraph(data);
+      setGraphError("");
+    } catch (err) {
+      setGraphError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGraphLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (section === "troubleshoot") {
+      void loadGraph();
+    }
+    // loadGraph only uses state setters and the stable API helper.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section]);
 
   useEffect(() => {
     void refreshAll();
@@ -347,7 +382,22 @@ export function NetworksTab() {
 
   return (
     <>
-      <section class="panel" aria-labelledby="networks-heading">
+      <div class="subtabs" role="tablist" aria-label="Network sections">
+        {SECTIONS.map((item) => (
+          <button
+            key={item.id}
+            class="subtab"
+            type="button"
+            role="tab"
+            aria-selected={section === item.id}
+            onClick={() => setSection(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      <section class="panel" aria-labelledby="networks-heading" hidden={section !== "networks"}>
         <div class="panel-head">
           <div>
             <h2 id="networks-heading">Network</h2>
@@ -451,7 +501,7 @@ export function NetworksTab() {
         </div>
       </section>
 
-      <section class="panel panel-spaced" aria-labelledby="interfaces-heading">
+      <section class="panel panel-spaced" aria-labelledby="interfaces-heading" hidden={section !== "interfaces"}>
         <div class="panel-head">
           <div>
             <h2 id="interfaces-heading">Rookery Virtual Interfaces</h2>
@@ -595,7 +645,7 @@ export function NetworksTab() {
         </div>
       </section>
 
-      <section class="panel panel-spaced" aria-labelledby="acls-heading">
+      <section class="panel panel-spaced" aria-labelledby="acls-heading" hidden={section !== "acl"}>
         <div class="panel-head">
           <div>
             <h2 id="acls-heading">Network ACLs</h2>
@@ -709,6 +759,52 @@ export function NetworksTab() {
             </div>
           )}
         </div>
+      </section>
+
+      <section class="panel panel-spaced" aria-labelledby="troubleshoot-heading" hidden={section !== "troubleshoot"}>
+        <div class="panel-head">
+          <div>
+            <h2 id="troubleshoot-heading">Troubleshoot</h2>
+            <p class="panel-subtitle">VPP packet processing graph</p>
+          </div>
+          <button class="button ghost" type="button" disabled={graphLoading} onClick={() => void loadGraph()}>
+            {graphLoading ? "Refreshing…" : "Refresh graph"}
+          </button>
+        </div>
+
+        <p class="field-hint">
+          Active VPP nodes since the last stats clear. Node size represents cycles per packet;
+          color represents packets per call.
+        </p>
+
+        {graphError ? (
+          <div class="banner" role="alert">
+            {graphError}
+          </div>
+        ) : null}
+
+        {graphLoading && !graph ? (
+          <div class="empty">
+            <div class="empty-mark" aria-hidden="true">
+              ◌
+            </div>
+            <h3>Loading VPP graph…</h3>
+          </div>
+        ) : graph ? (
+          <VPPGraphView graph={graph} />
+        ) : (
+          <div class="empty">
+            <div class="empty-mark" aria-hidden="true">
+              ◌
+            </div>
+            <h3>No graph loaded</h3>
+            <p>Use Refresh graph to inspect the active VPP packet-processing nodes.</p>
+          </div>
+        )}
+
+        {graph?.generated_at ? (
+          <p class="field-hint">Sampled {formatDate(graph.generated_at)}</p>
+        ) : null}
       </section>
 
       {networkDialogOpen ? (

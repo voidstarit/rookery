@@ -107,6 +107,8 @@ type fakeNetworkProvisioner struct {
 	deleteIfErr   error
 	createTapErr  error
 	deleteTapErr  error
+	graph         host.VPPGraph
+	graphErr      error
 }
 
 func (f *fakeNetworkProvisioner) Ping(_ context.Context) error { return nil }
@@ -143,6 +145,13 @@ func (f *fakeNetworkProvisioner) InterfaceCounters(_ context.Context, names []st
 }
 
 func (f *fakeNetworkProvisioner) Identity() (string, error) { return "fake-vpp", nil }
+
+func (f *fakeNetworkProvisioner) VPPNodeGraph(_ context.Context) (host.VPPGraph, error) {
+	if f.graphErr != nil {
+		return host.VPPGraph{}, f.graphErr
+	}
+	return f.graph, nil
+}
 
 func (f *fakeNetworkProvisioner) CreateBridgeDomain(_ context.Context, name string, _ []uint32) (uint32, error) {
 	if f.createBDErr != nil {
@@ -1605,6 +1614,39 @@ func TestVNFDHCPv6Lifecycle(t *testing.T) {
 	}
 }
 
+func TestVNFDHCPv4StaticAssignments(t *testing.T) {
+	env := newTestAPI(t)
+	network := createNetworkAPI(t, env.handler, "lab")
+	recorder := do(t, env.handler, http.MethodPost, "/api/vnfs", map[string]any{
+		"name":       "lab-dhcp",
+		"network_id": network.ID,
+		"type":       store.VNFTypeDHCPv4,
+		"enabled":    false,
+		"config": map[string]any{
+			"gateway":     "10.20.0.1/24",
+			"range_start": "10.20.0.100",
+			"range_end":   "10.20.0.200",
+			"dns":         "1.1.1.1",
+			"lease_time":  "12h",
+			"static_assignments": []map[string]any{
+				{"mac": "02:00:00:00:00:01", "ip": "10.20.0.50"},
+				{"mac": "02:00:00:00:00:02", "ip": "10.20.0.100"},
+			},
+		},
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create vnf status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	vnf := decode[store.VNF](t, recorder)
+	if len(vnf.Config.StaticAssignments) != 2 {
+		t.Fatalf("static assignments = %+v", vnf.Config.StaticAssignments)
+	}
+	if vnf.Config.StaticAssignments[0].MAC != "02:00:00:00:00:01" ||
+		vnf.Config.StaticAssignments[0].IP != "10.20.0.50" {
+		t.Fatalf("static assignment = %+v", vnf.Config.StaticAssignments[0])
+	}
+}
+
 func TestVNFValidation(t *testing.T) {
 	handler := newTestHandler(t)
 	network := createNetworkAPI(t, handler, "lab")
@@ -1638,6 +1680,39 @@ func TestVNFValidation(t *testing.T) {
 		{name: "v4 range gateway", mutate: func(m map[string]any) { m["config"].(map[string]any)["range_start"] = "10.20.0.1" }, status: http.StatusBadRequest},
 		{name: "v4 bad dns", mutate: func(m map[string]any) { m["config"].(map[string]any)["dns"] = "nope" }, status: http.StatusBadRequest},
 		{name: "v4 bad lease", mutate: func(m map[string]any) { m["config"].(map[string]any)["lease_time"] = "forever" }, status: http.StatusBadRequest},
+		{name: "v4 bad static MAC", mutate: func(m map[string]any) {
+			m["config"].(map[string]any)["static_assignments"] = []map[string]any{
+				{"mac": "nope", "ip": "10.20.0.50"},
+			}
+		}, status: http.StatusBadRequest},
+		{name: "v4 static IP outside subnet", mutate: func(m map[string]any) {
+			m["config"].(map[string]any)["static_assignments"] = []map[string]any{
+				{"mac": "02:00:00:00:00:01", "ip": "10.21.0.50"},
+			}
+		}, status: http.StatusBadRequest},
+		{name: "v4 duplicate static MAC", mutate: func(m map[string]any) {
+			m["config"].(map[string]any)["static_assignments"] = []map[string]any{
+				{"mac": "02:00:00:00:00:01", "ip": "10.20.0.50"},
+				{"mac": "02:00:00:00:00:01", "ip": "10.20.0.51"},
+			}
+		}, status: http.StatusBadRequest},
+		{name: "v4 duplicate static IP", mutate: func(m map[string]any) {
+			m["config"].(map[string]any)["static_assignments"] = []map[string]any{
+				{"mac": "02:00:00:00:00:01", "ip": "10.20.0.50"},
+				{"mac": "02:00:00:00:00:02", "ip": "10.20.0.50"},
+			}
+		}, status: http.StatusBadRequest},
+		{name: "v6 static assignments rejected", mutate: func(m map[string]any) {
+			m["type"] = store.VNFTypeDHCPv6
+			cfg := m["config"].(map[string]any)
+			cfg["gateway"] = "fd00:20::1/64"
+			cfg["range_start"] = "fd00:20::100"
+			cfg["range_end"] = "fd00:20::200"
+			cfg["dns"] = "2001:4860:4860::8888"
+			cfg["static_assignments"] = []map[string]any{
+				{"mac": "02:00:00:00:00:01", "ip": "fd00:20::50"},
+			}
+		}, status: http.StatusBadRequest},
 		{name: "v6 bad gateway", mutate: func(m map[string]any) {
 			m["type"] = store.VNFTypeDHCPv6
 			cfg := m["config"].(map[string]any)
@@ -3463,6 +3538,31 @@ func TestCreateDiskDoesNotRequireVPP(t *testing.T) {
 	recorder = do(t, handler, http.MethodPost, "/api/vms", map[string]any{"name": "vm01", "disk_id": 1})
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("vm create status = %d, body = %s, want 503", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestVPPNodeGraph(t *testing.T) {
+	env := newTestAPI(t)
+	env.networks.graph = host.VPPGraph{
+		Nodes: []host.VPPGraphNode{
+			{ID: "ip4-input", Label: "ip4-input", Width: 2.5, Fill: 3},
+			{ID: "ip4-lookup", Label: "ip4-lookup", Width: 1.5},
+		},
+		Edges: []host.VPPGraphEdge{{Source: "ip4-input", Target: "ip4-lookup"}},
+	}
+	recorder := do(t, env.handler, http.MethodGet, "/api/troubleshoot/vpp-graph", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("vpp graph status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	graph := decode[host.VPPGraph](t, recorder)
+	if len(graph.Nodes) != 2 || len(graph.Edges) != 1 || graph.Edges[0].Target != "ip4-lookup" {
+		t.Fatalf("vpp graph = %+v", graph)
+	}
+
+	env.networks.graphErr = errors.New("vppctl failed")
+	recorder = do(t, env.handler, http.MethodGet, "/api/troubleshoot/vpp-graph", nil)
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("vpp graph error status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 }
 
