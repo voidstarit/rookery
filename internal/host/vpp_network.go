@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -34,6 +35,12 @@ type VPPNetwork struct {
 	Socket   string
 	VhostDir string
 	CLI      string
+	// CaptureDir is where VPP writes packet capture files. VPP's pcap CLI
+	// only accepts a basename and always writes under /tmp.
+	CaptureDir string
+
+	captureMu sync.Mutex
+	capture   *PacketCaptureStatus
 }
 
 // NewVPPNetwork returns a VPP network provisioner.
@@ -52,7 +59,7 @@ func NewVPPNetwork(socket, vhostDir string) (*VPPNetwork, error) {
 	if err := os.MkdirAll(abs, 0o755); err != nil {
 		return nil, fmt.Errorf("create vhost directory: %w", err)
 	}
-	return &VPPNetwork{Socket: socket, VhostDir: abs, CLI: "vppctl"}, nil
+	return &VPPNetwork{Socket: socket, VhostDir: abs, CLI: "vppctl", CaptureDir: "/tmp"}, nil
 }
 
 // Ping checks the VPP binary API with a control ping.

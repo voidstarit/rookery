@@ -269,7 +269,7 @@ type ACL struct {
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	Rules       []ACLRule `json:"rules"`
-	VPPIndex    uint32    `json:"-"`
+	VPPIndex    uint32    `json:"vpp_index,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

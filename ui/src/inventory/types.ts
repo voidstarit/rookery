@@ -146,6 +146,65 @@ export type VirtualInterface = {
   updated_at: string;
 };
 
+export type VPPInterface = {
+  name: string;
+  sw_if_index: number;
+  type?: string;
+  mac?: string;
+  mtu?: number;
+  up: boolean;
+  tag?: string;
+};
+
+export type PacketCaptureStatus = {
+  active: boolean;
+  interface?: string;
+  direction?: string;
+  file?: string;
+  size: number;
+  max_packets: number;
+  max_bytes: number;
+  snap_length: number;
+  packets: number;
+  buffered: number;
+  started_at?: string;
+  stopped_at?: string;
+  raw?: string;
+};
+
+export type PacketCaptureFile = {
+  name: string;
+  size: number;
+  modified: string;
+};
+
+export type PacketCaptureOverview = {
+  status: PacketCaptureStatus;
+  files: PacketCaptureFile[];
+};
+
+export type ACLRuleCounter = {
+  acl_index: number;
+  rule_index: number;
+  action: string;
+  matched: number;
+};
+
+export type ACLDirectionCounters = {
+  matched: number;
+  denied: number;
+  permitted: number;
+  acl_indexes?: number[];
+  rules?: ACLRuleCounter[];
+};
+
+export type ACLInterfaceCounters = {
+  interface: string;
+  sw_if_index: number;
+  ingress: ACLDirectionCounters;
+  egress: ACLDirectionCounters;
+};
+
 export type VPPGraphNode = {
   id: string;
   label: string;
@@ -183,6 +242,7 @@ export type ACL = {
   title: string;
   description: string;
   rules: ACLRule[];
+  vpp_index?: number;
   created_at: string;
   updated_at: string;
 };

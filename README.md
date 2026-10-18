@@ -417,8 +417,25 @@ Drag to pan, scroll or use the `+`/`-` buttons to zoom, and use **Fit** to reset
 the view. **Labels** shows all node names, while hovering a node isolates that
 node and its directly connected neighbors. The graph is refreshed on demand, and
 nodes are only shown if they were active since the last VPP stats clear. Interface
-nodes appear only after the interface has processed traffic. Trace and packet
-capture are planned follow-ups.
+nodes appear only after the interface has processed traffic.
+
+Each row in the **Network → Interfaces** tab shows its ACL assignments and compact
+per-interface match totals. **ACL details** expands the row to show per-direction
+and per-rule counters (`matched`, `denied`, and `permitted`) from VPP's applied
+lookup contexts. These count explicit ACL rule matches since the ACL was applied;
+implicit-deny packets are not included. If you only need a specific rule's count,
+the rule row shows its own packet total and action.
+
+The same **Troubleshoot** section includes **Packet capture**. Choose a VPP
+interface (or `Any interface`), direction, maximum capture size, and snapshot
+length. The API converts the size and snapshot length into VPP's packet-ring
+limit, starts `pcap trace`, and stops it on demand. Captures are written by VPP
+under `/tmp` as `rookery-*.pcap` and can be downloaded, opened in the embedded
+WebShark viewer, or deleted. The active capture file cannot be deleted until the
+capture is stopped. WebShark v3.0.0 is vendored under
+`internal/webui/static/webshark` (GPL-2.0), with Roboto and Material Icons fonts
+served locally; the upstream `ffmpeg-core.wasm` is omitted, so RTP audio playback
+is unavailable while packet dissection works.
 
 Network functions (**VNFs**) are attached to Rookery Networks. The **VNFs** tab
 supports `dhcpv4`, `dhcpv6`, and `nat44` functions; the VNF record has a type,
@@ -582,6 +599,15 @@ Set `-addr :8080` to expose the server beyond localhost.
 | `DELETE` | `/api/networks/{id}` | Delete an empty network and its VNFs |
 | `GET`    | `/api/host/interfaces` | List host NICs for NAT44 outside selection |
 | `GET`    | `/api/troubleshoot/vpp-graph` | Active VPP packet-processing node graph |
+| `GET`    | `/api/troubleshoot/acl-counters` | Per-interface ACL rule-match counters |
+| `GET`    | `/api/troubleshoot/capture/interfaces` | List VPP interfaces for capture |
+| `GET`    | `/api/troubleshoot/capture` | Current capture status and retained files |
+| `POST`   | `/api/troubleshoot/capture` | Start a capture (`interface`, `direction`, `max_bytes`, `snap_length`) |
+| `POST`   | `/api/troubleshoot/capture/stop` | Stop the active capture |
+| `GET`    | `/api/troubleshoot/capture/files` | List retained pcap files |
+| `GET`    | `/api/troubleshoot/capture/files/{name}` | Download a pcap file |
+| `DELETE` | `/api/troubleshoot/capture/files/{name}` | Delete a retained pcap file |
+| `GET`    | `/webshark/`       | Embedded WebShark pcap viewer |
 | `GET`    | `/api/vnfs`        | List VNFs (`?network_id=<id>` optional) |
 | `POST`   | `/api/vnfs`        | Create a DHCPv4, DHCPv6, or NAT44 VNF |
 | `GET`    | `/api/vnfs/{id}`   | Get one VNF                       |

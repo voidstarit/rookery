@@ -1,0 +1,2 @@
+# Vendored browser bundles retain upstream formatting and whitespace.
+internal/webui/static/webshark/** -whitespace

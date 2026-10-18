@@ -65,6 +65,14 @@ type NetworkProvisioner interface {
 	Identity() (string, error)
 	InterfaceCounters(ctx context.Context, names []string) (map[string]host.InterfaceCounters, error)
 	VPPNodeGraph(ctx context.Context) (host.VPPGraph, error)
+	ACLInterfaceCounters(ctx context.Context) ([]host.ACLInterfaceCounters, error)
+	VPPInterfaces(ctx context.Context) ([]host.VPPInterface, error)
+	StartPacketCapture(ctx context.Context, options host.PacketCaptureOptions) (host.PacketCaptureStatus, error)
+	StopPacketCapture(ctx context.Context) (host.PacketCaptureStatus, error)
+	PacketCaptureStatus(ctx context.Context) (host.PacketCaptureStatus, error)
+	ListPacketCaptures() ([]host.PacketCaptureFile, error)
+	OpenPacketCapture(name string) (io.ReadSeekCloser, host.PacketCaptureFile, error)
+	DeletePacketCapture(name string) error
 	EnsureVPPACL(ctx context.Context, aclID int64, rules []store.ACLRule) (uint32, error)
 	DeleteVPPACL(ctx context.Context, index uint32) error
 	SetInterfaceACLs(ctx context.Context, swIfIndex uint32, ingress, egress uint32) error
@@ -166,6 +174,20 @@ func New(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMControll
 	mux.HandleFunc("GET /api/vnfs/{id}/sessions", s.handleListVNFSessions)
 	mux.HandleFunc("GET /api/host/interfaces", s.handleListHostInterfaces)
 	mux.HandleFunc("GET /api/troubleshoot/vpp-graph", s.handleVPPNodeGraph)
+	mux.HandleFunc("GET /api/troubleshoot/acl-counters", s.handleACLInterfaceCounters)
+	mux.HandleFunc("GET /api/troubleshoot/capture/interfaces", s.handleListVPPInterfaces)
+	mux.HandleFunc("GET /api/troubleshoot/capture", s.handlePacketCaptureOverview)
+	mux.HandleFunc("POST /api/troubleshoot/capture", s.handleStartPacketCapture)
+	mux.HandleFunc("POST /api/troubleshoot/capture/stop", s.handleStopPacketCapture)
+	mux.HandleFunc("GET /api/troubleshoot/capture/files", s.handleListPacketCaptures)
+	mux.HandleFunc("GET /api/troubleshoot/capture/files/{name}", s.handleDownloadPacketCapture)
+	mux.HandleFunc("DELETE /api/troubleshoot/capture/files/{name}", s.handleDeletePacketCapture)
+	mux.HandleFunc("GET /webshark/json", s.handleWebSharkJSON)
+	mux.HandleFunc("GET /webshark/captures/{name}", s.handleWebSharkCapture)
+	mux.HandleFunc("GET /webshark/watch", s.handleWebSharkWatch)
+	mux.HandleFunc("GET /webshark", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/webshark/", http.StatusFound)
+	})
 	mux.HandleFunc("GET /api/acls", s.handleListACLs)
 	mux.HandleFunc("POST /api/acls", s.handleCreateACL)
 	mux.HandleFunc("GET /api/acls/{id}", s.handleGetACL)
@@ -298,6 +320,24 @@ func allowedMethods(path string) (string, bool) {
 		return "GET, HEAD", true
 	case path == "/api/troubleshoot/vpp-graph":
 		return "GET, HEAD", true
+	case path == "/api/troubleshoot/acl-counters":
+		return "GET, HEAD", true
+	case path == "/api/troubleshoot/capture/interfaces":
+		return "GET, HEAD", true
+	case path == "/api/troubleshoot/capture":
+		return "GET, HEAD, POST", true
+	case path == "/api/troubleshoot/capture/stop":
+		return "POST", true
+	case path == "/api/troubleshoot/capture/files":
+		return "GET, HEAD", true
+	case strings.HasPrefix(path, "/api/troubleshoot/capture/files/"):
+		return "GET, HEAD, DELETE", true
+	case path == "/webshark/json":
+		return "GET, HEAD", true
+	case strings.HasPrefix(path, "/webshark/captures/"):
+		return "GET, HEAD", true
+	case path == "/webshark/watch":
+		return "GET", true
 	case path == "/api/vnfs":
 		return "GET, HEAD, POST", true
 	case strings.HasPrefix(path, "/api/vnfs/"):
@@ -390,12 +430,24 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy",
-			"default-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; "+
-				"img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self' ws: wss:")
+		webshark := strings.HasPrefix(r.URL.Path, "/webshark")
+		if webshark {
+			w.Header().Set("Content-Security-Policy",
+				"default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; "+
+					"img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; "+
+					"script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' 'unsafe-eval'; "+
+					"worker-src 'self' blob:; child-src 'self' blob:; frame-src 'self'; "+
+					"media-src 'self' blob:; font-src 'self' data:; connect-src 'self' ws: wss:")
+			w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+		} else {
+			w.Header().Set("Content-Security-Policy",
+				"default-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; "+
+					"img-src 'self' data:; style-src 'self'; script-src 'self'; "+
+					"connect-src 'self' ws: wss:; frame-src 'self'")
+			w.Header().Set("X-Frame-Options", "DENY")
+		}
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "DENY")
 		next.ServeHTTP(w, r)
 	})
 }

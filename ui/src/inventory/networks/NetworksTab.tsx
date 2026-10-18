@@ -1,14 +1,27 @@
+import { Fragment } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../../shared/api";
 import { showToast } from "../../shared/toast";
-import type { ACL, Network, StatusResponse, VirtualInterface, VM, VNF, VPPGraph } from "../types";
+import type {
+  ACL,
+  ACLDirectionCounters,
+  ACLInterfaceCounters,
+  ACLRuleCounter,
+  Network,
+  StatusResponse,
+  VirtualInterface,
+  VM,
+  VNF,
+  VPPGraph,
+} from "../types";
 import { ACLDialog } from "./ACLDialog";
 import { AttachDialog } from "./AttachDialog";
 import { InterfaceACLDialog } from "./InterfaceACLDialog";
 import { InterfaceDialog } from "./InterfaceDialog";
 import { NetworkDialog } from "./NetworkDialog";
+import { PacketCapturePanel } from "./PacketCapture";
 import { VPPGraphView } from "./VPPGraph";
-import { aclAssignments } from "./acl";
+import { aclAssignments, formatACLRuleText } from "./acl";
 
 function formatDate(value: string | undefined): string {
   if (!value) {
@@ -54,10 +67,14 @@ export function NetworksTab() {
   const [attachIface, setAttachIface] = useState<VirtualInterface | null>(null);
   const [aclDialog, setAclDialog] = useState<{ acl: ACL | null } | null>(null);
   const [interfaceACLIface, setInterfaceACLIface] = useState<VirtualInterface | null>(null);
+  const [expandedACLInterface, setExpandedACLInterface] = useState<number | null>(null);
   const [section, setSection] = useState<Section>("networks");
   const [graph, setGraph] = useState<VPPGraph | null>(null);
   const [graphError, setGraphError] = useState("");
   const [graphLoading, setGraphLoading] = useState(false);
+  const [aclCounters, setACLCounters] = useState<ACLInterfaceCounters[]>([]);
+  const [aclCounterError, setACLCounterError] = useState("");
+  const [aclCountersLoaded, setACLCountersLoaded] = useState(false);
 
   const setData = (partial: Partial<BackendData>) => {
     if (partial.networks) {
@@ -184,11 +201,32 @@ export function NetworksTab() {
     }
   };
 
+  const loadACLCounters = async () => {
+    setACLCountersLoaded(false);
+    try {
+      const data = await api<ACLInterfaceCounters[]>("/api/troubleshoot/acl-counters");
+      setACLCounters(Array.isArray(data) ? data : []);
+      setACLCounterError("");
+    } catch (err) {
+      setACLCounterError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setACLCountersLoaded(true);
+    }
+  };
+
   useEffect(() => {
     if (section === "troubleshoot") {
       void loadGraph();
     }
     // loadGraph only uses state setters and the stable API helper.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section]);
+
+  useEffect(() => {
+    if (section === "interfaces") {
+      void loadACLCounters();
+    }
+    // loadACLCounters only uses state setters and the stable API helper.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section]);
 
@@ -380,6 +418,45 @@ export function NetworksTab() {
         : "No ACLs defined"
       : `${acls.length} ACL${acls.length === 1 ? "" : "s"} · ${assignedACLs} assigned`;
 
+  const formatACLCounter = (counter: ACLDirectionCounters | undefined) => {
+    if (!counter || !counter.acl_indexes || counter.acl_indexes.length === 0) {
+      return "no ACL";
+    }
+    return `${counter.matched.toLocaleString()} matched · ${counter.denied.toLocaleString()} denied · ${counter.permitted.toLocaleString()} permitted`;
+  };
+
+  const ruleCounterLabel = (counter: ACLRuleCounter) => {
+    const acl = acls.find((item) => item.vpp_index === counter.acl_index);
+    const rule = acl?.rules[counter.rule_index];
+    if (rule) {
+      return formatACLRuleText(rule);
+    }
+    return `ACL ${counter.acl_index} rule ${counter.rule_index}`;
+  };
+
+  const renderRuleCounters = (title: string, direction: ACLDirectionCounters) => {
+    const rules = direction.rules || [];
+    return (
+      <div class="acl-rule-counter-group">
+        <span class="acl-counter-direction">{title}</span>
+        {!direction.acl_indexes || direction.acl_indexes.length === 0 ? (
+          <span class="acl-rule-counter muted">No ACL applied</span>
+        ) : rules.length === 0 ? (
+          <span class="acl-rule-counter muted">No explicit rule matches yet</span>
+        ) : (
+          rules.map((rule, index) => (
+            <span class="acl-rule-counter" key={`${rule.acl_index}-${rule.rule_index}-${index}`}>
+              <span class="acl-rule-counter-text">{ruleCounterLabel(rule)}</span>
+              <span class="acl-rule-counter-value">
+                {rule.matched.toLocaleString()} pkts · {rule.action}
+              </span>
+            </span>
+          ))
+        )}
+      </div>
+    );
+  };
+
   return (
     <>
       <div class="subtabs" role="tablist" aria-label="Network sections">
@@ -567,8 +644,11 @@ export function NetworksTab() {
                   if (iface.egress_acl_name) {
                     aclParts.push(`to: ${iface.egress_acl_name}`);
                   }
+                  const aclCounter = aclCounters.find((item) => item.interface === iface.name);
+                  const aclExpanded = expandedACLInterface === iface.id;
                   return (
-                    <tr key={iface.id}>
+                    <Fragment key={iface.id}>
+                    <tr>
                       <td>
                         <span class="vm-name">{iface.name}</span>
                         {iface.socket_path ? (
@@ -583,7 +663,32 @@ export function NetworksTab() {
                         {owner ? owner.name : iface.attached_vm_name || "unattached"}
                       </td>
                       <td class={aclParts.length ? "mono" : "mono muted"}>
-                        {aclParts.length ? aclParts.join(" · ") : "none"}
+                        {aclParts.length ? (
+                          <div class="interface-acl-summary">
+                            <span class="acl-assignment">{aclParts.join(" · ")}</span>
+                            {aclCounter ? (
+                              <span class="acl-inline-counter">
+                                from {aclCounter.ingress.matched.toLocaleString()} · to{" "}
+                                {aclCounter.egress.matched.toLocaleString()}
+                              </span>
+                            ) : !aclCountersLoaded ? (
+                              <span class="acl-inline-counter muted">loading counters…</span>
+                            ) : aclCounterError ? (
+                              <span class="acl-inline-counter muted">counters unavailable</span>
+                            ) : null}
+                            <button
+                              class="row-action"
+                              type="button"
+                              onClick={() =>
+                                setExpandedACLInterface(aclExpanded ? null : iface.id)
+                              }
+                            >
+                              {aclExpanded ? "Hide details" : "ACL details"}
+                            </button>
+                          </div>
+                        ) : (
+                          "none"
+                        )}
                       </td>
                       <td class="updated hide-sm">{formatDate(iface.updated_at)}</td>
                       <td>
@@ -629,6 +734,54 @@ export function NetworksTab() {
                         </div>
                       </td>
                     </tr>
+                    {aclExpanded && aclParts.length > 0 ? (
+                      <tr class="acl-details-row">
+                        <td colSpan={7}>
+                          <div class="interface-acl-details">
+                            <div class="interface-acl-details-head">
+                              <strong>ACL details for {iface.name}</strong>
+                              <button
+                                class="button ghost"
+                                type="button"
+                                onClick={() => setInterfaceACLIface(iface)}
+                              >
+                                Edit ACLs
+                              </button>
+                            </div>
+                            {aclCounter ? (
+                              <>
+                                <div class="acl-details-summary">
+                                  <span>
+                                    <b>From interface</b> {formatACLCounter(aclCounter.ingress)}
+                                  </span>
+                                  <span>
+                                    <b>To interface</b> {formatACLCounter(aclCounter.egress)}
+                                  </span>
+                                </div>
+                                <div class="acl-rule-counter-list">
+                                  {renderRuleCounters("From interface rules", aclCounter.ingress)}
+                                  {renderRuleCounters("To interface rules", aclCounter.egress)}
+                                </div>
+                              </>
+                            ) : aclCounterError ? (
+                              <p class="field-hint">ACL counters unavailable: {aclCounterError}</p>
+                            ) : !aclCountersLoaded ? (
+                              <p class="field-hint">Loading ACL counters…</p>
+                            ) : (
+                              <p class="field-hint">
+                                No ACL counter entry for this interface yet. Generate traffic or
+                                refresh the interface list.
+                              </p>
+                            )}
+                            <p class="field-hint">
+                              Counters show explicit ACL rule matches; implicit-deny packets are
+                              not included.
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -807,6 +960,16 @@ export function NetworksTab() {
         ) : null}
       </section>
 
+      <section class="panel panel-spaced" aria-labelledby="capture-heading" hidden={section !== "troubleshoot"}>
+        <div class="panel-head">
+          <div>
+            <h2 id="capture-heading">Packet capture</h2>
+            <p class="panel-subtitle">Capture VPP traffic and inspect it in WebShark</p>
+          </div>
+        </div>
+        <PacketCapturePanel />
+      </section>
+
       {networkDialogOpen ? (
         <NetworkDialog
           onClose={() => setNetworkDialogOpen(false)}
@@ -885,6 +1048,7 @@ export function NetworksTab() {
             setInterfaceACLIface(null);
             setData({ interfaces: interfaces.map((item) => (item.id === updated.id ? updated : item)) });
             setInterfaceError("");
+            void loadACLCounters();
             showToast(`Applied ACLs to ${updated.name}`);
           }}
         />

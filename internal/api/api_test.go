@@ -86,29 +86,38 @@ func (f *fakeDiskProvisioner) ListThinVolumes(_ context.Context, vg, thinPool st
 }
 
 type fakeNetworkProvisioner struct {
-	ensuredACLs   []int64
-	deletedACLs   []uint32
-	interfaceACLs map[uint32][2]uint32
-	nextBD        uint32
-	createdBDs    []string
-	ensuredBDs    []uint32
-	ensuredNames  []string
-	deletedBDs    []uint32
-	createdIfs    []string
-	ensuredIfs    []string
-	deletedIfs    []uint32
-	createdTaps   []string
-	deletedTaps   []uint32
-	createBDErr   error
-	deleteBDErr   error
-	ensureBDErr   error
-	createIfErr   error
-	ensureIfErr   error
-	deleteIfErr   error
-	createTapErr  error
-	deleteTapErr  error
-	graph         host.VPPGraph
-	graphErr      error
+	ensuredACLs    []int64
+	deletedACLs    []uint32
+	interfaceACLs  map[uint32][2]uint32
+	nextBD         uint32
+	createdBDs     []string
+	ensuredBDs     []uint32
+	ensuredNames   []string
+	deletedBDs     []uint32
+	createdIfs     []string
+	ensuredIfs     []string
+	deletedIfs     []uint32
+	createdTaps    []string
+	deletedTaps    []uint32
+	createBDErr    error
+	deleteBDErr    error
+	ensureBDErr    error
+	createIfErr    error
+	ensureIfErr    error
+	deleteIfErr    error
+	createTapErr   error
+	deleteTapErr   error
+	graph          host.VPPGraph
+	graphErr       error
+	vppInterfaces  []host.VPPInterface
+	interfacesErr  error
+	captureStatus  host.PacketCaptureStatus
+	captureErr     error
+	captureFiles   []host.PacketCaptureFile
+	captureData    map[string][]byte
+	deletedCapture string
+	aclCounters    []host.ACLInterfaceCounters
+	aclCounterErr  error
 }
 
 func (f *fakeNetworkProvisioner) Ping(_ context.Context) error { return nil }
@@ -152,6 +161,81 @@ func (f *fakeNetworkProvisioner) VPPNodeGraph(_ context.Context) (host.VPPGraph,
 	}
 	return f.graph, nil
 }
+
+func (f *fakeNetworkProvisioner) ACLInterfaceCounters(_ context.Context) ([]host.ACLInterfaceCounters, error) {
+	if f.aclCounterErr != nil {
+		return nil, f.aclCounterErr
+	}
+	return f.aclCounters, nil
+}
+
+func (f *fakeNetworkProvisioner) VPPInterfaces(_ context.Context) ([]host.VPPInterface, error) {
+	if f.interfacesErr != nil {
+		return nil, f.interfacesErr
+	}
+	return f.vppInterfaces, nil
+}
+
+func (f *fakeNetworkProvisioner) StartPacketCapture(_ context.Context, options host.PacketCaptureOptions) (host.PacketCaptureStatus, error) {
+	if f.captureErr != nil {
+		return host.PacketCaptureStatus{}, f.captureErr
+	}
+	f.captureStatus = host.PacketCaptureStatus{
+		Active:    true,
+		Interface: options.Interface,
+		Direction: options.Direction,
+		File:      "rookery-test.pcap",
+	}
+	return f.captureStatus, nil
+}
+
+func (f *fakeNetworkProvisioner) StopPacketCapture(_ context.Context) (host.PacketCaptureStatus, error) {
+	if f.captureErr != nil {
+		return host.PacketCaptureStatus{}, f.captureErr
+	}
+	f.captureStatus.Active = false
+	return f.captureStatus, nil
+}
+
+func (f *fakeNetworkProvisioner) PacketCaptureStatus(_ context.Context) (host.PacketCaptureStatus, error) {
+	if f.captureErr != nil {
+		return host.PacketCaptureStatus{}, f.captureErr
+	}
+	return f.captureStatus, nil
+}
+
+func (f *fakeNetworkProvisioner) ListPacketCaptures() ([]host.PacketCaptureFile, error) {
+	if f.captureErr != nil {
+		return nil, f.captureErr
+	}
+	return f.captureFiles, nil
+}
+
+func (f *fakeNetworkProvisioner) OpenPacketCapture(name string) (io.ReadSeekCloser, host.PacketCaptureFile, error) {
+	data, ok := f.captureData[name]
+	if !ok {
+		return nil, host.PacketCaptureFile{}, host.ErrCaptureNotFound
+	}
+	return readSeekNopCloser{bytes.NewReader(data)}, host.PacketCaptureFile{Name: name, Size: int64(len(data))}, nil
+}
+
+func (f *fakeNetworkProvisioner) DeletePacketCapture(name string) error {
+	if f.captureStatus.Active && f.captureStatus.File == name {
+		return host.ErrCaptureFileActive
+	}
+	if _, ok := f.captureData[name]; !ok {
+		return host.ErrCaptureNotFound
+	}
+	delete(f.captureData, name)
+	f.deletedCapture = name
+	return nil
+}
+
+type readSeekNopCloser struct {
+	*bytes.Reader
+}
+
+func (readSeekNopCloser) Close() error { return nil }
 
 func (f *fakeNetworkProvisioner) CreateBridgeDomain(_ context.Context, name string, _ []uint32) (uint32, error) {
 	if f.createBDErr != nil {
@@ -3563,6 +3647,133 @@ func TestVPPNodeGraph(t *testing.T) {
 	recorder = do(t, env.handler, http.MethodGet, "/api/troubleshoot/vpp-graph", nil)
 	if recorder.Code != http.StatusInternalServerError {
 		t.Fatalf("vpp graph error status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestACLInterfaceCounters(t *testing.T) {
+	env := newTestAPI(t)
+	env.networks.aclCounters = []host.ACLInterfaceCounters{{
+		Interface: "vm-01",
+		SwIfIndex: 5,
+		Ingress: host.ACLDirectionCounters{
+			Matched:    212,
+			Denied:     212,
+			ACLIndexes: []uint32{2},
+		},
+		Egress: host.ACLDirectionCounters{
+			Matched:    34,
+			Denied:     34,
+			ACLIndexes: []uint32{2},
+		},
+	}}
+	recorder := do(t, env.handler, http.MethodGet, "/api/troubleshoot/acl-counters", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("acl counters status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	counters := decode[[]host.ACLInterfaceCounters](t, recorder)
+	if len(counters) != 1 || counters[0].Ingress.Matched != 212 || counters[0].Egress.Denied != 34 {
+		t.Fatalf("acl counters = %+v", counters)
+	}
+}
+
+func TestPacketCaptureAPI(t *testing.T) {
+	env := newTestAPI(t)
+	env.networks.vppInterfaces = []host.VPPInterface{
+		{Name: "vm-01", SwIfIndex: 5, Type: "virtio", MAC: "02:00:00:00:00:01", Up: true},
+		{Name: "host-enp1s0", SwIfIndex: 1, Type: "af_packet", Up: true},
+	}
+	env.networks.captureFiles = []host.PacketCaptureFile{
+		{Name: "rookery-test.pcap", Size: 4, Modified: time.Unix(1700000000, 0).UTC()},
+	}
+	env.networks.captureData = map[string][]byte{"rookery-test.pcap": []byte("pcap")}
+
+	recorder := do(t, env.handler, http.MethodGet, "/api/troubleshoot/capture/interfaces", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("interfaces status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	interfaces := decode[[]host.VPPInterface](t, recorder)
+	if len(interfaces) != 2 || interfaces[0].Name != "vm-01" {
+		t.Fatalf("interfaces = %+v", interfaces)
+	}
+
+	recorder = do(t, env.handler, http.MethodGet, "/api/troubleshoot/capture", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("overview status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	type captureOverview struct {
+		Status host.PacketCaptureStatus `json:"status"`
+		Files  []host.PacketCaptureFile `json:"files"`
+	}
+	overview := decode[captureOverview](t, recorder)
+	if len(overview.Files) != 1 || overview.Files[0].Name != "rookery-test.pcap" {
+		t.Fatalf("overview = %+v", overview)
+	}
+
+	recorder = do(t, env.handler, http.MethodPost, "/api/troubleshoot/capture", map[string]any{
+		"interface":   "vm-01",
+		"direction":   "both",
+		"max_bytes":   1024 * 1024,
+		"snap_length": 2048,
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("start status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	status := decode[host.PacketCaptureStatus](t, recorder)
+	if !status.Active || status.Interface != "vm-01" {
+		t.Fatalf("start status = %+v", status)
+	}
+
+	recorder = do(t, env.handler, http.MethodPost, "/api/troubleshoot/capture/stop", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("stop status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	status = decode[host.PacketCaptureStatus](t, recorder)
+	if status.Active {
+		t.Fatalf("stop status = %+v", status)
+	}
+
+	recorder = do(t, env.handler, http.MethodGet, "/api/troubleshoot/capture/files", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("files status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	files := decode[[]host.PacketCaptureFile](t, recorder)
+	if len(files) != 1 || files[0].Name != "rookery-test.pcap" {
+		t.Fatalf("files = %+v", files)
+	}
+
+	recorder = do(t, env.handler, http.MethodGet, "/api/troubleshoot/capture/files/rookery-test.pcap", nil)
+	if recorder.Code != http.StatusOK || recorder.Body.String() != "pcap" {
+		t.Fatalf("download status = %d, body = %q", recorder.Code, recorder.Body.String())
+	}
+	if disposition := recorder.Header().Get("Content-Disposition"); !strings.Contains(disposition, "rookery-test.pcap") {
+		t.Fatalf("download disposition = %q", disposition)
+	}
+
+	recorder = do(t, env.handler, http.MethodGet, "/webshark/json?method=files", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("webshark files status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "rookery-test.pcap") {
+		t.Fatalf("webshark files body = %s", recorder.Body.String())
+	}
+
+	recorder = do(t, env.handler, http.MethodGet, "/webshark/captures/rookery-test.pcap", nil)
+	if recorder.Code != http.StatusOK || recorder.Body.String() != "pcap" {
+		t.Fatalf("webshark capture status = %d, body = %q", recorder.Code, recorder.Body.String())
+	}
+
+	env.networks.captureStatus = host.PacketCaptureStatus{Active: true, File: "rookery-test.pcap"}
+	recorder = do(t, env.handler, http.MethodDelete, "/api/troubleshoot/capture/files/rookery-test.pcap", nil)
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("delete active status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	env.networks.captureStatus = host.PacketCaptureStatus{}
+	recorder = do(t, env.handler, http.MethodDelete, "/api/troubleshoot/capture/files/rookery-test.pcap", nil)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("delete status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if env.networks.deletedCapture != "rookery-test.pcap" {
+		t.Fatalf("deleted capture = %q", env.networks.deletedCapture)
 	}
 }
 
