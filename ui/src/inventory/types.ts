@@ -2,6 +2,10 @@ export type Network = {
   id: number;
   name: string;
   bridge_domain_id: number;
+  bvi_host_name?: string;
+  ipv4_gateway?: string;
+  created_at?: string;
+  updated_at?: string;
 };
 
 export type Media = {
@@ -60,6 +64,46 @@ export type ImportableDisk = {
   attached_vm_id?: string;
   attached_vm_name?: string;
   storage_backend_name?: string;
+};
+
+export type VirtualInterface = {
+  id: number;
+  name: string;
+  network_id: number;
+  network_name: string;
+  socket_path: string;
+  mac: string;
+  sw_if_index: number;
+  attached_vm_id?: string;
+  attached_vm_name?: string;
+  ingress_acl_id?: number;
+  ingress_acl_name?: string;
+  egress_acl_id?: number;
+  egress_acl_name?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ACLRule = {
+  action: string;
+  description?: string;
+  protocol: string;
+  source: string;
+  destination: string;
+  source_port_start?: number;
+  source_port_end?: number;
+  destination_port_start?: number;
+  destination_port_end?: number;
+};
+
+export type ACL = {
+  id: number;
+  name: string;
+  title: string;
+  description: string;
+  rules: ACLRule[];
+  created_at: string;
+  updated_at: string;
 };
 
 export type VNFType = "dhcpv4" | "dhcpv6" | "nat44";

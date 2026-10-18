@@ -36,7 +36,6 @@ export function startInventory(): void {
     tabNetworks: document.getElementById("tab-networks"),
     tabVNFs: document.getElementById("tab-vnfs"),
     vmTabCount: document.getElementById("vm-tab-count"),
-    networkTabCount: document.getElementById("network-tab-count"),
     vmsPanel: document.getElementById("vms-panel"),
     disksPanel: document.getElementById("disks-panel"),
     mediaPanel: document.getElementById("media-panel"),
@@ -45,53 +44,6 @@ export function startInventory(): void {
     newDisk: document.getElementById("new-disk"),
     newMedia: document.getElementById("new-media"),
     newNetwork: document.getElementById("new-network"),
-    refreshNetworks: document.getElementById("refresh-networks"),
-    networkSummary: document.getElementById("network-summary"),
-    interfaceSummary: document.getElementById("interface-summary"),
-    networkErrorBanner: document.getElementById("network-error-banner"),
-    interfaceErrorBanner: document.getElementById("interface-error-banner"),
-    networkTable: document.getElementById("network-table"),
-    interfaceTable: document.getElementById("interface-table"),
-    networkRows: document.getElementById("network-rows"),
-    interfaceRows: document.getElementById("interface-rows"),
-    networkEmptyState: document.getElementById("network-empty-state"),
-    interfaceEmptyState: document.getElementById("interface-empty-state"),
-    emptyCreateNetwork: document.getElementById("empty-create-network"),
-    newInterface: document.getElementById("new-interface"),
-    newACL: document.getElementById("new-acl"),
-    emptyCreateACL: document.getElementById("empty-create-acl"),
-    refreshACLs: document.getElementById("refresh-acls"),
-    aclTable: document.getElementById("acl-table"),
-    aclRows: document.getElementById("acl-rows"),
-    aclEmptyState: document.getElementById("acl-empty-state"),
-    aclSummary: document.getElementById("acl-summary"),
-    aclErrorBanner: document.getElementById("acl-error-banner"),
-    aclDialog: document.getElementById("acl-dialog"),
-    aclForm: document.getElementById("acl-form"),
-    aclDialogEyebrow: document.getElementById("acl-dialog-eyebrow"),
-    aclDialogTitle: document.getElementById("acl-dialog-title"),
-    aclID: document.getElementById("acl-id"),
-    aclName: document.getElementById("acl-name"),
-    aclTitle: document.getElementById("acl-title"),
-    aclDescription: document.getElementById("acl-description"),
-    aclRuleRows: document.getElementById("acl-rule-rows"),
-    addACLRule: document.getElementById("add-acl-rule"),
-    aclPreview: document.getElementById("acl-preview"),
-    aclFormError: document.getElementById("acl-form-error"),
-    saveACL: document.getElementById("save-acl"),
-    closeACLDialog: document.getElementById("close-acl-dialog"),
-    cancelACLDialog: document.getElementById("cancel-acl-dialog"),
-    interfaceACLDialog: document.getElementById("interface-acl-dialog"),
-    interfaceACLForm: document.getElementById("interface-acl-form"),
-    interfaceACLTitle: document.getElementById("interface-acl-title"),
-    interfaceACLLede: document.getElementById("interface-acl-lede"),
-    interfaceIngressACL: document.getElementById("interface-ingress-acl"),
-    interfaceEgressACL: document.getElementById("interface-egress-acl"),
-    interfaceACLPreview: document.getElementById("interface-acl-preview"),
-    interfaceACLFormError: document.getElementById("interface-acl-form-error"),
-    saveInterfaceACL: document.getElementById("save-interface-acl"),
-    closeInterfaceACLDialog: document.getElementById("close-interface-acl-dialog"),
-    cancelInterfaceACL: document.getElementById("cancel-interface-acl"),
     dialog: document.getElementById("vm-dialog"),
     form: document.getElementById("vm-form"),
     dialogEyebrow: document.getElementById("dialog-eyebrow"),
@@ -142,30 +94,6 @@ export function startInventory(): void {
     vmInterfaceAdd: document.getElementById("vm-interface-add"),
     vmInterfaceList: document.getElementById("vm-interface-list"),
     vmInterfacesHint: document.getElementById("vm-interfaces-hint"),
-    networkDialog: document.getElementById("network-dialog"),
-    networkForm: document.getElementById("network-form"),
-    networkName: document.getElementById("network-name"),
-    networkFormError: document.getElementById("network-form-error"),
-    saveNetwork: document.getElementById("save-network"),
-    closeNetworkDialog: document.getElementById("close-network-dialog"),
-    cancelNetworkDialog: document.getElementById("cancel-network-dialog"),
-    interfaceDialog: document.getElementById("interface-dialog"),
-    interfaceForm: document.getElementById("interface-form"),
-    interfaceName: document.getElementById("interface-name"),
-    interfaceNetwork: document.getElementById("interface-network"),
-    interfaceVM: document.getElementById("interface-vm"),
-    interfaceFormError: document.getElementById("interface-form-error"),
-    saveInterface: document.getElementById("save-interface"),
-    closeInterfaceDialog: document.getElementById("close-interface-dialog"),
-    cancelInterfaceDialog: document.getElementById("cancel-interface-dialog"),
-    attachDialog: document.getElementById("attach-dialog"),
-    attachForm: document.getElementById("attach-form"),
-    attachInterfaceName: document.getElementById("attach-interface-name"),
-    attachVM: document.getElementById("attach-vm"),
-    attachFormError: document.getElementById("attach-form-error"),
-    saveAttach: document.getElementById("save-attach"),
-    closeAttachDialog: document.getElementById("close-attach-dialog"),
-    cancelAttachDialog: document.getElementById("cancel-attach-dialog"),
   };
 
   const dateFormat = new Intl.DateTimeFormat(undefined, {
@@ -205,14 +133,9 @@ export function startInventory(): void {
   let vms = [];
   let disks = [];
   let media = [];
-  let networks = [];
   let interfaces = [];
   let vnfs = [];
-  let acls = [];
   let editingID = null;
-  let editingInterfaceID = null;
-  let editingACLID = null;
-  let assigningInterfaceACLID = null;
   let monitorVMID = null;
   let monitorVMTimer = null;
   let monitorVMLast = null;
@@ -221,11 +144,6 @@ export function startInventory(): void {
   let vmInterfaceSelection = new Map();
   let vmDiskSelection = new Map();
   let saving = false;
-  let savingNetwork = false;
-  let savingInterface = false;
-  let savingACL = false;
-  let savingInterfaceACL = false;
-  let savingAttach = false;
   let prerequisitesReady = false;
   let thinPoolReady = false;
   let vppReady = false;
@@ -281,36 +199,6 @@ export function startInventory(): void {
   function hideBanner() {
     els.errorBanner.hidden = true;
     els.errorBanner.textContent = "";
-  }
-
-  function showNetworkBanner(message) {
-    els.networkErrorBanner.textContent = message;
-    els.networkErrorBanner.hidden = false;
-  }
-
-  function hideNetworkBanner() {
-    els.networkErrorBanner.hidden = true;
-    els.networkErrorBanner.textContent = "";
-  }
-
-  function showACLBanner(message) {
-    els.aclErrorBanner.textContent = message;
-    els.aclErrorBanner.hidden = false;
-  }
-
-  function hideACLBanner() {
-    els.aclErrorBanner.hidden = true;
-    els.aclErrorBanner.textContent = "";
-  }
-
-  function showInterfaceBanner(message) {
-    els.interfaceErrorBanner.textContent = message;
-    els.interfaceErrorBanner.hidden = false;
-  }
-
-  function hideInterfaceBanner() {
-    els.interfaceErrorBanner.hidden = true;
-    els.interfaceErrorBanner.textContent = "";
   }
 
   function showToast(message, isError = false) {
@@ -378,12 +266,6 @@ export function startInventory(): void {
     );
   }
 
-  function sortNetworks() {
-    networks.sort((a, b) =>
-      a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
-    );
-  }
-
   function sortInterfaces() {
     interfaces.sort((a, b) =>
       a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
@@ -394,10 +276,6 @@ export function startInventory(): void {
     vnfs.sort((a, b) =>
       a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
     );
-  }
-
-  function networkByID(networkID) {
-    return networks.find((network) => network.id === networkID);
   }
 
   function vmByID(vmID) {
@@ -429,32 +307,6 @@ export function startInventory(): void {
     render();
   }
 
-  function upsertNetwork(network) {
-    const index = networks.findIndex((item) => item.id === network.id);
-    if (index === -1) {
-      networks.push(network);
-    } else {
-      networks[index] = network;
-    }
-    sortNetworks();
-    render();
-  }
-
-  function upsertInterface(iface) {
-    const index = interfaces.findIndex((item) => item.id === iface.id);
-    if (index === -1) {
-      interfaces.push(iface);
-    } else {
-      interfaces[index] = iface;
-    }
-    sortInterfaces();
-    render();
-  }
-
-  function vnfsForNetwork(networkID) {
-    return vnfs.filter((vnf) => vnf.network_id === networkID);
-  }
-
   function updateVMActionState() {
     const free = availableDisks(null).length;
     const blocked = !prerequisitesReady;
@@ -476,35 +328,9 @@ export function startInventory(): void {
     els.newVMHint.hidden = !hint || activeTab !== "vms";
   }
 
-  function updateNetworkActionState() {
-    const hint = vppReady ? "" : "Network changes are blocked until FD.io VPP is ready";
-    els.newNetwork.disabled = !vppReady;
-    els.emptyCreateNetwork.disabled = !vppReady;
-    els.newNetwork.title = hint;
-    els.emptyCreateNetwork.title = hint;
-
-    const ifaceHint =
-      networks.length === 0
-        ? "Create a Rookery Network first"
-        : !vppReady
-          ? "Interface creation is blocked until FD.io VPP is ready"
-          : "";
-    els.newInterface.disabled = networks.length === 0 || !vppReady;
-    els.newInterface.title = ifaceHint;
-
-    const aclHint = vppReady ? "" : "ACL changes are blocked until FD.io VPP is ready";
-    els.newACL.disabled = !vppReady;
-    els.emptyCreateACL.disabled = !vppReady;
-    els.newACL.title = aclHint;
-    els.emptyCreateACL.title = aclHint;
-  }
-
   function render() {
     renderVMs();
-    renderNetworks();
-    renderACLs();
     updateVMActionState();
-    updateNetworkActionState();
   }
 
   function renderVMs() {
@@ -670,643 +496,6 @@ export function startInventory(): void {
     return row;
   }
 
-  function renderNetworks() {
-    const attached = interfaces.filter((iface) => iface.attached_vm_id).length;
-    els.networkTabCount.textContent = String(networks.length);
-    els.networkSummary.textContent =
-      networks.length === 0
-        ? "No Rookery Networks registered"
-        : `${networks.length} network${networks.length === 1 ? "" : "s"} · ${interfaces.length} interface${interfaces.length === 1 ? "" : "s"} · ${vnfs.length} VNF${vnfs.length === 1 ? "" : "s"}`;
-    els.interfaceSummary.textContent =
-      interfaces.length === 0
-        ? "No virtual interfaces registered"
-        : `${interfaces.length} interface${interfaces.length === 1 ? "" : "s"} · ${attached} attached`;
-
-    els.networkTable.hidden = networks.length === 0;
-    els.networkEmptyState.hidden = networks.length !== 0;
-    els.networkRows.replaceChildren();
-    for (const network of networks) {
-      els.networkRows.append(renderNetworkRow(network));
-    }
-
-    els.interfaceTable.hidden = interfaces.length === 0;
-    els.interfaceEmptyState.hidden = interfaces.length !== 0;
-    els.interfaceRows.replaceChildren();
-    for (const iface of interfaces) {
-      els.interfaceRows.append(renderInterfaceRow(iface));
-    }
-  }
-
-  function renderNetworkRow(network) {
-    const row = document.createElement("tr");
-
-    const nameCell = document.createElement("td");
-    const name = document.createElement("span");
-    name.className = "vm-name";
-    name.textContent = network.name;
-    nameCell.append(name);
-    if (network.bvi_host_name) {
-      const bvi = document.createElement("span");
-      bvi.className = "vm-description";
-      bvi.textContent = `${network.bvi_host_name}${network.ipv4_gateway ? ` · ${network.ipv4_gateway}` : ""}`;
-      nameCell.append(bvi);
-    }
-
-    const bdCell = document.createElement("td");
-    bdCell.className = "mono";
-    bdCell.textContent = `bd ${network.bridge_domain_id}`;
-
-    const count = interfaces.filter((iface) => iface.network_id === network.id).length;
-    const countCell = document.createElement("td");
-    countCell.className = count ? "mono" : "mono muted";
-    countCell.textContent = String(count);
-
-    const networkVNFs = vnfsForNetwork(network.id);
-    const vnfCell = document.createElement("td");
-    vnfCell.className = networkVNFs.length ? "mono" : "mono muted";
-    vnfCell.textContent = networkVNFs.length
-      ? networkVNFs.map((vnf) => `${vnf.name} (${vnf.type})`).join(", ")
-      : "none";
-
-    const updatedCell = document.createElement("td");
-    updatedCell.className = "updated hide-sm";
-    updatedCell.textContent = formatDate(network.updated_at);
-
-    const actionsCell = document.createElement("td");
-    const actions = document.createElement("div");
-    actions.className = "actions";
-
-    const addVNF = document.createElement("button");
-    addVNF.type = "button";
-    addVNF.className = "row-action";
-    addVNF.dataset.action = "add-vnf";
-    addVNF.dataset.id = String(network.id);
-    addVNF.textContent = "Add VNF";
-    addVNF.setAttribute("aria-label", `Add a VNF to ${network.name}`);
-
-    const del = document.createElement("button");
-    del.type = "button";
-    del.className = "row-action danger";
-    del.dataset.action = "delete-network";
-    del.dataset.id = String(network.id);
-    del.textContent = "Delete";
-    del.setAttribute("aria-label", `Delete network ${network.name}`);
-    if (count > 0) {
-      del.disabled = true;
-      del.title = "Delete the virtual interfaces first.";
-    } else if (!vppReady) {
-      del.disabled = true;
-      del.title = "VPP must be ready to delete a bridge domain.";
-    }
-
-    actions.append(addVNF, del);
-    actionsCell.append(actions);
-    row.append(nameCell, bdCell, countCell, vnfCell, updatedCell, actionsCell);
-    return row;
-  }
-
-  function sortACLs() {
-    acls.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-  }
-
-  function aclByName(name) {
-    return acls.find((acl) => acl.name.toLowerCase() === String(name).toLowerCase());
-  }
-
-  function aclAssignments(acl) {
-    return interfaces.filter(
-      (iface) => iface.ingress_acl_name === acl.name || iface.egress_acl_name === acl.name
-    );
-  }
-
-  function renderACLs() {
-    const assigned = acls.filter((acl) => aclAssignments(acl).length > 0).length;
-    els.aclSummary.textContent =
-      acls.length === 0
-        ? "No ACLs defined"
-        : `${acls.length} ACL${acls.length === 1 ? "" : "s"} · ${assigned} assigned`;
-    els.aclTable.hidden = acls.length === 0;
-    els.aclEmptyState.hidden = acls.length !== 0;
-    els.aclRows.replaceChildren();
-    for (const acl of acls) {
-      els.aclRows.append(renderACLRow(acl));
-    }
-  }
-
-  function renderACLRow(acl) {
-    const row = document.createElement("tr");
-
-    const nameCell = document.createElement("td");
-    const name = document.createElement("span");
-    name.className = "vm-name";
-    name.textContent = acl.name;
-    nameCell.append(name);
-    if (acl.description) {
-      const description = document.createElement("span");
-      description.className = "vm-description";
-      description.textContent = acl.description;
-      description.title = acl.description;
-      nameCell.append(description);
-    }
-
-    const titleCell = document.createElement("td");
-    titleCell.textContent = acl.title || "—";
-
-    const ruleCell = document.createElement("td");
-    ruleCell.className = "mono";
-    ruleCell.textContent = `${acl.rules?.length || 0} rule${acl.rules?.length === 1 ? "" : "s"}`;
-
-    const assignCell = document.createElement("td");
-    const assignments = aclAssignments(acl);
-    assignCell.className = assignments.length ? "mono" : "mono muted";
-    assignCell.textContent = assignments.length
-      ? assignments.map((iface) => iface.name).join(", ")
-      : "none";
-
-    const updatedCell = document.createElement("td");
-    updatedCell.className = "updated hide-sm";
-    updatedCell.textContent = formatDate(acl.updated_at);
-
-    const actionsCell = document.createElement("td");
-    const actions = document.createElement("div");
-    actions.className = "actions";
-
-    const edit = document.createElement("button");
-    edit.type = "button";
-    edit.className = "row-action";
-    edit.dataset.action = "edit-acl";
-    edit.dataset.id = String(acl.id);
-    edit.textContent = "Edit / Preview";
-
-    const del = document.createElement("button");
-    del.type = "button";
-    del.className = "row-action danger";
-    del.dataset.action = "delete-acl";
-    del.dataset.id = String(acl.id);
-    del.textContent = "Delete";
-    if (assignments.length > 0) {
-      del.disabled = true;
-      del.title = "Remove this ACL from its interfaces first.";
-    }
-
-    actions.append(edit, del);
-    actionsCell.append(actions);
-    row.append(nameCell, titleCell, ruleCell, assignCell, updatedCell, actionsCell);
-    return row;
-  }
-
-  function formatACLRuleText(rule) {
-    const action = String(rule.action || "").toUpperCase();
-    const protocol = String(rule.protocol || "any").toLowerCase();
-    let text = `${action} ${protocol} ${rule.source || "0.0.0.0/0"} -> ${rule.destination || "0.0.0.0/0"}`;
-    if (protocol === "tcp" || protocol === "udp") {
-      const sourceStart = Number(rule.source_port_start) || 0;
-      const sourceEnd = Number(rule.source_port_end) || 0;
-      const destinationStart = Number(rule.destination_port_start) || 0;
-      const destinationEnd = Number(rule.destination_port_end) || 0;
-      if (sourceStart || sourceEnd) {
-        text += ` sports ${sourceStart || "*"}-${sourceEnd || sourceStart || "*"}`;
-      }
-      if (destinationStart || destinationEnd) {
-        text += ` dports ${destinationStart || "*"}-${destinationEnd || destinationStart || "*"}`;
-      }
-    }
-    if (rule.description) {
-      text += `  — ${rule.description}`;
-    }
-    return text;
-  }
-
-  function formatACLText(acl, label = "ACL") {
-    const lines = [
-      `${label}: ${acl.name || "(unnamed)"}`,
-      `Title: ${acl.title || "—"}`,
-      `Description: ${acl.description || "—"}`,
-      "Rules:",
-    ];
-    const rules = Array.isArray(acl.rules) ? acl.rules : [];
-    if (rules.length === 0) {
-      lines.push("  (no rules)");
-    } else {
-      rules.forEach((rule, index) => {
-        lines.push(`  ${index + 1}. ${formatACLRuleText(rule)}`);
-      });
-    }
-    lines.push("Default action: DENY (implicit)");
-    return lines.join("\n");
-  }
-
-  function aclRuleFromForm(ruleElement) {
-    const protocol = ruleElement.querySelector(".acl-rule-protocol").value;
-    const portsEnabled = protocol === "tcp" || protocol === "udp";
-    return {
-      action: ruleElement.querySelector(".acl-rule-action").value,
-      description: ruleElement.querySelector(".acl-rule-description").value.trim(),
-      protocol,
-      source: ruleElement.querySelector(".acl-rule-source").value.trim(),
-      destination: ruleElement.querySelector(".acl-rule-destination").value.trim(),
-      source_port_start: portsEnabled
-        ? Number(ruleElement.querySelector(".acl-rule-source-start").value) || 0
-        : 0,
-      source_port_end: portsEnabled
-        ? Number(ruleElement.querySelector(".acl-rule-source-end").value) || 0
-        : 0,
-      destination_port_start: portsEnabled
-        ? Number(ruleElement.querySelector(".acl-rule-destination-start").value) || 0
-        : 0,
-      destination_port_end: portsEnabled
-        ? Number(ruleElement.querySelector(".acl-rule-destination-end").value) || 0
-        : 0,
-    };
-  }
-
-  function readACLRules() {
-    return Array.from(els.aclRuleRows.querySelectorAll(".acl-rule")).map(aclRuleFromForm);
-  }
-
-  function renumberACLRules() {
-    Array.from(els.aclRuleRows.querySelectorAll(".acl-rule")).forEach((rule, index) => {
-      const label = rule.querySelector(".acl-rule-label");
-      if (label) {
-        label.textContent = `Rule ${index + 1}`;
-      }
-    });
-  }
-
-  function addACLRule(rule = {}) {
-    const wrapper = document.createElement("div");
-    wrapper.className = "acl-rule";
-
-    const head = document.createElement("div");
-    head.className = "acl-rule-head";
-    const label = document.createElement("span");
-    label.className = "acl-rule-label";
-    const remove = document.createElement("button");
-    remove.type = "button";
-    remove.className = "row-action danger";
-    remove.dataset.removeRule = "true";
-    remove.textContent = "Remove";
-    head.append(label, remove);
-
-    const fields = document.createElement("div");
-    fields.className = "acl-rule-fields";
-
-    const appendSelect = (labelText, className, options, value) => {
-      const icon = document.createElement("label");
-      icon.className = `field acl-field-${className}`;
-      const text = document.createElement("span");
-      text.className = "field-label";
-      text.textContent = labelText;
-      const select = document.createElement("select");
-      select.className = className;
-      for (const [optionValue, optionLabel] of options) {
-        const option = document.createElement("option");
-        option.value = optionValue;
-        option.textContent = optionLabel;
-        select.append(option);
-      }
-      select.value = value;
-      icon.append(text, select);
-      return icon;
-    };
-
-    const appendInput = (labelText, className, value, placeholder) => {
-      const icon = document.createElement("label");
-      icon.className = `field acl-field-${className}`;
-      const text = document.createElement("span");
-      text.className = "field-label";
-      text.textContent = labelText;
-      const input = document.createElement("input");
-      input.type = "text";
-      input.className = className;
-      input.value = value || "";
-      input.placeholder = placeholder || "";
-      input.autocomplete = "off";
-      input.spellcheck = false;
-      icon.append(text, input);
-      return icon;
-    };
-
-    const appendPorts = (labelText, startClass, endClass, start, end) => {
-      const icon = document.createElement("label");
-      icon.className = `field acl-field-${startClass}`;
-      const text = document.createElement("span");
-      text.className = "field-label";
-      text.textContent = labelText;
-      const pair = document.createElement("div");
-      pair.className = "acl-port-pair";
-
-      const startLabel = document.createElement("label");
-      startLabel.className = "acl-port-input";
-      const startCaption = document.createElement("span");
-      startCaption.textContent = "Start";
-      const startInput = document.createElement("input");
-      startInput.type = "number";
-      startInput.min = "1";
-      startInput.max = "65535";
-      startInput.className = startClass;
-      startInput.value = start || "";
-      startInput.placeholder = "any";
-      startLabel.append(startCaption, startInput);
-
-      const endLabel = document.createElement("label");
-      endLabel.className = "acl-port-input";
-      const endCaption = document.createElement("span");
-      endCaption.textContent = "End";
-      const endInput = document.createElement("input");
-      endInput.type = "number";
-      endInput.min = "1";
-      endInput.max = "65535";
-      endInput.className = endClass;
-      endInput.value = end || "";
-      endInput.placeholder = "any";
-      endLabel.append(endCaption, endInput);
-
-      pair.append(startLabel, endLabel);
-      icon.append(text, pair);
-      return icon;
-    };
-
-    fields.append(
-      appendSelect("Action", "acl-rule-action", [["permit", "Permit"], ["deny", "Deny"]], rule.action || "permit"),
-      appendSelect(
-        "Protocol",
-        "acl-rule-protocol",
-        [
-          ["any", "Any"],
-          ["tcp", "TCP"],
-          ["udp", "UDP"],
-          ["icmp", "ICMP"],
-          ["icmpv6", "ICMPv6"],
-        ],
-        rule.protocol || "any"
-      ),
-      appendInput("Source CIDR", "acl-rule-source", rule.source || "0.0.0.0/0", "0.0.0.0/0"),
-      appendInput("Destination CIDR", "acl-rule-destination", rule.destination || "0.0.0.0/0", "0.0.0.0/0"),
-      appendInput("Description (optional)", "acl-rule-description", rule.description || "", "Why this rule exists"),
-      appendPorts("Source ports", "acl-rule-source-start", "acl-rule-source-end", rule.source_port_start, rule.source_port_end),
-      appendPorts("Destination ports", "acl-rule-destination-start", "acl-rule-destination-end", rule.destination_port_start, rule.destination_port_end)
-    );
-
-    const protocolSelect = fields.querySelector(".acl-rule-protocol");
-    const togglePorts = () => {
-      const enabled = protocolSelect.value === "tcp" || protocolSelect.value === "udp";
-      for (const input of fields.querySelectorAll(".acl-port-pair input")) {
-        input.disabled = !enabled;
-      }
-    };
-    protocolSelect.addEventListener("change", () => {
-      togglePorts();
-      renderACLPreview();
-    });
-    togglePorts();
-    wrapper.append(head, fields);
-    els.aclRuleRows.append(wrapper);
-    renumberACLRules();
-    renderACLPreview();
-  }
-
-  function renderACLPreview() {
-    const preview = {
-      name: els.aclName.value.trim(),
-      title: els.aclTitle.value.trim(),
-      description: els.aclDescription.value.trim(),
-      rules: readACLRules(),
-    };
-    els.aclPreview.textContent = formatACLText(preview);
-  }
-
-  function openCreateACL() {
-    if (!vppReady) {
-      showToast("ACL changes are blocked until FD.io VPP is ready.", true);
-      return;
-    }
-    editingACLID = null;
-    els.aclForm.reset();
-    els.aclID.value = "";
-    els.aclRuleRows.replaceChildren();
-    addACLRule({ action: "permit", protocol: "any", source: "0.0.0.0/0", destination: "0.0.0.0/0" });
-    els.aclDialogEyebrow.textContent = "New ACL";
-    els.aclDialogTitle.textContent = "Define ACL";
-    els.saveACL.textContent = "Save ACL";
-    els.aclFormError.hidden = true;
-    els.aclFormError.textContent = "";
-    els.aclDialog.showModal();
-    els.aclName.focus();
-    renderACLPreview();
-  }
-
-  function openEditACL(acl) {
-    editingACLID = acl.id;
-    els.aclForm.reset();
-    els.aclID.value = String(acl.id);
-    els.aclName.value = acl.name;
-    els.aclTitle.value = acl.title || "";
-    els.aclDescription.value = acl.description || "";
-    els.aclRuleRows.replaceChildren();
-    const rules = Array.isArray(acl.rules) ? acl.rules : [];
-    for (const rule of rules) {
-      addACLRule(rule);
-    }
-    if (rules.length === 0) {
-      addACLRule();
-    }
-    els.aclDialogEyebrow.textContent = "Edit ACL";
-    els.aclDialogTitle.textContent = `ACL · ${acl.name}`;
-    els.saveACL.textContent = "Save ACL";
-    els.aclFormError.hidden = true;
-    els.aclFormError.textContent = "";
-    els.aclDialog.showModal();
-    els.aclName.focus();
-    renderACLPreview();
-  }
-
-  function populateInterfaceACLSelect(select, selected) {
-    select.replaceChildren();
-    const none = document.createElement("option");
-    none.value = "";
-    none.textContent = "None";
-    select.append(none);
-    for (const acl of acls) {
-      const option = document.createElement("option");
-      option.value = acl.name;
-      option.textContent = acl.title ? `${acl.name} — ${acl.title}` : acl.name;
-      select.append(option);
-    }
-    select.value = selected || "";
-  }
-
-  function renderInterfaceACLPreview() {
-    const ingress = aclByName(els.interfaceIngressACL.value);
-    const egress = aclByName(els.interfaceEgressACL.value);
-    const sections = [];
-    sections.push(ingress ? formatACLText(ingress, "From interface ACL") : "From interface ACL: none");
-    sections.push(egress ? formatACLText(egress, "To interface ACL") : "To interface ACL: none");
-    els.interfaceACLPreview.textContent = sections.join("\n\n");
-  }
-
-  function openInterfaceACLs(iface) {
-    if (!vppReady) {
-      showToast("ACL changes are blocked until FD.io VPP is ready.", true);
-      return;
-    }
-    assigningInterfaceACLID = iface.id;
-    els.interfaceACLForm.reset();
-    els.interfaceACLTitle.textContent = `ACLs · ${iface.name}`;
-    els.interfaceACLLede.textContent = `${iface.network_name} · ${iface.mac}`;
-    populateInterfaceACLSelect(els.interfaceIngressACL, iface.ingress_acl_name || "");
-    populateInterfaceACLSelect(els.interfaceEgressACL, iface.egress_acl_name || "");
-    els.interfaceACLFormError.hidden = true;
-    els.interfaceACLFormError.textContent = "";
-    els.interfaceACLDialog.showModal();
-    renderInterfaceACLPreview();
-  }
-
-  function upsertACL(acl) {
-    const index = acls.findIndex((item) => item.id === acl.id);
-    if (index === -1) {
-      acls.push(acl);
-    } else {
-      acls[index] = acl;
-    }
-    sortACLs();
-    renderACLs();
-    renderNetworks();
-  }
-
-  function setSavingACL(value, label) {
-    savingACL = value;
-    els.saveACL.disabled = value;
-    els.cancelACLDialog.disabled = value;
-    els.closeACLDialog.disabled = value;
-    els.saveACL.textContent = value ? label : "Save ACL";
-  }
-
-  async function deleteACL(acl) {
-    if (!window.confirm(`Delete ACL "${acl.name}"?`)) {
-      return;
-    }
-    try {
-      await api(`/api/acls/${acl.id}`, { method: "DELETE" });
-      acls = acls.filter((item) => item.id !== acl.id);
-      renderACLs();
-      renderNetworks();
-      showToast(`Deleted ACL ${acl.name}`);
-    } catch (err) {
-      showACLBanner(`Could not delete ${acl.name}: ${err.message}`);
-      showToast(`Could not delete ACL ${acl.name}: ${err.message}`, true);
-    }
-  }
-
-  function setSavingInterfaceACL(value, label) {
-    savingInterfaceACL = value;
-    els.saveInterfaceACL.disabled = value;
-    els.cancelInterfaceACL.disabled = value;
-    els.closeInterfaceACLDialog.disabled = value;
-    els.saveInterfaceACL.textContent = value ? label : "Apply ACLs";
-  }
-
-
-  function renderInterfaceRow(iface) {
-    const row = document.createElement("tr");
-
-    const nameCell = document.createElement("td");
-    const name = document.createElement("span");
-    name.className = "vm-name";
-    name.textContent = iface.name;
-    nameCell.append(name);
-    if (iface.socket_path) {
-      const socket = document.createElement("span");
-      socket.className = "vm-description";
-      socket.textContent = iface.socket_path;
-      socket.title = iface.socket_path;
-      nameCell.append(socket);
-    }
-
-    const networkCell = document.createElement("td");
-    networkCell.className = "mono";
-    networkCell.textContent = iface.network_name || "—";
-
-    const macCell = document.createElement("td");
-    macCell.className = "mono";
-    macCell.textContent = iface.mac || "—";
-
-    const owner = iface.attached_vm_id ? vmByID(iface.attached_vm_id) : null;
-    const attached = Boolean(iface.attached_vm_id);
-    const attachedCell = document.createElement("td");
-    attachedCell.className = attached ? "mono" : "mono muted";
-    attachedCell.textContent = owner ? owner.name : iface.attached_vm_name || "unattached";
-
-    const aclCell = document.createElement("td");
-    aclCell.className = (iface.ingress_acl_name || iface.egress_acl_name) ? "mono" : "mono muted";
-    const aclParts = [];
-    if (iface.ingress_acl_name) aclParts.push(`from: ${iface.ingress_acl_name}`);
-    if (iface.egress_acl_name) aclParts.push(`to: ${iface.egress_acl_name}`);
-    aclCell.textContent = aclParts.length ? aclParts.join(" · ") : "none";
-
-    const updatedCell = document.createElement("td");
-    updatedCell.className = "updated hide-sm";
-    updatedCell.textContent = formatDate(iface.updated_at);
-
-    const actionsCell = document.createElement("td");
-    const actions = document.createElement("div");
-    actions.className = "actions";
-
-    const attach = document.createElement("button");
-    attach.type = "button";
-    attach.className = "row-action";
-    attach.dataset.action = "attach-interface";
-    attach.dataset.id = String(iface.id);
-    attach.textContent = "Attach";
-    attach.setAttribute("aria-label", `Attach ${iface.name} to a VM`);
-
-    const detach = document.createElement("button");
-    detach.type = "button";
-    detach.className = "row-action";
-    detach.dataset.action = "detach-interface";
-    detach.dataset.id = String(iface.id);
-    detach.textContent = "Detach";
-    detach.setAttribute("aria-label", `Detach ${iface.name}`);
-    if (!attached) {
-      detach.hidden = true;
-    } else if (owner && (owner.status === "running" || owner.status === "starting")) {
-      detach.disabled = true;
-      detach.title = "Stop the VM before detaching its interface.";
-    }
-
-    const del = document.createElement("button");
-    del.type = "button";
-    del.className = "row-action danger";
-    del.dataset.action = "delete-interface";
-    del.dataset.id = String(iface.id);
-    del.textContent = "Delete";
-    del.setAttribute("aria-label", `Delete interface ${iface.name}`);
-    if (attached) {
-      del.disabled = true;
-      del.title = "Detach the interface from its VM first.";
-    } else if (!vppReady) {
-      del.disabled = true;
-      del.title = "VPP must be ready to delete a vhost-user interface.";
-    }
-
-    const aclButton = document.createElement("button");
-    aclButton.type = "button";
-    aclButton.className = "row-action";
-    aclButton.dataset.action = "interface-acls";
-    aclButton.dataset.id = String(iface.id);
-    aclButton.textContent = "ACLs";
-    aclButton.setAttribute("aria-label", `Assign ACLs to ${iface.name}`);
-    if (!vppReady) {
-      aclButton.disabled = true;
-      aclButton.title = "VPP must be ready to apply interface ACLs.";
-    }
-
-    actions.append(attach, detach, aclButton, del);
-    actionsCell.append(actions);
-    row.append(nameCell, networkCell, macCell, attachedCell, aclCell, updatedCell, actionsCell);
-    return row;
-  }
-
   async function loadVMs() {
     els.refresh.disabled = true;
     const previousLabel = els.refresh.textContent;
@@ -1362,35 +551,11 @@ export function startInventory(): void {
     }
   }
 
-  async function loadNetworks() {
-    els.refreshNetworks.disabled = true;
-    const previousLabel = els.refreshNetworks.textContent;
-    els.refreshNetworks.textContent = "Refreshing…";
-
-    try {
-      const data = await api("/api/networks");
-      networks = Array.isArray(data) ? data : [];
-      sortNetworks();
-      render();
-      hideNetworkBanner();
-      setAPIState("online");
-      window.dispatchEvent(new CustomEvent("rookery:networks-changed", { detail: networks }));
-    } catch (err) {
-      setAPIState("offline");
-      showNetworkBanner(`Could not load networks: ${err.message}`);
-      throw err;
-    } finally {
-      els.refreshNetworks.disabled = false;
-      els.refreshNetworks.textContent = previousLabel;
-    }
-  }
-
   async function loadVNFs() {
     try {
       const data = await api("/api/vnfs");
       vnfs = Array.isArray(data) ? data : [];
       sortVNFs();
-      renderNetworks();
       setAPIState("online");
       window.dispatchEvent(new CustomEvent("rookery:vnfs-data", { detail: vnfs }));
     } catch (err) {
@@ -1399,40 +564,18 @@ export function startInventory(): void {
     }
   }
 
-  async function loadACLs() {
-    els.refreshACLs.disabled = true;
-    const previousLabel = els.refreshACLs.textContent;
-    els.refreshACLs.textContent = "Refreshing…";
-    try {
-      const data = await api("/api/acls");
-      acls = Array.isArray(data) ? data : [];
-      renderACLs();
-      hideACLBanner();
-      setAPIState("online");
-    } catch (err) {
-      setAPIState("offline");
-      showACLBanner(`Could not load ACLs: ${err.message}`);
-      throw err;
-    } finally {
-      els.refreshACLs.disabled = false;
-      els.refreshACLs.textContent = previousLabel;
-    }
-  }
-
   async function loadInterfaces() {
     try {
       const data = await api("/api/interfaces");
       interfaces = Array.isArray(data) ? data : [];
       sortInterfaces();
-      render();
+      window.dispatchEvent(new CustomEvent("rookery:interfaces-data", { detail: interfaces }));
       if (els.dialog.open) {
         renderVMInterfacePicker(currentDialogVM());
       }
-      hideInterfaceBanner();
       setAPIState("online");
     } catch (err) {
       setAPIState("offline");
-      showInterfaceBanner(`Could not load virtual interfaces: ${err.message}`);
       throw err;
     }
   }
@@ -1457,8 +600,6 @@ export function startInventory(): void {
       return;
     }
     vppReady = ready;
-    updateNetworkActionState();
-    renderNetworks();
     window.dispatchEvent(new CustomEvent("rookery:vpp-ready", { detail: ready }));
   }
 
@@ -1627,7 +768,6 @@ export function startInventory(): void {
     els.heroTitle.textContent = meta.title;
     els.heroLede.textContent = meta.lede;
     updateVMActionState();
-    updateNetworkActionState();
     window.dispatchEvent(new CustomEvent("rookery:tab-changed", { detail: name }));
 
     if (focus) {
@@ -1928,195 +1068,6 @@ export function startInventory(): void {
       els.saveVM.textContent = label;
     } else {
       els.saveVM.textContent = editingID === null ? "Create VM" : "Save changes";
-    }
-  }
-
-  function openCreateNetwork() {
-    if (!vppReady) {
-      showToast("Network creation is blocked until FD.io VPP is ready.", true);
-      return;
-    }
-    els.networkForm.reset();
-    els.networkFormError.hidden = true;
-    els.networkFormError.textContent = "";
-    els.networkDialog.showModal();
-    els.networkName.focus();
-  }
-
-  function setSavingNetwork(value, label) {
-    savingNetwork = value;
-    els.saveNetwork.disabled = value;
-    els.cancelNetworkDialog.disabled = value;
-    els.closeNetworkDialog.disabled = value;
-    els.saveNetwork.textContent = value ? label : "Create network";
-  }
-
-  function populateNetworkOptions(selectedID) {
-    els.interfaceNetwork.replaceChildren();
-
-    if (networks.length === 0) {
-      const option = document.createElement("option");
-      option.value = "";
-      option.textContent = "No networks available";
-      els.interfaceNetwork.append(option);
-      els.interfaceNetwork.disabled = true;
-      return;
-    }
-
-    els.interfaceNetwork.disabled = false;
-    for (const network of networks) {
-      const option = document.createElement("option");
-      option.value = String(network.id);
-      option.textContent = `${network.name} · bd ${network.bridge_domain_id}`;
-      els.interfaceNetwork.append(option);
-    }
-    if (selectedID !== null && selectedID !== undefined) {
-      els.interfaceNetwork.value = String(selectedID);
-    }
-  }
-
-  function populateVMSelect(select, selectedID, noneLabel) {
-    select.replaceChildren();
-
-    const none = document.createElement("option");
-    none.value = "";
-    none.textContent = noneLabel;
-    select.append(none);
-
-    for (const vm of vms) {
-      const option = document.createElement("option");
-      option.value = vm.id;
-      const running = vm.status === "running" || vm.status === "starting";
-      option.textContent = running ? `${vm.name} (running — stop first)` : vm.name;
-      select.append(option);
-    }
-
-    select.value =
-      selectedID !== null && selectedID !== undefined ? String(selectedID) : "";
-  }
-
-  function openCreateInterface() {
-    if (!vppReady) {
-      showToast("Interface creation is blocked until FD.io VPP is ready.", true);
-      return;
-    }
-    if (networks.length === 0) {
-      showToast("Create a Rookery Network first.", true);
-      return;
-    }
-
-    els.interfaceForm.reset();
-    populateNetworkOptions(null);
-    populateVMSelect(els.interfaceVM, null, "Leave unattached");
-    els.interfaceFormError.hidden = true;
-    els.interfaceFormError.textContent = "";
-    els.interfaceDialog.showModal();
-    els.interfaceName.focus();
-  }
-
-  function setSavingInterface(value, label) {
-    savingInterface = value;
-    els.saveInterface.disabled = value;
-    els.cancelInterfaceDialog.disabled = value;
-    els.closeInterfaceDialog.disabled = value;
-    els.saveInterface.textContent = value ? label : "Add interface";
-  }
-
-  function openAttachInterface(iface) {
-    editingInterfaceID = iface.id;
-    els.attachForm.reset();
-    els.attachInterfaceName.value = iface.name;
-    populateVMSelect(
-      els.attachVM,
-      iface.attached_vm_id || null,
-      "Leave unattached"
-    );
-    els.attachFormError.hidden = true;
-    els.attachFormError.textContent = "";
-    els.attachDialog.showModal();
-    els.attachVM.focus();
-  }
-
-  function setSavingAttach(value, label) {
-    savingAttach = value;
-    els.saveAttach.disabled = value;
-    els.cancelAttachDialog.disabled = value;
-    els.closeAttachDialog.disabled = value;
-    els.saveAttach.textContent = value ? label : "Save attachment";
-  }
-
-  async function detachInterface(iface) {
-    const owner = iface.attached_vm_id ? vmByID(iface.attached_vm_id) : null;
-    if (owner && (owner.status === "running" || owner.status === "starting")) {
-      showToast("Stop the VM before detaching its interface.", true);
-      return;
-    }
-    const confirmed = window.confirm(`Detach interface "${iface.name}" from its VM?`);
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      const updated = await api(`/api/interfaces/${iface.id}`, {
-        method: "PUT",
-        body: JSON.stringify({ attached_vm_id: null }),
-      });
-      upsertInterface(updated);
-      hideInterfaceBanner();
-      showToast(`Detached ${iface.name}`);
-    } catch (err) {
-      showInterfaceBanner(`Could not detach ${iface.name}: ${err.message}`);
-    }
-  }
-
-  async function deleteNetwork(network) {
-    const count = interfaces.filter((iface) => iface.network_id === network.id).length;
-    if (count > 0) {
-      showToast("Delete the virtual interfaces in this network first.", true);
-      return;
-    }
-    const networkVNFs = vnfsForNetwork(network.id);
-    const confirmed = window.confirm(
-      `Delete Rookery Network "${network.name}"?\n\nThis removes the VPP bridge domain and ${networkVNFs.length} VNF(s).`
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      await api(`/api/networks/${network.id}`, { method: "DELETE" });
-      networks = networks.filter((item) => item.id !== network.id);
-      vnfs = vnfs.filter((vnf) => vnf.network_id !== network.id);
-      render();
-      hideNetworkBanner();
-      window.dispatchEvent(new CustomEvent("rookery:networks-changed", { detail: networks }));
-      window.dispatchEvent(new CustomEvent("rookery:vnfs-changed", { detail: vnfs }));
-      showToast(`Deleted network ${network.name}`);
-    } catch (err) {
-      showNetworkBanner(`Could not delete ${network.name}: ${err.message}`);
-    }
-  }
-
-  async function deleteInterface(iface) {
-    if (iface.attached_vm_id) {
-      showToast("Detach the interface from its VM first.", true);
-      return;
-    }
-    const confirmed = window.confirm(
-      `Delete virtual interface "${iface.name}"?\n\nThis removes the VPP vhost-user interface and socket.`
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      await api(`/api/interfaces/${iface.id}`, { method: "DELETE" });
-      interfaces = interfaces.filter((item) => item.id !== iface.id);
-      render();
-      hideInterfaceBanner();
-      showToast(`Deleted interface ${iface.name}`);
-    } catch (err) {
-      showInterfaceBanner(`Could not delete ${iface.name}: ${err.message}`);
     }
   }
 
@@ -2573,220 +1524,6 @@ export function startInventory(): void {
     }
   });
 
-  els.networkForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (savingNetwork) {
-      return;
-    }
-
-    els.networkFormError.hidden = true;
-    els.networkFormError.textContent = "";
-
-    if (!els.networkForm.reportValidity()) {
-      return;
-    }
-
-    const payload = { name: els.networkName.value.trim() };
-    setSavingNetwork(true, "Creating…");
-
-    try {
-      const network = await api("/api/networks", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      upsertNetwork(network);
-      setAPIState("online");
-      hideNetworkBanner();
-      els.networkDialog.close();
-      window.dispatchEvent(new CustomEvent("rookery:networks-changed", { detail: networks }));
-      showToast(`Created network ${network.name}`);
-    } catch (err) {
-      els.networkFormError.textContent = err.message;
-      els.networkFormError.hidden = false;
-      if (err.status === 503) {
-        refreshStatus();
-      }
-      if (!err.status) {
-        setAPIState("offline");
-      }
-    } finally {
-      setSavingNetwork(false);
-    }
-  });
-
-
-  els.aclForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (savingACL) {
-      return;
-    }
-    els.aclFormError.hidden = true;
-    els.aclFormError.textContent = "";
-    if (!els.aclForm.reportValidity()) {
-      return;
-    }
-    const rules = readACLRules();
-    if (rules.length === 0) {
-      els.aclFormError.textContent = "Add at least one rule.";
-      els.aclFormError.hidden = false;
-      return;
-    }
-    const payload = {
-      name: els.aclName.value.trim(),
-      title: els.aclTitle.value.trim(),
-      description: els.aclDescription.value.trim(),
-      rules,
-    };
-    if (!payload.name) {
-      els.aclFormError.textContent = "ACL name is required.";
-      els.aclFormError.hidden = false;
-      return;
-    }
-    setSavingACL(true, "Saving…");
-    try {
-      const acl = await api(editingACLID === null ? "/api/acls" : `/api/acls/${editingACLID}`, {
-        method: editingACLID === null ? "POST" : "PUT",
-        body: JSON.stringify(payload),
-      });
-      upsertACL(acl);
-      loadInterfaces().catch(() => {});
-      hideACLBanner();
-      els.aclDialog.close();
-      showToast(editingACLID === null ? `Added ACL ${acl.name}` : `Saved ACL ${acl.name}`);
-    } catch (err) {
-      els.aclFormError.textContent = err.message;
-      els.aclFormError.hidden = false;
-      if (err.status === 503) {
-        refreshStatus();
-      }
-      if (!err.status) {
-        setAPIState("offline");
-      }
-    } finally {
-      setSavingACL(false);
-    }
-  });
-
-  els.interfaceACLForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (savingInterfaceACL || assigningInterfaceACLID === null) {
-      return;
-    }
-    els.interfaceACLFormError.hidden = true;
-    els.interfaceACLFormError.textContent = "";
-    setSavingInterfaceACL(true, "Applying…");
-    try {
-      const updated = await api(`/api/interfaces/${assigningInterfaceACLID}/acls`, {
-        method: "PUT",
-        body: JSON.stringify({
-          ingress_acl: els.interfaceIngressACL.value,
-          egress_acl: els.interfaceEgressACL.value,
-        }),
-      });
-      upsertInterface(updated);
-      loadInterfaces().catch(() => {});
-      loadVMs().catch(() => {});
-      hideInterfaceBanner();
-      els.interfaceACLDialog.close();
-      showToast(`Applied ACLs to ${updated.name}`);
-    } catch (err) {
-      els.interfaceACLFormError.textContent = err.message;
-      els.interfaceACLFormError.hidden = false;
-      if (err.status === 503) {
-        refreshStatus();
-      }
-      if (!err.status) {
-        setAPIState("offline");
-      }
-    } finally {
-      setSavingInterfaceACL(false);
-    }
-  });
-
-  els.interfaceForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (savingInterface) {
-      return;
-    }
-
-    els.interfaceFormError.hidden = true;
-    els.interfaceFormError.textContent = "";
-
-    if (!els.interfaceForm.reportValidity()) {
-      return;
-    }
-
-    const payload = {
-      name: els.interfaceName.value.trim(),
-      network_id: Number(els.interfaceNetwork.value),
-    };
-    const vmID = els.interfaceVM.value;
-    if (vmID) {
-      payload.attached_vm_id = vmID;
-    }
-
-    setSavingInterface(true, "Creating…");
-
-    try {
-      const iface = await api("/api/interfaces", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      upsertInterface(iface);
-      setAPIState("online");
-      hideInterfaceBanner();
-      els.interfaceDialog.close();
-      showToast(`Created interface ${iface.name}`);
-    } catch (err) {
-      els.interfaceFormError.textContent = err.message;
-      els.interfaceFormError.hidden = false;
-      if (err.status === 503) {
-        refreshStatus();
-      }
-      if (!err.status) {
-        setAPIState("offline");
-      }
-    } finally {
-      setSavingInterface(false);
-    }
-  });
-
-  els.attachForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (savingAttach || editingInterfaceID === null) {
-      return;
-    }
-
-    els.attachFormError.hidden = true;
-    els.attachFormError.textContent = "";
-
-    const vmID = els.attachVM.value;
-    setSavingAttach(true, "Saving…");
-
-    try {
-      const iface = await api(`/api/interfaces/${editingInterfaceID}`, {
-        method: "PUT",
-        body: JSON.stringify({ attached_vm_id: vmID || null }),
-      });
-      upsertInterface(iface);
-      setAPIState("online");
-      hideInterfaceBanner();
-      els.attachDialog.close();
-      showToast(
-        iface.attached_vm_id
-          ? `Attached ${iface.name} to ${iface.attached_vm_name}`
-          : `Detached ${iface.name}`
-      );
-    } catch (err) {
-      els.attachFormError.textContent = err.message;
-      els.attachFormError.hidden = false;
-      if (!err.status) {
-        setAPIState("offline");
-      }
-    } finally {
-      setSavingAttach(false);
-    }
-  });
 
   els.vmRows.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-action]");
@@ -2815,58 +1552,6 @@ export function startInventory(): void {
   });
 
 
-  els.networkRows.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-action]");
-    if (!button) {
-      return;
-    }
-    const network = networks.find((item) => item.id === Number(button.dataset.id));
-    if (!network) {
-      return;
-    }
-    if (button.dataset.action === "delete-network") {
-      deleteNetwork(network);
-    } else if (button.dataset.action === "add-vnf") {
-      selectTab("vnfs");
-      window.dispatchEvent(new CustomEvent("rookery:add-vnf", { detail: { networkId: network.id } }));
-    }
-  });
-
-  els.aclRows.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-action]");
-    if (!button) {
-      return;
-    }
-    const acl = acls.find((item) => item.id === Number(button.dataset.id));
-    if (!acl) {
-      return;
-    }
-    if (button.dataset.action === "edit-acl") {
-      openEditACL(acl);
-    } else if (button.dataset.action === "delete-acl") {
-      deleteACL(acl);
-    }
-  });
-
-  els.interfaceRows.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-action]");
-    if (!button) {
-      return;
-    }
-    const iface = interfaces.find((item) => item.id === Number(button.dataset.id));
-    if (!iface) {
-      return;
-    }
-    if (button.dataset.action === "attach-interface") {
-      openAttachInterface(iface);
-    } else if (button.dataset.action === "detach-interface") {
-      detachInterface(iface);
-    } else if (button.dataset.action === "interface-acls") {
-      openInterfaceACLs(iface);
-    } else if (button.dataset.action === "delete-interface") {
-      deleteInterface(iface);
-    }
-  });
 
   els.tabVMs.addEventListener("click", () => selectTab("vms"));
   els.tabDisks.addEventListener("click", () => selectTab("disks"));
@@ -2886,29 +1571,9 @@ export function startInventory(): void {
   els.newMedia.addEventListener("click", () => {
     window.dispatchEvent(new CustomEvent("rookery:add-media"));
   });
-  els.newNetwork.addEventListener("click", openCreateNetwork);
-  els.emptyCreateNetwork.addEventListener("click", openCreateNetwork);
-  els.newInterface.addEventListener("click", openCreateInterface);
-  els.newACL.addEventListener("click", openCreateACL);
-  els.emptyCreateACL.addEventListener("click", openCreateACL);
-  els.refreshACLs.addEventListener("click", () => loadACLs().catch(() => {}));
-  els.addACLRule.addEventListener("click", () => addACLRule());
-  els.aclRuleRows.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-remove-rule]");
-    if (!button) {
-      return;
-    }
-    button.closest(".acl-rule")?.remove();
-    renumberACLRules();
-    renderACLPreview();
+  els.newNetwork.addEventListener("click", () => {
+    window.dispatchEvent(new CustomEvent("rookery:add-network"));
   });
-  els.aclRuleRows.addEventListener("input", renderACLPreview);
-  els.aclRuleRows.addEventListener("change", renderACLPreview);
-  els.aclName.addEventListener("input", renderACLPreview);
-  els.aclTitle.addEventListener("input", renderACLPreview);
-  els.aclDescription.addEventListener("input", renderACLPreview);
-  els.interfaceIngressACL.addEventListener("change", renderInterfaceACLPreview);
-  els.interfaceEgressACL.addEventListener("change", renderInterfaceACLPreview);
   els.vmInterfaceAdd.addEventListener("click", () => {
     const id = Number(els.vmInterfaceSelect.value);
     if (!id) {
@@ -2953,18 +1618,8 @@ export function startInventory(): void {
     loadVMs().catch(() => {});
     loadDisks().catch(() => {});
     loadMedia().catch(() => {});
-    loadNetworks().catch(() => {});
     loadInterfaces().catch(() => {});
-    loadACLs().catch(() => {});
     loadVNFs().catch(() => {});
-    refreshStatus();
-  });
-  els.refreshNetworks.addEventListener("click", () => {
-    loadNetworks().catch(() => {});
-    loadInterfaces().catch(() => {});
-    loadACLs().catch(() => {});
-    loadVNFs().catch(() => {});
-    loadVMs().catch(() => {});
     refreshStatus();
   });
 
@@ -2990,26 +1645,6 @@ export function startInventory(): void {
   });
 
 
-  els.closeNetworkDialog.addEventListener("click", () => {
-    if (!savingNetwork) {
-      els.networkDialog.close();
-    }
-  });
-  els.cancelNetworkDialog.addEventListener("click", () => {
-    if (!savingNetwork) {
-      els.networkDialog.close();
-    }
-  });
-  els.networkDialog.addEventListener("click", (event) => {
-    if (event.target === els.networkDialog && !savingNetwork) {
-      els.networkDialog.close();
-    }
-  });
-  els.networkDialog.addEventListener("cancel", (event) => {
-    if (savingNetwork) {
-      event.preventDefault();
-    }
-  });
 
 
   els.closeVMMonitorDialog.addEventListener("click", () => {
@@ -3045,101 +1680,19 @@ export function startInventory(): void {
   });
 
 
-  els.closeACLDialog.addEventListener("click", () => {
-    if (!savingACL) {
-      els.aclDialog.close();
-    }
-  });
-  els.cancelACLDialog.addEventListener("click", () => {
-    if (!savingACL) {
-      els.aclDialog.close();
-    }
-  });
-  els.aclDialog.addEventListener("click", (event) => {
-    if (event.target === els.aclDialog && !savingACL) {
-      els.aclDialog.close();
-    }
-  });
-  els.aclDialog.addEventListener("cancel", (event) => {
-    if (savingACL) {
-      event.preventDefault();
-    }
-  });
-  els.aclDialog.addEventListener("close", () => {
-    editingACLID = null;
-  });
-
-  els.closeInterfaceACLDialog.addEventListener("click", () => {
-    if (!savingInterfaceACL) {
-      els.interfaceACLDialog.close();
-    }
-  });
-  els.cancelInterfaceACL.addEventListener("click", () => {
-    if (!savingInterfaceACL) {
-      els.interfaceACLDialog.close();
-    }
-  });
-  els.interfaceACLDialog.addEventListener("click", (event) => {
-    if (event.target === els.interfaceACLDialog && !savingInterfaceACL) {
-      els.interfaceACLDialog.close();
-    }
-  });
-  els.interfaceACLDialog.addEventListener("cancel", (event) => {
-    if (savingInterfaceACL) {
-      event.preventDefault();
-    }
-  });
-  els.interfaceACLDialog.addEventListener("close", () => {
-    assigningInterfaceACLID = null;
-  });
-
-  els.closeInterfaceDialog.addEventListener("click", () => {
-    if (!savingInterface) {
-      els.interfaceDialog.close();
-    }
-  });
-  els.cancelInterfaceDialog.addEventListener("click", () => {
-    if (!savingInterface) {
-      els.interfaceDialog.close();
-    }
-  });
-  els.interfaceDialog.addEventListener("click", (event) => {
-    if (event.target === els.interfaceDialog && !savingInterface) {
-      els.interfaceDialog.close();
-    }
-  });
-  els.interfaceDialog.addEventListener("cancel", (event) => {
-    if (savingInterface) {
-      event.preventDefault();
-    }
-  });
-
-  els.closeAttachDialog.addEventListener("click", () => {
-    if (!savingAttach) {
-      els.attachDialog.close();
-    }
-  });
-  els.cancelAttachDialog.addEventListener("click", () => {
-    if (!savingAttach) {
-      els.attachDialog.close();
-    }
-  });
-  els.attachDialog.addEventListener("click", (event) => {
-    if (event.target === els.attachDialog && !savingAttach) {
-      els.attachDialog.close();
-    }
-  });
-  els.attachDialog.addEventListener("cancel", (event) => {
-    if (savingAttach) {
-      event.preventDefault();
-    }
-  });
 
   window.addEventListener("rookery:disks-changed", (event) => {
     disks = Array.isArray(event.detail) ? event.detail : [];
     sortDisks();
     if (els.dialog.open) {
       renderVMDiskPicker(currentDialogVM());
+    }
+  });
+  window.addEventListener("rookery:interfaces-changed", (event) => {
+    interfaces = Array.isArray(event.detail) ? event.detail : [];
+    sortInterfaces();
+    if (els.dialog.open) {
+      renderVMInterfacePicker(currentDialogVM());
     }
   });
   window.addEventListener("rookery:media-changed", (event) => {
@@ -3153,10 +1706,12 @@ export function startInventory(): void {
   window.addEventListener("rookery:vnfs-changed", (event) => {
     vnfs = Array.isArray(event.detail) ? event.detail : [];
     sortVNFs();
-    renderNetworks();
   });
-  window.addEventListener("rookery:refresh-networks", () => {
-    loadNetworks().catch(() => {});
+  window.addEventListener("rookery:open-tab", (event) => {
+    const name = String(event.detail || "");
+    if (TAB_ORDER.includes(name)) {
+      selectTab(name);
+    }
   });
 
   window.setInterval(() => {
@@ -3176,5 +1731,5 @@ export function startInventory(): void {
   });
 
   refreshStatus();
-  Promise.allSettled([loadVMs(), loadDisks(), loadMedia(), loadNetworks(), loadInterfaces(), loadACLs(), loadVNFs()]);
+  Promise.allSettled([loadVMs(), loadDisks(), loadMedia(), loadInterfaces(), loadVNFs()]);
 }
