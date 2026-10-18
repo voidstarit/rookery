@@ -4,16 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>nerds-vms</title>
+  <title>rookery</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/style.css">
-  <script src="/app.js" defer></script>
+  <script type="module" src="/build/app.js"></script>
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="/">
       <span class="brand-mark" aria-hidden="true">◈</span>
-      <span>nerds<span class="brand-slash">/</span>vms</span>
+      <span>rookery</span>
     </a>
     <div class="topbar-meta">
       <span id="vm-count" class="vm-count">0 VMs</span>
@@ -304,7 +304,7 @@
       <section class="panel panel-spaced" aria-labelledby="interfaces-heading">
         <div class="panel-head">
           <div>
-            <h2 id="interfaces-heading">Nerd Virtual Interfaces</h2>
+            <h2 id="interfaces-heading">Rookery Virtual Interfaces</h2>
             <p id="interface-summary" class="panel-subtitle">Loading interfaces…</p>
           </div>
           <button class="button primary" id="new-interface" type="button" disabled>
@@ -334,7 +334,7 @@
           <div class="empty" id="interface-empty-state" hidden>
             <div class="empty-mark" aria-hidden="true">⇄</div>
             <h3>No virtual interfaces yet</h3>
-            <p>Add a VPP vhost-user interface to a Nerd's Network, then attach it to a VM.</p>
+            <p>Add a VPP vhost-user interface to a Rookery Network, then attach it to a VM.</p>
           </div>
         </div>
       </section>
@@ -381,47 +381,7 @@
     </section>
 
     <section class="tab-panel" id="vnfs-panel" role="tabpanel" aria-labelledby="tab-vnfs" tabindex="0" hidden>
-      <section class="panel" aria-labelledby="vnfs-heading">
-        <div class="panel-head">
-          <div>
-            <h2 id="vnfs-heading">Network functions</h2>
-            <p id="vnf-summary" class="panel-subtitle">Loading VNFs…</p>
-          </div>
-          <div class="actions">
-            <button class="button ghost" id="refresh-vnfs" type="button">Refresh</button>
-            <button class="button primary" id="new-vnf" type="button" disabled>
-              <span class="button-plus" aria-hidden="true">+</span>
-              Add VNF
-            </button>
-          </div>
-        </div>
-
-        <div class="banner" id="vnf-error-banner" role="alert" hidden></div>
-
-        <div class="table-wrap">
-          <table id="vnf-table">
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Type</th>
-                <th scope="col">Network</th>
-                <th scope="col">Status</th>
-                <th scope="col">Active leases</th>
-                <th scope="col" class="hide-sm">Updated</th>
-                <th scope="col"><span class="sr-only">Actions</span></th>
-              </tr>
-            </thead>
-            <tbody id="vnf-rows"></tbody>
-          </table>
-
-          <div class="empty" id="vnf-empty-state" hidden>
-            <div class="empty-mark" aria-hidden="true">◈</div>
-            <h3>No network functions yet</h3>
-            <p>Add a DHCPv4 or DHCPv6 function and attach it to a Nerd's Network.</p>
-            <button class="button primary" id="empty-create-vnf" type="button" disabled>Add a VNF</button>
-          </div>
-        </div>
-      </section>
+      <div id="vnfs-root"></div>
     </section>
   </main>
 
@@ -864,7 +824,7 @@
       <header class="dialog-head">
         <div>
           <p class="eyebrow">VPP bridge domain</p>
-          <h2 id="network-dialog-title">Create Nerd's Network</h2>
+          <h2 id="network-dialog-title">Create Rookery Network</h2>
         </div>
         <button class="icon-button" id="close-network-dialog" type="button" aria-label="Close dialog">×</button>
       </header>
@@ -888,178 +848,6 @@
     </form>
   </dialog>
 
-  <dialog id="vnf-dialog" aria-labelledby="vnf-dialog-title">
-    <form id="vnf-form" novalidate>
-      <header class="dialog-head">
-        <div>
-          <p class="eyebrow">Network function</p>
-          <h2 id="vnf-dialog-title">Add VNF</h2>
-        </div>
-        <button class="icon-button" id="close-vnf-dialog" type="button" aria-label="Close dialog">×</button>
-      </header>
-
-      <input type="hidden" id="vnf-id">
-
-      <div class="form-grid">
-        <label class="field field-wide">
-          <span class="field-label">Name</span>
-          <input id="vnf-name" type="text" required maxlength="64"
-                 pattern="[A-Za-z0-9][A-Za-z0-9._-]*" autocomplete="off" spellcheck="false"
-                 placeholder="lab-dhcpv4">
-          <span class="field-hint">Letters, digits, dots, dashes and underscores.</span>
-        </label>
-
-        <label class="field">
-          <span class="field-label">Network</span>
-          <select id="vnf-network" required></select>
-        </label>
-
-        <label class="field">
-          <span class="field-label">Type</span>
-          <select id="vnf-type" required>
-            <option value="dhcpv4">DHCPv4</option>
-            <option value="dhcpv6">DHCPv6</option>
-            <option value="nat44">NAT44</option>
-          </select>
-          <span class="field-hint" id="vnf-type-hint">IPv4 address pool served on a VPP tap.</span>
-        </label>
-
-        <label class="field">
-          <span class="field-label">Gateway CIDR</span>
-          <input id="vnf-gateway" type="text" required placeholder="10.20.0.1/24" autocomplete="off" spellcheck="false">
-        </label>
-      </div>
-
-      <div class="form-grid" id="vnf-dhcp-fields">
-        <label class="field">
-          <span class="field-label">DNS servers <em>optional</em></span>
-          <input id="vnf-dns" type="text" placeholder="1.1.1.1,8.8.8.8" autocomplete="off" spellcheck="false">
-        </label>
-
-        <label class="field">
-          <span class="field-label">Range start</span>
-          <input id="vnf-range-start" type="text" required placeholder="10.20.0.100" autocomplete="off" spellcheck="false">
-        </label>
-
-        <label class="field">
-          <span class="field-label">Range end</span>
-          <input id="vnf-range-end" type="text" required placeholder="10.20.0.200" autocomplete="off" spellcheck="false">
-        </label>
-
-        <label class="field">
-          <span class="field-label">Lease time</span>
-          <input id="vnf-lease-time" type="text" placeholder="12h" autocomplete="off" spellcheck="false">
-        </label>
-      </div>
-
-      <div class="form-grid" id="vnf-nat44-fields" hidden>
-        <label class="field">
-          <span class="field-label">Outside NIC</span>
-          <select id="vnf-outside-interface" required></select>
-          <span class="field-hint" id="vnf-outside-hint">The selected NIC will be taken over by VPP; its host addresses are flushed.</span>
-        </label>
-
-        <label class="field">
-          <span class="field-label">Outside address <em>optional</em></span>
-          <input id="vnf-outside-address" type="text" placeholder="empty = VPP DHCP client" autocomplete="off" spellcheck="false">
-        </label>
-
-        <label class="field">
-          <span class="field-label">Outside gateway <em>optional</em></span>
-          <input id="vnf-outside-gateway" type="text" placeholder="198.51.100.1" autocomplete="off" spellcheck="false">
-        </label>
-
-        <label class="field">
-          <span class="field-label">NAT44 pool <em>optional</em></span>
-          <input id="vnf-nat44-pool" type="text" placeholder="203.0.113.10-203.0.113.20" autocomplete="off" spellcheck="false">
-        </label>
-
-        <div class="field field-wide">
-          <div class="panel-head acl-rules-head">
-            <div>
-              <span class="field-label">DNAT / port forwarding <em>optional</em></span>
-              <span class="field-hint">Expose services inside this network on the NAT44 outside address. Saving restarts NAT44.</span>
-            </div>
-            <button class="button ghost" id="add-vnf-dnat-rule" type="button">Add rule</button>
-          </div>
-          <div id="vnf-dnat-rows" class="acl-rule-rows"></div>
-        </div>
-      </div>
-
-      <label class="field field-wide checkbox-field">
-        <span class="checkbox-row">
-          <input id="vnf-enabled" type="checkbox">
-          <span>Enable this VNF</span>
-        </span>
-        <span class="field-hint" id="vnf-enabled-hint">Creates a VPP tap and starts the function immediately.</span>
-      </label>
-
-      <p class="form-error" id="vnf-form-error" role="alert" hidden></p>
-
-      <footer class="dialog-actions">
-        <button class="button ghost" id="cancel-vnf-dialog" type="button">Cancel</button>
-        <button class="button primary" id="save-vnf" type="submit">Add VNF</button>
-      </footer>
-    </form>
-  </dialog>
-
-  <dialog id="vnf-leases-dialog" aria-labelledby="vnf-leases-title">
-    <header class="dialog-head">
-      <div>
-        <p class="eyebrow">Lease monitor</p>
-        <h2 id="vnf-leases-title">VNF leases</h2>
-      </div>
-      <button class="icon-button" id="close-vnf-leases-dialog" type="button" aria-label="Close dialog">×</button>
-    </header>
-
-    <p id="vnf-leases-lede" class="dialog-lede">Network function</p>
-    <div class="banner" id="vnf-leases-error" role="alert" hidden></div>
-
-    <div class="table-wrap">
-      <table id="vnf-lease-table">
-        <thead>
-          <tr>
-            <th scope="col">Client ID</th>
-            <th scope="col">Address</th>
-            <th scope="col">Hostname</th>
-            <th scope="col">Expires</th>
-            <th scope="col">Active</th>
-          </tr>
-        </thead>
-        <tbody id="vnf-lease-rows"></tbody>
-      </table>
-      <div class="empty" id="vnf-lease-empty" hidden>
-        <div class="empty-mark" aria-hidden="true">◌</div>
-        <h3>No leases yet</h3>
-        <p>Clients will appear here after they receive an address from this VNF.</p>
-      </div>
-    </div>
-
-    <footer class="dialog-actions">
-      <button class="button ghost" id="refresh-vnf-leases" type="button">Refresh</button>
-      <button class="button primary" id="close-vnf-leases" type="button">Close</button>
-    </footer>
-  </dialog>
-
-  <dialog id="vnf-sessions-dialog" aria-labelledby="vnf-sessions-title">
-    <header class="dialog-head">
-      <div>
-        <p class="eyebrow">NAT monitor</p>
-        <h2 id="vnf-sessions-title">NAT44 sessions</h2>
-      </div>
-      <button class="icon-button" id="close-vnf-sessions-dialog" type="button" aria-label="Close dialog">×</button>
-    </header>
-
-    <p id="vnf-sessions-lede" class="dialog-lede">Network function</p>
-    <div class="banner" id="vnf-sessions-error" role="alert" hidden></div>
-
-    <pre id="vnf-sessions-text" class="nat-sessions">No sessions.</pre>
-
-    <footer class="dialog-actions">
-      <button class="button ghost" id="refresh-vnf-sessions" type="button">Refresh</button>
-      <button class="button primary" id="close-vnf-sessions" type="button">Close</button>
-    </footer>
-  </dialog>
 
   <dialog id="interface-dialog" aria-labelledby="interface-dialog-title">
 
@@ -1082,7 +870,7 @@
         </label>
 
         <label class="field field-wide">
-          <span class="field-label">Nerd's Network</span>
+          <span class="field-label">Rookery Network</span>
           <select id="interface-network" name="network_id" required>
             <option value="">Loading networks…</option>
           </select>
@@ -1140,7 +928,7 @@
     </form>
   </dialog>
 
-  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <div id="toast-root"></div>
   <noscript><p class="noscript">This UI needs JavaScript enabled. The JSON API is available under <code>/api</code>.</p></noscript>
 </body>
 </html>

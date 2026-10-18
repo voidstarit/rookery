@@ -33,6 +33,14 @@ body {
   background: var(--bg);
 }
 
+#console-root {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+}
+
 .console-bar {
   display: flex;
   flex: none;

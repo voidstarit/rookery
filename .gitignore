@@ -1,0 +1,13 @@
+# Ansible output and local runtime files
+*.retry
+*.db
+*.db-shm
+*.db-wal
+
+# Go build output
+/bin/
+/nerds-vms-api
+
+# UI dependencies and typecheck cache
+/ui/node_modules/
+/ui/*.tsbuildinfo

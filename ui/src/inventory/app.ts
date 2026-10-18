@@ -1,4 +1,8 @@
-(() => {
+// @ts-nocheck -- transitional: this inventory UI is being migrated to Preact
+// tab by tab. New code lives under ui/src and should be typed.
+import { showToast as showAppToast } from "../shared/toast";
+
+export function startInventory(): void {
   "use strict";
 
   const els = {
@@ -35,7 +39,6 @@
     diskTabCount: document.getElementById("disk-tab-count"),
     mediaTabCount: document.getElementById("media-tab-count"),
     networkTabCount: document.getElementById("network-tab-count"),
-    vnfTabCount: document.getElementById("vnf-tab-count"),
     vmsPanel: document.getElementById("vms-panel"),
     disksPanel: document.getElementById("disks-panel"),
     mediaPanel: document.getElementById("media-panel"),
@@ -76,40 +79,32 @@
     cancelImportDiskDialog: document.getElementById("cancel-import-disk-dialog"),
     newMedia: document.getElementById("new-media"),
     newNetwork: document.getElementById("new-network"),
-    newVNF: document.getElementById("new-vnf"),
     refreshDisks: document.getElementById("refresh-disks"),
     refreshMedia: document.getElementById("refresh-media"),
     refreshNetworks: document.getElementById("refresh-networks"),
-    refreshVNFs: document.getElementById("refresh-vnfs"),
     diskSummary: document.getElementById("disk-summary"),
     mediaSummary: document.getElementById("media-summary"),
     networkSummary: document.getElementById("network-summary"),
     interfaceSummary: document.getElementById("interface-summary"),
-    vnfSummary: document.getElementById("vnf-summary"),
     diskErrorBanner: document.getElementById("disk-error-banner"),
     mediaErrorBanner: document.getElementById("media-error-banner"),
     networkErrorBanner: document.getElementById("network-error-banner"),
     interfaceErrorBanner: document.getElementById("interface-error-banner"),
-    vnfErrorBanner: document.getElementById("vnf-error-banner"),
     diskTable: document.getElementById("disk-table"),
     mediaTable: document.getElementById("media-table"),
     networkTable: document.getElementById("network-table"),
     interfaceTable: document.getElementById("interface-table"),
-    vnfTable: document.getElementById("vnf-table"),
     diskRows: document.getElementById("disk-rows"),
     mediaRows: document.getElementById("media-rows"),
     networkRows: document.getElementById("network-rows"),
     interfaceRows: document.getElementById("interface-rows"),
-    vnfRows: document.getElementById("vnf-rows"),
     diskEmptyState: document.getElementById("disk-empty-state"),
     mediaEmptyState: document.getElementById("media-empty-state"),
     networkEmptyState: document.getElementById("network-empty-state"),
     interfaceEmptyState: document.getElementById("interface-empty-state"),
-    vnfEmptyState: document.getElementById("vnf-empty-state"),
     emptyCreateDisk: document.getElementById("empty-create-disk"),
     emptyCreateMedia: document.getElementById("empty-create-media"),
     emptyCreateNetwork: document.getElementById("empty-create-network"),
-    emptyCreateVNF: document.getElementById("empty-create-vnf"),
     newInterface: document.getElementById("new-interface"),
     newACL: document.getElementById("new-acl"),
     emptyCreateACL: document.getElementById("empty-create-acl"),
@@ -223,52 +218,6 @@
     saveNetwork: document.getElementById("save-network"),
     closeNetworkDialog: document.getElementById("close-network-dialog"),
     cancelNetworkDialog: document.getElementById("cancel-network-dialog"),
-    vnfDialog: document.getElementById("vnf-dialog"),
-    vnfDialogTitle: document.getElementById("vnf-dialog-title"),
-    vnfForm: document.getElementById("vnf-form"),
-    vnfID: document.getElementById("vnf-id"),
-    vnfName: document.getElementById("vnf-name"),
-    vnfNetwork: document.getElementById("vnf-network"),
-    vnfType: document.getElementById("vnf-type"),
-    vnfTypeHint: document.getElementById("vnf-type-hint"),
-    vnfEnabled: document.getElementById("vnf-enabled"),
-    vnfEnabledHint: document.getElementById("vnf-enabled-hint"),
-    vnfGateway: document.getElementById("vnf-gateway"),
-    vnfDHCPFields: document.getElementById("vnf-dhcp-fields"),
-    vnfNAT44Fields: document.getElementById("vnf-nat44-fields"),
-    vnfOutsideInterface: document.getElementById("vnf-outside-interface"),
-    vnfOutsideHint: document.getElementById("vnf-outside-hint"),
-    vnfOutsideAddress: document.getElementById("vnf-outside-address"),
-    vnfOutsideGateway: document.getElementById("vnf-outside-gateway"),
-    vnfNAT44Pool: document.getElementById("vnf-nat44-pool"),
-    vnfDNATRows: document.getElementById("vnf-dnat-rows"),
-    addVNFDNATRule: document.getElementById("add-vnf-dnat-rule"),
-    vnfDNS: document.getElementById("vnf-dns"),
-    vnfRangeStart: document.getElementById("vnf-range-start"),
-    vnfRangeEnd: document.getElementById("vnf-range-end"),
-    vnfLeaseTime: document.getElementById("vnf-lease-time"),
-    vnfFormError: document.getElementById("vnf-form-error"),
-    saveVNF: document.getElementById("save-vnf"),
-    closeVNFDialog: document.getElementById("close-vnf-dialog"),
-    cancelVNFDialog: document.getElementById("cancel-vnf-dialog"),
-    vnfLeasesDialog: document.getElementById("vnf-leases-dialog"),
-    vnfLeasesTitle: document.getElementById("vnf-leases-title"),
-    vnfLeasesLede: document.getElementById("vnf-leases-lede"),
-    vnfLeasesError: document.getElementById("vnf-leases-error"),
-    vnfLeaseTable: document.getElementById("vnf-lease-table"),
-    vnfLeaseRows: document.getElementById("vnf-lease-rows"),
-    vnfLeaseEmpty: document.getElementById("vnf-lease-empty"),
-    refreshVNFLeases: document.getElementById("refresh-vnf-leases"),
-    closeVNFLeases: document.getElementById("close-vnf-leases"),
-    closeVNFLeasesDialog: document.getElementById("close-vnf-leases-dialog"),
-    vnfSessionsDialog: document.getElementById("vnf-sessions-dialog"),
-    vnfSessionsTitle: document.getElementById("vnf-sessions-title"),
-    vnfSessionsLede: document.getElementById("vnf-sessions-lede"),
-    vnfSessionsError: document.getElementById("vnf-sessions-error"),
-    vnfSessionsText: document.getElementById("vnf-sessions-text"),
-    refreshVNFSessions: document.getElementById("refresh-vnf-sessions"),
-    closeVNFSessions: document.getElementById("close-vnf-sessions"),
-    closeVNFSessionsDialog: document.getElementById("close-vnf-sessions-dialog"),
     interfaceDialog: document.getElementById("interface-dialog"),
     interfaceForm: document.getElementById("interface-form"),
     interfaceName: document.getElementById("interface-name"),
@@ -286,7 +235,6 @@
     saveAttach: document.getElementById("save-attach"),
     closeAttachDialog: document.getElementById("close-attach-dialog"),
     cancelAttachDialog: document.getElementById("cancel-attach-dialog"),
-    toast: document.getElementById("toast"),
   };
 
   const dateFormat = new Intl.DateTimeFormat(undefined, {
@@ -319,7 +267,7 @@
     vnfs: {
       eyebrow: "Network functions",
       title: "VNFs",
-      lede: "Attach DHCPv4 and DHCPv6 functions to Nerd's Networks, enable them, and inspect their leases.",
+      lede: "Attach DHCPv4 and DHCPv6 functions to Rookery Networks, enable them, and inspect their leases.",
     },
   };
 
@@ -330,7 +278,6 @@
   let networks = [];
   let interfaces = [];
   let vnfs = [];
-  let hostInterfaces = [];
   let acls = [];
   let editingID = null;
   let editingInterfaceID = null;
@@ -341,9 +288,6 @@
   let importLoadID = 0;
   let savingImport = false;
   let assigningInterfaceACLID = null;
-  let editingVNFID = null;
-  let leasesVNFID = null;
-  let sessionsVNFID = null;
   let monitorVMID = null;
   let monitorVMTimer = null;
   let monitorVMLast = null;
@@ -360,9 +304,6 @@
   let savingStorageBackend = false;
   let savingInterfaceACL = false;
   let savingAttach = false;
-  let savingVNF = false;
-  let loadingVNFLeases = false;
-  let toastTimer = null;
   let prerequisitesReady = false;
   let thinPoolReady = false;
   let vppReady = false;
@@ -480,24 +421,8 @@
     els.interfaceErrorBanner.textContent = "";
   }
 
-  function showVNFBanner(message) {
-    els.vnfErrorBanner.textContent = message;
-    els.vnfErrorBanner.hidden = false;
-  }
-
-  function hideVNFBanner() {
-    els.vnfErrorBanner.hidden = true;
-    els.vnfErrorBanner.textContent = "";
-  }
-
   function showToast(message, isError = false) {
-    window.clearTimeout(toastTimer);
-    els.toast.textContent = message;
-    els.toast.classList.toggle("error", isError);
-    els.toast.hidden = false;
-    toastTimer = window.setTimeout(() => {
-      els.toast.hidden = true;
-    }, 3500);
+    showAppToast(message, isError);
   }
 
   function formatMemory(mb) {
@@ -660,21 +585,6 @@
     render();
   }
 
-  function upsertVNF(vnf) {
-    const index = vnfs.findIndex((item) => item.id === vnf.id);
-    if (index === -1) {
-      vnfs.push(vnf);
-    } else {
-      vnfs[index] = vnf;
-    }
-    sortVNFs();
-    render();
-  }
-
-  function vnfByID(vnfID) {
-    return vnfs.find((vnf) => vnf.id === vnfID);
-  }
-
   function vnfsForNetwork(networkID) {
     return vnfs.filter((vnf) => vnf.network_id === networkID);
   }
@@ -719,23 +629,12 @@
 
     const ifaceHint =
       networks.length === 0
-        ? "Create a Nerd's Network first"
+        ? "Create a Rookery Network first"
         : !vppReady
           ? "Interface creation is blocked until FD.io VPP is ready"
           : "";
     els.newInterface.disabled = networks.length === 0 || !vppReady;
     els.newInterface.title = ifaceHint;
-
-    const vnfHint =
-      networks.length === 0
-        ? "Create a Nerd's Network first"
-        : !vppReady
-          ? "VNFs can be created disabled, but enabling needs FD.io VPP"
-          : "";
-    els.newVNF.disabled = networks.length === 0;
-    els.emptyCreateVNF.disabled = networks.length === 0;
-    els.newVNF.title = vnfHint;
-    els.emptyCreateVNF.title = vnfHint;
 
     const aclHint = vppReady ? "" : "ACL changes are blocked until FD.io VPP is ready";
     els.newACL.disabled = !vppReady;
@@ -751,7 +650,6 @@
     renderMedia();
     renderNetworks();
     renderACLs();
-    renderVNFs();
     updateVMActionState();
     updateDiskActionState();
     updateNetworkActionState();
@@ -1166,7 +1064,7 @@
     els.networkTabCount.textContent = String(networks.length);
     els.networkSummary.textContent =
       networks.length === 0
-        ? "No Nerd's Networks registered"
+        ? "No Rookery Networks registered"
         : `${networks.length} network${networks.length === 1 ? "" : "s"} · ${interfaces.length} interface${interfaces.length === 1 ? "" : "s"} · ${vnfs.length} VNF${vnfs.length === 1 ? "" : "s"}`;
     els.interfaceSummary.textContent =
       interfaces.length === 0
@@ -1697,111 +1595,6 @@
     els.saveInterfaceACL.textContent = value ? label : "Apply ACLs";
   }
 
-  function renderVNFs() {
-    const enabled = vnfs.filter((vnf) => vnf.enabled).length;
-    els.vnfTabCount.textContent = String(vnfs.length);
-    els.vnfSummary.textContent =
-      vnfs.length === 0
-        ? "No network functions registered"
-        : `${vnfs.length} VNF${vnfs.length === 1 ? "" : "s"} · ${enabled} enabled · ${vnfs.reduce((sum, vnf) => sum + (vnf.lease_count || 0), 0)} active leases`;
-
-    els.vnfTable.hidden = vnfs.length === 0;
-    els.vnfEmptyState.hidden = vnfs.length !== 0;
-    els.vnfRows.replaceChildren();
-    for (const vnf of vnfs) {
-      els.vnfRows.append(renderVNFRow(vnf));
-    }
-  }
-
-  function renderVNFRow(vnf) {
-    const row = document.createElement("tr");
-
-    const nameCell = document.createElement("td");
-    const name = document.createElement("span");
-    name.className = "vm-name";
-    name.textContent = vnf.name;
-    nameCell.append(name);
-    if (vnf.type === "nat44" && vnf.config?.outside_interface) {
-      const dnatCount = Array.isArray(vnf.config.dnat_rules) ? vnf.config.dnat_rules.length : 0;
-      const outside = document.createElement("span");
-      outside.className = "vm-description";
-      outside.textContent = `outside ${vnf.config.outside_interface}${dnatCount ? ` · ${dnatCount} DNAT` : ""}`;
-      nameCell.append(outside);
-    } else if (vnf.tap_host_name) {
-      const tap = document.createElement("span");
-      tap.className = "vm-description";
-      tap.textContent = vnf.tap_host_name;
-      nameCell.append(tap);
-    }
-
-    const typeCell = document.createElement("td");
-    typeCell.className = "mono";
-    typeCell.textContent =
-      vnf.type === "nat44" ? "NAT44" : vnf.type === "dhcpv6" ? "DHCPv6" : "DHCPv4";
-
-    const networkCell = document.createElement("td");
-    networkCell.className = "mono";
-    networkCell.textContent = networkByID(vnf.network_id)?.name || `network ${vnf.network_id}`;
-
-    const statusCell = document.createElement("td");
-    const status = document.createElement("span");
-    status.className = "status-badge";
-    status.dataset.status = vnf.status || "disabled";
-    status.textContent = vnf.status || "disabled";
-    if (vnf.status_detail) {
-      status.title = vnf.status_detail;
-    }
-    statusCell.append(status);
-
-    const leaseCell = document.createElement("td");
-    leaseCell.className = vnf.lease_count && vnf.type !== "nat44" ? "mono" : "mono muted";
-    leaseCell.textContent = vnf.type === "nat44" ? "—" : String(vnf.lease_count || 0);
-
-    const updatedCell = document.createElement("td");
-    updatedCell.className = "updated hide-sm";
-    updatedCell.textContent = formatDate(vnf.updated_at);
-
-    const actionsCell = document.createElement("td");
-    const actions = document.createElement("div");
-    actions.className = "actions";
-
-    const leases = document.createElement("button");
-    leases.type = "button";
-    leases.className = "row-action";
-    leases.dataset.action = vnf.type === "nat44" ? "vnf-sessions" : "vnf-leases";
-    leases.dataset.id = String(vnf.id);
-    leases.textContent = vnf.type === "nat44" ? "Sessions" : "Leases";
-
-    const edit = document.createElement("button");
-    edit.type = "button";
-    edit.className = "row-action";
-    edit.dataset.action = "edit-vnf";
-    edit.dataset.id = String(vnf.id);
-    edit.textContent = "Edit";
-
-    const restart = document.createElement("button");
-    restart.type = "button";
-    restart.className = "row-action";
-    restart.dataset.action = "restart-vnf";
-    restart.dataset.id = String(vnf.id);
-    restart.textContent = vnf.enabled ? "Restart" : "Start";
-    if (!vppReady) {
-      restart.disabled = true;
-      restart.title = "VPP must be ready to start a VNF.";
-    }
-
-    const del = document.createElement("button");
-    del.type = "button";
-    del.className = "row-action danger";
-    del.dataset.action = "delete-vnf";
-    del.dataset.id = String(vnf.id);
-    del.textContent = "Delete";
-
-    actions.append(leases, edit, restart, del);
-    actionsCell.append(actions);
-    row.append(nameCell, typeCell, networkCell, statusCell, leaseCell, updatedCell, actionsCell);
-    return row;
-  }
 
   function renderInterfaceRow(iface) {
     const row = document.createElement("tr");
@@ -2005,6 +1798,7 @@
       render();
       hideNetworkBanner();
       setAPIState("online");
+      window.dispatchEvent(new CustomEvent("rookery:networks-changed", { detail: networks }));
     } catch (err) {
       setAPIState("offline");
       showNetworkBanner(`Could not load networks: ${err.message}`);
@@ -2016,24 +1810,16 @@
   }
 
   async function loadVNFs() {
-    els.refreshVNFs.disabled = true;
-    const previousLabel = els.refreshVNFs.textContent;
-    els.refreshVNFs.textContent = "Refreshing…";
-
     try {
       const data = await api("/api/vnfs");
       vnfs = Array.isArray(data) ? data : [];
       sortVNFs();
-      render();
-      hideVNFBanner();
+      renderNetworks();
       setAPIState("online");
+      window.dispatchEvent(new CustomEvent("rookery:vnfs-data", { detail: vnfs }));
     } catch (err) {
       setAPIState("offline");
-      showVNFBanner(`Could not load VNFs: ${err.message}`);
       throw err;
-    } finally {
-      els.refreshVNFs.disabled = false;
-      els.refreshVNFs.textContent = previousLabel;
     }
   }
 
@@ -2098,6 +1884,7 @@
     vppReady = ready;
     updateNetworkActionState();
     renderNetworks();
+    window.dispatchEvent(new CustomEvent("rookery:vpp-ready", { detail: ready }));
   }
 
   function applyReadinessCard(card, stateEl, targetEl, detailEl, component, target) {
@@ -2238,7 +2025,6 @@
     disks: els.newDisk,
     media: els.newMedia,
     networks: els.newNetwork,
-    vnfs: els.newVNF,
   };
 
   function selectTab(name, focus = false, updateHash = true) {
@@ -2252,7 +2038,9 @@
       TAB_ELEMENTS[key].setAttribute("aria-selected", String(selected));
       TAB_ELEMENTS[key].tabIndex = selected ? 0 : -1;
       PANEL_ELEMENTS[key].hidden = !selected;
-      CREATE_BUTTONS[key].hidden = !selected;
+      if (CREATE_BUTTONS[key]) {
+        CREATE_BUTTONS[key].hidden = !selected;
+      }
     }
 
     if (updateHash) {
@@ -2265,6 +2053,7 @@
     els.heroLede.textContent = meta.lede;
     updateVMActionState();
     updateNetworkActionState();
+    window.dispatchEvent(new CustomEvent("rookery:tab-changed", { detail: name }));
 
     if (focus) {
       TAB_ELEMENTS[name].focus();
@@ -2480,7 +2269,7 @@
       els.vmInterfacesHint.textContent = "Stop the VM before changing network interfaces.";
     } else if (available.length === 0 && vmInterfaceSelection.size === 0) {
       els.vmInterfacesHint.textContent =
-        "Create a Nerd Virtual Interface on the Network tab first.";
+        "Create a Rookery Virtual Interface on the Network tab first.";
     } else {
       els.vmInterfacesHint.textContent =
         "Choose an interface and click Add. Remove interfaces with the buttons below.";
@@ -2927,526 +2716,6 @@
     els.saveNetwork.textContent = value ? label : "Create network";
   }
 
-  function populateVNFNetworkOptions(selectedID) {
-    els.vnfNetwork.replaceChildren();
-    if (networks.length === 0) {
-      const option = document.createElement("option");
-      option.value = "";
-      option.textContent = "No networks available";
-      els.vnfNetwork.append(option);
-      els.vnfNetwork.disabled = true;
-      return;
-    }
-
-    els.vnfNetwork.disabled = false;
-    for (const network of networks) {
-      const option = document.createElement("option");
-      option.value = String(network.id);
-      option.textContent = `${network.name} · bd ${network.bridge_domain_id}`;
-      els.vnfNetwork.append(option);
-    }
-    if (selectedID !== null && selectedID !== undefined) {
-      els.vnfNetwork.value = String(selectedID);
-    }
-  }
-
-  function setVNFTypeHint() {
-    const type = els.vnfType.value;
-    const ipv6 = type === "dhcpv6";
-    const nat44 = type === "nat44";
-    els.vnfTypeHint.textContent = nat44
-      ? "IPv4 NAT44 gateway. A dedicated network BVI owns the gateway; the outside NIC is taken over by VPP."
-      : ipv6
-        ? "IPv6 address pool with stateful IA_NA leases on a VPP tap."
-        : "IPv4 address pool served on a VPP tap.";
-    els.vnfGateway.placeholder = nat44
-      ? "10.20.0.1/24 (network BVI gateway)"
-      : ipv6
-        ? "fd00:20::1/64"
-        : "10.20.0.1/24";
-    els.vnfDNS.placeholder = ipv6 ? "2001:4860:4860::8888" : "1.1.1.1,8.8.8.8";
-    els.vnfRangeStart.placeholder = ipv6 ? "fd00:20::100" : "10.20.0.100";
-    els.vnfRangeEnd.placeholder = ipv6 ? "fd00:20::200" : "10.20.0.200";
-  }
-
-  function setVNFFieldsForType() {
-    const nat44 = els.vnfType.value === "nat44";
-    els.vnfDHCPFields.hidden = nat44;
-    els.vnfNAT44Fields.hidden = !nat44;
-    for (const input of els.vnfDHCPFields.querySelectorAll("input, select")) {
-      input.disabled = nat44;
-    }
-    els.vnfRangeStart.required = !nat44;
-    els.vnfRangeEnd.required = !nat44;
-    for (const input of els.vnfNAT44Fields.querySelectorAll("input, select")) {
-      input.disabled = !nat44;
-    }
-    els.vnfOutsideInterface.required = nat44;
-    els.vnfEnabledHint.textContent = nat44
-      ? !vppReady
-        ? "VPP is not ready. Save disabled and start the NAT44 VNF later."
-        : els.vnfEnabled.checked
-          ? "Saving takes over the selected outside NIC and flushes its host addresses."
-          : "The configuration is saved without taking over the outside NIC."
-      : vppReady
-        ? "Creates a VPP tap and starts the function immediately."
-        : "VPP is not ready. The VNF can be created disabled and started later.";
-    updateOutsideInterfaceHint();
-  }
-
-  async function loadHostInterfaces() {
-    try {
-      const data = await api("/api/host/interfaces");
-      hostInterfaces = Array.isArray(data) ? data : [];
-    } catch (err) {
-      hostInterfaces = [];
-    }
-    populateOutsideInterfaces(els.vnfOutsideInterface.value);
-    return hostInterfaces;
-  }
-
-  function populateOutsideInterfaces(selected = "") {
-    els.vnfOutsideInterface.replaceChildren();
-    if (hostInterfaces.length === 0) {
-      const option = document.createElement("option");
-      option.value = "";
-      option.textContent = "No host interfaces found";
-      option.disabled = true;
-      els.vnfOutsideInterface.append(option);
-      els.vnfOutsideInterface.value = "";
-      updateOutsideInterfaceHint();
-      return;
-    }
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.textContent = "Select a wired physical NIC…";
-    placeholder.disabled = true;
-    els.vnfOutsideInterface.append(placeholder);
-    let selectedPresent = false;
-    for (const iface of hostInterfaces) {
-      const option = document.createElement("option");
-      option.value = iface.name;
-      const addresses = Array.isArray(iface.addresses) && iface.addresses.length
-        ? ` — ${iface.addresses.join(", ")}`
-        : "";
-      const virtual = iface.physical === false;
-      const wireless = iface.wireless === true;
-      const blocked = Boolean(iface.default_route) || virtual || wireless;
-      const reason = iface.default_route
-        ? " (default route — blocked)"
-        : virtual
-          ? " (virtual — not selectable)"
-          : wireless
-            ? " (wireless — not supported)"
-            : "";
-      option.textContent = `${iface.name}${addresses}${reason}`;
-      option.disabled = blocked;
-      els.vnfOutsideInterface.append(option);
-      if (iface.name === selected) {
-        selectedPresent = true;
-        if (blocked) {
-          const warning = document.createElement("option");
-          warning.value = iface.name;
-          warning.textContent = `${iface.name} (${iface.default_route ? "default route" : iface.wireless ? "wireless" : "virtual"} — choose another NIC)`;
-          warning.disabled = true;
-          els.vnfOutsideInterface.append(warning);
-        }
-      }
-    }
-    if (selected && !selectedPresent) {
-      const option = document.createElement("option");
-      option.value = selected;
-      option.textContent = `${selected} (not currently present)`;
-      els.vnfOutsideInterface.append(option);
-    }
-    if (selected) {
-      els.vnfOutsideInterface.value = selected;
-    }
-    updateOutsideInterfaceHint();
-  }
-
-  function updateOutsideInterfaceHint() {
-    if (!els.vnfOutsideInterface) {
-      return;
-    }
-    const iface = hostInterfaces.find((item) => item.name === els.vnfOutsideInterface.value);
-    if (els.vnfType.value !== "nat44") {
-      return;
-    }
-    if (iface?.default_route) {
-      els.vnfOutsideHint.textContent =
-        "This NIC carries the host default route and cannot be used for NAT.";
-      return;
-    }
-    if (iface?.physical === false) {
-      els.vnfOutsideHint.textContent =
-        "Select a wired physical NIC; virtual and VPP-managed interfaces are not valid outside uplinks.";
-      return;
-    }
-    if (iface?.wireless) {
-      els.vnfOutsideHint.textContent =
-        "Wireless NICs are not supported as VPP NAT44 outside uplinks; use a wired NIC.";
-      return;
-    }
-    els.vnfOutsideHint.textContent = iface
-      ? `VPP will take over ${iface.name} and flush its host addresses.`
-      : "The selected NIC will be taken over by VPP; its host addresses are flushed.";
-  }
-
-  function applyVNFTypeDefaults() {
-    const type = els.vnfType.value;
-    const ipv6 = type === "dhcpv6";
-    const nat44 = type === "nat44";
-    els.vnfGateway.value = nat44
-      ? "10.20.0.1/24"
-      : ipv6
-        ? "fd00:20::1/64"
-        : "10.20.0.1/24";
-    els.vnfDNS.value = ipv6 ? "2001:4860:4860::8888" : "1.1.1.1";
-    els.vnfRangeStart.value = ipv6 ? "fd00:20::100" : "10.20.0.100";
-    els.vnfRangeEnd.value = ipv6 ? "fd00:20::200" : "10.20.0.200";
-    els.vnfLeaseTime.value = "12h";
-    if (nat44) {
-      els.vnfOutsideAddress.value = "";
-      els.vnfOutsideGateway.value = "";
-      els.vnfNAT44Pool.value = "";
-      loadHostInterfaces().catch(() => {});
-    }
-    setVNFFieldsForType();
-  }
-
-  function renumberVNFDNATRules() {
-    const rows = [...els.vnfDNATRows.querySelectorAll(".dnat-rule")];
-    rows.forEach((row, index) => {
-      const title = row.querySelector(".dnat-rule-title");
-      if (title) {
-        title.textContent = `Rule ${index + 1}`;
-      }
-    });
-  }
-
-  function addVNFDNATRule(rule = {}) {
-    const row = document.createElement("div");
-    row.className = "acl-rule dnat-rule";
-
-    const head = document.createElement("div");
-    head.className = "acl-rule-head";
-    const title = document.createElement("span");
-    title.className = "dnat-rule-title";
-    title.textContent = "Rule";
-    const remove = document.createElement("button");
-    remove.type = "button";
-    remove.className = "row-action danger";
-    remove.dataset.removeDnatRule = "";
-    remove.textContent = "Remove";
-    head.append(title, remove);
-
-    const fields = document.createElement("div");
-    fields.className = "acl-rule-fields";
-
-    const protocol = document.createElement("label");
-    protocol.className = "field dnat-field-protocol";
-    const protocolLabel = document.createElement("span");
-    protocolLabel.className = "field-label";
-    protocolLabel.textContent = "Protocol";
-    const protocolSelect = document.createElement("select");
-    protocolSelect.dataset.dnatField = "protocol";
-    for (const value of ["tcp", "udp"]) {
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = value.toUpperCase();
-      protocolSelect.append(option);
-    }
-    protocolSelect.value = rule.protocol === "udp" ? "udp" : "tcp";
-    protocol.append(protocolLabel, protocolSelect);
-
-    const externalPort = document.createElement("label");
-    externalPort.className = "field dnat-field-external-port";
-    const externalPortLabel = document.createElement("span");
-    externalPortLabel.className = "field-label";
-    externalPortLabel.textContent = "External port";
-    const externalPortInput = document.createElement("input");
-    externalPortInput.type = "number";
-    externalPortInput.min = "1";
-    externalPortInput.max = "65535";
-    externalPortInput.step = "1";
-    externalPortInput.required = true;
-    externalPortInput.inputMode = "numeric";
-    externalPortInput.placeholder = "8080";
-    externalPortInput.dataset.dnatField = "external-port";
-    externalPortInput.value = rule.external_port > 0 ? String(rule.external_port) : "";
-    externalPort.append(externalPortLabel, externalPortInput);
-
-    const localIP = document.createElement("label");
-    localIP.className = "field dnat-field-local-ip";
-    const localIPLabel = document.createElement("span");
-    localIPLabel.className = "field-label";
-    localIPLabel.textContent = "Internal address";
-    const localIPInput = document.createElement("input");
-    localIPInput.type = "text";
-    localIPInput.required = true;
-    localIPInput.autocomplete = "off";
-    localIPInput.spellcheck = false;
-    localIPInput.inputMode = "decimal";
-    localIPInput.placeholder = "10.20.0.100";
-    localIPInput.dataset.dnatField = "local-ip";
-    localIPInput.value = rule.local_ip || "";
-    localIP.append(localIPLabel, localIPInput);
-
-    const localPort = document.createElement("label");
-    localPort.className = "field dnat-field-local-port";
-    const localPortLabel = document.createElement("span");
-    localPortLabel.className = "field-label";
-    localPortLabel.textContent = "Internal port";
-    const localPortInput = document.createElement("input");
-    localPortInput.type = "number";
-    localPortInput.min = "1";
-    localPortInput.max = "65535";
-    localPortInput.step = "1";
-    localPortInput.required = true;
-    localPortInput.inputMode = "numeric";
-    localPortInput.placeholder = "80";
-    localPortInput.dataset.dnatField = "local-port";
-    localPortInput.value = rule.local_port > 0 ? String(rule.local_port) : "";
-    localPort.append(localPortLabel, localPortInput);
-
-    fields.append(protocol, externalPort, localIP, localPort);
-    row.append(head, fields);
-    els.vnfDNATRows.append(row);
-    renumberVNFDNATRules();
-    return row;
-  }
-
-  function renderVNFDNATRules(rules) {
-    els.vnfDNATRows.replaceChildren();
-    const list = Array.isArray(rules) ? rules : [];
-    for (const rule of list) {
-      addVNFDNATRule(rule);
-    }
-  }
-
-  function readVNFDNATRules() {
-    return [...els.vnfDNATRows.querySelectorAll(".dnat-rule")].map((row) => {
-      const value = (name) => row.querySelector(`[data-dnat-field="${name}"]`)?.value || "";
-      return {
-        protocol: value("protocol"),
-        external_port: Number(value("external-port")),
-        local_ip: value("local-ip").trim(),
-        local_port: Number(value("local-port")),
-      };
-    });
-  }
-
-  function openCreateVNF(networkID = null) {
-    if (networks.length === 0) {
-      showToast("Create a Nerd's Network before adding a VNF.", true);
-      return;
-    }
-    editingVNFID = null;
-    els.vnfForm.reset();
-    renderVNFDNATRules([]);
-    els.vnfNetwork.disabled = false;
-    els.vnfType.disabled = false;
-    populateVNFNetworkOptions(networkID ?? networks[0].id);
-    els.vnfType.value = "dhcpv4";
-    els.vnfEnabled.checked = vppReady;
-    els.vnfEnabled.disabled = !vppReady;
-    applyVNFTypeDefaults();
-    els.vnfDialogTitle.textContent = "Add VNF";
-    els.saveVNF.textContent = "Add VNF";
-    els.vnfFormError.hidden = true;
-    els.vnfFormError.textContent = "";
-    els.vnfDialog.showModal();
-    els.vnfName.focus();
-  }
-
-  function openEditVNF(vnf) {
-    editingVNFID = vnf.id;
-    els.vnfForm.reset();
-    renderVNFDNATRules(vnf.config?.dnat_rules || []);
-    els.vnfID.value = String(vnf.id);
-    els.vnfName.value = vnf.name;
-    populateVNFNetworkOptions(vnf.network_id);
-    els.vnfNetwork.disabled = true;
-    els.vnfType.value = vnf.type;
-    els.vnfType.disabled = true;
-    els.vnfGateway.value = vnf.config?.gateway || "";
-    els.vnfDNS.value = vnf.config?.dns || "";
-    els.vnfRangeStart.value = vnf.config?.range_start || "";
-    els.vnfRangeEnd.value = vnf.config?.range_end || "";
-    els.vnfLeaseTime.value = vnf.config?.lease_time || "12h";
-    els.vnfOutsideAddress.value = vnf.config?.outside_address || "";
-    els.vnfOutsideGateway.value = vnf.config?.outside_gateway || "";
-    els.vnfNAT44Pool.value = vnf.config?.nat44_pool || "";
-    els.vnfEnabled.checked = Boolean(vnf.enabled);
-    els.vnfEnabled.disabled = false;
-    setVNFTypeHint();
-    setVNFFieldsForType();
-    if (vnf.type === "nat44") {
-      loadHostInterfaces().then(() => {
-        populateOutsideInterfaces(vnf.config?.outside_interface || "");
-      }).catch(() => {});
-    }
-    els.vnfDialogTitle.textContent = "Edit VNF";
-    els.saveVNF.textContent = "Save VNF";
-    els.vnfFormError.hidden = true;
-    els.vnfFormError.textContent = "";
-    els.vnfDialog.showModal();
-    els.vnfName.focus();
-  }
-
-  function setSavingVNF(value, label) {
-    savingVNF = value;
-    els.saveVNF.disabled = value;
-    els.cancelVNFDialog.disabled = value;
-    els.closeVNFDialog.disabled = value;
-    els.saveVNF.textContent = value ? label : editingVNFID ? "Save VNF" : "Add VNF";
-  }
-
-  function openVNFLeases(vnf) {
-    leasesVNFID = vnf.id;
-    els.vnfLeasesTitle.textContent = `Leases · ${vnf.name}`;
-    els.vnfLeasesLede.textContent = `${vnf.type === "dhcpv6" ? "DHCPv6" : "DHCPv4"} · ${networkByID(vnf.network_id)?.name || "network"}`;
-    els.vnfLeasesError.hidden = true;
-    els.vnfLeasesError.textContent = "";
-    els.vnfLeaseRows.replaceChildren();
-    els.vnfLeaseTable.hidden = false;
-    els.vnfLeaseEmpty.hidden = true;
-    els.vnfLeasesDialog.showModal();
-    loadVNFLeases().catch(() => {});
-  }
-
-  async function loadVNFLeases() {
-    if (leasesVNFID === null || loadingVNFLeases) {
-      return;
-    }
-    loadingVNFLeases = true;
-    els.refreshVNFLeases.disabled = true;
-    const previousLabel = els.refreshVNFLeases.textContent;
-    els.refreshVNFLeases.textContent = "Refreshing…";
-
-    try {
-      const data = await api(`/api/vnfs/${leasesVNFID}/leases`);
-      const leases = Array.isArray(data?.leases) ? data.leases : [];
-      els.vnfLeaseRows.replaceChildren();
-      els.vnfLeaseTable.hidden = leases.length === 0;
-      els.vnfLeaseEmpty.hidden = leases.length !== 0;
-      for (const lease of leases) {
-        const row = document.createElement("tr");
-
-        const client = document.createElement("td");
-        client.className = "mono";
-        client.textContent = lease.client_id || "—";
-
-        const address = document.createElement("td");
-        address.className = "mono";
-        address.textContent = lease.address || "—";
-
-        const hostname = document.createElement("td");
-        hostname.textContent = lease.hostname || "—";
-
-        const expires = document.createElement("td");
-        expires.textContent = formatDate(lease.expires_at);
-
-        const active = document.createElement("td");
-        const badge = document.createElement("span");
-        badge.className = "status-badge";
-        badge.dataset.status = lease.active ? "running" : "disabled";
-        badge.textContent = lease.active ? "active" : "expired";
-        active.append(badge);
-
-        row.append(client, address, hostname, expires, active);
-        els.vnfLeaseRows.append(row);
-      }
-      els.vnfLeasesError.hidden = true;
-      els.vnfLeasesError.textContent = "";
-    } catch (err) {
-      els.vnfLeasesError.textContent = `Could not load leases: ${err.message}`;
-      els.vnfLeasesError.hidden = false;
-    } finally {
-      loadingVNFLeases = false;
-      els.refreshVNFLeases.disabled = false;
-      els.refreshVNFLeases.textContent = previousLabel;
-    }
-  }
-
-  function openVNFSessions(vnf) {
-    sessionsVNFID = vnf.id;
-    els.vnfSessionsTitle.textContent = `NAT44 sessions · ${vnf.name}`;
-    els.vnfSessionsLede.textContent = `${networkByID(vnf.network_id)?.name || "network"} · outside ${vnf.config?.outside_interface || "—"}`;
-    els.vnfSessionsError.hidden = true;
-    els.vnfSessionsError.textContent = "";
-    els.vnfSessionsText.textContent = "Loading…";
-    els.vnfSessionsDialog.showModal();
-    loadVNFSessions().catch(() => {});
-  }
-
-  async function loadVNFSessions() {
-    if (sessionsVNFID === null) {
-      return;
-    }
-    els.refreshVNFSessions.disabled = true;
-    const previousLabel = els.refreshVNFSessions.textContent;
-    els.refreshVNFSessions.textContent = "Refreshing…";
-    try {
-      const data = await api(`/api/vnfs/${sessionsVNFID}/sessions`);
-      const lines = Array.isArray(data?.sessions) ? data.sessions : [];
-      els.vnfSessionsText.textContent = lines.length
-        ? lines.join("\n")
-        : "No active NAT44 sessions.";
-      els.vnfSessionsError.hidden = true;
-      els.vnfSessionsError.textContent = "";
-    } catch (err) {
-      els.vnfSessionsError.textContent = `Could not load NAT44 sessions: ${err.message}`;
-      els.vnfSessionsError.hidden = false;
-    } finally {
-      els.refreshVNFSessions.disabled = false;
-      els.refreshVNFSessions.textContent = previousLabel;
-    }
-  }
-
-  async function deleteVNF(vnf) {
-    const confirmed = window.confirm(
-      vnf.type === "nat44"
-        ? `Delete VNF "${vnf.name}"?\n\nThis stops NAT44 and removes its VPP rules. The network BVI is kept until the network is deleted.`
-        : `Delete VNF "${vnf.name}"?\n\nThis stops the function, removes its tap, and deletes its leases.`
-    );
-    if (!confirmed) {
-      return;
-    }
-    try {
-      await api(`/api/vnfs/${vnf.id}`, { method: "DELETE" });
-      vnfs = vnfs.filter((item) => item.id !== vnf.id);
-      if (leasesVNFID === vnf.id) {
-        els.vnfLeasesDialog.close();
-        leasesVNFID = null;
-      }
-      render();
-      hideVNFBanner();
-      showToast(`Deleted VNF ${vnf.name}`);
-    } catch (err) {
-      showVNFBanner(`Could not delete ${vnf.name}: ${err.message}`);
-    }
-  }
-
-  async function restartVNF(vnf) {
-    if (!vppReady) {
-      showToast("VPP must be ready to start a VNF.", true);
-      return;
-    }
-    try {
-      const updated = await api(`/api/vnfs/${vnf.id}/restart`, { method: "POST" });
-      upsertVNF(updated);
-      hideVNFBanner();
-      showToast(`Started VNF ${vnf.name}`);
-    } catch (err) {
-      showVNFBanner(`Could not start ${vnf.name}: ${err.message}`);
-      if (err.status === 503) {
-        refreshStatus();
-      }
-    }
-  }
-
   function populateNetworkOptions(selectedID) {
     els.interfaceNetwork.replaceChildren();
 
@@ -3497,7 +2766,7 @@
       return;
     }
     if (networks.length === 0) {
-      showToast("Create a Nerd's Network first.", true);
+      showToast("Create a Rookery Network first.", true);
       return;
     }
 
@@ -3573,7 +2842,7 @@
     }
     const networkVNFs = vnfsForNetwork(network.id);
     const confirmed = window.confirm(
-      `Delete Nerd's Network "${network.name}"?\n\nThis removes the VPP bridge domain and ${networkVNFs.length} VNF(s).`
+      `Delete Rookery Network "${network.name}"?\n\nThis removes the VPP bridge domain and ${networkVNFs.length} VNF(s).`
     );
     if (!confirmed) {
       return;
@@ -3585,6 +2854,8 @@
       vnfs = vnfs.filter((vnf) => vnf.network_id !== network.id);
       render();
       hideNetworkBanner();
+      window.dispatchEvent(new CustomEvent("rookery:networks-changed", { detail: networks }));
+      window.dispatchEvent(new CustomEvent("rookery:vnfs-changed", { detail: vnfs }));
       showToast(`Deleted network ${network.name}`);
     } catch (err) {
       showNetworkBanner(`Could not delete ${network.name}: ${err.message}`);
@@ -4258,6 +3529,7 @@
       setAPIState("online");
       hideNetworkBanner();
       els.networkDialog.close();
+      window.dispatchEvent(new CustomEvent("rookery:networks-changed", { detail: networks }));
       showToast(`Created network ${network.name}`);
     } catch (err) {
       els.networkFormError.textContent = err.message;
@@ -4273,105 +3545,6 @@
     }
   });
 
-  els.vnfForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (savingVNF) {
-      return;
-    }
-
-    els.vnfFormError.hidden = true;
-    els.vnfFormError.textContent = "";
-
-    if (!els.vnfForm.reportValidity()) {
-      return;
-    }
-
-    const vnfType = els.vnfType.value;
-    const nat44 = vnfType === "nat44";
-    const config = nat44
-      ? {
-          gateway: els.vnfGateway.value.trim(),
-          outside_interface: els.vnfOutsideInterface.value,
-          outside_address: els.vnfOutsideAddress.value.trim(),
-          outside_gateway: els.vnfOutsideGateway.value.trim(),
-          nat44_pool: els.vnfNAT44Pool.value.trim(),
-          dnat_rules: readVNFDNATRules(),
-        }
-      : {
-          gateway: els.vnfGateway.value.trim(),
-          range_start: els.vnfRangeStart.value.trim(),
-          range_end: els.vnfRangeEnd.value.trim(),
-          dns: els.vnfDNS.value.trim(),
-          lease_time: els.vnfLeaseTime.value.trim() || "12h",
-        };
-    if (!config.gateway) {
-      els.vnfFormError.textContent = "Gateway CIDR is required.";
-      els.vnfFormError.hidden = false;
-      return;
-    }
-    if (!nat44 && (!config.range_start || !config.range_end)) {
-      els.vnfFormError.textContent = "Range start and end are required.";
-      els.vnfFormError.hidden = false;
-      return;
-    }
-    if (nat44 && !config.outside_interface) {
-      els.vnfFormError.textContent = "Select an outside network interface.";
-      els.vnfFormError.hidden = false;
-      return;
-    }
-    if (
-      nat44 &&
-      els.vnfEnabled.checked &&
-      !window.confirm(
-        `Take over ${config.outside_interface} for NAT44?\n\nVPP will own this NIC and its host IPv4/IPv6 addresses will be flushed. The host default-route interface is rejected by the server.`
-      )
-    ) {
-      return;
-    }
-
-    const payload = {
-      name: els.vnfName.value.trim(),
-      enabled: els.vnfEnabled.checked,
-      config,
-    };
-    if (editingVNFID === null) {
-      payload.network_id = Number(els.vnfNetwork.value);
-      payload.type = els.vnfType.value;
-    }
-
-    setSavingVNF(true, "Saving…");
-
-    try {
-      const vnf = await api(editingVNFID === null ? "/api/vnfs" : `/api/vnfs/${editingVNFID}`, {
-        method: editingVNFID === null ? "POST" : "PUT",
-        body: JSON.stringify(payload),
-      });
-      upsertVNF(vnf);
-      setAPIState("online");
-      hideVNFBanner();
-      els.vnfDialog.close();
-      if (vnf.type === "nat44") {
-        loadVNFs().catch(() => {});
-        loadNetworks().catch(() => {});
-      }
-      showToast(
-        editingVNFID === null
-          ? `Added VNF ${vnf.name}`
-          : `Saved VNF ${vnf.name}`
-      );
-    } catch (err) {
-      els.vnfFormError.textContent = err.message;
-      els.vnfFormError.hidden = false;
-      if (err.status === 503) {
-        refreshStatus();
-      }
-      if (!err.status) {
-        setAPIState("offline");
-      }
-    } finally {
-      setSavingVNF(false);
-    }
-  });
 
   els.aclForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -4634,29 +3807,8 @@
     if (button.dataset.action === "delete-network") {
       deleteNetwork(network);
     } else if (button.dataset.action === "add-vnf") {
-      openCreateVNF(network.id);
-    }
-  });
-
-  els.vnfRows.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-action]");
-    if (!button) {
-      return;
-    }
-    const vnf = vnfByID(Number(button.dataset.id));
-    if (!vnf) {
-      return;
-    }
-    if (button.dataset.action === "vnf-leases") {
-      openVNFLeases(vnf);
-    } else if (button.dataset.action === "vnf-sessions") {
-      openVNFSessions(vnf);
-    } else if (button.dataset.action === "edit-vnf") {
-      openEditVNF(vnf);
-    } else if (button.dataset.action === "restart-vnf") {
-      restartVNF(vnf);
-    } else if (button.dataset.action === "delete-vnf") {
-      deleteVNF(vnf);
+      selectTab("vnfs");
+      window.dispatchEvent(new CustomEvent("rookery:add-vnf", { detail: { networkId: network.id } }));
     }
   });
 
@@ -4741,33 +3893,6 @@
   els.aclDescription.addEventListener("input", renderACLPreview);
   els.interfaceIngressACL.addEventListener("change", renderInterfaceACLPreview);
   els.interfaceEgressACL.addEventListener("change", renderInterfaceACLPreview);
-  els.newVNF.addEventListener("click", () => openCreateVNF());
-  els.emptyCreateVNF.addEventListener("click", () => openCreateVNF());
-  els.vnfType.addEventListener("change", () => {
-    if (editingVNFID === null) {
-      applyVNFTypeDefaults();
-    } else {
-      setVNFTypeHint();
-      setVNFFieldsForType();
-    }
-    if (els.vnfType.value === "nat44") {
-      loadHostInterfaces().catch(() => {});
-    }
-  });
-  els.vnfOutsideInterface.addEventListener("change", updateOutsideInterfaceHint);
-  els.addVNFDNATRule.addEventListener("click", () => {
-    const row = addVNFDNATRule();
-    row.querySelector('[data-dnat-field="external-port"]')?.focus();
-  });
-  els.vnfDNATRows.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-remove-dnat-rule]");
-    if (!button) {
-      return;
-    }
-    button.closest(".dnat-rule")?.remove();
-    renumberVNFDNATRules();
-  });
-  els.vnfEnabled.addEventListener("change", setVNFFieldsForType);
   els.vmInterfaceAdd.addEventListener("click", () => {
     const id = Number(els.vmInterfaceSelect.value);
     if (!id) {
@@ -4859,25 +3984,6 @@
     loadVNFs().catch(() => {});
     loadVMs().catch(() => {});
     refreshStatus();
-  });
-  els.refreshVNFs.addEventListener("click", () => {
-    loadVNFs().catch(() => {});
-    loadNetworks().catch(() => {});
-    refreshStatus();
-  });
-  els.refreshVNFLeases.addEventListener("click", () => loadVNFLeases().catch(() => {}));
-  els.closeVNFLeases.addEventListener("click", () => els.vnfLeasesDialog.close());
-  els.closeVNFLeasesDialog.addEventListener("click", () => els.vnfLeasesDialog.close());
-  els.refreshVNFSessions.addEventListener("click", () => loadVNFSessions().catch(() => {}));
-  els.closeVNFSessions.addEventListener("click", () => els.vnfSessionsDialog.close());
-  els.closeVNFSessionsDialog.addEventListener("click", () => els.vnfSessionsDialog.close());
-  els.vnfSessionsDialog.addEventListener("click", (event) => {
-    if (event.target === els.vnfSessionsDialog) {
-      els.vnfSessionsDialog.close();
-    }
-  });
-  els.vnfSessionsDialog.addEventListener("close", () => {
-    sessionsVNFID = null;
   });
 
   els.closeDialog.addEventListener("click", () => {
@@ -4988,26 +4094,6 @@
     }
   });
 
-  els.closeVNFDialog.addEventListener("click", () => {
-    if (!savingVNF) {
-      els.vnfDialog.close();
-    }
-  });
-  els.cancelVNFDialog.addEventListener("click", () => {
-    if (!savingVNF) {
-      els.vnfDialog.close();
-    }
-  });
-  els.vnfDialog.addEventListener("click", (event) => {
-    if (event.target === els.vnfDialog && !savingVNF) {
-      els.vnfDialog.close();
-    }
-  });
-  els.vnfDialog.addEventListener("cancel", (event) => {
-    if (savingVNF) {
-      event.preventDefault();
-    }
-  });
 
   els.closeVMMonitorDialog.addEventListener("click", () => {
     closeVMMonitor();
@@ -5041,17 +4127,6 @@
     monitorVMSamples = [];
   });
 
-  els.vnfLeasesDialog.addEventListener("click", (event) => {
-    if (event.target === els.vnfLeasesDialog) {
-      els.vnfLeasesDialog.close();
-    }
-  });
-  els.vnfLeasesDialog.addEventListener("cancel", () => {
-    leasesVNFID = null;
-  });
-  els.vnfLeasesDialog.addEventListener("close", () => {
-    leasesVNFID = null;
-  });
 
   els.closeACLDialog.addEventListener("click", () => {
     if (!savingACL) {
@@ -5143,6 +4218,15 @@
     }
   });
 
+  window.addEventListener("rookery:vnfs-changed", (event) => {
+    vnfs = Array.isArray(event.detail) ? event.detail : [];
+    sortVNFs();
+    renderNetworks();
+  });
+  window.addEventListener("rookery:refresh-networks", () => {
+    loadNetworks().catch(() => {});
+  });
+
   window.setInterval(() => {
     if (!document.hidden) {
       refreshStatus();
@@ -5161,4 +4245,4 @@
 
   refreshStatus();
   Promise.allSettled([loadVMs(), loadDisks(), loadStorageBackends(), loadMedia(), loadNetworks(), loadInterfaces(), loadACLs(), loadVNFs()]);
-})();
+}

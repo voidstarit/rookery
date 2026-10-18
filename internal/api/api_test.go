@@ -3476,10 +3476,10 @@ func TestHealthAndEmbeddedUI(t *testing.T) {
 	if contentType := recorder.Header().Get("Content-Type"); !strings.Contains(contentType, "text/html") {
 		t.Fatalf("index content type = %q", contentType)
 	}
-	if !strings.Contains(recorder.Body.String(), "nerds") || !strings.Contains(recorder.Body.String(), "Virtual machines") {
+	if !strings.Contains(recorder.Body.String(), "rookery") || !strings.Contains(recorder.Body.String(), "Virtual machines") {
 		t.Fatal("index does not look like the embedded UI")
 	}
-	for _, want := range []string{"Readiness", "LVM thin pool", "FD.io VPP", `id="new-vm"`, `id="new-vm-hint"`, `id="tab-disks"`, `id="new-disk"`, `id="vm-disk"`, `id="tab-media"`, `id="new-media"`, `id="vm-boot-media"`, `id="vm-console-enabled"`, `id="vm-interface-select"`, `id="vm-interface-add"`, `id="vm-interface-list"`, `id="tab-networks"`, `id="tab-vnfs"`, `id="new-network"`, `id="new-interface"`, `id="new-vnf"`, `id="network-dialog"`, `id="vnf-dialog"`, `id="vnf-type"`, `id="vnf-enabled"`, `id="vnf-gateway"`, `id="vnf-leases-dialog"`, `id="vnf-lease-rows"`, `id="interface-dialog"`, `id="attach-dialog"`, `id="media-dialog"`} {
+	for _, want := range []string{"Readiness", "LVM thin pool", "FD.io VPP", `id="new-vm"`, `id="new-vm-hint"`, `id="tab-disks"`, `id="new-disk"`, `id="vm-disk"`, `id="tab-media"`, `id="new-media"`, `id="vm-boot-media"`, `id="vm-console-enabled"`, `id="vm-interface-select"`, `id="vm-interface-add"`, `id="vm-interface-list"`, `id="tab-networks"`, `id="tab-vnfs"`, `id="new-network"`, `id="new-interface"`, `id="network-dialog"`, `id="vnfs-root"`, `id="interface-dialog"`, `id="attach-dialog"`, `id="media-dialog"`} {
 		if !strings.Contains(recorder.Body.String(), want) {
 			t.Fatalf("index does not contain %q", want)
 		}
@@ -3488,7 +3488,7 @@ func TestHealthAndEmbeddedUI(t *testing.T) {
 		t.Fatal("Content-Security-Policy header is missing")
 	}
 
-	for _, asset := range []string{"/app.js", "/style.css", "/favicon.svg", "/console.html", "/console.js", "/console.css", "/novnc/core/rfb.js", "/novnc/LICENSE.txt"} {
+	for _, asset := range []string{"/build/app.js", "/style.css", "/favicon.svg", "/console.html", "/build/console.js", "/console.css", "/novnc/core/rfb.js", "/novnc/LICENSE.txt"} {
 		recorder = do(t, handler, http.MethodGet, asset, nil)
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("%s status = %d", asset, recorder.Code)
