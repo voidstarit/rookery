@@ -37,7 +37,6 @@ export function startInventory(): void {
     tabVNFs: document.getElementById("tab-vnfs"),
     vmTabCount: document.getElementById("vm-tab-count"),
     diskTabCount: document.getElementById("disk-tab-count"),
-    mediaTabCount: document.getElementById("media-tab-count"),
     networkTabCount: document.getElementById("network-tab-count"),
     vmsPanel: document.getElementById("vms-panel"),
     disksPanel: document.getElementById("disks-panel"),
@@ -80,30 +79,23 @@ export function startInventory(): void {
     newMedia: document.getElementById("new-media"),
     newNetwork: document.getElementById("new-network"),
     refreshDisks: document.getElementById("refresh-disks"),
-    refreshMedia: document.getElementById("refresh-media"),
     refreshNetworks: document.getElementById("refresh-networks"),
     diskSummary: document.getElementById("disk-summary"),
-    mediaSummary: document.getElementById("media-summary"),
     networkSummary: document.getElementById("network-summary"),
     interfaceSummary: document.getElementById("interface-summary"),
     diskErrorBanner: document.getElementById("disk-error-banner"),
-    mediaErrorBanner: document.getElementById("media-error-banner"),
     networkErrorBanner: document.getElementById("network-error-banner"),
     interfaceErrorBanner: document.getElementById("interface-error-banner"),
     diskTable: document.getElementById("disk-table"),
-    mediaTable: document.getElementById("media-table"),
     networkTable: document.getElementById("network-table"),
     interfaceTable: document.getElementById("interface-table"),
     diskRows: document.getElementById("disk-rows"),
-    mediaRows: document.getElementById("media-rows"),
     networkRows: document.getElementById("network-rows"),
     interfaceRows: document.getElementById("interface-rows"),
     diskEmptyState: document.getElementById("disk-empty-state"),
-    mediaEmptyState: document.getElementById("media-empty-state"),
     networkEmptyState: document.getElementById("network-empty-state"),
     interfaceEmptyState: document.getElementById("interface-empty-state"),
     emptyCreateDisk: document.getElementById("empty-create-disk"),
-    emptyCreateMedia: document.getElementById("empty-create-media"),
     emptyCreateNetwork: document.getElementById("empty-create-network"),
     newInterface: document.getElementById("new-interface"),
     newACL: document.getElementById("new-acl"),
@@ -201,16 +193,6 @@ export function startInventory(): void {
     cancelDiskDialog: document.getElementById("cancel-disk-dialog"),
     diskName: document.getElementById("disk-name"),
     diskSize: document.getElementById("disk-size"),
-    mediaDialog: document.getElementById("media-dialog"),
-    mediaForm: document.getElementById("media-form"),
-    mediaDialogEyebrow: document.getElementById("media-dialog-eyebrow"),
-    mediaDialogTitle: document.getElementById("media-dialog-title"),
-    mediaFormError: document.getElementById("media-form-error"),
-    saveMedia: document.getElementById("save-media"),
-    closeMediaDialog: document.getElementById("close-media-dialog"),
-    cancelMediaDialog: document.getElementById("cancel-media-dialog"),
-    mediaName: document.getElementById("media-name"),
-    mediaPath: document.getElementById("media-path"),
     networkDialog: document.getElementById("network-dialog"),
     networkForm: document.getElementById("network-form"),
     networkName: document.getElementById("network-name"),
@@ -297,7 +279,6 @@ export function startInventory(): void {
   let vmDiskSelection = new Map();
   let saving = false;
   let savingDisk = false;
-  let savingMedia = false;
   let savingNetwork = false;
   let savingInterface = false;
   let savingACL = false;
@@ -369,16 +350,6 @@ export function startInventory(): void {
   function hideDiskBanner() {
     els.diskErrorBanner.hidden = true;
     els.diskErrorBanner.textContent = "";
-  }
-
-  function showMediaBanner(message) {
-    els.mediaErrorBanner.textContent = message;
-    els.mediaErrorBanner.hidden = false;
-  }
-
-  function hideMediaBanner() {
-    els.mediaErrorBanner.hidden = true;
-    els.mediaErrorBanner.textContent = "";
   }
 
   function showNetworkBanner(message) {
@@ -486,10 +457,6 @@ export function startInventory(): void {
     );
   }
 
-  function mediaUsers(mediaID) {
-    return vms.filter((vm) => vm.boot_media_id === mediaID);
-  }
-
   function sortNetworks() {
     networks.sort((a, b) =>
       a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
@@ -549,17 +516,6 @@ export function startInventory(): void {
       disks[index] = disk;
     }
     sortDisks();
-    render();
-  }
-
-  function upsertMedia(item) {
-    const index = media.findIndex((entry) => entry.id === item.id);
-    if (index === -1) {
-      media.push(item);
-    } else {
-      media[index] = item;
-    }
-    sortMedia();
     render();
   }
 
@@ -647,7 +603,6 @@ export function startInventory(): void {
     renderVMs();
     renderDisks();
     renderStorageBackends();
-    renderMedia();
     renderNetworks();
     renderACLs();
     updateVMActionState();
@@ -978,84 +933,6 @@ export function startInventory(): void {
     actions.append(importButton, edit, del);
     actionsCell.append(actions);
     row.append(nameCell, driverCell, locationCell, diskCell, updatedCell, actionsCell);
-    return row;
-  }
-
-  function renderMedia() {
-    const used = media.filter((item) => mediaUsers(item.id).length > 0).length;
-    els.mediaTabCount.textContent = String(media.length);
-    els.mediaSummary.textContent =
-      media.length === 0
-        ? "No installation media registered"
-        : `${media.length} media file${media.length === 1 ? "" : "s"} · ${used} in use`;
-
-    els.mediaTable.hidden = media.length === 0;
-    els.mediaEmptyState.hidden = media.length !== 0;
-    els.mediaRows.replaceChildren();
-
-    for (const item of media) {
-      els.mediaRows.append(renderMediaRow(item));
-    }
-  }
-
-  function renderMediaRow(item) {
-    const row = document.createElement("tr");
-
-    const nameCell = document.createElement("td");
-    const name = document.createElement("span");
-    name.className = "vm-name";
-    name.textContent = item.name;
-    nameCell.append(name);
-    if (item.path) {
-      const path = document.createElement("span");
-      path.className = "vm-description";
-      path.textContent = item.path;
-      path.title = item.path;
-      nameCell.append(path);
-    }
-
-    const sizeCell = document.createElement("td");
-    sizeCell.className = "mono";
-    sizeCell.textContent = formatBytes(item.size_bytes);
-
-    const users = mediaUsers(item.id);
-    const usedCell = document.createElement("td");
-    usedCell.className = users.length ? "mono" : "mono muted";
-    if (users.length === 0) {
-      usedCell.textContent = "not used";
-    } else if (users.length === 1) {
-      usedCell.textContent = users[0].name;
-    } else {
-      usedCell.textContent = `${users[0].name} +${users.length - 1}`;
-    }
-    if (users.length > 0) {
-      usedCell.title = users.map((vm) => vm.name).join(", ");
-    }
-
-    const updatedCell = document.createElement("td");
-    updatedCell.className = "updated hide-sm";
-    updatedCell.textContent = formatDate(item.updated_at);
-
-    const actionsCell = document.createElement("td");
-    const actions = document.createElement("div");
-    actions.className = "actions";
-
-    const del = document.createElement("button");
-    del.type = "button";
-    del.className = "row-action danger";
-    del.dataset.action = "delete-media";
-    del.dataset.id = String(item.id);
-    del.textContent = "Remove";
-    del.setAttribute("aria-label", `Remove ${item.name}`);
-    if (users.length > 0) {
-      del.disabled = true;
-      del.title = `Clear boot media on ${users.map((vm) => vm.name).join(", ")} first.`;
-    }
-
-    actions.append(del);
-    actionsCell.append(actions);
-
-    row.append(nameCell, sizeCell, usedCell, updatedCell, actionsCell);
     return row;
   }
 
@@ -1765,24 +1642,19 @@ export function startInventory(): void {
   }
 
   async function loadMedia() {
-    els.refreshMedia.disabled = true;
-    const previousLabel = els.refreshMedia.textContent;
-    els.refreshMedia.textContent = "Refreshing…";
-
     try {
       const data = await api("/api/media");
       media = Array.isArray(data) ? data : [];
       sortMedia();
-      render();
-      hideMediaBanner();
+      window.dispatchEvent(new CustomEvent("rookery:media-data", { detail: media }));
+      if (els.dialog.open) {
+        const current = currentDialogVM();
+        populateBootMediaOptions(current?.boot_media_id ?? null, current?.boot_media ?? null);
+      }
       setAPIState("online");
     } catch (err) {
       setAPIState("offline");
-      showMediaBanner(`Could not load media: ${err.message}`);
       throw err;
-    } finally {
-      els.refreshMedia.disabled = false;
-      els.refreshMedia.textContent = previousLabel;
     }
   }
 
@@ -2650,52 +2522,6 @@ export function startInventory(): void {
     els.saveDisk.textContent = value ? label : "Create disk";
   }
 
-  function openCreateMedia() {
-    els.mediaForm.reset();
-    els.mediaDialogEyebrow.textContent = "New media";
-    els.mediaDialogTitle.textContent = "Add installation media";
-    els.mediaFormError.hidden = true;
-    els.mediaFormError.textContent = "";
-    els.mediaDialog.showModal();
-    els.mediaName.focus();
-  }
-
-  function setSavingMedia(value, label) {
-    savingMedia = value;
-    els.saveMedia.disabled = value;
-    els.cancelMediaDialog.disabled = value;
-    els.closeMediaDialog.disabled = value;
-    els.saveMedia.textContent = value ? label : "Add media";
-  }
-
-  async function deleteMedia(item) {
-    const users = mediaUsers(item.id);
-    if (users.length > 0) {
-      showToast(
-        `Clear boot media on ${users.map((vm) => vm.name).join(", ")} first.`,
-        true
-      );
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Remove media "${item.name}"?\n\nThis removes the inventory entry only. The ISO file is not deleted.`
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      await api(`/api/media/${item.id}`, { method: "DELETE" });
-      media = media.filter((entry) => entry.id !== item.id);
-      render();
-      hideMediaBanner();
-      showToast(`Removed media ${item.name}`);
-    } catch (err) {
-      showMediaBanner(`Could not remove ${item.name}: ${err.message}`);
-    }
-  }
-
   function openCreateNetwork() {
     if (!vppReady) {
       showToast("Network creation is blocked until FD.io VPP is ready.", true);
@@ -3463,47 +3289,6 @@ export function startInventory(): void {
     }
   });
 
-  els.mediaForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (savingMedia) {
-      return;
-    }
-
-    els.mediaFormError.hidden = true;
-    els.mediaFormError.textContent = "";
-
-    if (!els.mediaForm.reportValidity()) {
-      return;
-    }
-
-    const payload = {
-      name: els.mediaName.value.trim(),
-      path: els.mediaPath.value.trim(),
-    };
-
-    setSavingMedia(true, "Adding…");
-
-    try {
-      const item = await api("/api/media", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      upsertMedia(item);
-      setAPIState("online");
-      hideMediaBanner();
-      els.mediaDialog.close();
-      showToast(`Added media ${item.name}`);
-    } catch (err) {
-      els.mediaFormError.textContent = err.message;
-      els.mediaFormError.hidden = false;
-      if (!err.status) {
-        setAPIState("offline");
-      }
-    } finally {
-      setSavingMedia(false);
-    }
-  });
-
   els.networkForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (savingNetwork) {
@@ -3779,22 +3564,6 @@ export function startInventory(): void {
     }
   });
 
-  els.mediaRows.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-action]");
-    if (!button) {
-      return;
-    }
-
-    const item = media.find((entry) => entry.id === Number(button.dataset.id));
-    if (!item) {
-      return;
-    }
-
-    if (button.dataset.action === "delete-media") {
-      deleteMedia(item);
-    }
-  });
-
   els.networkRows.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-action]");
     if (!button) {
@@ -3868,8 +3637,9 @@ export function startInventory(): void {
     loadDisks().catch(() => {});
   });
   els.emptyCreateDisk.addEventListener("click", openCreateDisk);
-  els.newMedia.addEventListener("click", openCreateMedia);
-  els.emptyCreateMedia.addEventListener("click", openCreateMedia);
+  els.newMedia.addEventListener("click", () => {
+    window.dispatchEvent(new CustomEvent("rookery:add-media"));
+  });
   els.newNetwork.addEventListener("click", openCreateNetwork);
   els.emptyCreateNetwork.addEventListener("click", openCreateNetwork);
   els.newInterface.addEventListener("click", openCreateInterface);
@@ -3972,11 +3742,6 @@ export function startInventory(): void {
     loadVMs().catch(() => {});
     refreshStatus();
   });
-  els.refreshMedia.addEventListener("click", () => {
-    loadMedia().catch(() => {});
-    loadVMs().catch(() => {});
-    refreshStatus();
-  });
   els.refreshNetworks.addEventListener("click", () => {
     loadNetworks().catch(() => {});
     loadInterfaces().catch(() => {});
@@ -4052,26 +3817,6 @@ export function startInventory(): void {
     }
   });
 
-  els.closeMediaDialog.addEventListener("click", () => {
-    if (!savingMedia) {
-      els.mediaDialog.close();
-    }
-  });
-  els.cancelMediaDialog.addEventListener("click", () => {
-    if (!savingMedia) {
-      els.mediaDialog.close();
-    }
-  });
-  els.mediaDialog.addEventListener("click", (event) => {
-    if (event.target === els.mediaDialog && !savingMedia) {
-      els.mediaDialog.close();
-    }
-  });
-  els.mediaDialog.addEventListener("cancel", (event) => {
-    if (savingMedia) {
-      event.preventDefault();
-    }
-  });
 
   els.closeNetworkDialog.addEventListener("click", () => {
     if (!savingNetwork) {
@@ -4218,6 +3963,14 @@ export function startInventory(): void {
     }
   });
 
+  window.addEventListener("rookery:media-changed", (event) => {
+    media = Array.isArray(event.detail) ? event.detail : [];
+    sortMedia();
+    if (els.dialog.open) {
+      const current = currentDialogVM();
+      populateBootMediaOptions(current?.boot_media_id ?? null, current?.boot_media ?? null);
+    }
+  });
   window.addEventListener("rookery:vnfs-changed", (event) => {
     vnfs = Array.isArray(event.detail) ? event.detail : [];
     sortVNFs();

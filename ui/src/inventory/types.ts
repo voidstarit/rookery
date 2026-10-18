@@ -4,6 +4,22 @@ export type Network = {
   bridge_domain_id: number;
 };
 
+export type Media = {
+  id: number;
+  name: string;
+  path: string;
+  size_bytes: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type VM = {
+  id: string;
+  name: string;
+  status: string;
+  boot_media_id?: number;
+};
+
 export type VNFType = "dhcpv4" | "dhcpv6" | "nat44";
 
 export type DNATRule = {

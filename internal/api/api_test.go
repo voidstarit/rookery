@@ -3479,7 +3479,7 @@ func TestHealthAndEmbeddedUI(t *testing.T) {
 	if !strings.Contains(recorder.Body.String(), "rookery") || !strings.Contains(recorder.Body.String(), "Virtual machines") {
 		t.Fatal("index does not look like the embedded UI")
 	}
-	for _, want := range []string{"Readiness", "LVM thin pool", "FD.io VPP", `id="new-vm"`, `id="new-vm-hint"`, `id="tab-disks"`, `id="new-disk"`, `id="vm-disk"`, `id="tab-media"`, `id="new-media"`, `id="vm-boot-media"`, `id="vm-console-enabled"`, `id="vm-interface-select"`, `id="vm-interface-add"`, `id="vm-interface-list"`, `id="tab-networks"`, `id="tab-vnfs"`, `id="new-network"`, `id="new-interface"`, `id="network-dialog"`, `id="vnfs-root"`, `id="interface-dialog"`, `id="attach-dialog"`, `id="media-dialog"`} {
+	for _, want := range []string{"Readiness", "LVM thin pool", "FD.io VPP", `id="new-vm"`, `id="new-vm-hint"`, `id="tab-disks"`, `id="new-disk"`, `id="vm-disk"`, `id="tab-media"`, `id="new-media"`, `id="vm-boot-media"`, `id="vm-console-enabled"`, `id="vm-interface-select"`, `id="vm-interface-add"`, `id="vm-interface-list"`, `id="tab-networks"`, `id="tab-vnfs"`, `id="new-network"`, `id="new-interface"`, `id="network-dialog"`, `id="vnfs-root"`, `id="interface-dialog"`, `id="attach-dialog"`, `id="media-root"`} {
 		if !strings.Contains(recorder.Body.String(), want) {
 			t.Fatalf("index does not contain %q", want)
 		}

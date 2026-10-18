@@ -230,39 +230,7 @@
     </section>
 
     <section class="tab-panel" id="media-panel" role="tabpanel" aria-labelledby="tab-media" tabindex="0" hidden>
-      <section class="panel" aria-labelledby="media-heading">
-        <div class="panel-head">
-          <div>
-            <h2 id="media-heading">Installation media</h2>
-            <p id="media-summary" class="panel-subtitle">Loading media…</p>
-          </div>
-          <button class="button ghost" id="refresh-media" type="button">Refresh</button>
-        </div>
-
-        <div class="banner" id="media-error-banner" role="alert" hidden></div>
-
-        <div class="table-wrap">
-          <table id="media-table">
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Size</th>
-                <th scope="col">Used as boot media</th>
-                <th scope="col" class="hide-sm">Updated</th>
-                <th scope="col"><span class="sr-only">Actions</span></th>
-              </tr>
-            </thead>
-            <tbody id="media-rows"></tbody>
-          </table>
-
-          <div class="empty" id="media-empty-state" hidden>
-            <div class="empty-mark" aria-hidden="true">◎</div>
-            <h3>No installation media yet</h3>
-            <p>Register a read-only ISO file from the host, then choose it as a VM's boot media.</p>
-            <button class="button primary" id="empty-create-media" type="button">Add media</button>
-          </div>
-        </div>
-      </section>
+      <div id="media-root"></div>
     </section>
 
     <section class="tab-panel" id="networks-panel" role="tabpanel" aria-labelledby="tab-networks" tabindex="0" hidden>
@@ -781,42 +749,6 @@
       <button class="button ghost" id="cancel-import-disk-dialog" type="button">Cancel</button>
       <button class="button primary" id="import-disks" type="button" disabled>Import selected</button>
     </footer>
-  </dialog>
-
-  <dialog id="media-dialog" aria-labelledby="media-dialog-title">
-    <form id="media-form" novalidate>
-      <header class="dialog-head">
-        <div>
-          <p class="eyebrow" id="media-dialog-eyebrow">New media</p>
-          <h2 id="media-dialog-title">Add installation media</h2>
-        </div>
-        <button class="icon-button" id="close-media-dialog" type="button" aria-label="Close dialog">×</button>
-      </header>
-
-      <div class="form-grid">
-        <label class="field field-wide">
-          <span class="field-label">Name</span>
-          <input id="media-name" name="name" type="text" required maxlength="127"
-                 pattern="[A-Za-z0-9][A-Za-z0-9._-]*" autocomplete="off" spellcheck="false"
-                 placeholder="debian-13-netinst">
-          <span class="field-hint">A short label for the media.</span>
-        </label>
-
-        <label class="field field-wide">
-          <span class="field-label">ISO path</span>
-          <input id="media-path" name="path" type="text" required autocomplete="off" spellcheck="false"
-                 placeholder="/srv/isos/debian-13.1.0-amd64-netinst.iso">
-          <span class="field-hint">Absolute path to an existing read-only file on the host. The file is never modified.</span>
-        </label>
-      </div>
-
-      <p class="form-error" id="media-form-error" role="alert" hidden></p>
-
-      <footer class="dialog-actions">
-        <button class="button ghost" id="cancel-media-dialog" type="button">Cancel</button>
-        <button class="button primary" id="save-media" type="submit">Add media</button>
-      </footer>
-    </form>
   </dialog>
 
   <dialog id="network-dialog" aria-labelledby="network-dialog-title">
