@@ -17,11 +17,73 @@ export type Media = {
   updated_at: string;
 };
 
+export type VMDisk = {
+  id: number;
+  name: string;
+  size_gb: number;
+  storage_backend_id?: number;
+  storage_backend_name?: string;
+  vg: string;
+  thin_pool: string;
+  device: string;
+};
+
+export type VMMedia = {
+  id: number;
+  name: string;
+  path: string;
+  size_bytes: number;
+};
+
+export type VMInterface = {
+  id: number;
+  name: string;
+  network_id: number;
+  network_name: string;
+  socket_path: string;
+  mac: string;
+  sw_if_index: number;
+  ingress_acl_name?: string;
+  egress_acl_name?: string;
+};
+
 export type VM = {
   id: string;
   name: string;
+  description: string;
   status: string;
+  vcpus: number;
+  memory_mb: number;
+  disk_id?: number;
+  disk?: VMDisk;
+  disk_ids?: number[];
+  disks?: VMDisk[];
   boot_media_id?: number;
+  boot_media?: VMMedia;
+  interfaces?: VMInterface[];
+  console_enabled: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type VMMetrics = {
+  running: boolean;
+  pid?: number;
+  uptime_seconds: number;
+  cpu_seconds_total: number;
+  memory_rss_bytes: number;
+  memory_virtual_bytes: number;
+  disk_read_bytes_total: number;
+  disk_write_bytes_total: number;
+  vm_id: string;
+  name: string;
+  vcpus: number;
+  memory_mb: number;
+  network_rx_bytes_total: number;
+  network_tx_bytes_total: number;
+  network_rx_packets_total: number;
+  network_tx_packets_total: number;
+  sampled_at: string;
 };
 
 export type StorageBackendConfig = {
@@ -164,7 +226,18 @@ export type VNFLease = {
 };
 
 export type StatusResponse = {
+  ready?: boolean;
+  thin_pool?: {
+    ready: boolean;
+    state: string;
+    detail?: string;
+    vg?: string;
+    name?: string;
+  };
   vpp?: {
     ready: boolean;
+    state?: string;
+    detail?: string;
+    socket?: string;
   };
 };
