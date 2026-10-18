@@ -311,7 +311,7 @@
     },
     networks: {
       eyebrow: "VPP bridge domains",
-      title: "Nerd's Networks",
+      title: "Network",
       lede: "Create VPP bridge domains and vhost-user interfaces, then attach them to stopped VMs.",
     },
     vnfs: {
@@ -2477,7 +2477,7 @@
       els.vmInterfacesHint.textContent = "Stop the VM before changing network interfaces.";
     } else if (available.length === 0 && vmInterfaceSelection.size === 0) {
       els.vmInterfacesHint.textContent =
-        "Create a Nerd Virtual Interface on the Nerd's Networks tab first.";
+        "Create a Nerd Virtual Interface on the Network tab first.";
     } else {
       els.vmInterfacesHint.textContent =
         "Choose an interface and click Add. Remove interfaces with the buttons below.";
