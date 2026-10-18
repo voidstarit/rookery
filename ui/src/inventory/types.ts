@@ -20,6 +20,48 @@ export type VM = {
   boot_media_id?: number;
 };
 
+export type StorageBackendConfig = {
+  vg: string;
+  thin_pool: string;
+};
+
+export type StorageBackend = {
+  id: number;
+  name: string;
+  title: string;
+  description: string;
+  driver: string;
+  config: StorageBackendConfig;
+  disk_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Disk = {
+  id: number;
+  name: string;
+  size_gb: number;
+  storage_backend_id?: number;
+  storage_backend_name?: string;
+  vg: string;
+  thin_pool: string;
+  device: string;
+  attached_vm_id?: string;
+  attached_vm_name?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ImportableDisk = {
+  name: string;
+  size_gb: number;
+  registered: boolean;
+  disk_id?: number;
+  attached_vm_id?: string;
+  attached_vm_name?: string;
+  storage_backend_name?: string;
+};
+
 export type VNFType = "dhcpv4" | "dhcpv6" | "nat44";
 
 export type DNATRule = {

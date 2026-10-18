@@ -875,12 +875,13 @@ make test         # UI build + go test ./...
 
 Node.js and npm are only needed when changing UI sources; plain `go build` and
 `go test` use the committed bundle. The console page (`ui/src/console`), the
-inventory **Media** tab (`ui/src/inventory/media`), and the inventory **VNFs**
-tab (`ui/src/inventory/vnfs`) are fully Preact/TypeScript. The rest of the
-inventory app (`ui/src/inventory/app.ts`) is the legacy DOM implementation
-marked `@ts-nocheck` and is being migrated to Preact tab by tab. The legacy app
-and Preact islands communicate through `rookery:*` window events; keep those
-bridges in sync until the legacy app is removed.
+inventory **Disks** tab (`ui/src/inventory/disks`), the **Media** tab
+(`ui/src/inventory/media`), and the **VNFs** tab (`ui/src/inventory/vnfs`) are
+fully Preact/TypeScript. The rest of the inventory app (`ui/src/inventory/app.ts`)
+is the legacy DOM implementation marked `@ts-nocheck` and is being migrated to
+Preact tab by tab. The legacy app and Preact islands communicate through
+`rookery:*` window events; keep those bridges in sync until the legacy app is
+removed.
 
 ### Tests
 

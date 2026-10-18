@@ -36,7 +36,6 @@ export function startInventory(): void {
     tabNetworks: document.getElementById("tab-networks"),
     tabVNFs: document.getElementById("tab-vnfs"),
     vmTabCount: document.getElementById("vm-tab-count"),
-    diskTabCount: document.getElementById("disk-tab-count"),
     networkTabCount: document.getElementById("network-tab-count"),
     vmsPanel: document.getElementById("vms-panel"),
     disksPanel: document.getElementById("disks-panel"),
@@ -44,58 +43,19 @@ export function startInventory(): void {
     networksPanel: document.getElementById("networks-panel"),
     vnfsPanel: document.getElementById("vnfs-panel"),
     newDisk: document.getElementById("new-disk"),
-    newStorageBackend: document.getElementById("new-storage-backend"),
-    emptyCreateStorageBackend: document.getElementById("empty-create-storage-backend"),
-    refreshStorageBackends: document.getElementById("refresh-storage-backends"),
-    storageBackendSummary: document.getElementById("storage-backend-summary"),
-    storageBackendErrorBanner: document.getElementById("storage-backend-error-banner"),
-    storageBackendTable: document.getElementById("storage-backend-table"),
-    storageBackendRows: document.getElementById("storage-backend-rows"),
-    storageBackendEmptyState: document.getElementById("storage-backend-empty-state"),
-    storageBackendDialog: document.getElementById("storage-backend-dialog"),
-    storageBackendForm: document.getElementById("storage-backend-form"),
-    storageBackendDialogEyebrow: document.getElementById("storage-backend-dialog-eyebrow"),
-    storageBackendDialogTitle: document.getElementById("storage-backend-dialog-title"),
-    storageBackendID: document.getElementById("storage-backend-id"),
-    storageBackendName: document.getElementById("storage-backend-name"),
-    storageBackendTitle: document.getElementById("storage-backend-title"),
-    storageBackendDescription: document.getElementById("storage-backend-description"),
-    storageBackendDriver: document.getElementById("storage-backend-driver"),
-    storageBackendVG: document.getElementById("storage-backend-vg"),
-    storageBackendPool: document.getElementById("storage-backend-pool"),
-    storageBackendFormError: document.getElementById("storage-backend-form-error"),
-    saveStorageBackend: document.getElementById("save-storage-backend"),
-    closeStorageBackendDialog: document.getElementById("close-storage-backend-dialog"),
-    cancelStorageBackendDialog: document.getElementById("cancel-storage-backend-dialog"),
-    importDiskDialog: document.getElementById("import-disk-dialog"),
-    importDiskLede: document.getElementById("import-disk-lede"),
-    importDiskErrorBanner: document.getElementById("import-disk-error-banner"),
-    importDiskList: document.getElementById("import-disk-list"),
-    importDiskEmpty: document.getElementById("import-disk-empty"),
-    importDisks: document.getElementById("import-disks"),
-    refreshImportDisks: document.getElementById("refresh-import-disks"),
-    closeImportDiskDialog: document.getElementById("close-import-disk-dialog"),
-    cancelImportDiskDialog: document.getElementById("cancel-import-disk-dialog"),
     newMedia: document.getElementById("new-media"),
     newNetwork: document.getElementById("new-network"),
-    refreshDisks: document.getElementById("refresh-disks"),
     refreshNetworks: document.getElementById("refresh-networks"),
-    diskSummary: document.getElementById("disk-summary"),
     networkSummary: document.getElementById("network-summary"),
     interfaceSummary: document.getElementById("interface-summary"),
-    diskErrorBanner: document.getElementById("disk-error-banner"),
     networkErrorBanner: document.getElementById("network-error-banner"),
     interfaceErrorBanner: document.getElementById("interface-error-banner"),
-    diskTable: document.getElementById("disk-table"),
     networkTable: document.getElementById("network-table"),
     interfaceTable: document.getElementById("interface-table"),
-    diskRows: document.getElementById("disk-rows"),
     networkRows: document.getElementById("network-rows"),
     interfaceRows: document.getElementById("interface-rows"),
-    diskEmptyState: document.getElementById("disk-empty-state"),
     networkEmptyState: document.getElementById("network-empty-state"),
     interfaceEmptyState: document.getElementById("interface-empty-state"),
-    emptyCreateDisk: document.getElementById("empty-create-disk"),
     emptyCreateNetwork: document.getElementById("empty-create-network"),
     newInterface: document.getElementById("new-interface"),
     newACL: document.getElementById("new-acl"),
@@ -149,7 +109,6 @@ export function startInventory(): void {
     disk: document.getElementById("vm-disk"),
     diskAdd: document.getElementById("vm-disk-add"),
     diskList: document.getElementById("vm-disk-list"),
-    diskBackend: document.getElementById("disk-backend"),
     diskHint: document.getElementById("vm-disk-hint"),
     bootMedia: document.getElementById("vm-boot-media"),
     consoleEnabled: document.getElementById("vm-console-enabled"),
@@ -183,16 +142,6 @@ export function startInventory(): void {
     vmInterfaceAdd: document.getElementById("vm-interface-add"),
     vmInterfaceList: document.getElementById("vm-interface-list"),
     vmInterfacesHint: document.getElementById("vm-interfaces-hint"),
-    diskDialog: document.getElementById("disk-dialog"),
-    diskForm: document.getElementById("disk-form"),
-    diskDialogEyebrow: document.getElementById("disk-dialog-eyebrow"),
-    diskDialogTitle: document.getElementById("disk-dialog-title"),
-    diskFormError: document.getElementById("disk-form-error"),
-    saveDisk: document.getElementById("save-disk"),
-    closeDiskDialog: document.getElementById("close-disk-dialog"),
-    cancelDiskDialog: document.getElementById("cancel-disk-dialog"),
-    diskName: document.getElementById("disk-name"),
-    diskSize: document.getElementById("disk-size"),
     networkDialog: document.getElementById("network-dialog"),
     networkForm: document.getElementById("network-form"),
     networkName: document.getElementById("network-name"),
@@ -255,7 +204,6 @@ export function startInventory(): void {
 
   let vms = [];
   let disks = [];
-  let storageBackends = [];
   let media = [];
   let networks = [];
   let interfaces = [];
@@ -264,11 +212,6 @@ export function startInventory(): void {
   let editingID = null;
   let editingInterfaceID = null;
   let editingACLID = null;
-  let editingStorageBackendID = null;
-  let importingBackendID = null;
-  let importDiskItems = [];
-  let importLoadID = 0;
-  let savingImport = false;
   let assigningInterfaceACLID = null;
   let monitorVMID = null;
   let monitorVMTimer = null;
@@ -278,11 +221,9 @@ export function startInventory(): void {
   let vmInterfaceSelection = new Map();
   let vmDiskSelection = new Map();
   let saving = false;
-  let savingDisk = false;
   let savingNetwork = false;
   let savingInterface = false;
   let savingACL = false;
-  let savingStorageBackend = false;
   let savingInterfaceACL = false;
   let savingAttach = false;
   let prerequisitesReady = false;
@@ -342,16 +283,6 @@ export function startInventory(): void {
     els.errorBanner.textContent = "";
   }
 
-  function showDiskBanner(message) {
-    els.diskErrorBanner.textContent = message;
-    els.diskErrorBanner.hidden = false;
-  }
-
-  function hideDiskBanner() {
-    els.diskErrorBanner.hidden = true;
-    els.diskErrorBanner.textContent = "";
-  }
-
   function showNetworkBanner(message) {
     els.networkErrorBanner.textContent = message;
     els.networkErrorBanner.hidden = false;
@@ -370,16 +301,6 @@ export function startInventory(): void {
   function hideACLBanner() {
     els.aclErrorBanner.hidden = true;
     els.aclErrorBanner.textContent = "";
-  }
-
-  function showStorageBackendBanner(message) {
-    els.storageBackendErrorBanner.textContent = message;
-    els.storageBackendErrorBanner.hidden = false;
-  }
-
-  function hideStorageBackendBanner() {
-    els.storageBackendErrorBanner.hidden = true;
-    els.storageBackendErrorBanner.textContent = "";
   }
 
   function showInterfaceBanner(message) {
@@ -508,17 +429,6 @@ export function startInventory(): void {
     render();
   }
 
-  function upsertDisk(disk) {
-    const index = disks.findIndex((item) => item.id === disk.id);
-    if (index === -1) {
-      disks.push(disk);
-    } else {
-      disks[index] = disk;
-    }
-    sortDisks();
-    render();
-  }
-
   function upsertNetwork(network) {
     const index = networks.findIndex((item) => item.id === network.id);
     if (index === -1) {
@@ -566,16 +476,6 @@ export function startInventory(): void {
     els.newVMHint.hidden = !hint || activeTab !== "vms";
   }
 
-  function updateDiskActionState() {
-    const hint = storageBackends.length === 0
-      ? "Add a storage backend before creating disks"
-      : "";
-    els.newDisk.disabled = storageBackends.length === 0;
-    els.emptyCreateDisk.disabled = storageBackends.length === 0;
-    els.newDisk.title = hint;
-    els.emptyCreateDisk.title = hint;
-  }
-
   function updateNetworkActionState() {
     const hint = vppReady ? "" : "Network changes are blocked until FD.io VPP is ready";
     els.newNetwork.disabled = !vppReady;
@@ -601,12 +501,9 @@ export function startInventory(): void {
 
   function render() {
     renderVMs();
-    renderDisks();
-    renderStorageBackends();
     renderNetworks();
     renderACLs();
     updateVMActionState();
-    updateDiskActionState();
     updateNetworkActionState();
   }
 
@@ -770,169 +667,6 @@ export function startInventory(): void {
       updatedCell,
       actionsCell
     );
-    return row;
-  }
-
-  function renderDisks() {
-    const attached = disks.filter((disk) => diskOwner(disk.id)).length;
-    els.diskTabCount.textContent = String(disks.length);
-    els.diskSummary.textContent =
-      disks.length === 0
-        ? "No disks registered"
-        : `${disks.length} disk${disks.length === 1 ? "" : "s"} · ${attached} attached`;
-
-    els.diskTable.hidden = disks.length === 0;
-    els.diskEmptyState.hidden = disks.length !== 0;
-    els.diskRows.replaceChildren();
-
-    for (const disk of disks) {
-      els.diskRows.append(renderDiskRow(disk));
-    }
-  }
-
-  function renderDiskRow(disk) {
-    const row = document.createElement("tr");
-
-    const nameCell = document.createElement("td");
-    const name = document.createElement("span");
-    name.className = "vm-name";
-    name.textContent = disk.name;
-    nameCell.append(name);
-    if (disk.device) {
-      const device = document.createElement("span");
-      device.className = "vm-description";
-      device.textContent = disk.device;
-      device.title = disk.device;
-      nameCell.append(device);
-    }
-
-    const sizeCell = document.createElement("td");
-    sizeCell.className = "mono";
-    sizeCell.textContent = `${numberFormat.format(disk.size_gb)} GB`;
-
-    const backendCell = document.createElement("td");
-    backendCell.className = disk.storage_backend_name ? "mono" : "mono muted";
-    backendCell.textContent = disk.storage_backend_name || "—";
-
-    const owner = diskOwner(disk.id);
-    const attachedCell = document.createElement("td");
-    attachedCell.className = owner ? "mono" : "mono muted";
-    attachedCell.textContent = owner ? owner.name : "unattached";
-
-    const updatedCell = document.createElement("td");
-    updatedCell.className = "updated hide-sm";
-    updatedCell.textContent = formatDate(disk.updated_at);
-
-    const actionsCell = document.createElement("td");
-    const actions = document.createElement("div");
-    actions.className = "actions";
-
-    const del = document.createElement("button");
-    del.type = "button";
-    del.className = "row-action danger";
-    del.dataset.action = "delete-disk";
-    del.dataset.id = String(disk.id);
-    del.textContent = "Delete";
-    del.setAttribute("aria-label", `Delete ${disk.name}`);
-    if (owner) {
-      del.disabled = true;
-      del.title = `Detach ${disk.name} from ${owner.name} before deleting it.`;
-    }
-
-    actions.append(del);
-    actionsCell.append(actions);
-
-    row.append(nameCell, sizeCell, attachedCell, updatedCell, actionsCell);
-    return row;
-  }
-
-  function renderStorageBackends() {
-    const totalDisks = storageBackends.reduce((sum, backend) => sum + (backend.disk_count || 0), 0);
-    els.storageBackendSummary.textContent =
-      storageBackends.length === 0
-        ? "No storage backends registered"
-        : `${storageBackends.length} backend${storageBackends.length === 1 ? "" : "s"} · ${totalDisks} disk${totalDisks === 1 ? "" : "s"}`;
-    els.storageBackendTable.hidden = storageBackends.length === 0;
-    els.storageBackendEmptyState.hidden = storageBackends.length !== 0;
-    els.storageBackendRows.replaceChildren();
-    for (const backend of storageBackends) {
-      els.storageBackendRows.append(renderStorageBackendRow(backend));
-    }
-    if (els.diskBackend) {
-      populateDiskBackendOptions(els.diskBackend.value);
-    }
-  }
-
-  function renderStorageBackendRow(backend) {
-    const row = document.createElement("tr");
-
-    const nameCell = document.createElement("td");
-    const name = document.createElement("span");
-    name.className = "vm-name";
-    name.textContent = backend.name;
-    nameCell.append(name);
-    if (backend.title || backend.description) {
-      const description = document.createElement("span");
-      description.className = "vm-description";
-      description.textContent = [backend.title, backend.description].filter(Boolean).join(" · ");
-      description.title = backend.description || backend.title || "";
-      nameCell.append(description);
-    }
-
-    const driverCell = document.createElement("td");
-    driverCell.className = "mono";
-    driverCell.textContent = backend.driver === "lvm-thin" ? "LVM thin" : backend.driver;
-
-    const locationCell = document.createElement("td");
-    locationCell.className = "mono";
-    locationCell.textContent = `${backend.config?.vg || "—"}/${backend.config?.thin_pool || "—"}`;
-
-    const diskCell = document.createElement("td");
-    diskCell.className = backend.disk_count ? "mono" : "mono muted";
-    diskCell.textContent = String(backend.disk_count || 0);
-
-    const updatedCell = document.createElement("td");
-    updatedCell.className = "updated hide-sm";
-    updatedCell.textContent = formatDate(backend.updated_at);
-
-    const actionsCell = document.createElement("td");
-    const actions = document.createElement("div");
-    actions.className = "actions";
-
-    const importButton = document.createElement("button");
-    importButton.type = "button";
-    importButton.className = "row-action";
-    importButton.dataset.action = "import-storage-backend";
-    importButton.dataset.id = String(backend.id);
-    importButton.textContent = "Import";
-    if (backend.driver !== "lvm-thin" || !backend.config?.vg || !backend.config?.thin_pool) {
-      importButton.disabled = true;
-      importButton.title = "Import is available for configured LVM thin backends.";
-    } else {
-      importButton.title = "Import existing thin volumes from this backend.";
-    }
-
-    const edit = document.createElement("button");
-    edit.type = "button";
-    edit.className = "row-action";
-    edit.dataset.action = "edit-storage-backend";
-    edit.dataset.id = String(backend.id);
-    edit.textContent = "Edit";
-
-    const del = document.createElement("button");
-    del.type = "button";
-    del.className = "row-action danger";
-    del.dataset.action = "delete-storage-backend";
-    del.dataset.id = String(backend.id);
-    del.textContent = "Delete";
-    if (backend.disk_count > 0) {
-      del.disabled = true;
-      del.title = "Delete disks using this backend first.";
-    }
-
-    actions.append(importButton, edit, del);
-    actionsCell.append(actions);
-    row.append(nameCell, driverCell, locationCell, diskCell, updatedCell, actionsCell);
     return row;
   }
 
@@ -1596,48 +1330,18 @@ export function startInventory(): void {
   }
 
   async function loadDisks() {
-    els.refreshDisks.disabled = true;
-    const previousLabel = els.refreshDisks.textContent;
-    els.refreshDisks.textContent = "Refreshing…";
-
     try {
       const data = await api("/api/disks");
       disks = Array.isArray(data) ? data : [];
       sortDisks();
-      render();
+      window.dispatchEvent(new CustomEvent("rookery:disks-data", { detail: disks }));
       if (els.dialog.open) {
         renderVMDiskPicker(currentDialogVM());
       }
-      hideDiskBanner();
       setAPIState("online");
     } catch (err) {
       setAPIState("offline");
-      showDiskBanner(`Could not load disks: ${err.message}`);
       throw err;
-    } finally {
-      els.refreshDisks.disabled = false;
-      els.refreshDisks.textContent = previousLabel;
-    }
-  }
-
-  async function loadStorageBackends() {
-    els.refreshStorageBackends.disabled = true;
-    const previousLabel = els.refreshStorageBackends.textContent;
-    els.refreshStorageBackends.textContent = "Refreshing…";
-    try {
-      const data = await api("/api/storage-backends");
-      storageBackends = Array.isArray(data) ? data : [];
-      storageBackends.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-      render();
-      hideStorageBackendBanner();
-      setAPIState("online");
-    } catch (err) {
-      setAPIState("offline");
-      showStorageBackendBanner(`Could not load storage backends: ${err.message}`);
-      throw err;
-    } finally {
-      els.refreshStorageBackends.disabled = false;
-      els.refreshStorageBackends.textContent = previousLabel;
     }
   }
 
@@ -1746,7 +1450,6 @@ export function startInventory(): void {
     prerequisitesReady = ready;
     thinPoolReady = thinPool;
     updateVMActionState();
-    updateDiskActionState();
   }
 
   function setVPPReady(ready) {
@@ -2226,300 +1929,6 @@ export function startInventory(): void {
     } else {
       els.saveVM.textContent = editingID === null ? "Create VM" : "Save changes";
     }
-  }
-
-  function populateDiskBackendOptions(selected = "") {
-    if (!els.diskBackend) {
-      return;
-    }
-    els.diskBackend.replaceChildren();
-    if (storageBackends.length === 0) {
-      const option = document.createElement("option");
-      option.value = "";
-      option.textContent = "No storage backends";
-      els.diskBackend.append(option);
-      els.diskBackend.disabled = true;
-      return;
-    }
-    els.diskBackend.disabled = false;
-    for (const backend of storageBackends) {
-      const option = document.createElement("option");
-      option.value = String(backend.id);
-      option.textContent = `${backend.name} · ${backend.driver === "lvm-thin" ? "LVM thin" : backend.driver}`;
-      els.diskBackend.append(option);
-    }
-    const fallback = storageBackends.find((backend) => backend.name === "default") || storageBackends[0];
-    els.diskBackend.value = selected && storageBackends.some((backend) => String(backend.id) === selected)
-      ? selected
-      : String(fallback.id);
-  }
-
-  function openCreateStorageBackend() {
-    editingStorageBackendID = null;
-    els.storageBackendForm.reset();
-    els.storageBackendID.value = "";
-    els.storageBackendDriver.value = "lvm-thin";
-    els.storageBackendDialogEyebrow.textContent = "New backend";
-    els.storageBackendDialogTitle.textContent = "Register storage backend";
-    els.saveStorageBackend.textContent = "Save backend";
-    els.storageBackendFormError.hidden = true;
-    els.storageBackendFormError.textContent = "";
-    els.storageBackendDialog.showModal();
-    els.storageBackendName.focus();
-  }
-
-  function openEditStorageBackend(backend) {
-    editingStorageBackendID = backend.id;
-    els.storageBackendForm.reset();
-    els.storageBackendID.value = String(backend.id);
-    els.storageBackendName.value = backend.name;
-    els.storageBackendTitle.value = backend.title || "";
-    els.storageBackendDescription.value = backend.description || "";
-    els.storageBackendDriver.value = backend.driver;
-    els.storageBackendVG.value = backend.config?.vg || "";
-    els.storageBackendPool.value = backend.config?.thin_pool || "";
-    els.storageBackendDialogEyebrow.textContent = "Edit backend";
-    els.storageBackendDialogTitle.textContent = `Storage backend · ${backend.name}`;
-    els.saveStorageBackend.textContent = "Save backend";
-    els.storageBackendFormError.hidden = true;
-    els.storageBackendFormError.textContent = "";
-    els.storageBackendDialog.showModal();
-    els.storageBackendName.focus();
-  }
-
-  function setSavingStorageBackend(value, label) {
-    savingStorageBackend = value;
-    els.saveStorageBackend.disabled = value;
-    els.cancelStorageBackendDialog.disabled = value;
-    els.closeStorageBackendDialog.disabled = value;
-    els.saveStorageBackend.textContent = value ? label : "Save backend";
-  }
-
-  async function deleteStorageBackend(backend) {
-    if (!window.confirm(`Delete storage backend "${backend.name}"?`)) {
-      return;
-    }
-    try {
-      await api(`/api/storage-backends/${backend.id}`, { method: "DELETE" });
-      storageBackends = storageBackends.filter((item) => item.id !== backend.id);
-      render();
-      showToast(`Deleted storage backend ${backend.name}`);
-    } catch (err) {
-      showStorageBackendBanner(`Could not delete ${backend.name}: ${err.message}`);
-      showToast(`Could not delete backend ${backend.name}: ${err.message}`, true);
-    }
-  }
-
-  function openImportDisks(backend) {
-    if (backend.driver !== "lvm-thin" || !backend.config?.vg || !backend.config?.thin_pool) {
-      showToast("Import is available for configured LVM thin backends.", true);
-      return;
-    }
-    importingBackendID = backend.id;
-    importDiskItems = [];
-    els.importDiskLede.textContent =
-      `${backend.name} · ${backend.config.vg}/${backend.config.thin_pool} — ` +
-      "select existing thin volumes to register as disks. Importing does not modify LVM, " +
-      "but deleting an imported disk later removes its volume.";
-    els.importDiskErrorBanner.hidden = true;
-    els.importDiskErrorBanner.textContent = "";
-    els.importDiskList.replaceChildren();
-    els.importDiskEmpty.hidden = true;
-    els.importDisks.disabled = true;
-    els.importDisks.textContent = "Import selected";
-    els.importDiskDialog.showModal();
-    loadImportableDisks();
-  }
-
-  async function loadImportableDisks() {
-    if (importingBackendID === null) {
-      return;
-    }
-    const backendID = importingBackendID;
-    const loadID = ++importLoadID;
-    els.importDiskErrorBanner.hidden = true;
-    els.importDiskErrorBanner.textContent = "";
-    els.refreshImportDisks.disabled = true;
-    els.importDiskList.replaceChildren();
-    els.importDiskEmpty.hidden = true;
-
-    const loading = document.createElement("p");
-    loading.className = "import-disk-meta";
-    loading.textContent = "Loading existing thin volumes…";
-    els.importDiskList.append(loading);
-    updateImportDiskActionState();
-
-    try {
-      const data = await api(`/api/storage-backends/${backendID}/importable-disks`);
-      if (importingBackendID !== backendID || loadID !== importLoadID) {
-        return;
-      }
-      importDiskItems = Array.isArray(data) ? data : [];
-      setAPIState("online");
-      renderImportDisks();
-    } catch (err) {
-      if (importingBackendID !== backendID || loadID !== importLoadID) {
-        return;
-      }
-      els.importDiskList.replaceChildren();
-      els.importDiskEmpty.hidden = true;
-      els.importDiskErrorBanner.textContent = `Could not list existing disks: ${err.message}`;
-      els.importDiskErrorBanner.hidden = false;
-      if (!err.status) {
-        setAPIState("offline");
-      }
-      updateImportDiskActionState();
-    } finally {
-      if (importingBackendID === backendID && loadID === importLoadID) {
-        els.refreshImportDisks.disabled = false;
-      }
-    }
-  }
-
-  function renderImportDisks() {
-    els.importDiskList.replaceChildren();
-    els.importDiskEmpty.hidden = importDiskItems.length !== 0;
-    if (importDiskItems.length === 0) {
-      updateImportDiskActionState();
-      return;
-    }
-
-    for (const item of importDiskItems) {
-      const row = document.createElement("label");
-      row.className = item.registered ? "import-disk-row imported" : "import-disk-row";
-
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.value = item.name;
-      checkbox.disabled = Boolean(item.registered) || savingImport;
-      checkbox.setAttribute("aria-label", `Import ${item.name}`);
-
-      const copy = document.createElement("span");
-      copy.className = "import-disk-copy";
-      const name = document.createElement("span");
-      name.className = "import-disk-name";
-      name.textContent = item.name;
-      const meta = document.createElement("span");
-      meta.className = "import-disk-meta";
-      const parts = [`${numberFormat.format(item.size_gb)} GB`];
-      if (item.registered) {
-        parts.push(
-          item.attached_vm_name
-            ? `already imported · attached to ${item.attached_vm_name}`
-            : "already imported"
-        );
-        if (item.storage_backend_name) {
-          parts.push(item.storage_backend_name);
-        }
-      } else {
-        parts.push("available to import");
-      }
-      meta.textContent = parts.join(" · ");
-      copy.append(name, meta);
-
-      const badge = document.createElement("span");
-      badge.className = "import-disk-badge";
-      badge.textContent = item.registered ? "imported" : "new";
-
-      row.append(checkbox, copy, badge);
-      els.importDiskList.append(row);
-    }
-    updateImportDiskActionState();
-  }
-
-  function updateImportDiskActionState() {
-    const selected = els.importDiskList.querySelectorAll(
-      'input[type="checkbox"]:checked'
-    ).length;
-    if (savingImport) {
-      els.importDisks.disabled = true;
-      els.importDisks.textContent = "Importing…";
-      return;
-    }
-    els.importDisks.disabled = selected === 0;
-    els.importDisks.textContent =
-      selected > 0 ? `Import selected (${selected})` : "Import selected";
-  }
-
-  function setSavingImport(value) {
-    savingImport = value;
-    els.refreshImportDisks.disabled = value;
-    els.cancelImportDiskDialog.disabled = value;
-    els.closeImportDiskDialog.disabled = value;
-    for (const checkbox of els.importDiskList.querySelectorAll('input[type="checkbox"]')) {
-      checkbox.disabled = value || checkbox.closest(".imported") !== null;
-    }
-    updateImportDiskActionState();
-  }
-
-  function closeImportDisks() {
-    if (savingImport) {
-      return;
-    }
-    els.importDiskDialog.close();
-  }
-
-  async function importSelectedDisks() {
-    if (importingBackendID === null || savingImport) {
-      return;
-    }
-    const names = Array.from(
-      els.importDiskList.querySelectorAll('input[type="checkbox"]:checked')
-    ).map((checkbox) => checkbox.value);
-    if (names.length === 0) {
-      return;
-    }
-
-    const backendID = importingBackendID;
-    els.importDiskErrorBanner.hidden = true;
-    els.importDiskErrorBanner.textContent = "";
-    setSavingImport(true);
-
-    try {
-      const imported = await api(`/api/storage-backends/${backendID}/import-disks`, {
-        method: "POST",
-        body: JSON.stringify({ names }),
-      });
-      for (const disk of imported) {
-        upsertDisk(disk);
-      }
-      setAPIState("online");
-      els.importDiskDialog.close();
-      loadStorageBackends().catch(() => {});
-      showToast(`Imported ${imported.length} disk${imported.length === 1 ? "" : "s"}`);
-    } catch (err) {
-      els.importDiskErrorBanner.textContent = `Could not import disks: ${err.message}`;
-      els.importDiskErrorBanner.hidden = false;
-      if (!err.status) {
-        setAPIState("offline");
-      }
-    } finally {
-      setSavingImport(false);
-    }
-  }
-
-  function openCreateDisk() {
-    if (storageBackends.length === 0) {
-      showToast("Register a storage backend before creating a disk.", true);
-      return;
-    }
-
-    els.diskForm.reset();
-    populateDiskBackendOptions();
-    els.diskDialogEyebrow.textContent = "New disk";
-    els.diskDialogTitle.textContent = "Create disk";
-    els.diskFormError.hidden = true;
-    els.diskFormError.textContent = "";
-    els.diskDialog.showModal();
-    els.diskName.focus();
-  }
-
-  function setSavingDisk(value, label) {
-    savingDisk = value;
-    els.saveDisk.disabled = value;
-    els.cancelDiskDialog.disabled = value;
-    els.closeDiskDialog.disabled = value;
-    els.saveDisk.textContent = value ? label : "Create disk";
   }
 
   function openCreateNetwork() {
@@ -3075,35 +2484,6 @@ export function startInventory(): void {
     }
   }
 
-  async function deleteDisk(disk) {
-    const owner = diskOwner(disk.id);
-    if (owner) {
-      showToast(
-        `Detach ${disk.name} from ${owner.name} before deleting it.`,
-        true
-      );
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Delete disk "${disk.name}"?\n\nThis removes the LVM thin volume and its inventory record.`
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      await api(`/api/disks/${disk.id}`, { method: "DELETE" });
-      disks = disks.filter((item) => item.id !== disk.id);
-      render();
-      loadStorageBackends().catch(() => {});
-      hideDiskBanner();
-      showToast(`Deleted disk ${disk.name}`);
-    } catch (err) {
-      showDiskBanner(`Could not delete ${disk.name}: ${err.message}`);
-    }
-  }
-
   els.form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (saving) {
@@ -3190,102 +2570,6 @@ export function startInventory(): void {
       }
     } finally {
       setSaving(false);
-    }
-  });
-
-  els.storageBackendForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (savingStorageBackend) {
-      return;
-    }
-    els.storageBackendFormError.hidden = true;
-    els.storageBackendFormError.textContent = "";
-    if (!els.storageBackendForm.reportValidity()) {
-      return;
-    }
-    const payload = {
-      name: els.storageBackendName.value.trim(),
-      title: els.storageBackendTitle.value.trim(),
-      description: els.storageBackendDescription.value.trim(),
-      driver: els.storageBackendDriver.value,
-      config: {
-        vg: els.storageBackendVG.value.trim(),
-        thin_pool: els.storageBackendPool.value.trim(),
-      },
-    };
-    setSavingStorageBackend(true, "Saving…");
-    try {
-      const backend = await api(
-        editingStorageBackendID === null
-          ? "/api/storage-backends"
-          : `/api/storage-backends/${editingStorageBackendID}`,
-        {
-          method: editingStorageBackendID === null ? "POST" : "PUT",
-          body: JSON.stringify(payload),
-        }
-      );
-      const index = storageBackends.findIndex((item) => item.id === backend.id);
-      if (index === -1) storageBackends.push(backend);
-      else storageBackends[index] = backend;
-      storageBackends.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-      render();
-      loadStorageBackends().catch(() => {});
-      els.storageBackendDialog.close();
-      showToast(editingStorageBackendID === null ? `Added storage backend ${backend.name}` : `Saved storage backend ${backend.name}`);
-    } catch (err) {
-      els.storageBackendFormError.textContent = err.message;
-      els.storageBackendFormError.hidden = false;
-      if (!err.status) {
-        setAPIState("offline");
-      }
-    } finally {
-      setSavingStorageBackend(false);
-    }
-  });
-
-  els.diskForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (savingDisk) {
-      return;
-    }
-
-    els.diskFormError.hidden = true;
-    els.diskFormError.textContent = "";
-
-    if (!els.diskForm.reportValidity()) {
-      return;
-    }
-
-    const payload = {
-      name: els.diskName.value.trim(),
-      size_gb: Number(els.diskSize.value),
-      storage_backend_id: Number(els.diskBackend.value),
-    };
-
-    setSavingDisk(true, "Creating…");
-
-    try {
-      const disk = await api("/api/disks", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      upsertDisk(disk);
-      setAPIState("online");
-      hideDiskBanner();
-      els.diskDialog.close();
-      loadStorageBackends().catch(() => {});
-      showToast(`Created disk ${disk.name}`);
-    } catch (err) {
-      els.diskFormError.textContent = err.message;
-      els.diskFormError.hidden = false;
-      if (err.status === 503) {
-        refreshStatus();
-      }
-      if (!err.status) {
-        setAPIState("offline");
-      }
-    } finally {
-      setSavingDisk(false);
     }
   });
 
@@ -3530,39 +2814,6 @@ export function startInventory(): void {
     }
   });
 
-  els.storageBackendRows.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-action]");
-    if (!button) {
-      return;
-    }
-    const backend = storageBackends.find((item) => item.id === Number(button.dataset.id));
-    if (!backend) {
-      return;
-    }
-    if (button.dataset.action === "import-storage-backend") {
-      openImportDisks(backend);
-    } else if (button.dataset.action === "edit-storage-backend") {
-      openEditStorageBackend(backend);
-    } else if (button.dataset.action === "delete-storage-backend") {
-      deleteStorageBackend(backend);
-    }
-  });
-
-  els.diskRows.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-action]");
-    if (!button) {
-      return;
-    }
-
-    const disk = disks.find((item) => item.id === Number(button.dataset.id));
-    if (!disk) {
-      return;
-    }
-
-    if (button.dataset.action === "delete-disk") {
-      deleteDisk(disk);
-    }
-  });
 
   els.networkRows.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-action]");
@@ -3629,14 +2880,9 @@ export function startInventory(): void {
   els.tabVNFs.addEventListener("keydown", handleTabKey);
   els.newVM.addEventListener("click", openCreate);
   els.emptyCreate.addEventListener("click", openCreate);
-  els.newDisk.addEventListener("click", openCreateDisk);
-  els.newStorageBackend.addEventListener("click", openCreateStorageBackend);
-  els.emptyCreateStorageBackend.addEventListener("click", openCreateStorageBackend);
-  els.refreshStorageBackends.addEventListener("click", () => {
-    loadStorageBackends().catch(() => {});
-    loadDisks().catch(() => {});
+  els.newDisk.addEventListener("click", () => {
+    window.dispatchEvent(new CustomEvent("rookery:add-disk"));
   });
-  els.emptyCreateDisk.addEventListener("click", openCreateDisk);
   els.newMedia.addEventListener("click", () => {
     window.dispatchEvent(new CustomEvent("rookery:add-media"));
   });
@@ -3703,43 +2949,14 @@ export function startInventory(): void {
     vmDiskSelection.delete(Number(button.dataset.removeDisk));
     renderVMDiskPicker(currentDialogVM());
   });
-  els.importDiskList.addEventListener("change", updateImportDiskActionState);
-  els.importDisks.addEventListener("click", importSelectedDisks);
-  els.refreshImportDisks.addEventListener("click", () => {
-    loadImportableDisks();
-  });
-  els.cancelImportDiskDialog.addEventListener("click", closeImportDisks);
-  els.closeImportDiskDialog.addEventListener("click", closeImportDisks);
-  els.importDiskDialog.addEventListener("click", (event) => {
-    if (event.target === els.importDiskDialog) {
-      closeImportDisks();
-    }
-  });
-  els.importDiskDialog.addEventListener("cancel", (event) => {
-    if (savingImport) {
-      event.preventDefault();
-    }
-  });
-  els.importDiskDialog.addEventListener("close", () => {
-    importingBackendID = null;
-    importDiskItems = [];
-  });
-
   els.refresh.addEventListener("click", () => {
     loadVMs().catch(() => {});
     loadDisks().catch(() => {});
-    loadStorageBackends().catch(() => {});
     loadMedia().catch(() => {});
     loadNetworks().catch(() => {});
     loadInterfaces().catch(() => {});
     loadACLs().catch(() => {});
     loadVNFs().catch(() => {});
-    refreshStatus();
-  });
-  els.refreshDisks.addEventListener("click", () => {
-    loadDisks().catch(() => {});
-    loadStorageBackends().catch(() => {});
-    loadVMs().catch(() => {});
     refreshStatus();
   });
   els.refreshNetworks.addEventListener("click", () => {
@@ -3768,51 +2985,6 @@ export function startInventory(): void {
   });
   els.dialog.addEventListener("cancel", (event) => {
     if (saving) {
-      event.preventDefault();
-    }
-  });
-
-  els.closeStorageBackendDialog.addEventListener("click", () => {
-    if (!savingStorageBackend) {
-      els.storageBackendDialog.close();
-    }
-  });
-  els.cancelStorageBackendDialog.addEventListener("click", () => {
-    if (!savingStorageBackend) {
-      els.storageBackendDialog.close();
-    }
-  });
-  els.storageBackendDialog.addEventListener("click", (event) => {
-    if (event.target === els.storageBackendDialog && !savingStorageBackend) {
-      els.storageBackendDialog.close();
-    }
-  });
-  els.storageBackendDialog.addEventListener("cancel", (event) => {
-    if (savingStorageBackend) {
-      event.preventDefault();
-    }
-  });
-  els.storageBackendDialog.addEventListener("close", () => {
-    editingStorageBackendID = null;
-  });
-
-  els.closeDiskDialog.addEventListener("click", () => {
-    if (!savingDisk) {
-      els.diskDialog.close();
-    }
-  });
-  els.cancelDiskDialog.addEventListener("click", () => {
-    if (!savingDisk) {
-      els.diskDialog.close();
-    }
-  });
-  els.diskDialog.addEventListener("click", (event) => {
-    if (event.target === els.diskDialog && !savingDisk) {
-      els.diskDialog.close();
-    }
-  });
-  els.diskDialog.addEventListener("cancel", (event) => {
-    if (savingDisk) {
       event.preventDefault();
     }
   });
@@ -3963,6 +3135,13 @@ export function startInventory(): void {
     }
   });
 
+  window.addEventListener("rookery:disks-changed", (event) => {
+    disks = Array.isArray(event.detail) ? event.detail : [];
+    sortDisks();
+    if (els.dialog.open) {
+      renderVMDiskPicker(currentDialogVM());
+    }
+  });
   window.addEventListener("rookery:media-changed", (event) => {
     media = Array.isArray(event.detail) ? event.detail : [];
     sortMedia();
@@ -3997,5 +3176,5 @@ export function startInventory(): void {
   });
 
   refreshStatus();
-  Promise.allSettled([loadVMs(), loadDisks(), loadStorageBackends(), loadMedia(), loadNetworks(), loadInterfaces(), loadACLs(), loadVNFs()]);
+  Promise.allSettled([loadVMs(), loadDisks(), loadMedia(), loadNetworks(), loadInterfaces(), loadACLs(), loadVNFs()]);
 }
