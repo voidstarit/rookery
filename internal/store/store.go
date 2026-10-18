@@ -299,6 +299,12 @@ type Disk struct {
 	UpdatedAt          time.Time `json:"updated_at"`
 }
 
+// ImportDisk describes an existing volume that should be added to inventory.
+type ImportDisk struct {
+	Name   string
+	SizeGB int
+}
+
 // Media is a read-only installation file (usually an ISO) on the host.
 type Media struct {
 	ID        int64     `json:"id"`
@@ -661,6 +667,56 @@ func (s *Store) CreateDisk(ctx context.Context, disk Disk) (Disk, error) {
 	}
 
 	return s.GetDisk(ctx, id)
+}
+
+// ImportDisks registers existing volumes as disks in a single transaction.
+func (s *Store) ImportDisks(ctx context.Context, backendID int64, vg, thinPool string, imports []ImportDisk) ([]Disk, error) {
+	if len(imports) == 0 {
+		return nil, errors.New("at least one disk is required")
+	}
+
+	now := time.Now().UTC().UnixMilli()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin import disks: %w", err)
+	}
+	defer tx.Rollback()
+
+	ids := make([]int64, 0, len(imports))
+	for _, item := range imports {
+		if item.SizeGB < 1 {
+			return nil, fmt.Errorf("disk %q must be at least 1 GB", item.Name)
+		}
+		res, err := tx.ExecContext(ctx, `
+			INSERT INTO disks (name, size_gb, vg, thin_pool, storage_backend_id, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			item.Name, item.SizeGB, vg, thinPool, backendID, now, now,
+		)
+		if err != nil {
+			if isUniqueViolation(err) {
+				return nil, fmt.Errorf("%w: %q", ErrDiskNameTaken, item.Name)
+			}
+			return nil, fmt.Errorf("insert imported disk %q: %w", item.Name, err)
+		}
+		id, err := res.LastInsertId()
+		if err != nil {
+			return nil, fmt.Errorf("read imported disk id for %q: %w", item.Name, err)
+		}
+		ids = append(ids, id)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit import disks: %w", err)
+	}
+
+	disks := make([]Disk, 0, len(ids))
+	for _, id := range ids {
+		disk, err := s.GetDisk(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		disks = append(disks, disk)
+	}
+	return disks, nil
 }
 
 // ListDisks returns all disks ordered by name.

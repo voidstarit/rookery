@@ -52,10 +52,13 @@ type volumeCall struct {
 }
 
 type fakeDiskProvisioner struct {
-	created   []volumeCall
-	deleted   []volumeCall
-	createErr error
-	deleteErr error
+	created     []volumeCall
+	deleted     []volumeCall
+	listed      []volumeCall
+	thinVolumes []host.ThinVolume
+	createErr   error
+	deleteErr   error
+	listErr     error
 }
 
 func (f *fakeDiskProvisioner) CreateThinVolume(_ context.Context, vg, thinPool, name string, sizeGB int) error {
@@ -72,6 +75,14 @@ func (f *fakeDiskProvisioner) DeleteThinVolume(_ context.Context, vg, name strin
 	}
 	f.deleted = append(f.deleted, volumeCall{VG: vg, Name: name})
 	return nil
+}
+
+func (f *fakeDiskProvisioner) ListThinVolumes(_ context.Context, vg, thinPool string) ([]host.ThinVolume, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	f.listed = append(f.listed, volumeCall{VG: vg, ThinPool: thinPool})
+	return append([]host.ThinVolume(nil), f.thinVolumes...), nil
 }
 
 type fakeNetworkProvisioner struct {
@@ -941,6 +952,107 @@ func TestStorageBackendAndDiskSelection(t *testing.T) {
 	recorder = do(t, handler, http.MethodDelete, fmt.Sprintf("/api/storage-backends/%d", backend.ID), nil)
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("delete backend status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestStorageBackendImportDisks(t *testing.T) {
+	env := newTestAPI(t)
+	handler := env.handler
+
+	recorder := do(t, handler, http.MethodPost, "/api/storage-backends", map[string]any{
+		"name":   "import-pool",
+		"driver": "lvm-thin",
+		"config": map[string]any{"vg": "vg-import", "thin_pool": "import-pool"},
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create backend status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	backend := decode[store.StorageBackend](t, recorder)
+
+	recorder = do(t, handler, http.MethodPost, "/api/disks", map[string]any{
+		"name":               "already-registered",
+		"size_gb":            10,
+		"storage_backend_id": backend.ID,
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create registered disk status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	registered := decode[store.Disk](t, recorder)
+
+	env.provisioner.thinVolumes = []host.ThinVolume{
+		{Name: "legacy-root", SizeGB: 20},
+		{Name: "already-registered", SizeGB: 10},
+		{Name: "legacy-data", SizeGB: 6},
+	}
+	recorder = do(t, handler, http.MethodGet, fmt.Sprintf("/api/storage-backends/%d/importable-disks", backend.ID), nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("list importable status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var importable []struct {
+		Name               string `json:"name"`
+		SizeGB             int    `json:"size_gb"`
+		Registered         bool   `json:"registered"`
+		DiskID             *int64 `json:"disk_id"`
+		StorageBackendName string `json:"storage_backend_name"`
+	}
+	importable = decode[[]struct {
+		Name               string `json:"name"`
+		SizeGB             int    `json:"size_gb"`
+		Registered         bool   `json:"registered"`
+		DiskID             *int64 `json:"disk_id"`
+		StorageBackendName string `json:"storage_backend_name"`
+	}](t, recorder)
+	if len(importable) != 3 {
+		t.Fatalf("importable = %+v, want three", importable)
+	}
+	if !importable[0].Registered || importable[0].Name != "already-registered" ||
+		importable[0].DiskID == nil || *importable[0].DiskID != registered.ID ||
+		importable[0].StorageBackendName != backend.Name {
+		t.Fatalf("registered importable disk = %+v", importable[0])
+	}
+	if importable[1].Name != "legacy-data" || importable[1].SizeGB != 6 || importable[1].Registered {
+		t.Fatalf("legacy-data = %+v", importable[1])
+	}
+	if importable[2].Name != "legacy-root" || importable[2].SizeGB != 20 || importable[2].Registered {
+		t.Fatalf("legacy-root = %+v", importable[2])
+	}
+
+	recorder = do(t, handler, http.MethodPost,
+		fmt.Sprintf("/api/storage-backends/%d/import-disks", backend.ID),
+		map[string]any{"names": []string{"legacy-root", "legacy-data"}})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("import status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	imported := decode[[]store.Disk](t, recorder)
+	if len(imported) != 2 {
+		t.Fatalf("imported = %+v, want two", imported)
+	}
+	if imported[0].Name != "legacy-root" || imported[0].SizeGB != 20 ||
+		imported[0].StorageBackendID == nil || *imported[0].StorageBackendID != backend.ID ||
+		imported[0].VG != "vg-import" || imported[0].ThinPool != "import-pool" {
+		t.Fatalf("imported root = %+v", imported[0])
+	}
+	if len(env.provisioner.created) != 1 {
+		t.Fatalf("import created host volumes: %+v", env.provisioner.created)
+	}
+
+	recorder = do(t, handler, http.MethodPost,
+		fmt.Sprintf("/api/storage-backends/%d/import-disks", backend.ID),
+		map[string]any{"names": []string{"legacy-root"}})
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("duplicate import status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	recorder = do(t, handler, http.MethodPost,
+		fmt.Sprintf("/api/storage-backends/%d/import-disks", backend.ID),
+		map[string]any{"names": []string{"does-not-exist"}})
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("unknown import status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	recorder = do(t, handler, http.MethodPost,
+		fmt.Sprintf("/api/storage-backends/%d/import-disks", backend.ID),
+		map[string]any{"names": []string{}})
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("empty import status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 }
 

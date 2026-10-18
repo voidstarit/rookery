@@ -36,6 +36,7 @@ type Readiness interface {
 type DiskProvisioner interface {
 	CreateThinVolume(ctx context.Context, vg, thinPool, name string, sizeGB int) error
 	DeleteThinVolume(ctx context.Context, vg, name string) error
+	ListThinVolumes(ctx context.Context, vg, thinPool string) ([]host.ThinVolume, error)
 }
 
 // VMController starts and stops QEMU processes and reports their VNC sockets.
@@ -138,6 +139,8 @@ func New(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMControll
 	mux.HandleFunc("GET /api/storage-backends/{id}", s.handleGetStorageBackend)
 	mux.HandleFunc("PUT /api/storage-backends/{id}", s.handleUpdateStorageBackend)
 	mux.HandleFunc("DELETE /api/storage-backends/{id}", s.handleDeleteStorageBackend)
+	mux.HandleFunc("GET /api/storage-backends/{id}/importable-disks", s.handleListImportableDisks)
+	mux.HandleFunc("POST /api/storage-backends/{id}/import-disks", s.handleImportDisks)
 	mux.HandleFunc("GET /api/disks", s.handleListDisks)
 	mux.HandleFunc("POST /api/disks", s.handleCreateDisk)
 	mux.HandleFunc("GET /api/disks/{id}", s.handleGetDisk)

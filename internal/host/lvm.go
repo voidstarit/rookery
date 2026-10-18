@@ -3,7 +3,10 @@ package host
 import (
 	"context"
 	"fmt"
+	"math"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -72,6 +75,81 @@ func (l *LVM) ThinPool(ctx context.Context, vg, name string) (ThinPoolInfo, erro
 		Exists:     exists,
 		IsThinPool: exists && strings.HasPrefix(attribute, "t"),
 	}, nil
+}
+
+// ThinVolume describes a logical volume that belongs to a thin pool.
+type ThinVolume struct {
+	Name   string
+	SizeGB int
+}
+
+// ListThinVolumes returns the existing thin volumes in a thin pool.
+func (l *LVM) ListThinVolumes(ctx context.Context, vg, thinPool string) ([]ThinVolume, error) {
+	if err := ValidateLVMName("volume group", vg); err != nil {
+		return nil, err
+	}
+	if err := ValidateLVMName("thin pool", thinPool); err != nil {
+		return nil, err
+	}
+
+	info, err := l.ThinPool(ctx, vg, thinPool)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Exists {
+		return nil, fmt.Errorf("thin pool %s/%s does not exist", vg, thinPool)
+	}
+	if !info.IsThinPool {
+		return nil, fmt.Errorf("logical volume %s/%s is not a thin pool", vg, thinPool)
+	}
+
+	output, err := l.Runner.Run(ctx, "lvs",
+		"--noheadings", "--separator", "|",
+		"-o", "lv_name,lv_attr,lv_size,pool_lv",
+		"--units", "g", "--nosuffix", vg,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list thin volumes in %s: %w", vg, err)
+	}
+
+	volumes := make([]ThinVolume, 0)
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, "|")
+		if len(parts) < 4 {
+			continue
+		}
+		name := strings.TrimSpace(parts[0])
+		attribute := strings.TrimSpace(parts[1])
+		pool := strings.TrimSpace(parts[3])
+		if name == "" || !strings.HasPrefix(attribute, "V") || pool != thinPool {
+			continue
+		}
+		sizeText := strings.TrimPrefix(strings.TrimSpace(parts[2]), "<")
+		sizeText = strings.TrimSuffix(sizeText, "g")
+		sizeText = strings.ReplaceAll(sizeText, ",", ".")
+		size, err := strconv.ParseFloat(sizeText, 64)
+		if err != nil {
+			return nil, fmt.Errorf("parse size of thin volume %s/%s (%q): %w", vg, name, parts[2], err)
+		}
+		sizeGB := int(math.Ceil(size))
+		if sizeGB < 1 {
+			sizeGB = 1
+		}
+		volumes = append(volumes, ThinVolume{Name: name, SizeGB: sizeGB})
+	}
+	sort.Slice(volumes, func(i, j int) bool {
+		left := strings.ToLower(volumes[i].Name)
+		right := strings.ToLower(volumes[j].Name)
+		if left == right {
+			return volumes[i].Name < volumes[j].Name
+		}
+		return left < right
+	})
+	return volumes, nil
 }
 
 // CreateThinVolume creates a thin logical volume in an existing thin pool.

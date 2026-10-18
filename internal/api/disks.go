@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/readiness"
 	"github.com/voidstarit/rookery/internal/store"
 )
@@ -18,6 +20,7 @@ const (
 	maxDiskNameLength = 127
 	minDiskGB         = 1
 	maxDiskGB         = 65_536
+	maxImportDisks    = 256
 )
 
 type diskPayload struct {
@@ -200,6 +203,169 @@ func (s *Server) handleDeleteDisk(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+type importableDisk struct {
+	Name               string  `json:"name"`
+	SizeGB             int     `json:"size_gb"`
+	Registered         bool    `json:"registered"`
+	DiskID             *int64  `json:"disk_id,omitempty"`
+	AttachedVMID       *string `json:"attached_vm_id,omitempty"`
+	AttachedVMName     string  `json:"attached_vm_name,omitempty"`
+	StorageBackendName string  `json:"storage_backend_name,omitempty"`
+}
+
+type importDisksPayload struct {
+	Names []string `json:"names"`
+}
+
+func normalizeImportDiskNames(names []string) ([]string, error) {
+	if len(names) == 0 {
+		return nil, errors.New("at least one disk is required")
+	}
+	if len(names) > maxImportDisks {
+		return nil, fmt.Errorf("at most %d disks can be imported at once", maxImportDisks)
+	}
+	seen := make(map[string]struct{}, len(names))
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if err := host.ValidateLVMName("logical volume", name); err != nil {
+			return nil, err
+		}
+		key := strings.ToLower(name)
+		if _, ok := seen[key]; ok {
+			return nil, fmt.Errorf("duplicate disk name %q", name)
+		}
+		seen[key] = struct{}{}
+		out = append(out, name)
+	}
+	return out, nil
+}
+
+func (s *Server) handleListImportableDisks(w http.ResponseWriter, r *http.Request) {
+	id, err := parseStorageBackendID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	backend, err := s.store.GetStorageBackend(r.Context(), id)
+	if err != nil {
+		writeStorageBackendError(w, r, s, err)
+		return
+	}
+	if backend.Driver != "lvm-thin" || backend.Config.VG == "" || backend.Config.ThinPool == "" {
+		writeError(w, http.StatusBadRequest, "storage backend is not configured for LVM thin volumes")
+		return
+	}
+
+	volumes, err := s.disks.ListThinVolumes(r.Context(), backend.Config.VG, backend.Config.ThinPool)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	disks, err := s.store.ListDisks(r.Context())
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	registered := make(map[string]store.Disk, len(disks))
+	for _, disk := range disks {
+		registered[strings.ToLower(disk.Name)] = disk
+	}
+
+	items := make([]importableDisk, 0, len(volumes))
+	for _, volume := range volumes {
+		item := importableDisk{Name: volume.Name, SizeGB: volume.SizeGB}
+		if disk, ok := registered[strings.ToLower(volume.Name)]; ok {
+			item.Registered = true
+			item.DiskID = &disk.ID
+			item.AttachedVMID = disk.AttachedVMID
+			item.AttachedVMName = disk.AttachedVMName
+			item.StorageBackendName = disk.StorageBackendName
+		}
+		items = append(items, item)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		left := strings.ToLower(items[i].Name)
+		right := strings.ToLower(items[j].Name)
+		if left == right {
+			return items[i].Name < items[j].Name
+		}
+		return left < right
+	})
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (s *Server) handleImportDisks(w http.ResponseWriter, r *http.Request) {
+	id, err := parseStorageBackendID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	backend, err := s.store.GetStorageBackend(r.Context(), id)
+	if err != nil {
+		writeStorageBackendError(w, r, s, err)
+		return
+	}
+	if backend.Driver != "lvm-thin" || backend.Config.VG == "" || backend.Config.ThinPool == "" {
+		writeError(w, http.StatusBadRequest, "storage backend is not configured for LVM thin volumes")
+		return
+	}
+
+	var payload importDisksPayload
+	if err := decodeJSON(w, r, &payload); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	names, err := normalizeImportDiskNames(payload.Names)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	s.resourceMu.Lock()
+	defer s.resourceMu.Unlock()
+
+	volumes, err := s.disks.ListThinVolumes(r.Context(), backend.Config.VG, backend.Config.ThinPool)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	byName := make(map[string]host.ThinVolume, len(volumes))
+	for _, volume := range volumes {
+		byName[volume.Name] = volume
+	}
+
+	imports := make([]store.ImportDisk, 0, len(names))
+	for _, name := range names {
+		volume, ok := byName[name]
+		if !ok {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("thin volume %q was not found in the backend", name))
+			return
+		}
+		switch _, err := s.store.GetDiskByName(r.Context(), name); {
+		case err == nil:
+			writeError(w, http.StatusConflict, fmt.Sprintf("disk %q is already registered", name))
+			return
+		case !errors.Is(err, store.ErrDiskNotFound):
+			s.internalError(w, r, err)
+			return
+		}
+		imports = append(imports, store.ImportDisk{Name: volume.Name, SizeGB: volume.SizeGB})
+	}
+
+	created, err := s.store.ImportDisks(r.Context(), backend.ID, backend.Config.VG, backend.Config.ThinPool, imports)
+	if err != nil {
+		switch {
+		case errors.Is(err, store.ErrDiskNameTaken):
+			writeError(w, http.StatusConflict, "a disk with that name already exists")
+		default:
+			s.internalError(w, r, err)
+		}
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
 }
 
 func (s *Server) resolveStorageBackend(ctx context.Context, id *int64) (store.StorageBackend, error) {

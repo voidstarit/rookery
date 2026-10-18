@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -16,6 +17,8 @@ type fakeLVM struct {
 	failVolumeRemove bool
 	createCalls      int
 	volumes          map[string]string
+	volumeSizes      map[string]float64
+	volumePools      map[string]string
 	calls            []string
 }
 
@@ -30,6 +33,20 @@ func (f *fakeLVM) Run(_ context.Context, name string, args ...string) ([]byte, e
 		return []byte("  other\n"), nil
 	case "lvs":
 		var output strings.Builder
+		if argValue(args, "-o") == "lv_name,lv_attr,lv_size,pool_lv" {
+			for volumeName, attribute := range f.volumes {
+				size := f.volumeSizes[volumeName]
+				if size == 0 {
+					size = 20
+				}
+				pool := f.volumePools[volumeName]
+				if pool == "" {
+					pool = "nerds-vms"
+				}
+				fmt.Fprintf(&output, "  %s|%s|%.2f|%s\n", volumeName, attribute, size, pool)
+			}
+			return []byte(output.String()), nil
+		}
 		if f.poolExists {
 			attribute := f.poolAttr
 			if attribute == "" {
@@ -217,6 +234,54 @@ func TestValidateLVMName(t *testing.T) {
 		if err := ValidateLVMName("name", name); err == nil {
 			t.Errorf("ValidateLVMName(%q) = nil, want error", name)
 		}
+	}
+}
+
+func TestListThinVolumes(t *testing.T) {
+	runner := &fakeLVM{
+		vgExists:   true,
+		poolExists: true,
+		volumes: map[string]string{
+			"zdata":     "Vwi-a-tz--",
+			"root":      "Vwi-a-tz--",
+			"plain":     "-wi-a-----",
+			"otherpool": "Vwi-a-tz--",
+		},
+		volumeSizes: map[string]float64{
+			"zdata":     5.2,
+			"root":      10,
+			"plain":     10,
+			"otherpool": 1,
+		},
+		volumePools: map[string]string{"otherpool": "other-pool"},
+	}
+	lvm := &LVM{Runner: runner}
+
+	volumes, err := lvm.ListThinVolumes(context.Background(), "vg0", "nerds-vms")
+	if err != nil {
+		t.Fatalf("ListThinVolumes: %v", err)
+	}
+	if len(volumes) != 2 {
+		t.Fatalf("volumes = %+v, want two", volumes)
+	}
+	if volumes[0].Name != "root" || volumes[0].SizeGB != 10 {
+		t.Fatalf("first volume = %+v", volumes[0])
+	}
+	if volumes[1].Name != "zdata" || volumes[1].SizeGB != 6 {
+		t.Fatalf("second volume = %+v", volumes[1])
+	}
+	if !runner.called("lvs --noheadings --separator | -o lv_name,lv_attr,lv_size,pool_lv --units g --nosuffix vg0") {
+		t.Fatalf("unexpected calls: %v", runner.calls)
+	}
+}
+
+func TestListThinVolumesRequiresThinPool(t *testing.T) {
+	runner := &fakeLVM{vgExists: true}
+	lvm := &LVM{Runner: runner}
+
+	_, err := lvm.ListThinVolumes(context.Background(), "vg0", "nerds-vms")
+	if err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("error = %v, want missing thin pool", err)
 	}
 }
 

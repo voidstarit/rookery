@@ -65,6 +65,15 @@
     saveStorageBackend: document.getElementById("save-storage-backend"),
     closeStorageBackendDialog: document.getElementById("close-storage-backend-dialog"),
     cancelStorageBackendDialog: document.getElementById("cancel-storage-backend-dialog"),
+    importDiskDialog: document.getElementById("import-disk-dialog"),
+    importDiskLede: document.getElementById("import-disk-lede"),
+    importDiskErrorBanner: document.getElementById("import-disk-error-banner"),
+    importDiskList: document.getElementById("import-disk-list"),
+    importDiskEmpty: document.getElementById("import-disk-empty"),
+    importDisks: document.getElementById("import-disks"),
+    refreshImportDisks: document.getElementById("refresh-import-disks"),
+    closeImportDiskDialog: document.getElementById("close-import-disk-dialog"),
+    cancelImportDiskDialog: document.getElementById("cancel-import-disk-dialog"),
     newMedia: document.getElementById("new-media"),
     newNetwork: document.getElementById("new-network"),
     newVNF: document.getElementById("new-vnf"),
@@ -325,6 +334,10 @@
   let editingInterfaceID = null;
   let editingACLID = null;
   let editingStorageBackendID = null;
+  let importingBackendID = null;
+  let importDiskItems = [];
+  let importLoadID = 0;
+  let savingImport = false;
   let assigningInterfaceACLID = null;
   let editingVNFID = null;
   let leasesVNFID = null;
@@ -1031,6 +1044,19 @@
     const actions = document.createElement("div");
     actions.className = "actions";
 
+    const importButton = document.createElement("button");
+    importButton.type = "button";
+    importButton.className = "row-action";
+    importButton.dataset.action = "import-storage-backend";
+    importButton.dataset.id = String(backend.id);
+    importButton.textContent = "Import";
+    if (backend.driver !== "lvm-thin" || !backend.config?.vg || !backend.config?.thin_pool) {
+      importButton.disabled = true;
+      importButton.title = "Import is available for configured LVM thin backends.";
+    } else {
+      importButton.title = "Import existing thin volumes from this backend.";
+    }
+
     const edit = document.createElement("button");
     edit.type = "button";
     edit.className = "row-action";
@@ -1049,7 +1075,7 @@
       del.title = "Delete disks using this backend first.";
     }
 
-    actions.append(edit, del);
+    actions.append(importButton, edit, del);
     actionsCell.append(actions);
     row.append(nameCell, driverCell, locationCell, diskCell, updatedCell, actionsCell);
     return row;
@@ -2617,6 +2643,194 @@
     } catch (err) {
       showStorageBackendBanner(`Could not delete ${backend.name}: ${err.message}`);
       showToast(`Could not delete backend ${backend.name}: ${err.message}`, true);
+    }
+  }
+
+  function openImportDisks(backend) {
+    if (backend.driver !== "lvm-thin" || !backend.config?.vg || !backend.config?.thin_pool) {
+      showToast("Import is available for configured LVM thin backends.", true);
+      return;
+    }
+    importingBackendID = backend.id;
+    importDiskItems = [];
+    els.importDiskLede.textContent =
+      `${backend.name} · ${backend.config.vg}/${backend.config.thin_pool} — ` +
+      "select existing thin volumes to register as disks. Importing does not modify LVM, " +
+      "but deleting an imported disk later removes its volume.";
+    els.importDiskErrorBanner.hidden = true;
+    els.importDiskErrorBanner.textContent = "";
+    els.importDiskList.replaceChildren();
+    els.importDiskEmpty.hidden = true;
+    els.importDisks.disabled = true;
+    els.importDisks.textContent = "Import selected";
+    els.importDiskDialog.showModal();
+    loadImportableDisks();
+  }
+
+  async function loadImportableDisks() {
+    if (importingBackendID === null) {
+      return;
+    }
+    const backendID = importingBackendID;
+    const loadID = ++importLoadID;
+    els.importDiskErrorBanner.hidden = true;
+    els.importDiskErrorBanner.textContent = "";
+    els.refreshImportDisks.disabled = true;
+    els.importDiskList.replaceChildren();
+    els.importDiskEmpty.hidden = true;
+
+    const loading = document.createElement("p");
+    loading.className = "import-disk-meta";
+    loading.textContent = "Loading existing thin volumes…";
+    els.importDiskList.append(loading);
+    updateImportDiskActionState();
+
+    try {
+      const data = await api(`/api/storage-backends/${backendID}/importable-disks`);
+      if (importingBackendID !== backendID || loadID !== importLoadID) {
+        return;
+      }
+      importDiskItems = Array.isArray(data) ? data : [];
+      setAPIState("online");
+      renderImportDisks();
+    } catch (err) {
+      if (importingBackendID !== backendID || loadID !== importLoadID) {
+        return;
+      }
+      els.importDiskList.replaceChildren();
+      els.importDiskEmpty.hidden = true;
+      els.importDiskErrorBanner.textContent = `Could not list existing disks: ${err.message}`;
+      els.importDiskErrorBanner.hidden = false;
+      if (!err.status) {
+        setAPIState("offline");
+      }
+      updateImportDiskActionState();
+    } finally {
+      if (importingBackendID === backendID && loadID === importLoadID) {
+        els.refreshImportDisks.disabled = false;
+      }
+    }
+  }
+
+  function renderImportDisks() {
+    els.importDiskList.replaceChildren();
+    els.importDiskEmpty.hidden = importDiskItems.length !== 0;
+    if (importDiskItems.length === 0) {
+      updateImportDiskActionState();
+      return;
+    }
+
+    for (const item of importDiskItems) {
+      const row = document.createElement("label");
+      row.className = item.registered ? "import-disk-row imported" : "import-disk-row";
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = item.name;
+      checkbox.disabled = Boolean(item.registered) || savingImport;
+      checkbox.setAttribute("aria-label", `Import ${item.name}`);
+
+      const copy = document.createElement("span");
+      copy.className = "import-disk-copy";
+      const name = document.createElement("span");
+      name.className = "import-disk-name";
+      name.textContent = item.name;
+      const meta = document.createElement("span");
+      meta.className = "import-disk-meta";
+      const parts = [`${numberFormat.format(item.size_gb)} GB`];
+      if (item.registered) {
+        parts.push(
+          item.attached_vm_name
+            ? `already imported · attached to ${item.attached_vm_name}`
+            : "already imported"
+        );
+        if (item.storage_backend_name) {
+          parts.push(item.storage_backend_name);
+        }
+      } else {
+        parts.push("available to import");
+      }
+      meta.textContent = parts.join(" · ");
+      copy.append(name, meta);
+
+      const badge = document.createElement("span");
+      badge.className = "import-disk-badge";
+      badge.textContent = item.registered ? "imported" : "new";
+
+      row.append(checkbox, copy, badge);
+      els.importDiskList.append(row);
+    }
+    updateImportDiskActionState();
+  }
+
+  function updateImportDiskActionState() {
+    const selected = els.importDiskList.querySelectorAll(
+      'input[type="checkbox"]:checked'
+    ).length;
+    if (savingImport) {
+      els.importDisks.disabled = true;
+      els.importDisks.textContent = "Importing…";
+      return;
+    }
+    els.importDisks.disabled = selected === 0;
+    els.importDisks.textContent =
+      selected > 0 ? `Import selected (${selected})` : "Import selected";
+  }
+
+  function setSavingImport(value) {
+    savingImport = value;
+    els.refreshImportDisks.disabled = value;
+    els.cancelImportDiskDialog.disabled = value;
+    els.closeImportDiskDialog.disabled = value;
+    for (const checkbox of els.importDiskList.querySelectorAll('input[type="checkbox"]')) {
+      checkbox.disabled = value || checkbox.closest(".imported") !== null;
+    }
+    updateImportDiskActionState();
+  }
+
+  function closeImportDisks() {
+    if (savingImport) {
+      return;
+    }
+    els.importDiskDialog.close();
+  }
+
+  async function importSelectedDisks() {
+    if (importingBackendID === null || savingImport) {
+      return;
+    }
+    const names = Array.from(
+      els.importDiskList.querySelectorAll('input[type="checkbox"]:checked')
+    ).map((checkbox) => checkbox.value);
+    if (names.length === 0) {
+      return;
+    }
+
+    const backendID = importingBackendID;
+    els.importDiskErrorBanner.hidden = true;
+    els.importDiskErrorBanner.textContent = "";
+    setSavingImport(true);
+
+    try {
+      const imported = await api(`/api/storage-backends/${backendID}/import-disks`, {
+        method: "POST",
+        body: JSON.stringify({ names }),
+      });
+      for (const disk of imported) {
+        upsertDisk(disk);
+      }
+      setAPIState("online");
+      els.importDiskDialog.close();
+      loadStorageBackends().catch(() => {});
+      showToast(`Imported ${imported.length} disk${imported.length === 1 ? "" : "s"}`);
+    } catch (err) {
+      els.importDiskErrorBanner.textContent = `Could not import disks: ${err.message}`;
+      els.importDiskErrorBanner.hidden = false;
+      if (!err.status) {
+        setAPIState("offline");
+      }
+    } finally {
+      setSavingImport(false);
     }
   }
 
@@ -4239,7 +4453,9 @@
     if (!backend) {
       return;
     }
-    if (button.dataset.action === "edit-storage-backend") {
+    if (button.dataset.action === "import-storage-backend") {
+      openImportDisks(backend);
+    } else if (button.dataset.action === "edit-storage-backend") {
       openEditStorageBackend(backend);
     } else if (button.dataset.action === "delete-storage-backend") {
       deleteStorageBackend(backend);
@@ -4452,6 +4668,28 @@
     vmDiskSelection.delete(Number(button.dataset.removeDisk));
     renderVMDiskPicker(currentDialogVM());
   });
+  els.importDiskList.addEventListener("change", updateImportDiskActionState);
+  els.importDisks.addEventListener("click", importSelectedDisks);
+  els.refreshImportDisks.addEventListener("click", () => {
+    loadImportableDisks();
+  });
+  els.cancelImportDiskDialog.addEventListener("click", closeImportDisks);
+  els.closeImportDiskDialog.addEventListener("click", closeImportDisks);
+  els.importDiskDialog.addEventListener("click", (event) => {
+    if (event.target === els.importDiskDialog) {
+      closeImportDisks();
+    }
+  });
+  els.importDiskDialog.addEventListener("cancel", (event) => {
+    if (savingImport) {
+      event.preventDefault();
+    }
+  });
+  els.importDiskDialog.addEventListener("close", () => {
+    importingBackendID = null;
+    importDiskItems = [];
+  });
+
   els.refresh.addEventListener("click", () => {
     loadVMs().catch(() => {});
     loadDisks().catch(() => {});

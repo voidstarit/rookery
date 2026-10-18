@@ -752,6 +752,88 @@ tbody tr:hover {
   background: transparent;
 }
 
+#import-disk-dialog {
+  padding: 1.5rem;
+}
+
+#import-disk-error-banner {
+  margin-right: 0;
+  margin-left: 0;
+}
+
+.import-disk-lede {
+  margin: 0 0 0.85rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.import-disk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 48vh;
+  overflow: auto;
+}
+
+.import-disk-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.58rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--field);
+}
+
+.import-disk-row.imported {
+  opacity: 0.62;
+}
+
+.import-disk-row input[type="checkbox"] {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--accent-strong);
+}
+
+.import-disk-copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.import-disk-name {
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-disk-meta {
+  color: var(--faint);
+  font-size: 0.72rem;
+}
+
+.import-disk-badge {
+  flex: none;
+  padding: 0.18rem 0.4rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.import-disk-empty {
+  margin-top: 0.5rem;
+  padding: 1.75rem 1rem 1.5rem;
+}
+
 .empty {
   display: flex;
   flex-direction: column;

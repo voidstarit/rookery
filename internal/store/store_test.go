@@ -429,6 +429,48 @@ func TestDiskCrudAndAttachment(t *testing.T) {
 	}
 }
 
+func TestImportDisks(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+
+	backend, err := st.CreateStorageBackend(ctx, store.StorageBackend{
+		Name:   "import-pool",
+		Driver: "lvm-thin",
+		Config: store.StorageBackendConfig{VG: "vg0", ThinPool: "nerds-vms"},
+	})
+	if err != nil {
+		t.Fatalf("create backend: %v", err)
+	}
+
+	imported, err := st.ImportDisks(ctx, backend.ID, "vg0", "nerds-vms", []store.ImportDisk{
+		{Name: "old-root", SizeGB: 20},
+		{Name: "old-data", SizeGB: 5},
+	})
+	if err != nil {
+		t.Fatalf("import disks: %v", err)
+	}
+	if len(imported) != 2 {
+		t.Fatalf("imported = %+v, want two", imported)
+	}
+	if imported[0].Name != "old-root" || imported[0].SizeGB != 20 || imported[0].StorageBackendName != "import-pool" {
+		t.Fatalf("first imported disk = %+v", imported[0])
+	}
+	if imported[0].VG != "vg0" || imported[0].ThinPool != "nerds-vms" || imported[0].Device != "/dev/vg0/old-root" {
+		t.Fatalf("first imported location = %+v", imported[0])
+	}
+
+	_, err = st.ImportDisks(ctx, backend.ID, "vg0", "nerds-vms", []store.ImportDisk{
+		{Name: "new-disk", SizeGB: 10},
+		{Name: "OLD-ROOT", SizeGB: 20},
+	})
+	if !errors.Is(err, store.ErrDiskNameTaken) {
+		t.Fatalf("duplicate import error = %v, want ErrDiskNameTaken", err)
+	}
+	if _, err := st.GetDiskByName(ctx, "new-disk"); !errors.Is(err, store.ErrDiskNotFound) {
+		t.Fatalf("partial import left new-disk: %v", err)
+	}
+}
+
 func TestCreateDuplicateDiskName(t *testing.T) {
 	st := newTestStore(t)
 	createDisk(t, st, "web-01-root")
