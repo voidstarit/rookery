@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>VM console · nerds-vms</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/console.css">
+  <script type="module" src="/console.js"></script>
+</head>
+<body>
+  <header class="console-bar">
+    <div class="console-title">
+      <span class="brand-mark" aria-hidden="true">◈</span>
+      <span id="console-title">VM console</span>
+    </div>
+    <div class="console-actions">
+      <span id="console-status" class="console-status" data-state="pending" role="status">connecting…</span>
+      <button class="console-button" id="console-keyboard" type="button" aria-expanded="false" aria-controls="virtual-keyboard">Keyboard</button>
+      <button class="console-button" id="console-clipboard" type="button" disabled title="Paste text into the VM clipboard">Paste</button>
+      <button class="console-button" id="console-ctrl-alt-del" type="button" disabled>Ctrl+Alt+Del</button>
+      <button class="console-button" id="console-reset" type="button" disabled>Reset</button>
+      <button class="console-button" id="console-reconnect" type="button">Reconnect</button>
+      <a class="console-button" href="/">Back to inventory</a>
+    </div>
+  </header>
+
+  <main id="console-screen" class="console-screen" aria-label="Remote screen"></main>
+
+  <section id="virtual-keyboard" class="virtual-keyboard" aria-label="Virtual keyboard" hidden></section>
+
+  <p id="console-error" class="console-error" role="alert" hidden></p>
+
+  <dialog id="clipboard-dialog" class="clipboard-dialog" aria-labelledby="clipboard-title">
+    <form class="clipboard-form" id="clipboard-form">
+      <header class="clipboard-head">
+        <div>
+          <p class="clipboard-eyebrow">Clipboard</p>
+          <h2 id="clipboard-title">Paste to VM</h2>
+        </div>
+        <button class="clipboard-close" id="clipboard-close" type="button" aria-label="Close clipboard dialog">×</button>
+      </header>
+      <p class="clipboard-hint">
+        <strong>Type into VM</strong> sends the text as US keyboard input, which works
+        without guest tools. <strong>Set clipboard</strong> uses VNC's clipboard and
+        needs a guest clipboard agent such as <code>spice-vdagent</code>. Browser
+        clipboard access may need permission; you can always paste manually below.
+      </p>
+      <label class="clipboard-field">
+        <span>Text</span>
+        <textarea id="clipboard-text" rows="8" spellcheck="false" autocomplete="off"
+                  autocapitalize="off" autocorrect="off"
+                  placeholder="Paste here with Ctrl+V or Cmd+V"></textarea>
+      </label>
+      <p id="clipboard-error" class="clipboard-error" role="alert" hidden></p>
+      <footer class="clipboard-actions">
+        <button class="console-button" id="clipboard-read" type="button">Read clipboard</button>
+        <button class="console-button" id="clipboard-cancel" type="button">Cancel</button>
+        <button class="console-button" id="clipboard-set" type="button" disabled>Set clipboard</button>
+        <button class="console-button clipboard-send" id="clipboard-send" type="button" disabled>Type into VM</button>
+      </footer>
+    </form>
+  </dialog>
+</body>
+</html>

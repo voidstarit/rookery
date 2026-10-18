@@ -1,0 +1,13 @@
+CREATE TABLE acls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    title TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    rules TEXT NOT NULL DEFAULT '[]',
+    vpp_index INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+ALTER TABLE virtual_interfaces ADD COLUMN ingress_acl_id INTEGER REFERENCES acls(id) ON DELETE SET NULL;
+ALTER TABLE virtual_interfaces ADD COLUMN egress_acl_id INTEGER REFERENCES acls(id) ON DELETE SET NULL;

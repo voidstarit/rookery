@@ -1,0 +1,1110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>nerds-vms</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true">◈</span>
+      <span>nerds<span class="brand-slash">/</span>vms</span>
+    </a>
+    <div class="topbar-meta">
+      <span id="vm-count" class="vm-count">0 VMs</span>
+      <span id="api-status" class="api-status" data-state="pending">
+        <span class="api-dot" aria-hidden="true"></span>
+        <span id="api-status-label">connecting</span>
+      </span>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow" id="hero-eyebrow">Thin-LVM inventory</p>
+        <h1 id="hero-title">Virtual machines</h1>
+        <p class="lede" id="hero-lede">
+          Keep track of the instances on this host. Resources are metadata for now;
+          disk and network automation comes next.
+        </p>
+      </div>
+      <div class="hero-actions-wrap">
+        <div class="hero-actions">
+          <button class="button primary" id="new-vm" type="button" disabled>
+            <span class="button-plus" aria-hidden="true">+</span>
+            New VM
+          </button>
+          <button class="button primary" id="new-disk" type="button" disabled hidden>
+            <span class="button-plus" aria-hidden="true">+</span>
+            New disk
+          </button>
+          <button class="button primary" id="new-media" type="button" hidden>
+            <span class="button-plus" aria-hidden="true">+</span>
+            Add media
+          </button>
+          <button class="button primary" id="new-network" type="button" disabled hidden>
+            <span class="button-plus" aria-hidden="true">+</span>
+            New network
+          </button>
+        </div>
+        <p class="hero-hint" id="new-vm-hint" hidden></p>
+      </div>
+    </section>
+
+    <section class="readiness" aria-labelledby="readiness-heading">
+      <div class="readiness-head">
+        <div>
+          <p class="eyebrow">Prerequisites</p>
+          <h2 id="readiness-heading">Readiness</h2>
+        </div>
+        <span class="readiness-summary" id="readiness-summary" data-state="checking" role="status">checking</span>
+      </div>
+
+      <div class="readiness-grid">
+        <article class="readiness-card" id="thin-pool-card" data-state="checking">
+          <div class="readiness-card-top">
+            <span class="readiness-label">LVM thin pool</span>
+            <span class="readiness-state" id="thin-pool-state">checking</span>
+          </div>
+          <p class="readiness-target" id="thin-pool-target">…</p>
+          <p class="readiness-detail" id="thin-pool-detail">Checking LVM…</p>
+        </article>
+
+        <article class="readiness-card" id="vpp-card" data-state="checking">
+          <div class="readiness-card-top">
+            <span class="readiness-label">FD.io VPP</span>
+            <span class="readiness-state" id="vpp-state">checking</span>
+          </div>
+          <p class="readiness-target" id="vpp-target">…</p>
+          <p class="readiness-detail" id="vpp-detail">Checking the binary API socket…</p>
+        </article>
+      </div>
+    </section>
+
+    <nav class="tabs" role="tablist" aria-label="Resources">
+      <button class="tab" id="tab-vms" type="button" role="tab" aria-selected="true" aria-controls="vms-panel">
+        Virtual machines
+        <span class="tab-count" id="vm-tab-count">0</span>
+      </button>
+      <button class="tab" id="tab-disks" type="button" role="tab" aria-selected="false" aria-controls="disks-panel" tabindex="-1">
+        Disks
+        <span class="tab-count" id="disk-tab-count">0</span>
+      </button>
+      <button class="tab" id="tab-media" type="button" role="tab" aria-selected="false" aria-controls="media-panel" tabindex="-1">
+        Installation media
+        <span class="tab-count" id="media-tab-count">0</span>
+      </button>
+      <button class="tab" id="tab-networks" type="button" role="tab" aria-selected="false" aria-controls="networks-panel" tabindex="-1">
+        Nerd's Networks
+        <span class="tab-count" id="network-tab-count">0</span>
+      </button>
+      <button class="tab" id="tab-vnfs" type="button" role="tab" aria-selected="false" aria-controls="vnfs-panel" tabindex="-1">
+        VNFs
+        <span class="tab-count" id="vnf-tab-count">0</span>
+      </button>
+    </nav>
+
+    <section class="tab-panel" id="vms-panel" role="tabpanel" aria-labelledby="tab-vms" tabindex="0">
+      <section class="panel" aria-labelledby="inventory-heading">
+        <div class="panel-head">
+          <div>
+            <h2 id="inventory-heading">Inventory</h2>
+            <p id="inventory-summary" class="panel-subtitle">Loading instances…</p>
+          </div>
+          <button class="button ghost" id="refresh" type="button">Refresh</button>
+        </div>
+
+        <div class="banner" id="error-banner" role="alert" hidden></div>
+
+        <div class="table-wrap">
+          <table id="vm-table">
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Status</th>
+                <th scope="col">vCPU</th>
+                <th scope="col">Memory</th>
+                <th scope="col">Disks</th>
+                <th scope="col">Boot</th>
+                <th scope="col">Console</th>
+                <th scope="col">Network</th>
+                <th scope="col" class="hide-sm">Updated</th>
+                <th scope="col"><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="vm-rows"></tbody>
+          </table>
+
+          <div class="empty" id="empty-state" hidden>
+            <div class="empty-mark" aria-hidden="true">⬡</div>
+            <h3>No virtual machines yet</h3>
+            <p>Create the first instance to start building out this host.</p>
+            <button class="button primary" id="empty-create" type="button" disabled>Create a VM</button>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="disks-panel" role="tabpanel" aria-labelledby="tab-disks" tabindex="0" hidden>
+      <section class="panel" aria-labelledby="storage-backends-heading">
+        <div class="panel-head">
+          <div>
+            <h2 id="storage-backends-heading">Storage backends</h2>
+            <p id="storage-backend-summary" class="panel-subtitle">Loading storage backends…</p>
+          </div>
+          <div class="actions">
+            <button class="button ghost" id="refresh-storage-backends" type="button">Refresh</button>
+            <button class="button primary" id="new-storage-backend" type="button">
+              <span class="button-plus" aria-hidden="true">+</span>
+              Add backend
+            </button>
+          </div>
+        </div>
+
+        <div class="banner" id="storage-backend-error-banner" role="alert" hidden></div>
+
+        <div class="table-wrap">
+          <table id="storage-backend-table">
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Driver</th>
+                <th scope="col">Location</th>
+                <th scope="col">Disks</th>
+                <th scope="col" class="hide-sm">Updated</th>
+                <th scope="col"><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="storage-backend-rows"></tbody>
+          </table>
+
+          <div class="empty" id="storage-backend-empty-state" hidden>
+            <div class="empty-mark" aria-hidden="true">▤</div>
+            <h3>No storage backends yet</h3>
+            <p>Register an LVM thin pool before creating disks.</p>
+            <button class="button primary" id="empty-create-storage-backend" type="button">Add a storage backend</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel panel-spaced" aria-labelledby="disks-heading">
+        <div class="panel-head">
+          <div>
+            <h2 id="disks-heading">Disks</h2>
+            <p id="disk-summary" class="panel-subtitle">Loading disks…</p>
+          </div>
+          <button class="button ghost" id="refresh-disks" type="button">Refresh</button>
+        </div>
+
+        <div class="banner" id="disk-error-banner" role="alert" hidden></div>
+
+        <div class="table-wrap">
+          <table id="disk-table">
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Size</th>
+                <th scope="col">Backend</th>
+                <th scope="col">Attached to</th>
+                <th scope="col" class="hide-sm">Updated</th>
+                <th scope="col"><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="disk-rows"></tbody>
+          </table>
+
+          <div class="empty" id="disk-empty-state" hidden>
+            <div class="empty-mark" aria-hidden="true">▣</div>
+            <h3>No disks yet</h3>
+            <p>Create a disk here first, then attach it to a VM from the VM form.</p>
+            <button class="button primary" id="empty-create-disk" type="button" disabled>Create a disk</button>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="media-panel" role="tabpanel" aria-labelledby="tab-media" tabindex="0" hidden>
+      <section class="panel" aria-labelledby="media-heading">
+        <div class="panel-head">
+          <div>
+            <h2 id="media-heading">Installation media</h2>
+            <p id="media-summary" class="panel-subtitle">Loading media…</p>
+          </div>
+          <button class="button ghost" id="refresh-media" type="button">Refresh</button>
+        </div>
+
+        <div class="banner" id="media-error-banner" role="alert" hidden></div>
+
+        <div class="table-wrap">
+          <table id="media-table">
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Size</th>
+                <th scope="col">Used as boot media</th>
+                <th scope="col" class="hide-sm">Updated</th>
+                <th scope="col"><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="media-rows"></tbody>
+          </table>
+
+          <div class="empty" id="media-empty-state" hidden>
+            <div class="empty-mark" aria-hidden="true">◎</div>
+            <h3>No installation media yet</h3>
+            <p>Register a read-only ISO file from the host, then choose it as a VM's boot media.</p>
+            <button class="button primary" id="empty-create-media" type="button">Add media</button>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="networks-panel" role="tabpanel" aria-labelledby="tab-networks" tabindex="0" hidden>
+      <section class="panel" aria-labelledby="networks-heading">
+        <div class="panel-head">
+          <div>
+            <h2 id="networks-heading">Nerd's Networks</h2>
+            <p id="network-summary" class="panel-subtitle">Loading networks…</p>
+          </div>
+          <button class="button ghost" id="refresh-networks" type="button">Refresh</button>
+        </div>
+
+        <div class="banner" id="network-error-banner" role="alert" hidden></div>
+
+        <div class="table-wrap">
+          <table id="network-table">
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Bridge domain</th>
+                <th scope="col">Interfaces</th>
+                <th scope="col">VNFs</th>
+                <th scope="col" class="hide-sm">Updated</th>
+                <th scope="col"><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="network-rows"></tbody>
+          </table>
+
+          <div class="empty" id="network-empty-state" hidden>
+            <div class="empty-mark" aria-hidden="true">⬢</div>
+            <h3>No Nerd's Networks yet</h3>
+            <p>Create a VPP bridge domain to connect virtual interfaces and VMs.</p>
+            <button class="button primary" id="empty-create-network" type="button" disabled>Create a network</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel panel-spaced" aria-labelledby="interfaces-heading">
+        <div class="panel-head">
+          <div>
+            <h2 id="interfaces-heading">Nerd Virtual Interfaces</h2>
+            <p id="interface-summary" class="panel-subtitle">Loading interfaces…</p>
+          </div>
+          <button class="button primary" id="new-interface" type="button" disabled>
+            <span class="button-plus" aria-hidden="true">+</span>
+            Add interface
+          </button>
+        </div>
+
+        <div class="banner" id="interface-error-banner" role="alert" hidden></div>
+
+        <div class="table-wrap">
+          <table id="interface-table">
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Network</th>
+                <th scope="col">MAC</th>
+                <th scope="col">Attached VM</th>
+                <th scope="col">ACLs</th>
+                <th scope="col" class="hide-sm">Updated</th>
+                <th scope="col"><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="interface-rows"></tbody>
+          </table>
+
+          <div class="empty" id="interface-empty-state" hidden>
+            <div class="empty-mark" aria-hidden="true">⇄</div>
+            <h3>No virtual interfaces yet</h3>
+            <p>Add a VPP vhost-user interface to a Nerd's Network, then attach it to a VM.</p>
+          </div>
+        </div>
+      </section>
+      <section class="panel panel-spaced" aria-labelledby="acls-heading">
+        <div class="panel-head">
+          <div>
+            <h2 id="acls-heading">Network ACLs</h2>
+            <p id="acl-summary" class="panel-subtitle">Loading ACLs…</p>
+          </div>
+          <div class="actions">
+            <button class="button ghost" id="refresh-acls" type="button">Refresh</button>
+            <button class="button primary" id="new-acl" type="button" disabled>
+              <span class="button-plus" aria-hidden="true">+</span>
+              Add ACL
+            </button>
+          </div>
+        </div>
+
+        <div class="banner" id="acl-error-banner" role="alert" hidden></div>
+
+        <div class="table-wrap">
+          <table id="acl-table">
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Title</th>
+                <th scope="col">Rules</th>
+                <th scope="col">Assigned to</th>
+                <th scope="col" class="hide-sm">Updated</th>
+                <th scope="col"><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="acl-rows"></tbody>
+          </table>
+
+          <div class="empty" id="acl-empty-state" hidden>
+            <div class="empty-mark" aria-hidden="true">▤</div>
+            <h3>No ACLs yet</h3>
+            <p>Define ordered ingress/egress rules, then assign an ACL to a virtual interface.</p>
+            <button class="button primary" id="empty-create-acl" type="button" disabled>Add an ACL</button>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="vnfs-panel" role="tabpanel" aria-labelledby="tab-vnfs" tabindex="0" hidden>
+      <section class="panel" aria-labelledby="vnfs-heading">
+        <div class="panel-head">
+          <div>
+            <h2 id="vnfs-heading">Network functions</h2>
+            <p id="vnf-summary" class="panel-subtitle">Loading VNFs…</p>
+          </div>
+          <div class="actions">
+            <button class="button ghost" id="refresh-vnfs" type="button">Refresh</button>
+            <button class="button primary" id="new-vnf" type="button" disabled>
+              <span class="button-plus" aria-hidden="true">+</span>
+              Add VNF
+            </button>
+          </div>
+        </div>
+
+        <div class="banner" id="vnf-error-banner" role="alert" hidden></div>
+
+        <div class="table-wrap">
+          <table id="vnf-table">
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Type</th>
+                <th scope="col">Network</th>
+                <th scope="col">Status</th>
+                <th scope="col">Active leases</th>
+                <th scope="col" class="hide-sm">Updated</th>
+                <th scope="col"><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="vnf-rows"></tbody>
+          </table>
+
+          <div class="empty" id="vnf-empty-state" hidden>
+            <div class="empty-mark" aria-hidden="true">◈</div>
+            <h3>No network functions yet</h3>
+            <p>Add a DHCPv4 or DHCPv6 function and attach it to a Nerd's Network.</p>
+            <button class="button primary" id="empty-create-vnf" type="button" disabled>Add a VNF</button>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <dialog id="vm-dialog" aria-labelledby="dialog-title">
+    <form id="vm-form" novalidate>
+      <header class="dialog-head">
+        <div>
+          <p class="eyebrow" id="dialog-eyebrow">New instance</p>
+          <h2 id="dialog-title">Create VM</h2>
+        </div>
+        <button class="icon-button" id="close-dialog" type="button" aria-label="Close dialog">×</button>
+      </header>
+
+      <input type="hidden" id="vm-id">
+
+      <div class="form-grid">
+        <label class="field field-wide">
+          <span class="field-label">Name</span>
+          <input id="vm-name" name="name" type="text" required maxlength="64"
+                 pattern="[A-Za-z0-9][A-Za-z0-9._-]*" autocomplete="off" spellcheck="false"
+                 placeholder="web-01">
+          <span class="field-hint">Letters, digits, dots, dashes and underscores.</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Status</span>
+          <select id="vm-status" name="status" disabled>
+            <option value="stopped">Stopped</option>
+            <option value="starting">Starting</option>
+            <option value="running">Running</option>
+            <option value="stopping">Stopping</option>
+            <option value="paused">Paused</option>
+            <option value="error">Error</option>
+          </select>
+          <span class="field-hint">Managed by Start/Stop on the inventory table.</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">vCPUs</span>
+          <input id="vm-vcpus" name="vcpus" type="number" required min="1" max="128" step="1" value="1">
+        </label>
+
+        <label class="field">
+          <span class="field-label">Memory (MB)</span>
+          <input id="vm-memory" name="memory_mb" type="number" required min="128" max="1048576" step="128" value="512">
+        </label>
+
+        <div class="field field-wide">
+          <span class="field-label">Disks</span>
+          <div class="interface-picker">
+            <select id="vm-disk">
+              <option value="">Select a disk…</option>
+            </select>
+            <button class="button ghost" id="vm-disk-add" type="button">Add</button>
+          </div>
+          <ul class="interface-list" id="vm-disk-list"></ul>
+          <span class="field-hint" id="vm-disk-hint">Choose a disk and click Add. The first disk is the boot disk.</span>
+        </div>
+
+        <label class="field field-wide">
+          <span class="field-label">Boot media <em>optional</em></span>
+          <select id="vm-boot-media" name="boot_media_id">
+            <option value="">Boot from disk</option>
+          </select>
+          <span class="field-hint">Read-only ISO from the Installation media tab. You can change this later.</span>
+        </label>
+
+        <label class="field field-wide checkbox-field">
+          <span class="field-label">Console access</span>
+          <span class="checkbox-row">
+            <input id="vm-console-enabled" name="console_enabled" type="checkbox">
+            <span>Allow end users to open this VM's console</span>
+          </span>
+          <span class="field-hint">When disabled, the console page and VNC WebSocket are blocked.</span>
+        </label>
+
+        <div class="field field-wide" id="vm-interfaces-field">
+          <span class="field-label">Network interfaces <em>optional</em></span>
+          <div class="interface-picker">
+            <select id="vm-interface-select">
+              <option value="">Select an interface…</option>
+            </select>
+            <button class="button ghost" id="vm-interface-add" type="button">Add</button>
+          </div>
+          <ul class="interface-list" id="vm-interface-list"></ul>
+          <span class="field-hint" id="vm-interfaces-hint">Choose an interface and click Add. You can remove interfaces from the list below.</span>
+        </div>
+
+        <label class="field field-wide">
+          <span class="field-label">Description <em>optional</em></span>
+          <textarea id="vm-description" name="description" rows="3" maxlength="2000"
+                    placeholder="What is this instance for?"></textarea>
+        </label>
+      </div>
+
+      <p class="form-error" id="form-error" role="alert" hidden></p>
+
+      <footer class="dialog-actions">
+        <button class="button ghost" id="cancel-dialog" type="button">Cancel</button>
+        <button class="button primary" id="save-vm" type="submit">Create VM</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="vm-monitor-dialog" aria-labelledby="vm-monitor-title">
+    <header class="dialog-head">
+      <div>
+        <p class="eyebrow">Live telemetry</p>
+        <h2 id="vm-monitor-title">VM monitor</h2>
+      </div>
+      <button class="icon-button" id="close-vm-monitor-dialog" type="button" aria-label="Close monitor">×</button>
+    </header>
+
+    <p class="dialog-lede" id="vm-monitor-lede">QEMU process metrics</p>
+    <div class="banner" id="vm-monitor-error" role="alert" hidden></div>
+
+    <div class="monitor-grid">
+      <section class="monitor-card">
+        <span class="metric-label">Process</span>
+        <strong class="metric-value" id="vm-monitor-status">—</strong>
+        <span class="metric-detail" id="vm-monitor-pid">PID —</span>
+      </section>
+      <section class="monitor-card">
+        <span class="metric-label">CPU</span>
+        <strong class="metric-value" id="vm-monitor-cpu">—</strong>
+        <span class="metric-detail" id="vm-monitor-vcpus">—</span>
+      </section>
+      <section class="monitor-card">
+        <span class="metric-label">Memory</span>
+        <strong class="metric-value" id="vm-monitor-memory">—</strong>
+        <span class="metric-detail" id="vm-monitor-memory-detail">—</span>
+      </section>
+      <section class="monitor-card">
+        <span class="metric-label">Disk read</span>
+        <strong class="metric-value" id="vm-monitor-read">—</strong>
+        <span class="metric-detail" id="vm-monitor-read-total">—</span>
+      </section>
+      <section class="monitor-card">
+        <span class="metric-label">Disk write</span>
+        <strong class="metric-value" id="vm-monitor-write">—</strong>
+        <span class="metric-detail" id="vm-monitor-write-total">—</span>
+      </section>
+      <section class="monitor-card">
+        <span class="metric-label">Network I/O</span>
+        <strong class="metric-value" id="vm-monitor-network">—</strong>
+        <span class="metric-detail" id="vm-monitor-network-detail">—</span>
+      </section>
+      <section class="monitor-card">
+        <span class="metric-label">Uptime</span>
+        <strong class="metric-value" id="vm-monitor-uptime">—</strong>
+        <span class="metric-detail">since QEMU started</span>
+      </section>
+    </div>
+
+    <div class="monitor-charts">
+      <section class="chart-card">
+        <div class="chart-head">
+          <span>CPU history</span>
+          <span class="chart-note">last 60 samples</span>
+        </div>
+        <canvas id="vm-monitor-cpu-chart" class="metric-chart" role="img" aria-label="CPU usage history"></canvas>
+      </section>
+      <section class="chart-card">
+        <div class="chart-head">
+          <span>Memory RSS</span>
+          <span class="chart-note">last 60 samples</span>
+        </div>
+        <canvas id="vm-monitor-memory-chart" class="metric-chart" role="img" aria-label="Memory RSS history"></canvas>
+      </section>
+      <section class="chart-card">
+        <div class="chart-head">
+          <span>Disk I/O</span>
+          <span class="chart-legend"><i class="legend-read"></i>read <i class="legend-write"></i>write</span>
+        </div>
+        <canvas id="vm-monitor-io-chart" class="metric-chart" role="img" aria-label="Disk read and write history"></canvas>
+      </section>
+      <section class="chart-card">
+        <div class="chart-head">
+          <span>Network I/O</span>
+          <span class="chart-legend"><i class="legend-net-rx"></i>RX <i class="legend-net-tx"></i>TX</span>
+        </div>
+        <canvas id="vm-monitor-network-chart" class="metric-chart" role="img" aria-label="Network receive and transmit history"></canvas>
+      </section>
+    </div>
+
+    <p class="field-hint" id="vm-monitor-sampled">Waiting for the first sample…</p>
+
+    <footer class="dialog-actions">
+      <button class="button ghost" id="refresh-vm-monitor" type="button">Refresh</button>
+      <button class="button primary" id="close-vm-monitor" type="button">Close</button>
+    </footer>
+  </dialog>
+
+  <dialog id="acl-dialog" aria-labelledby="acl-dialog-title">
+    <form id="acl-form" novalidate>
+      <header class="dialog-head">
+        <div>
+          <p class="eyebrow" id="acl-dialog-eyebrow">New ACL</p>
+          <h2 id="acl-dialog-title">Define ACL</h2>
+        </div>
+        <button class="icon-button" id="close-acl-dialog" type="button" aria-label="Close dialog">×</button>
+      </header>
+
+      <input type="hidden" id="acl-id">
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">Name</span>
+          <input id="acl-name" type="text" required maxlength="64"
+                 pattern="[A-Za-z0-9][A-Za-z0-9._-]*" autocomplete="off" spellcheck="false"
+                 placeholder="web-ingress">
+          <span class="field-hint">Used when assigning the ACL to an interface.</span>
+        </label>
+        <label class="field">
+          <span class="field-label">Title</span>
+          <input id="acl-title" type="text" maxlength="128" autocomplete="off" placeholder="Web server ingress">
+        </label>
+        <label class="field field-wide">
+          <span class="field-label">Description <em>optional</em></span>
+          <textarea id="acl-description" rows="2" maxlength="2000" placeholder="What this ACL protects"></textarea>
+        </label>
+      </div>
+
+      <div class="form-grid">
+        <div class="field field-wide">
+          <div class="panel-head acl-rules-head">
+            <div>
+              <span class="field-label">Ordered rules</span>
+              <span class="field-hint">First match wins. Traffic that matches no rule is denied.</span>
+            </div>
+            <button class="button ghost" id="add-acl-rule" type="button">Add rule</button>
+          </div>
+          <div id="acl-rule-rows" class="acl-rule-rows"></div>
+        </div>
+      </div>
+
+      <label class="field field-wide">
+        <span class="field-label">Full ACL preview</span>
+        <pre id="acl-preview" class="acl-preview">Add at least one rule.</pre>
+      </label>
+
+      <p class="form-error" id="acl-form-error" role="alert" hidden></p>
+      <footer class="dialog-actions">
+        <button class="button ghost" id="cancel-acl-dialog" type="button">Cancel</button>
+        <button class="button primary" id="save-acl" type="submit">Save ACL</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="interface-acl-dialog" aria-labelledby="interface-acl-title">
+    <form id="interface-acl-form" novalidate>
+      <header class="dialog-head">
+        <div>
+          <p class="eyebrow">Interface policy</p>
+          <h2 id="interface-acl-title">Assign ACLs</h2>
+        </div>
+        <button class="icon-button" id="close-interface-acl-dialog" type="button" aria-label="Close dialog">×</button>
+      </header>
+
+      <p id="interface-acl-lede" class="dialog-lede">Virtual interface</p>
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">From interface</span>
+          <select id="interface-ingress-acl"></select>
+          <span class="field-hint">Traffic coming from this VM interface into VPP.</span>
+        </label>
+        <label class="field">
+          <span class="field-label">To interface</span>
+          <select id="interface-egress-acl"></select>
+          <span class="field-hint">Traffic going from VPP to this VM interface.</span>
+        </label>
+      </div>
+      <label class="field field-wide">
+        <span class="field-label">Effective ACL preview</span>
+        <pre id="interface-acl-preview" class="acl-preview">No ACLs selected.</pre>
+      </label>
+      <p class="form-error" id="interface-acl-form-error" role="alert" hidden></p>
+      <footer class="dialog-actions">
+        <button class="button ghost" id="cancel-interface-acl" type="button">Cancel</button>
+        <button class="button primary" id="save-interface-acl" type="submit">Apply ACLs</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="storage-backend-dialog" aria-labelledby="storage-backend-dialog-title">
+    <form id="storage-backend-form" novalidate>
+      <header class="dialog-head">
+        <div>
+          <p class="eyebrow" id="storage-backend-dialog-eyebrow">New backend</p>
+          <h2 id="storage-backend-dialog-title">Register storage backend</h2>
+        </div>
+        <button class="icon-button" id="close-storage-backend-dialog" type="button" aria-label="Close dialog">×</button>
+      </header>
+
+      <input type="hidden" id="storage-backend-id">
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">Name</span>
+          <input id="storage-backend-name" type="text" required maxlength="64"
+                 pattern="[A-Za-z0-9][A-Za-z0-9._-]*" autocomplete="off" spellcheck="false"
+                 placeholder="fast-pool">
+          <span class="field-hint">Used when creating disks.</span>
+        </label>
+        <label class="field">
+          <span class="field-label">Title</span>
+          <input id="storage-backend-title" type="text" maxlength="128" autocomplete="off" placeholder="Fast NVMe thin pool">
+        </label>
+        <label class="field field-wide">
+          <span class="field-label">Description <em>optional</em></span>
+          <textarea id="storage-backend-description" rows="2" maxlength="2000" placeholder="What this backend is for"></textarea>
+        </label>
+        <label class="field">
+          <span class="field-label">Driver</span>
+          <select id="storage-backend-driver" required>
+            <option value="lvm-thin">LVM thin pool</option>
+          </select>
+          <span class="field-hint">Additional drivers can be added later.</span>
+        </label>
+        <label class="field">
+          <span class="field-label">Volume group</span>
+          <input id="storage-backend-vg" type="text" required autocomplete="off" spellcheck="false" placeholder="vg0">
+        </label>
+        <label class="field">
+          <span class="field-label">Thin pool</span>
+          <input id="storage-backend-pool" type="text" required autocomplete="off" spellcheck="false" placeholder="nerds-vms">
+        </label>
+      </div>
+
+      <p class="form-error" id="storage-backend-form-error" role="alert" hidden></p>
+      <footer class="dialog-actions">
+        <button class="button ghost" id="cancel-storage-backend-dialog" type="button">Cancel</button>
+        <button class="button primary" id="save-storage-backend" type="submit">Save backend</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="disk-dialog" aria-labelledby="disk-dialog-title">
+    <form id="disk-form" novalidate>
+      <header class="dialog-head">
+        <div>
+          <p class="eyebrow" id="disk-dialog-eyebrow">New disk</p>
+          <h2 id="disk-dialog-title">Create disk</h2>
+        </div>
+        <button class="icon-button" id="close-disk-dialog" type="button" aria-label="Close dialog">×</button>
+      </header>
+
+      <div class="form-grid">
+        <label class="field field-wide">
+          <span class="field-label">Name</span>
+          <input id="disk-name" name="name" type="text" required maxlength="127"
+                 pattern="[A-Za-z0-9][A-Za-z0-9._-]*" autocomplete="off" spellcheck="false"
+                 placeholder="vm01-root">
+          <span class="field-hint">Letters, digits, dots, dashes and underscores.</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Size (GB)</span>
+          <input id="disk-size" name="size_gb" type="number" required min="1" max="65536" step="1" value="10">
+          <span class="field-hint">Creates an LVM thin volume of this size in the configured pool.</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Storage backend</span>
+          <select id="disk-backend" name="storage_backend_id" required></select>
+          <span class="field-hint">The thin pool or storage driver that will hold this disk.</span>
+        </label>
+      </div>
+
+      <p class="form-error" id="disk-form-error" role="alert" hidden></p>
+
+      <footer class="dialog-actions">
+        <button class="button ghost" id="cancel-disk-dialog" type="button">Cancel</button>
+        <button class="button primary" id="save-disk" type="submit">Create disk</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="media-dialog" aria-labelledby="media-dialog-title">
+    <form id="media-form" novalidate>
+      <header class="dialog-head">
+        <div>
+          <p class="eyebrow" id="media-dialog-eyebrow">New media</p>
+          <h2 id="media-dialog-title">Add installation media</h2>
+        </div>
+        <button class="icon-button" id="close-media-dialog" type="button" aria-label="Close dialog">×</button>
+      </header>
+
+      <div class="form-grid">
+        <label class="field field-wide">
+          <span class="field-label">Name</span>
+          <input id="media-name" name="name" type="text" required maxlength="127"
+                 pattern="[A-Za-z0-9][A-Za-z0-9._-]*" autocomplete="off" spellcheck="false"
+                 placeholder="debian-13-netinst">
+          <span class="field-hint">A short label for the media.</span>
+        </label>
+
+        <label class="field field-wide">
+          <span class="field-label">ISO path</span>
+          <input id="media-path" name="path" type="text" required autocomplete="off" spellcheck="false"
+                 placeholder="/srv/isos/debian-13.1.0-amd64-netinst.iso">
+          <span class="field-hint">Absolute path to an existing read-only file on the host. The file is never modified.</span>
+        </label>
+      </div>
+
+      <p class="form-error" id="media-form-error" role="alert" hidden></p>
+
+      <footer class="dialog-actions">
+        <button class="button ghost" id="cancel-media-dialog" type="button">Cancel</button>
+        <button class="button primary" id="save-media" type="submit">Add media</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="network-dialog" aria-labelledby="network-dialog-title">
+    <form id="network-form" novalidate>
+      <header class="dialog-head">
+        <div>
+          <p class="eyebrow">VPP bridge domain</p>
+          <h2 id="network-dialog-title">Create Nerd's Network</h2>
+        </div>
+        <button class="icon-button" id="close-network-dialog" type="button" aria-label="Close dialog">×</button>
+      </header>
+
+      <div class="form-grid">
+        <label class="field field-wide">
+          <span class="field-label">Name</span>
+          <input id="network-name" name="name" type="text" required maxlength="64"
+                 pattern="[A-Za-z0-9][A-Za-z0-9._-]*" autocomplete="off" spellcheck="false"
+                 placeholder="lab-network">
+          <span class="field-hint">A VPP bridge domain is created with an automatically assigned ID.</span>
+        </label>
+      </div>
+
+      <p class="form-error" id="network-form-error" role="alert" hidden></p>
+
+      <footer class="dialog-actions">
+        <button class="button ghost" id="cancel-network-dialog" type="button">Cancel</button>
+        <button class="button primary" id="save-network" type="submit">Create network</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="vnf-dialog" aria-labelledby="vnf-dialog-title">
+    <form id="vnf-form" novalidate>
+      <header class="dialog-head">
+        <div>
+          <p class="eyebrow">Network function</p>
+          <h2 id="vnf-dialog-title">Add VNF</h2>
+        </div>
+        <button class="icon-button" id="close-vnf-dialog" type="button" aria-label="Close dialog">×</button>
+      </header>
+
+      <input type="hidden" id="vnf-id">
+
+      <div class="form-grid">
+        <label class="field field-wide">
+          <span class="field-label">Name</span>
+          <input id="vnf-name" type="text" required maxlength="64"
+                 pattern="[A-Za-z0-9][A-Za-z0-9._-]*" autocomplete="off" spellcheck="false"
+                 placeholder="lab-dhcpv4">
+          <span class="field-hint">Letters, digits, dots, dashes and underscores.</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Network</span>
+          <select id="vnf-network" required></select>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Type</span>
+          <select id="vnf-type" required>
+            <option value="dhcpv4">DHCPv4</option>
+            <option value="dhcpv6">DHCPv6</option>
+            <option value="nat44">NAT44</option>
+          </select>
+          <span class="field-hint" id="vnf-type-hint">IPv4 address pool served on a VPP tap.</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Gateway CIDR</span>
+          <input id="vnf-gateway" type="text" required placeholder="10.20.0.1/24" autocomplete="off" spellcheck="false">
+        </label>
+      </div>
+
+      <div class="form-grid" id="vnf-dhcp-fields">
+        <label class="field">
+          <span class="field-label">DNS servers <em>optional</em></span>
+          <input id="vnf-dns" type="text" placeholder="1.1.1.1,8.8.8.8" autocomplete="off" spellcheck="false">
+        </label>
+
+        <label class="field">
+          <span class="field-label">Range start</span>
+          <input id="vnf-range-start" type="text" required placeholder="10.20.0.100" autocomplete="off" spellcheck="false">
+        </label>
+
+        <label class="field">
+          <span class="field-label">Range end</span>
+          <input id="vnf-range-end" type="text" required placeholder="10.20.0.200" autocomplete="off" spellcheck="false">
+        </label>
+
+        <label class="field">
+          <span class="field-label">Lease time</span>
+          <input id="vnf-lease-time" type="text" placeholder="12h" autocomplete="off" spellcheck="false">
+        </label>
+      </div>
+
+      <div class="form-grid" id="vnf-nat44-fields" hidden>
+        <label class="field">
+          <span class="field-label">Outside NIC</span>
+          <select id="vnf-outside-interface" required></select>
+          <span class="field-hint" id="vnf-outside-hint">The selected NIC will be taken over by VPP; its host addresses are flushed.</span>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Outside address <em>optional</em></span>
+          <input id="vnf-outside-address" type="text" placeholder="empty = VPP DHCP client" autocomplete="off" spellcheck="false">
+        </label>
+
+        <label class="field">
+          <span class="field-label">Outside gateway <em>optional</em></span>
+          <input id="vnf-outside-gateway" type="text" placeholder="198.51.100.1" autocomplete="off" spellcheck="false">
+        </label>
+
+        <label class="field">
+          <span class="field-label">NAT44 pool <em>optional</em></span>
+          <input id="vnf-nat44-pool" type="text" placeholder="203.0.113.10-203.0.113.20" autocomplete="off" spellcheck="false">
+        </label>
+      </div>
+
+      <label class="field field-wide checkbox-field">
+        <span class="checkbox-row">
+          <input id="vnf-enabled" type="checkbox">
+          <span>Enable this VNF</span>
+        </span>
+        <span class="field-hint" id="vnf-enabled-hint">Creates a VPP tap and starts the function immediately.</span>
+      </label>
+
+      <p class="form-error" id="vnf-form-error" role="alert" hidden></p>
+
+      <footer class="dialog-actions">
+        <button class="button ghost" id="cancel-vnf-dialog" type="button">Cancel</button>
+        <button class="button primary" id="save-vnf" type="submit">Add VNF</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="vnf-leases-dialog" aria-labelledby="vnf-leases-title">
+    <header class="dialog-head">
+      <div>
+        <p class="eyebrow">Lease monitor</p>
+        <h2 id="vnf-leases-title">VNF leases</h2>
+      </div>
+      <button class="icon-button" id="close-vnf-leases-dialog" type="button" aria-label="Close dialog">×</button>
+    </header>
+
+    <p id="vnf-leases-lede" class="dialog-lede">Network function</p>
+    <div class="banner" id="vnf-leases-error" role="alert" hidden></div>
+
+    <div class="table-wrap">
+      <table id="vnf-lease-table">
+        <thead>
+          <tr>
+            <th scope="col">Client ID</th>
+            <th scope="col">Address</th>
+            <th scope="col">Hostname</th>
+            <th scope="col">Expires</th>
+            <th scope="col">Active</th>
+          </tr>
+        </thead>
+        <tbody id="vnf-lease-rows"></tbody>
+      </table>
+      <div class="empty" id="vnf-lease-empty" hidden>
+        <div class="empty-mark" aria-hidden="true">◌</div>
+        <h3>No leases yet</h3>
+        <p>Clients will appear here after they receive an address from this VNF.</p>
+      </div>
+    </div>
+
+    <footer class="dialog-actions">
+      <button class="button ghost" id="refresh-vnf-leases" type="button">Refresh</button>
+      <button class="button primary" id="close-vnf-leases" type="button">Close</button>
+    </footer>
+  </dialog>
+
+  <dialog id="vnf-sessions-dialog" aria-labelledby="vnf-sessions-title">
+    <header class="dialog-head">
+      <div>
+        <p class="eyebrow">NAT monitor</p>
+        <h2 id="vnf-sessions-title">NAT44 sessions</h2>
+      </div>
+      <button class="icon-button" id="close-vnf-sessions-dialog" type="button" aria-label="Close dialog">×</button>
+    </header>
+
+    <p id="vnf-sessions-lede" class="dialog-lede">Network function</p>
+    <div class="banner" id="vnf-sessions-error" role="alert" hidden></div>
+
+    <pre id="vnf-sessions-text" class="nat-sessions">No sessions.</pre>
+
+    <footer class="dialog-actions">
+      <button class="button ghost" id="refresh-vnf-sessions" type="button">Refresh</button>
+      <button class="button primary" id="close-vnf-sessions" type="button">Close</button>
+    </footer>
+  </dialog>
+
+  <dialog id="interface-dialog" aria-labelledby="interface-dialog-title">
+
+    <form id="interface-form" novalidate>
+      <header class="dialog-head">
+        <div>
+          <p class="eyebrow">VPP vhost-user</p>
+          <h2 id="interface-dialog-title">Add virtual interface</h2>
+        </div>
+        <button class="icon-button" id="close-interface-dialog" type="button" aria-label="Close dialog">×</button>
+      </header>
+
+      <div class="form-grid">
+        <label class="field field-wide">
+          <span class="field-label">Name</span>
+          <input id="interface-name" name="name" type="text" required maxlength="64"
+                 pattern="[A-Za-z0-9][A-Za-z0-9._-]*" autocomplete="off" spellcheck="false"
+                 placeholder="vm01-eth0">
+          <span class="field-hint">Creates a vhost-user socket under the configured VPP directory.</span>
+        </label>
+
+        <label class="field field-wide">
+          <span class="field-label">Nerd's Network</span>
+          <select id="interface-network" name="network_id" required>
+            <option value="">Loading networks…</option>
+          </select>
+        </label>
+
+        <label class="field field-wide">
+          <span class="field-label">Attach to VM <em>optional</em></span>
+          <select id="interface-vm" name="attached_vm_id">
+            <option value="">Leave unattached</option>
+          </select>
+          <span class="field-hint">Stop the VM before attaching or detaching interfaces.</span>
+        </label>
+      </div>
+
+      <p class="form-error" id="interface-form-error" role="alert" hidden></p>
+
+      <footer class="dialog-actions">
+        <button class="button ghost" id="cancel-interface-dialog" type="button">Cancel</button>
+        <button class="button primary" id="save-interface" type="submit">Add interface</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="attach-dialog" aria-labelledby="attach-dialog-title">
+    <form id="attach-form" novalidate>
+      <header class="dialog-head">
+        <div>
+          <p class="eyebrow">VM attachment</p>
+          <h2 id="attach-dialog-title">Attach interface</h2>
+        </div>
+        <button class="icon-button" id="close-attach-dialog" type="button" aria-label="Close dialog">×</button>
+      </header>
+
+      <div class="form-grid">
+        <label class="field field-wide">
+          <span class="field-label">Interface</span>
+          <input id="attach-interface-name" type="text" readonly>
+        </label>
+
+        <label class="field field-wide">
+          <span class="field-label">Attach to VM</span>
+          <select id="attach-vm" name="attached_vm_id">
+            <option value="">Leave unattached</option>
+          </select>
+          <span class="field-hint">Interfaces take effect when the VM is started.</span>
+        </label>
+      </div>
+
+      <p class="form-error" id="attach-form-error" role="alert" hidden></p>
+
+      <footer class="dialog-actions">
+        <button class="button ghost" id="cancel-attach-dialog" type="button">Cancel</button>
+        <button class="button primary" id="save-attach" type="submit">Save attachment</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <noscript><p class="noscript">This UI needs JavaScript enabled. The JSON API is available under <code>/api</code>.</p></noscript>
+</body>
+</html>
