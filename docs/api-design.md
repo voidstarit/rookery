@@ -102,9 +102,8 @@ backends, host interfaces, troubleshoot, and capture. It preserves the
 a custom marshaler, keeps list responses as arrays, and returns `201` for
 creates and `204` for deletes.
 
-The main `serve` listener routes `/api` through the gateway. The legacy handler
-remains only for native VNC WebSocket, WebShark, pcap-download, and static UI
-paths. VM lifecycle and disk provisioning share the legacy API's mutexes so both
+The main `serve` listener routes `/api` through the gateway. `api.Server.NativeHandler`
+serves only native VNC WebSocket, WebShark, pcap-download, and static UI paths. VM lifecycle and disk provisioning share the legacy API's mutexes so both
 listeners remain serialized. VNF writes and network deletion call native
 lifecycle methods implemented in `internal/api`. `-gateway-addr` adds an
 optional second gateway HTTP listener and `-grpc-addr` exposes direct gRPC.
@@ -113,9 +112,9 @@ optional second gateway HTTP listener and `-grpc-addr` exposes direct gRPC.
 
 - UI contract tests against the cutover gateway are still needed.
 - The legacy API route registrations and handlers remain in `internal/api` for
-  tests and native paths. They can be removed once the native VNF/network
-  lifecycle methods are moved into a dedicated service and covered by focused
-  unit tests.
+  tests but are no longer mounted by `serve`. They can be removed once the
+  native VNF/network lifecycle methods are moved into a dedicated service and
+  covered by focused unit tests.
 - VNF DHCP/NAT44 conditional requirements remain in the domain validator rather
   than generated validation (a CEL layer would close this gap).
 - VM update uses `replace_interface_ids`/`replace_disk_ids` to distinguish an
