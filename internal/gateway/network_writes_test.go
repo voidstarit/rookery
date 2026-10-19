@@ -77,6 +77,9 @@ type fakeNetworkWriter struct {
 	deleted []int64
 }
 
+func (f *fakeNetworkWriter) CreateNetwork(_ context.Context, name string) (store.Network, error) {
+	return store.Network{ID: 1, Name: name, BridgeDomainID: 601}, nil
+}
 func (f *fakeNetworkWriter) DeleteNetwork(_ context.Context, id int64) error {
 	f.deleted = append(f.deleted, id)
 	return nil

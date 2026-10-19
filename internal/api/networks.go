@@ -88,18 +88,6 @@ func (s *Server) handleGetNetwork(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCreateNetwork(w http.ResponseWriter, r *http.Request) {
-	s.resourceMu.Lock()
-	defer s.resourceMu.Unlock()
-
-	if s.networks == nil {
-		writeError(w, http.StatusServiceUnavailable, "VPP network runtime is not configured")
-		return
-	}
-	if blocked, message := s.vppBlocked(); blocked {
-		writeError(w, http.StatusServiceUnavailable, message)
-		return
-	}
-
 	var payload networkPayload
 	if err := decodeJSON(w, r, &payload); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -110,39 +98,11 @@ func (s *Server) handleCreateNetwork(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-
-	existing, err := s.store.ListNetworks(r.Context())
+	created, err := s.CreateNetwork(r.Context(), name)
 	if err != nil {
-		s.internalError(w, r, err)
+		s.writeNetworkOperationError(w, r, err)
 		return
 	}
-	reserved := make([]uint32, 0, len(existing))
-	for _, network := range existing {
-		reserved = append(reserved, network.BridgeDomainID)
-	}
-
-	bdID, err := s.networks.CreateBridgeDomain(r.Context(), name, reserved)
-	if err != nil {
-		s.logger.Error("create bridge domain failed", "network", name, "error", err)
-		writeError(w, http.StatusInternalServerError, "could not create VPP bridge domain: "+err.Error())
-		return
-	}
-
-	created, err := s.store.CreateNetwork(r.Context(), store.Network{
-		Name:           name,
-		BridgeDomainID: bdID,
-	})
-	if err != nil {
-		s.rollbackBridgeDomain(bdID)
-		switch {
-		case errors.Is(err, store.ErrNetworkNameTaken):
-			writeError(w, http.StatusConflict, "a network with that name already exists")
-		default:
-			s.internalError(w, r, err)
-		}
-		return
-	}
-
 	w.Header().Set("Location", fmt.Sprintf("/api/networks/%d", created.ID))
 	writeJSON(w, http.StatusCreated, created)
 }

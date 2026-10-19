@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/voidstarit/rookery/internal/store"
 )
@@ -35,6 +36,50 @@ func (e *NetworkError) NetworkStatus() (int, string) {
 		return e.Status, "network operation failed"
 	}
 	return e.Status, e.Error()
+}
+
+// CreateNetwork validates a network name and provisions its VPP bridge domain.
+func (s *Server) CreateNetwork(ctx context.Context, name string) (store.Network, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return store.Network{}, &NetworkError{Status: http.StatusBadRequest, Message: "name is required"}
+	}
+	if len(name) > maxNetworkNameLength {
+		return store.Network{}, &NetworkError{Status: http.StatusBadRequest, Message: fmt.Sprintf("name must be at most %d characters", maxNetworkNameLength)}
+	}
+	if !vmNamePattern.MatchString(name) {
+		return store.Network{}, &NetworkError{Status: http.StatusBadRequest, Message: "name must start with a letter or digit and contain only letters, digits, dots, dashes, and underscores"}
+	}
+	if s.networks == nil {
+		return store.Network{}, &NetworkError{Status: http.StatusServiceUnavailable, Message: "VPP network runtime is not configured"}
+	}
+	if blocked, message := s.vppBlocked(); blocked {
+		return store.Network{}, &NetworkError{Status: http.StatusServiceUnavailable, Message: message}
+	}
+
+	s.resourceMu.Lock()
+	defer s.resourceMu.Unlock()
+	existing, err := s.store.ListNetworks(ctx)
+	if err != nil {
+		return store.Network{}, &NetworkError{Status: http.StatusInternalServerError, Err: err}
+	}
+	reserved := make([]uint32, 0, len(existing))
+	for _, network := range existing {
+		reserved = append(reserved, network.BridgeDomainID)
+	}
+	bdID, err := s.networks.CreateBridgeDomain(ctx, name, reserved)
+	if err != nil {
+		return store.Network{}, &NetworkError{Status: http.StatusInternalServerError, Err: fmt.Errorf("could not create VPP bridge domain: %w", err)}
+	}
+	created, err := s.store.CreateNetwork(ctx, store.Network{Name: name, BridgeDomainID: bdID})
+	if err != nil {
+		s.rollbackBridgeDomain(bdID)
+		if errors.Is(err, store.ErrNetworkNameTaken) {
+			return store.Network{}, &NetworkError{Status: http.StatusConflict, Message: "a network with that name already exists"}
+		}
+		return store.Network{}, &NetworkError{Status: http.StatusInternalServerError, Err: err}
+	}
+	return created, nil
 }
 
 // DeleteNetwork stops the network's VNFs, removes its BVI and bridge domain,

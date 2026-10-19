@@ -21,6 +21,7 @@ type NetworkRuntime interface {
 
 // NetworkWriter is the native network lifecycle service implemented by internal/api.
 type NetworkWriter interface {
+	CreateNetwork(ctx context.Context, name string) (store.Network, error)
 	DeleteNetwork(ctx context.Context, id int64) error
 }
 
@@ -38,6 +39,13 @@ func (s *networkService) CreateNetwork(ctx context.Context, request *rookeryv1.C
 	name := strings.TrimSpace(request.GetName())
 	if name == "" {
 		return nil, status.Error(codes.InvalidArgument, "name is required")
+	}
+	if s.writer != nil {
+		created, err := s.writer.CreateNetwork(ctx, name)
+		if err != nil {
+			return nil, mapNetworkWriteError(err)
+		}
+		return networkToProto(created), nil
 	}
 	if err := s.ready(); err != nil {
 		return nil, err
