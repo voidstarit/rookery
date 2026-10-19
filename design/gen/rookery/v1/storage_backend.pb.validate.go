@@ -79,6 +79,32 @@ func (m *StorageBackendConfig) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
+	// no validation rules for SupportsTemplates
+
+	if utf8.RuneCountInString(m.GetPreparationScript()) > 1024 {
+		err := StorageBackendConfigValidationError{
+			field:  "PreparationScript",
+			reason: "value length must be at most 1024 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetPreparationTimeout()) > 32 {
+		err := StorageBackendConfigValidationError{
+			field:  "PreparationTimeout",
+			reason: "value length must be at most 32 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	// no validation rules for AllowTemplateDeleteWithClones
+
 	if len(errors) > 0 {
 		return StorageBackendConfigMultiError(errors)
 	}

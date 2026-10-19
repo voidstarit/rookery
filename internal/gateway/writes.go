@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -46,8 +47,9 @@ func (s *storageBackendService) UpdateStorageBackend(ctx context.Context, reques
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	backend.ID = existing.ID
-	if existing.DiskCount > 0 && (backend.Driver != existing.Driver || backend.Config != existing.Config) {
-		return nil, status.Error(codes.Aborted, "storage backend configuration cannot change while disks use it")
+	if existing.DiskCount > 0 && (backend.Driver != existing.Driver ||
+		backend.Config.VG != existing.Config.VG || backend.Config.ThinPool != existing.Config.ThinPool) {
+		return nil, status.Error(codes.Aborted, "storage backend volume group and thin pool cannot change while disks use it")
 	}
 	updated, err := s.store.UpdateStorageBackend(ctx, backend)
 	if err != nil {
@@ -123,9 +125,30 @@ func normalizeStorageBackendFields(name, title, description, driver string, conf
 	if err := host.ValidateLVMName("thin pool", thinPool); err != nil {
 		return store.StorageBackend{}, err
 	}
+	script := strings.TrimSpace(config.GetPreparationScript())
+	if script != "" && !filepath.IsAbs(script) {
+		return store.StorageBackend{}, errors.New("preparation_script must be an absolute path")
+	}
+	timeout := strings.TrimSpace(config.GetPreparationTimeout())
+	if timeout == "" {
+		timeout = "5m"
+	}
+	duration, err := time.ParseDuration(timeout)
+	if err != nil || duration <= 0 {
+		return store.StorageBackend{}, errors.New("preparation_timeout must be a positive duration such as 5m")
+	}
+	if config.GetSupportsTemplates() && script == "" {
+		return store.StorageBackend{}, errors.New("preparation_script is required when template support is enabled")
+	}
 	return store.StorageBackend{
 		Name: name, Title: title, Description: description, Driver: driver,
-		Config: store.StorageBackendConfig{VG: vg, ThinPool: thinPool},
+		Config: store.StorageBackendConfig{
+			VG: vg, ThinPool: thinPool,
+			SupportsTemplates:             config.GetSupportsTemplates(),
+			PreparationScript:             script,
+			PreparationTimeout:            duration.String(),
+			AllowTemplateDeleteWithClones: config.GetAllowTemplateDeleteWithClones(),
+		},
 	}, nil
 }
 

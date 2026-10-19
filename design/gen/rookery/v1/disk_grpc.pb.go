@@ -23,6 +23,7 @@ const (
 	DiskService_ListDisks_FullMethodName  = "/rookery.v1.DiskService/ListDisks"
 	DiskService_GetDisk_FullMethodName    = "/rookery.v1.DiskService/GetDisk"
 	DiskService_CreateDisk_FullMethodName = "/rookery.v1.DiskService/CreateDisk"
+	DiskService_UpdateDisk_FullMethodName = "/rookery.v1.DiskService/UpdateDisk"
 	DiskService_DeleteDisk_FullMethodName = "/rookery.v1.DiskService/DeleteDisk"
 )
 
@@ -35,6 +36,7 @@ type DiskServiceClient interface {
 	ListDisks(ctx context.Context, in *ListDisksRequest, opts ...grpc.CallOption) (*ListDisksResponse, error)
 	GetDisk(ctx context.Context, in *GetDiskRequest, opts ...grpc.CallOption) (*Disk, error)
 	CreateDisk(ctx context.Context, in *CreateDiskRequest, opts ...grpc.CallOption) (*Disk, error)
+	UpdateDisk(ctx context.Context, in *UpdateDiskRequest, opts ...grpc.CallOption) (*Disk, error)
 	DeleteDisk(ctx context.Context, in *DeleteDiskRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
@@ -76,6 +78,16 @@ func (c *diskServiceClient) CreateDisk(ctx context.Context, in *CreateDiskReques
 	return out, nil
 }
 
+func (c *diskServiceClient) UpdateDisk(ctx context.Context, in *UpdateDiskRequest, opts ...grpc.CallOption) (*Disk, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Disk)
+	err := c.cc.Invoke(ctx, DiskService_UpdateDisk_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *diskServiceClient) DeleteDisk(ctx context.Context, in *DeleteDiskRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(emptypb.Empty)
@@ -95,6 +107,7 @@ type DiskServiceServer interface {
 	ListDisks(context.Context, *ListDisksRequest) (*ListDisksResponse, error)
 	GetDisk(context.Context, *GetDiskRequest) (*Disk, error)
 	CreateDisk(context.Context, *CreateDiskRequest) (*Disk, error)
+	UpdateDisk(context.Context, *UpdateDiskRequest) (*Disk, error)
 	DeleteDisk(context.Context, *DeleteDiskRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedDiskServiceServer()
 }
@@ -114,6 +127,9 @@ func (UnimplementedDiskServiceServer) GetDisk(context.Context, *GetDiskRequest) 
 }
 func (UnimplementedDiskServiceServer) CreateDisk(context.Context, *CreateDiskRequest) (*Disk, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateDisk not implemented")
+}
+func (UnimplementedDiskServiceServer) UpdateDisk(context.Context, *UpdateDiskRequest) (*Disk, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateDisk not implemented")
 }
 func (UnimplementedDiskServiceServer) DeleteDisk(context.Context, *DeleteDiskRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteDisk not implemented")
@@ -193,6 +209,24 @@ func _DiskService_CreateDisk_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DiskService_UpdateDisk_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateDiskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DiskServiceServer).UpdateDisk(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DiskService_UpdateDisk_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DiskServiceServer).UpdateDisk(ctx, req.(*UpdateDiskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _DiskService_DeleteDisk_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteDiskRequest)
 	if err := dec(in); err != nil {
@@ -229,6 +263,10 @@ var DiskService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateDisk",
 			Handler:    _DiskService_CreateDisk_Handler,
+		},
+		{
+			MethodName: "UpdateDisk",
+			Handler:    _DiskService_UpdateDisk_Handler,
 		},
 		{
 			MethodName: "DeleteDisk",

@@ -29,19 +29,9 @@ const (
 )
 
 func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateDiskRequest) (*rookeryv1.Disk, error) {
-	if s.runtime == nil {
-		return nil, status.Error(codes.Unavailable, "disk runtime is not configured")
-	}
 	name := strings.TrimSpace(request.GetName())
 	if name == "" {
 		return nil, status.Error(codes.InvalidArgument, "name is required")
-	}
-	sizeGB := int(request.GetSizeGb())
-	if sizeGB == 0 {
-		sizeGB = defaultGatewayDiskGB
-	}
-	if sizeGB < 1 || sizeGB > maxGatewayDiskGB {
-		return nil, status.Error(codes.InvalidArgument, "size_gb is out of range")
 	}
 	backend, err := s.resolveStorageBackend(ctx, request.StorageBackendId)
 	if err != nil {
@@ -52,6 +42,56 @@ func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateD
 	}
 	if backend.Name == "default" && s.readiness != nil && !s.readiness.Status().ThinPool.Ready {
 		return nil, status.Error(codes.Unavailable, "default thin pool is not ready")
+	}
+	isTemplate := request.GetIsTemplate()
+	templateID := request.TemplateDiskId
+	if isTemplate && templateID != nil {
+		return nil, status.Error(codes.InvalidArgument, "a template disk cannot also be a template clone")
+	}
+	if isTemplate && !backend.Config.SupportsTemplates {
+		return nil, status.Error(codes.FailedPrecondition, "selected storage backend does not support templates")
+	}
+	sizeGB := int(request.GetSizeGb())
+	var template *store.Disk
+	if templateID != nil {
+		if !backend.Config.SupportsTemplates {
+			return nil, status.Error(codes.FailedPrecondition, "selected storage backend does not support templates")
+		}
+		if strings.TrimSpace(backend.Config.PreparationScript) == "" {
+			return nil, status.Error(codes.FailedPrecondition, "selected storage backend has no preparation script")
+		}
+		value, err := s.store.GetDisk(ctx, *templateID)
+		if err != nil {
+			if errors.Is(err, store.ErrDiskNotFound) {
+				return nil, status.Error(codes.InvalidArgument, "template disk not found")
+			}
+			return nil, status.Error(codes.Internal, "could not read template disk")
+		}
+		if !value.IsTemplate {
+			return nil, status.Error(codes.InvalidArgument, "source disk is not a template")
+		}
+		if value.StorageBackendID == nil || *value.StorageBackendID != backend.ID {
+			return nil, status.Error(codes.InvalidArgument, "template disk belongs to a different storage backend")
+		}
+		if value.AttachedVMID != nil {
+			return nil, status.Error(codes.FailedPrecondition, "template disk is attached to a VM")
+		}
+		if sizeGB == 0 {
+			sizeGB = value.SizeGB
+		}
+		if sizeGB < value.SizeGB {
+			return nil, status.Errorf(codes.InvalidArgument, "size_gb must be at least the template size (%d GB)", value.SizeGB)
+		}
+		template = &value
+	}
+	if sizeGB == 0 {
+		sizeGB = defaultGatewayDiskGB
+	}
+	if sizeGB < 1 || sizeGB > maxGatewayDiskGB {
+		return nil, status.Error(codes.InvalidArgument, "size_gb is out of range")
+	}
+	if template == nil && s.runtime == nil {
+		return nil, status.Error(codes.Unavailable, "disk runtime is not configured")
 	}
 
 	s.mu.Lock()
@@ -66,6 +106,24 @@ func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateD
 		Name: name, SizeGB: sizeGB,
 		StorageBackendID: &backend.ID, StorageBackendName: backend.Name,
 		VG: backend.Config.VG, ThinPool: backend.Config.ThinPool,
+		IsTemplate: isTemplate, TemplateDiskID: templateID, PreparedByScript: template != nil,
+	}
+	if template != nil {
+		if err := s.runDiskPreparationScript(ctx, "create", backend, disk, template); err != nil {
+			_ = s.runDiskPreparationScript(context.Background(), "delete", backend, disk, template)
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+		created, err := s.store.CreateDisk(ctx, disk)
+		if err != nil {
+			_ = s.runDiskPreparationScript(context.Background(), "delete", backend, disk, template)
+			switch {
+			case errors.Is(err, store.ErrDiskNameTaken):
+				return nil, status.Error(codes.AlreadyExists, "a disk with that name already exists")
+			default:
+				return nil, status.Error(codes.Internal, "could not record disk")
+			}
+		}
+		return diskToProto(created), nil
 	}
 	if err := s.runtime.CreateThinVolume(ctx, disk.VG, disk.ThinPool, disk.Name, disk.SizeGB); err != nil {
 		return nil, status.Error(codes.Internal, "could not create disk volume: "+err.Error())
@@ -83,10 +141,38 @@ func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateD
 	return diskToProto(created), nil
 }
 
-func (s *diskService) DeleteDisk(ctx context.Context, request *rookeryv1.DeleteDiskRequest) (*emptypb.Empty, error) {
-	if s.runtime == nil {
-		return nil, status.Error(codes.Unavailable, "disk runtime is not configured")
+func (s *diskService) UpdateDisk(ctx context.Context, request *rookeryv1.UpdateDiskRequest) (*rookeryv1.Disk, error) {
+	disk, err := s.store.GetDisk(ctx, request.GetId())
+	if err != nil {
+		return nil, storeReadError(err, store.ErrDiskNotFound, "disk not found")
 	}
+	if request.IsTemplate == nil {
+		return diskToProto(disk), nil
+	}
+	if request.GetIsTemplate() {
+		backend, err := s.resolveStorageBackend(ctx, disk.StorageBackendID)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+		if !backend.Config.SupportsTemplates {
+			return nil, status.Error(codes.FailedPrecondition, "selected storage backend does not support templates")
+		}
+	}
+	updated, err := s.store.SetDiskTemplate(ctx, disk.ID, request.GetIsTemplate())
+	if err != nil {
+		switch {
+		case errors.Is(err, store.ErrDiskNotFound):
+			return nil, status.Error(codes.NotFound, "disk not found")
+		case errors.Is(err, store.ErrDiskInUse):
+			return nil, status.Error(codes.Aborted, "disk is attached to a VM")
+		default:
+			return nil, status.Error(codes.Internal, "could not update disk")
+		}
+	}
+	return diskToProto(updated), nil
+}
+
+func (s *diskService) DeleteDisk(ctx context.Context, request *rookeryv1.DeleteDiskRequest) (*emptypb.Empty, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	disk, err := s.store.GetDisk(ctx, request.GetId())
@@ -96,8 +182,27 @@ func (s *diskService) DeleteDisk(ctx context.Context, request *rookeryv1.DeleteD
 	if disk.AttachedVMID != nil {
 		return nil, status.Error(codes.Aborted, "disk is attached to a VM; delete the VM first")
 	}
-	if err := s.runtime.DeleteThinVolume(ctx, disk.VG, disk.Name); err != nil {
-		return nil, status.Error(codes.Internal, "could not remove disk volume: "+err.Error())
+	backend, backendErr := s.resolveStorageBackend(ctx, disk.StorageBackendID)
+	if disk.IsTemplate {
+		clones, err := s.store.CountDiskClones(ctx, disk.ID)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "could not check template clones")
+		}
+		if clones > 0 && (backendErr != nil || !backend.Config.AllowTemplateDeleteWithClones) {
+			return nil, status.Errorf(codes.Aborted, "template has %d clone(s); enable allow_template_delete_with_clones or delete them first", clones)
+		}
+	}
+	if disk.PreparedByScript && backendErr == nil && strings.TrimSpace(backend.Config.PreparationScript) != "" {
+		if err := s.runDiskPreparationScript(ctx, "delete", backend, disk, nil); err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+	} else {
+		if s.runtime == nil {
+			return nil, status.Error(codes.Unavailable, "disk runtime is not configured")
+		}
+		if err := s.runtime.DeleteThinVolume(ctx, disk.VG, disk.Name); err != nil {
+			return nil, status.Error(codes.Internal, "could not remove disk volume: "+err.Error())
+		}
 	}
 	if err := s.store.DeleteDisk(ctx, request.GetId()); err != nil {
 		switch {

@@ -140,6 +140,25 @@ export function DisksTab() {
     }
   };
 
+  const toggleTemplate = async (disk: Disk) => {
+    if (disk.attached_vm_id) {
+      showToast("Detach the disk from its VM before changing template status.", true);
+      return;
+    }
+    try {
+      const updated = await api<Disk>(`/api/disks/${disk.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ is_template: !disk.is_template }),
+      });
+      publishDisks(disks.map((item) => (item.id === updated.id ? updated : item)));
+      showToast(updated.is_template ? `Marked ${updated.name} as a template` : `Unmarked ${updated.name} as a template`);
+    } catch (err) {
+      setDiskError(
+        `Could not update ${disk.name}: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  };
+
   const deleteBackend = async (backend: StorageBackend) => {
     if (backend.disk_count > 0) {
       showToast("Delete disks using this backend first.", true);
@@ -332,6 +351,10 @@ export function DisksTab() {
                   <tr key={disk.id}>
                     <td>
                       <span class="vm-name">{disk.name}</span>
+                      {disk.is_template ? <span class="import-disk-badge">template</span> : null}
+                      {disk.template_disk_name ? (
+                        <span class="vm-description">from {disk.template_disk_name}</span>
+                      ) : null}
                       {disk.device ? (
                         <span class="vm-description" title={disk.device}>
                           {disk.device}
@@ -342,12 +365,25 @@ export function DisksTab() {
                     <td class={disk.storage_backend_name ? "mono" : "mono muted"}>
                       {disk.storage_backend_name || "—"}
                     </td>
-                    <td class={disk.attached_vm_id ? "mono" : "mono muted"}>
-                      {disk.attached_vm_id ? disk.attached_vm_name || disk.attached_vm_id : "unattached"}
+                    <td class={disk.is_template ? "mono muted" : disk.attached_vm_id ? "mono" : "mono muted"}>
+                      {disk.is_template
+                        ? "template"
+                        : disk.attached_vm_id
+                          ? disk.attached_vm_name || disk.attached_vm_id
+                          : "unattached"}
                     </td>
                     <td class="updated hide-sm">{formatDate(disk.updated_at)}</td>
                     <td>
                       <div class="actions">
+                        <button
+                          class="row-action"
+                          type="button"
+                          disabled={Boolean(disk.attached_vm_id)}
+                          title={disk.is_template ? "Allow this disk to be used as a normal disk again." : "Mark this unattached disk as a template."}
+                          onClick={() => void toggleTemplate(disk)}
+                        >
+                          {disk.is_template ? "Unmark" : "Template"}
+                        </button>
                         <button
                           class="row-action danger"
                           type="button"
@@ -394,6 +430,7 @@ export function DisksTab() {
       {diskDialogOpen ? (
         <DiskDialog
           backends={backends}
+          disks={disks}
           onClose={() => setDiskDialogOpen(false)}
           onSaved={(disk) => {
             setDiskDialogOpen(false);

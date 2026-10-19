@@ -11,8 +11,12 @@ import (
 
 // StorageBackendConfig contains driver-specific settings.
 type StorageBackendConfig struct {
-	VG       string `json:"vg,omitempty"`
-	ThinPool string `json:"thin_pool,omitempty"`
+	VG                            string `json:"vg,omitempty"`
+	ThinPool                      string `json:"thin_pool,omitempty"`
+	SupportsTemplates             bool   `json:"supports_templates,omitempty"`
+	PreparationScript             string `json:"preparation_script,omitempty"`
+	PreparationTimeout            string `json:"preparation_timeout,omitempty"`
+	AllowTemplateDeleteWithClones bool   `json:"allow_template_delete_with_clones,omitempty"`
 }
 
 // StorageBackend is a registered disk provisioning backend.

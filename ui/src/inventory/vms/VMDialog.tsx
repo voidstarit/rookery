@@ -70,6 +70,9 @@ export function VMDialog({
   const selectedInterfaceIDs = new Set(selectedInterfaces.map((iface) => iface.id));
 
   const availableDisks = disks.filter((disk) => {
+    if (disk.is_template) {
+      return false;
+    }
     if (selectedDiskIDs.has(disk.id)) {
       return false;
     }

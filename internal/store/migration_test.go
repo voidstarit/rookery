@@ -43,6 +43,14 @@ func TestMigrationConvertsNetworkDHCPToVNF(t *testing.T) {
 	if _, err := db.Exec(`DROP TABLE vm_disks`); err != nil {
 		t.Fatalf("drop vm_disks table: %v", err)
 	}
+	if _, err := db.Exec(`DROP INDEX IF EXISTS idx_disks_template_disk_id`); err != nil {
+		t.Fatalf("drop disk template index: %v", err)
+	}
+	for _, column := range []string{"is_template", "template_disk_id", "prepared_by_script"} {
+		if _, err := db.Exec(`ALTER TABLE disks DROP COLUMN ` + column); err != nil {
+			t.Fatalf("drop disks.%s: %v", column, err)
+		}
+	}
 	for _, column := range []string{"ingress_acl_id", "egress_acl_id"} {
 		if _, err := db.Exec(`ALTER TABLE virtual_interfaces DROP COLUMN ` + column); err != nil {
 			t.Fatalf("drop virtual_interfaces.%s: %v", column, err)
@@ -124,6 +132,14 @@ func TestMigrationBackfillsVMDisks(t *testing.T) {
 	}
 	if _, err := db.Exec(`DROP TABLE vm_disks`); err != nil {
 		t.Fatalf("drop vm_disks table: %v", err)
+	}
+	if _, err := db.Exec(`DROP INDEX IF EXISTS idx_disks_template_disk_id`); err != nil {
+		t.Fatalf("drop disk template index: %v", err)
+	}
+	for _, column := range []string{"is_template", "template_disk_id", "prepared_by_script"} {
+		if _, err := db.Exec(`ALTER TABLE disks DROP COLUMN ` + column); err != nil {
+			t.Fatalf("drop disks.%s: %v", column, err)
+		}
 	}
 	if _, err := db.Exec(`PRAGMA user_version = 11`); err != nil {
 		t.Fatalf("set schema version: %v", err)
@@ -222,7 +238,7 @@ func TestMigrationPreservesLegacyVMsWithoutDisks(t *testing.T) {
 	if err := st.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 12 {
-		t.Fatalf("schema version = %d, want 12", version)
+	if version != 13 {
+		t.Fatalf("schema version = %d, want 13", version)
 	}
 }

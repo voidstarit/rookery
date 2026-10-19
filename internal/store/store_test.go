@@ -959,3 +959,18 @@ func TestReopenKeepsDataAndSkipsAppliedMigrations(t *testing.T) {
 func ptr[T any](v T) *T {
 	return &v
 }
+
+func TestTemplateDiskCannotAttachToVM(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	disk, err := st.CreateDisk(ctx, store.Disk{Name: "template", SizeGB: 5, VG: "vg0", ThinPool: "pool"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SetDiskTemplate(ctx, disk.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreateVM(ctx, store.VM{Name: "vm", VCPUs: 1, MemoryMB: 512, DiskIDs: []int64{disk.ID}}); !errors.Is(err, store.ErrDiskIsTemplate) {
+		t.Fatalf("create vm with template error = %v, want ErrDiskIsTemplate", err)
+	}
+}

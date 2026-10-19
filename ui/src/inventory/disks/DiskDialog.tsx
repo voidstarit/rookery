@@ -4,17 +4,21 @@ import type { Disk, StorageBackend } from "../types";
 
 type DiskDialogProps = {
   backends: StorageBackend[];
+  disks: Disk[];
   onClose: () => void;
   onSaved: (disk: Disk) => void;
 };
 
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._-]*";
 
-export function DiskDialog({ backends, onClose, onSaved }: DiskDialogProps) {
+export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProps) {
   const defaultBackend = backends.find((item) => item.name === "default") || backends[0];
   const [name, setName] = useState("");
   const [sizeGB, setSizeGB] = useState("10");
   const [backendID, setBackendID] = useState(defaultBackend ? String(defaultBackend.id) : "");
+  const [source, setSource] = useState<"empty" | "template">("empty");
+  const [templateID, setTemplateID] = useState("");
+  const [markAsTemplate, setMarkAsTemplate] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDialogElement | null>(null);
@@ -25,6 +29,21 @@ export function DiskDialog({ backends, onClose, onSaved }: DiskDialogProps) {
     dialogRef.current?.showModal();
     nameRef.current?.focus();
   }, []);
+
+  const backend = backends.find((item) => String(item.id) === backendID) || null;
+  const supportsTemplates = Boolean(backend?.config?.supports_templates);
+  const templates = disks.filter(
+    (disk) => disk.is_template && String(disk.storage_backend_id ?? "") === backendID
+  );
+  const template = templates.find((disk) => String(disk.id) === templateID) || null;
+
+  useEffect(() => {
+    if (!supportsTemplates) {
+      setSource("empty");
+      setTemplateID("");
+      setMarkAsTemplate(false);
+    }
+  }, [supportsTemplates]);
 
   const close = () => {
     if (!saving) {
@@ -46,6 +65,8 @@ export function DiskDialog({ backends, onClose, onSaved }: DiskDialogProps) {
           name: name.trim(),
           size_gb: Number(sizeGB),
           storage_backend_id: Number(backendID),
+          ...(source === "template" && template ? { template_disk_id: template.id } : {}),
+          ...(source === "empty" && supportsTemplates ? { is_template: markAsTemplate } : {}),
         }),
       });
       onSaved(disk);
@@ -107,7 +128,7 @@ export function DiskDialog({ backends, onClose, onSaved }: DiskDialogProps) {
             <input
               type="number"
               required
-              min={1}
+              min={template ? template.size_gb : 1}
               max={65536}
               step={1}
               value={sizeGB}
@@ -121,7 +142,11 @@ export function DiskDialog({ backends, onClose, onSaved }: DiskDialogProps) {
             <select
               required
               value={backendID}
-              onChange={(event) => setBackendID(event.currentTarget.value)}
+              onChange={(event) => {
+                setBackendID(event.currentTarget.value);
+                setTemplateID("");
+                setSource("empty");
+              }}
             >
               {backends.map((backend) => (
                 <option value={String(backend.id)} key={backend.id}>
@@ -131,6 +156,54 @@ export function DiskDialog({ backends, onClose, onSaved }: DiskDialogProps) {
             </select>
             <span class="field-hint">The thin pool or storage driver that will hold this disk.</span>
           </label>
+          {supportsTemplates ? (
+            <label class="field">
+              <span class="field-label">Creation source</span>
+              <select value={source} onChange={(event) => setSource(event.currentTarget.value as "empty" | "template")}>
+                <option value="empty">Empty disk</option>
+                <option value="template" disabled={templates.length === 0}>
+                  From template{templates.length === 0 ? " (none available)" : ""}
+                </option>
+              </select>
+              <span class="field-hint">
+                Template clones run the backend preparation script; empty disks use the thin pool directly.
+              </span>
+            </label>
+          ) : null}
+          {supportsTemplates && source === "template" ? (
+            <label class="field">
+              <span class="field-label">Template</span>
+              <select
+                required
+                value={templateID}
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  setTemplateID(value);
+                  const selected = templates.find((disk) => String(disk.id) === value);
+                  if (selected) {
+                    setSizeGB(String(selected.size_gb));
+                  }
+                }}
+              >
+                <option value="">Select a template…</option>
+                {templates.map((disk) => (
+                  <option value={String(disk.id)} key={disk.id}>
+                    {disk.name} · {disk.size_gb} GB
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {supportsTemplates && source === "empty" ? (
+            <label class="field field-wide checkbox-field">
+              <input
+                type="checkbox"
+                checked={markAsTemplate}
+                onChange={(event) => setMarkAsTemplate(event.currentTarget.checked)}
+              />
+              <span>Mark this new disk as a template</span>
+            </label>
+          ) : null}
         </div>
 
         {error ? (
@@ -143,7 +216,11 @@ export function DiskDialog({ backends, onClose, onSaved }: DiskDialogProps) {
           <button class="button ghost" type="button" disabled={saving} onClick={close}>
             Cancel
           </button>
-          <button class="button primary" type="submit" disabled={saving || backends.length === 0}>
+          <button
+            class="button primary"
+            type="submit"
+            disabled={saving || backends.length === 0 || (source === "template" && !template)}
+          >
             {saving ? "Creating…" : "Create disk"}
           </button>
         </footer>

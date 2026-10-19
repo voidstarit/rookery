@@ -29,6 +29,13 @@ service DiskService {
     };
   }
 
+  rpc UpdateDisk(UpdateDiskRequest) returns (Disk) {
+    option (google.api.http) = {
+      put: "/api/disks/{id}"
+      body: "*"
+    };
+  }
+
   rpc DeleteDisk(DeleteDiskRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {delete: "/api/disks/{id}"};
   }
@@ -58,6 +65,9 @@ message Disk {
   string attached_vm_name = 10;
   google.protobuf.Timestamp created_at = 11;
   google.protobuf.Timestamp updated_at = 12;
+  bool is_template = 13;
+  optional int64 template_disk_id = 14;
+  string template_disk_name = 15;
 }
 
 message ImportableDisk {
@@ -88,6 +98,13 @@ message CreateDiskRequest {
   }];
   optional int32 size_gb = 2 [(validate.rules).int32 = {gte: 1, lte: 65536}];
   optional int64 storage_backend_id = 3 [(validate.rules).int64 = {gt: 0}];
+  optional int64 template_disk_id = 4 [(validate.rules).int64 = {gt: 0}];
+  optional bool is_template = 5;
+}
+
+message UpdateDiskRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  optional bool is_template = 2;
 }
 
 message DeleteDiskRequest {

@@ -621,8 +621,9 @@ native routes plus the static UI.
 | `GET`    | `/api/storage-backends/{id}/importable-disks` | List existing thin volumes and registration state |
 | `POST`   | `/api/storage-backends/{id}/import-disks` | Register existing thin volumes as disks |
 | `GET`    | `/api/disks`       | List all disks                    |
-| `POST`   | `/api/disks`       | Create a thin-LVM disk            |
+| `POST`   | `/api/disks`       | Create a thin-LVM disk or template clone |
 | `GET`    | `/api/disks/{id}`  | Get one disk                      |
+| `PUT`    | `/api/disks/{id}`  | Mark or unmark a disk as a template |
 | `DELETE` | `/api/disks/{id}`  | Delete an unattached disk         |
 | `GET`    | `/api/media`       | List installation media           |
 | `POST`   | `/api/media`       | Register an existing ISO file     |
@@ -686,7 +687,11 @@ curl -sS -X POST http://127.0.0.1:8080/api/disks \
 ```
 
 `POST /api/disks` accepts an optional `storage_backend_id`; omit it for the
-default backend. This runs `lvcreate` against the selected backend's thin pool.
+default backend. Empty disks run `lvcreate` against the selected backend's thin
+pool. A backend with `supports_templates` can also create a disk from another
+disk marked as a template using `template_disk_id`; the backend's
+`preparation_script` creates the clone LV/device. The clone size defaults to the
+template size and may only be increased.
 Existing thin volumes can be imported without running LVM commands:
 
 ```bash
@@ -916,7 +921,19 @@ WebSocket returns `403` and any already-open console is closed within about a
 second.
 
 Disk fields: `name` (required, unique, max 127 chars), `size_gb` (default `10`,
-1–65536). Disk size is provisioned as a thin-LVM virtual size in GB.
+1–65536), `storage_backend_id`, `template_disk_id`, and `is_template`. Disk size
+is provisioned as a thin-LVM virtual size in GB. Templates are backend-scoped,
+cannot be attached to a VM, and can be marked or unmarked with
+`PUT /api/disks/{id}`. Deleting a template with clones is blocked unless the
+backend sets `allow_template_delete_with_clones`.
+
+Template-capable backends add `supports_templates`, `preparation_script`, and
+`preparation_timeout` to their config. The script runs as the API user, receives
+disk details in the `ROOKERY_DISK_JSON` environment variable, and is responsible
+for creating the clone LV/device. Its JSON contains `operation` (`create` or
+`delete`), `request_id`, `disk`, optional `template`, and `backend` objects. On
+failure the script output is logged and the operation is rolled back; clones
+created by a script are removed by the script on deletion.
 
 Media fields: `name` (required, unique, max 127 chars) and `path` (required,
 absolute path to an existing regular file). `size_bytes` is read from the file

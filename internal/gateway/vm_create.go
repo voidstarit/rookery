@@ -320,6 +320,8 @@ func vmStoreError(err error, operation string) error {
 		return status.Error(codes.InvalidArgument, "disk not found")
 	case errors.Is(err, store.ErrDiskInUse):
 		return status.Error(codes.Aborted, "disk is already attached to another VM")
+	case errors.Is(err, store.ErrDiskIsTemplate):
+		return status.Error(codes.Aborted, "template disks cannot be attached to a VM")
 	case errors.Is(err, store.ErrMediaNotFound):
 		return status.Error(codes.InvalidArgument, "boot media not found")
 	case errors.Is(err, store.ErrInterfaceNotFound):

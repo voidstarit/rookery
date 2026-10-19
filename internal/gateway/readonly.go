@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -35,6 +36,7 @@ type diskService struct {
 	runtime   DiskProvisioner
 	readiness Readiness
 	mu        *sync.Mutex
+	logger    *slog.Logger
 }
 
 func (s *diskService) ListDisks(ctx context.Context, _ *rookeryv1.ListDisksRequest) (*rookeryv1.ListDisksResponse, error) {
@@ -62,6 +64,7 @@ func diskToProto(disk store.Disk) *rookeryv1.Disk {
 		Id: disk.ID, Name: disk.Name, SizeGb: int32(disk.SizeGB),
 		StorageBackendId: disk.StorageBackendID, StorageBackendName: disk.StorageBackendName,
 		Vg: disk.VG, ThinPool: disk.ThinPool, Device: disk.Device,
+		IsTemplate: disk.IsTemplate, TemplateDiskId: disk.TemplateDiskID, TemplateDiskName: disk.TemplateDiskName,
 		AttachedVmId: disk.AttachedVMID, AttachedVmName: disk.AttachedVMName,
 		CreatedAt: timestamp(disk.CreatedAt), UpdatedAt: timestamp(disk.UpdatedAt),
 	}
@@ -309,8 +312,14 @@ func (s *storageBackendService) GetStorageBackend(ctx context.Context, request *
 func storageBackendToProto(backend store.StorageBackend) *rookeryv1.StorageBackend {
 	return &rookeryv1.StorageBackend{
 		Id: backend.ID, Name: backend.Name, Title: backend.Title, Description: backend.Description,
-		Driver:    backend.Driver,
-		Config:    &rookeryv1.StorageBackendConfig{Vg: backend.Config.VG, ThinPool: backend.Config.ThinPool},
+		Driver: backend.Driver,
+		Config: &rookeryv1.StorageBackendConfig{
+			Vg: backend.Config.VG, ThinPool: backend.Config.ThinPool,
+			SupportsTemplates:             backend.Config.SupportsTemplates,
+			PreparationScript:             backend.Config.PreparationScript,
+			PreparationTimeout:            backend.Config.PreparationTimeout,
+			AllowTemplateDeleteWithClones: backend.Config.AllowTemplateDeleteWithClones,
+		},
 		DiskCount: int32(backend.DiskCount),
 		CreatedAt: timestamp(backend.CreatedAt), UpdatedAt: timestamp(backend.UpdatedAt),
 	}

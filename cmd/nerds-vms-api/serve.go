@@ -121,6 +121,7 @@ func runServe(args []string) error {
 	lifecycleService := lifecycle.New(st, apiServer, apiServer.ResourceMutex())
 
 	gatewayOptions := []gateway.Option{
+		gateway.WithLogger(logger),
 		gateway.WithVMController(qemuRunner),
 		gateway.WithInterfaceCounters(networkRunner),
 		gateway.WithACLRuntime(networkRunner),

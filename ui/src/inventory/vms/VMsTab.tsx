@@ -171,7 +171,7 @@ export function VMsTab() {
     }
   }, [vms.length]);
 
-  const freeDisks = disks.filter((disk) => !disk.attached_vm_id);
+  const freeDisks = disks.filter((disk) => !disk.attached_vm_id && !disk.is_template);
 
   useEffect(() => {
     const newVM = document.getElementById("new-vm") as HTMLButtonElement | null;

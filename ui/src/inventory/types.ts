@@ -89,6 +89,10 @@ export type VMMetrics = {
 export type StorageBackendConfig = {
   vg: string;
   thin_pool: string;
+  supports_templates?: boolean;
+  preparation_script?: string;
+  preparation_timeout?: string;
+  allow_template_delete_with_clones?: boolean;
 };
 
 export type StorageBackend = {
@@ -114,6 +118,9 @@ export type Disk = {
   device: string;
   attached_vm_id?: string;
   attached_vm_name?: string;
+  is_template?: boolean;
+  template_disk_id?: number;
+  template_disk_name?: string;
   created_at: string;
   updated_at: string;
 };

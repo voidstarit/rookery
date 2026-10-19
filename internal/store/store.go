@@ -35,6 +35,8 @@ var (
 	ErrDiskNameTaken = errors.New("disk name already exists")
 	// ErrDiskInUse is returned when a disk is attached to a VM.
 	ErrDiskInUse = errors.New("disk is attached to a vm")
+	// ErrDiskIsTemplate is returned when a template disk is attached to a VM.
+	ErrDiskIsTemplate = errors.New("template disks cannot be attached to a vm")
 	// ErrStorageBackendNotFound is returned when a storage backend does not exist.
 	ErrStorageBackendNotFound = errors.New("storage backend not found")
 	// ErrStorageBackendNameTaken is returned when a backend name is already in use.
@@ -316,6 +318,10 @@ type Disk struct {
 	VG                 string    `json:"vg"`
 	ThinPool           string    `json:"thin_pool"`
 	Device             string    `json:"device"`
+	IsTemplate         bool      `json:"is_template"`
+	TemplateDiskID     *int64    `json:"template_disk_id,omitempty"`
+	TemplateDiskName   string    `json:"template_disk_name,omitempty"`
+	PreparedByScript   bool      `json:"-"`
 	AttachedVMID       *string   `json:"attached_vm_id,omitempty"`
 	AttachedVMName     string    `json:"attached_vm_name,omitempty"`
 	CreatedAt          time.Time `json:"created_at"`
@@ -673,9 +679,9 @@ func (s *Store) CreateDisk(ctx context.Context, disk Disk) (Disk, error) {
 	now := time.Now().UTC().UnixMilli()
 
 	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO disks (name, size_gb, vg, thin_pool, storage_backend_id, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		disk.Name, disk.SizeGB, disk.VG, disk.ThinPool, disk.StorageBackendID, now, now,
+		INSERT INTO disks (name, size_gb, vg, thin_pool, storage_backend_id, is_template, template_disk_id, prepared_by_script, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		disk.Name, disk.SizeGB, disk.VG, disk.ThinPool, disk.StorageBackendID, disk.IsTemplate, disk.TemplateDiskID, disk.PreparedByScript, now, now,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -796,6 +802,31 @@ func (s *Store) GetDiskByName(ctx context.Context, name string) (Disk, error) {
 	return disk, nil
 }
 
+// SetDiskTemplate marks or unmarks an unattached disk as a template.
+func (s *Store) SetDiskTemplate(ctx context.Context, id int64, isTemplate bool) (Disk, error) {
+	disk, err := s.GetDisk(ctx, id)
+	if err != nil {
+		return Disk{}, err
+	}
+	if disk.AttachedVMID != nil {
+		return Disk{}, ErrDiskInUse
+	}
+	now := time.Now().UTC().UnixMilli()
+	if _, err := s.db.ExecContext(ctx, `UPDATE disks SET is_template = ?, updated_at = ? WHERE id = ?`, isTemplate, now, id); err != nil {
+		return Disk{}, fmt.Errorf("update disk template flag: %w", err)
+	}
+	return s.GetDisk(ctx, id)
+}
+
+// CountDiskClones returns the number of disks created from a template.
+func (s *Store) CountDiskClones(ctx context.Context, id int64) (int, error) {
+	var count int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM disks WHERE template_disk_id = ?`, id).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count disk clones: %w", err)
+	}
+	return count, nil
+}
+
 // DeleteDisk deletes an unattached disk record.
 func (s *Store) DeleteDisk(ctx context.Context, id int64) error {
 	disk, err := s.GetDisk(ctx, id)
@@ -828,6 +859,9 @@ func (s *Store) checkDiskAvailable(ctx context.Context, diskID int64, exceptVMID
 	disk, err := s.GetDisk(ctx, diskID)
 	if err != nil {
 		return err
+	}
+	if disk.IsTemplate {
+		return ErrDiskIsTemplate
 	}
 	if disk.AttachedVMID != nil && *disk.AttachedVMID != exceptVMID {
 		return ErrDiskInUse
@@ -1699,10 +1733,11 @@ const vmSelect = `
 
 const diskSelect = `
 	SELECT d.id, d.name, d.size_gb, d.vg, d.thin_pool,
-	       d.storage_backend_id, sb.name,
-	       v.id, v.name, d.created_at, d.updated_at
+	       d.storage_backend_id, sb.name, d.is_template, d.template_disk_id,
+	       d.prepared_by_script, td.name, v.id, v.name, d.created_at, d.updated_at
 	FROM disks AS d
 	LEFT JOIN storage_backends AS sb ON sb.id = d.storage_backend_id
+	LEFT JOIN disks AS td ON td.id = d.template_disk_id
 	LEFT JOIN vm_disks AS vd ON vd.disk_id = d.id
 	LEFT JOIN vms AS v ON v.id = vd.vm_id`
 
@@ -1781,13 +1816,17 @@ func scanVM(s scanner) (VM, error) {
 
 func scanDisk(s scanner) (Disk, error) {
 	var (
-		disk      Disk
-		backendID sql.NullInt64
-		backend   sql.NullString
-		vmID      sql.NullString
-		vmName    sql.NullString
-		createdAt int64
-		updatedAt int64
+		disk             Disk
+		backendID        sql.NullInt64
+		backend          sql.NullString
+		isTemplate       int64
+		templateID       sql.NullInt64
+		preparedByScript int64
+		templateName     sql.NullString
+		vmID             sql.NullString
+		vmName           sql.NullString
+		createdAt        int64
+		updatedAt        int64
 	)
 	if err := s.Scan(
 		&disk.ID,
@@ -1797,6 +1836,10 @@ func scanDisk(s scanner) (Disk, error) {
 		&disk.ThinPool,
 		&backendID,
 		&backend,
+		&isTemplate,
+		&templateID,
+		&preparedByScript,
+		&templateName,
 		&vmID,
 		&vmName,
 		&createdAt,
@@ -1806,6 +1849,15 @@ func scanDisk(s scanner) (Disk, error) {
 	}
 
 	disk.Device = devicePath(disk.VG, disk.Name)
+	disk.IsTemplate = isTemplate != 0
+	disk.PreparedByScript = preparedByScript != 0
+	if templateID.Valid {
+		id := templateID.Int64
+		disk.TemplateDiskID = &id
+	}
+	if templateName.Valid {
+		disk.TemplateDiskName = templateName.String
+	}
 	if backendID.Valid {
 		id := backendID.Int64
 		disk.StorageBackendID = &id

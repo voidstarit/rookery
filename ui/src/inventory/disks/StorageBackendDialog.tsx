@@ -18,6 +18,10 @@ export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBacke
   const [driver, setDriver] = useState(backend?.driver ?? "lvm-thin");
   const [vg, setVG] = useState(backend?.config?.vg ?? "");
   const [thinPool, setThinPool] = useState(backend?.config?.thin_pool ?? "");
+  const [supportsTemplates, setSupportsTemplates] = useState(Boolean(backend?.config?.supports_templates));
+  const [preparationScript, setPreparationScript] = useState(backend?.config?.preparation_script ?? "");
+  const [preparationTimeout, setPreparationTimeout] = useState(backend?.config?.preparation_timeout || "5m");
+  const [allowTemplateDelete, setAllowTemplateDelete] = useState(Boolean(backend?.config?.allow_template_delete_with_clones));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDialogElement | null>(null);
@@ -52,7 +56,14 @@ export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBacke
             title: title.trim(),
             description: description.trim(),
             driver,
-            config: { vg: vg.trim(), thin_pool: thinPool.trim() },
+            config: {
+              vg: vg.trim(),
+              thin_pool: thinPool.trim(),
+              supports_templates: supportsTemplates,
+              preparation_script: supportsTemplates ? preparationScript.trim() : "",
+              preparation_timeout: supportsTemplates ? preparationTimeout.trim() || "5m" : "",
+              allow_template_delete_with_clones: supportsTemplates && allowTemplateDelete,
+            },
           }),
         }
       );
@@ -163,6 +174,53 @@ export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBacke
               onInput={(event) => setThinPool(event.currentTarget.value)}
             />
           </label>
+          <label class="field field-wide checkbox-field">
+            <input
+              type="checkbox"
+              checked={supportsTemplates}
+              onChange={(event) => setSupportsTemplates(event.currentTarget.checked)}
+            />
+            <span>Support template disks and template-based disk creation</span>
+          </label>
+          {supportsTemplates ? (
+            <>
+              <label class="field field-wide">
+                <span class="field-label">Preparation script</span>
+                <input
+                  type="text"
+                  required
+                  autocomplete="off"
+                  spellcheck={false}
+                  placeholder="/usr/local/sbin/rookery-disk-prepare"
+                  value={preparationScript}
+                  onInput={(event) => setPreparationScript(event.currentTarget.value)}
+                />
+                <span class="field-hint">
+                  Absolute path. Runs as the API user with disk details in ROOKERY_DISK_JSON.
+                </span>
+              </label>
+              <label class="field">
+                <span class="field-label">Script timeout</span>
+                <input
+                  type="text"
+                  required
+                  autocomplete="off"
+                  spellcheck={false}
+                  placeholder="5m"
+                  value={preparationTimeout}
+                  onInput={(event) => setPreparationTimeout(event.currentTarget.value)}
+                />
+              </label>
+              <label class="field field-wide checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={allowTemplateDelete}
+                  onChange={(event) => setAllowTemplateDelete(event.currentTarget.checked)}
+                />
+                <span>Allow deleting a template while clones still exist</span>
+              </label>
+            </>
+          ) : null}
         </div>
 
         {error ? (

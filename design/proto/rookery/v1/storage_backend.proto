@@ -60,6 +60,10 @@ service StorageBackendService {
 message StorageBackendConfig {
   string vg = 1 [(validate.rules).string = {max_len: 128}];
   string thin_pool = 2 [(validate.rules).string = {max_len: 128}];
+  bool supports_templates = 3;
+  string preparation_script = 4 [(validate.rules).string = {max_len: 1024}];
+  string preparation_timeout = 5 [(validate.rules).string = {max_len: 32}];
+  bool allow_template_delete_with_clones = 6;
 }
 
 message StorageBackend {

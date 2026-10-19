@@ -246,12 +246,20 @@ func (m *Disk) validate(all bool) error {
 		}
 	}
 
+	// no validation rules for IsTemplate
+
+	// no validation rules for TemplateDiskName
+
 	if m.StorageBackendId != nil {
 		// no validation rules for StorageBackendId
 	}
 
 	if m.AttachedVmId != nil {
 		// no validation rules for AttachedVmId
+	}
+
+	if m.TemplateDiskId != nil {
+		// no validation rules for TemplateDiskId
 	}
 
 	if len(errors) > 0 {
@@ -870,6 +878,25 @@ func (m *CreateDiskRequest) validate(all bool) error {
 
 	}
 
+	if m.TemplateDiskId != nil {
+
+		if m.GetTemplateDiskId() <= 0 {
+			err := CreateDiskRequestValidationError{
+				field:  "TemplateDiskId",
+				reason: "value must be greater than 0",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.IsTemplate != nil {
+		// no validation rules for IsTemplate
+	}
+
 	if len(errors) > 0 {
 		return CreateDiskRequestMultiError(errors)
 	}
@@ -951,6 +978,123 @@ var _ interface {
 } = CreateDiskRequestValidationError{}
 
 var _CreateDiskRequest_Name_Pattern = regexp.MustCompile("^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+// Validate checks the field values on UpdateDiskRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *UpdateDiskRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on UpdateDiskRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// UpdateDiskRequestMultiError, or nil if none found.
+func (m *UpdateDiskRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *UpdateDiskRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetId() <= 0 {
+		err := UpdateDiskRequestValidationError{
+			field:  "Id",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if m.IsTemplate != nil {
+		// no validation rules for IsTemplate
+	}
+
+	if len(errors) > 0 {
+		return UpdateDiskRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// UpdateDiskRequestMultiError is an error wrapping multiple validation errors
+// returned by UpdateDiskRequest.ValidateAll() if the designated constraints
+// aren't met.
+type UpdateDiskRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m UpdateDiskRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m UpdateDiskRequestMultiError) AllErrors() []error { return m }
+
+// UpdateDiskRequestValidationError is the validation error returned by
+// UpdateDiskRequest.Validate if the designated constraints aren't met.
+type UpdateDiskRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e UpdateDiskRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e UpdateDiskRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e UpdateDiskRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e UpdateDiskRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e UpdateDiskRequestValidationError) ErrorName() string {
+	return "UpdateDiskRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e UpdateDiskRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sUpdateDiskRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = UpdateDiskRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = UpdateDiskRequestValidationError{}
 
 // Validate checks the field values on DeleteDiskRequest with the rules defined
 // in the proto definition for this message. If any rules are violated, the

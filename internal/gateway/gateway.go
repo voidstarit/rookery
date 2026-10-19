@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"sync"
@@ -57,6 +58,7 @@ type options struct {
 	diagnostics       DiagnosticsRuntime
 	networkRuntime    NetworkRuntime
 	networkWriter     NetworkWriter
+	logger            *slog.Logger
 	vnfRuntime        VNFRuntime
 	vnfStatusProvider VNFStatusProvider
 	vnfWriter         VNFWriter
@@ -161,6 +163,13 @@ func WithVNFWriter(writer VNFWriter) Option {
 	}
 }
 
+// WithLogger sets the gateway logger used by disk preparation scripts.
+func WithLogger(logger *slog.Logger) Option {
+	return func(opts *options) {
+		opts.logger = logger
+	}
+}
+
 // New builds the generated read-only gateway. By default it uses an in-process
 // bufconn listener for tests and embedding. Use WithGRPCListener to expose gRPC
 // on a real Unix or TCP socket.
@@ -175,6 +184,9 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	if options.vmMutex == nil {
 		options.vmMutex = &sync.Mutex{}
 	}
+	if options.logger == nil {
+		options.logger = slog.Default()
+	}
 	listener := options.grpcListener
 	useBufconn := listener == nil
 	if useBufconn {
@@ -183,7 +195,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	server := grpc.NewServer(grpc.UnaryInterceptor(validationInterceptor))
 	system := &systemService{store: st, readiness: ready}
 	vms := &vmService{store: st, runtime: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, mu: options.vmMutex}
-	disks := &diskService{store: st, runtime: options.diskProvisioner, readiness: ready, mu: options.diskMutex}
+	disks := &diskService{store: st, runtime: options.diskProvisioner, readiness: ready, mu: options.diskMutex, logger: options.logger}
 	media := &mediaService{store: st}
 	networks := &networkService{store: st, runtime: options.networkRuntime, readiness: ready, writer: options.networkWriter, mu: options.diskMutex}
 	interfaces := &interfaceService{store: st, runtime: options.aclRuntime, attachments: options.interfaceRuntime, vms: options.vmController, readiness: ready, resourceMu: options.diskMutex, runMu: options.vmMutex}

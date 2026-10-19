@@ -334,6 +334,43 @@
         "tags": [
           "DiskService"
         ]
+      },
+      "put": {
+        "operationId": "DiskService_UpdateDisk",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Disk"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DiskServiceUpdateDiskBody"
+            }
+          }
+        ],
+        "tags": [
+          "DiskService"
+        ]
       }
     },
     "/api/healthz": {
@@ -1850,6 +1887,14 @@
         }
       }
     },
+    "DiskServiceUpdateDiskBody": {
+      "type": "object",
+      "properties": {
+        "is_template": {
+          "type": "boolean"
+        }
+      }
+    },
     "InterfaceServiceSetInterfaceACLsBody": {
       "type": "object",
       "properties": {
@@ -2168,6 +2213,13 @@
         "storage_backend_id": {
           "type": "string",
           "format": "int64"
+        },
+        "template_disk_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "is_template": {
+          "type": "boolean"
         }
       }
     },
@@ -2366,6 +2418,16 @@
         "updated_at": {
           "type": "string",
           "format": "date-time"
+        },
+        "is_template": {
+          "type": "boolean"
+        },
+        "template_disk_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "template_disk_name": {
+          "type": "string"
         }
       }
     },
@@ -2865,6 +2927,18 @@
         },
         "thin_pool": {
           "type": "string"
+        },
+        "supports_templates": {
+          "type": "boolean"
+        },
+        "preparation_script": {
+          "type": "string"
+        },
+        "preparation_timeout": {
+          "type": "string"
+        },
+        "allow_template_delete_with_clones": {
+          "type": "boolean"
         }
       }
     },

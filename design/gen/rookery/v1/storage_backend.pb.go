@@ -26,11 +26,15 @@ const (
 )
 
 type StorageBackendConfig struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Vg            string                 `protobuf:"bytes,1,opt,name=vg,proto3" json:"vg,omitempty"`
-	ThinPool      string                 `protobuf:"bytes,2,opt,name=thin_pool,json=thinPool,proto3" json:"thin_pool,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                         protoimpl.MessageState `protogen:"open.v1"`
+	Vg                            string                 `protobuf:"bytes,1,opt,name=vg,proto3" json:"vg,omitempty"`
+	ThinPool                      string                 `protobuf:"bytes,2,opt,name=thin_pool,json=thinPool,proto3" json:"thin_pool,omitempty"`
+	SupportsTemplates             bool                   `protobuf:"varint,3,opt,name=supports_templates,json=supportsTemplates,proto3" json:"supports_templates,omitempty"`
+	PreparationScript             string                 `protobuf:"bytes,4,opt,name=preparation_script,json=preparationScript,proto3" json:"preparation_script,omitempty"`
+	PreparationTimeout            string                 `protobuf:"bytes,5,opt,name=preparation_timeout,json=preparationTimeout,proto3" json:"preparation_timeout,omitempty"`
+	AllowTemplateDeleteWithClones bool                   `protobuf:"varint,6,opt,name=allow_template_delete_with_clones,json=allowTemplateDeleteWithClones,proto3" json:"allow_template_delete_with_clones,omitempty"`
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *StorageBackendConfig) Reset() {
@@ -75,6 +79,34 @@ func (x *StorageBackendConfig) GetThinPool() string {
 		return x.ThinPool
 	}
 	return ""
+}
+
+func (x *StorageBackendConfig) GetSupportsTemplates() bool {
+	if x != nil {
+		return x.SupportsTemplates
+	}
+	return false
+}
+
+func (x *StorageBackendConfig) GetPreparationScript() string {
+	if x != nil {
+		return x.PreparationScript
+	}
+	return ""
+}
+
+func (x *StorageBackendConfig) GetPreparationTimeout() string {
+	if x != nil {
+		return x.PreparationTimeout
+	}
+	return ""
+}
+
+func (x *StorageBackendConfig) GetAllowTemplateDeleteWithClones() bool {
+	if x != nil {
+		return x.AllowTemplateDeleteWithClones
+	}
+	return false
 }
 
 type StorageBackend struct {
@@ -702,10 +734,14 @@ var File_rookery_v1_storage_backend_proto protoreflect.FileDescriptor
 const file_rookery_v1_storage_backend_proto_rawDesc = "" +
 	"\n" +
 	" rookery/v1/storage_backend.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\x1a\x15rookery/v1/disk.proto\"W\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\x1a\x15rookery/v1/disk.proto\"\xc3\x02\n" +
 	"\x14StorageBackendConfig\x12\x18\n" +
 	"\x02vg\x18\x01 \x01(\tB\b\xfaB\x05r\x03\x18\x80\x01R\x02vg\x12%\n" +
-	"\tthin_pool\x18\x02 \x01(\tB\b\xfaB\x05r\x03\x18\x80\x01R\bthinPool\"\xd3\x02\n" +
+	"\tthin_pool\x18\x02 \x01(\tB\b\xfaB\x05r\x03\x18\x80\x01R\bthinPool\x12-\n" +
+	"\x12supports_templates\x18\x03 \x01(\bR\x11supportsTemplates\x127\n" +
+	"\x12preparation_script\x18\x04 \x01(\tB\b\xfaB\x05r\x03\x18\x80\bR\x11preparationScript\x128\n" +
+	"\x13preparation_timeout\x18\x05 \x01(\tB\a\xfaB\x04r\x02\x18 R\x12preparationTimeout\x12H\n" +
+	"!allow_template_delete_with_clones\x18\x06 \x01(\bR\x1dallowTemplateDeleteWithClones\"\xd3\x02\n" +
 	"\x0eStorageBackend\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
