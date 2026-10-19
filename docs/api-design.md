@@ -127,9 +127,10 @@ listener and `-grpc-addr` exposes direct gRPC.
   extraction is required before removing the legacy handlers.
 - Gateway network deletion requires VNFs and any BVI to be removed first; it
   does not yet replicate the legacy handler's automatic VNF shutdown.
-- Proto3 repeated fields cannot distinguish omitted from empty, so VM update
-  treats an empty `interface_ids`/`disk_ids` list as unchanged. Clearing all
-  interfaces or disks still needs an explicit presence wrapper or update mask.
+- VM update uses `replace_interface_ids`/`replace_disk_ids` to distinguish an
+  omitted list from an explicit replacement. Interfaces can be cleared with
+  `replace_interface_ids`; disks cannot be cleared because a VM must keep at
+  least one disk.
 - Disk creation/deletion, network/interface/ACL writes, VM create/update/delete
   and actions, storage disk import, and troubleshoot/capture are implemented.
 - VNF status/status_detail/lease_count and lease/session RPCs still need the VNF

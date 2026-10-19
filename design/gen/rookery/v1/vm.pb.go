@@ -441,8 +441,12 @@ type UpdateVMRequest struct {
 	ConsoleEnabled *bool                  `protobuf:"varint,8,opt,name=console_enabled,json=consoleEnabled,proto3,oneof" json:"console_enabled,omitempty"`
 	InterfaceIds   []int64                `protobuf:"varint,9,rep,packed,name=interface_ids,json=interfaceIds,proto3" json:"interface_ids,omitempty"`
 	DiskIds        []int64                `protobuf:"varint,10,rep,packed,name=disk_ids,json=diskIds,proto3" json:"disk_ids,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Explicit replacement lets clients clear the interface set. Disks cannot
+	// be cleared because every VM requires at least one disk.
+	ReplaceInterfaceIds *bool `protobuf:"varint,11,opt,name=replace_interface_ids,json=replaceInterfaceIds,proto3,oneof" json:"replace_interface_ids,omitempty"`
+	ReplaceDiskIds      *bool `protobuf:"varint,12,opt,name=replace_disk_ids,json=replaceDiskIds,proto3,oneof" json:"replace_disk_ids,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *UpdateVMRequest) Reset() {
@@ -543,6 +547,20 @@ func (x *UpdateVMRequest) GetDiskIds() []int64 {
 		return x.DiskIds
 	}
 	return nil
+}
+
+func (x *UpdateVMRequest) GetReplaceInterfaceIds() bool {
+	if x != nil && x.ReplaceInterfaceIds != nil {
+		return *x.ReplaceInterfaceIds
+	}
+	return false
+}
+
+func (x *UpdateVMRequest) GetReplaceDiskIds() bool {
+	if x != nil && x.ReplaceDiskIds != nil {
+		return *x.ReplaceDiskIds
+	}
+	return false
 }
 
 type DeleteVMRequest struct {
@@ -1038,7 +1056,7 @@ const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\x0e_boot_media_idB\x12\n" +
 	"\x10_console_enabledB\n" +
 	"\n" +
-	"\b_disk_id\"\x9d\x04\n" +
+	"\b_disk_id\"\xb4\x05\n" +
 	"\x0fUpdateVMRequest\x12\x18\n" +
 	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\x12@\n" +
 	"\x04name\x18\x02 \x01(\tB'\xfaB$r\"\x10\x01\x18@2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$H\x00R\x04name\x88\x01\x01\x12/\n" +
@@ -1051,7 +1069,9 @@ const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\x0fconsole_enabled\x18\b \x01(\bH\x06R\x0econsoleEnabled\x88\x01\x01\x12#\n" +
 	"\rinterface_ids\x18\t \x03(\x03R\finterfaceIds\x12\x19\n" +
 	"\bdisk_ids\x18\n" +
-	" \x03(\x03R\adiskIdsB\a\n" +
+	" \x03(\x03R\adiskIds\x127\n" +
+	"\x15replace_interface_ids\x18\v \x01(\bH\aR\x13replaceInterfaceIds\x88\x01\x01\x12-\n" +
+	"\x10replace_disk_ids\x18\f \x01(\bH\bR\x0ereplaceDiskIds\x88\x01\x01B\a\n" +
 	"\x05_nameB\x0e\n" +
 	"\f_descriptionB\t\n" +
 	"\a_statusB\b\n" +
@@ -1059,7 +1079,9 @@ const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\n" +
 	"_memory_mbB\x10\n" +
 	"\x0e_boot_media_idB\x12\n" +
-	"\x10_console_enabled\"+\n" +
+	"\x10_console_enabledB\x18\n" +
+	"\x16_replace_interface_idsB\x13\n" +
+	"\x11_replace_disk_ids\"+\n" +
 	"\x0fDeleteVMRequest\x12\x18\n" +
 	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\"*\n" +
 	"\x0eStartVMRequest\x12\x18\n" +

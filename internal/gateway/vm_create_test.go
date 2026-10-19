@@ -31,6 +31,16 @@ func TestVMCreateAndUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	network, err := st.CreateNetwork(context.Background(), store.Network{Name: "lab", BridgeDomainID: 500})
+	if err != nil {
+		t.Fatal(err)
+	}
+	iface, err := st.CreateInterface(context.Background(), store.VirtualInterface{
+		Name: "tap-1", NetworkID: network.ID, SocketPath: "/run/vpp/tap-1.sock", MAC: "02:00:00:00:00:01", SwIfIndex: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	gw, err := gateway.New(st, fakeReadiness{status: readiness.Status{Ready: true}}, gateway.WithVMController(&fakeVMController{}))
 	if err != nil {
@@ -71,6 +81,56 @@ func TestVMCreateAndUpdate(t *testing.T) {
 	if updatedVM["name"] != "vm-1b" || updatedVM["vcpus"].(float64) != 4 || updatedVM["memory_mb"].(float64) != 1024 {
 		t.Fatalf("updated vm = %+v", updatedVM)
 	}
+
+	request, err = http.NewRequest(http.MethodPut, server.URL+"/api/vms/"+id, strings.NewReader(`{"interface_ids":[`+itoa(iface.ID)+`]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	attached, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if attached.StatusCode != http.StatusOK {
+		t.Fatalf("attach interface status = %d, body = %s", attached.StatusCode, readBody(t, attached))
+	}
+	var attachedVM map[string]any
+	decodeBody(t, attached, &attachedVM)
+	if len(attachedVM["interfaces"].([]any)) != 1 {
+		t.Fatalf("attached vm = %+v", attachedVM)
+	}
+
+	request, err = http.NewRequest(http.MethodPut, server.URL+"/api/vms/"+id, strings.NewReader(`{"replace_interface_ids":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	cleared, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleared.StatusCode != http.StatusOK {
+		t.Fatalf("clear interfaces status = %d, body = %s", cleared.StatusCode, readBody(t, cleared))
+	}
+	var clearedVM map[string]any
+	decodeBody(t, cleared, &clearedVM)
+	if _, ok := clearedVM["interfaces"]; ok {
+		t.Fatalf("interfaces were not cleared: %+v", clearedVM)
+	}
+
+	request, err = http.NewRequest(http.MethodPut, server.URL+"/api/vms/"+id, strings.NewReader(`{"replace_disk_ids":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	emptyDisks, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if emptyDisks.StatusCode != http.StatusBadRequest {
+		t.Fatalf("empty disk replacement status = %d, body = %s", emptyDisks.StatusCode, readBody(t, emptyDisks))
+	}
+	_ = emptyDisks.Body.Close()
 
 	missingDisk, err := http.Post(server.URL+"/api/vms", "application/json", strings.NewReader(`{"name":"vm-2"}`))
 	if err != nil {

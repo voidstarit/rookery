@@ -125,6 +125,10 @@ message UpdateVMRequest {
   optional bool console_enabled = 8;
   repeated int64 interface_ids = 9;
   repeated int64 disk_ids = 10;
+  // Explicit replacement lets clients clear the interface set. Disks cannot
+  // be cleared because every VM requires at least one disk.
+  optional bool replace_interface_ids = 11;
+  optional bool replace_disk_ids = 12;
 }
 
 message DeleteVMRequest {

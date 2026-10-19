@@ -89,10 +89,10 @@ func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMReq
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	// Repeated fields cannot represent omitted vs. empty in proto3. Treat an
-	// empty list as "leave the current set unchanged" during migration.
-	changeInterfaces := len(request.GetInterfaceIds()) > 0
-	changeDisks := len(request.GetDiskIds()) > 0
+	// Empty repeated fields mean "leave the current set unchanged" unless the
+	// caller explicitly requests replacement.
+	changeInterfaces := request.GetReplaceInterfaceIds() || len(request.GetInterfaceIds()) > 0
+	changeDisks := request.GetReplaceDiskIds() || len(request.GetDiskIds()) > 0
 	var interfaceIDs, diskIDs []int64
 	if changeInterfaces {
 		interfaceIDs, err = normalizeGatewayIDs(request.GetInterfaceIds(), gatewayMaxVMInterfaces, "interface_ids")
@@ -104,6 +104,9 @@ func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMReq
 		diskIDs, err = normalizeGatewayIDs(request.GetDiskIds(), gatewayMaxVMDisks, "disk_ids")
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+		if len(diskIDs) == 0 {
+			return nil, status.Error(codes.InvalidArgument, "at least one disk is required")
 		}
 	}
 

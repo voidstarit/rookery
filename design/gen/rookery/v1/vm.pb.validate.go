@@ -1048,6 +1048,14 @@ func (m *UpdateVMRequest) validate(all bool) error {
 		// no validation rules for ConsoleEnabled
 	}
 
+	if m.ReplaceInterfaceIds != nil {
+		// no validation rules for ReplaceInterfaceIds
+	}
+
+	if m.ReplaceDiskIds != nil {
+		// no validation rules for ReplaceDiskIds
+	}
+
 	if len(errors) > 0 {
 		return UpdateVMRequestMultiError(errors)
 	}

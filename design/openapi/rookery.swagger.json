@@ -1940,6 +1940,13 @@
             "type": "string",
             "format": "int64"
           }
+        },
+        "replace_interface_ids": {
+          "type": "boolean",
+          "description": "Explicit replacement lets clients clear the interface set. Disks cannot\nbe cleared because every VM requires at least one disk."
+        },
+        "replace_disk_ids": {
+          "type": "boolean"
         }
       }
     },
