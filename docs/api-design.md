@@ -110,7 +110,9 @@ optional second gateway HTTP listener and `-grpc-addr` exposes direct gRPC.
 
 ## Known gaps
 
-- UI contract tests against the cutover gateway are still needed.
+- Core response-shape contract coverage now checks numeric IDs, status booleans,
+  list arrays, and key VM/network/VNF fields; broader UI workflow tests are
+  still desirable.
 - The legacy API handlers remain in `internal/api` and are registered only by
   `api.NewLegacy` for tests. They can be removed once the native VNF/network
   lifecycle methods are moved into a dedicated service and covered by focused
