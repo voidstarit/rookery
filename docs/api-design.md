@@ -94,45 +94,31 @@ The following remain outside the unary gRPC/gateway surface initially:
 Phase 0 (design package and generation) and Phase 1 (all current JSON resource
 schemas and HTTP annotations) are complete.
 
-The first gateway slice exists under `internal/gateway`: it runs an in-process
-gRPC server, applies generated validation through a unary interceptor, exposes
-`SystemService`, read-only list/get adapters for VMs, disks, media, networks,
-interfaces, ACLs, VNFs, storage backends, and host interfaces, plus
-VM/disk/media/network/interface/ACL/storage writes, VM lifecycle actions and
-metrics, interface ACL assignment, storage disk import, and troubleshoot/capture
-services through grpc-gateway. It preserves the `{"error":"..."}` response
-shape, emits 64-bit integers as JSON numbers through a custom marshaler, and
-returns `201` for creates and `204` for deletes. VM lifecycle and disk
-provisioning share the legacy API's mutexes so both listeners remain serialized. The main `serve` listener now routes `/api` through this gateway; the legacy
-handler remains for native VNC/WebShark/pcap-download/static paths and as the
-temporary VNF-write bridge. `-gateway-addr` adds an optional second gateway HTTP
-listener and `-grpc-addr` exposes direct gRPC.
+The gateway under `internal/gateway` runs an in-process gRPC server, applies
+generated validation through a unary interceptor, and exposes all generated
+services: system, VMs, disks, media, networks, interfaces, ACLs, VNFs, storage
+backends, host interfaces, troubleshoot, and capture. It preserves the
+`{"error":"..."}` response shape, emits 64-bit integers as JSON numbers through
+a custom marshaler, keeps list responses as arrays, and returns `201` for
+creates and `204` for deletes.
 
-## Known gaps before full cutover
+The main `serve` listener routes `/api` through the gateway. The legacy handler
+remains only for native VNC WebSocket, WebShark, pcap-download, and static UI
+paths. VM lifecycle and disk provisioning share the legacy API's mutexes so both
+listeners remain serialized. VNF writes and network deletion call native
+lifecycle methods implemented in `internal/api`. `-gateway-addr` adds an
+optional second gateway HTTP listener and `-grpc-addr` exposes direct gRPC.
 
-- `UpdateVMRequest` uses repeated `disk_ids`/`interface_ids`; proto3 has no
-  presence bit for repeated fields. Add a presence wrapper or field mask before
-  replacing the existing update semantics.
-- VNF DHCP/NAT44 conditional requirements remain in a domain validator until a
-  CEL-based validation layer is added.
-- grpc-gateway returns `200` for `google.protobuf.Empty` deletes; map successful
-  deletes to the existing `204` behavior in the gateway forwarder.
-- The gateway must reproduce the existing security headers, CSP, request
-  logging, and readiness gating.
-- The gateway's numeric JSON marshaler now matches the legacy REST API's
-  number encoding for int64/uint64 fields; verify it with UI contract tests
-  before route cutover.
-- VNF create/update/delete/restart use native lifecycle methods in `internal/api`.
-  The legacy VNF HTTP handlers still exist and can be removed once the native
-  methods have dedicated service tests.
+## Known gaps
+
+- UI contract tests against the cutover gateway are still needed.
+- The legacy API route registrations and handlers remain in `internal/api` for
+  tests and native paths. They can be removed once the native VNF/network
+  lifecycle methods are moved into a dedicated service and covered by focused
+  unit tests.
+- VNF DHCP/NAT44 conditional requirements remain in the domain validator rather
+  than generated validation (a CEL layer would close this gap).
 - VM update uses `replace_interface_ids`/`replace_disk_ids` to distinguish an
   omitted list from an explicit replacement. Interfaces can be cleared with
   `replace_interface_ids`; disks cannot be cleared because a VM must keep at
   least one disk.
-- Disk creation/deletion, network/interface/ACL writes, VM create/update/delete
-  and actions, storage disk import, and troubleshoot/capture are implemented.
-- VNF status/status_detail/lease_count and lease/session RPCs still need the VNF
-  runtime adapter.
-- Troubleshoot and capture gateway services are generated but not registered yet.
-- Route cutover is complete for the main HTTP listener; UI contract tests and
-  removal of the legacy API handlers are still pending.

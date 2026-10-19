@@ -28,4 +28,12 @@ func TestNumericJSONListFields(t *testing.T) {
 	if string(empty) != "[]" {
 		t.Fatalf("empty list JSON = %s", empty)
 	}
+	status, err := marshaler.Marshal(&rookeryv1.StatusResponse{ThinPool: &rookeryv1.ThinPoolStatus{}, Vpp: &rookeryv1.VPPStatus{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	statusText := string(status)
+	if !strings.Contains(statusText, `"ready":false`) {
+		t.Fatalf("status JSON = %s", statusText)
+	}
 }

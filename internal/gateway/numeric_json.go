@@ -95,12 +95,26 @@ func (e *numericJSONEncoder) Encode(value interface{}) error {
 	return err
 }
 
+func readinessMessage(name protoreflect.FullName) bool {
+	switch name {
+	case "rookery.v1.StatusResponse", "rookery.v1.ComponentStatus", "rookery.v1.ThinPoolStatus", "rookery.v1.VPPStatus":
+		return true
+	default:
+		return false
+	}
+}
+
 func rewrite64BitFields(message protoreflect.Message, value interface{}) interface{} {
 	object, ok := value.(map[string]interface{})
 	if !ok {
 		return value
 	}
 	fields := message.Descriptor().Fields()
+	if readinessMessage(message.Descriptor().FullName()) {
+		if _, ok := object["ready"]; !ok {
+			object["ready"] = false
+		}
+	}
 	for i := 0; i < fields.Len(); i++ {
 		field := fields.Get(i)
 		key := string(field.Name())
