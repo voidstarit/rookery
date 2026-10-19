@@ -52,7 +52,7 @@ func (s *vmService) StartVM(ctx context.Context, request *rookeryv1.StartVMReque
 		return nil, status.Error(codes.Internal, "could not read VM")
 	}
 	if len(vm.Disks) == 0 && vm.Disk == nil {
-		return nil, status.Error(codes.FailedPrecondition, "vm has no disk")
+		return nil, status.Error(codes.Aborted, "vm has no disk")
 	}
 	if s.runtime.Running(vm.ID) {
 		return nil, status.Error(codes.AlreadyExists, "vm is already running")
@@ -106,7 +106,7 @@ func (s *vmService) ResetVM(ctx context.Context, request *rookeryv1.ResetVMReque
 		return nil, status.Error(codes.Internal, "could not read VM")
 	}
 	if !s.runtime.Running(vm.ID) {
-		return nil, status.Error(codes.FailedPrecondition, "vm is not running")
+		return nil, status.Error(codes.Aborted, "vm is not running")
 	}
 	if err := s.runtime.Reset(ctx, vm.ID); err != nil {
 		if !errors.Is(err, qemu.ErrMonitorUnavailable) {
@@ -139,11 +139,11 @@ func (s *vmService) CtrlAltDel(ctx context.Context, request *rookeryv1.CtrlAltDe
 		return nil, status.Error(codes.Internal, "could not read VM")
 	}
 	if !s.runtime.Running(request.GetId()) {
-		return nil, status.Error(codes.FailedPrecondition, "vm is not running")
+		return nil, status.Error(codes.Aborted, "vm is not running")
 	}
 	if err := s.runtime.SendCtrlAltDel(ctx, request.GetId()); err != nil {
 		if errors.Is(err, qemu.ErrMonitorUnavailable) {
-			return nil, status.Error(codes.FailedPrecondition, "VM was started without a QEMU monitor; use Reset or stop/start the VM once")
+			return nil, status.Error(codes.Aborted, "VM was started without a QEMU monitor; use Reset or stop/start the VM once")
 		}
 		return nil, status.Error(codes.Internal, "could not send Ctrl+Alt+Del: "+err.Error())
 	}

@@ -67,7 +67,7 @@ func (s *interfaceService) CreateInterface(ctx context.Context, request *rookery
 			return nil, status.Error(codes.Internal, "could not read VM")
 		}
 		if s.vms != nil && s.vms.Running(*vmID) {
-			return nil, status.Error(codes.FailedPrecondition, "stop the VM before attaching a network interface")
+			return nil, status.Error(codes.Aborted, "stop the VM before attaching a network interface")
 		}
 	}
 	mac, err := gatewayMAC()
@@ -113,10 +113,10 @@ func (s *interfaceService) UpdateInterface(ctx context.Context, request *rookery
 		vmID = nil
 	}
 	if iface.AttachedVMID != nil && s.vms != nil && s.vms.Running(*iface.AttachedVMID) {
-		return nil, status.Error(codes.FailedPrecondition, "stop the current VM before detaching its network interface")
+		return nil, status.Error(codes.Aborted, "stop the current VM before detaching its network interface")
 	}
 	if vmID != nil && s.vms != nil && s.vms.Running(*vmID) {
-		return nil, status.Error(codes.FailedPrecondition, "stop the target VM before attaching a network interface")
+		return nil, status.Error(codes.Aborted, "stop the target VM before attaching a network interface")
 	}
 	updated, err := s.store.SetInterfaceAttachment(ctx, iface.ID, vmID)
 	if err != nil {
@@ -143,7 +143,7 @@ func (s *interfaceService) DeleteInterface(ctx context.Context, request *rookery
 		return nil, storeReadError(err, store.ErrInterfaceNotFound, "interface not found")
 	}
 	if iface.AttachedVMID != nil {
-		return nil, status.Error(codes.FailedPrecondition, "interface is attached to a VM; detach it first")
+		return nil, status.Error(codes.Aborted, "interface is attached to a VM; detach it first")
 	}
 	if err := s.attachments.DeleteVhostUser(ctx, iface.SwIfIndex); err != nil {
 		return nil, status.Error(codes.Internal, "could not delete VPP vhost-user interface: "+err.Error())
@@ -154,7 +154,7 @@ func (s *interfaceService) DeleteInterface(ctx context.Context, request *rookery
 		case errors.Is(err, store.ErrInterfaceNotFound):
 			return nil, status.Error(codes.NotFound, "interface not found")
 		case errors.Is(err, store.ErrInterfaceInUse):
-			return nil, status.Error(codes.FailedPrecondition, "interface is attached to a VM; detach it first")
+			return nil, status.Error(codes.Aborted, "interface is attached to a VM; detach it first")
 		default:
 			return nil, status.Error(codes.Internal, "could not delete interface")
 		}

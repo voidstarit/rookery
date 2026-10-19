@@ -113,13 +113,13 @@ func TestVMActionsAndMetrics(t *testing.T) {
 	}
 
 	ctrlAltDel := post("/api/vms/" + vm.ID + "/ctrl-alt-del")
-	if ctrlAltDel.StatusCode != http.StatusOK {
+	if ctrlAltDel.StatusCode != http.StatusNoContent {
 		t.Fatalf("ctrl-alt-del status = %d, body = %s", ctrlAltDel.StatusCode, readBody(t, ctrlAltDel))
 	}
 	_ = ctrlAltDel.Body.Close()
 
 	reset := post("/api/vms/" + vm.ID + "/reset")
-	if reset.StatusCode != http.StatusOK {
+	if reset.StatusCode != http.StatusNoContent {
 		t.Fatalf("reset status = %d, body = %s", reset.StatusCode, readBody(t, reset))
 	}
 	_ = reset.Body.Close()

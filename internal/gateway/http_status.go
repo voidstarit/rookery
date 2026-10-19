@@ -2,10 +2,13 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/protobuf/proto"
+
+	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 )
 
 var createdMethods = map[string]bool{
@@ -31,6 +34,29 @@ var noContentMethods = map[string]bool{
 	"/rookery.v1.VNFService/DeleteVNF":                       true,
 	"/rookery.v1.StorageBackendService/DeleteStorageBackend": true,
 	"/rookery.v1.CaptureService/DeleteCaptureFile":           true,
+	"/rookery.v1.VMService/ResetVM":                          true,
+	"/rookery.v1.VMService/CtrlAltDel":                       true,
+}
+
+func setLocationHeader(method string, response proto.Message, writer http.ResponseWriter) {
+	switch value := response.(type) {
+	case *rookeryv1.VM:
+		writer.Header().Set("Location", "/api/vms/"+value.GetId())
+	case *rookeryv1.Disk:
+		writer.Header().Set("Location", fmt.Sprintf("/api/disks/%d", value.GetId()))
+	case *rookeryv1.Media:
+		writer.Header().Set("Location", fmt.Sprintf("/api/media/%d", value.GetId()))
+	case *rookeryv1.Network:
+		writer.Header().Set("Location", fmt.Sprintf("/api/networks/%d", value.GetId()))
+	case *rookeryv1.VirtualInterface:
+		writer.Header().Set("Location", fmt.Sprintf("/api/interfaces/%d", value.GetId()))
+	case *rookeryv1.ACL:
+		writer.Header().Set("Location", fmt.Sprintf("/api/acls/%d", value.GetId()))
+	case *rookeryv1.VNF:
+		writer.Header().Set("Location", fmt.Sprintf("/api/vnfs/%d", value.GetId()))
+	case *rookeryv1.StorageBackend:
+		writer.Header().Set("Location", fmt.Sprintf("/api/storage-backends/%d", value.GetId()))
+	}
 }
 
 func httpResponseStatus(ctx context.Context, writer http.ResponseWriter, response proto.Message) error {
@@ -43,6 +69,7 @@ func httpResponseStatus(ctx context.Context, writer http.ResponseWriter, respons
 	}
 	switch {
 	case createdMethods[method]:
+		setLocationHeader(method, response, writer)
 		writer.WriteHeader(http.StatusCreated)
 	case noContentMethods[method]:
 		writer.WriteHeader(http.StatusNoContent)

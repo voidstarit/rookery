@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"net"
-	"net/http"
 	"net/netip"
-	"strconv"
 	"strings"
 	"time"
 
@@ -549,87 +547,6 @@ func bytesCompareIPv4(a, b net.IP) int {
 	}
 }
 
-func parseVNFID(r *http.Request) (int64, error) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil || id < 1 {
-		return 0, errors.New("invalid VNF id")
-	}
-	return id, nil
-}
-
-func (s *Server) handleListVNFs(w http.ResponseWriter, r *http.Request) {
-	var networkID *int64
-	if raw := strings.TrimSpace(r.URL.Query().Get("network_id")); raw != "" {
-		id, err := strconv.ParseInt(raw, 10, 64)
-		if err != nil || id < 1 {
-			writeError(w, http.StatusBadRequest, "invalid network_id")
-			return
-		}
-		networkID = &id
-	}
-	vnfs, err := s.store.ListVNFs(r.Context(), networkID)
-	if err != nil {
-		s.internalError(w, r, err)
-		return
-	}
-	views := make([]vnfView, 0, len(vnfs))
-	for _, vnf := range vnfs {
-		views = append(views, s.viewVNF(r.Context(), vnf))
-	}
-	writeJSON(w, http.StatusOK, views)
-}
-
-func (s *Server) handleGetVNF(w http.ResponseWriter, r *http.Request) {
-	id, err := parseVNFID(r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	vnf, err := s.store.GetVNF(r.Context(), id)
-	switch {
-	case errors.Is(err, store.ErrVNFNotFound):
-		writeError(w, http.StatusNotFound, "vnf not found")
-	case err != nil:
-		s.internalError(w, r, err)
-	default:
-		writeJSON(w, http.StatusOK, s.viewVNF(r.Context(), vnf))
-	}
-}
-
-func (s *Server) handleCreateVNF(w http.ResponseWriter, r *http.Request) {
-	var payload vnfPayload
-	if err := decodeJSON(w, r, &payload); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	created, err := s.createVNF(r.Context(), payload)
-	if err != nil {
-		s.writeVNFOperationError(w, r, err)
-		return
-	}
-	w.Header().Set("Location", fmt.Sprintf("/api/vnfs/%d", created.ID))
-	writeJSON(w, http.StatusCreated, s.viewVNF(r.Context(), created))
-}
-
-func (s *Server) handleUpdateVNF(w http.ResponseWriter, r *http.Request) {
-	id, err := parseVNFID(r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	var payload vnfUpdatePayload
-	if err := decodeJSON(w, r, &payload); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	updated, err := s.updateVNF(r.Context(), id, payload)
-	if err != nil {
-		s.writeVNFOperationError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, s.viewVNF(r.Context(), updated))
-}
-
 func vnfUpdateName(value *string) (string, error) {
 	if value == nil {
 		return "", errors.New("name is required")
@@ -644,84 +561,6 @@ func vnfUpdateName(value *string) (string, error) {
 		return "", errors.New("name must start with a letter or digit and contain only letters, digits, dots, dashes, and underscores")
 	}
 	return name, nil
-}
-
-func (s *Server) handleDeleteVNF(w http.ResponseWriter, r *http.Request) {
-	id, err := parseVNFID(r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if err := s.deleteVNF(r.Context(), id); err != nil {
-		s.writeVNFOperationError(w, r, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (s *Server) handleRestartVNF(w http.ResponseWriter, r *http.Request) {
-	id, err := parseVNFID(r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	updated, err := s.restartVNF(r.Context(), id)
-	if err != nil {
-		s.writeVNFOperationError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, s.viewVNF(r.Context(), updated))
-}
-
-func (s *Server) writeVNFOperationError(w http.ResponseWriter, r *http.Request, err error) {
-	var operationError *VNFError
-	if !errors.As(err, &operationError) {
-		s.internalError(w, r, err)
-		return
-	}
-	if operationError.Status >= http.StatusInternalServerError {
-		s.logger.Error("VNF operation failed", "error", err)
-		writeError(w, operationError.Status, "VNF operation failed")
-		return
-	}
-	writeError(w, operationError.Status, operationError.Error())
-}
-
-func (s *Server) handleListVNFLeases(w http.ResponseWriter, r *http.Request) {
-	id, err := parseVNFID(r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	vnf, err := s.store.GetVNF(r.Context(), id)
-	switch {
-	case errors.Is(err, store.ErrVNFNotFound):
-		writeError(w, http.StatusNotFound, "vnf not found")
-		return
-	case err != nil:
-		s.internalError(w, r, err)
-		return
-	}
-	if s.vnfs == nil {
-		writeJSON(w, http.StatusOK, []store.VNFLease{})
-		return
-	}
-	leases, err := s.vnfs.Leases(r.Context(), id)
-	if err != nil {
-		s.internalError(w, r, err)
-		return
-	}
-	filtered := make([]store.VNFLease, 0, len(leases))
-	for _, lease := range leases {
-		if leaseBelongsToVNF(vnf, lease.Address) {
-			filtered = append(filtered, lease)
-		}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"vnf_id": vnf.ID,
-		"type":   vnf.Type,
-		"leases": filtered,
-	})
 }
 
 func leaseBelongsToVNF(vnf store.VNF, address string) bool {
@@ -804,44 +643,6 @@ func (s *Server) setNAT44Running(vnfID int64, running bool) {
 	} else {
 		delete(s.natRunning, vnfID)
 	}
-}
-
-func (s *Server) handleListVNFSessions(w http.ResponseWriter, r *http.Request) {
-	id, err := parseVNFID(r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	vnf, err := s.store.GetVNF(r.Context(), id)
-	switch {
-	case errors.Is(err, store.ErrVNFNotFound):
-		writeError(w, http.StatusNotFound, "vnf not found")
-		return
-	case err != nil:
-		s.internalError(w, r, err)
-		return
-	}
-	if vnf.Type != store.VNFTypeNAT44 {
-		writeError(w, http.StatusBadRequest, "sessions are available for NAT44 VNFs only")
-		return
-	}
-	if s.nat == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"vnf_id": vnf.ID, "type": vnf.Type, "sessions": []string{}})
-		return
-	}
-	sessions, err := s.nat.NAT44Sessions(r.Context())
-	if err != nil {
-		s.internalError(w, r, err)
-		return
-	}
-	if sessions == nil {
-		sessions = []string{}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"vnf_id":   vnf.ID,
-		"type":     vnf.Type,
-		"sessions": sessions,
-	})
 }
 
 func applyNATGatewayToDHCPConfig(network store.Network, vnfType string, config *store.VNFConfig) error {

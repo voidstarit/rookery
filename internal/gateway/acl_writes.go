@@ -153,7 +153,7 @@ func aclStoreError(err error) error {
 	case errors.Is(err, store.ErrACLNameTaken):
 		return status.Error(codes.AlreadyExists, "an ACL with that name already exists")
 	case errors.Is(err, store.ErrACLInUse):
-		return status.Error(codes.FailedPrecondition, "ACL is assigned to an interface")
+		return status.Error(codes.Aborted, "ACL is assigned to an interface")
 	default:
 		return status.Error(codes.Internal, "ACL operation failed")
 	}

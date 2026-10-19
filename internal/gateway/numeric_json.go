@@ -3,6 +3,7 @@ package gateway
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"reflect"
 
@@ -10,6 +11,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // numericJSONMarshaler keeps protobuf JSON semantics for enums and field
@@ -32,6 +34,9 @@ func newNumericJSONMarshaler() *numericJSONMarshaler {
 }
 
 func (m *numericJSONMarshaler) Marshal(value interface{}) ([]byte, error) {
+	if _, ok := value.(*emptypb.Empty); ok {
+		return nil, nil
+	}
 	data, err := m.JSONPb.Marshal(value)
 	if err != nil {
 		return nil, err
@@ -71,6 +76,45 @@ func marshalProtoSlice(m *numericJSONMarshaler, value interface{}) ([]byte, bool
 	}
 	data, err := json.Marshal(items)
 	return data, true, err
+}
+
+func (m *numericJSONMarshaler) Unmarshal(data []byte, value interface{}) error {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	var first json.RawMessage
+	if err := decoder.Decode(&first); err != nil {
+		return err
+	}
+	var extra json.RawMessage
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return errors.New("request body must contain a single JSON value")
+		}
+		return err
+	}
+	return m.JSONPb.Unmarshal(data, value)
+}
+
+func (m *numericJSONMarshaler) NewDecoder(reader io.Reader) runtime.Decoder {
+	return &numericJSONDecoder{marshaler: m, reader: reader}
+}
+
+type numericJSONDecoder struct {
+	marshaler *numericJSONMarshaler
+	reader    io.Reader
+	done      bool
+}
+
+func (d *numericJSONDecoder) Decode(value interface{}) error {
+	if d.done {
+		return io.EOF
+	}
+	data, err := io.ReadAll(d.reader)
+	if err != nil {
+		return err
+	}
+	d.done = true
+	return d.marshaler.Unmarshal(data, value)
 }
 
 func (m *numericJSONMarshaler) NewEncoder(writer io.Writer) runtime.Encoder {

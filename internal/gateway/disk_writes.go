@@ -94,7 +94,7 @@ func (s *diskService) DeleteDisk(ctx context.Context, request *rookeryv1.DeleteD
 		return nil, storeReadError(err, store.ErrDiskNotFound, "disk not found")
 	}
 	if disk.AttachedVMID != nil {
-		return nil, status.Error(codes.FailedPrecondition, "disk is attached to a VM; delete the VM first")
+		return nil, status.Error(codes.Aborted, "disk is attached to a VM; delete the VM first")
 	}
 	if err := s.runtime.DeleteThinVolume(ctx, disk.VG, disk.Name); err != nil {
 		return nil, status.Error(codes.Internal, "could not remove disk volume: "+err.Error())
@@ -104,7 +104,7 @@ func (s *diskService) DeleteDisk(ctx context.Context, request *rookeryv1.DeleteD
 		case errors.Is(err, store.ErrDiskNotFound):
 			return nil, status.Error(codes.NotFound, "disk not found")
 		case errors.Is(err, store.ErrDiskInUse):
-			return nil, status.Error(codes.FailedPrecondition, "disk is attached to a VM; delete the VM first")
+			return nil, status.Error(codes.Aborted, "disk is attached to a VM; delete the VM first")
 		default:
 			return nil, status.Error(codes.Internal, "could not delete disk")
 		}

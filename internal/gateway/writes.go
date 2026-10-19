@@ -47,7 +47,7 @@ func (s *storageBackendService) UpdateStorageBackend(ctx context.Context, reques
 	}
 	backend.ID = existing.ID
 	if existing.DiskCount > 0 && (backend.Driver != existing.Driver || backend.Config != existing.Config) {
-		return nil, status.Error(codes.FailedPrecondition, "storage backend configuration cannot change while disks use it")
+		return nil, status.Error(codes.Aborted, "storage backend configuration cannot change while disks use it")
 	}
 	updated, err := s.store.UpdateStorageBackend(ctx, backend)
 	if err != nil {
@@ -136,7 +136,7 @@ func storageBackendError(err error) error {
 	case errors.Is(err, store.ErrStorageBackendNameTaken):
 		return status.Error(codes.AlreadyExists, "a storage backend with that name already exists")
 	case errors.Is(err, store.ErrStorageBackendInUse):
-		return status.Error(codes.FailedPrecondition, "storage backend still has disks")
+		return status.Error(codes.Aborted, "storage backend still has disks")
 	default:
 		return status.Error(codes.Internal, "storage backend operation failed")
 	}
@@ -216,7 +216,7 @@ func (s *mediaService) DeleteMedia(ctx context.Context, request *rookeryv1.Delet
 		case errors.Is(err, store.ErrMediaNotFound):
 			return nil, status.Error(codes.NotFound, "media not found")
 		case errors.Is(err, store.ErrMediaInUse):
-			return nil, status.Error(codes.FailedPrecondition, "media is used as boot media by a VM; clear it first")
+			return nil, status.Error(codes.Aborted, "media is used as boot media by a VM; clear it first")
 		default:
 			return nil, status.Error(codes.Internal, "could not delete media")
 		}

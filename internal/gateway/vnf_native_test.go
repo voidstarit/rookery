@@ -25,8 +25,8 @@ func TestNativeVNFWrites(t *testing.T) {
 	}
 
 	ready := fakeReadiness{}
-	legacy := api.New(st, ready, nil, nil, nil, nil, nil, nil)
-	gw, err := gateway.New(st, ready, gateway.WithVNFWriter(legacy), gateway.WithVNFStatusProvider(legacy))
+	provider := api.New(st, ready, nil, nil, nil, nil, nil, nil)
+	gw, err := gateway.New(st, ready, gateway.WithVNFWriter(provider), gateway.WithVNFStatusProvider(provider))
 	if err != nil {
 		t.Fatal(err)
 	}

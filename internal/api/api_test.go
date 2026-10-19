@@ -21,6 +21,7 @@ import (
 	"golang.org/x/net/websocket"
 
 	"github.com/voidstarit/rookery/internal/api"
+	"github.com/voidstarit/rookery/internal/gateway"
 	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/readiness"
@@ -588,9 +589,28 @@ func newTestAPIWithReadiness(t *testing.T, ready api.Readiness) *testAPI {
 	vnfManager := newFakeVNFManager()
 	natManager := &fakeNAT44{}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	apiServer := api.NewLegacy(st, ready, provisioner, controller, networkProvisioner, vnfManager, natManager, logger)
+	apiServer := api.New(st, ready, provisioner, controller, networkProvisioner, vnfManager, natManager, logger)
+	gw, err := gateway.New(st, ready,
+		gateway.WithDiskProvisioner(provisioner),
+		gateway.WithVMController(controller),
+		gateway.WithInterfaceCounters(networkProvisioner),
+		gateway.WithACLRuntime(networkProvisioner),
+		gateway.WithInterfaceRuntime(networkProvisioner),
+		gateway.WithNetworkRuntime(networkProvisioner),
+		gateway.WithDiagnosticsRuntime(networkProvisioner),
+		gateway.WithVNFRuntime(vnfManager),
+		gateway.WithVNFWriter(apiServer),
+		gateway.WithNetworkWriter(apiServer),
+		gateway.WithVNFStatusProvider(apiServer),
+		gateway.WithDiskMutex(apiServer.ResourceMutex()),
+		gateway.WithVMMutex(apiServer.RunMutex()),
+	)
+	if err != nil {
+		t.Fatalf("create gateway: %v", err)
+	}
+	t.Cleanup(gw.Close)
 	return &testAPI{
-		handler:     apiServer,
+		handler:     api.CutoverHandler(gw.Handler, apiServer.NativeHandler()),
 		server:      apiServer,
 		store:       st,
 		provisioner: provisioner,
@@ -2783,8 +2803,9 @@ func TestEditVMInterfaces(t *testing.T) {
 	}
 
 	recorder = do(t, handler, http.MethodPut, "/api/vms/"+vm.ID, map[string]any{
-		"name":          vm.Name,
-		"interface_ids": []int64{},
+		"name":                  vm.Name,
+		"interface_ids":         []int64{},
+		"replace_interface_ids": true,
 	})
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("remove all interfaces status = %d, body = %s", recorder.Code, recorder.Body.String())

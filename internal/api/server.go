@@ -6,24 +6,19 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"runtime/debug"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/google/uuid"
 
 	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/readiness"
 	"github.com/voidstarit/rookery/internal/store"
-	"github.com/voidstarit/rookery/internal/webui"
 )
 
 // Readiness reports whether host prerequisites for VM creation are available.
@@ -135,21 +130,6 @@ func (s *Server) ResourceMutex() *sync.Mutex {
 	return &s.resourceMu
 }
 
-// New returns the API server with only the protocol-native routes used by
-// serve. Legacy JSON routes are registered by NewLegacy for tests.
-func New(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMController, networks NetworkProvisioner, vnfs VNFManager, nat NAT44Provisioner, logger *slog.Logger) *Server {
-	s := newServer(st, ready, disks, vms, networks, vnfs, nat, logger)
-	s.handler = s.NativeHandler()
-	return s
-}
-
-// NewLegacy returns the server with the original JSON API routes registered.
-// It exists for handler tests while callers migrate to the generated gateway.
-func NewLegacy(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMController, networks NetworkProvisioner, vnfs VNFManager, nat NAT44Provisioner, logger *slog.Logger) *Server {
-	s := newServer(st, ready, disks, vms, networks, vnfs, nat, logger)
-	return s.registerLegacyRoutes()
-}
-
 func newServer(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMController, networks NetworkProvisioner, vnfs VNFManager, nat NAT44Provisioner, logger *slog.Logger) *Server {
 	if logger == nil {
 		logger = slog.Default()
@@ -157,252 +137,17 @@ func newServer(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMCo
 	return &Server{store: st, readiness: ready, disks: disks, vms: vms, networks: networks, vnfs: vnfs, nat: nat, logger: logger, natRunning: make(map[int64]bool)}
 }
 
-func (s *Server) registerLegacyRoutes() *Server {
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/healthz", s.handleHealth)
-	mux.HandleFunc("GET /api/status", s.handleStatus)
-	mux.HandleFunc("GET /api/vms", s.handleListVMs)
-	mux.HandleFunc("POST /api/vms", s.handleCreateVM)
-	mux.HandleFunc("GET /api/vms/{id}", s.handleGetVM)
-	mux.HandleFunc("GET /api/vms/{id}/metrics", s.handleGetVMMetrics)
-	mux.HandleFunc("PUT /api/vms/{id}", s.handleUpdateVM)
-	mux.HandleFunc("DELETE /api/vms/{id}", s.handleDeleteVM)
-	mux.HandleFunc("POST /api/vms/{id}/start", s.handleStartVM)
-	mux.HandleFunc("POST /api/vms/{id}/stop", s.handleStopVM)
-	mux.HandleFunc("POST /api/vms/{id}/reset", s.handleResetVM)
-	mux.HandleFunc("POST /api/vms/{id}/ctrl-alt-del", s.handleVMCtrlAltDel)
-	mux.HandleFunc("GET /ws/vms/{id}/vnc", s.handleVNCProxy)
-	mux.HandleFunc("GET /api/storage-backends", s.handleListStorageBackends)
-	mux.HandleFunc("POST /api/storage-backends", s.handleCreateStorageBackend)
-	mux.HandleFunc("GET /api/storage-backends/{id}", s.handleGetStorageBackend)
-	mux.HandleFunc("PUT /api/storage-backends/{id}", s.handleUpdateStorageBackend)
-	mux.HandleFunc("DELETE /api/storage-backends/{id}", s.handleDeleteStorageBackend)
-	mux.HandleFunc("GET /api/storage-backends/{id}/importable-disks", s.handleListImportableDisks)
-	mux.HandleFunc("POST /api/storage-backends/{id}/import-disks", s.handleImportDisks)
-	mux.HandleFunc("GET /api/disks", s.handleListDisks)
-	mux.HandleFunc("POST /api/disks", s.handleCreateDisk)
-	mux.HandleFunc("GET /api/disks/{id}", s.handleGetDisk)
-	mux.HandleFunc("DELETE /api/disks/{id}", s.handleDeleteDisk)
-	mux.HandleFunc("GET /api/media", s.handleListMedia)
-	mux.HandleFunc("POST /api/media", s.handleCreateMedia)
-	mux.HandleFunc("GET /api/media/{id}", s.handleGetMedia)
-	mux.HandleFunc("DELETE /api/media/{id}", s.handleDeleteMedia)
-	mux.HandleFunc("GET /api/networks", s.handleListNetworks)
-	mux.HandleFunc("POST /api/networks", s.handleCreateNetwork)
-	mux.HandleFunc("GET /api/networks/{id}", s.handleGetNetwork)
-	mux.HandleFunc("DELETE /api/networks/{id}", s.handleDeleteNetwork)
-	mux.HandleFunc("GET /api/vnfs", s.handleListVNFs)
-	mux.HandleFunc("POST /api/vnfs", s.handleCreateVNF)
-	mux.HandleFunc("GET /api/vnfs/{id}", s.handleGetVNF)
-	mux.HandleFunc("PUT /api/vnfs/{id}", s.handleUpdateVNF)
-	mux.HandleFunc("DELETE /api/vnfs/{id}", s.handleDeleteVNF)
-	mux.HandleFunc("POST /api/vnfs/{id}/restart", s.handleRestartVNF)
-	mux.HandleFunc("GET /api/vnfs/{id}/leases", s.handleListVNFLeases)
-	mux.HandleFunc("GET /api/vnfs/{id}/sessions", s.handleListVNFSessions)
-	mux.HandleFunc("GET /api/host/interfaces", s.handleListHostInterfaces)
-	mux.HandleFunc("GET /api/troubleshoot/vpp-graph", s.handleVPPNodeGraph)
-	mux.HandleFunc("GET /api/troubleshoot/acl-counters", s.handleACLInterfaceCounters)
-	mux.HandleFunc("GET /api/troubleshoot/capture/interfaces", s.handleListVPPInterfaces)
-	mux.HandleFunc("GET /api/troubleshoot/capture", s.handlePacketCaptureOverview)
-	mux.HandleFunc("POST /api/troubleshoot/capture", s.handleStartPacketCapture)
-	mux.HandleFunc("POST /api/troubleshoot/capture/stop", s.handleStopPacketCapture)
-	mux.HandleFunc("GET /api/troubleshoot/capture/files", s.handleListPacketCaptures)
-	mux.HandleFunc("GET /api/troubleshoot/capture/files/{name}", s.handleDownloadPacketCapture)
-	mux.HandleFunc("DELETE /api/troubleshoot/capture/files/{name}", s.handleDeletePacketCapture)
-	mux.HandleFunc("GET /webshark/json", s.handleWebSharkJSON)
-	mux.HandleFunc("GET /webshark/captures/{name}", s.handleWebSharkCapture)
-	mux.HandleFunc("GET /webshark/watch", s.handleWebSharkWatch)
-	mux.HandleFunc("GET /webshark", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/webshark/", http.StatusFound)
-	})
-	mux.HandleFunc("GET /api/acls", s.handleListACLs)
-	mux.HandleFunc("POST /api/acls", s.handleCreateACL)
-	mux.HandleFunc("GET /api/acls/{id}", s.handleGetACL)
-	mux.HandleFunc("PUT /api/acls/{id}", s.handleUpdateACL)
-	mux.HandleFunc("DELETE /api/acls/{id}", s.handleDeleteACL)
-	mux.HandleFunc("GET /api/interfaces", s.handleListInterfaces)
-	mux.HandleFunc("POST /api/interfaces", s.handleCreateInterface)
-	mux.HandleFunc("GET /api/interfaces/{id}", s.handleGetInterface)
-	mux.HandleFunc("PUT /api/interfaces/{id}", s.handleUpdateInterface)
-	mux.HandleFunc("PUT /api/interfaces/{id}/acls", s.handleSetInterfaceACLs)
-	mux.HandleFunc("DELETE /api/interfaces/{id}", s.handleDeleteInterface)
-	mux.HandleFunc("/api", s.handleAPINotFound)
-	mux.HandleFunc("/api/", s.handleAPINotFound)
-	mux.Handle("/", webui.Handler())
-
-	var handler http.Handler = mux
-	handler = s.recoverPanic(handler)
-	handler = securityHeaders(handler)
-	handler = s.logRequests(handler)
-	s.handler = handler
+// New returns the API server with only the protocol-native routes used by
+// serve.
+func New(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMController, networks NetworkProvisioner, vnfs VNFManager, nat NAT44Provisioner, logger *slog.Logger) *Server {
+	s := newServer(st, ready, disks, vms, networks, vnfs, nat, logger)
+	s.handler = s.NativeHandler()
 	return s
 }
 
 // ServeHTTP implements http.Handler.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.handler.ServeHTTP(w, r)
-}
-
-func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-	defer cancel()
-
-	if err := s.store.Ping(ctx); err != nil {
-		s.logger.Error("health check failed", "error", err)
-		writeError(w, http.StatusServiceUnavailable, "database unavailable")
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-}
-
-func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.readiness.Status())
-}
-
-func (s *Server) handleAPINotFound(w http.ResponseWriter, r *http.Request) {
-	if allow, ok := allowedMethods(r.URL.Path); ok {
-		w.Header().Set("Allow", allow)
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	writeError(w, http.StatusNotFound, "not found")
-}
-
-// allowedMethods reports whether path is a known API route. Requests that
-// reach the fallback with a known path can only have an unsupported method,
-// because method-specific patterns are registered for the valid ones.
-func allowedMethods(path string) (string, bool) {
-	switch {
-	case path == "/api/healthz":
-		return "GET, HEAD", true
-	case path == "/api/status":
-		return "GET, HEAD", true
-	case path == "/api/vms":
-		return "GET, HEAD, POST", true
-	case strings.HasPrefix(path, "/api/vms/"):
-		rest := strings.TrimPrefix(path, "/api/vms/")
-		parts := strings.Split(rest, "/")
-		if len(parts) == 1 {
-			if _, err := uuid.Parse(parts[0]); err == nil {
-				return "GET, HEAD, PUT, DELETE", true
-			}
-		}
-		if len(parts) == 2 {
-			if _, err := uuid.Parse(parts[0]); err == nil && parts[1] == "metrics" {
-				return "GET, HEAD", true
-			}
-		}
-	case path == "/api/storage-backends":
-		return "GET, HEAD, POST", true
-	case strings.HasPrefix(path, "/api/storage-backends/"):
-		id := strings.TrimPrefix(path, "/api/storage-backends/")
-		if id == "" || strings.Contains(id, "/") {
-			return "", false
-		}
-		if parsed, err := strconv.ParseInt(id, 10, 64); err == nil && parsed > 0 {
-			return "GET, HEAD, PUT, DELETE", true
-		}
-	case path == "/api/disks":
-		return "GET, HEAD, POST", true
-	case strings.HasPrefix(path, "/api/disks/"):
-		id := strings.TrimPrefix(path, "/api/disks/")
-		if id == "" || strings.Contains(id, "/") {
-			return "", false
-		}
-		if parsed, err := strconv.ParseInt(id, 10, 64); err == nil && parsed > 0 {
-			return "GET, HEAD, DELETE", true
-		}
-	case path == "/api/media":
-		return "GET, HEAD, POST", true
-	case strings.HasPrefix(path, "/api/media/"):
-		id := strings.TrimPrefix(path, "/api/media/")
-		if id == "" || strings.Contains(id, "/") {
-			return "", false
-		}
-		if parsed, err := strconv.ParseInt(id, 10, 64); err == nil && parsed > 0 {
-			return "GET, HEAD, DELETE", true
-		}
-	case path == "/api/acls":
-		return "GET, HEAD, POST", true
-	case strings.HasPrefix(path, "/api/acls/"):
-		id := strings.TrimPrefix(path, "/api/acls/")
-		if id == "" || strings.Contains(id, "/") {
-			return "", false
-		}
-		if parsed, err := strconv.ParseInt(id, 10, 64); err == nil && parsed > 0 {
-			return "GET, HEAD, PUT, DELETE", true
-		}
-	case path == "/api/networks":
-		return "GET, HEAD, POST", true
-	case strings.HasPrefix(path, "/api/networks/"):
-		rest := strings.TrimPrefix(path, "/api/networks/")
-		parts := strings.Split(rest, "/")
-		if len(parts) == 1 {
-			if parsed, err := strconv.ParseInt(parts[0], 10, 64); err == nil && parsed > 0 {
-				return "GET, HEAD, DELETE", true
-			}
-		}
-	case path == "/api/host/interfaces":
-		return "GET, HEAD", true
-	case path == "/api/troubleshoot/vpp-graph":
-		return "GET, HEAD", true
-	case path == "/api/troubleshoot/acl-counters":
-		return "GET, HEAD", true
-	case path == "/api/troubleshoot/capture/interfaces":
-		return "GET, HEAD", true
-	case path == "/api/troubleshoot/capture":
-		return "GET, HEAD, POST", true
-	case path == "/api/troubleshoot/capture/stop":
-		return "POST", true
-	case path == "/api/troubleshoot/capture/files":
-		return "GET, HEAD", true
-	case strings.HasPrefix(path, "/api/troubleshoot/capture/files/"):
-		return "GET, HEAD, DELETE", true
-	case path == "/webshark/json":
-		return "GET, HEAD", true
-	case strings.HasPrefix(path, "/webshark/captures/"):
-		return "GET, HEAD", true
-	case path == "/webshark/watch":
-		return "GET", true
-	case path == "/api/vnfs":
-		return "GET, HEAD, POST", true
-	case strings.HasPrefix(path, "/api/vnfs/"):
-		rest := strings.TrimPrefix(path, "/api/vnfs/")
-		parts := strings.Split(rest, "/")
-		if len(parts) == 1 {
-			if parsed, err := strconv.ParseInt(parts[0], 10, 64); err == nil && parsed > 0 {
-				return "GET, HEAD, PUT, DELETE", true
-			}
-		}
-		if len(parts) == 2 {
-			if parsed, err := strconv.ParseInt(parts[0], 10, 64); err == nil && parsed > 0 {
-				switch parts[1] {
-				case "leases", "sessions":
-					return "GET, HEAD", true
-				case "restart":
-					return "POST", true
-				}
-			}
-		}
-	case path == "/api/interfaces":
-		return "GET, HEAD, POST", true
-	case strings.HasPrefix(path, "/api/interfaces/"):
-		rest := strings.TrimPrefix(path, "/api/interfaces/")
-		parts := strings.Split(rest, "/")
-		if len(parts) == 1 {
-			if parsed, err := strconv.ParseInt(parts[0], 10, 64); err == nil && parsed > 0 {
-				return "GET, HEAD, PUT, DELETE", true
-			}
-		}
-		if len(parts) == 2 && parts[1] == "acls" {
-			if parsed, err := strconv.ParseInt(parts[0], 10, 64); err == nil && parsed > 0 {
-				return "PUT", true
-			}
-		}
-	}
-	return "", false
 }
 
 func (s *Server) internalError(w http.ResponseWriter, r *http.Request, err error) {
@@ -426,34 +171,6 @@ type errorResponse struct {
 
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, errorResponse{Error: message})
-}
-
-func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
-	const maxBodyBytes = 1 << 20
-
-	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
-
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-
-	if err := decoder.Decode(dst); err != nil {
-		var maxErr *http.MaxBytesError
-		switch {
-		case errors.As(err, &maxErr):
-			return errors.New("request body is too large")
-		case errors.Is(err, io.EOF):
-			return errors.New("request body is empty")
-		default:
-			return fmt.Errorf("invalid JSON: %v", err)
-		}
-	}
-
-	var extra any
-	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-		return errors.New("request body must contain a single JSON object")
-	}
-
-	return nil
 }
 
 // SecurityHeaders applies the API's standard security headers. It is exported

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/voidstarit/rookery/internal/readiness"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -25,8 +27,11 @@ const (
 )
 
 func (s *vmService) CreateVM(ctx context.Context, request *rookeryv1.CreateVMRequest) (*rookeryv1.VM, error) {
-	if s.readiness != nil && !s.readiness.Status().Ready {
-		return nil, status.Error(codes.Unavailable, "VM creation is blocked until prerequisites are ready")
+	if s.readiness != nil {
+		current := s.readiness.Status()
+		if !current.Ready {
+			return nil, status.Error(codes.Unavailable, vmCreationBlockedMessage(current))
+		}
 	}
 	vm, err := vmFromCreateRequest(request)
 	if err != nil {
@@ -47,7 +52,7 @@ func (s *vmService) CreateVM(ctx context.Context, request *rookeryv1.CreateVMReq
 			return nil, status.Error(codes.Internal, "could not read interface")
 		}
 		if iface.AttachedVMID != nil {
-			return nil, status.Errorf(codes.FailedPrecondition, "interface %q is already attached to a VM", iface.Name)
+			return nil, status.Errorf(codes.Aborted, "interface %q is already attached to a VM", iface.Name)
 		}
 	}
 	created, err := s.store.CreateVM(ctx, vm)
@@ -115,10 +120,10 @@ func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMReq
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if changeInterfaces && s.runtime != nil && s.runtime.Running(existing.ID) {
-		return nil, status.Error(codes.FailedPrecondition, "stop the VM before changing its network interfaces")
+		return nil, status.Error(codes.Aborted, "stop the VM before changing its network interfaces")
 	}
 	if changeDisks && s.runtime != nil && s.runtime.Running(existing.ID) {
-		return nil, status.Error(codes.FailedPrecondition, "stop the VM before changing its disks")
+		return nil, status.Error(codes.Aborted, "stop the VM before changing its disks")
 	}
 	for _, interfaceID := range interfaceIDs {
 		iface, err := s.store.GetInterface(ctx, interfaceID)
@@ -129,7 +134,7 @@ func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMReq
 			return nil, status.Error(codes.Internal, "could not read interface")
 		}
 		if iface.AttachedVMID != nil && *iface.AttachedVMID != existing.ID {
-			return nil, status.Errorf(codes.FailedPrecondition, "interface %q is already attached to another VM", iface.Name)
+			return nil, status.Errorf(codes.Aborted, "interface %q is already attached to another VM", iface.Name)
 		}
 	}
 	for _, diskID := range diskIDs {
@@ -141,7 +146,7 @@ func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMReq
 			return nil, status.Error(codes.Internal, "could not read disk")
 		}
 		if disk.AttachedVMID != nil && *disk.AttachedVMID != existing.ID {
-			return nil, status.Errorf(codes.FailedPrecondition, "disk %q is already attached to another VM", disk.Name)
+			return nil, status.Errorf(codes.Aborted, "disk %q is already attached to another VM", disk.Name)
 		}
 	}
 	updated, err := s.store.UpdateVM(ctx, vm)
@@ -233,9 +238,7 @@ func vmFromUpdateRequest(existing store.VM, request *rookeryv1.UpdateVMRequest) 
 			return store.VM{}, err
 		}
 	}
-	if request.BootMediaId != nil {
-		vm.BootMediaID = request.BootMediaId
-	}
+	vm.BootMediaID = request.BootMediaId
 	if request.ConsoleEnabled != nil {
 		vm.ConsoleEnabled = request.GetConsoleEnabled()
 	}
@@ -316,16 +319,40 @@ func vmStoreError(err error, operation string) error {
 	case errors.Is(err, store.ErrDiskNotFound):
 		return status.Error(codes.InvalidArgument, "disk not found")
 	case errors.Is(err, store.ErrDiskInUse):
-		return status.Error(codes.FailedPrecondition, "disk is already attached to another VM")
+		return status.Error(codes.Aborted, "disk is already attached to another VM")
 	case errors.Is(err, store.ErrMediaNotFound):
 		return status.Error(codes.InvalidArgument, "boot media not found")
 	case errors.Is(err, store.ErrInterfaceNotFound):
 		return status.Error(codes.InvalidArgument, "interface not found")
 	case errors.Is(err, store.ErrInterfaceInUse):
-		return status.Error(codes.FailedPrecondition, "interface is already attached to another VM")
+		return status.Error(codes.Aborted, "interface is already attached to another VM")
 	case errors.Is(err, store.ErrNotFound):
 		return status.Error(codes.NotFound, "vm not found")
 	default:
 		return status.Error(codes.Internal, "could not "+operation+" VM")
 	}
+}
+
+func vmCreationBlockedMessage(status readiness.Status) string {
+	var problems []string
+	if !status.ThinPool.Ready {
+		problems = append(problems, "thin pool: "+componentReason(status.ThinPool.ComponentStatus))
+	}
+	if !status.VPP.Ready {
+		problems = append(problems, "FD.io VPP: "+componentReason(status.VPP.ComponentStatus))
+	}
+	if len(problems) == 0 {
+		return "VM creation is blocked until prerequisites are ready"
+	}
+	return "VM creation is blocked: " + strings.Join(problems, "; ")
+}
+
+func componentReason(status readiness.ComponentStatus) string {
+	if status.Detail != "" {
+		return status.Detail
+	}
+	if status.State != "" {
+		return status.State
+	}
+	return "not ready"
 }

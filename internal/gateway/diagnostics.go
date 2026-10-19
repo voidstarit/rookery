@@ -147,7 +147,7 @@ func (s *captureService) StartCapture(ctx context.Context, request *rookeryv1.St
 	})
 	if err != nil {
 		if errors.Is(err, host.ErrCaptureActive) {
-			return nil, status.Error(codes.FailedPrecondition, err.Error())
+			return nil, status.Error(codes.Aborted, err.Error())
 		}
 		return nil, status.Error(codes.Internal, "could not start packet capture: "+err.Error())
 	}
@@ -185,7 +185,7 @@ func (s *captureService) DeleteCaptureFile(_ context.Context, request *rookeryv1
 		case errors.Is(err, host.ErrCaptureNotFound):
 			return nil, status.Error(codes.NotFound, "packet capture not found")
 		case errors.Is(err, host.ErrCaptureFileActive):
-			return nil, status.Error(codes.FailedPrecondition, err.Error())
+			return nil, status.Error(codes.Aborted, err.Error())
 		default:
 			return nil, status.Error(codes.Internal, "could not delete packet capture")
 		}

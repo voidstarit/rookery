@@ -87,17 +87,17 @@ func (s *networkService) DeleteNetwork(ctx context.Context, request *rookeryv1.D
 		return nil, storeReadError(err, store.ErrNetworkNotFound, "network not found")
 	}
 	if network.InterfaceCount > 0 {
-		return nil, status.Error(codes.FailedPrecondition, "network still has virtual interfaces")
+		return nil, status.Error(codes.Aborted, "network still has virtual interfaces")
 	}
 	vnfs, err := s.store.ListVNFsByNetwork(ctx, network.ID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not list network VNFs")
 	}
 	if len(vnfs) > 0 {
-		return nil, status.Error(codes.FailedPrecondition, "delete the network's VNFs before deleting the network")
+		return nil, status.Error(codes.Aborted, "delete the network's VNFs before deleting the network")
 	}
 	if network.BVIHostName != "" {
-		return nil, status.Error(codes.FailedPrecondition, "delete the network's NAT44 VNF before deleting the network")
+		return nil, status.Error(codes.Aborted, "delete the network's NAT44 VNF before deleting the network")
 	}
 	if err := s.ready(); err != nil {
 		return nil, err
@@ -112,7 +112,7 @@ func (s *networkService) DeleteNetwork(ctx context.Context, request *rookeryv1.D
 		case errors.Is(err, store.ErrNetworkNotFound):
 			return nil, status.Error(codes.NotFound, "network not found")
 		case errors.Is(err, store.ErrNetworkInUse):
-			return nil, status.Error(codes.FailedPrecondition, "network still has virtual interfaces")
+			return nil, status.Error(codes.Aborted, "network still has virtual interfaces")
 		default:
 			return nil, status.Error(codes.Internal, "could not delete network")
 		}

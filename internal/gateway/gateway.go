@@ -18,6 +18,8 @@ import (
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
@@ -231,6 +233,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 		runtime.WithMarshalerOption(runtime.MIMEWildcard, newNumericJSONMarshaler()),
 		runtime.WithErrorHandler(errorHandler),
 		runtime.WithForwardResponseOption(httpResponseStatus),
+		runtime.WithForwardResponseRewriter(rewriteNativeResponses),
 	)
 	ctx := context.Background()
 	registrations := []func(context.Context, *runtime.ServeMux, *grpc.ClientConn) error{
@@ -292,14 +295,28 @@ func validationInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo
 	return handler(ctx, req)
 }
 
+func rewriteNativeResponses(ctx context.Context, response proto.Message) (interface{}, error) {
+	if method, ok := runtime.RPCMethod(ctx); ok {
+		switch method {
+		case "/rookery.v1.VMService/ResetVM", "/rookery.v1.VMService/CtrlAltDel":
+			return &emptypb.Empty{}, nil
+		}
+	}
+	return response, nil
+}
+
 func errorHandler(_ context.Context, _ *runtime.ServeMux, _ runtime.Marshaler, w http.ResponseWriter, _ *http.Request, err error) {
 	st := status.Convert(err)
 	payload, marshalErr := json.Marshal(map[string]string{"error": st.Message()})
 	if marshalErr != nil {
 		payload = []byte(`{"error":"request failed"}`)
 	}
+	httpStatus := runtime.HTTPStatusFromCode(st.Code())
+	if st.Code() == codes.Unimplemented {
+		httpStatus = http.StatusMethodNotAllowed
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(runtime.HTTPStatusFromCode(st.Code()))
+	w.WriteHeader(httpStatus)
 	_, _ = w.Write(payload)
 }
 

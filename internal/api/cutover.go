@@ -8,7 +8,7 @@ import (
 )
 
 // CutoverHandler routes browser-facing API traffic through the grpc-gateway
-// while keeping protocol-native handlers on the legacy server.
+// while keeping protocol-native handlers on the API server.
 func CutoverHandler(gateway, legacy http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -31,7 +31,7 @@ func (s *Server) LogRequests(next http.Handler) http.Handler {
 }
 
 // NativeHandler exposes only the protocol-native routes that remain on the
-// legacy server: VNC, WebShark, pcap downloads, and static UI assets.
+// API server: VNC, WebShark, pcap downloads, and static UI assets.
 func (s *Server) NativeHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ws/vms/{id}/vnc", s.handleVNCProxy)
