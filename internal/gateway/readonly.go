@@ -104,6 +104,7 @@ type networkService struct {
 	store     *store.Store
 	runtime   NetworkRuntime
 	readiness Readiness
+	writer    NetworkWriter
 	mu        *sync.Mutex
 }
 

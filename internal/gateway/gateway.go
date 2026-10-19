@@ -51,6 +51,7 @@ type options struct {
 	interfaceRuntime  InterfaceRuntime
 	diagnostics       DiagnosticsRuntime
 	networkRuntime    NetworkRuntime
+	networkWriter     NetworkWriter
 	vnfRuntime        VNFRuntime
 	vnfStatusProvider VNFStatusProvider
 	vnfWriter         VNFWriter
@@ -127,6 +128,13 @@ func WithNetworkRuntime(runtime NetworkRuntime) Option {
 	}
 }
 
+// WithNetworkWriter enables full network lifecycle deletion through internal/api.
+func WithNetworkWriter(writer NetworkWriter) Option {
+	return func(opts *options) {
+		opts.networkWriter = writer
+	}
+}
+
 // WithVNFRuntime enables DHCP lease and running-state views.
 func WithVNFRuntime(runtime VNFRuntime) Option {
 	return func(opts *options) {
@@ -172,7 +180,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	vms := &vmService{store: st, runtime: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, mu: options.vmMutex}
 	disks := &diskService{store: st, runtime: options.diskProvisioner, readiness: ready, mu: options.diskMutex}
 	media := &mediaService{store: st}
-	networks := &networkService{store: st, runtime: options.networkRuntime, readiness: ready, mu: options.diskMutex}
+	networks := &networkService{store: st, runtime: options.networkRuntime, readiness: ready, writer: options.networkWriter, mu: options.diskMutex}
 	interfaces := &interfaceService{store: st, runtime: options.aclRuntime, attachments: options.interfaceRuntime, vms: options.vmController, readiness: ready, resourceMu: options.diskMutex, runMu: options.vmMutex}
 	acls := &aclService{store: st, runtime: options.aclRuntime, readiness: ready}
 	vnfs := &vnfService{store: st, runtime: options.vnfRuntime, statusProvider: options.vnfStatusProvider, writer: options.vnfWriter}

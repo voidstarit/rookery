@@ -595,7 +595,8 @@ slice under `internal/gateway` exposes system health/status, read-only list/get
 operations for VMs, disks, media, networks, interfaces, ACLs, VNFs, storage
 backends, and host interfaces, plus VM/disk/media/network/interface/ACL/storage
 writes, VM lifecycle actions and metrics, interface ACL assignment, storage
-disk import, troubleshoot/capture services, and VNF writes. 64-bit JSON fields
+disk import, network lifecycle deletion, troubleshoot/capture services, and VNF
+writes. 64-bit JSON fields
 are emitted as numbers to match the existing REST API, and creates/deletes use
 `201`/`204`. VNF writes call native lifecycle methods in `internal/api` so
 activation/NAT behavior is shared without an HTTP round trip. The main `serve`

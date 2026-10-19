@@ -19,6 +19,11 @@ type NetworkRuntime interface {
 	DeleteBridgeDomain(ctx context.Context, bdID uint32) error
 }
 
+// NetworkWriter is the native network lifecycle service implemented by internal/api.
+type NetworkWriter interface {
+	DeleteNetwork(ctx context.Context, id int64) error
+}
+
 func (s *networkService) ready() error {
 	if s.runtime == nil {
 		return status.Error(codes.Unavailable, "VPP network runtime is not configured")
@@ -63,6 +68,12 @@ func (s *networkService) CreateNetwork(ctx context.Context, request *rookeryv1.C
 }
 
 func (s *networkService) DeleteNetwork(ctx context.Context, request *rookeryv1.DeleteNetworkRequest) (*emptypb.Empty, error) {
+	if s.writer != nil {
+		if err := s.writer.DeleteNetwork(ctx, request.GetId()); err != nil {
+			return nil, mapNetworkWriteError(err)
+		}
+		return &emptypb.Empty{}, nil
+	}
 	network, err := s.store.GetNetwork(ctx, request.GetId())
 	if err != nil {
 		return nil, storeReadError(err, store.ErrNetworkNotFound, "network not found")
@@ -99,4 +110,31 @@ func (s *networkService) DeleteNetwork(ctx context.Context, request *rookeryv1.D
 		}
 	}
 	return &emptypb.Empty{}, nil
+}
+
+type networkStatusError interface {
+	NetworkStatus() (int, string)
+}
+
+func mapNetworkWriteError(err error) error {
+	var operationError networkStatusError
+	if !errors.As(err, &operationError) {
+		return status.Error(codes.Internal, "network operation failed")
+	}
+	httpStatus, message := operationError.NetworkStatus()
+	if message == "" {
+		message = "network operation failed"
+	}
+	switch httpStatus {
+	case 400:
+		return status.Error(codes.InvalidArgument, message)
+	case 404:
+		return status.Error(codes.NotFound, message)
+	case 409:
+		return status.Error(codes.Aborted, message)
+	case 503:
+		return status.Error(codes.Unavailable, message)
+	default:
+		return status.Error(codes.Internal, "network operation failed")
+	}
 }

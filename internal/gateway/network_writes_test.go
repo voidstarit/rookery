@@ -72,3 +72,48 @@ func TestNetworkWriteRoutes(t *testing.T) {
 		t.Fatalf("deleted bridge domains = %+v", runtime.deleted)
 	}
 }
+
+type fakeNetworkWriter struct {
+	deleted []int64
+}
+
+func (f *fakeNetworkWriter) DeleteNetwork(_ context.Context, id int64) error {
+	f.deleted = append(f.deleted, id)
+	return nil
+}
+
+func TestNetworkDeleteWithWriter(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "network-writer.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	network, err := st.CreateNetwork(context.Background(), store.Network{Name: "lab", BridgeDomainID: 600})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := &fakeNetworkWriter{}
+	gw, err := gateway.New(st, fakeReadiness{}, gateway.WithNetworkWriter(writer))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	server := httptest.NewServer(gw.Handler)
+	t.Cleanup(server.Close)
+
+	request, err := http.NewRequest(http.MethodDelete, server.URL+"/api/networks/"+jsonID(network.ID), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete network status = %d, body = %s", response.StatusCode, readBody(t, response))
+	}
+	_ = response.Body.Close()
+	if len(writer.deleted) != 1 || writer.deleted[0] != network.ID {
+		t.Fatalf("deleted networks = %+v", writer.deleted)
+	}
+}

@@ -125,8 +125,6 @@ listener and `-grpc-addr` exposes direct gRPC.
 - VNF create/update/delete/restart use native lifecycle methods in `internal/api`.
   The legacy VNF HTTP handlers still exist and can be removed once the native
   methods have dedicated service tests.
-- Gateway network deletion requires VNFs and any BVI to be removed first; it
-  does not yet replicate the legacy handler's automatic VNF shutdown.
 - VM update uses `replace_interface_ids`/`replace_disk_ids` to distinguish an
   omitted list from an explicit replacement. Interfaces can be cleared with
   `replace_interface_ids`; disks cannot be cleared because a VM must keep at
