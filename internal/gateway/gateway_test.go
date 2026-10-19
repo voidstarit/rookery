@@ -16,6 +16,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/gateway"
@@ -220,6 +221,13 @@ func TestGatewayWithGRPCListener(t *testing.T) {
 	}
 	if response.GetStatus() != "ok" {
 		t.Fatalf("gRPC health = %+v", response)
+	}
+	healthResponse, err := healthpb.NewHealthClient(conn).Check(context.Background(), &healthpb.HealthCheckRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if healthResponse.GetStatus() != healthpb.HealthCheckResponse_SERVING {
+		t.Fatalf("gRPC serving status = %v", healthResponse.GetStatus())
 	}
 }
 

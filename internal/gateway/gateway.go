@@ -13,6 +13,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -200,6 +203,10 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	rookeryv1.RegisterHostServiceServer(server, hostInterfaces)
 	rookeryv1.RegisterTroubleshootServiceServer(server, troubleshoot)
 	rookeryv1.RegisterCaptureServiceServer(server, captures)
+	healthServer := health.NewServer()
+	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+	healthpb.RegisterHealthServer(server, healthServer)
+	reflection.Register(server)
 
 	go func() {
 		_ = server.Serve(listener)

@@ -602,7 +602,7 @@ are emitted as numbers to match the existing REST API, and creates/deletes use
 activation/NAT behavior is shared without an HTTP round trip. The main `serve`
 listener routes `/api` through the gateway;
 `-gateway-addr` adds an optional second gateway listener and `-grpc-addr`
-exposes direct gRPC. WebSocket VNC, WebShark SSE/static assets, and streamed pcap
+exposes direct gRPC with health checks and server reflection. WebSocket VNC, WebShark SSE/static assets, and streamed pcap
 downloads are served by `api.Server.NativeHandler`, which contains only those
 native routes plus the static UI.
 
