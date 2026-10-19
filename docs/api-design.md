@@ -111,10 +111,10 @@ optional second gateway HTTP listener and `-grpc-addr` exposes direct gRPC.
 ## Known gaps
 
 - UI contract tests against the cutover gateway are still needed.
-- The legacy API route registrations and handlers remain in `internal/api` for
-  tests but are no longer mounted by `serve`. They can be removed once the
-  native VNF/network lifecycle methods are moved into a dedicated service and
-  covered by focused unit tests.
+- The legacy API handlers remain in `internal/api` and are registered only by
+  `api.NewLegacy` for tests. They can be removed once the native VNF/network
+  lifecycle methods are moved into a dedicated service and covered by focused
+  unit tests.
 - VNF DHCP/NAT44 conditional requirements remain in the domain validator rather
   than generated validation (a CEL layer would close this gap).
 - VM update uses `replace_interface_ids`/`replace_disk_ids` to distinguish an

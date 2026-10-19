@@ -588,7 +588,7 @@ func newTestAPIWithReadiness(t *testing.T, ready api.Readiness) *testAPI {
 	vnfManager := newFakeVNFManager()
 	natManager := &fakeNAT44{}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	apiServer := api.New(st, ready, provisioner, controller, networkProvisioner, vnfManager, natManager, logger)
+	apiServer := api.NewLegacy(st, ready, provisioner, controller, networkProvisioner, vnfManager, natManager, logger)
 	return &testAPI{
 		handler:     apiServer,
 		server:      apiServer,

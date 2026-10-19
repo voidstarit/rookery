@@ -135,12 +135,29 @@ func (s *Server) ResourceMutex() *sync.Mutex {
 	return &s.resourceMu
 }
 
-// New returns the HTTP handler for the API and UI.
+// New returns the API server with only the protocol-native routes used by
+// serve. Legacy JSON routes are registered by NewLegacy for tests.
 func New(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMController, networks NetworkProvisioner, vnfs VNFManager, nat NAT44Provisioner, logger *slog.Logger) *Server {
+	s := newServer(st, ready, disks, vms, networks, vnfs, nat, logger)
+	s.handler = s.NativeHandler()
+	return s
+}
+
+// NewLegacy returns the server with the original JSON API routes registered.
+// It exists for handler tests while callers migrate to the generated gateway.
+func NewLegacy(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMController, networks NetworkProvisioner, vnfs VNFManager, nat NAT44Provisioner, logger *slog.Logger) *Server {
+	s := newServer(st, ready, disks, vms, networks, vnfs, nat, logger)
+	return s.registerLegacyRoutes()
+}
+
+func newServer(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMController, networks NetworkProvisioner, vnfs VNFManager, nat NAT44Provisioner, logger *slog.Logger) *Server {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	s := &Server{store: st, readiness: ready, disks: disks, vms: vms, networks: networks, vnfs: vnfs, nat: nat, logger: logger, natRunning: make(map[int64]bool)}
+	return &Server{store: st, readiness: ready, disks: disks, vms: vms, networks: networks, vnfs: vnfs, nat: nat, logger: logger, natRunning: make(map[int64]bool)}
+}
+
+func (s *Server) registerLegacyRoutes() *Server {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/healthz", s.handleHealth)
