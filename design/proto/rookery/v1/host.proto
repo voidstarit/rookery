@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// HostService exposes Linux host network information used by network functions.
+service HostService {
+  rpc ListHostInterfaces(ListHostInterfacesRequest) returns (ListHostInterfacesResponse) {
+    option (google.api.http) = {
+      get: "/api/host/interfaces"
+      response_body: "interfaces"
+    };
+  }
+}
+
+message HostInterface {
+  string name = 1;
+  bool up = 2;
+  repeated string addresses = 3;
+  bool default_route = 4;
+  bool physical = 5;
+  bool wireless = 6;
+}
+
+message ListHostInterfacesRequest {}
+
+message ListHostInterfacesResponse {
+  repeated HostInterface interfaces = 1;
+}

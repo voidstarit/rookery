@@ -124,6 +124,17 @@ type Server struct {
 	runMu sync.Mutex
 }
 
+// RunMutex returns the lock that serializes VM lifecycle operations. The
+// grpc-gateway shares it while both listeners are active.
+func (s *Server) RunMutex() *sync.Mutex {
+	return &s.runMu
+}
+
+// ResourceMutex returns the lock that serializes host resource provisioning.
+func (s *Server) ResourceMutex() *sync.Mutex {
+	return &s.resourceMu
+}
+
 // New returns the HTTP handler for the API and UI.
 func New(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMController, networks NetworkProvisioner, vnfs VNFManager, nat NAT44Provisioner, logger *slog.Logger) *Server {
 	if logger == nil {
@@ -426,6 +437,12 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	}
 
 	return nil
+}
+
+// SecurityHeaders applies the API's standard security headers. It is exported
+// for the grpc-gateway listener, which uses the same browser-facing policy.
+func SecurityHeaders(next http.Handler) http.Handler {
+	return securityHeaders(next)
 }
 
 func securityHeaders(next http.Handler) http.Handler {

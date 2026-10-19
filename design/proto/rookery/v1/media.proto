@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// MediaService manages read-only installation media records.
+service MediaService {
+  rpc ListMedia(ListMediaRequest) returns (ListMediaResponse) {
+    option (google.api.http) = {
+      get: "/api/media"
+      response_body: "media"
+    };
+  }
+
+  rpc GetMedia(GetMediaRequest) returns (Media) {
+    option (google.api.http) = {get: "/api/media/{id}"};
+  }
+
+  rpc CreateMedia(CreateMediaRequest) returns (Media) {
+    option (google.api.http) = {
+      post: "/api/media"
+      body: "*"
+    };
+  }
+
+  rpc DeleteMedia(DeleteMediaRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/media/{id}"};
+  }
+}
+
+message VMMedia {
+  int64 id = 1;
+  string name = 2;
+  string path = 3;
+  int64 size_bytes = 4;
+}
+
+message Media {
+  int64 id = 1;
+  string name = 2;
+  string path = 3;
+  int64 size_bytes = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+message ListMediaRequest {}
+
+message ListMediaResponse {
+  repeated Media media = 1;
+}
+
+message GetMediaRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateMediaRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 127
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  string path = 2 [(validate.rules).string = {min_len: 1, max_len: 4096}];
+}
+
+message DeleteMediaRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}

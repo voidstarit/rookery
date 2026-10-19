@@ -1255,3 +1255,29 @@ func (s *Server) cleanupLegacyNetworkVNF(ctx context.Context, network store.Netw
 	}
 	return nil
 }
+
+// VNFStatus returns the status fields and active lease count used by the
+// HTTP VNF views. The grpc-gateway reuses it so both listeners agree.
+func (s *Server) VNFStatus(ctx context.Context, vnf store.VNF) (status, detail string, leaseCount int) {
+	view := s.viewVNF(ctx, vnf)
+	return view.Status, view.StatusDetail, view.LeaseCount
+}
+
+// VNFSessions returns NAT44 sessions for a VNF, or an empty list when the NAT
+// runtime is unavailable.
+func (s *Server) VNFSessions(ctx context.Context, vnf store.VNF) ([]string, error) {
+	if vnf.Type != store.VNFTypeNAT44 {
+		return nil, errors.New("sessions are available for NAT44 VNFs only")
+	}
+	if s.nat == nil {
+		return []string{}, nil
+	}
+	sessions, err := s.nat.NAT44Sessions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if sessions == nil {
+		sessions = []string{}
+	}
+	return sessions, nil
+}

@@ -1,0 +1,114 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// InterfaceService manages VPP vhost-user interfaces and their VM attachment.
+service InterfaceService {
+  rpc ListInterfaces(ListInterfacesRequest) returns (ListInterfacesResponse) {
+    option (google.api.http) = {
+      get: "/api/interfaces"
+      response_body: "interfaces"
+    };
+  }
+
+  rpc GetInterface(GetInterfaceRequest) returns (VirtualInterface) {
+    option (google.api.http) = {get: "/api/interfaces/{id}"};
+  }
+
+  rpc CreateInterface(CreateInterfaceRequest) returns (VirtualInterface) {
+    option (google.api.http) = {
+      post: "/api/interfaces"
+      body: "*"
+    };
+  }
+
+  rpc UpdateInterface(UpdateInterfaceRequest) returns (VirtualInterface) {
+    option (google.api.http) = {
+      put: "/api/interfaces/{id}"
+      body: "*"
+    };
+  }
+
+  rpc SetInterfaceACLs(SetInterfaceACLsRequest) returns (VirtualInterface) {
+    option (google.api.http) = {
+      put: "/api/interfaces/{id}/acls"
+      body: "*"
+    };
+  }
+
+  rpc DeleteInterface(DeleteInterfaceRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/interfaces/{id}"};
+  }
+}
+
+message VirtualInterface {
+  int64 id = 1;
+  string name = 2;
+  int64 network_id = 3;
+  string network_name = 4;
+  string socket_path = 5;
+  string mac = 6;
+  uint32 sw_if_index = 7;
+  optional string attached_vm_id = 8;
+  string attached_vm_name = 9;
+  optional int64 ingress_acl_id = 10;
+  string ingress_acl_name = 11;
+  optional int64 egress_acl_id = 12;
+  string egress_acl_name = 13;
+  google.protobuf.Timestamp created_at = 14;
+  google.protobuf.Timestamp updated_at = 15;
+}
+
+message VMInterface {
+  int64 id = 1;
+  string name = 2;
+  int64 network_id = 3;
+  string network_name = 4;
+  string socket_path = 5;
+  string mac = 6;
+  uint32 sw_if_index = 7;
+  string ingress_acl_name = 8;
+  string egress_acl_name = 9;
+}
+
+message ListInterfacesRequest {}
+
+message ListInterfacesResponse {
+  repeated VirtualInterface interfaces = 1;
+}
+
+message GetInterfaceRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateInterfaceRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  int64 network_id = 2 [(validate.rules).int64 = {gt: 0}];
+  optional string attached_vm_id = 3 [(validate.rules).string = {ignore_empty: true, uuid: true}];
+}
+
+message UpdateInterfaceRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  optional string attached_vm_id = 2 [(validate.rules).string = {ignore_empty: true, uuid: true}];
+}
+
+message SetInterfaceACLsRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  string ingress_acl = 2 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
+  string egress_acl = 3 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
+}
+
+message DeleteInterfaceRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}

@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/voidstarit/rookery/internal/api"
+	"github.com/voidstarit/rookery/internal/gateway"
 	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/readiness"
@@ -27,6 +29,8 @@ func runServe(args []string) error {
 	hostCfg.register(fs)
 
 	addr := fs.String("addr", envDefault("NERDS_VMS_ADDR", "127.0.0.1:8080"), "HTTP listen address")
+	gatewayAddr := fs.String("gateway-addr", envDefault("NERDS_VMS_GATEWAY_ADDR", ""), "optional grpc-gateway HTTP listen address")
+	grpcAddr := fs.String("grpc-addr", envDefault("NERDS_VMS_GRPC_ADDR", ""), "optional gRPC listen address")
 	dbPath := fs.String("db", envDefault("NERDS_VMS_DB", "nerds-vms.db"), "SQLite database path")
 	checkInterval := fs.Duration("check-interval", 10*time.Second, "readiness check interval")
 	qemuBin := fs.String("qemu-bin", envDefault("NERDS_VMS_QEMU_BIN", qemu.DefaultBinary), "QEMU system emulator binary")
@@ -111,7 +115,38 @@ func runServe(args []string) error {
 		*checkInterval,
 	)
 
-	apiServer := api.New(st, manager, host.NewLVM(), qemuRunner, networkRunner, vnfManager, networkRunner, logger)
+	diskRunner := host.NewLVM()
+	apiServer := api.New(st, manager, diskRunner, qemuRunner, networkRunner, vnfManager, networkRunner, logger)
+
+	var gatewayRuntime *gateway.Gateway
+	var gatewayHTTP *http.Server
+	if *gatewayAddr != "" || *grpcAddr != "" {
+		grpcListenAddr := *grpcAddr
+		if grpcListenAddr == "" {
+			grpcListenAddr = "127.0.0.1:0"
+		}
+		listener, err := net.Listen("tcp", grpcListenAddr)
+		if err != nil {
+			return fmt.Errorf("listen gRPC: %w", err)
+		}
+		gatewayRuntime, err = gateway.New(st, manager, gateway.WithGRPCListener(listener), gateway.WithVMController(qemuRunner), gateway.WithInterfaceCounters(networkRunner), gateway.WithACLRuntime(networkRunner), gateway.WithDiskProvisioner(diskRunner), gateway.WithDiskMutex(apiServer.ResourceMutex()), gateway.WithVMMutex(apiServer.RunMutex()), gateway.WithInterfaceRuntime(networkRunner), gateway.WithDiagnosticsRuntime(networkRunner), gateway.WithNetworkRuntime(networkRunner), gateway.WithVNFRuntime(vnfManager), gateway.WithVNFStatusProvider(apiServer), gateway.WithLegacyVNFHandler(apiServer))
+		if err != nil {
+			_ = listener.Close()
+			return fmt.Errorf("prepare grpc-gateway: %w", err)
+		}
+		defer gatewayRuntime.Close()
+		if *gatewayAddr != "" {
+			gatewayHTTP = &http.Server{
+				Addr:              *gatewayAddr,
+				Handler:           api.SecurityHeaders(gatewayRuntime.Handler),
+				ReadHeaderTimeout: 5 * time.Second,
+				ReadTimeout:       15 * time.Second,
+				WriteTimeout:      30 * time.Second,
+				IdleTimeout:       60 * time.Second,
+			}
+		}
+	}
+
 	srv := &http.Server{
 		Addr:              *addr,
 		Handler:           apiServer,
@@ -127,13 +162,25 @@ func runServe(args []string) error {
 	go manager.Run(ctx)
 	go apiServer.RunInfrastructureReconciler(ctx)
 
-	serveErr := make(chan error, 1)
-	go func() {
-		serveErr <- srv.ListenAndServe()
-	}()
+	servers := []*http.Server{srv}
+	if gatewayHTTP != nil {
+		servers = append(servers, gatewayHTTP)
+	}
+	serveErr := make(chan error, len(servers))
+	for _, server := range servers {
+		go func(server *http.Server) {
+			serveErr <- server.ListenAndServe()
+		}(server)
+	}
 
+	grpcAddress := ""
+	if gatewayRuntime != nil {
+		grpcAddress = gatewayRuntime.GRPCAddress()
+	}
 	logger.Info("nerds-vms API listening",
 		"addr", httpURL(*addr),
+		"gateway_addr", *gatewayAddr,
+		"grpc_addr", grpcAddress,
 		"database", *dbPath,
 		"vg", vg,
 		"thin_pool", thinPool,
@@ -145,26 +192,30 @@ func runServe(args []string) error {
 		"vnf_backend", "coredhcp",
 	)
 
+	var runErr error
 	select {
 	case err := <-serveErr:
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil
-		}
-		return fmt.Errorf("listen: %w", err)
+		runErr = err
 	case <-ctx.Done():
 		logger.Info("shutdown requested")
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("graceful shutdown: %w", err)
+	for _, server := range servers {
+		if err := server.Shutdown(shutdownCtx); err != nil && runErr == nil {
+			runErr = fmt.Errorf("graceful shutdown: %w", err)
+		}
 	}
-	if err := <-serveErr; err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("listen: %w", err)
+	for range servers {
+		if err := <-serveErr; err != nil && !errors.Is(err, http.ErrServerClosed) && runErr == nil {
+			runErr = err
+		}
 	}
 
+	if runErr != nil && !errors.Is(runErr, http.ErrServerClosed) {
+		return fmt.Errorf("listen: %w", runErr)
+	}
 	logger.Info("stopped")
 	return nil
 }

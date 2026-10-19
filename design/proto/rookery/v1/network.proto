@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// NetworkService manages VPP bridge domains presented as Rookery Networks.
+service NetworkService {
+  rpc ListNetworks(ListNetworksRequest) returns (ListNetworksResponse) {
+    option (google.api.http) = {
+      get: "/api/networks"
+      response_body: "networks"
+    };
+  }
+
+  rpc GetNetwork(GetNetworkRequest) returns (Network) {
+    option (google.api.http) = {get: "/api/networks/{id}"};
+  }
+
+  rpc CreateNetwork(CreateNetworkRequest) returns (Network) {
+    option (google.api.http) = {
+      post: "/api/networks"
+      body: "*"
+    };
+  }
+
+  rpc DeleteNetwork(DeleteNetworkRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/networks/{id}"};
+  }
+}
+
+message Network {
+  int64 id = 1;
+  string name = 2;
+  uint32 bridge_domain_id = 3;
+  int32 interface_count = 4;
+  string bvi_host_name = 5;
+  uint32 bvi_sw_if_index = 6;
+  string ipv4_gateway = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+message ListNetworksRequest {}
+
+message ListNetworksResponse {
+  repeated Network networks = 1;
+}
+
+message GetNetworkRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateNetworkRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+}
+
+message DeleteNetworkRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}

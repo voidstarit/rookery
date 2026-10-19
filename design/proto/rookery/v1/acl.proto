@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// ACLService manages ordered interface ingress/egress ACLs.
+service ACLService {
+  rpc ListACLs(ListACLsRequest) returns (ListACLsResponse) {
+    option (google.api.http) = {
+      get: "/api/acls"
+      response_body: "acls"
+    };
+  }
+
+  rpc GetACL(GetACLRequest) returns (ACL) {
+    option (google.api.http) = {get: "/api/acls/{id}"};
+  }
+
+  rpc CreateACL(CreateACLRequest) returns (ACL) {
+    option (google.api.http) = {
+      post: "/api/acls"
+      body: "*"
+    };
+  }
+
+  rpc UpdateACL(UpdateACLRequest) returns (ACL) {
+    option (google.api.http) = {
+      put: "/api/acls/{id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteACL(DeleteACLRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/acls/{id}"};
+  }
+}
+
+message ACLRule {
+  string action = 1 [(validate.rules).string = {in: ["permit", "deny"]}];
+  string description = 2 [(validate.rules).string = {max_len: 256}];
+  string protocol = 3 [(validate.rules).string = {
+    in: ["any", "tcp", "udp", "icmp", "icmpv6"]
+  }];
+  string source = 4 [(validate.rules).string = {min_len: 1, max_len: 64}];
+  string destination = 5 [(validate.rules).string = {min_len: 1, max_len: 64}];
+  int32 source_port_start = 6 [(validate.rules).int32 = {gte: 0, lte: 65535}];
+  int32 source_port_end = 7 [(validate.rules).int32 = {gte: 0, lte: 65535}];
+  int32 destination_port_start = 8 [(validate.rules).int32 = {gte: 0, lte: 65535}];
+  int32 destination_port_end = 9 [(validate.rules).int32 = {gte: 0, lte: 65535}];
+}
+
+message ACL {
+  int64 id = 1;
+  string name = 2;
+  string title = 3;
+  string description = 4;
+  repeated ACLRule rules = 5;
+  uint32 vpp_index = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message ListACLsRequest {}
+
+message ListACLsResponse {
+  repeated ACL acls = 1;
+}
+
+message GetACLRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateACLRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  string title = 2 [(validate.rules).string = {max_len: 128}];
+  string description = 3 [(validate.rules).string = {max_len: 2000}];
+  repeated ACLRule rules = 4 [(validate.rules).repeated = {min_items: 1, max_items: 64}];
+}
+
+message UpdateACLRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  string name = 2 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  string title = 3 [(validate.rules).string = {max_len: 128}];
+  string description = 4 [(validate.rules).string = {max_len: 2000}];
+  repeated ACLRule rules = 5 [(validate.rules).repeated = {min_items: 1, max_items: 64}];
+}
+
+message DeleteACLRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}

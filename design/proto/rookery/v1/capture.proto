@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// CaptureService manages VPP pcap traces and retained capture metadata.
+// The pcap download itself remains a native streaming HTTP endpoint.
+service CaptureService {
+  rpc ListCaptureInterfaces(ListCaptureInterfacesRequest) returns (ListCaptureInterfacesResponse) {
+    option (google.api.http) = {
+      get: "/api/troubleshoot/capture/interfaces"
+      response_body: "interfaces"
+    };
+  }
+
+  rpc GetCaptureOverview(GetCaptureOverviewRequest) returns (PacketCaptureOverview) {
+    option (google.api.http) = {get: "/api/troubleshoot/capture"};
+  }
+
+  rpc StartCapture(StartCaptureRequest) returns (PacketCaptureStatus) {
+    option (google.api.http) = {
+      post: "/api/troubleshoot/capture"
+      body: "*"
+    };
+  }
+
+  rpc StopCapture(StopCaptureRequest) returns (PacketCaptureStatus) {
+    option (google.api.http) = {post: "/api/troubleshoot/capture/stop"};
+  }
+
+  rpc ListCaptureFiles(ListCaptureFilesRequest) returns (ListCaptureFilesResponse) {
+    option (google.api.http) = {
+      get: "/api/troubleshoot/capture/files"
+      response_body: "files"
+    };
+  }
+
+  rpc DeleteCaptureFile(DeleteCaptureFileRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/troubleshoot/capture/files/{name}"};
+  }
+}
+
+message VPPInterface {
+  string name = 1;
+  uint32 sw_if_index = 2;
+  string type = 3;
+  string mac = 4;
+  uint32 mtu = 5;
+  bool up = 6;
+  string tag = 7;
+}
+
+message PacketCaptureStatus {
+  bool active = 1;
+  string interface = 2;
+  string direction = 3;
+  string file = 4;
+  int64 size = 5;
+  uint64 max_packets = 6;
+  int64 max_bytes = 7;
+  int32 snap_length = 8;
+  uint64 packets = 9;
+  uint64 buffered = 10;
+  google.protobuf.Timestamp started_at = 11;
+  google.protobuf.Timestamp stopped_at = 12;
+  string raw = 13;
+}
+
+message PacketCaptureFile {
+  string name = 1;
+  int64 size = 2;
+  google.protobuf.Timestamp modified = 3;
+}
+
+message PacketCaptureOverview {
+  PacketCaptureStatus status = 1;
+  repeated PacketCaptureFile files = 2;
+}
+
+message ListCaptureInterfacesRequest {}
+
+message ListCaptureInterfacesResponse {
+  repeated VPPInterface interfaces = 1;
+}
+
+message GetCaptureOverviewRequest {}
+
+message StartCaptureRequest {
+  string interface = 1 [(validate.rules).string = {max_len: 64}];
+  string direction = 2 [(validate.rules).string = {ignore_empty: true, in: ["both", "rx", "tx"]}];
+  int64 max_bytes = 3 [(validate.rules).int64 = {ignore_empty: true, gte: 65536, lte: 209715200}];
+  int32 snap_length = 4 [(validate.rules).int32 = {ignore_empty: true, gte: 64, lte: 9000}];
+}
+
+message StopCaptureRequest {}
+
+message ListCaptureFilesRequest {}
+
+message ListCaptureFilesResponse {
+  repeated PacketCaptureFile files = 1;
+}
+
+message DeleteCaptureFileRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 128
+    pattern: "^rookery-[A-Za-z0-9._-]+\\.(pcap|pcapng)$"
+  }];
+}
