@@ -130,7 +130,7 @@ func runServe(args []string) error {
 		gateway.WithNetworkRuntime(networkRunner),
 		gateway.WithVNFRuntime(vnfManager),
 		gateway.WithVNFStatusProvider(apiServer),
-		gateway.WithLegacyVNFHandler(apiServer),
+		gateway.WithVNFWriter(apiServer),
 	}
 	var grpcListener net.Listener
 	if *grpcAddr != "" {

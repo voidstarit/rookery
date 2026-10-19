@@ -1,17 +1,39 @@
 package gateway_test
 
 import (
+	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/gateway"
 	"github.com/voidstarit/rookery/internal/store"
 )
+
+type fakeVNFWriter struct {
+	calls []string
+}
+
+func (f *fakeVNFWriter) CreateVNF(_ context.Context, request *rookeryv1.CreateVNFRequest) (store.VNF, error) {
+	f.calls = append(f.calls, "create "+request.GetName())
+	return store.VNF{ID: 9, Name: request.GetName(), NetworkID: request.GetNetworkId(), Type: request.GetType()}, nil
+}
+func (f *fakeVNFWriter) UpdateVNF(_ context.Context, request *rookeryv1.UpdateVNFRequest) (store.VNF, error) {
+	f.calls = append(f.calls, fmt.Sprintf("update %d", request.GetId()))
+	return store.VNF{ID: request.GetId(), Name: request.GetName(), Type: store.VNFTypeDHCPv4, Enabled: true}, nil
+}
+func (f *fakeVNFWriter) DeleteVNF(_ context.Context, request *rookeryv1.DeleteVNFRequest) error {
+	f.calls = append(f.calls, fmt.Sprintf("delete %d", request.GetId()))
+	return nil
+}
+func (f *fakeVNFWriter) RestartVNF(_ context.Context, request *rookeryv1.RestartVNFRequest) (store.VNF, error) {
+	f.calls = append(f.calls, fmt.Sprintf("restart %d", request.GetId()))
+	return store.VNF{ID: request.GetId(), Name: "dhcp", Type: store.VNFTypeDHCPv4, Enabled: true}, nil
+}
 
 func TestVNFWriteRoutes(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "vnf-writes.db"))
@@ -20,28 +42,8 @@ func TestVNFWriteRoutes(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = st.Close() })
 
-	var paths []string
-	legacy := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		paths = append(paths, request.Method+" "+request.URL.Path)
-		switch {
-		case request.Method == http.MethodDelete:
-			writer.WriteHeader(http.StatusNoContent)
-		case strings.HasSuffix(request.URL.Path, "/restart"):
-			writer.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(writer, `{"id":9,"name":"dhcp","network_id":3,"type":"dhcpv4","enabled":true,"status":"running","config":{"gateway":"10.0.0.1/24","range_start":"10.0.0.10","range_end":"10.0.0.20"}}`)
-		case request.Method == http.MethodPost:
-			writer.WriteHeader(http.StatusCreated)
-			writer.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(writer, `{"id":9,"name":"dhcp","network_id":3,"type":"dhcpv4","enabled":false,"status":"disabled","config":{"gateway":"10.0.0.1/24","range_start":"10.0.0.10","range_end":"10.0.0.20"}}`)
-		case request.Method == http.MethodPut:
-			writer.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(writer, `{"id":9,"name":"dhcp2","network_id":3,"type":"dhcpv4","enabled":true,"status":"running","config":{"gateway":"10.0.0.1/24","range_start":"10.0.0.10","range_end":"10.0.0.20"}}`)
-		default:
-			http.Error(writer, `{"error":"unexpected"}`, http.StatusInternalServerError)
-		}
-	})
-
-	gw, err := gateway.New(st, fakeReadiness{}, gateway.WithLegacyVNFHandler(legacy))
+	writer := &fakeVNFWriter{}
+	gw, err := gateway.New(st, fakeReadiness{}, gateway.WithVNFWriter(writer), gateway.WithVNFStatusProvider(fakeVNFStatusProvider{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,8 +104,8 @@ func TestVNFWriteRoutes(t *testing.T) {
 	}
 	_ = deleted.Body.Close()
 
-	wantPaths := []string{"POST /api/vnfs", "PUT /api/vnfs/9", "POST /api/vnfs/9/restart", "DELETE /api/vnfs/9"}
-	if fmt.Sprint(paths) != fmt.Sprint(wantPaths) {
-		t.Fatalf("legacy paths = %v", paths)
+	want := []string{"create dhcp", "update 9", "restart 9", "delete 9"}
+	if fmt.Sprint(writer.calls) != fmt.Sprint(want) {
+		t.Fatalf("writer calls = %v", writer.calls)
 	}
 }

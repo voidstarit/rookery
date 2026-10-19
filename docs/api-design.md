@@ -122,9 +122,9 @@ listener and `-grpc-addr` exposes direct gRPC.
 - The gateway's numeric JSON marshaler now matches the legacy REST API's
   number encoding for int64/uint64 fields; verify it with UI contract tests
   before route cutover.
-- VNF create/update/delete/restart are implemented by a temporary in-process
-  bridge to the legacy VNF HTTP handler. Native activation/NAT lifecycle
-  extraction is required before removing the legacy handlers.
+- VNF create/update/delete/restart use native lifecycle methods in `internal/api`.
+  The legacy VNF HTTP handlers still exist and can be removed once the native
+  methods have dedicated service tests.
 - Gateway network deletion requires VNFs and any BVI to be removed first; it
   does not yet replicate the legacy handler's automatic VNF shutdown.
 - VM update uses `replace_interface_ids`/`replace_disk_ids` to distinguish an
@@ -137,5 +137,4 @@ listener and `-grpc-addr` exposes direct gRPC.
   runtime adapter.
 - Troubleshoot and capture gateway services are generated but not registered yet.
 - Route cutover is complete for the main HTTP listener; UI contract tests and
-  removal of the legacy API handlers (blocked on native VNF lifecycle
-  extraction) are still pending.
+  removal of the legacy API handlers are still pending.

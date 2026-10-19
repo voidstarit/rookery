@@ -53,7 +53,7 @@ type options struct {
 	networkRuntime    NetworkRuntime
 	vnfRuntime        VNFRuntime
 	vnfStatusProvider VNFStatusProvider
-	legacyVNF         http.Handler
+	vnfWriter         VNFWriter
 }
 
 // WithGRPCListener exposes the generated gRPC server on listener instead of an
@@ -141,11 +141,10 @@ func WithVNFStatusProvider(provider VNFStatusProvider) Option {
 	}
 }
 
-// WithLegacyVNFHandler temporarily bridges VNF writes through the existing
-// HTTP handler while activation/NAT lifecycle logic is extracted.
-func WithLegacyVNFHandler(handler http.Handler) Option {
+// WithVNFWriter enables native VNF create/update/delete/restart operations.
+func WithVNFWriter(writer VNFWriter) Option {
 	return func(opts *options) {
-		opts.legacyVNF = handler
+		opts.vnfWriter = writer
 	}
 }
 
@@ -176,7 +175,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	networks := &networkService{store: st, runtime: options.networkRuntime, readiness: ready, mu: options.diskMutex}
 	interfaces := &interfaceService{store: st, runtime: options.aclRuntime, attachments: options.interfaceRuntime, vms: options.vmController, readiness: ready, resourceMu: options.diskMutex, runMu: options.vmMutex}
 	acls := &aclService{store: st, runtime: options.aclRuntime, readiness: ready}
-	vnfs := &vnfService{store: st, runtime: options.vnfRuntime, statusProvider: options.vnfStatusProvider, legacy: options.legacyVNF}
+	vnfs := &vnfService{store: st, runtime: options.vnfRuntime, statusProvider: options.vnfStatusProvider, writer: options.vnfWriter}
 	backends := &storageBackendService{store: st, readiness: ready, disks: options.diskProvisioner, mu: options.diskMutex}
 	hostInterfaces := &hostService{}
 	troubleshoot := &troubleshootService{runtime: options.diagnostics, readiness: ready}

@@ -13,7 +13,7 @@ import (
 	"github.com/voidstarit/rookery/internal/store"
 )
 
-func TestVNFWritesThroughLegacyHandler(t *testing.T) {
+func TestNativeVNFWrites(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "vnf-bridge.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -26,7 +26,7 @@ func TestVNFWritesThroughLegacyHandler(t *testing.T) {
 
 	ready := fakeReadiness{}
 	legacy := api.New(st, ready, nil, nil, nil, nil, nil, nil)
-	gw, err := gateway.New(st, ready, gateway.WithLegacyVNFHandler(legacy))
+	gw, err := gateway.New(st, ready, gateway.WithVNFWriter(legacy), gateway.WithVNFStatusProvider(legacy))
 	if err != nil {
 		t.Fatal(err)
 	}

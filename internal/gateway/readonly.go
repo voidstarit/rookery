@@ -3,7 +3,6 @@ package gateway
 import (
 	"context"
 	"errors"
-	"net/http"
 	"sync"
 	"time"
 
@@ -228,7 +227,7 @@ type vnfService struct {
 	store          *store.Store
 	runtime        VNFRuntime
 	statusProvider VNFStatusProvider
-	legacy         http.Handler
+	writer         VNFWriter
 }
 
 func (s *vnfService) ListVNFs(ctx context.Context, request *rookeryv1.ListVNFsRequest) (*rookeryv1.ListVNFsResponse, error) {
