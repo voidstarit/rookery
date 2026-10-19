@@ -108,7 +108,7 @@ gateway operations remain serialized. VNF writes and network deletion are implem
 `internal/lifecycle`, backed by the VPP/NAT/DHCP runtime in `internal/api`. `-gateway-addr` adds an
 optional second gateway HTTP listener and `-grpc-addr` exposes direct gRPC.
 
-## Known gaps
+## Notes
 
 - Core response-shape contract coverage checks numeric IDs, status booleans,
   list arrays, and key VM/network/VNF fields used by the UI.
