@@ -369,8 +369,8 @@ with generated MAC addresses. Attach an interface to a stopped VM; QEMU gets a
 virtio-net device using that vhost socket on the next start. The VM creation form
 can also select multiple unattached interfaces at once (`interface_ids`), and the
 edit dialog can add or remove interfaces while the VM is stopped. On update,
-omitting `interface_ids` leaves attachments unchanged; an empty array detaches
-all interfaces. Only unattached or currently attached interfaces are offered,
+omitting `interface_ids` leaves attachments unchanged; send
+`replace_interface_ids: true` with an empty array to detach all interfaces. Only unattached or currently attached interfaces are offered,
 and attachments change only when a VM starts.
 Interfaces remain in VPP when a VM is deleted or the interface is detached, so
 they can be reused.
@@ -897,7 +897,9 @@ to UUIDs; disk and media IDs remain integers.
 | `name`        | yes      | -         | Unique, case-insensitive, max 64 chars     |
 | `disk_ids`    | yes (create) / no (edit) | - | IDs of existing unattached disks; at least one. On edit, replaces the attached set while the VM is stopped. `disk_id` is still accepted as a single-disk alias on create |
 | `disks`       | read-only | -         | Attached disk summaries, in attachment order |
-| `interface_ids` | no (create/edit) | `[]`  | IDs of unattached virtual interfaces to attach at creation, or the desired set on update |
+| `interface_ids` | no (create/edit) | `[]`  | IDs of unattached virtual interfaces to attach at creation, or the desired set on update with `replace_interface_ids` |
+| `replace_interface_ids` | no (edit) | `false` | Explicitly replace the interface set; allows clearing all interfaces |
+| `replace_disk_ids` | no (edit) | `false` | Explicitly replace the disk set; empty is rejected because a VM needs a disk |
 | `boot_media_id` | no     | -         | ID of an installation media entry; omit to boot from disk |
 | `console_enabled` | no   | `false`   | Allow the VNC console for this VM          |
 | `description` | no       | `""`      | Max 2000 chars                             |

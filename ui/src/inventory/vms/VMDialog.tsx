@@ -191,6 +191,10 @@ export function VMDialog({
     } else if (!running) {
       payload.disk_ids = selectedDisks.map((disk) => disk.id);
       payload.interface_ids = selectedInterfaces.map((iface) => iface.id);
+      // The gateway treats omitted repeated fields as unchanged; editing the
+      // dialog is an explicit replacement, including an empty interface set.
+      payload.replace_disk_ids = true;
+      payload.replace_interface_ids = true;
     }
 
     const bootMedia = Number(bootMediaID);
