@@ -597,121 +597,21 @@ func (s *Server) handleGetVNF(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCreateVNF(w http.ResponseWriter, r *http.Request) {
-	s.resourceMu.Lock()
-	defer s.resourceMu.Unlock()
-
 	var payload vnfPayload
 	if err := decodeJSON(w, r, &payload); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	name, err := payload.toName()
+	created, err := s.createVNF(r.Context(), payload)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		s.writeVNFOperationError(w, r, err)
 		return
 	}
-	vnfType, err := payload.toType()
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if payload.NetworkID == nil || *payload.NetworkID < 1 {
-		writeError(w, http.StatusBadRequest, "network_id is required")
-		return
-	}
-	if payload.Config == nil {
-		writeError(w, http.StatusBadRequest, "config is required")
-		return
-	}
-	config, err := payload.Config.toConfig(vnfType)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	network, err := s.store.GetNetwork(r.Context(), *payload.NetworkID)
-	switch {
-	case errors.Is(err, store.ErrNetworkNotFound):
-		writeError(w, http.StatusBadRequest, "network not found")
-		return
-	case err != nil:
-		s.internalError(w, r, err)
-		return
-	}
-	existingVNFs, err := s.store.ListVNFsByNetwork(r.Context(), network.ID)
-	if err != nil {
-		s.internalError(w, r, err)
-		return
-	}
-	for _, existing := range existingVNFs {
-		if existing.Type == vnfType {
-			writeError(w, http.StatusConflict, fmt.Sprintf("network already has a %s VNF", vnfType))
-			return
-		}
-	}
-
-	if err := applyNATGatewayToDHCPConfig(network, vnfType, &config); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	enabled := payload.Enabled != nil && *payload.Enabled
-	if enabled {
-		if blocked, message := s.vppBlocked(); blocked {
-			writeError(w, http.StatusServiceUnavailable, message)
-			return
-		}
-		if s.vnfs == nil || s.networks == nil {
-			writeError(w, http.StatusServiceUnavailable, "VNF runtime is not configured")
-			return
-		}
-		if vnfType == store.VNFTypeNAT44 && s.nat == nil {
-			writeError(w, http.StatusServiceUnavailable, "NAT44 runtime is not configured")
-			return
-		}
-	}
-
-	created, err := s.store.CreateVNF(r.Context(), store.VNF{
-		Name:      name,
-		NetworkID: network.ID,
-		Type:      vnfType,
-		Enabled:   false,
-		Config:    config,
-	})
-	if err != nil {
-		switch {
-		case errors.Is(err, store.ErrVNFNameTaken):
-			writeError(w, http.StatusConflict, "a VNF with that name already exists")
-		default:
-			s.internalError(w, r, err)
-		}
-		return
-	}
-
-	if enabled {
-		var activated store.VNF
-		var err error
-		if vnfType == store.VNFTypeNAT44 {
-			activated, err = s.activateNAT44(r.Context(), created)
-		} else {
-			activated, err = s.activateVNF(r.Context(), created)
-		}
-		if err != nil {
-			_ = s.store.DeleteVNF(r.Context(), created.ID)
-			s.logger.Error("start VNF failed", "vnf", created.Name, "error", err)
-			writeError(w, http.StatusInternalServerError, "could not start VNF: "+err.Error())
-			return
-		}
-		created = activated
-	}
-
 	w.Header().Set("Location", fmt.Sprintf("/api/vnfs/%d", created.ID))
 	writeJSON(w, http.StatusCreated, s.viewVNF(r.Context(), created))
 }
 
 func (s *Server) handleUpdateVNF(w http.ResponseWriter, r *http.Request) {
-	s.resourceMu.Lock()
-	defer s.resourceMu.Unlock()
-
 	id, err := parseVNFID(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -722,141 +622,12 @@ func (s *Server) handleUpdateVNF(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	existing, err := s.store.GetVNF(r.Context(), id)
-	switch {
-	case errors.Is(err, store.ErrVNFNotFound):
-		writeError(w, http.StatusNotFound, "vnf not found")
-		return
-	case err != nil:
-		s.internalError(w, r, err)
+	updated, err := s.updateVNF(r.Context(), id, payload)
+	if err != nil {
+		s.writeVNFOperationError(w, r, err)
 		return
 	}
-
-	name := existing.Name
-	if payload.Name != nil {
-		name, err = vnfUpdateName(payload.Name)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-	}
-	config := existing.Config
-	if payload.Config != nil {
-		config, err = payload.Config.toConfig(existing.Type)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-	}
-	if existing.Type == store.VNFTypeDHCPv4 {
-		if network, err := s.store.GetNetwork(r.Context(), existing.NetworkID); err == nil {
-			if err := applyNATGatewayToDHCPConfig(network, existing.Type, &config); err != nil {
-				writeError(w, http.StatusBadRequest, err.Error())
-				return
-			}
-		}
-	}
-	enabled := existing.Enabled
-	if payload.Enabled != nil {
-		enabled = *payload.Enabled
-	}
-	if enabled {
-		if blocked, message := s.vppBlocked(); blocked {
-			writeError(w, http.StatusServiceUnavailable, message)
-			return
-		}
-		if s.vnfs == nil || s.networks == nil {
-			writeError(w, http.StatusServiceUnavailable, "VNF runtime is not configured")
-			return
-		}
-		if existing.Type == store.VNFTypeNAT44 && s.nat == nil {
-			writeError(w, http.StatusServiceUnavailable, "NAT44 runtime is not configured")
-			return
-		}
-	}
-
-	updated := existing
-	updated.Name = name
-	updated.Config = config
-	updated.Enabled = enabled
-
-	if existing.Type == store.VNFTypeNAT44 {
-		if err := s.stopNAT44(r.Context(), existing); err != nil {
-			s.logger.Error("stop NAT44 for update failed", "vnf", existing.Name, "error", err)
-			writeError(w, http.StatusInternalServerError, "could not stop NAT44: "+err.Error())
-			return
-		}
-		updated.Enabled = false
-		updated.TapSwIfIndex = 0
-		updated.TapHostName = ""
-		if enabled {
-			activated, err := s.activateNAT44(r.Context(), updated)
-			if err != nil {
-				if _, saveErr := s.store.UpdateVNF(r.Context(), id, updated); saveErr != nil {
-					s.logger.Error("save disabled NAT44 after start failure failed", "vnf", id, "error", saveErr)
-				}
-				s.logger.Error("start NAT44 failed", "vnf", name, "error", err)
-				writeError(w, http.StatusInternalServerError, "could not start NAT44: "+err.Error())
-				return
-			}
-			updated = activated
-		} else {
-			saved, err := s.store.UpdateVNF(r.Context(), id, updated)
-			if err != nil {
-				writeUpdateVNFError(w, r, s, err)
-				return
-			}
-			updated = saved
-		}
-		writeJSON(w, http.StatusOK, s.viewVNF(r.Context(), updated))
-		return
-	}
-
-	if existing.Enabled || existing.TapSwIfIndex > 0 {
-		if err := s.stopVNF(r.Context(), existing, false); err != nil {
-			s.logger.Error("stop VNF for update failed", "vnf", existing.Name, "error", err)
-			writeError(w, http.StatusInternalServerError, "could not stop VNF: "+err.Error())
-			return
-		}
-		updated.TapSwIfIndex = 0
-		updated.TapHostName = ""
-	}
-
-	if enabled {
-		activated, err := s.activateVNF(r.Context(), updated)
-		if err != nil {
-			updated.Enabled = false
-			updated.TapSwIfIndex = 0
-			updated.TapHostName = ""
-			if _, saveErr := s.store.UpdateVNF(r.Context(), id, updated); saveErr != nil {
-				s.logger.Error("save disabled VNF after start failure failed", "vnf", id, "error", saveErr)
-			}
-			s.logger.Error("start VNF failed", "vnf", name, "error", err)
-			writeError(w, http.StatusInternalServerError, "could not start VNF: "+err.Error())
-			return
-		}
-		updated = activated
-	} else {
-		saved, err := s.store.UpdateVNF(r.Context(), id, updated)
-		if err != nil {
-			writeUpdateVNFError(w, r, s, err)
-			return
-		}
-		updated = saved
-	}
-
 	writeJSON(w, http.StatusOK, s.viewVNF(r.Context(), updated))
-}
-
-func writeUpdateVNFError(w http.ResponseWriter, r *http.Request, s *Server, err error) {
-	switch {
-	case errors.Is(err, store.ErrVNFNameTaken):
-		writeError(w, http.StatusConflict, "a VNF with that name already exists")
-	case errors.Is(err, store.ErrVNFNotFound):
-		writeError(w, http.StatusNotFound, "vnf not found")
-	default:
-		s.internalError(w, r, err)
-	}
 }
 
 func vnfUpdateName(value *string) (string, error) {
@@ -876,110 +647,44 @@ func vnfUpdateName(value *string) (string, error) {
 }
 
 func (s *Server) handleDeleteVNF(w http.ResponseWriter, r *http.Request) {
-	s.resourceMu.Lock()
-	defer s.resourceMu.Unlock()
-
 	id, err := parseVNFID(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	vnf, err := s.store.GetVNF(r.Context(), id)
-	switch {
-	case errors.Is(err, store.ErrVNFNotFound):
-		writeError(w, http.StatusNotFound, "vnf not found")
-		return
-	case err != nil:
-		s.internalError(w, r, err)
+	if err := s.deleteVNF(r.Context(), id); err != nil {
+		s.writeVNFOperationError(w, r, err)
 		return
 	}
-	var stopErr error
-	if vnf.Type == store.VNFTypeNAT44 {
-		stopErr = s.stopNAT44(r.Context(), vnf)
-	} else {
-		stopErr = s.stopVNF(r.Context(), vnf, true)
-	}
-	if stopErr != nil {
-		s.logger.Error("stop VNF before delete failed", "vnf", vnf.Name, "error", stopErr)
-		writeError(w, http.StatusInternalServerError, "could not stop VNF: "+stopErr.Error())
-		return
-	}
-	err = s.store.DeleteVNF(r.Context(), id)
-	switch {
-	case errors.Is(err, store.ErrVNFNotFound):
-		writeError(w, http.StatusNotFound, "vnf not found")
-	case err != nil:
-		s.internalError(w, r, err)
-	default:
-		if vnf.Type == store.VNFTypeNAT44 {
-			if err := s.cleanupNetworkBVIAfterNATDelete(r.Context(), vnf.NetworkID); err != nil {
-				s.logger.Error("cleanup network BVI after NAT44 delete failed", "vnf", vnf.Name, "network", vnf.NetworkName, "error", err)
-			}
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleRestartVNF(w http.ResponseWriter, r *http.Request) {
-	s.resourceMu.Lock()
-	defer s.resourceMu.Unlock()
-
 	id, err := parseVNFID(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	vnf, err := s.store.GetVNF(r.Context(), id)
-	switch {
-	case errors.Is(err, store.ErrVNFNotFound):
-		writeError(w, http.StatusNotFound, "vnf not found")
+	updated, err := s.restartVNF(r.Context(), id)
+	if err != nil {
+		s.writeVNFOperationError(w, r, err)
 		return
-	case err != nil:
+	}
+	writeJSON(w, http.StatusOK, s.viewVNF(r.Context(), updated))
+}
+
+func (s *Server) writeVNFOperationError(w http.ResponseWriter, r *http.Request, err error) {
+	var operationError *VNFError
+	if !errors.As(err, &operationError) {
 		s.internalError(w, r, err)
 		return
 	}
-	if s.vnfs == nil || s.networks == nil {
-		writeError(w, http.StatusServiceUnavailable, "VNF runtime is not configured")
+	if operationError.Status >= http.StatusInternalServerError {
+		s.logger.Error("VNF operation failed", "error", err)
+		writeError(w, operationError.Status, "VNF operation failed")
 		return
 	}
-	if blocked, message := s.vppBlocked(); blocked {
-		writeError(w, http.StatusServiceUnavailable, message)
-		return
-	}
-	if vnf.Type == store.VNFTypeNAT44 && s.nat == nil {
-		writeError(w, http.StatusServiceUnavailable, "NAT44 runtime is not configured")
-		return
-	}
-	var stopErr error
-	if vnf.Type == store.VNFTypeNAT44 {
-		stopErr = s.stopNAT44(r.Context(), vnf)
-	} else {
-		stopErr = s.stopVNF(r.Context(), vnf, false)
-	}
-	if stopErr != nil {
-		s.logger.Error("stop VNF for restart failed", "vnf", vnf.Name, "error", stopErr)
-		writeError(w, http.StatusInternalServerError, "could not stop VNF: "+stopErr.Error())
-		return
-	}
-	vnf.Enabled = true
-	vnf.TapSwIfIndex = 0
-	vnf.TapHostName = ""
-	var activated store.VNF
-	if vnf.Type == store.VNFTypeNAT44 {
-		activated, err = s.activateNAT44(r.Context(), vnf)
-	} else {
-		activated, err = s.activateVNF(r.Context(), vnf)
-	}
-	if err != nil {
-		vnf.Enabled = false
-		if _, saveErr := s.store.UpdateVNF(r.Context(), id, vnf); saveErr != nil {
-			s.logger.Error("save disabled VNF after restart failure failed", "vnf", id, "error", saveErr)
-		}
-		s.logger.Error("restart VNF failed", "vnf", vnf.Name, "error", err)
-		writeError(w, http.StatusInternalServerError, "could not restart VNF: "+err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, s.viewVNF(r.Context(), activated))
+	writeError(w, operationError.Status, operationError.Error())
 }
 
 func (s *Server) handleListVNFLeases(w http.ResponseWriter, r *http.Request) {

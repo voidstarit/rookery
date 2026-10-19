@@ -153,80 +153,25 @@ func (s *Server) handleDeleteNetwork(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-
-	s.resourceMu.Lock()
-	defer s.resourceMu.Unlock()
-
-	if s.networks == nil {
-		writeError(w, http.StatusServiceUnavailable, "VPP network runtime is not configured")
+	if err := s.DeleteNetwork(r.Context(), id); err != nil {
+		s.writeNetworkOperationError(w, r, err)
 		return
 	}
-	network, err := s.store.GetNetwork(r.Context(), id)
-	switch {
-	case errors.Is(err, store.ErrNetworkNotFound):
-		writeError(w, http.StatusNotFound, "network not found")
-		return
-	case err != nil:
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) writeNetworkOperationError(w http.ResponseWriter, r *http.Request, err error) {
+	var operationError *NetworkError
+	if !errors.As(err, &operationError) {
 		s.internalError(w, r, err)
 		return
 	}
-	if network.InterfaceCount > 0 {
-		writeError(w, http.StatusConflict, "network still has virtual interfaces")
+	if operationError.Status >= http.StatusInternalServerError {
+		s.logger.Error("network operation failed", "error", err)
+		writeError(w, operationError.Status, "network operation failed")
 		return
 	}
-	if blocked, message := s.vppBlocked(); blocked {
-		writeError(w, http.StatusServiceUnavailable, message)
-		return
-	}
-
-	if err := s.cleanupLegacyNetworkVNF(r.Context(), network); err != nil {
-		s.logger.Error("clean legacy network DHCP before delete failed", "network", network.Name, "error", err)
-		writeError(w, http.StatusInternalServerError, "could not clean legacy DHCP before deleting the network: "+err.Error())
-		return
-	}
-	vnfs, err := s.store.ListVNFsByNetwork(r.Context(), id)
-	if err != nil {
-		s.internalError(w, r, err)
-		return
-	}
-	for _, vnf := range vnfs {
-		var err error
-		if vnf.Type == store.VNFTypeNAT44 {
-			err = s.stopNAT44(r.Context(), vnf)
-		} else {
-			err = s.stopVNF(r.Context(), vnf, true)
-		}
-		if err != nil {
-			s.logger.Error("stop VNF before network delete failed", "vnf", vnf.Name, "network", network.Name, "error", err)
-			writeError(w, http.StatusInternalServerError, "could not stop network VNFs: "+err.Error())
-			return
-		}
-	}
-	if network.BVIHostName != "" && s.nat != nil {
-		if err := s.nat.DeleteBVIByName(r.Context(), network.BVIHostName); err != nil {
-			s.logger.Error("delete network BVI failed", "network", network.Name, "bvi", network.BVIHostName, "error", err)
-			writeError(w, http.StatusInternalServerError, "could not delete network BVI: "+err.Error())
-			return
-		}
-	}
-
-	if err := s.networks.DeleteBridgeDomain(r.Context(), network.BridgeDomainID); err != nil {
-		s.logger.Error("delete bridge domain failed", "network", network.Name, "bd_id", network.BridgeDomainID, "error", err)
-		writeError(w, http.StatusInternalServerError, "could not delete VPP bridge domain: "+err.Error())
-		return
-	}
-
-	err = s.store.DeleteNetwork(r.Context(), id)
-	switch {
-	case errors.Is(err, store.ErrNetworkNotFound):
-		writeError(w, http.StatusNotFound, "network not found")
-	case errors.Is(err, store.ErrNetworkInUse):
-		writeError(w, http.StatusConflict, "network still has virtual interfaces")
-	case err != nil:
-		s.internalError(w, r, err)
-	default:
-		w.WriteHeader(http.StatusNoContent)
-	}
+	writeError(w, operationError.Status, operationError.Error())
 }
 
 func (s *Server) handleListInterfaces(w http.ResponseWriter, r *http.Request) {
