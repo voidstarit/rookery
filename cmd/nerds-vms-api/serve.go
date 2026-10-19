@@ -118,38 +118,54 @@ func runServe(args []string) error {
 	diskRunner := host.NewLVM()
 	apiServer := api.New(st, manager, diskRunner, qemuRunner, networkRunner, vnfManager, networkRunner, logger)
 
-	var gatewayRuntime *gateway.Gateway
-	var gatewayHTTP *http.Server
-	if *gatewayAddr != "" || *grpcAddr != "" {
-		grpcListenAddr := *grpcAddr
-		if grpcListenAddr == "" {
-			grpcListenAddr = "127.0.0.1:0"
-		}
-		listener, err := net.Listen("tcp", grpcListenAddr)
+	gatewayOptions := []gateway.Option{
+		gateway.WithVMController(qemuRunner),
+		gateway.WithInterfaceCounters(networkRunner),
+		gateway.WithACLRuntime(networkRunner),
+		gateway.WithDiskProvisioner(diskRunner),
+		gateway.WithDiskMutex(apiServer.ResourceMutex()),
+		gateway.WithVMMutex(apiServer.RunMutex()),
+		gateway.WithInterfaceRuntime(networkRunner),
+		gateway.WithDiagnosticsRuntime(networkRunner),
+		gateway.WithNetworkRuntime(networkRunner),
+		gateway.WithVNFRuntime(vnfManager),
+		gateway.WithVNFStatusProvider(apiServer),
+		gateway.WithLegacyVNFHandler(apiServer),
+	}
+	var grpcListener net.Listener
+	if *grpcAddr != "" {
+		listener, err := net.Listen("tcp", *grpcAddr)
 		if err != nil {
 			return fmt.Errorf("listen gRPC: %w", err)
 		}
-		gatewayRuntime, err = gateway.New(st, manager, gateway.WithGRPCListener(listener), gateway.WithVMController(qemuRunner), gateway.WithInterfaceCounters(networkRunner), gateway.WithACLRuntime(networkRunner), gateway.WithDiskProvisioner(diskRunner), gateway.WithDiskMutex(apiServer.ResourceMutex()), gateway.WithVMMutex(apiServer.RunMutex()), gateway.WithInterfaceRuntime(networkRunner), gateway.WithDiagnosticsRuntime(networkRunner), gateway.WithNetworkRuntime(networkRunner), gateway.WithVNFRuntime(vnfManager), gateway.WithVNFStatusProvider(apiServer), gateway.WithLegacyVNFHandler(apiServer))
-		if err != nil {
-			_ = listener.Close()
-			return fmt.Errorf("prepare grpc-gateway: %w", err)
+		grpcListener = listener
+		gatewayOptions = append(gatewayOptions, gateway.WithGRPCListener(listener))
+	}
+	gatewayRuntime, err := gateway.New(st, manager, gatewayOptions...)
+	if err != nil {
+		if grpcListener != nil {
+			_ = grpcListener.Close()
 		}
-		defer gatewayRuntime.Close()
-		if *gatewayAddr != "" {
-			gatewayHTTP = &http.Server{
-				Addr:              *gatewayAddr,
-				Handler:           api.SecurityHeaders(gatewayRuntime.Handler),
-				ReadHeaderTimeout: 5 * time.Second,
-				ReadTimeout:       15 * time.Second,
-				WriteTimeout:      30 * time.Second,
-				IdleTimeout:       60 * time.Second,
-			}
+		return fmt.Errorf("prepare grpc-gateway: %w", err)
+	}
+	defer gatewayRuntime.Close()
+	gatewayHandler := apiServer.LogRequests(api.SecurityHeaders(gatewayRuntime.Handler))
+
+	var gatewayHTTP *http.Server
+	if *gatewayAddr != "" {
+		gatewayHTTP = &http.Server{
+			Addr:              *gatewayAddr,
+			Handler:           gatewayHandler,
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       15 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       60 * time.Second,
 		}
 	}
 
 	srv := &http.Server{
 		Addr:              *addr,
-		Handler:           apiServer,
+		Handler:           api.CutoverHandler(gatewayHandler, apiServer),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -174,7 +190,7 @@ func runServe(args []string) error {
 	}
 
 	grpcAddress := ""
-	if gatewayRuntime != nil {
+	if grpcListener != nil {
 		grpcAddress = gatewayRuntime.GRPCAddress()
 	}
 	logger.Info("nerds-vms API listening",

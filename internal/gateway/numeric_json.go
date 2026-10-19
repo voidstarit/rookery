@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"reflect"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -37,6 +38,9 @@ func (m *numericJSONMarshaler) Marshal(value interface{}) ([]byte, error) {
 	}
 	message, ok := value.(proto.Message)
 	if !ok {
+		if items, handled, err := marshalProtoSlice(m, value); handled {
+			return items, err
+		}
 		return data, nil
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
@@ -46,6 +50,27 @@ func (m *numericJSONMarshaler) Marshal(value interface{}) ([]byte, error) {
 		return data, nil
 	}
 	return json.Marshal(rewrite64BitFields(message.ProtoReflect(), generic))
+}
+
+func marshalProtoSlice(m *numericJSONMarshaler, value interface{}) ([]byte, bool, error) {
+	reflected := reflect.ValueOf(value)
+	if reflected.Kind() != reflect.Slice && reflected.Kind() != reflect.Array {
+		return nil, false, nil
+	}
+	items := make([]json.RawMessage, 0, reflected.Len())
+	for i := 0; i < reflected.Len(); i++ {
+		message, ok := reflected.Index(i).Interface().(proto.Message)
+		if !ok {
+			return nil, false, nil
+		}
+		data, err := m.Marshal(message)
+		if err != nil {
+			return nil, true, err
+		}
+		items = append(items, data)
+	}
+	data, err := json.Marshal(items)
+	return data, true, err
 }
 
 func (m *numericJSONMarshaler) NewEncoder(writer io.Writer) runtime.Encoder {

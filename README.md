@@ -252,8 +252,8 @@ outside uplink.
 The server has two commands:
 
 - `init` — idempotently create the LVM thin pool and verify the FD.io VPP API.
-- `serve` — run the API/UI. It starts even when prerequisites are missing and
-  reports readiness. The bootstrapped default storage backend needs its thin
+- `serve` — run the gateway API and UI. It starts even when prerequisites are
+  missing and reports readiness. The bootstrapped default storage backend needs its thin
   pool; additional storage backends are validated when used. VM creation needs
   the thin pool and VPP. Installation media only registers existing files and
   has no host prerequisites.
@@ -599,10 +599,10 @@ disk import, troubleshoot/capture services, and VNF writes. 64-bit JSON fields
 are emitted as numbers to match the existing REST API, and creates/deletes use
 `201`/`204`. VNF writes temporarily bridge through the legacy VNF HTTP handler
 so activation/NAT lifecycle behavior stays identical until it is extracted into
-a native service. Start it optionally with
-`-gateway-addr` and/or `-grpc-addr`; the existing `/api` server remains the
-authoritative backend during migration. WebSocket VNC, WebShark SSE/static
-assets, and streamed pcap downloads remain native HTTP handlers.
+a native service. The main `serve` listener routes `/api` through the gateway;
+`-gateway-addr` adds an optional second gateway listener and `-grpc-addr`
+exposes direct gRPC. WebSocket VNC, WebShark SSE/static assets, and streamed pcap
+downloads remain native HTTP handlers.
 
 ## API
 

@@ -103,10 +103,10 @@ metrics, interface ACL assignment, storage disk import, and troubleshoot/capture
 services through grpc-gateway. It preserves the `{"error":"..."}` response
 shape, emits 64-bit integers as JSON numbers through a custom marshaler, and
 returns `201` for creates and `204` for deletes. VM lifecycle and disk
-provisioning share the legacy API's mutexes so both listeners remain serialized. The optional
-`-gateway-addr` and `-grpc-addr` flags expose the listeners during migration.
-Write operations, actions, remaining diagnostics/capture adapters, and the
-main-server cutover are next.
+provisioning share the legacy API's mutexes so both listeners remain serialized. The main `serve` listener now routes `/api` through this gateway; the legacy
+handler remains for native VNC/WebShark/pcap-download/static paths and as the
+temporary VNF-write bridge. `-gateway-addr` adds an optional second gateway HTTP
+listener and `-grpc-addr` exposes direct gRPC.
 
 ## Known gaps before full cutover
 
@@ -135,5 +135,6 @@ main-server cutover are next.
 - VNF status/status_detail/lease_count and lease/session RPCs still need the VNF
   runtime adapter.
 - Troubleshoot and capture gateway services are generated but not registered yet.
-- Route cutover, UI contract tests, and native handler separation are still
-  pending.
+- Route cutover is complete for the main HTTP listener; UI contract tests and
+  removal of the legacy API handlers (blocked on native VNF lifecycle
+  extraction) are still pending.
