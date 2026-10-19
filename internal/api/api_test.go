@@ -23,6 +23,7 @@ import (
 	"github.com/voidstarit/rookery/internal/api"
 	"github.com/voidstarit/rookery/internal/gateway"
 	"github.com/voidstarit/rookery/internal/host"
+	"github.com/voidstarit/rookery/internal/lifecycle"
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/readiness"
 	"github.com/voidstarit/rookery/internal/store"
@@ -590,6 +591,7 @@ func newTestAPIWithReadiness(t *testing.T, ready api.Readiness) *testAPI {
 	natManager := &fakeNAT44{}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	apiServer := api.New(st, ready, provisioner, controller, networkProvisioner, vnfManager, natManager, logger)
+	lifecycleService := lifecycle.New(st, apiServer, apiServer.ResourceMutex())
 	gw, err := gateway.New(st, ready,
 		gateway.WithDiskProvisioner(provisioner),
 		gateway.WithVMController(controller),
@@ -599,8 +601,8 @@ func newTestAPIWithReadiness(t *testing.T, ready api.Readiness) *testAPI {
 		gateway.WithNetworkRuntime(networkProvisioner),
 		gateway.WithDiagnosticsRuntime(networkProvisioner),
 		gateway.WithVNFRuntime(vnfManager),
-		gateway.WithVNFWriter(apiServer),
-		gateway.WithNetworkWriter(apiServer),
+		gateway.WithVNFWriter(lifecycleService),
+		gateway.WithNetworkWriter(lifecycleService),
 		gateway.WithVNFStatusProvider(apiServer),
 		gateway.WithDiskMutex(apiServer.ResourceMutex()),
 		gateway.WithVMMutex(apiServer.RunMutex()),

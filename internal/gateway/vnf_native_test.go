@@ -10,6 +10,7 @@ import (
 
 	"github.com/voidstarit/rookery/internal/api"
 	"github.com/voidstarit/rookery/internal/gateway"
+	"github.com/voidstarit/rookery/internal/lifecycle"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -26,7 +27,8 @@ func TestNativeVNFWrites(t *testing.T) {
 
 	ready := fakeReadiness{}
 	provider := api.New(st, ready, nil, nil, nil, nil, nil, nil)
-	gw, err := gateway.New(st, ready, gateway.WithVNFWriter(provider), gateway.WithVNFStatusProvider(provider))
+	lifecycleService := lifecycle.New(st, provider, provider.ResourceMutex())
+	gw, err := gateway.New(st, ready, gateway.WithVNFWriter(lifecycleService), gateway.WithVNFStatusProvider(provider))
 	if err != nil {
 		t.Fatal(err)
 	}

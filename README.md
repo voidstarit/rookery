@@ -598,8 +598,9 @@ writes, VM lifecycle actions and metrics, interface ACL assignment, storage
 disk import, network lifecycle deletion, troubleshoot/capture services, and VNF
 writes. 64-bit JSON fields
 are emitted as numbers to match the existing REST API, and creates/deletes use
-`201`/`204`. VNF writes call native lifecycle methods in `internal/api` so
-activation/NAT behavior is shared without an HTTP round trip. The main `serve`
+`201`/`204`. VNF writes call the native lifecycle service in
+`internal/lifecycle` so activation/NAT behavior is shared without an HTTP round
+trip. The main `serve`
 listener routes `/api` through the gateway;
 `-gateway-addr` adds an optional second gateway listener and `-grpc-addr`
 exposes direct gRPC with health checks and server reflection. WebSocket VNC, WebShark SSE/static assets, and streamed pcap

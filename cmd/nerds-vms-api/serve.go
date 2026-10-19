@@ -18,6 +18,7 @@ import (
 	"github.com/voidstarit/rookery/internal/api"
 	"github.com/voidstarit/rookery/internal/gateway"
 	"github.com/voidstarit/rookery/internal/host"
+	"github.com/voidstarit/rookery/internal/lifecycle"
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/readiness"
 	"github.com/voidstarit/rookery/internal/store"
@@ -117,6 +118,7 @@ func runServe(args []string) error {
 
 	diskRunner := host.NewLVM()
 	apiServer := api.New(st, manager, diskRunner, qemuRunner, networkRunner, vnfManager, networkRunner, logger)
+	lifecycleService := lifecycle.New(st, apiServer, apiServer.ResourceMutex())
 
 	gatewayOptions := []gateway.Option{
 		gateway.WithVMController(qemuRunner),
@@ -127,10 +129,10 @@ func runServe(args []string) error {
 		gateway.WithVMMutex(apiServer.RunMutex()),
 		gateway.WithInterfaceRuntime(networkRunner),
 		gateway.WithDiagnosticsRuntime(networkRunner),
-		gateway.WithNetworkRuntime(networkRunner), gateway.WithNetworkWriter(apiServer),
+		gateway.WithNetworkRuntime(networkRunner), gateway.WithNetworkWriter(lifecycleService),
 		gateway.WithVNFRuntime(vnfManager),
 		gateway.WithVNFStatusProvider(apiServer),
-		gateway.WithVNFWriter(apiServer),
+		gateway.WithVNFWriter(lifecycleService),
 	}
 	var grpcListener net.Listener
 	if *grpcAddr != "" {

@@ -103,20 +103,17 @@ a custom marshaler, keeps list responses as arrays, and returns `201` for
 creates and `204` for deletes.
 
 The main `serve` listener routes `/api` through the gateway. `api.Server.NativeHandler`
-serves only native VNC WebSocket, WebShark, pcap-download, and static UI paths. VM lifecycle and disk provisioning share the legacy API's mutexes so both
-listeners remain serialized. VNF writes and network deletion call native
-lifecycle methods implemented in `internal/api`. `-gateway-addr` adds an
+serves only native VNC WebSocket, WebShark, pcap-download, and static UI paths. VM lifecycle and disk provisioning share the API server's mutexes so native and
+gateway operations remain serialized. VNF writes and network deletion are implemented in
+`internal/lifecycle`, backed by the VPP/NAT/DHCP runtime in `internal/api`. `-gateway-addr` adds an
 optional second gateway HTTP listener and `-grpc-addr` exposes direct gRPC.
 
 ## Known gaps
 
-- Core response-shape contract coverage now checks numeric IDs, status booleans,
-  list arrays, and key VM/network/VNF fields; broader UI workflow tests are
-  still desirable.
-- VNF/network lifecycle methods still live in `internal/api`; extracting them
-  into a dedicated service package remains a future cleanup.
-- VNF DHCP/NAT44 conditional requirements remain in the domain validator rather
-  than generated validation (a CEL layer would close this gap).
+- Core response-shape contract coverage checks numeric IDs, status booleans,
+  list arrays, and key VM/network/VNF fields used by the UI.
+- VNF DHCP/NAT44 conditional requirements are enforced by the lifecycle domain
+  validator; proto-level CEL validation is not required for the current API.
 - VM update uses `replace_interface_ids`/`replace_disk_ids` to distinguish an
   omitted list from an explicit replacement. Interfaces can be cleared with
   `replace_interface_ids`; disks cannot be cleared because a VM must keep at
