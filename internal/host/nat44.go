@@ -42,7 +42,7 @@ func ListHostInterfaces() ([]HostInterface, error) {
 	}
 	result := make([]HostInterface, 0, len(ifs))
 	for _, iface := range ifs {
-		if iface.Flags&net.FlagLoopback != 0 {
+		if iface.Flags&net.FlagLoopback != 0 || isManagedHostInterface(iface.Name) {
 			continue
 		}
 		_, deviceErr := os.Stat("/sys/class/net/" + iface.Name + "/device")
@@ -62,6 +62,18 @@ func ListHostInterfaces() ([]HostInterface, error) {
 		result = append(result, entry)
 	}
 	return result, nil
+}
+
+// isManagedHostInterface excludes Linux interfaces created or owned by the
+// Rookery/VPP runtime. Physical NICs and external virtual interfaces remain
+// visible to the host-interface inventory.
+func isManagedHostInterface(name string) bool {
+	for _, prefix := range []string{"vnf", "tap", "host-", "bvi", "vpp", "ndn"} {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func defaultRouteInterfaces() map[string]bool {

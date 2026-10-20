@@ -617,9 +617,10 @@ export function NetworksTab() {
         </div>
 
         <p class="field-hint">
-          Linux NICs visible to the server. “In VPP” means a matching <code>host-&lt;nic&gt;</code>
-          interface currently exists in VPP; the VPP state is shown as unknown when VPP
-          cannot be queried.
+          Physical NICs and external interfaces visible to the server; Rookery/VPP
+          taps and host interfaces are hidden. “In VPP” means a matching
+          <code>host-&lt;nic&gt;</code> interface currently exists in VPP; the VPP state is
+          shown as unknown when VPP cannot be queried.
         </p>
 
         {hostError ? (

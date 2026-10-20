@@ -98,3 +98,16 @@ func TestNAT44Unavailable(t *testing.T) {
 		t.Error("vppRetvalNoSuchEntry(0) = true")
 	}
 }
+
+func TestManagedHostInterface(t *testing.T) {
+	for _, name := range []string{"vnf1", "tap0", "host-eth0", "bvi1", "vpp0", "ndn1"} {
+		if !isManagedHostInterface(name) {
+			t.Errorf("%s should be managed", name)
+		}
+	}
+	for _, name := range []string{"eth0", "enp1s0", "docker0", "br0"} {
+		if isManagedHostInterface(name) {
+			t.Errorf("%s should not be managed", name)
+		}
+	}
+}

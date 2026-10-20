@@ -633,7 +633,7 @@ native routes plus the static UI.
 | `POST`   | `/api/networks`    | Create a VPP bridge domain        |
 | `GET`    | `/api/networks/{id}` | Get one network                 |
 | `DELETE` | `/api/networks/{id}` | Delete an empty network and its VNFs |
-| `GET`    | `/api/host/interfaces` | List host NICs, linked state, and VPP host-interface correlation |
+| `GET`    | `/api/host/interfaces` | List physical/external NICs, link state, and VPP host-interface correlation |
 | `GET`    | `/api/troubleshoot/vpp-graph` | Active VPP packet-processing node graph |
 | `GET`    | `/api/troubleshoot/acl-counters` | Per-interface ACL rule-match counters |
 | `GET`    | `/api/troubleshoot/capture/interfaces` | List VPP interfaces for capture |
