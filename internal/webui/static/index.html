@@ -10,127 +10,129 @@
   <script type="module" src="/build/app.js"></script>
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="/">
-      <span class="brand-mark" aria-hidden="true">◈</span>
-      <span>rookery</span>
-    </a>
-    <div class="topbar-meta">
-      <span id="vm-count" class="vm-count">0 VMs</span>
-      <span id="api-status" class="api-status" data-state="pending">
-        <span class="api-dot" aria-hidden="true"></span>
-        <span id="api-status-label">connecting</span>
-      </span>
-    </div>
-  </header>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="/">
+        <span class="brand-mark" aria-hidden="true">◈</span>
+        <span>rookery</span>
+      </a>
 
-  <main class="shell">
-    <section class="hero">
-      <div class="hero-copy">
-        <p class="eyebrow" id="hero-eyebrow">Thin-LVM inventory</p>
-        <h1 id="hero-title">Virtual machines</h1>
-        <p class="lede" id="hero-lede">
-          Keep track of the instances on this host. Resources are metadata for now;
-          disk and network automation comes next.
-        </p>
-      </div>
-      <div class="hero-actions-wrap">
-        <div class="hero-actions">
-          <button class="button primary" id="new-vm" type="button" disabled>
-            <span class="button-plus" aria-hidden="true">+</span>
-            New VM
-          </button>
-          <button class="button primary" id="new-disk" type="button" disabled hidden>
-            <span class="button-plus" aria-hidden="true">+</span>
-            New disk
-          </button>
-          <button class="button primary" id="new-media" type="button" hidden>
-            <span class="button-plus" aria-hidden="true">+</span>
-            Add media
-          </button>
-          <button class="button primary" id="new-network" type="button" disabled hidden>
-            <span class="button-plus" aria-hidden="true">+</span>
-            New network
-          </button>
-        </div>
-        <p class="hero-hint" id="new-vm-hint" hidden></p>
-      </div>
-    </section>
+      <nav class="tabs sidebar-tabs" role="tablist" aria-label="Resources">
+        <button class="tab" id="tab-vms" type="button" role="tab" aria-selected="true" aria-controls="vms-panel">
+          Virtual machines
+          <span class="tab-count" id="vm-tab-count">0</span>
+        </button>
+        <button class="tab" id="tab-disks" type="button" role="tab" aria-selected="false" aria-controls="disks-panel" tabindex="-1">
+          Disks
+          <span class="tab-count" id="disk-tab-count">0</span>
+        </button>
+        <button class="tab" id="tab-media" type="button" role="tab" aria-selected="false" aria-controls="media-panel" tabindex="-1">
+          Installation media
+          <span class="tab-count" id="media-tab-count">0</span>
+        </button>
+        <button class="tab" id="tab-networks" type="button" role="tab" aria-selected="false" aria-controls="networks-panel" tabindex="-1">
+          Networks
+          <span class="tab-count" id="network-tab-count">0</span>
+        </button>
+        <button class="tab" id="tab-vnfs" type="button" role="tab" aria-selected="false" aria-controls="vnfs-panel" tabindex="-1">
+          VNFs
+          <span class="tab-count" id="vnf-tab-count">0</span>
+        </button>
+      </nav>
 
-    <section class="readiness" aria-labelledby="readiness-heading">
-      <div class="readiness-head">
-        <div>
-          <p class="eyebrow">Prerequisites</p>
-          <h2 id="readiness-heading">Readiness</h2>
-        </div>
-        <span class="readiness-summary" id="readiness-summary" data-state="checking" role="status">checking</span>
-      </div>
-
-      <div class="readiness-grid">
-        <article class="readiness-card" id="thin-pool-card" data-state="checking">
-          <div class="readiness-card-top">
-            <span class="readiness-label">LVM thin pool</span>
-            <span class="readiness-state" id="thin-pool-state">checking</span>
+      <section class="readiness sidebar-status" aria-labelledby="readiness-heading">
+        <div class="readiness-head">
+          <div>
+            <p class="eyebrow">Status</p>
+            <h2 id="readiness-heading">Prerequisites</h2>
           </div>
-          <p class="readiness-target" id="thin-pool-target">…</p>
-          <p class="readiness-detail" id="thin-pool-detail">Checking LVM…</p>
-        </article>
+          <span class="readiness-summary" id="readiness-summary" data-state="checking" role="status">checking</span>
+        </div>
 
-        <article class="readiness-card" id="vpp-card" data-state="checking">
-          <div class="readiness-card-top">
-            <span class="readiness-label">FD.io VPP</span>
-            <span class="readiness-state" id="vpp-state">checking</span>
-          </div>
-          <p class="readiness-target" id="vpp-target">…</p>
-          <p class="readiness-detail" id="vpp-detail">Checking the binary API socket…</p>
-        </article>
+        <div class="readiness-grid">
+          <article class="readiness-card" id="thin-pool-card" data-state="checking">
+            <div class="readiness-card-top">
+              <span class="readiness-label">LVM thin pool</span>
+              <span class="readiness-state" id="thin-pool-state">checking</span>
+            </div>
+            <p class="readiness-target" id="thin-pool-target">…</p>
+            <p class="readiness-detail" id="thin-pool-detail">Checking LVM…</p>
+          </article>
+
+          <article class="readiness-card" id="vpp-card" data-state="checking">
+            <div class="readiness-card-top">
+              <span class="readiness-label">FD.io VPP</span>
+              <span class="readiness-state" id="vpp-state">checking</span>
+            </div>
+            <p class="readiness-target" id="vpp-target">…</p>
+            <p class="readiness-detail" id="vpp-detail">Checking the binary API socket…</p>
+          </article>
+        </div>
+      </section>
+
+      <div class="sidebar-meta">
+        <span id="vm-count" class="vm-count">0 VMs</span>
+        <span id="api-status" class="api-status" data-state="pending">
+          <span class="api-dot" aria-hidden="true"></span>
+          <span id="api-status-label">connecting</span>
+        </span>
       </div>
-    </section>
+    </aside>
 
-    <nav class="tabs" role="tablist" aria-label="Resources">
-      <button class="tab" id="tab-vms" type="button" role="tab" aria-selected="true" aria-controls="vms-panel">
-        Virtual machines
-        <span class="tab-count" id="vm-tab-count">0</span>
-      </button>
-      <button class="tab" id="tab-disks" type="button" role="tab" aria-selected="false" aria-controls="disks-panel" tabindex="-1">
-        Disks
-        <span class="tab-count" id="disk-tab-count">0</span>
-      </button>
-      <button class="tab" id="tab-media" type="button" role="tab" aria-selected="false" aria-controls="media-panel" tabindex="-1">
-        Installation media
-        <span class="tab-count" id="media-tab-count">0</span>
-      </button>
-      <button class="tab" id="tab-networks" type="button" role="tab" aria-selected="false" aria-controls="networks-panel" tabindex="-1">
-        Network
-        <span class="tab-count" id="network-tab-count">0</span>
-      </button>
-      <button class="tab" id="tab-vnfs" type="button" role="tab" aria-selected="false" aria-controls="vnfs-panel" tabindex="-1">
-        VNFs
-        <span class="tab-count" id="vnf-tab-count">0</span>
-      </button>
-    </nav>
+    <main class="shell">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow" id="hero-eyebrow">Thin-LVM inventory</p>
+          <h1 id="hero-title">Virtual machines</h1>
+          <p class="lede" id="hero-lede">
+            Keep track of the instances on this host. Resources are metadata for now;
+            disk and network automation comes next.
+          </p>
+        </div>
+        <div class="hero-actions-wrap">
+          <div class="hero-actions">
+            <button class="button primary" id="new-vm" type="button" disabled>
+              <span class="button-plus" aria-hidden="true">+</span>
+              New VM
+            </button>
+            <button class="button primary" id="new-disk" type="button" disabled hidden>
+              <span class="button-plus" aria-hidden="true">+</span>
+              New disk
+            </button>
+            <button class="button primary" id="new-media" type="button" hidden>
+              <span class="button-plus" aria-hidden="true">+</span>
+              Add media
+            </button>
+            <button class="button primary" id="new-network" type="button" disabled hidden>
+              <span class="button-plus" aria-hidden="true">+</span>
+              New network
+            </button>
+          </div>
+          <p class="hero-hint" id="new-vm-hint" hidden></p>
+        </div>
+      </section>
 
-    <section class="tab-panel" id="vms-panel" role="tabpanel" aria-labelledby="tab-vms" tabindex="0">
-      <div id="vms-root"></div>
-    </section>
+      <section class="tab-panel" id="vms-panel" role="tabpanel" aria-labelledby="tab-vms" tabindex="0">
+        <div id="vms-root"></div>
+      </section>
 
-    <section class="tab-panel" id="disks-panel" role="tabpanel" aria-labelledby="tab-disks" tabindex="0" hidden>
-      <div id="disks-root"></div>
-    </section>
+      <section class="tab-panel" id="disks-panel" role="tabpanel" aria-labelledby="tab-disks" tabindex="0" hidden>
+        <div id="disks-root"></div>
+      </section>
 
-    <section class="tab-panel" id="media-panel" role="tabpanel" aria-labelledby="tab-media" tabindex="0" hidden>
-      <div id="media-root"></div>
-    </section>
+      <section class="tab-panel" id="media-panel" role="tabpanel" aria-labelledby="tab-media" tabindex="0" hidden>
+        <div id="media-root"></div>
+      </section>
 
-    <section class="tab-panel" id="networks-panel" role="tabpanel" aria-labelledby="tab-networks" tabindex="0" hidden>
-      <div id="networks-root"></div>
-    </section>
+      <section class="tab-panel" id="networks-panel" role="tabpanel" aria-labelledby="tab-networks" tabindex="0" hidden>
+        <div id="networks-root"></div>
+      </section>
 
-    <section class="tab-panel" id="vnfs-panel" role="tabpanel" aria-labelledby="tab-vnfs" tabindex="0" hidden>
-      <div id="vnfs-root"></div>
-    </section>
-  </main>
-
+      <section class="tab-panel" id="vnfs-panel" role="tabpanel" aria-labelledby="tab-vnfs" tabindex="0" hidden>
+        <div id="vnfs-root"></div>
+      </section>
+    </main>
+  </div>
 
   <div id="toast-root"></div>
   <noscript><p class="noscript">This UI needs JavaScript enabled. The JSON API is available under <code>/api</code>.</p></noscript>

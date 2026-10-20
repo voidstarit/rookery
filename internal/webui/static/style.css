@@ -2327,3 +2327,193 @@ textarea:disabled {
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
+
+/* Application shell: persistent sidebar for primary navigation and status. */
+.app-shell {
+  display: grid;
+  grid-template-columns: 17rem minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  height: 100vh;
+  padding: 1.4rem 1.25rem;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: rgba(7, 12, 18, 0.72);
+}
+
+.sidebar .brand {
+  flex: none;
+  padding: 0.2rem 0.25rem 0.65rem;
+}
+
+.sidebar-tabs {
+  flex: none;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  border-bottom: 0;
+}
+
+.sidebar .tab {
+  width: 100%;
+  justify-content: space-between;
+  margin: 0;
+  padding: 0.68rem 0.75rem;
+  border: 1px solid transparent;
+  border-left: 3px solid transparent;
+  border-radius: 0.55rem;
+  text-align: left;
+}
+
+.sidebar .tab:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.sidebar .tab[aria-selected="true"] {
+  color: var(--accent);
+  border-color: rgba(94, 234, 212, 0.14);
+  border-left-color: var(--accent);
+  background: rgba(94, 234, 212, 0.06);
+}
+
+.sidebar .tab[aria-selected="true"] .tab-count {
+  color: var(--accent);
+  border-color: rgba(94, 234, 212, 0.3);
+}
+
+.sidebar-status {
+  margin-top: auto;
+  margin-bottom: 0;
+  padding: 1rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.sidebar-status .readiness-head {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin-bottom: 0.65rem;
+}
+
+.sidebar-status .readiness-head .eyebrow {
+  margin-bottom: 0.25rem;
+}
+
+.sidebar-status .readiness-head h2 {
+  font-size: 0.95rem;
+}
+
+.sidebar-status .readiness-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+.sidebar-status .readiness-card {
+  padding: 0.65rem 0.7rem;
+  border-radius: 0.65rem;
+}
+
+.sidebar-status .readiness-card-top {
+  margin-bottom: 0.3rem;
+}
+
+.sidebar-status .readiness-target {
+  margin-bottom: 0.25rem;
+}
+
+.sidebar-status .readiness-detail {
+  max-height: 4.5rem;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  font-size: 0.65rem;
+}
+
+.sidebar-meta {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+
+.app-shell > .shell {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 2.2rem 2.4rem 4.5rem;
+}
+
+@media (max-width: 980px) {
+  .app-shell {
+    display: block;
+  }
+
+  .sidebar {
+    position: static;
+    height: auto;
+    padding: 1rem 1.1rem;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar .brand {
+    padding-bottom: 0.8rem;
+  }
+
+  .sidebar-tabs {
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+  }
+
+  .sidebar .tab {
+    width: auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
+    border-left: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0.45rem;
+  }
+
+  .sidebar .tab[aria-selected="true"] {
+    border-color: transparent;
+    border-bottom-color: var(--accent);
+    background: transparent;
+  }
+
+  .sidebar-status {
+    margin-top: 0.9rem;
+    padding-top: 0.9rem;
+  }
+
+  .sidebar-status .readiness-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sidebar-meta {
+    padding-top: 0.8rem;
+  }
+
+  .app-shell > .shell {
+    padding: 1.5rem 1.1rem 3rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .sidebar-status .readiness-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
