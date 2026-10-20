@@ -124,6 +124,8 @@ type fakeNetworkProvisioner struct {
 	deletedCapture string
 	aclCounters    []host.ACLInterfaceCounters
 	aclCounterErr  error
+	fibRoutes      []host.FIBRoute
+	fibErr         error
 }
 
 func (f *fakeNetworkProvisioner) Ping(_ context.Context) error { return nil }
@@ -326,6 +328,33 @@ func (f *fakeNetworkProvisioner) DeleteMemif(_ context.Context, swIfIndex uint32
 	}
 	f.deletedMemifs = append(f.deletedMemifs, swIfIndex)
 	return nil
+}
+
+func (f *fakeNetworkProvisioner) EnsureRouteTable(_ context.Context, _ uint32, _ bool, _ string) error {
+	return nil
+}
+
+func (f *fakeNetworkProvisioner) DeleteRouteTable(_ context.Context, _ uint32, _ bool) error {
+	return nil
+}
+
+func (f *fakeNetworkProvisioner) SetInterfaceRouteTable(_ context.Context, _ uint32, _ bool, _ uint32) error {
+	return nil
+}
+
+func (f *fakeNetworkProvisioner) AddRoute(_ context.Context, _ uint32, _ bool, _, _ string, _ uint32) error {
+	return nil
+}
+
+func (f *fakeNetworkProvisioner) DeleteRoute(_ context.Context, _ uint32, _ bool, _ string) error {
+	return nil
+}
+
+func (f *fakeNetworkProvisioner) DumpFIBRoutes(_ context.Context, _ uint32, _ bool) ([]host.FIBRoute, error) {
+	if f.fibErr != nil {
+		return nil, f.fibErr
+	}
+	return f.fibRoutes, nil
 }
 
 func (f *fakeNetworkProvisioner) DeleteMemifByName(_ context.Context, _ string) error {
@@ -784,6 +813,148 @@ func createAPI(t *testing.T, handler http.Handler, name string) store.VM {
 		t.Fatalf("create %q status = %d, body = %s", name, recorder.Code, recorder.Body.String())
 	}
 	return decode[store.VM](t, recorder)
+}
+
+func TestRouteTableAssignment(t *testing.T) {
+	env := newTestAPI(t)
+	network := createNetworkAPI(t, env.handler, "routes-net")
+	iface := createInterfaceAPI(t, env.handler, "vm-routes", network.ID)
+
+	recorder := do(t, env.handler, http.MethodPost, "/api/route-tables", map[string]any{
+		"name":     "tenant-blue",
+		"table_id": 42,
+		"ipv6":     true,
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create route table status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	table := decode[store.RouteTable](t, recorder)
+	if table.TableID != 42 || !table.IPv6 {
+		t.Fatalf("created route table = %+v", table)
+	}
+
+	recorder = do(t, env.handler, http.MethodGet, "/api/route-tables", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("list route tables status = %d", recorder.Code)
+	}
+	tables := decode[[]store.RouteTable](t, recorder)
+	if len(tables) < 3 {
+		t.Fatalf("route tables = %+v, want default v4/v6 plus custom", tables)
+	}
+
+	recorder = do(t, env.handler, http.MethodPut, fmt.Sprintf("/api/interfaces/%d/route-tables", iface.ID), map[string]any{
+		"ipv4_table_id": 0,
+		"ipv6_table_id": 42,
+	})
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("assign route table status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	assigned := decode[store.VirtualInterface](t, recorder)
+	if assigned.IPv6TableID != 42 || assigned.IPv6TableName != "tenant-blue" {
+		t.Fatalf("assigned interface = %+v", assigned)
+	}
+
+	recorder = do(t, env.handler, http.MethodPost, fmt.Sprintf("/api/route-tables/%d/routes", table.ID), map[string]any{
+		"ipv6":         true,
+		"prefix":       "2001:db8:10::/64",
+		"next_hop":     "2001:db8::1",
+		"interface_id": iface.ID,
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create route status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	route := decode[store.Route](t, recorder)
+	if route.TableID != 42 || !route.IPv6 || route.InterfaceID == nil || *route.InterfaceID != iface.ID {
+		t.Fatalf("created route = %+v", route)
+	}
+
+	recorder = do(t, env.handler, http.MethodGet, fmt.Sprintf("/api/route-tables/%d/routes?ipv6=true", table.ID), nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("list routes status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	routes := decode[[]store.Route](t, recorder)
+	if len(routes) != 1 || routes[0].Prefix != "2001:db8:10::/64" {
+		t.Fatalf("routes = %+v", routes)
+	}
+
+	recorder = do(t, env.handler, http.MethodDelete, fmt.Sprintf("/api/route-tables/%d", table.ID), nil)
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("delete assigned route table status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+
+	recorder = do(t, env.handler, http.MethodPut, fmt.Sprintf("/api/interfaces/%d/route-tables", iface.ID), map[string]any{
+		"ipv4_table_id": 0,
+		"ipv6_table_id": 0,
+	})
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("clear route table status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+
+	recorder = do(t, env.handler, http.MethodDelete, fmt.Sprintf("/api/route-tables/%d", table.ID), nil)
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("delete route table with routes status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+
+	recorder = do(t, env.handler, http.MethodDelete, fmt.Sprintf("/api/routes/%d", route.ID), nil)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("delete route status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+
+	recorder = do(t, env.handler, http.MethodDelete, fmt.Sprintf("/api/route-tables/%d", table.ID), nil)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("delete route table status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestDefaultRouteTableRoutes(t *testing.T) {
+	env := newTestAPI(t)
+	recorder := do(t, env.handler, http.MethodPost, "/api/route-tables/0/routes", map[string]any{
+		"ipv6":     false,
+		"prefix":   "192.0.2.0/24",
+		"next_hop": "192.0.2.1",
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create default route status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	route := decode[store.Route](t, recorder)
+	if route.TableID != 0 || route.IPv6 || route.Prefix != "192.0.2.0/24" {
+		t.Fatalf("created default route = %+v", route)
+	}
+
+	recorder = do(t, env.handler, http.MethodGet, "/api/route-tables/0/routes?ipv6=false", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("list default routes status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	routes := decode[[]store.Route](t, recorder)
+	if len(routes) != 1 || routes[0].ID != route.ID {
+		t.Fatalf("default routes = %+v", routes)
+	}
+
+	recorder = do(t, env.handler, http.MethodDelete, fmt.Sprintf("/api/routes/%d", route.ID), nil)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("delete default route status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestListFIBRoutes(t *testing.T) {
+	env := newTestAPI(t)
+	env.networks.fibRoutes = []host.FIBRoute{{
+		Prefix: "10.20.0.0/24", TableID: 0, Source: 4, SourceName: "interface", Dynamic: true, StatsIndex: 7,
+		Paths: []host.FIBPath{{
+			SwIfIndex: 3, InterfaceName: "vhost-test", Type: "NORMAL", Weight: 1, Proto: "FIB_API_PATH_NH_PROTO_IP4", NextHop: "10.20.0.1",
+		}},
+	}}
+	recorder := do(t, env.handler, http.MethodGet, "/api/route-tables/0/fib?ipv6=false", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("list FIB routes status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	routes := decode[[]host.FIBRoute](t, recorder)
+	if len(routes) != 1 || !routes[0].Dynamic || routes[0].SourceName != "interface" {
+		t.Fatalf("FIB routes = %+v", routes)
+	}
+	if len(routes[0].Paths) != 1 || routes[0].Paths[0].InterfaceName != "vhost-test" || routes[0].Paths[0].NextHop != "10.20.0.1" {
+		t.Fatalf("FIB paths = %+v", routes[0].Paths)
+	}
 }
 
 func TestACLCRUDAndInterfaceAssignment(t *testing.T) {

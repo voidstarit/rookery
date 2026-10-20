@@ -46,6 +46,17 @@ func TestMigrationConvertsNetworkDHCPToVNF(t *testing.T) {
 	if _, err := db.Exec(`DROP TABLE interface_acls`); err != nil {
 		t.Fatalf("drop interface_acls table: %v", err)
 	}
+	if _, err := db.Exec(`DROP TABLE routes`); err != nil {
+		t.Fatalf("drop routes table: %v", err)
+	}
+	if _, err := db.Exec(`DROP TABLE route_tables`); err != nil {
+		t.Fatalf("drop route_tables table: %v", err)
+	}
+	for _, column := range []string{"ipv4_table_id", "ipv6_table_id"} {
+		if _, err := db.Exec(`ALTER TABLE virtual_interfaces DROP COLUMN ` + column); err != nil {
+			t.Fatalf("drop virtual_interfaces.%s: %v", column, err)
+		}
+	}
 	if _, err := db.Exec(`DROP INDEX IF EXISTS idx_disks_template_disk_id`); err != nil {
 		t.Fatalf("drop disk template index: %v", err)
 	}
@@ -138,6 +149,17 @@ func TestMigrationBackfillsVMDisks(t *testing.T) {
 	}
 	if _, err := db.Exec(`DROP TABLE interface_acls`); err != nil {
 		t.Fatalf("drop interface_acls table: %v", err)
+	}
+	if _, err := db.Exec(`DROP TABLE routes`); err != nil {
+		t.Fatalf("drop routes table: %v", err)
+	}
+	if _, err := db.Exec(`DROP TABLE route_tables`); err != nil {
+		t.Fatalf("drop route_tables table: %v", err)
+	}
+	for _, column := range []string{"ipv4_table_id", "ipv6_table_id"} {
+		if _, err := db.Exec(`ALTER TABLE virtual_interfaces DROP COLUMN ` + column); err != nil {
+			t.Fatalf("drop virtual_interfaces.%s: %v", column, err)
+		}
 	}
 	if _, err := db.Exec(`DROP INDEX IF EXISTS idx_disks_template_disk_id`); err != nil {
 		t.Fatalf("drop disk template index: %v", err)
@@ -249,7 +271,7 @@ func TestMigrationPreservesLegacyVMsWithoutDisks(t *testing.T) {
 	if err := st.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 16 {
-		t.Fatalf("schema version = %d, want 16", version)
+	if version != 18 {
+		t.Fatalf("schema version = %d, want 18", version)
 	}
 }

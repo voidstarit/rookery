@@ -179,7 +179,9 @@ func interfaceToProto(iface store.VirtualInterface) *rookeryv1.VirtualInterface 
 		EgressAclId: iface.EgressACLID, EgressAclName: iface.EgressACLName,
 		IngressAcls: interfaceACLNames(iface.IngressACLs),
 		EgressAcls:  interfaceACLNames(iface.EgressACLs),
-		CreatedAt:   timestamp(iface.CreatedAt), UpdatedAt: timestamp(iface.UpdatedAt),
+		Ipv4TableId: iface.IPv4TableID, Ipv6TableId: iface.IPv6TableID,
+		Ipv4TableName: iface.IPv4TableName, Ipv6TableName: iface.IPv6TableName,
+		CreatedAt: timestamp(iface.CreatedAt), UpdatedAt: timestamp(iface.UpdatedAt),
 	}
 }
 

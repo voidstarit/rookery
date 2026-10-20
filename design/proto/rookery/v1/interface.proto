@@ -66,6 +66,10 @@ message VirtualInterface {
   google.protobuf.Timestamp updated_at = 15;
   repeated string ingress_acls = 16;
   repeated string egress_acls = 17;
+  uint32 ipv4_table_id = 18;
+  uint32 ipv6_table_id = 19;
+  string ipv4_table_name = 20;
+  string ipv6_table_name = 21;
 }
 
 message VMInterface {

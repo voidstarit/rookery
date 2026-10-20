@@ -22,6 +22,8 @@ var createdMethods = map[string]bool{
 	"/rookery.v1.StorageBackendService/CreateStorageBackend": true,
 	"/rookery.v1.StorageBackendService/ImportDisks":          true,
 	"/rookery.v1.CaptureService/StartCapture":                true,
+	"/rookery.v1.RouteTableService/CreateRouteTable":         true,
+	"/rookery.v1.RouteTableService/CreateRoute":              true,
 }
 
 var noContentMethods = map[string]bool{
@@ -34,6 +36,8 @@ var noContentMethods = map[string]bool{
 	"/rookery.v1.VNFService/DeleteVNF":                       true,
 	"/rookery.v1.StorageBackendService/DeleteStorageBackend": true,
 	"/rookery.v1.CaptureService/DeleteCaptureFile":           true,
+	"/rookery.v1.RouteTableService/DeleteRouteTable":         true,
+	"/rookery.v1.RouteTableService/DeleteRoute":              true,
 	"/rookery.v1.VMService/ResetVM":                          true,
 	"/rookery.v1.VMService/CtrlAltDel":                       true,
 }
@@ -56,6 +60,10 @@ func setLocationHeader(method string, response proto.Message, writer http.Respon
 		writer.Header().Set("Location", fmt.Sprintf("/api/vnfs/%d", value.GetId()))
 	case *rookeryv1.StorageBackend:
 		writer.Header().Set("Location", fmt.Sprintf("/api/storage-backends/%d", value.GetId()))
+	case *rookeryv1.RouteTable:
+		writer.Header().Set("Location", fmt.Sprintf("/api/route-tables/%d", value.GetId()))
+	case *rookeryv1.Route:
+		writer.Header().Set("Location", fmt.Sprintf("/api/routes/%d", value.GetId()))
 	}
 }
 

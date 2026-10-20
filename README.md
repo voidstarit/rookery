@@ -406,6 +406,32 @@ survive API/VPP reconciliation. The editor and assignment dialog both show the
 full effective ACL text, including the implicit deny. An ACL cannot be deleted
 while assigned to an interface.
 
+### Route tables
+
+Route tables are VPP IP FIB/VRF definitions. The **Route tables** subtab always
+shows the default VRF (table `0`) for both IPv4 and IPv6, plus custom tables.
+Custom tables have a name, a table ID, and an address family; the same ID may be
+used once for IPv4 and once for IPv6. Create a table with **Add route table**,
+then use **Route tables** on an interface row to bind its IPv4 and IPv6 FIBs.
+Table `0` is always available and cannot be deleted. Deleting a custom table is
+blocked while an interface or static route references it. VPP table definitions,
+interface bindings, and static routes are recreated during startup reconciliation
+after a VPP restart.
+
+Use **Routes** on a table row to list, add, and delete static entries. Each route
+has a prefix, next hop, and optional egress interface; leave the interface empty
+to let VPP resolve the next hop through the table. The route editor works for
+the default VRF `0` as well as custom tables.
+
+The route editor is a full page at
+`/route-tables/{id}?ipv6=<bool>` (the legacy
+`/route-tables/{id}/routes?ipv6=<bool>` form also works), so refreshing the
+browser keeps the selected VRF open. The create page is `/route-tables/new`.
+It also shows **Dynamic routes** read from the live VPP FIB:
+connected/interface routes, DHCP and IPv6 ND routes, adjacency entries, and
+other non-API sources. They are read-only and include source and forwarding
+path details for troubleshooting.
+
 The **Network** tab includes a **Troubleshoot** section. It currently renders
 the active VPP packet-processing graph from `vppctl show vlib graphviz filter`;
 node size is cycles/packet and color is packets/call. Interface-related nodes
@@ -677,11 +703,19 @@ native routes plus the static UI.
 | `GET`    | `/api/acls/{id}`   | Get one ACL and its full rules    |
 | `PUT`    | `/api/acls/{id}`   | Update an ACL                     |
 | `DELETE` | `/api/acls/{id}`   | Delete an unassigned ACL          |
+| `GET`    | `/api/route-tables` | List default and custom IP FIB/VRF tables |
+| `POST`   | `/api/route-tables` | Create an IPv4 or IPv6 route table |
+| `DELETE` | `/api/route-tables/{id}` | Delete an unassigned route table |
+| `GET`    | `/api/route-tables/{id}/routes?ipv6=<bool>` | List static routes in a table |
+| `POST`   | `/api/route-tables/{id}/routes` | Add a static route |
+| `DELETE` | `/api/routes/{id}` | Delete a static route |
+| `GET`    | `/api/route-tables/{id}/fib?ipv6=<bool>` | Inspect live VPP FIB entries, including dynamic routes |
 | `GET`    | `/api/interfaces`  | List vhost-user interfaces        |
 | `POST`   | `/api/interfaces`  | Create a vhost-user interface      |
 | `GET`    | `/api/interfaces/{id}` | Get one interface              |
 | `PUT`    | `/api/interfaces/{id}` | Attach/detach to a VM          |
 | `PUT`    | `/api/interfaces/{id}/acls` | Assign ordered ingress/egress ACL lists by name |
+| `PUT`    | `/api/interfaces/{id}/route-tables` | Bind IPv4/IPv6 FIB tables |
 | `DELETE` | `/api/interfaces/{id}` | Delete an unattached interface |
 | `GET`    | `/api/vms`         | List all VMs                       |
 | `POST`   | `/api/vms`         | Create a VM with an existing disk |

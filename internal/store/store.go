@@ -301,6 +301,10 @@ type VirtualInterface struct {
 	EgressACLName  string         `json:"egress_acl_name,omitempty"`
 	IngressACLs    []InterfaceACL `json:"-"`
 	EgressACLs     []InterfaceACL `json:"-"`
+	IPv4TableID    uint32         `json:"ipv4_table_id"`
+	IPv6TableID    uint32         `json:"ipv6_table_id"`
+	IPv4TableName  string         `json:"ipv4_table_name,omitempty"`
+	IPv6TableName  string         `json:"ipv6_table_name,omitempty"`
 	CreatedAt      time.Time      `json:"created_at"`
 	UpdatedAt      time.Time      `json:"updated_at"`
 }
@@ -1687,12 +1691,16 @@ const interfaceSelect = `
 	SELECT i.id, i.name, i.network_id, n.name, i.socket_path, i.mac, i.sw_if_index,
 	       i.attached_vm_id, v.name,
 	       i.ingress_acl_id, ai.name, i.egress_acl_id, ae.name,
+	       i.ipv4_table_id, COALESCE(r4.name, 'default'),
+	       i.ipv6_table_id, COALESCE(r6.name, 'default'),
 	       i.created_at, i.updated_at
 	FROM virtual_interfaces AS i
 	JOIN networks AS n ON n.id = i.network_id
 	LEFT JOIN vms AS v ON v.id = i.attached_vm_id
 	LEFT JOIN acls AS ai ON ai.id = i.ingress_acl_id
-	LEFT JOIN acls AS ae ON ae.id = i.egress_acl_id`
+	LEFT JOIN acls AS ae ON ae.id = i.egress_acl_id
+	LEFT JOIN route_tables AS r4 ON r4.table_id = i.ipv4_table_id AND r4.is_ipv6 = 0
+	LEFT JOIN route_tables AS r6 ON r6.table_id = i.ipv6_table_id AND r6.is_ipv6 = 1`
 
 func scanNetwork(s scanner) (Network, error) {
 	var (
@@ -1762,6 +1770,8 @@ func scanInterface(s scanner) (VirtualInterface, error) {
 		ingress   sql.NullString
 		egressID  sql.NullInt64
 		egress    sql.NullString
+		ipv4Table int64
+		ipv6Table int64
 		createdAt int64
 		updatedAt int64
 	)
@@ -1769,11 +1779,14 @@ func scanInterface(s scanner) (VirtualInterface, error) {
 		&iface.ID, &iface.Name, &iface.NetworkID, &iface.NetworkName,
 		&iface.SocketPath, &iface.MAC, &swIf, &vmID, &vmName,
 		&ingressID, &ingress, &egressID, &egress,
+		&ipv4Table, &iface.IPv4TableName, &ipv6Table, &iface.IPv6TableName,
 		&createdAt, &updatedAt,
 	); err != nil {
 		return VirtualInterface{}, err
 	}
 	iface.SwIfIndex = uint32(swIf)
+	iface.IPv4TableID = uint32(ipv4Table)
+	iface.IPv6TableID = uint32(ipv6Table)
 	if vmID.Valid {
 		id := vmID.String
 		iface.AttachedVMID = &id

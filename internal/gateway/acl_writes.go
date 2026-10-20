@@ -12,6 +12,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
+	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -20,6 +21,12 @@ type ACLRuntime interface {
 	EnsureVPPACL(ctx context.Context, aclID int64, rules []store.ACLRule) (uint32, error)
 	DeleteVPPACL(ctx context.Context, index uint32) error
 	SetInterfaceACLs(ctx context.Context, swIfIndex uint32, ingress, egress []uint32) error
+	EnsureRouteTable(ctx context.Context, tableID uint32, ipv6 bool, name string) error
+	DeleteRouteTable(ctx context.Context, tableID uint32, ipv6 bool) error
+	SetInterfaceRouteTable(ctx context.Context, swIfIndex uint32, ipv6 bool, tableID uint32) error
+	AddRoute(ctx context.Context, tableID uint32, ipv6 bool, prefix, nextHop string, swIfIndex uint32) error
+	DeleteRoute(ctx context.Context, tableID uint32, ipv6 bool, prefix string) error
+	DumpFIBRoutes(ctx context.Context, tableID uint32, ipv6 bool) ([]host.FIBRoute, error)
 }
 
 func (s *aclService) runtimeReady() error {

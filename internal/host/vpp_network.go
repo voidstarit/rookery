@@ -16,8 +16,10 @@ import (
 
 	"go.fd.io/govpp"
 	"go.fd.io/govpp/binapi/ethernet_types"
+	"go.fd.io/govpp/binapi/fib_types"
 	"go.fd.io/govpp/binapi/interface"
 	"go.fd.io/govpp/binapi/interface_types"
+	ipapi "go.fd.io/govpp/binapi/ip"
 	"go.fd.io/govpp/binapi/ip_types"
 	"go.fd.io/govpp/binapi/l2"
 	"go.fd.io/govpp/binapi/memif"
@@ -788,6 +790,150 @@ func (v *VPPNetwork) DeleteMemifByName(ctx context.Context, name string) error {
 		}
 		return checkVPPRetval("delete VNF memif", reply.Retval)
 	}
+}
+
+// EnsureRouteTable creates a custom VPP IP FIB/VRF table if it does not exist.
+func (v *VPPNetwork) EnsureRouteTable(ctx context.Context, tableID uint32, ipv6 bool, name string) error {
+	if tableID == 0 {
+		return nil
+	}
+	conn, err := v.connect()
+	if err != nil {
+		return err
+	}
+	defer conn.Disconnect()
+
+	reply, err := ipapi.NewServiceClient(conn).IPTableAddDel(ctx, &ipapi.IPTableAddDel{
+		IsAdd: true,
+		Table: ipapi.IPTable{TableID: tableID, IsIP6: ipv6, Name: name},
+	})
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "already exists") {
+			return nil
+		}
+		return fmt.Errorf("create route table %d: %w", tableID, err)
+	}
+	if reply.Retval != 0 {
+		return checkVPPRetval("create route table", reply.Retval)
+	}
+	return nil
+}
+
+// DeleteRouteTable removes a custom VPP IP FIB/VRF table.
+func (v *VPPNetwork) DeleteRouteTable(ctx context.Context, tableID uint32, ipv6 bool) error {
+	if tableID == 0 {
+		return nil
+	}
+	conn, err := v.connect()
+	if err != nil {
+		return err
+	}
+	defer conn.Disconnect()
+
+	reply, err := ipapi.NewServiceClient(conn).IPTableAddDel(ctx, &ipapi.IPTableAddDel{
+		IsAdd: false,
+		Table: ipapi.IPTable{TableID: tableID, IsIP6: ipv6},
+	})
+	if err != nil {
+		if isVPPNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("delete route table %d: %w", tableID, err)
+	}
+	return checkVPPRetval("delete route table", reply.Retval)
+}
+
+// AddRoute installs a static route in an IP FIB/VRF table. swIfIndex may be 0
+// when VPP can resolve the next hop through a connected route in the table.
+func (v *VPPNetwork) AddRoute(ctx context.Context, tableID uint32, ipv6 bool, prefix, nextHop string, swIfIndex uint32) error {
+	parsedPrefix, err := ip_types.ParsePrefix(strings.TrimSpace(prefix))
+	if err != nil {
+		return fmt.Errorf("parse route prefix: %w", err)
+	}
+	if (parsedPrefix.Address.Af == ip_types.ADDRESS_IP6) != ipv6 {
+		return errors.New("route prefix family does not match the table")
+	}
+	nh, err := ip_types.ParseAddress(strings.TrimSpace(nextHop))
+	if err != nil {
+		return fmt.Errorf("parse route next hop: %w", err)
+	}
+	if (nh.Af == ip_types.ADDRESS_IP6) != ipv6 {
+		return errors.New("route next-hop family does not match the table")
+	}
+	proto := fib_types.FIB_API_PATH_NH_PROTO_IP4
+	if ipv6 {
+		proto = fib_types.FIB_API_PATH_NH_PROTO_IP6
+	}
+	route := ipapi.IPRoute{
+		TableID: tableID,
+		Prefix:  parsedPrefix,
+		Paths: []fib_types.FibPath{{
+			SwIfIndex: swIfIndex,
+			Type:      fib_types.FIB_API_PATH_TYPE_NORMAL,
+			Proto:     proto,
+			Nh:        fib_types.FibPathNh{Address: nh.Un},
+		}},
+	}
+	return v.changeRoute(ctx, true, route)
+}
+
+// DeleteRoute removes a static route from an IP FIB/VRF table.
+func (v *VPPNetwork) DeleteRoute(ctx context.Context, tableID uint32, ipv6 bool, prefix string) error {
+	parsedPrefix, err := ip_types.ParsePrefix(strings.TrimSpace(prefix))
+	if err != nil {
+		return fmt.Errorf("parse route prefix: %w", err)
+	}
+	if (parsedPrefix.Address.Af == ip_types.ADDRESS_IP6) != ipv6 {
+		return errors.New("route prefix family does not match the table")
+	}
+	return v.changeRoute(ctx, false, ipapi.IPRoute{TableID: tableID, Prefix: parsedPrefix})
+}
+
+func (v *VPPNetwork) changeRoute(ctx context.Context, isAdd bool, route ipapi.IPRoute) error {
+	conn, err := v.connect()
+	if err != nil {
+		return err
+	}
+	defer conn.Disconnect()
+	reply, err := ipapi.NewServiceClient(conn).IPRouteAddDel(ctx, &ipapi.IPRouteAddDel{
+		IsAdd: isAdd,
+		Route: route,
+	})
+	if err != nil {
+		if !isAdd && isVPPNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("change route: %w", err)
+	}
+	if err := checkVPPRetval("change route", reply.Retval); err != nil {
+		if !isAdd && isVPPNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+// SetInterfaceRouteTable binds an interface to an IPv4 or IPv6 FIB/VRF.
+func (v *VPPNetwork) SetInterfaceRouteTable(ctx context.Context, swIfIndex uint32, ipv6 bool, tableID uint32) error {
+	if swIfIndex == 0 {
+		return errors.New("interface index is required")
+	}
+	conn, err := v.connect()
+	if err != nil {
+		return err
+	}
+	defer conn.Disconnect()
+
+	reply, err := interfaces.NewServiceClient(conn).SwInterfaceSetTable(ctx, &interfaces.SwInterfaceSetTable{
+		SwIfIndex: interface_types.InterfaceIndex(swIfIndex),
+		IsIPv6:    ipv6,
+		VrfID:     tableID,
+	})
+	if err != nil {
+		return fmt.Errorf("set interface route table: %w", err)
+	}
+	return checkVPPRetval("set interface route table", reply.Retval)
 }
 
 func (v *VPPNetwork) connect() (*core.Connection, error) {

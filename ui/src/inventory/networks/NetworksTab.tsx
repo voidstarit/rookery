@@ -15,13 +15,17 @@ import type {
   VM,
   VNF,
   VPPGraph,
+  RouteTable,
 } from "../types";
 import { ACLDialog } from "./ACLDialog";
 import { AttachDialog } from "./AttachDialog";
 import { InterfaceACLDialog } from "./InterfaceACLDialog";
 import { InterfaceDialog } from "./InterfaceDialog";
+import { InterfaceRouteTablesDialog } from "./InterfaceRouteTablesDialog";
 import { NetworkDialog } from "./NetworkDialog";
 import { PacketCapturePanel } from "./PacketCapture";
+import { RouteTableCreatePage } from "./RouteTableCreatePage";
+import { RouteTablePage } from "./RouteTablePage";
 import { VPPGraphView } from "./VPPGraph";
 import { aclAssignments, formatACLRuleText } from "./acl";
 import { navigate, useRoute } from "../router";
@@ -45,7 +49,7 @@ type BackendData = {
   vnfs: VNF[];
 };
 
-type Section = "networks" | "hosts" | "interfaces" | "acl" | "troubleshoot";
+type Section = "networks" | "hosts" | "interfaces" | "acl" | "routes" | "troubleshoot";
 
 let aclCountersInFlight = false;
 let aclCountersLastLoaded = 0;
@@ -55,6 +59,7 @@ const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: "networks", label: "Networks" },
   { id: "interfaces", label: "Interfaces" },
   { id: "acl", label: "ACLs" },
+  { id: "routes", label: "Route tables" },
   { id: "troubleshoot", label: "Troubleshoot" },
 ];
 
@@ -76,6 +81,11 @@ export function NetworksTab() {
   const [attachIface, setAttachIface] = useState<VirtualInterface | null>(null);
   const [aclDialog, setAclDialog] = useState<{ acl: ACL | null } | null>(null);
   const [interfaceACLIface, setInterfaceACLIface] = useState<VirtualInterface | null>(null);
+  const [routeTables, setRouteTables] = useState<RouteTable[]>([]);
+  const [routeTableError, setRouteTableError] = useState("");
+  const [routeTableCreateOpen, setRouteTableDialogOpen] = useState(false);
+  const [routeTableRoutes, setRouteTableRoutes] = useState<RouteTable | null>(null);
+  const [interfaceRouteTablesIface, setInterfaceRouteTablesIface] = useState<VirtualInterface | null>(null);
   const [expandedACLInterface, setExpandedACLInterface] = useState<number | null>(null);
   const [section, setSection] = useState<Section>("hosts");
   const [graph, setGraph] = useState<VPPGraph | null>(null);
@@ -95,6 +105,9 @@ export function NetworksTab() {
       setAttachIface(null);
       setAclDialog(null);
       setInterfaceACLIface(null);
+      setRouteTableDialogOpen(false);
+      setRouteTableRoutes(null);
+      setInterfaceRouteTablesIface(null);
       if (second === "new") {
         setNetworkDialogOpen(true);
         setSection("networks");
@@ -111,16 +124,20 @@ export function NetworksTab() {
     setNetworkDialogOpen(false);
     if (root === "interfaces") {
       setSection("interfaces");
+      setRouteTableDialogOpen(false);
+      setRouteTableRoutes(null);
       if (second === "new") {
         setInterfaceDialogOpen(true);
         setAttachIface(null);
         setInterfaceACLIface(null);
+        setInterfaceRouteTablesIface(null);
         return;
       }
       const iface = interfaces.find((item) => String(item.id) === second);
       setInterfaceDialogOpen(false);
       setAttachIface(iface && third === "attach" ? iface : null);
       setInterfaceACLIface(iface && third === "acls" ? iface : null);
+      setInterfaceRouteTablesIface(iface && third === "route-tables" ? iface : null);
       return;
     }
     if (root === "acls") {
@@ -128,6 +145,9 @@ export function NetworksTab() {
       setInterfaceDialogOpen(false);
       setAttachIface(null);
       setInterfaceACLIface(null);
+      setInterfaceRouteTablesIface(null);
+      setRouteTableDialogOpen(false);
+      setRouteTableRoutes(null);
       if (second === "new") {
         setAclDialog({ acl: null });
         return;
@@ -136,11 +156,36 @@ export function NetworksTab() {
       setAclDialog(acl && third === "edit" ? { acl } : null);
       return;
     }
+    if (root === "route-tables") {
+      setSection("routes");
+      setInterfaceDialogOpen(false);
+      setAttachIface(null);
+      setAclDialog(null);
+      setInterfaceACLIface(null);
+      setInterfaceRouteTablesIface(null);
+      if (second === "new") {
+        setRouteTableDialogOpen(true);
+        setRouteTableRoutes(null);
+        return;
+      }
+      setRouteTableDialogOpen(false);
+      if (third === "routes" || !third) {
+        const family = route.query.get("ipv6") === "true";
+        const table = routeTables.find((item) => String(item.id) === second && item.ipv6 === family);
+        setRouteTableRoutes(table ?? null);
+      } else {
+        setRouteTableRoutes(null);
+      }
+      return;
+    }
     setInterfaceDialogOpen(false);
     setAttachIface(null);
     setAclDialog(null);
     setInterfaceACLIface(null);
-  }, [route.path, interfaces, acls]);
+    setRouteTableDialogOpen(false);
+    setRouteTableRoutes(null);
+    setInterfaceRouteTablesIface(null);
+  }, [route.path, route.search, interfaces, acls, routeTables]);
 
   const setData = (partial: Partial<BackendData>) => {
     if (partial.networks) {
@@ -230,6 +275,28 @@ export function NetworksTab() {
     }
   };
 
+  const loadRouteTables = async (showErrors = true) => {
+    try {
+      const data = await api<RouteTable[]>("/api/route-tables");
+      const list = (Array.isArray(data) ? data : []).map((table) => ({
+        ...table,
+        id: table.id ?? 0,
+        table_id: table.table_id ?? 0,
+        ipv6: Boolean(table.ipv6),
+        interface_count: table.interface_count ?? 0,
+        route_count: table.route_count ?? 0,
+      }));
+      setRouteTables(list);
+      if (showErrors) {
+        setRouteTableError("");
+      }
+    } catch (err) {
+      if (showErrors) {
+        setRouteTableError(err instanceof Error ? err.message : String(err));
+      }
+    }
+  };
+
   const loadVMs = async () => {
     try {
       const data = await api<VM[]>("/api/vms");
@@ -264,6 +331,7 @@ export function NetworksTab() {
       loadHostInterfaces(),
       loadInterfaces(),
       loadACLs(),
+      loadRouteTables(),
       loadVMs(),
       loadVNFs(),
       loadStatus(),
@@ -481,6 +549,24 @@ export function NetworksTab() {
     } catch (err) {
       setAclError(`Could not delete ${acl.name}: ${err instanceof Error ? err.message : String(err)}`);
       showToast(`Could not delete ACL ${acl.name}: ${err instanceof Error ? err.message : String(err)}`, true);
+    }
+  };
+
+  const deleteRouteTable = async (table: RouteTable) => {
+    if (table.is_default) {
+      return;
+    }
+    if (!window.confirm(`Delete route table "${table.name}" (${table.table_id}/${table.ipv6 ? "IPv6" : "IPv4"})?`)) {
+      return;
+    }
+    try {
+      await api(`/api/route-tables/${table.id}`, { method: "DELETE" });
+      await loadRouteTables();
+      showToast(`Deleted route table ${table.name}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setRouteTableError(`Could not delete ${table.name}: ${message}`);
+      showToast(`Could not delete route table ${table.name}: ${message}`, true);
     }
   };
 
@@ -882,6 +968,10 @@ export function NetworksTab() {
                             {iface.socket_path}
                           </span>
                         ) : null}
+                        <span class="vm-description">
+                          FIB v4: {iface.ipv4_table_name || "default"} · v6:{" "}
+                          {iface.ipv6_table_name || "default"}
+                        </span>
                       </td>
                       <td class="mono">{iface.network_name || "—"}</td>
                       <td class="mono">{iface.mac || "—"}</td>
@@ -941,6 +1031,15 @@ export function NetworksTab() {
                             onClick={() => navigate(`/interfaces/${iface.id}/acls`)}
                           >
                             ACLs
+                          </button>
+                          <button
+                            class="row-action"
+                            type="button"
+                            disabled={!vppReady}
+                            title={vppReady ? "" : "VPP must be ready to change interface FIB tables."}
+                            onClick={() => navigate(`/interfaces/${iface.id}/route-tables`)}
+                          >
+                            Route tables
                           </button>
                           <button
                             class="row-action danger"
@@ -1140,6 +1239,116 @@ export function NetworksTab() {
         </div>
       </section>
 
+      <section class="panel panel-spaced" aria-label="Route tables" hidden={section !== "routes"}>
+        {routeTableRoutes ? (
+          <RouteTablePage
+            key={`route-page-${routeTableRoutes.ipv6 ? "v6" : "v4"}-${routeTableRoutes.id}`}
+            table={routeTableRoutes}
+            interfaces={interfaces}
+            onBack={() => {
+              setRouteTableRoutes(null);
+              navigate("/networks/routes", true);
+            }}
+            onChanged={() => void loadRouteTables(false)}
+          />
+        ) : routeTableCreateOpen ? (
+          <RouteTableCreatePage
+            tables={routeTables}
+            onCancel={() => {
+              setRouteTableDialogOpen(false);
+              navigate("/networks/routes", true);
+            }}
+            onSaved={(saved) => {
+              setRouteTableDialogOpen(false);
+              navigate("/networks/routes", true);
+              showToast(`Created route table ${saved.name}`);
+              void loadRouteTables();
+            }}
+          />
+        ) : (
+          <>
+            <div class="panel-head">
+              <div>
+                <h2 id="routes-heading">Route tables</h2>
+                <p class="panel-subtitle">
+                  IP FIB / VRF definitions attachable to interfaces. Table 0 is the default VRF.
+                </p>
+              </div>
+              <button class="button primary" type="button" disabled={!vppReady} onClick={() => navigate("/route-tables/new")}>
+                <span class="button-plus" aria-hidden="true">
+                  +
+                </span>
+                Add route table
+              </button>
+            </div>
+
+            {routeTableError ? (
+              <div class="banner" role="alert">
+                {routeTableError}
+              </div>
+            ) : null}
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Family</th>
+                    <th scope="col">Table ID</th>
+                    <th scope="col">Interfaces</th>
+                    <th scope="col">Routes</th>
+                    <th scope="col">
+                      <span class="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {routeTables.map((table) => (
+                    <tr key={`${table.ipv6 ? "v6" : "v4"}-${table.id}`}>
+                      <td>
+                        <span class="vm-name">{table.name}</span>
+                        {table.is_default ? <span class="vm-description">default VRF</span> : null}
+                      </td>
+                      <td class="mono">{table.ipv6 ? "IPv6" : "IPv4"}</td>
+                      <td class="mono">{table.table_id}</td>
+                      <td class={table.interface_count ? "mono" : "mono muted"}>
+                        {table.interface_count || 0}
+                      </td>
+                      <td class={table.route_count ? "mono" : "mono muted"}>
+                        {table.route_count || 0}
+                      </td>
+                      <td>
+                        <div class="actions">
+                          <button
+                            class="row-action"
+                            type="button"
+                            onClick={() => navigate(`/route-tables/${table.id}?ipv6=${table.ipv6}`)}
+                          >
+                            Routes
+                          </button>
+                          {table.is_default ? (
+                            <span class="muted">built-in</span>
+                          ) : (
+                            <button
+                              class="row-action danger"
+                              type="button"
+                              disabled={!vppReady}
+                              onClick={() => void deleteRouteTable(table)}
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </section>
+
       <section class="panel panel-spaced" aria-labelledby="troubleshoot-heading" hidden={section !== "troubleshoot"}>
         <div class="panel-head">
           <div>
@@ -1296,6 +1505,25 @@ export function NetworksTab() {
             setInterfaceError("");
             void loadACLCounters(true);
             showToast(`Applied ACLs to ${updated.name}`);
+          }}
+        />
+      ) : null}
+      {interfaceRouteTablesIface ? (
+        <InterfaceRouteTablesDialog
+          key={`route-tables-${interfaceRouteTablesIface.id}`}
+          iface={interfaceRouteTablesIface}
+          tables={routeTables}
+          onClose={() => {
+            setInterfaceRouteTablesIface(null);
+            navigate("/networks/interfaces", true);
+          }}
+          onSaved={(updated) => {
+            setInterfaceRouteTablesIface(null);
+            navigate("/networks/interfaces", true);
+            setData({ interfaces: interfaces.map((item) => (item.id === updated.id ? updated : item)) });
+            setInterfaceError("");
+            showToast(`Updated route tables for ${updated.name}`);
+            void loadRouteTables(false);
           }}
         />
       ) : null}

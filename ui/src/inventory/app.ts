@@ -216,7 +216,7 @@ export function startInventory(): void {
     if (top === "storage-backends") {
       return "disks";
     }
-    if (top === "interfaces" || top === "acls") {
+    if (top === "interfaces" || top === "acls" || top === "route-tables") {
       return "networks";
     }
     return isTab(top) ? top : "vms";
@@ -279,6 +279,10 @@ export function startInventory(): void {
     if (route.path === "/") {
       window.history.replaceState(null, "", "/vms");
     }
+    // Route-table detail/create pages are full-page views. Hiding the
+    // inventory chrome makes the URL a true refreshable page instead of a
+    // panel embedded inside the Networks tab.
+    document.body.classList.toggle("route-page-mode", route.path.startsWith("/route-tables"));
     selectTab(tabForPath(route.path), false, false);
   };
 

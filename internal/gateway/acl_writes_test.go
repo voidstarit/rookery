@@ -2,6 +2,7 @@ package gateway_test
 
 import (
 	"context"
+	"github.com/voidstarit/rookery/internal/host"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -30,6 +31,24 @@ func (f *fakeACLRuntime) DeleteVPPACL(_ context.Context, index uint32) error {
 }
 func (f *fakeACLRuntime) SetInterfaceACLs(_ context.Context, _ uint32, _, _ []uint32) error {
 	return nil
+}
+func (f *fakeACLRuntime) EnsureRouteTable(_ context.Context, _ uint32, _ bool, _ string) error {
+	return nil
+}
+func (f *fakeACLRuntime) DeleteRouteTable(_ context.Context, _ uint32, _ bool) error {
+	return nil
+}
+func (f *fakeACLRuntime) SetInterfaceRouteTable(_ context.Context, _ uint32, _ bool, _ uint32) error {
+	return nil
+}
+func (f *fakeACLRuntime) AddRoute(_ context.Context, _ uint32, _ bool, _, _ string, _ uint32) error {
+	return nil
+}
+func (f *fakeACLRuntime) DeleteRoute(_ context.Context, _ uint32, _ bool, _ string) error {
+	return nil
+}
+func (f *fakeACLRuntime) DumpFIBRoutes(_ context.Context, _ uint32, _ bool) ([]host.FIBRoute, error) {
+	return nil, nil
 }
 
 func TestACLWriteRoutes(t *testing.T) {

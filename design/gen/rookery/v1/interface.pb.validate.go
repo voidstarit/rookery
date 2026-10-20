@@ -138,6 +138,14 @@ func (m *VirtualInterface) validate(all bool) error {
 		}
 	}
 
+	// no validation rules for Ipv4TableId
+
+	// no validation rules for Ipv6TableId
+
+	// no validation rules for Ipv4TableName
+
+	// no validation rules for Ipv6TableName
+
 	if m.AttachedVmId != nil {
 		// no validation rules for AttachedVmId
 	}

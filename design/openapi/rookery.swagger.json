@@ -53,6 +53,9 @@
     {
       "name": "CaptureService",
       "description": "CaptureService manages VPP pcap traces and retained capture metadata.\nThe pcap download itself remains a native streaming HTTP endpoint."
+    },
+    {
+      "name": "RouteTableService"
     }
   ],
   "schemes": [
@@ -1863,6 +1866,284 @@
           "VNFService"
         ]
       }
+    },
+    "/api/interfaces/{id}/route-tables": {
+      "put": {
+        "operationId": "RouteTableService_SetInterfaceRouteTables",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VirtualInterface"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/RouteTableServiceSetInterfaceRouteTablesBody"
+            }
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      }
+    },
+    "/api/route-tables": {
+      "get": {
+        "operationId": "RouteTableService_ListRouteTables",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1RouteTable"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "RouteTableService"
+        ]
+      },
+      "post": {
+        "operationId": "RouteTableService_CreateRouteTable",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RouteTable"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateRouteTableRequest"
+            }
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      }
+    },
+    "/api/route-tables/{id}": {
+      "delete": {
+        "operationId": "RouteTableService_DeleteRouteTable",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      }
+    },
+    "/api/route-tables/{route_table_id}/fib": {
+      "get": {
+        "operationId": "RouteTableService_ListFIBRoutes",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1FIBRoute"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "route_table_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "ipv6",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      }
+    },
+    "/api/route-tables/{route_table_id}/routes": {
+      "get": {
+        "operationId": "RouteTableService_ListRoutes",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1Route"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "route_table_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "ipv6",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      },
+      "post": {
+        "operationId": "RouteTableService_CreateRoute",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Route"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "route_table_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/RouteTableServiceCreateRouteBody"
+            }
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      }
+    },
+    "/api/routes/{id}": {
+      "delete": {
+        "operationId": "RouteTableService_DeleteRoute",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      }
     }
   },
   "definitions": {
@@ -3519,6 +3800,246 @@
           "items": {
             "type": "string"
           }
+        },
+        "ipv4_table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv6_table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv4_table_name": {
+          "type": "string"
+        },
+        "ipv6_table_name": {
+          "type": "string"
+        }
+      }
+    },
+    "RouteTableServiceCreateRouteBody": {
+      "type": "object",
+      "properties": {
+        "ipv6": {
+          "type": "boolean"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "next_hop": {
+          "type": "string"
+        },
+        "interface_id": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "RouteTableServiceSetInterfaceRouteTablesBody": {
+      "type": "object",
+      "properties": {
+        "ipv4_table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv6_table_id": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "v1CreateRouteTableRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv6": {
+          "type": "boolean"
+        }
+      }
+    },
+    "v1FIBPath": {
+      "type": "object",
+      "properties": {
+        "sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "interface_name": {
+          "type": "string"
+        },
+        "next_hop": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "preference": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "proto": {
+          "type": "string"
+        }
+      }
+    },
+    "v1FIBRoute": {
+      "type": "object",
+      "properties": {
+        "prefix": {
+          "type": "string"
+        },
+        "table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv6": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "source_name": {
+          "type": "string"
+        },
+        "dynamic": {
+          "type": "boolean"
+        },
+        "stats_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1FIBPath"
+          }
+        }
+      }
+    },
+    "v1ListFIBRoutesResponse": {
+      "type": "object",
+      "properties": {
+        "routes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1FIBRoute"
+          }
+        }
+      }
+    },
+    "v1ListRouteTablesResponse": {
+      "type": "object",
+      "properties": {
+        "route_tables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1RouteTable"
+          }
+        }
+      }
+    },
+    "v1ListRoutesResponse": {
+      "type": "object",
+      "properties": {
+        "routes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Route"
+          }
+        }
+      }
+    },
+    "v1Route": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "route_table_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv6": {
+          "type": "boolean"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "next_hop": {
+          "type": "string"
+        },
+        "interface_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "interface_name": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1RouteTable": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv6": {
+          "type": "boolean"
+        },
+        "is_default": {
+          "type": "boolean"
+        },
+        "interface_count": {
+          "type": "string",
+          "format": "int64"
+        },
+        "route_count": {
+          "type": "string",
+          "format": "int64"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
         }
       }
     }

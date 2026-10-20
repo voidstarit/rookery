@@ -151,8 +151,58 @@ export type VirtualInterface = {
   egress_acl_name?: string;
   ingress_acls?: string[];
   egress_acls?: string[];
+  ipv4_table_id?: number;
+  ipv6_table_id?: number;
+  ipv4_table_name?: string;
+  ipv6_table_name?: string;
   created_at: string;
   updated_at: string;
+};
+
+export type RouteTable = {
+  id: number;
+  name: string;
+  table_id: number;
+  ipv6: boolean;
+  is_default?: boolean;
+  interface_count?: number;
+  route_count?: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type Route = {
+  id: number;
+  route_table_id: number;
+  table_id: number;
+  ipv6: boolean;
+  prefix: string;
+  next_hop: string;
+  interface_id?: number;
+  interface_name?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type FIBPath = {
+  sw_if_index: number;
+  interface_name?: string;
+  next_hop?: string;
+  type: string;
+  weight?: number;
+  preference?: number;
+  proto?: string;
+};
+
+export type FIBRoute = {
+  prefix: string;
+  table_id: number;
+  ipv6: boolean;
+  source: number;
+  source_name: string;
+  dynamic: boolean;
+  stats_index?: number;
+  paths?: FIBPath[];
 };
 
 export type VPPInterface = {

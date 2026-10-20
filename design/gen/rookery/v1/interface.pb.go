@@ -44,6 +44,10 @@ type VirtualInterface struct {
 	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	IngressAcls    []string               `protobuf:"bytes,16,rep,name=ingress_acls,json=ingressAcls,proto3" json:"ingress_acls,omitempty"`
 	EgressAcls     []string               `protobuf:"bytes,17,rep,name=egress_acls,json=egressAcls,proto3" json:"egress_acls,omitempty"`
+	Ipv4TableId    uint32                 `protobuf:"varint,18,opt,name=ipv4_table_id,json=ipv4TableId,proto3" json:"ipv4_table_id,omitempty"`
+	Ipv6TableId    uint32                 `protobuf:"varint,19,opt,name=ipv6_table_id,json=ipv6TableId,proto3" json:"ipv6_table_id,omitempty"`
+	Ipv4TableName  string                 `protobuf:"bytes,20,opt,name=ipv4_table_name,json=ipv4TableName,proto3" json:"ipv4_table_name,omitempty"`
+	Ipv6TableName  string                 `protobuf:"bytes,21,opt,name=ipv6_table_name,json=ipv6TableName,proto3" json:"ipv6_table_name,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -195,6 +199,34 @@ func (x *VirtualInterface) GetEgressAcls() []string {
 		return x.EgressAcls
 	}
 	return nil
+}
+
+func (x *VirtualInterface) GetIpv4TableId() uint32 {
+	if x != nil {
+		return x.Ipv4TableId
+	}
+	return 0
+}
+
+func (x *VirtualInterface) GetIpv6TableId() uint32 {
+	if x != nil {
+		return x.Ipv6TableId
+	}
+	return 0
+}
+
+func (x *VirtualInterface) GetIpv4TableName() string {
+	if x != nil {
+		return x.Ipv4TableName
+	}
+	return ""
+}
+
+func (x *VirtualInterface) GetIpv6TableName() string {
+	if x != nil {
+		return x.Ipv6TableName
+	}
+	return ""
 }
 
 type VMInterface struct {
@@ -666,7 +698,7 @@ var File_rookery_v1_interface_proto protoreflect.FileDescriptor
 const file_rookery_v1_interface_proto_rawDesc = "" +
 	"\n" +
 	"\x1arookery/v1/interface.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\xb8\x05\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\xd0\x06\n" +
 	"\x10VirtualInterface\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +
@@ -690,7 +722,11 @@ const file_rookery_v1_interface_proto_rawDesc = "" +
 	"updated_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12!\n" +
 	"\fingress_acls\x18\x10 \x03(\tR\vingressAcls\x12\x1f\n" +
 	"\vegress_acls\x18\x11 \x03(\tR\n" +
-	"egressAclsB\x11\n" +
+	"egressAcls\x12\"\n" +
+	"\ripv4_table_id\x18\x12 \x01(\rR\vipv4TableId\x12\"\n" +
+	"\ripv6_table_id\x18\x13 \x01(\rR\vipv6TableId\x12&\n" +
+	"\x0fipv4_table_name\x18\x14 \x01(\tR\ripv4TableName\x12&\n" +
+	"\x0fipv6_table_name\x18\x15 \x01(\tR\ripv6TableNameB\x11\n" +
 	"\x0f_attached_vm_idB\x11\n" +
 	"\x0f_ingress_acl_idB\x10\n" +
 	"\x0e_egress_acl_id\"\x98\x02\n" +
