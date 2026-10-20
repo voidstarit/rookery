@@ -5,6 +5,7 @@ import type { Disk, StorageBackend } from "../types";
 import { DiskDialog } from "./DiskDialog";
 import { ImportDisksDialog } from "./ImportDisksDialog";
 import { StorageBackendDialog } from "./StorageBackendDialog";
+import { navigate, useRoute } from "../router";
 
 const numberFormat = new Intl.NumberFormat();
 
@@ -28,6 +29,37 @@ export function DisksTab() {
   const [diskDialogOpen, setDiskDialogOpen] = useState(false);
   const [backendDialog, setBackendDialog] = useState<{ backend: StorageBackend | null } | null>(null);
   const [importBackend, setImportBackend] = useState<StorageBackend | null>(null);
+  const route = useRoute();
+
+  useEffect(() => {
+    const [section, second, third] = route.segments;
+    if (section === "disks") {
+      setDiskDialogOpen(second === "new");
+      setBackendDialog(null);
+      setImportBackend(null);
+      return;
+    }
+    if (section === "storage-backends") {
+      setDiskDialogOpen(false);
+      if (second === "new") {
+        setBackendDialog({ backend: null });
+        setImportBackend(null);
+        return;
+      }
+      const backend = backends.find((item) => String(item.id) === second);
+      if (backend) {
+        setBackendDialog(third === "edit" ? { backend } : null);
+        setImportBackend(third === "import" ? backend : null);
+      } else {
+        setBackendDialog(null);
+        setImportBackend(null);
+      }
+      return;
+    }
+    setDiskDialogOpen(false);
+    setBackendDialog(null);
+    setImportBackend(null);
+  }, [route.path, backends]);
 
   const publishDisks = (list: Disk[]) => {
     setDisks(list);
@@ -80,7 +112,7 @@ export function DisksTab() {
       }
     };
     const onAddDisk = () => {
-      setDiskDialogOpen(true);
+      navigate("/disks/new");
     };
     const onTabChanged = (event: Event) => {
       if ((event as CustomEvent<string>).detail === "disks") {
@@ -207,7 +239,7 @@ export function DisksTab() {
             <button class="button ghost" type="button" disabled={loading} onClick={() => void refreshAll()}>
               {loading ? "Refreshing…" : "Refresh"}
             </button>
-            <button class="button primary" type="button" onClick={() => setBackendDialog({ backend: null })}>
+            <button class="button primary" type="button" onClick={() => navigate("/storage-backends/new")}>
               <span class="button-plus" aria-hidden="true">
                 +
               </span>
@@ -273,14 +305,14 @@ export function DisksTab() {
                                 ? "Import existing thin volumes from this backend."
                                 : "Import is available for configured LVM thin backends."
                             }
-                            onClick={() => setImportBackend(backend)}
+                            onClick={() => navigate(`/storage-backends/${backend.id}/import`)}
                           >
                             Import
                           </button>
                           <button
                             class="row-action"
                             type="button"
-                            onClick={() => setBackendDialog({ backend })}
+                            onClick={() => navigate(`/storage-backends/${backend.id}/edit`)}
                           >
                             Edit
                           </button>
@@ -307,7 +339,7 @@ export function DisksTab() {
               </div>
               <h3>No storage backends yet</h3>
               <p>Register an LVM thin pool before creating disks.</p>
-              <button class="button primary" type="button" onClick={() => setBackendDialog({ backend: null })}>
+              <button class="button primary" type="button" onClick={() => navigate("/storage-backends/new")}>
                 Add a storage backend
               </button>
             </div>
@@ -421,7 +453,7 @@ export function DisksTab() {
                 type="button"
                 disabled={backends.length === 0}
                 title={backends.length === 0 ? "Add a storage backend before creating disks" : ""}
-                onClick={() => setDiskDialogOpen(true)}
+                onClick={() => navigate("/disks/new")}
               >
                 Create a disk
               </button>
@@ -434,9 +466,13 @@ export function DisksTab() {
         <DiskDialog
           backends={backends}
           disks={disks}
-          onClose={() => setDiskDialogOpen(false)}
+          onClose={() => {
+            setDiskDialogOpen(false);
+            navigate("/disks", true);
+          }}
           onSaved={(disk) => {
             setDiskDialogOpen(false);
+            navigate("/disks", true);
             setDiskError("");
             showToast(`Created disk ${disk.name}`);
             void loadDisks();
@@ -449,9 +485,13 @@ export function DisksTab() {
         <StorageBackendDialog
           key={backendDialog.backend ? `edit-${backendDialog.backend.id}` : "new"}
           backend={backendDialog.backend}
-          onClose={() => setBackendDialog(null)}
+          onClose={() => {
+            setBackendDialog(null);
+            navigate("/disks", true);
+          }}
           onSaved={(saved) => {
             setBackendDialog(null);
+            navigate("/disks", true);
             setBackendError("");
             showToast(`${backendDialog.backend ? "Saved" : "Added"} storage backend ${saved.name}`);
             void loadBackends();
@@ -464,9 +504,13 @@ export function DisksTab() {
         <ImportDisksDialog
           key={`import-${importBackend.id}`}
           backend={importBackend}
-          onClose={() => setImportBackend(null)}
+          onClose={() => {
+            setImportBackend(null);
+            navigate("/disks", true);
+          }}
           onImported={(imported) => {
             setImportBackend(null);
+            navigate("/disks", true);
             setDiskError("");
             showToast(`Imported ${imported.length} disk${imported.length === 1 ? "" : "s"}`);
             void loadDisks();

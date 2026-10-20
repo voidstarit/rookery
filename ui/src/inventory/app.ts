@@ -1,5 +1,6 @@
 import type { StatusResponse } from "./types";
 import { api } from "../shared/api";
+import { currentRoute, navigate, ROUTE_EVENT } from "./router";
 
 const TAB_ORDER = ["vms", "disks", "media", "networks", "vnfs"] as const;
 type TabName = (typeof TAB_ORDER)[number];
@@ -210,8 +211,20 @@ export function startInventory(): void {
   const isTab = (value: string): value is TabName =>
     (TAB_ORDER as readonly string[]).includes(value);
 
-  const selectTab = (name: string, focus = false, updateHash = true) => {
+  const tabForPath = (path: string): TabName => {
+    const top = path.split("/").filter(Boolean)[0] || "vms";
+    if (top === "storage-backends") {
+      return "disks";
+    }
+    if (top === "interfaces" || top === "acls") {
+      return "networks";
+    }
+    return isTab(top) ? top : "vms";
+  };
+
+  const selectTab = (name: string, focus = false, updateURL = true) => {
     const selectedTab = isTab(name) ? name : "vms";
+    const changed = selectedTab !== activeTab;
     activeTab = selectedTab;
 
     for (const key of TAB_ORDER) {
@@ -225,15 +238,18 @@ export function startInventory(): void {
       }
     }
 
-    if (updateHash) {
-      window.history.replaceState(null, "", `#${selectedTab}`);
+    if (updateURL) {
+      navigate(`/${selectedTab}`);
     }
 
     const meta = tabMeta[selectedTab];
     heroEyebrow.textContent = meta.eyebrow;
     heroTitle.textContent = meta.title;
     heroLede.textContent = meta.lede;
-    window.dispatchEvent(new CustomEvent("rookery:tab-changed", { detail: selectedTab }));
+    document.title = `${meta.title} · rookery`;
+    if (changed) {
+      window.dispatchEvent(new CustomEvent("rookery:tab-changed", { detail: selectedTab }));
+    }
 
     if (focus) {
       tabElements[selectedTab].focus();
@@ -258,7 +274,13 @@ export function startInventory(): void {
     }
   };
 
-  const tabFromHash = (): string => window.location.hash.replace(/^#/, "");
+  const syncRoute = () => {
+    const route = currentRoute();
+    if (route.path === "/") {
+      window.history.replaceState(null, "", "/vms");
+    }
+    selectTab(tabForPath(route.path), false, false);
+  };
 
   for (const key of TAB_ORDER) {
     tabElements[key].addEventListener("click", () => selectTab(key));
@@ -278,9 +300,8 @@ export function startInventory(): void {
     window.dispatchEvent(new CustomEvent("rookery:add-network"));
   });
 
-  window.addEventListener("hashchange", () => {
-    selectTab(tabFromHash(), false, false);
-  });
+  window.addEventListener("popstate", syncRoute);
+  window.addEventListener(ROUTE_EVENT, syncRoute);
   window.addEventListener("rookery:open-tab", (event) => {
     const name = String((event as CustomEvent<string>).detail || "");
     if (isTab(name)) {
@@ -294,6 +315,11 @@ export function startInventory(): void {
     }
   }, 10000);
 
-  selectTab(tabFromHash(), false, false);
+  // Keep old #vms-style bookmarks working while moving to path routes.
+  const legacyHash = window.location.hash.replace(/^#/, "");
+  if (legacyHash && isTab(legacyHash)) {
+    window.history.replaceState(null, "", `/${legacyHash}`);
+  }
+  syncRoute();
   void refreshStatus();
 }

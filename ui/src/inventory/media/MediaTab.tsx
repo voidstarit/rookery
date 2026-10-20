@@ -3,6 +3,7 @@ import { api } from "../../shared/api";
 import { showToast } from "../../shared/toast";
 import type { Media, VM } from "../types";
 import { MediaDialog } from "./MediaDialog";
+import { navigate, useRoute } from "../router";
 
 function formatBytes(bytes: number): string {
   const value = Number(bytes) || 0;
@@ -39,6 +40,15 @@ export function MediaTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const route = useRoute();
+
+  useEffect(() => {
+    if (route.segments[0] !== "media") {
+      setDialogOpen(false);
+      return;
+    }
+    setDialogOpen(route.segments[1] === "new");
+  }, [route.path]);
 
   const publishMedia = (list: Media[]) => {
     setMedia(list);
@@ -84,7 +94,7 @@ export function MediaTab() {
       }
     };
     const onAddMedia = () => {
-      setDialogOpen(true);
+      navigate("/media/new");
     };
     const onTabChanged = (event: Event) => {
       if ((event as CustomEvent<string>).detail === "media") {
@@ -237,7 +247,7 @@ export function MediaTab() {
               </div>
               <h3>No installation media yet</h3>
               <p>Register a read-only ISO file from the host, then choose it as a VM's boot media.</p>
-              <button class="button primary" type="button" onClick={() => setDialogOpen(true)}>
+              <button class="button primary" type="button" onClick={() => navigate("/media/new")}>
                 Add media
               </button>
             </div>
@@ -247,9 +257,13 @@ export function MediaTab() {
 
       {dialogOpen ? (
         <MediaDialog
-          onClose={() => setDialogOpen(false)}
+          onClose={() => {
+            setDialogOpen(false);
+            navigate("/media", true);
+          }}
           onSaved={(item) => {
             setDialogOpen(false);
+            navigate("/media", true);
             setError("");
             showToast(`Added media ${item.name}`);
             void loadMedia();

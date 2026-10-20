@@ -1002,6 +1002,12 @@ console page and all inventory tabs are components, with
 islands communicate through `rookery:*` window events; keep those bridges in
 sync when changing shared state.
 
+Inventory URLs are path-based and survive refresh: `/vms`, `/disks`, `/media`,
+`/networks`, and `/vnfs` select tabs; dialog routes include `/vms/new`,
+`/vms/{uuid}/edit`, `/vms/{uuid}/monitor`, `/interfaces/{id}/acls`, and
+`/vnfs/{id}/leases`. The server serves `index.html` for browser navigations that
+do not match an embedded asset, so deep links work without hash routing.
+
 Inventory HTTP calls go through `ui/src/shared/api.ts`. In-flight GET requests
 are shared, and transient failures (network errors, `429`, and server errors)
 are retried after 1s, 2s, 4s, and 10s. After the fifth failed attempt the call

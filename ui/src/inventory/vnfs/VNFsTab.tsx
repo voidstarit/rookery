@@ -6,6 +6,7 @@ import { formatDate } from "./format";
 import { VNFDialog } from "./VNFDialog";
 import { VNFLeasesDialog } from "./VNFLeasesDialog";
 import { VNFSessionsDialog } from "./VNFSessionsDialog";
+import { navigate, useRoute } from "../router";
 
 type DialogState = {
   vnf: VNF | null;
@@ -21,6 +22,37 @@ export function VNFsTab() {
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [leasesVNF, setLeasesVNF] = useState<VNF | null>(null);
   const [sessionsVNF, setSessionsVNF] = useState<VNF | null>(null);
+  const route = useRoute();
+
+  useEffect(() => {
+    if (route.segments[0] !== "vnfs") {
+      setDialog(null);
+      setLeasesVNF(null);
+      setSessionsVNF(null);
+      return;
+    }
+    const action = route.segments[1];
+    if (action === "new") {
+      const networkID = Number(route.query.get("network")) || undefined;
+      setLeasesVNF(null);
+      setSessionsVNF(null);
+      setDialog({ vnf: null, networkID });
+      return;
+    }
+    if (action && action !== "new") {
+      const vnf = vnfs.find((item) => String(item.id) === action);
+      const mode = route.segments[2];
+      if (vnf) {
+        setDialog(mode === "edit" ? { vnf } : null);
+        setLeasesVNF(mode === "leases" ? vnf : null);
+        setSessionsVNF(mode === "sessions" ? vnf : null);
+      }
+      return;
+    }
+    setDialog(null);
+    setLeasesVNF(null);
+    setSessionsVNF(null);
+  }, [route.path, route.search, vnfs]);
 
   const publishVNFs = (list: VNF[]) => {
     setVnfs(list);
@@ -88,7 +120,7 @@ export function VNFsTab() {
     };
     const onAddVNF = (event: Event) => {
       const networkID = (event as CustomEvent<{ networkId?: number }>).detail?.networkId;
-      setDialog({ vnf: null, networkID });
+      navigate(networkID ? `/vnfs/new?network=${networkID}` : "/vnfs/new");
     };
     const onRefreshNetworks = () => {
       void loadNetworks();
@@ -133,6 +165,7 @@ export function VNFsTab() {
 
   const handleSaved = (saved: VNF) => {
     setDialog(null);
+    navigate("/vnfs", true);
     setError("");
     showToast(`${dialog?.vnf ? "Saved" : "Added"} VNF ${saved.name}`);
     void loadVNFs(false);
@@ -206,7 +239,7 @@ export function VNFsTab() {
               type="button"
               disabled={networks.length === 0}
               title={networks.length === 0 ? "Create a Network first" : ""}
-              onClick={() => setDialog({ vnf: null })}
+              onClick={() => navigate("/vnfs/new")}
             >
               <span class="button-plus" aria-hidden="true">
                 +
@@ -283,12 +316,12 @@ export function VNFsTab() {
                             class="row-action"
                             type="button"
                             onClick={() =>
-                              vnf.type === "nat44" ? setSessionsVNF(vnf) : setLeasesVNF(vnf)
+                              navigate(`/vnfs/${vnf.id}/${vnf.type === "nat44" ? "sessions" : "leases"}`)
                             }
                           >
                             {vnf.type === "nat44" ? "Sessions" : "Leases"}
                           </button>
-                          <button class="row-action" type="button" onClick={() => setDialog({ vnf })}>
+                          <button class="row-action" type="button" onClick={() => navigate(`/vnfs/${vnf.id}/edit`)}>
                             Edit
                           </button>
                           <button
@@ -321,7 +354,7 @@ export function VNFsTab() {
                 class="button primary"
                 type="button"
                 disabled={networks.length === 0}
-                onClick={() => setDialog({ vnf: null })}
+                onClick={() => navigate("/vnfs/new")}
               >
                 Add a VNF
               </button>
@@ -337,20 +370,33 @@ export function VNFsTab() {
           networks={networks}
           vppReady={vppReady}
           initialNetworkID={dialog.networkID}
-          onClose={() => setDialog(null)}
+          onClose={() => {
+            setDialog(null);
+            navigate("/vnfs", true);
+          }}
           onSaved={handleSaved}
         />
       ) : null}
 
       {leasesVNF ? (
-        <VNFLeasesDialog key={`leases-${leasesVNF.id}`} vnf={leasesVNF} onClose={() => setLeasesVNF(null)} />
+        <VNFLeasesDialog
+          key={`leases-${leasesVNF.id}`}
+          vnf={leasesVNF}
+          onClose={() => {
+            setLeasesVNF(null);
+            navigate("/vnfs", true);
+          }}
+        />
       ) : null}
 
       {sessionsVNF ? (
         <VNFSessionsDialog
           key={`sessions-${sessionsVNF.id}`}
           vnf={sessionsVNF}
-          onClose={() => setSessionsVNF(null)}
+          onClose={() => {
+            setSessionsVNF(null);
+            navigate("/vnfs", true);
+          }}
         />
       ) : null}
     </>

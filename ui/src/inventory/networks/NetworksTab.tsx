@@ -24,6 +24,7 @@ import { NetworkDialog } from "./NetworkDialog";
 import { PacketCapturePanel } from "./PacketCapture";
 import { VPPGraphView } from "./VPPGraph";
 import { aclAssignments, formatACLRuleText } from "./acl";
+import { navigate, useRoute } from "../router";
 
 function formatDate(value: string | undefined): string {
   if (!value) {
@@ -85,6 +86,61 @@ export function NetworksTab() {
   const [aclCounters, setACLCounters] = useState<ACLInterfaceCounters[]>([]);
   const [aclCounterError, setACLCounterError] = useState("");
   const [aclCountersLoaded, setACLCountersLoaded] = useState(false);
+  const route = useRoute();
+
+  useEffect(() => {
+    const [root, second, third] = route.segments;
+    if (root === "networks") {
+      setInterfaceDialogOpen(false);
+      setAttachIface(null);
+      setAclDialog(null);
+      setInterfaceACLIface(null);
+      if (second === "new") {
+        setNetworkDialogOpen(true);
+        setSection("networks");
+        return;
+      }
+      setNetworkDialogOpen(false);
+      if (second && SECTIONS.some((item) => item.id === second)) {
+        setSection(second as Section);
+      } else {
+        setSection("networks");
+      }
+      return;
+    }
+    setNetworkDialogOpen(false);
+    if (root === "interfaces") {
+      setSection("interfaces");
+      if (second === "new") {
+        setInterfaceDialogOpen(true);
+        setAttachIface(null);
+        setInterfaceACLIface(null);
+        return;
+      }
+      const iface = interfaces.find((item) => String(item.id) === second);
+      setInterfaceDialogOpen(false);
+      setAttachIface(iface && third === "attach" ? iface : null);
+      setInterfaceACLIface(iface && third === "acls" ? iface : null);
+      return;
+    }
+    if (root === "acls") {
+      setSection("acl");
+      setInterfaceDialogOpen(false);
+      setAttachIface(null);
+      setInterfaceACLIface(null);
+      if (second === "new") {
+        setAclDialog({ acl: null });
+        return;
+      }
+      const acl = acls.find((item) => String(item.id) === second);
+      setAclDialog(acl && third === "edit" ? { acl } : null);
+      return;
+    }
+    setInterfaceDialogOpen(false);
+    setAttachIface(null);
+    setAclDialog(null);
+    setInterfaceACLIface(null);
+  }, [route.path, interfaces, acls]);
 
   const setData = (partial: Partial<BackendData>) => {
     if (partial.networks) {
@@ -273,7 +329,7 @@ export function NetworksTab() {
       setVppReady(Boolean((event as CustomEvent<boolean>).detail));
     };
     const onAddNetwork = () => {
-      setNetworkDialogOpen(true);
+      navigate("/networks/new");
     };
     const onInterfaceData = (event: Event) => {
       const detail = (event as CustomEvent<VirtualInterface[]>).detail;
@@ -515,7 +571,7 @@ export function NetworksTab() {
             role="tab"
             aria-selected={section === item.id}
             onClick={() => {
-              setSection(item.id);
+              navigate(`/networks/${item.id}`);
               if (item.id === "interfaces") {
                 void loadACLCounters();
               }
@@ -621,7 +677,7 @@ export function NetworksTab() {
                 class="button primary"
                 type="button"
                 disabled={!vppReady}
-                onClick={() => setNetworkDialogOpen(true)}
+                onClick={() => navigate("/networks/new")}
               >
                 Create a network
               </button>
@@ -754,7 +810,7 @@ export function NetworksTab() {
                     ? ""
                     : "Interface creation is blocked until FD.io VPP is ready"
               }
-              onClick={() => setInterfaceDialogOpen(true)}
+              onClick={() => navigate("/interfaces/new")}
             >
               <span class="button-plus" aria-hidden="true">
                 +
@@ -863,7 +919,7 @@ export function NetworksTab() {
                       <td class="updated hide-sm">{formatDate(iface.updated_at)}</td>
                       <td>
                         <div class="actions">
-                          <button class="row-action" type="button" onClick={() => setAttachIface(iface)}>
+                          <button class="row-action" type="button" onClick={() => navigate(`/interfaces/${iface.id}/attach`)}>
                             Attach
                           </button>
                           {attached ? (
@@ -882,7 +938,7 @@ export function NetworksTab() {
                             type="button"
                             disabled={!vppReady}
                             title={vppReady ? "" : "VPP must be ready to apply interface ACLs."}
-                            onClick={() => setInterfaceACLIface(iface)}
+                            onClick={() => navigate(`/interfaces/${iface.id}/acls`)}
                           >
                             ACLs
                           </button>
@@ -913,7 +969,7 @@ export function NetworksTab() {
                               <button
                                 class="button ghost"
                                 type="button"
-                                onClick={() => setInterfaceACLIface(iface)}
+                                onClick={() => navigate(`/interfaces/${iface.id}/acls`)}
                               >
                                 Edit ACLs
                               </button>
@@ -983,7 +1039,7 @@ export function NetworksTab() {
               type="button"
               disabled={!vppReady}
               title={vppReady ? "" : "ACL changes are blocked until FD.io VPP is ready."}
-              onClick={() => setAclDialog({ acl: null })}
+              onClick={() => navigate("/acls/new")}
             >
               <span class="button-plus" aria-hidden="true">
                 +
@@ -1044,7 +1100,7 @@ export function NetworksTab() {
                             type="button"
                             disabled={!vppReady}
                             title={vppReady ? "" : "VPP must be ready to edit ACLs."}
-                            onClick={() => setAclDialog({ acl })}
+                            onClick={() => navigate(`/acls/${acl.id}/edit`)}
                           >
                             Edit / Preview
                           </button>
@@ -1075,7 +1131,7 @@ export function NetworksTab() {
                 class="button primary"
                 type="button"
                 disabled={!vppReady}
-                onClick={() => setAclDialog({ acl: null })}
+                onClick={() => navigate("/acls/new")}
               >
                 Add an ACL
               </button>
@@ -1142,9 +1198,13 @@ export function NetworksTab() {
 
       {networkDialogOpen ? (
         <NetworkDialog
-          onClose={() => setNetworkDialogOpen(false)}
+          onClose={() => {
+            setNetworkDialogOpen(false);
+            navigate("/networks", true);
+          }}
           onSaved={(network) => {
             setNetworkDialogOpen(false);
+            navigate("/networks", true);
             setData({ networks: [...networks, network].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })) });
             setNetworkError("");
             showToast(`Created network ${network.name}`);
@@ -1156,9 +1216,13 @@ export function NetworksTab() {
         <InterfaceDialog
           networks={networks}
           vms={vms}
-          onClose={() => setInterfaceDialogOpen(false)}
+          onClose={() => {
+            setInterfaceDialogOpen(false);
+            navigate("/networks/interfaces", true);
+          }}
           onSaved={(iface) => {
             setInterfaceDialogOpen(false);
+            navigate("/networks/interfaces", true);
             setData({ interfaces: [...interfaces, iface].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })) });
             setInterfaceError("");
             showToast(`Created interface ${iface.name}`);
@@ -1172,9 +1236,13 @@ export function NetworksTab() {
           key={`attach-${attachIface.id}`}
           iface={attachIface}
           vms={vms}
-          onClose={() => setAttachIface(null)}
+          onClose={() => {
+            setAttachIface(null);
+            navigate("/networks/interfaces", true);
+          }}
           onSaved={(updated) => {
             setAttachIface(null);
+            navigate("/networks/interfaces", true);
             setData({ interfaces: interfaces.map((item) => (item.id === updated.id ? updated : item)) });
             setInterfaceError("");
             showToast(
@@ -1192,9 +1260,13 @@ export function NetworksTab() {
           key={aclDialog.acl ? `edit-${aclDialog.acl.id}` : "new"}
           acl={aclDialog.acl}
           vppReady={vppReady}
-          onClose={() => setAclDialog(null)}
+          onClose={() => {
+            setAclDialog(null);
+            navigate("/networks/acl", true);
+          }}
           onSaved={(saved) => {
             setAclDialog(null);
+            navigate("/networks/acl", true);
             setData({
               acls: aclDialog.acl
                 ? acls.map((item) => (item.id === saved.id ? saved : item))
@@ -1213,9 +1285,13 @@ export function NetworksTab() {
           iface={interfaceACLIface}
           acls={acls}
           vppReady={vppReady}
-          onClose={() => setInterfaceACLIface(null)}
+          onClose={() => {
+            setInterfaceACLIface(null);
+            navigate("/networks/interfaces", true);
+          }}
           onSaved={(updated) => {
             setInterfaceACLIface(null);
+            navigate("/networks/interfaces", true);
             setData({ interfaces: interfaces.map((item) => (item.id === updated.id ? updated : item)) });
             setInterfaceError("");
             void loadACLCounters(true);

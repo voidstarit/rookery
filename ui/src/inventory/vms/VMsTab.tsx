@@ -11,6 +11,7 @@ import type {
 import { formatMemory } from "./monitor";
 import { VMDialog } from "./VMDialog";
 import { VMMonitorDialog } from "./VMMonitorDialog";
+import { navigate, useRoute } from "../router";
 
 const numberFormat = new Intl.NumberFormat();
 
@@ -42,6 +43,37 @@ export function VMsTab() {
   const [error, setError] = useState("");
   const [dialog, setDialog] = useState<{ vm: VM | null } | null>(null);
   const [monitorVM, setMonitorVM] = useState<VM | null>(null);
+  const route = useRoute();
+
+  useEffect(() => {
+    if (route.segments[0] !== "vms") {
+      setDialog(null);
+      setMonitorVM(null);
+      return;
+    }
+    const action = route.segments[1];
+    const mode = route.segments[2];
+    if (action === "new") {
+      setMonitorVM(null);
+      setDialog({ vm: null });
+      return;
+    }
+    if (action && action !== "new") {
+      const vm = vms.find((item) => item.id === action);
+      if (vm && mode === "edit") {
+        setMonitorVM(null);
+        setDialog({ vm });
+        return;
+      }
+      if (vm && mode === "monitor") {
+        setDialog(null);
+        setMonitorVM(vm);
+        return;
+      }
+    }
+    setDialog(null);
+    setMonitorVM(null);
+  }, [route.path, vms]);
 
   const publishVMs = (list: VM[]) => {
     setVms(list);
@@ -137,7 +169,7 @@ export function VMsTab() {
       }
     };
     const onAddVM = () => {
-      setDialog({ vm: null });
+      navigate("/vms/new");
     };
 
     window.addEventListener("rookery:disks-changed", onDisksChanged);
@@ -201,6 +233,7 @@ export function VMsTab() {
       return;
     }
     setDialog({ vm: null });
+    navigate("/vms/new");
   };
 
   const deleteVM = async (vm: VM) => {
@@ -383,10 +416,10 @@ export function VMsTab() {
                           >
                             Console
                           </button>
-                          <button class="row-action" type="button" onClick={() => setMonitorVM(vm)}>
+                          <button class="row-action" type="button" onClick={() => navigate(`/vms/${vm.id}/monitor`)}>
                             Monitor
                           </button>
-                          <button class="row-action" type="button" onClick={() => setDialog({ vm })}>
+                          <button class="row-action" type="button" onClick={() => navigate(`/vms/${vm.id}/edit`)}>
                             Edit
                           </button>
                           <button class="row-action danger" type="button" onClick={() => void deleteVM(vm)}>
@@ -434,9 +467,13 @@ export function VMsTab() {
           media={media}
           interfaces={interfaces}
           ready={ready}
-          onClose={() => setDialog(null)}
+          onClose={() => {
+            setDialog(null);
+            navigate("/vms", true);
+          }}
           onSaved={(saved) => {
             setDialog(null);
+            navigate("/vms", true);
             setError("");
             showToast(`${dialog.vm ? "Saved" : "Created"} ${saved.name}`);
             void Promise.allSettled([loadVMs(), loadDisks(), loadInterfaces()]);
@@ -448,7 +485,10 @@ export function VMsTab() {
         <VMMonitorDialog
           key={`monitor-${monitorVM.id}`}
           vm={monitorVM}
-          onClose={() => setMonitorVM(null)}
+          onClose={() => {
+            setMonitorVM(null);
+            navigate("/vms", true);
+          }}
         />
       ) : null}
     </>
