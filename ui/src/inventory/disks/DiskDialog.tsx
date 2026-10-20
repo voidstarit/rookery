@@ -154,7 +154,11 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
                 </option>
               ))}
             </select>
-            <span class="field-hint">The thin pool or storage driver that will hold this disk.</span>
+            <span class="field-hint">
+              {supportsTemplates
+                ? "Template cloning is available on this backend."
+                : "Template cloning is disabled for this backend; enable it in Storage backends."}
+            </span>
           </label>
           {supportsTemplates ? (
             <label class="field">

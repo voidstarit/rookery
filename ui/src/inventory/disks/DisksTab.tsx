@@ -256,6 +256,9 @@ export function DisksTab() {
                       <td class="mono">{backend.driver === "lvm-thin" ? "LVM thin" : backend.driver}</td>
                       <td class="mono">
                         {backend.config?.vg || "—"}/{backend.config?.thin_pool || "—"}
+                        {backend.config?.supports_templates ? (
+                          <span class="import-disk-badge template-backend-badge">templates</span>
+                        ) : null}
                       </td>
                       <td class={backend.disk_count ? "mono" : "mono muted"}>{String(backend.disk_count || 0)}</td>
                       <td class="updated hide-sm">{formatDate(backend.updated_at)}</td>
