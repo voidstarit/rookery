@@ -50,8 +50,8 @@ let aclCountersInFlight = false;
 let aclCountersLastLoaded = 0;
 
 const SECTIONS: Array<{ id: Section; label: string }> = [
-  { id: "networks", label: "Networks" },
   { id: "hosts", label: "Host interfaces" },
+  { id: "networks", label: "Networks" },
   { id: "interfaces", label: "Interfaces" },
   { id: "acl", label: "ACLs" },
   { id: "troubleshoot", label: "Troubleshoot" },
@@ -76,7 +76,7 @@ export function NetworksTab() {
   const [aclDialog, setAclDialog] = useState<{ acl: ACL | null } | null>(null);
   const [interfaceACLIface, setInterfaceACLIface] = useState<VirtualInterface | null>(null);
   const [expandedACLInterface, setExpandedACLInterface] = useState<number | null>(null);
-  const [section, setSection] = useState<Section>("networks");
+  const [section, setSection] = useState<Section>("hosts");
   const [graph, setGraph] = useState<VPPGraph | null>(null);
   const [graphError, setGraphError] = useState("");
   const [graphLoading, setGraphLoading] = useState(false);
