@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../../shared/api";
+import { formatCount } from "../../shared/format";
 import { showToast } from "../../shared/toast";
 import type {
   PacketCaptureFile,
@@ -22,8 +23,8 @@ const DEFAULT_FORM: CaptureForm = {
   snapLength: 2048,
 };
 
-function formatBytes(value: number): string {
-  if (!Number.isFinite(value) || value < 0) {
+function formatBytes(value: number | undefined): string {
+  if (value === undefined || !Number.isFinite(value) || value < 0) {
     return "—";
   }
   if (value < 1024) {
@@ -398,12 +399,12 @@ export function PacketCapturePanel() {
             <span>
               <b>{active ? "Buffer" : "Captured"}</b>
               {active
-                ? `${status.buffered.toLocaleString()} / ${status.max_packets.toLocaleString()} packets`
-                : `${status.packets.toLocaleString()} packets`}
+                ? `${formatCount(status.buffered)} / ${formatCount(status.max_packets)} packets`
+                : `${formatCount(status.packets)} packets`}
             </span>
             <span>
               <b>Limit</b>
-              {status.max_packets.toLocaleString()} packets · {formatBytes(status.max_bytes)}
+              {formatCount(status.max_packets)} packets · {formatBytes(status.max_bytes)}
             </span>
             <span>
               <b>Started</b>

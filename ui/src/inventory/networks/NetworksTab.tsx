@@ -1,6 +1,7 @@
 import { Fragment } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../../shared/api";
+import { formatCount } from "../../shared/format";
 import { showToast } from "../../shared/toast";
 import type {
   ACL,
@@ -451,33 +452,38 @@ export function NetworksTab() {
     if (!counter || !counter.acl_indexes || counter.acl_indexes.length === 0) {
       return "no ACL";
     }
-    return `${counter.matched.toLocaleString()} matched · ${counter.denied.toLocaleString()} denied · ${counter.permitted.toLocaleString()} permitted`;
+    return `${formatCount(counter.matched)} matched · ${formatCount(counter.denied)} denied · ${formatCount(counter.permitted)} permitted`;
   };
 
   const ruleCounterLabel = (counter: ACLRuleCounter) => {
-    const acl = acls.find((item) => item.vpp_index === counter.acl_index);
-    const rule = acl?.rules[counter.rule_index];
+    const aclIndex = counter.acl_index ?? 0;
+    const ruleIndex = counter.rule_index ?? 0;
+    const acl = acls.find((item) => item.vpp_index === aclIndex);
+    const rule = acl?.rules[ruleIndex];
     if (rule) {
       return formatACLRuleText(rule);
     }
-    return `ACL ${counter.acl_index} rule ${counter.rule_index}`;
+    return `ACL ${aclIndex} rule ${ruleIndex}`;
   };
 
-  const renderRuleCounters = (title: string, direction: ACLDirectionCounters) => {
-    const rules = direction.rules || [];
+  const renderRuleCounters = (title: string, direction: ACLDirectionCounters | undefined) => {
+    const rules = direction?.rules || [];
     return (
       <div class="acl-rule-counter-group">
         <span class="acl-counter-direction">{title}</span>
-        {!direction.acl_indexes || direction.acl_indexes.length === 0 ? (
+        {!direction?.acl_indexes || direction.acl_indexes.length === 0 ? (
           <span class="acl-rule-counter muted">No ACL applied</span>
         ) : rules.length === 0 ? (
           <span class="acl-rule-counter muted">No explicit rule matches yet</span>
         ) : (
           rules.map((rule, index) => (
-            <span class="acl-rule-counter" key={`${rule.acl_index}-${rule.rule_index}-${index}`}>
+            <span
+              class="acl-rule-counter"
+              key={`${rule.acl_index ?? 0}-${rule.rule_index ?? 0}-${index}`}
+            >
               <span class="acl-rule-counter-text">{ruleCounterLabel(rule)}</span>
               <span class="acl-rule-counter-value">
-                {rule.matched.toLocaleString()} pkts · {rule.action}
+                {formatCount(rule.matched)} pkts · {rule.action || "—"}
               </span>
             </span>
           ))
@@ -810,8 +816,8 @@ export function NetworksTab() {
                             <span class="acl-assignment">{aclParts.join(" · ")}</span>
                             {aclCounter ? (
                               <span class="acl-inline-counter">
-                                from {aclCounter.ingress.matched.toLocaleString()} · to{" "}
-                                {aclCounter.egress.matched.toLocaleString()}
+                                from {formatCount(aclCounter.ingress?.matched)} · to{" "}
+                                {formatCount(aclCounter.egress?.matched)}
                               </span>
                             ) : !aclCountersLoaded ? (
                               <span class="acl-inline-counter muted">loading counters…</span>

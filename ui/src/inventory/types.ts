@@ -168,12 +168,12 @@ export type PacketCaptureStatus = {
   interface?: string;
   direction?: string;
   file?: string;
-  size: number;
-  max_packets: number;
-  max_bytes: number;
-  snap_length: number;
-  packets: number;
-  buffered: number;
+  size?: number;
+  max_packets?: number;
+  max_bytes?: number;
+  snap_length?: number;
+  packets?: number;
+  buffered?: number;
   started_at?: string;
   stopped_at?: string;
   raw?: string;
@@ -191,25 +191,26 @@ export type PacketCaptureOverview = {
 };
 
 export type ACLRuleCounter = {
-  acl_index: number;
-  rule_index: number;
-  action: string;
-  matched: number;
+  // Proto3 JSON omits zero values; a missing index is index 0.
+  acl_index?: number;
+  rule_index?: number;
+  action?: string;
+  matched?: number;
 };
 
 export type ACLDirectionCounters = {
-  matched: number;
-  denied: number;
-  permitted: number;
+  matched?: number;
+  denied?: number;
+  permitted?: number;
   acl_indexes?: number[];
   rules?: ACLRuleCounter[];
 };
 
 export type ACLInterfaceCounters = {
   interface: string;
-  sw_if_index: number;
-  ingress: ACLDirectionCounters;
-  egress: ACLDirectionCounters;
+  sw_if_index?: number;
+  ingress?: ACLDirectionCounters;
+  egress?: ACLDirectionCounters;
 };
 
 export type VPPGraphNode = {
