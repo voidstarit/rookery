@@ -1,4 +1,5 @@
 import type { StatusResponse } from "./types";
+import { api } from "../shared/api";
 
 const TAB_ORDER = ["vms", "disks", "media", "networks", "vnfs"] as const;
 type TabName = (typeof TAB_ORDER)[number];
@@ -197,11 +198,7 @@ export function startInventory(): void {
 
   const refreshStatus = async () => {
     try {
-      const response = await fetch("/api/status");
-      if (!response.ok) {
-        throw new Error(`status request failed (${response.status})`);
-      }
-      const status = (await response.json()) as StatusResponse;
+      const status = await api<StatusResponse>("/api/status");
       renderReadiness(status);
       setAPIState("online");
     } catch {

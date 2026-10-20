@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import RFB from "novnc-rfb";
 import KeyTable from "novnc-keysym";
+import { api } from "../shared/api";
 import {
   KEY_DEFS,
   KEY_ROWS,
@@ -319,21 +320,7 @@ export function ConsoleApp() {
   };
 
   const postVMCommand = async (action: string) => {
-    const response = await fetch(`/api/vms/${encodeURIComponent(VM_ID)}/${action}`, {
-      method: "POST",
-    });
-    if (!response.ok) {
-      let message = `Request failed (${response.status})`;
-      try {
-        const data = await response.json();
-        if (data && typeof data.error === "string") {
-          message = data.error;
-        }
-      } catch {
-        // Keep the status-based message.
-      }
-      throw new Error(message);
-    }
+    await api<unknown>(`/api/vms/${encodeURIComponent(VM_ID)}/${action}`, { method: "POST" });
   };
 
   const sendCtrlAltDelVNC = () => {
@@ -465,11 +452,9 @@ export function ConsoleApp() {
       return false;
     }
     try {
-      const response = await fetch(`/api/vms/${encodeURIComponent(VM_ID)}`);
-      if (!response.ok) {
-        return true;
-      }
-      const vm = await response.json();
+      const vm = await api<{ name?: string; console_enabled?: boolean; status?: string }>(
+        `/api/vms/${encodeURIComponent(VM_ID)}`
+      );
       if (!vm || typeof vm.name !== "string") {
         return true;
       }

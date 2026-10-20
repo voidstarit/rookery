@@ -6,11 +6,13 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -33,6 +35,7 @@ func runServe(args []string) error {
 	gatewayAddr := fs.String("gateway-addr", envDefault("NERDS_VMS_GATEWAY_ADDR", ""), "optional grpc-gateway HTTP listen address")
 	grpcAddr := fs.String("grpc-addr", envDefault("NERDS_VMS_GRPC_ADDR", ""), "optional gRPC listen address")
 	dbPath := fs.String("db", envDefault("NERDS_VMS_DB", "nerds-vms.db"), "SQLite database path")
+	rateLimitValue := fs.String("rate-limit", envDefault("NERDS_VMS_RATE_LIMIT", "3"), "global HTTP request rate limit in requests per second (0 disables)")
 	checkInterval := fs.Duration("check-interval", 10*time.Second, "readiness check interval")
 	qemuBin := fs.String("qemu-bin", envDefault("NERDS_VMS_QEMU_BIN", qemu.DefaultBinary), "QEMU system emulator binary")
 	runDir := fs.String("run-dir", envDefault("NERDS_VMS_RUN_DIR", qemu.DefaultRunDir), "directory for QEMU pid files and VNC sockets")
@@ -57,8 +60,17 @@ func runServe(args []string) error {
 		return err
 	}
 
+	rateLimit, err := strconv.ParseFloat(strings.TrimSpace(*rateLimitValue), 64)
+	if err != nil || math.IsNaN(rateLimit) || math.IsInf(rateLimit, 0) || rateLimit < 0 {
+		return fmt.Errorf("-rate-limit must be a non-negative number, got %q", *rateLimitValue)
+	}
+
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
+
+	if rateLimit <= 0 {
+		logger.Warn("HTTP rate limiting disabled", "rate_limit_rps", rateLimit)
+	}
 
 	st, err := store.Open(*dbPath)
 	if err != nil {
@@ -154,12 +166,13 @@ func runServe(args []string) error {
 	}
 	defer gatewayRuntime.Close()
 	gatewayHandler := apiServer.LogRequests(api.SecurityHeaders(gatewayRuntime.Handler))
+	rateLimiter := api.NewPathRateLimiter(rateLimit)
 
 	var gatewayHTTP *http.Server
 	if *gatewayAddr != "" {
 		gatewayHTTP = &http.Server{
 			Addr:              *gatewayAddr,
-			Handler:           gatewayHandler,
+			Handler:           rateLimiter.Middleware(gatewayHandler),
 			ReadHeaderTimeout: 5 * time.Second,
 			ReadTimeout:       15 * time.Second,
 			WriteTimeout:      30 * time.Second,
@@ -169,7 +182,7 @@ func runServe(args []string) error {
 
 	srv := &http.Server{
 		Addr:              *addr,
-		Handler:           api.CutoverHandler(gatewayHandler, apiServer.NativeHandler()),
+		Handler:           rateLimiter.Middleware(api.CutoverHandler(gatewayHandler, apiServer.NativeHandler())),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -210,6 +223,8 @@ func runServe(args []string) error {
 		"vhost_dir", *vhostDir,
 		"vnf_dir", filepath.Join(*runDir, "vnfs"),
 		"vnf_backend", "coredhcp",
+		"rate_limit_rps", rateLimit,
+		"rate_limit_scope", "path",
 	)
 
 	var runErr error

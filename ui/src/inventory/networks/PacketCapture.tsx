@@ -95,8 +95,9 @@ export function PacketCapturePanel() {
 
   const loadFiles = async () => {
     const next = await api<PacketCaptureFile[]>("/api/troubleshoot/capture/files");
-    setFiles(next);
-    if (selected && !next.some((file) => file.name === selected)) {
+    const list = Array.isArray(next) ? next : [];
+    setFiles(list);
+    if (selected && !list.some((file) => file.name === selected)) {
       setSelected("");
     }
   };
@@ -109,7 +110,7 @@ export function PacketCapturePanel() {
       api<PacketCaptureOverview>("/api/troubleshoot/capture"),
     ]);
     if (interfacesResult.status === "fulfilled") {
-      setInterfaces(interfacesResult.value);
+      setInterfaces(Array.isArray(interfacesResult.value) ? interfacesResult.value : []);
     } else {
       setError(
         interfacesResult.reason instanceof Error
@@ -118,8 +119,9 @@ export function PacketCapturePanel() {
       );
     }
     if (overviewResult.status === "fulfilled") {
-      setStatus(overviewResult.value.status);
-      setFiles(overviewResult.value.files);
+      const overview = overviewResult.value;
+      setStatus(overview.status ?? null);
+      setFiles(Array.isArray(overview.files) ? overview.files : []);
     } else {
       if (!error) {
         setError(
@@ -154,12 +156,13 @@ export function PacketCapturePanel() {
         if (cancelled) {
           return;
         }
-        setStatus(overview.status);
-        setFiles(overview.files);
+        const files = Array.isArray(overview.files) ? overview.files : [];
+        setStatus(overview.status ?? null);
+        setFiles(files);
         setError("");
-        if (!overview.status.active) {
+        if (!overview.status?.active) {
           setSelected((current) =>
-            current && overview.files.some((file) => file.name === current) ? current : ""
+            current && files.some((file) => file.name === current) ? current : ""
           );
         }
       } catch (err) {

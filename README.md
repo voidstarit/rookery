@@ -560,6 +560,7 @@ vhost-user netdevs for interfaces attached through Rookery Networks.
 | ----------------- | ---------------------- | ------------------- | --------------- | ----------- |
 | `-addr`           | `NERDS_VMS_ADDR`       | `127.0.0.1:8080`    | `serve`         | HTTP listen address |
 | `-db`             | `NERDS_VMS_DB`         | `nerds-vms.db`      | `serve`         | SQLite database path |
+| `-rate-limit`     | `NERDS_VMS_RATE_LIMIT` | `3`                 | `serve`         | HTTP requests per second for each URL path; `0` disables |
 | `-vg`             | `NERDS_VMS_VG`         | empty               | `serve`, `init` | Bootstrap LVM volume group; optional for `serve` |
 | `-thin-pool`      | `NERDS_VMS_THIN_POOL`  | `nerds-vms`         | `serve`, `init` | Bootstrap thin pool name or `<vg>/<name>`; `serve` can use UI backends instead |
 | `-vpp-socket`     | `NERDS_VMS_VPP_SOCKET` | `/run/vpp/api.sock` | `serve`, `init` | VPP binary API Unix socket |
@@ -572,7 +573,9 @@ vhost-user netdevs for interfaces attached through Rookery Networks.
 | `-size`           | —                      | `100%FREE`          | `init`          | Thin pool size when creating |
 
 The database directory is created automatically and migrations run on startup.
-Set `-addr :8080` to expose the server beyond localhost.
+Set `-addr :8080` to expose the server beyond localhost. The rate limit applies
+per URL path, and requests over it receive `429 Too Many Requests` with
+`Retry-After: 1`.
 
 ### Protobuf API design
 
@@ -981,6 +984,13 @@ console page and all inventory tabs are components, with
 `ui/src/inventory/app.ts` providing the typed tab/readiness shell. Preact
 islands communicate through `rookery:*` window events; keep those bridges in
 sync when changing shared state.
+
+Inventory HTTP calls go through `ui/src/shared/api.ts`. In-flight GET requests
+are shared, and transient failures (network errors, `429`, and server errors)
+are retried after 1s, 2s, 4s, and 10s. After the fifth failed attempt the call
+stops and returns an error naming the method and path. Mutations only retry
+`429`/`503` so a create is not duplicated; validation and other `4xx` errors
+are returned immediately.
 
 ### Tests
 

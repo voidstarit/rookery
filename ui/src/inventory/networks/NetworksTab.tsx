@@ -1,5 +1,5 @@
 import { Fragment } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
 import { formatCount } from "../../shared/format";
 import { showToast } from "../../shared/toast";
@@ -80,6 +80,8 @@ export function NetworksTab() {
   const [graph, setGraph] = useState<VPPGraph | null>(null);
   const [graphError, setGraphError] = useState("");
   const [graphLoading, setGraphLoading] = useState(false);
+  const graphLoadingRef = useRef(false);
+  const graphLoadedAtRef = useRef(0);
   const [aclCounters, setACLCounters] = useState<ACLInterfaceCounters[]>([]);
   const [aclCounterError, setACLCounterError] = useState("");
   const [aclCountersLoaded, setACLCountersLoaded] = useState(false);
@@ -213,7 +215,15 @@ export function NetworksTab() {
     setLoading(false);
   };
 
-  const loadGraph = async () => {
+  const loadGraph = async (force = false) => {
+    if (graphLoadingRef.current) {
+      return;
+    }
+    const now = Date.now();
+    if (now - graphLoadedAtRef.current < (force ? 1000 : 5000)) {
+      return;
+    }
+    graphLoadingRef.current = true;
     setGraphLoading(true);
     try {
       const data = await api<VPPGraph>("/api/troubleshoot/vpp-graph");
@@ -222,6 +232,8 @@ export function NetworksTab() {
     } catch (err) {
       setGraphError(err instanceof Error ? err.message : String(err));
     } finally {
+      graphLoadedAtRef.current = Date.now();
+      graphLoadingRef.current = false;
       setGraphLoading(false);
     }
   };
@@ -1068,7 +1080,7 @@ export function NetworksTab() {
             <h2 id="troubleshoot-heading">Troubleshoot</h2>
             <p class="panel-subtitle">VPP packet processing graph</p>
           </div>
-          <button class="button ghost" type="button" disabled={graphLoading} onClick={() => void loadGraph()}>
+          <button class="button ghost" type="button" disabled={graphLoading} onClick={() => void loadGraph(true)}>
             {graphLoading ? "Refreshing…" : "Refresh graph"}
           </button>
         </div>
