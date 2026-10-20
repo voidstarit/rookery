@@ -45,6 +45,9 @@ type BackendData = {
 
 type Section = "networks" | "hosts" | "interfaces" | "acl" | "troubleshoot";
 
+let aclCountersInFlight = false;
+let aclCountersLastLoaded = 0;
+
 const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: "networks", label: "Networks" },
   { id: "hosts", label: "Host interfaces" },
@@ -222,7 +225,12 @@ export function NetworksTab() {
     }
   };
 
-  const loadACLCounters = async () => {
+  const loadACLCounters = async (force = false) => {
+    const now = Date.now();
+    if (aclCountersInFlight || (!force && now - aclCountersLastLoaded < 5000)) {
+      return;
+    }
+    aclCountersInFlight = true;
     setACLCountersLoaded(false);
     try {
       const data = await api<ACLInterfaceCounters[]>("/api/troubleshoot/acl-counters");
@@ -231,6 +239,8 @@ export function NetworksTab() {
     } catch (err) {
       setACLCounterError(err instanceof Error ? err.message : String(err));
     } finally {
+      aclCountersInFlight = false;
+      aclCountersLastLoaded = Date.now();
       setACLCountersLoaded(true);
     }
   };
@@ -240,14 +250,6 @@ export function NetworksTab() {
       void loadGraph();
     }
     // loadGraph only uses state setters and the stable API helper.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section]);
-
-  useEffect(() => {
-    if (section === "interfaces") {
-      void loadACLCounters();
-    }
-    // loadACLCounters only uses state setters and the stable API helper.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section]);
 
@@ -494,7 +496,12 @@ export function NetworksTab() {
             type="button"
             role="tab"
             aria-selected={section === item.id}
-            onClick={() => setSection(item.id)}
+            onClick={() => {
+              setSection(item.id);
+              if (item.id === "interfaces") {
+                void loadACLCounters();
+              }
+            }}
           >
             {item.label}
           </button>
@@ -710,24 +717,33 @@ export function NetworksTab() {
             <h2 id="interfaces-heading">Rookery Virtual Interfaces</h2>
             <p class="panel-subtitle">{interfaceSummary}</p>
           </div>
-          <button
-            class="button primary"
-            type="button"
-            disabled={networks.length === 0 || !vppReady}
-            title={
-              networks.length === 0
-                ? "Create a Rookery Network first"
-                : vppReady
-                  ? ""
-                  : "Interface creation is blocked until FD.io VPP is ready"
-            }
-            onClick={() => setInterfaceDialogOpen(true)}
-          >
-            <span class="button-plus" aria-hidden="true">
-              +
-            </span>
-            Add interface
-          </button>
+          <div class="actions">
+            <button
+              class="button ghost"
+              type="button"
+              onClick={() => void loadACLCounters(true)}
+            >
+              Refresh counters
+            </button>
+            <button
+              class="button primary"
+              type="button"
+              disabled={networks.length === 0 || !vppReady}
+              title={
+                networks.length === 0
+                  ? "Create a Rookery Network first"
+                  : vppReady
+                    ? ""
+                    : "Interface creation is blocked until FD.io VPP is ready"
+              }
+              onClick={() => setInterfaceDialogOpen(true)}
+            >
+              <span class="button-plus" aria-hidden="true">
+                +
+              </span>
+              Add interface
+            </button>
+          </div>
         </div>
 
         {interfaceError ? (
@@ -1174,7 +1190,7 @@ export function NetworksTab() {
             setInterfaceACLIface(null);
             setData({ interfaces: interfaces.map((item) => (item.id === updated.id ? updated : item)) });
             setInterfaceError("");
-            void loadACLCounters();
+            void loadACLCounters(true);
             showToast(`Applied ACLs to ${updated.name}`);
           }}
         />
