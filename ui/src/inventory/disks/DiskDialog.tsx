@@ -200,12 +200,14 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
           ) : null}
           {supportsTemplates && source === "empty" ? (
             <label class="field field-wide checkbox-field">
-              <input
-                type="checkbox"
-                checked={markAsTemplate}
-                onChange={(event) => setMarkAsTemplate(event.currentTarget.checked)}
-              />
-              <span>Mark this new disk as a template</span>
+              <span class="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={markAsTemplate}
+                  onChange={(event) => setMarkAsTemplate(event.currentTarget.checked)}
+                />
+                <span>Mark this new disk as a template</span>
+              </span>
             </label>
           ) : null}
         </div>

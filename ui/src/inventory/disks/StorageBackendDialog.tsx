@@ -175,12 +175,18 @@ export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBacke
             />
           </label>
           <label class="field field-wide checkbox-field">
-            <input
-              type="checkbox"
-              checked={supportsTemplates}
-              onChange={(event) => setSupportsTemplates(event.currentTarget.checked)}
-            />
-            <span>Support template disks and template-based disk creation</span>
+            <span class="field-label">Templates</span>
+            <span class="checkbox-row">
+              <input
+                type="checkbox"
+                checked={supportsTemplates}
+                onChange={(event) => setSupportsTemplates(event.currentTarget.checked)}
+              />
+              <span>Support template disks and template-based disk creation</span>
+            </span>
+            <span class="field-hint">
+              Clone existing template disks with the backend preparation script.
+            </span>
           </label>
           {supportsTemplates ? (
             <>
@@ -212,12 +218,14 @@ export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBacke
                 />
               </label>
               <label class="field field-wide checkbox-field">
-                <input
-                  type="checkbox"
-                  checked={allowTemplateDelete}
-                  onChange={(event) => setAllowTemplateDelete(event.currentTarget.checked)}
-                />
-                <span>Allow deleting a template while clones still exist</span>
+                <span class="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={allowTemplateDelete}
+                    onChange={(event) => setAllowTemplateDelete(event.currentTarget.checked)}
+                  />
+                  <span>Allow deleting a template while clones still exist</span>
+                </span>
               </label>
             </>
           ) : null}
