@@ -16,6 +16,10 @@ import (
 // DiagnosticsRuntime exposes VPP diagnostics and packet-capture operations.
 type DiagnosticsRuntime interface {
 	VPPNodeGraph(ctx context.Context) (host.VPPGraph, error)
+	VPPGraphNodes(ctx context.Context) ([]host.VPPGraphNode, error)
+	StartTrace(ctx context.Context, node string, count uint32) (host.TraceResult, error)
+	GetTrace(ctx context.Context) (host.TraceResult, error)
+	ClearTrace(ctx context.Context) error
 	ACLInterfaceCounters(ctx context.Context) ([]host.ACLInterfaceCounters, error)
 	VPPInterfaces(ctx context.Context) ([]host.VPPInterface, error)
 	StartPacketCapture(ctx context.Context, options host.PacketCaptureOptions) (host.PacketCaptureStatus, error)
@@ -76,6 +80,61 @@ func (s *troubleshootService) ListACLInterfaceCounters(ctx context.Context, _ *r
 		})
 	}
 	return response, nil
+}
+
+func (s *troubleshootService) ListTraceNodes(ctx context.Context, _ *rookeryv1.ListTraceNodesRequest) (*rookeryv1.ListTraceNodesResponse, error) {
+	if err := s.ready(); err != nil {
+		return nil, err
+	}
+	nodes, err := s.runtime.VPPGraphNodes(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not list VPP graph nodes: "+err.Error())
+	}
+	response := &rookeryv1.ListTraceNodesResponse{Nodes: make([]string, 0, len(nodes))}
+	for _, node := range nodes {
+		response.Nodes = append(response.Nodes, node.ID)
+	}
+	return response, nil
+}
+
+func (s *troubleshootService) StartTrace(ctx context.Context, request *rookeryv1.StartTraceRequest) (*rookeryv1.TraceResult, error) {
+	if err := s.ready(); err != nil {
+		return nil, err
+	}
+	result, err := s.runtime.StartTrace(ctx, request.GetNode(), request.GetCount())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "could not start VPP trace: "+err.Error())
+	}
+	return traceResultToProto(result), nil
+}
+
+func (s *troubleshootService) GetTrace(ctx context.Context, _ *rookeryv1.GetTraceRequest) (*rookeryv1.TraceResult, error) {
+	if err := s.ready(); err != nil {
+		return nil, err
+	}
+	result, err := s.runtime.GetTrace(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not read VPP trace: "+err.Error())
+	}
+	return traceResultToProto(result), nil
+}
+
+func (s *troubleshootService) ClearTrace(ctx context.Context, _ *rookeryv1.ClearTraceRequest) (*emptypb.Empty, error) {
+	if err := s.ready(); err != nil {
+		return nil, err
+	}
+	if err := s.runtime.ClearTrace(ctx); err != nil {
+		return nil, status.Error(codes.Internal, "could not clear VPP trace: "+err.Error())
+	}
+	return &emptypb.Empty{}, nil
+}
+
+func traceResultToProto(value host.TraceResult) *rookeryv1.TraceResult {
+	result := &rookeryv1.TraceResult{Node: value.Node, Count: value.Count, Raw: value.Raw}
+	if !value.CapturedAt.IsZero() {
+		result.CapturedAt = timestamppb.New(value.CapturedAt)
+	}
+	return result
 }
 
 func aclDirectionToProto(value host.ACLDirectionCounters) *rookeryv1.ACLDirectionCounters {

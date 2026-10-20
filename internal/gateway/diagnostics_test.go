@@ -18,9 +18,19 @@ type fakeDiagnostics struct {
 	deleted string
 }
 
+func (f *fakeDiagnostics) VPPGraphNodes(context.Context) ([]host.VPPGraphNode, error) {
+	return []host.VPPGraphNode{{ID: "ip4-input", Label: "ip4-input"}, {ID: "interface-output", Label: "interface-output"}}, nil
+}
 func (f *fakeDiagnostics) VPPNodeGraph(context.Context) (host.VPPGraph, error) {
 	return host.VPPGraph{Nodes: []host.VPPGraphNode{{ID: "node", Label: "Node", Width: 2, FontSize: 10, Fill: 3}}, Edges: []host.VPPGraphEdge{{Source: "node", Target: "next"}}, GeneratedAt: time.Now()}, nil
 }
+func (f *fakeDiagnostics) StartTrace(_ context.Context, node string, count uint32) (host.TraceResult, error) {
+	return host.TraceResult{Node: node, Count: count, Raw: "trace started", CapturedAt: time.Now()}, nil
+}
+func (f *fakeDiagnostics) GetTrace(context.Context) (host.TraceResult, error) {
+	return host.TraceResult{Raw: "Packet 1\n  ip4-input", CapturedAt: time.Now()}, nil
+}
+func (f *fakeDiagnostics) ClearTrace(context.Context) error { return nil }
 func (f *fakeDiagnostics) ACLInterfaceCounters(context.Context) ([]host.ACLInterfaceCounters, error) {
 	return []host.ACLInterfaceCounters{{
 		Interface: "tap0", SwIfIndex: 1,
@@ -69,6 +79,8 @@ func TestDiagnosticsRoutes(t *testing.T) {
 	for _, path := range []string{
 		"/api/troubleshoot/vpp-graph",
 		"/api/troubleshoot/acl-counters",
+		"/api/troubleshoot/trace",
+		"/api/troubleshoot/trace/nodes",
 		"/api/troubleshoot/capture/interfaces",
 		"/api/troubleshoot/capture",
 		"/api/troubleshoot/capture/files",

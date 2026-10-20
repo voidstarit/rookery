@@ -24,6 +24,7 @@ import { InterfaceDialog } from "./InterfaceDialog";
 import { InterfaceRouteTablesDialog } from "./InterfaceRouteTablesDialog";
 import { NetworkDialog } from "./NetworkDialog";
 import { PacketCapturePanel } from "./PacketCapture";
+import { PacketTracePanel } from "./PacketTracePanel";
 import { RouteTableCreatePage } from "./RouteTableCreatePage";
 import { RouteTablePage } from "./RouteTablePage";
 import { VPPGraphView } from "./VPPGraph";
@@ -1393,6 +1394,16 @@ export function NetworksTab() {
         {graph?.generated_at ? (
           <p class="field-hint">Sampled {formatDate(graph.generated_at)}</p>
         ) : null}
+      </section>
+
+      <section class="panel panel-spaced" aria-labelledby="trace-heading" hidden={section !== "troubleshoot"}>
+        <div class="panel-head">
+          <div>
+            <h2 id="trace-heading">Packet trace</h2>
+            <p class="panel-subtitle">Trace packets through a selected VPP graph node</p>
+          </div>
+        </div>
+        <PacketTracePanel active={section === "troubleshoot"} />
       </section>
 
       <section class="panel panel-spaced" aria-labelledby="capture-heading" hidden={section !== "troubleshoot"}>

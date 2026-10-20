@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -21,6 +22,10 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	TroubleshootService_GetVPPGraph_FullMethodName              = "/rookery.v1.TroubleshootService/GetVPPGraph"
 	TroubleshootService_ListACLInterfaceCounters_FullMethodName = "/rookery.v1.TroubleshootService/ListACLInterfaceCounters"
+	TroubleshootService_ListTraceNodes_FullMethodName           = "/rookery.v1.TroubleshootService/ListTraceNodes"
+	TroubleshootService_StartTrace_FullMethodName               = "/rookery.v1.TroubleshootService/StartTrace"
+	TroubleshootService_GetTrace_FullMethodName                 = "/rookery.v1.TroubleshootService/GetTrace"
+	TroubleshootService_ClearTrace_FullMethodName               = "/rookery.v1.TroubleshootService/ClearTrace"
 )
 
 // TroubleshootServiceClient is the client API for TroubleshootService service.
@@ -31,6 +36,10 @@ const (
 type TroubleshootServiceClient interface {
 	GetVPPGraph(ctx context.Context, in *GetVPPGraphRequest, opts ...grpc.CallOption) (*VPPGraph, error)
 	ListACLInterfaceCounters(ctx context.Context, in *ListACLInterfaceCountersRequest, opts ...grpc.CallOption) (*ListACLInterfaceCountersResponse, error)
+	ListTraceNodes(ctx context.Context, in *ListTraceNodesRequest, opts ...grpc.CallOption) (*ListTraceNodesResponse, error)
+	StartTrace(ctx context.Context, in *StartTraceRequest, opts ...grpc.CallOption) (*TraceResult, error)
+	GetTrace(ctx context.Context, in *GetTraceRequest, opts ...grpc.CallOption) (*TraceResult, error)
+	ClearTrace(ctx context.Context, in *ClearTraceRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type troubleshootServiceClient struct {
@@ -61,6 +70,46 @@ func (c *troubleshootServiceClient) ListACLInterfaceCounters(ctx context.Context
 	return out, nil
 }
 
+func (c *troubleshootServiceClient) ListTraceNodes(ctx context.Context, in *ListTraceNodesRequest, opts ...grpc.CallOption) (*ListTraceNodesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListTraceNodesResponse)
+	err := c.cc.Invoke(ctx, TroubleshootService_ListTraceNodes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *troubleshootServiceClient) StartTrace(ctx context.Context, in *StartTraceRequest, opts ...grpc.CallOption) (*TraceResult, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TraceResult)
+	err := c.cc.Invoke(ctx, TroubleshootService_StartTrace_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *troubleshootServiceClient) GetTrace(ctx context.Context, in *GetTraceRequest, opts ...grpc.CallOption) (*TraceResult, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TraceResult)
+	err := c.cc.Invoke(ctx, TroubleshootService_GetTrace_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *troubleshootServiceClient) ClearTrace(ctx context.Context, in *ClearTraceRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, TroubleshootService_ClearTrace_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TroubleshootServiceServer is the server API for TroubleshootService service.
 // All implementations must embed UnimplementedTroubleshootServiceServer
 // for forward compatibility.
@@ -69,6 +118,10 @@ func (c *troubleshootServiceClient) ListACLInterfaceCounters(ctx context.Context
 type TroubleshootServiceServer interface {
 	GetVPPGraph(context.Context, *GetVPPGraphRequest) (*VPPGraph, error)
 	ListACLInterfaceCounters(context.Context, *ListACLInterfaceCountersRequest) (*ListACLInterfaceCountersResponse, error)
+	ListTraceNodes(context.Context, *ListTraceNodesRequest) (*ListTraceNodesResponse, error)
+	StartTrace(context.Context, *StartTraceRequest) (*TraceResult, error)
+	GetTrace(context.Context, *GetTraceRequest) (*TraceResult, error)
+	ClearTrace(context.Context, *ClearTraceRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedTroubleshootServiceServer()
 }
 
@@ -84,6 +137,18 @@ func (UnimplementedTroubleshootServiceServer) GetVPPGraph(context.Context, *GetV
 }
 func (UnimplementedTroubleshootServiceServer) ListACLInterfaceCounters(context.Context, *ListACLInterfaceCountersRequest) (*ListACLInterfaceCountersResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListACLInterfaceCounters not implemented")
+}
+func (UnimplementedTroubleshootServiceServer) ListTraceNodes(context.Context, *ListTraceNodesRequest) (*ListTraceNodesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListTraceNodes not implemented")
+}
+func (UnimplementedTroubleshootServiceServer) StartTrace(context.Context, *StartTraceRequest) (*TraceResult, error) {
+	return nil, status.Error(codes.Unimplemented, "method StartTrace not implemented")
+}
+func (UnimplementedTroubleshootServiceServer) GetTrace(context.Context, *GetTraceRequest) (*TraceResult, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetTrace not implemented")
+}
+func (UnimplementedTroubleshootServiceServer) ClearTrace(context.Context, *ClearTraceRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClearTrace not implemented")
 }
 func (UnimplementedTroubleshootServiceServer) mustEmbedUnimplementedTroubleshootServiceServer() {}
 func (UnimplementedTroubleshootServiceServer) testEmbeddedByValue()                             {}
@@ -142,6 +207,78 @@ func _TroubleshootService_ListACLInterfaceCounters_Handler(srv interface{}, ctx 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TroubleshootService_ListTraceNodes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTraceNodesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TroubleshootServiceServer).ListTraceNodes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TroubleshootService_ListTraceNodes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TroubleshootServiceServer).ListTraceNodes(ctx, req.(*ListTraceNodesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TroubleshootService_StartTrace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartTraceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TroubleshootServiceServer).StartTrace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TroubleshootService_StartTrace_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TroubleshootServiceServer).StartTrace(ctx, req.(*StartTraceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TroubleshootService_GetTrace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTraceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TroubleshootServiceServer).GetTrace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TroubleshootService_GetTrace_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TroubleshootServiceServer).GetTrace(ctx, req.(*GetTraceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TroubleshootService_ClearTrace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClearTraceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TroubleshootServiceServer).ClearTrace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TroubleshootService_ClearTrace_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TroubleshootServiceServer).ClearTrace(ctx, req.(*ClearTraceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TroubleshootService_ServiceDesc is the grpc.ServiceDesc for TroubleshootService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -156,6 +293,22 @@ var TroubleshootService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListACLInterfaceCounters",
 			Handler:    _TroubleshootService_ListACLInterfaceCounters_Handler,
+		},
+		{
+			MethodName: "ListTraceNodes",
+			Handler:    _TroubleshootService_ListTraceNodes_Handler,
+		},
+		{
+			MethodName: "StartTrace",
+			Handler:    _TroubleshootService_StartTrace_Handler,
+		},
+		{
+			MethodName: "GetTrace",
+			Handler:    _TroubleshootService_GetTrace_Handler,
+		},
+		{
+			MethodName: "ClearTrace",
+			Handler:    _TroubleshootService_ClearTrace_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

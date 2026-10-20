@@ -744,6 +744,17 @@ func natFlags(inside bool) nat_types.NatConfigFlags {
 }
 
 func (v *VPPNetwork) runCLI(ctx context.Context, args ...string) (string, error) {
+	output, err := v.runCLIRaw(ctx, args...)
+	if err == nil && cliOutputFailed(output) {
+		err = errors.New("vppctl rejected the command")
+	}
+	return output, err
+}
+
+// runCLIRaw executes a VPP CLI command without applying the generic
+// "rejected command" text heuristic. Commands such as `show trace` contain
+// arbitrary packet text that can include words like "invalid".
+func (v *VPPNetwork) runCLIRaw(ctx context.Context, args ...string) (string, error) {
 	binary := strings.TrimSpace(v.CLI)
 	if binary == "" {
 		binary = "vppctl"
@@ -763,9 +774,6 @@ func (v *VPPNetwork) runCLI(ctx context.Context, args ...string) (string, error)
 	}
 	if errors.Is(cmdCtx.Err(), context.DeadlineExceeded) {
 		return output, errors.New("vppctl timed out")
-	}
-	if err == nil && cliOutputFailed(output) {
-		err = errors.New("vppctl rejected the command")
 	}
 	return output, err
 }

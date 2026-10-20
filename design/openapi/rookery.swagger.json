@@ -2144,6 +2144,104 @@
           "RouteTableService"
         ]
       }
+    },
+    "/api/troubleshoot/trace": {
+      "get": {
+        "operationId": "TroubleshootService_GetTrace",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1TraceResult"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TroubleshootService"
+        ]
+      },
+      "delete": {
+        "operationId": "TroubleshootService_ClearTrace",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TroubleshootService"
+        ]
+      },
+      "post": {
+        "operationId": "TroubleshootService_StartTrace",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1TraceResult"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1StartTraceRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TroubleshootService"
+        ]
+      }
+    },
+    "/api/troubleshoot/trace/nodes": {
+      "get": {
+        "operationId": "TroubleshootService_ListTraceNodes",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TroubleshootService"
+        ]
+      }
     }
   },
   "definitions": {
@@ -4038,6 +4136,48 @@
           "format": "date-time"
         },
         "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1ListTraceNodesResponse": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v1StartTraceRequest": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "v1TraceResult": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "raw": {
+          "type": "string"
+        },
+        "captured_at": {
           "type": "string",
           "format": "date-time"
         }

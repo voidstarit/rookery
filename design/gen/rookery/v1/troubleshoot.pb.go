@@ -7,9 +7,11 @@
 package rookeryv1
 
 import (
+	_ "github.com/envoyproxy/protoc-gen-validate/validate"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
@@ -22,6 +24,278 @@ const (
 	// Verify that runtime/protoimpl is sufficiently up-to-date.
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
+
+type ListTraceNodesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListTraceNodesRequest) Reset() {
+	*x = ListTraceNodesRequest{}
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListTraceNodesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListTraceNodesRequest) ProtoMessage() {}
+
+func (x *ListTraceNodesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListTraceNodesRequest.ProtoReflect.Descriptor instead.
+func (*ListTraceNodesRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{0}
+}
+
+type ListTraceNodesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Nodes         []string               `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListTraceNodesResponse) Reset() {
+	*x = ListTraceNodesResponse{}
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListTraceNodesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListTraceNodesResponse) ProtoMessage() {}
+
+func (x *ListTraceNodesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListTraceNodesResponse.ProtoReflect.Descriptor instead.
+func (*ListTraceNodesResponse) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ListTraceNodesResponse) GetNodes() []string {
+	if x != nil {
+		return x.Nodes
+	}
+	return nil
+}
+
+type StartTraceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Node          string                 `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
+	Count         uint32                 `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartTraceRequest) Reset() {
+	*x = StartTraceRequest{}
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartTraceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartTraceRequest) ProtoMessage() {}
+
+func (x *StartTraceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartTraceRequest.ProtoReflect.Descriptor instead.
+func (*StartTraceRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *StartTraceRequest) GetNode() string {
+	if x != nil {
+		return x.Node
+	}
+	return ""
+}
+
+func (x *StartTraceRequest) GetCount() uint32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+type GetTraceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetTraceRequest) Reset() {
+	*x = GetTraceRequest{}
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTraceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTraceRequest) ProtoMessage() {}
+
+func (x *GetTraceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTraceRequest.ProtoReflect.Descriptor instead.
+func (*GetTraceRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{3}
+}
+
+type ClearTraceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClearTraceRequest) Reset() {
+	*x = ClearTraceRequest{}
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClearTraceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClearTraceRequest) ProtoMessage() {}
+
+func (x *ClearTraceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClearTraceRequest.ProtoReflect.Descriptor instead.
+func (*ClearTraceRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{4}
+}
+
+type TraceResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Node          string                 `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
+	Count         uint32                 `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	Raw           string                 `protobuf:"bytes,3,opt,name=raw,proto3" json:"raw,omitempty"`
+	CapturedAt    *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=captured_at,json=capturedAt,proto3" json:"captured_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TraceResult) Reset() {
+	*x = TraceResult{}
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TraceResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TraceResult) ProtoMessage() {}
+
+func (x *TraceResult) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TraceResult.ProtoReflect.Descriptor instead.
+func (*TraceResult) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *TraceResult) GetNode() string {
+	if x != nil {
+		return x.Node
+	}
+	return ""
+}
+
+func (x *TraceResult) GetCount() uint32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *TraceResult) GetRaw() string {
+	if x != nil {
+		return x.Raw
+	}
+	return ""
+}
+
+func (x *TraceResult) GetCapturedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CapturedAt
+	}
+	return nil
+}
 
 type VPPGraphNode struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -36,7 +310,7 @@ type VPPGraphNode struct {
 
 func (x *VPPGraphNode) Reset() {
 	*x = VPPGraphNode{}
-	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[0]
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -48,7 +322,7 @@ func (x *VPPGraphNode) String() string {
 func (*VPPGraphNode) ProtoMessage() {}
 
 func (x *VPPGraphNode) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[0]
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61,7 +335,7 @@ func (x *VPPGraphNode) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VPPGraphNode.ProtoReflect.Descriptor instead.
 func (*VPPGraphNode) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{0}
+	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *VPPGraphNode) GetId() string {
@@ -109,7 +383,7 @@ type VPPGraphEdge struct {
 
 func (x *VPPGraphEdge) Reset() {
 	*x = VPPGraphEdge{}
-	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[1]
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -121,7 +395,7 @@ func (x *VPPGraphEdge) String() string {
 func (*VPPGraphEdge) ProtoMessage() {}
 
 func (x *VPPGraphEdge) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[1]
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -134,7 +408,7 @@ func (x *VPPGraphEdge) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VPPGraphEdge.ProtoReflect.Descriptor instead.
 func (*VPPGraphEdge) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{1}
+	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *VPPGraphEdge) GetSource() string {
@@ -162,7 +436,7 @@ type VPPGraph struct {
 
 func (x *VPPGraph) Reset() {
 	*x = VPPGraph{}
-	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[2]
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -174,7 +448,7 @@ func (x *VPPGraph) String() string {
 func (*VPPGraph) ProtoMessage() {}
 
 func (x *VPPGraph) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[2]
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -187,7 +461,7 @@ func (x *VPPGraph) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VPPGraph.ProtoReflect.Descriptor instead.
 func (*VPPGraph) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{2}
+	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *VPPGraph) GetNodes() []*VPPGraphNode {
@@ -219,7 +493,7 @@ type GetVPPGraphRequest struct {
 
 func (x *GetVPPGraphRequest) Reset() {
 	*x = GetVPPGraphRequest{}
-	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[3]
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -231,7 +505,7 @@ func (x *GetVPPGraphRequest) String() string {
 func (*GetVPPGraphRequest) ProtoMessage() {}
 
 func (x *GetVPPGraphRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[3]
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -244,7 +518,7 @@ func (x *GetVPPGraphRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVPPGraphRequest.ProtoReflect.Descriptor instead.
 func (*GetVPPGraphRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{3}
+	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{9}
 }
 
 type ACLRuleCounter struct {
@@ -259,7 +533,7 @@ type ACLRuleCounter struct {
 
 func (x *ACLRuleCounter) Reset() {
 	*x = ACLRuleCounter{}
-	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[4]
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -271,7 +545,7 @@ func (x *ACLRuleCounter) String() string {
 func (*ACLRuleCounter) ProtoMessage() {}
 
 func (x *ACLRuleCounter) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[4]
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -284,7 +558,7 @@ func (x *ACLRuleCounter) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ACLRuleCounter.ProtoReflect.Descriptor instead.
 func (*ACLRuleCounter) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{4}
+	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ACLRuleCounter) GetAclIndex() uint32 {
@@ -328,7 +602,7 @@ type ACLDirectionCounters struct {
 
 func (x *ACLDirectionCounters) Reset() {
 	*x = ACLDirectionCounters{}
-	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[5]
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -340,7 +614,7 @@ func (x *ACLDirectionCounters) String() string {
 func (*ACLDirectionCounters) ProtoMessage() {}
 
 func (x *ACLDirectionCounters) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[5]
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -353,7 +627,7 @@ func (x *ACLDirectionCounters) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ACLDirectionCounters.ProtoReflect.Descriptor instead.
 func (*ACLDirectionCounters) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{5}
+	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ACLDirectionCounters) GetMatched() uint64 {
@@ -403,7 +677,7 @@ type ACLInterfaceCounters struct {
 
 func (x *ACLInterfaceCounters) Reset() {
 	*x = ACLInterfaceCounters{}
-	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[6]
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -415,7 +689,7 @@ func (x *ACLInterfaceCounters) String() string {
 func (*ACLInterfaceCounters) ProtoMessage() {}
 
 func (x *ACLInterfaceCounters) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[6]
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -428,7 +702,7 @@ func (x *ACLInterfaceCounters) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ACLInterfaceCounters.ProtoReflect.Descriptor instead.
 func (*ACLInterfaceCounters) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{6}
+	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ACLInterfaceCounters) GetInterface() string {
@@ -467,7 +741,7 @@ type ListACLInterfaceCountersRequest struct {
 
 func (x *ListACLInterfaceCountersRequest) Reset() {
 	*x = ListACLInterfaceCountersRequest{}
-	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[7]
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -479,7 +753,7 @@ func (x *ListACLInterfaceCountersRequest) String() string {
 func (*ListACLInterfaceCountersRequest) ProtoMessage() {}
 
 func (x *ListACLInterfaceCountersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[7]
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -492,7 +766,7 @@ func (x *ListACLInterfaceCountersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListACLInterfaceCountersRequest.ProtoReflect.Descriptor instead.
 func (*ListACLInterfaceCountersRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{7}
+	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{13}
 }
 
 type ListACLInterfaceCountersResponse struct {
@@ -504,7 +778,7 @@ type ListACLInterfaceCountersResponse struct {
 
 func (x *ListACLInterfaceCountersResponse) Reset() {
 	*x = ListACLInterfaceCountersResponse{}
-	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[8]
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -516,7 +790,7 @@ func (x *ListACLInterfaceCountersResponse) String() string {
 func (*ListACLInterfaceCountersResponse) ProtoMessage() {}
 
 func (x *ListACLInterfaceCountersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[8]
+	mi := &file_rookery_v1_troubleshoot_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -529,7 +803,7 @@ func (x *ListACLInterfaceCountersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListACLInterfaceCountersResponse.ProtoReflect.Descriptor instead.
 func (*ListACLInterfaceCountersResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{8}
+	return file_rookery_v1_troubleshoot_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ListACLInterfaceCountersResponse) GetInterfaces() []*ACLInterfaceCounters {
@@ -544,7 +818,22 @@ var File_rookery_v1_troubleshoot_proto protoreflect.FileDescriptor
 const file_rookery_v1_troubleshoot_proto_rawDesc = "" +
 	"\n" +
 	"\x1drookery/v1/troubleshoot.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"{\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\x17\n" +
+	"\x15ListTraceNodesRequest\".\n" +
+	"\x16ListTraceNodesResponse\x12\x14\n" +
+	"\x05nodes\x18\x01 \x03(\tR\x05nodes\"i\n" +
+	"\x11StartTraceRequest\x122\n" +
+	"\x04node\x18\x01 \x01(\tB\x1e\xfaB\x1br\x19\x10\x01\x18\x80\x012\x12^[A-Za-z0-9_.:-]+$R\x04node\x12 \n" +
+	"\x05count\x18\x02 \x01(\rB\n" +
+	"\xfaB\a*\x05\x18\xe8\a(\x01R\x05count\"\x11\n" +
+	"\x0fGetTraceRequest\"\x13\n" +
+	"\x11ClearTraceRequest\"\x86\x01\n" +
+	"\vTraceResult\x12\x12\n" +
+	"\x04node\x18\x01 \x01(\tR\x04node\x12\x14\n" +
+	"\x05count\x18\x02 \x01(\rR\x05count\x12\x10\n" +
+	"\x03raw\x18\x03 \x01(\tR\x03raw\x12;\n" +
+	"\vcaptured_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"capturedAt\"{\n" +
 	"\fVPPGraphNode\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12\x14\n" +
@@ -581,11 +870,17 @@ const file_rookery_v1_troubleshoot_proto_rawDesc = "" +
 	" ListACLInterfaceCountersResponse\x12@\n" +
 	"\n" +
 	"interfaces\x18\x01 \x03(\v2 .rookery.v1.ACLInterfaceCountersR\n" +
-	"interfaces2\xab\x02\n" +
+	"interfaces2\xe6\x05\n" +
 	"\x13TroubleshootService\x12h\n" +
 	"\vGetVPPGraph\x12\x1e.rookery.v1.GetVPPGraphRequest\x1a\x14.rookery.v1.VPPGraph\"#\x82\xd3\xe4\x93\x02\x1d\x12\x1b/api/troubleshoot/vpp-graph\x12\xa9\x01\n" +
 	"\x18ListACLInterfaceCounters\x12+.rookery.v1.ListACLInterfaceCountersRequest\x1a,.rookery.v1.ListACLInterfaceCountersResponse\"2\x82\xd3\xe4\x93\x02,b\n" +
-	"interfaces\x12\x1e/api/troubleshoot/acl-countersB?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
+	"interfaces\x12\x1e/api/troubleshoot/acl-counters\x12\x85\x01\n" +
+	"\x0eListTraceNodes\x12!.rookery.v1.ListTraceNodesRequest\x1a\".rookery.v1.ListTraceNodesResponse\",\x82\xd3\xe4\x93\x02&b\x05nodes\x12\x1d/api/troubleshoot/trace/nodes\x12h\n" +
+	"\n" +
+	"StartTrace\x12\x1d.rookery.v1.StartTraceRequest\x1a\x17.rookery.v1.TraceResult\"\"\x82\xd3\xe4\x93\x02\x1c:\x01*\"\x17/api/troubleshoot/trace\x12a\n" +
+	"\bGetTrace\x12\x1b.rookery.v1.GetTraceRequest\x1a\x17.rookery.v1.TraceResult\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/api/troubleshoot/trace\x12d\n" +
+	"\n" +
+	"ClearTrace\x12\x1d.rookery.v1.ClearTraceRequest\x1a\x16.google.protobuf.Empty\"\x1f\x82\xd3\xe4\x93\x02\x19*\x17/api/troubleshoot/traceB?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
 
 var (
 	file_rookery_v1_troubleshoot_proto_rawDescOnce sync.Once
@@ -599,36 +894,52 @@ func file_rookery_v1_troubleshoot_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_troubleshoot_proto_rawDescData
 }
 
-var file_rookery_v1_troubleshoot_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_rookery_v1_troubleshoot_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_rookery_v1_troubleshoot_proto_goTypes = []any{
-	(*VPPGraphNode)(nil),                     // 0: rookery.v1.VPPGraphNode
-	(*VPPGraphEdge)(nil),                     // 1: rookery.v1.VPPGraphEdge
-	(*VPPGraph)(nil),                         // 2: rookery.v1.VPPGraph
-	(*GetVPPGraphRequest)(nil),               // 3: rookery.v1.GetVPPGraphRequest
-	(*ACLRuleCounter)(nil),                   // 4: rookery.v1.ACLRuleCounter
-	(*ACLDirectionCounters)(nil),             // 5: rookery.v1.ACLDirectionCounters
-	(*ACLInterfaceCounters)(nil),             // 6: rookery.v1.ACLInterfaceCounters
-	(*ListACLInterfaceCountersRequest)(nil),  // 7: rookery.v1.ListACLInterfaceCountersRequest
-	(*ListACLInterfaceCountersResponse)(nil), // 8: rookery.v1.ListACLInterfaceCountersResponse
-	(*timestamppb.Timestamp)(nil),            // 9: google.protobuf.Timestamp
+	(*ListTraceNodesRequest)(nil),            // 0: rookery.v1.ListTraceNodesRequest
+	(*ListTraceNodesResponse)(nil),           // 1: rookery.v1.ListTraceNodesResponse
+	(*StartTraceRequest)(nil),                // 2: rookery.v1.StartTraceRequest
+	(*GetTraceRequest)(nil),                  // 3: rookery.v1.GetTraceRequest
+	(*ClearTraceRequest)(nil),                // 4: rookery.v1.ClearTraceRequest
+	(*TraceResult)(nil),                      // 5: rookery.v1.TraceResult
+	(*VPPGraphNode)(nil),                     // 6: rookery.v1.VPPGraphNode
+	(*VPPGraphEdge)(nil),                     // 7: rookery.v1.VPPGraphEdge
+	(*VPPGraph)(nil),                         // 8: rookery.v1.VPPGraph
+	(*GetVPPGraphRequest)(nil),               // 9: rookery.v1.GetVPPGraphRequest
+	(*ACLRuleCounter)(nil),                   // 10: rookery.v1.ACLRuleCounter
+	(*ACLDirectionCounters)(nil),             // 11: rookery.v1.ACLDirectionCounters
+	(*ACLInterfaceCounters)(nil),             // 12: rookery.v1.ACLInterfaceCounters
+	(*ListACLInterfaceCountersRequest)(nil),  // 13: rookery.v1.ListACLInterfaceCountersRequest
+	(*ListACLInterfaceCountersResponse)(nil), // 14: rookery.v1.ListACLInterfaceCountersResponse
+	(*timestamppb.Timestamp)(nil),            // 15: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),                    // 16: google.protobuf.Empty
 }
 var file_rookery_v1_troubleshoot_proto_depIdxs = []int32{
-	0, // 0: rookery.v1.VPPGraph.nodes:type_name -> rookery.v1.VPPGraphNode
-	1, // 1: rookery.v1.VPPGraph.edges:type_name -> rookery.v1.VPPGraphEdge
-	9, // 2: rookery.v1.VPPGraph.generated_at:type_name -> google.protobuf.Timestamp
-	4, // 3: rookery.v1.ACLDirectionCounters.rules:type_name -> rookery.v1.ACLRuleCounter
-	5, // 4: rookery.v1.ACLInterfaceCounters.ingress:type_name -> rookery.v1.ACLDirectionCounters
-	5, // 5: rookery.v1.ACLInterfaceCounters.egress:type_name -> rookery.v1.ACLDirectionCounters
-	6, // 6: rookery.v1.ListACLInterfaceCountersResponse.interfaces:type_name -> rookery.v1.ACLInterfaceCounters
-	3, // 7: rookery.v1.TroubleshootService.GetVPPGraph:input_type -> rookery.v1.GetVPPGraphRequest
-	7, // 8: rookery.v1.TroubleshootService.ListACLInterfaceCounters:input_type -> rookery.v1.ListACLInterfaceCountersRequest
-	2, // 9: rookery.v1.TroubleshootService.GetVPPGraph:output_type -> rookery.v1.VPPGraph
-	8, // 10: rookery.v1.TroubleshootService.ListACLInterfaceCounters:output_type -> rookery.v1.ListACLInterfaceCountersResponse
-	9, // [9:11] is the sub-list for method output_type
-	7, // [7:9] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	15, // 0: rookery.v1.TraceResult.captured_at:type_name -> google.protobuf.Timestamp
+	6,  // 1: rookery.v1.VPPGraph.nodes:type_name -> rookery.v1.VPPGraphNode
+	7,  // 2: rookery.v1.VPPGraph.edges:type_name -> rookery.v1.VPPGraphEdge
+	15, // 3: rookery.v1.VPPGraph.generated_at:type_name -> google.protobuf.Timestamp
+	10, // 4: rookery.v1.ACLDirectionCounters.rules:type_name -> rookery.v1.ACLRuleCounter
+	11, // 5: rookery.v1.ACLInterfaceCounters.ingress:type_name -> rookery.v1.ACLDirectionCounters
+	11, // 6: rookery.v1.ACLInterfaceCounters.egress:type_name -> rookery.v1.ACLDirectionCounters
+	12, // 7: rookery.v1.ListACLInterfaceCountersResponse.interfaces:type_name -> rookery.v1.ACLInterfaceCounters
+	9,  // 8: rookery.v1.TroubleshootService.GetVPPGraph:input_type -> rookery.v1.GetVPPGraphRequest
+	13, // 9: rookery.v1.TroubleshootService.ListACLInterfaceCounters:input_type -> rookery.v1.ListACLInterfaceCountersRequest
+	0,  // 10: rookery.v1.TroubleshootService.ListTraceNodes:input_type -> rookery.v1.ListTraceNodesRequest
+	2,  // 11: rookery.v1.TroubleshootService.StartTrace:input_type -> rookery.v1.StartTraceRequest
+	3,  // 12: rookery.v1.TroubleshootService.GetTrace:input_type -> rookery.v1.GetTraceRequest
+	4,  // 13: rookery.v1.TroubleshootService.ClearTrace:input_type -> rookery.v1.ClearTraceRequest
+	8,  // 14: rookery.v1.TroubleshootService.GetVPPGraph:output_type -> rookery.v1.VPPGraph
+	14, // 15: rookery.v1.TroubleshootService.ListACLInterfaceCounters:output_type -> rookery.v1.ListACLInterfaceCountersResponse
+	1,  // 16: rookery.v1.TroubleshootService.ListTraceNodes:output_type -> rookery.v1.ListTraceNodesResponse
+	5,  // 17: rookery.v1.TroubleshootService.StartTrace:output_type -> rookery.v1.TraceResult
+	5,  // 18: rookery.v1.TroubleshootService.GetTrace:output_type -> rookery.v1.TraceResult
+	16, // 19: rookery.v1.TroubleshootService.ClearTrace:output_type -> google.protobuf.Empty
+	14, // [14:20] is the sub-list for method output_type
+	8,  // [8:14] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_rookery_v1_troubleshoot_proto_init() }
@@ -642,7 +953,7 @@ func file_rookery_v1_troubleshoot_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_troubleshoot_proto_rawDesc), len(file_rookery_v1_troubleshoot_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

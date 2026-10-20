@@ -35,6 +35,683 @@ var (
 	_ = sort.Sort
 )
 
+// Validate checks the field values on ListTraceNodesRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ListTraceNodesRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ListTraceNodesRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ListTraceNodesRequestMultiError, or nil if none found.
+func (m *ListTraceNodesRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ListTraceNodesRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if len(errors) > 0 {
+		return ListTraceNodesRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// ListTraceNodesRequestMultiError is an error wrapping multiple validation
+// errors returned by ListTraceNodesRequest.ValidateAll() if the designated
+// constraints aren't met.
+type ListTraceNodesRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ListTraceNodesRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ListTraceNodesRequestMultiError) AllErrors() []error { return m }
+
+// ListTraceNodesRequestValidationError is the validation error returned by
+// ListTraceNodesRequest.Validate if the designated constraints aren't met.
+type ListTraceNodesRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ListTraceNodesRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ListTraceNodesRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ListTraceNodesRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ListTraceNodesRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ListTraceNodesRequestValidationError) ErrorName() string {
+	return "ListTraceNodesRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ListTraceNodesRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListTraceNodesRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ListTraceNodesRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ListTraceNodesRequestValidationError{}
+
+// Validate checks the field values on ListTraceNodesResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ListTraceNodesResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ListTraceNodesResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ListTraceNodesResponseMultiError, or nil if none found.
+func (m *ListTraceNodesResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ListTraceNodesResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if len(errors) > 0 {
+		return ListTraceNodesResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// ListTraceNodesResponseMultiError is an error wrapping multiple validation
+// errors returned by ListTraceNodesResponse.ValidateAll() if the designated
+// constraints aren't met.
+type ListTraceNodesResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ListTraceNodesResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ListTraceNodesResponseMultiError) AllErrors() []error { return m }
+
+// ListTraceNodesResponseValidationError is the validation error returned by
+// ListTraceNodesResponse.Validate if the designated constraints aren't met.
+type ListTraceNodesResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ListTraceNodesResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ListTraceNodesResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ListTraceNodesResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ListTraceNodesResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ListTraceNodesResponseValidationError) ErrorName() string {
+	return "ListTraceNodesResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ListTraceNodesResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListTraceNodesResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ListTraceNodesResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ListTraceNodesResponseValidationError{}
+
+// Validate checks the field values on StartTraceRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *StartTraceRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on StartTraceRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// StartTraceRequestMultiError, or nil if none found.
+func (m *StartTraceRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *StartTraceRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if l := utf8.RuneCountInString(m.GetNode()); l < 1 || l > 128 {
+		err := StartTraceRequestValidationError{
+			field:  "Node",
+			reason: "value length must be between 1 and 128 runes, inclusive",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if !_StartTraceRequest_Node_Pattern.MatchString(m.GetNode()) {
+		err := StartTraceRequestValidationError{
+			field:  "Node",
+			reason: "value does not match regex pattern \"^[A-Za-z0-9_.:-]+$\"",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if val := m.GetCount(); val < 1 || val > 1000 {
+		err := StartTraceRequestValidationError{
+			field:  "Count",
+			reason: "value must be inside range [1, 1000]",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return StartTraceRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// StartTraceRequestMultiError is an error wrapping multiple validation errors
+// returned by StartTraceRequest.ValidateAll() if the designated constraints
+// aren't met.
+type StartTraceRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m StartTraceRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m StartTraceRequestMultiError) AllErrors() []error { return m }
+
+// StartTraceRequestValidationError is the validation error returned by
+// StartTraceRequest.Validate if the designated constraints aren't met.
+type StartTraceRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e StartTraceRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e StartTraceRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e StartTraceRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e StartTraceRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e StartTraceRequestValidationError) ErrorName() string {
+	return "StartTraceRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e StartTraceRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sStartTraceRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = StartTraceRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = StartTraceRequestValidationError{}
+
+var _StartTraceRequest_Node_Pattern = regexp.MustCompile("^[A-Za-z0-9_.:-]+$")
+
+// Validate checks the field values on GetTraceRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *GetTraceRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetTraceRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// GetTraceRequestMultiError, or nil if none found.
+func (m *GetTraceRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetTraceRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if len(errors) > 0 {
+		return GetTraceRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// GetTraceRequestMultiError is an error wrapping multiple validation errors
+// returned by GetTraceRequest.ValidateAll() if the designated constraints
+// aren't met.
+type GetTraceRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetTraceRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetTraceRequestMultiError) AllErrors() []error { return m }
+
+// GetTraceRequestValidationError is the validation error returned by
+// GetTraceRequest.Validate if the designated constraints aren't met.
+type GetTraceRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetTraceRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetTraceRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetTraceRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetTraceRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetTraceRequestValidationError) ErrorName() string { return "GetTraceRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e GetTraceRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetTraceRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetTraceRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetTraceRequestValidationError{}
+
+// Validate checks the field values on ClearTraceRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *ClearTraceRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ClearTraceRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ClearTraceRequestMultiError, or nil if none found.
+func (m *ClearTraceRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ClearTraceRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if len(errors) > 0 {
+		return ClearTraceRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// ClearTraceRequestMultiError is an error wrapping multiple validation errors
+// returned by ClearTraceRequest.ValidateAll() if the designated constraints
+// aren't met.
+type ClearTraceRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ClearTraceRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ClearTraceRequestMultiError) AllErrors() []error { return m }
+
+// ClearTraceRequestValidationError is the validation error returned by
+// ClearTraceRequest.Validate if the designated constraints aren't met.
+type ClearTraceRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ClearTraceRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ClearTraceRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ClearTraceRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ClearTraceRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ClearTraceRequestValidationError) ErrorName() string {
+	return "ClearTraceRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ClearTraceRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sClearTraceRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ClearTraceRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ClearTraceRequestValidationError{}
+
+// Validate checks the field values on TraceResult with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *TraceResult) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on TraceResult with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in TraceResultMultiError, or
+// nil if none found.
+func (m *TraceResult) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *TraceResult) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Node
+
+	// no validation rules for Count
+
+	// no validation rules for Raw
+
+	if all {
+		switch v := interface{}(m.GetCapturedAt()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, TraceResultValidationError{
+					field:  "CapturedAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, TraceResultValidationError{
+					field:  "CapturedAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetCapturedAt()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return TraceResultValidationError{
+				field:  "CapturedAt",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return TraceResultMultiError(errors)
+	}
+
+	return nil
+}
+
+// TraceResultMultiError is an error wrapping multiple validation errors
+// returned by TraceResult.ValidateAll() if the designated constraints aren't met.
+type TraceResultMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m TraceResultMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m TraceResultMultiError) AllErrors() []error { return m }
+
+// TraceResultValidationError is the validation error returned by
+// TraceResult.Validate if the designated constraints aren't met.
+type TraceResultValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e TraceResultValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e TraceResultValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e TraceResultValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e TraceResultValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e TraceResultValidationError) ErrorName() string { return "TraceResultValidationError" }
+
+// Error satisfies the builtin error interface
+func (e TraceResultValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sTraceResult.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = TraceResultValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = TraceResultValidationError{}
+
 // Validate checks the field values on VPPGraphNode with the rules defined in
 // the proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.

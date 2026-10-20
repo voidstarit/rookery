@@ -140,3 +140,20 @@ func parseVPPNodeGraph(output string) (VPPGraph, error) {
 	})
 	return graph, nil
 }
+
+// VPPGraphNodes returns every registered VPP graph node, not only nodes active
+// since the last stats clear. It is used by the packet-trace node picker.
+func (v *VPPNetwork) VPPGraphNodes(ctx context.Context) ([]VPPGraphNode, error) {
+	out, err := v.runCLI(ctx, "show", "vlib", "graphviz")
+	graph, parseErr := parseVPPNodeGraph(out)
+	if err != nil {
+		if parseErr == nil && strings.Contains(out, "digraph {") {
+			return graph.Nodes, nil
+		}
+		return nil, fmt.Errorf("show VPP graph nodes: %w: %s", err, out)
+	}
+	if parseErr != nil {
+		return nil, parseErr
+	}
+	return graph.Nodes, nil
+}

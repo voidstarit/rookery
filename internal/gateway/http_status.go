@@ -36,6 +36,7 @@ var noContentMethods = map[string]bool{
 	"/rookery.v1.VNFService/DeleteVNF":                       true,
 	"/rookery.v1.StorageBackendService/DeleteStorageBackend": true,
 	"/rookery.v1.CaptureService/DeleteCaptureFile":           true,
+	"/rookery.v1.TroubleshootService/ClearTrace":             true,
 	"/rookery.v1.RouteTableService/DeleteRouteTable":         true,
 	"/rookery.v1.RouteTableService/DeleteRoute":              true,
 	"/rookery.v1.VMService/ResetVM":                          true,

@@ -3,7 +3,9 @@ syntax = "proto3";
 package rookery.v1;
 
 import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
 
 option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
 
@@ -19,6 +21,54 @@ service TroubleshootService {
       response_body: "interfaces"
     };
   }
+
+  rpc ListTraceNodes(ListTraceNodesRequest) returns (ListTraceNodesResponse) {
+    option (google.api.http) = {
+      get: "/api/troubleshoot/trace/nodes"
+      response_body: "nodes"
+    };
+  }
+
+  rpc StartTrace(StartTraceRequest) returns (TraceResult) {
+    option (google.api.http) = {
+      post: "/api/troubleshoot/trace"
+      body: "*"
+    };
+  }
+
+  rpc GetTrace(GetTraceRequest) returns (TraceResult) {
+    option (google.api.http) = {get: "/api/troubleshoot/trace"};
+  }
+
+  rpc ClearTrace(ClearTraceRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/troubleshoot/trace"};
+  }
+}
+
+message ListTraceNodesRequest {}
+
+message ListTraceNodesResponse {
+  repeated string nodes = 1;
+}
+
+message StartTraceRequest {
+  string node = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 128
+    pattern: "^[A-Za-z0-9_.:-]+$"
+  }];
+  uint32 count = 2 [(validate.rules).uint32 = {gte: 1, lte: 1000}];
+}
+
+message GetTraceRequest {}
+
+message ClearTraceRequest {}
+
+message TraceResult {
+  string node = 1;
+  uint32 count = 2;
+  string raw = 3;
+  google.protobuf.Timestamp captured_at = 4;
 }
 
 message VPPGraphNode {

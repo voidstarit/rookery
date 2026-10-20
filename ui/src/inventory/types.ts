@@ -284,6 +284,13 @@ export type VPPGraph = {
   generated_at: string;
 };
 
+export type TraceResult = {
+  node?: string;
+  count?: number;
+  raw: string;
+  captured_at?: string;
+};
+
 export type ACLRule = {
   action: string;
   description?: string;

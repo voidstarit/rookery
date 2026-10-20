@@ -1268,6 +1268,154 @@ dialog form {
   overflow: auto;
 }
 
+.trace-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(8rem, 0.5fr) auto auto auto;
+  gap: 0.75rem;
+  align-items: end;
+  margin-bottom: 1rem;
+}
+
+.trace-node-field {
+  min-width: 0;
+}
+
+.trace-node-list {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.trace-refresh-nodes {
+  align-self: flex-start;
+}
+
+.trace-result {
+  margin-top: 1rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: rgba(6, 12, 18, 0.7);
+}
+
+.trace-result-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.8rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.trace-visual {
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.45fr) minmax(0, 1fr);
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.trace-packet-field {
+  align-self: start;
+}
+
+.trace-path-panel {
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: rgba(8, 15, 23, 0.55);
+}
+
+.trace-path-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.65rem;
+  font-size: 0.82rem;
+}
+
+.trace-path {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trace-path li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.trace-path-node {
+  display: block;
+  max-width: 100%;
+  padding: 0.35rem 0.7rem;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  text-align: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.5rem;
+  background: var(--surface-raised);
+}
+
+.trace-path-node[data-drop="true"] {
+  color: var(--danger);
+  border-color: rgba(251, 113, 133, 0.5);
+  background: var(--danger-soft);
+}
+
+.trace-path-arrow {
+  color: var(--accent);
+  font-size: 1.1rem;
+  line-height: 1.25;
+}
+
+.trace-raw {
+  border-top: 1px solid var(--border);
+}
+
+.trace-raw summary {
+  padding: 0.7rem 0.8rem;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.trace-raw .trace-output {
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 900px) {
+  .trace-visual {
+    grid-template-columns: 1fr;
+  }
+}
+
+.trace-output {
+  max-height: 32rem;
+  margin: 0;
+  padding: 0.8rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 900px) {
+  .trace-form {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 .fib-section {
   margin-top: 1.25rem;
   padding-top: 1rem;

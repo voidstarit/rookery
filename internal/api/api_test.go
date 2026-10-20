@@ -126,6 +126,8 @@ type fakeNetworkProvisioner struct {
 	aclCounterErr  error
 	fibRoutes      []host.FIBRoute
 	fibErr         error
+	traceResult    host.TraceResult
+	traceErr       error
 }
 
 func (f *fakeNetworkProvisioner) Ping(_ context.Context) error { return nil }
@@ -166,12 +168,36 @@ func (f *fakeNetworkProvisioner) InterfaceCounters(_ context.Context, names []st
 
 func (f *fakeNetworkProvisioner) Identity() (string, error) { return "fake-vpp", nil }
 
+func (f *fakeNetworkProvisioner) VPPGraphNodes(_ context.Context) ([]host.VPPGraphNode, error) {
+	return []host.VPPGraphNode{
+		{ID: "ip4-input", Label: "ip4-input"},
+		{ID: "ip4-lookup", Label: "ip4-lookup"},
+	}, nil
+}
+
 func (f *fakeNetworkProvisioner) VPPNodeGraph(_ context.Context) (host.VPPGraph, error) {
 	if f.graphErr != nil {
 		return host.VPPGraph{}, f.graphErr
 	}
 	return f.graph, nil
 }
+
+func (f *fakeNetworkProvisioner) StartTrace(_ context.Context, node string, count uint32) (host.TraceResult, error) {
+	if f.traceErr != nil {
+		return host.TraceResult{}, f.traceErr
+	}
+	f.traceResult = host.TraceResult{Node: node, Count: count, Raw: "trace started", CapturedAt: time.Now()}
+	return f.traceResult, nil
+}
+
+func (f *fakeNetworkProvisioner) GetTrace(_ context.Context) (host.TraceResult, error) {
+	if f.traceErr != nil {
+		return host.TraceResult{}, f.traceErr
+	}
+	return host.TraceResult{Raw: "Packet 1\n  ip4-input", CapturedAt: time.Now()}, nil
+}
+
+func (f *fakeNetworkProvisioner) ClearTrace(_ context.Context) error { return f.traceErr }
 
 func (f *fakeNetworkProvisioner) ACLInterfaceCounters(_ context.Context) ([]host.ACLInterfaceCounters, error) {
 	if f.aclCounterErr != nil {
@@ -3954,6 +3980,44 @@ func TestVPPNodeGraph(t *testing.T) {
 	recorder = do(t, env.handler, http.MethodGet, "/api/troubleshoot/vpp-graph", nil)
 	if recorder.Code != http.StatusInternalServerError {
 		t.Fatalf("vpp graph error status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestPacketTrace(t *testing.T) {
+	env := newTestAPI(t)
+	recorder := do(t, env.handler, http.MethodGet, "/api/troubleshoot/trace/nodes", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("trace nodes status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	nodes := decode[[]string](t, recorder)
+	if len(nodes) != 2 || nodes[0] != "ip4-input" || nodes[1] != "ip4-lookup" {
+		t.Fatalf("trace nodes = %+v", nodes)
+	}
+
+	recorder = do(t, env.handler, http.MethodPost, "/api/troubleshoot/trace", map[string]any{
+		"node":  "ip4-input",
+		"count": 25,
+	})
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("start trace status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	started := decode[host.TraceResult](t, recorder)
+	if started.Node != "ip4-input" || started.Count != 25 || started.Raw != "trace started" {
+		t.Fatalf("started trace = %+v", started)
+	}
+
+	recorder = do(t, env.handler, http.MethodGet, "/api/troubleshoot/trace", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("get trace status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	result := decode[host.TraceResult](t, recorder)
+	if !strings.Contains(result.Raw, "ip4-input") {
+		t.Fatalf("trace result = %+v", result)
+	}
+
+	recorder = do(t, env.handler, http.MethodDelete, "/api/troubleshoot/trace", nil)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("clear trace status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 }
 

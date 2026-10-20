@@ -453,6 +453,11 @@ lookup contexts. These count explicit ACL rule matches since the ACL was applied
 implicit-deny packets are not included. If you only need a specific rule's count,
 the rule row shows its own packet total and action.
 
+The same **Troubleshoot** section includes **Packet trace**. Select a registered VPP node (or type a node name), set the packet count, and click
+**Start trace**. Generate traffic through that node, then click **Show trace** to
+read the VPP trace buffer. **Clear** removes the trace. The node picker is
+populated from all registered VPP graph nodes; traces are capped at 1,000 packets.
+
 The same **Troubleshoot** section includes **Packet capture**. Choose a VPP
 interface (or `Any interface`), direction, maximum capture size, and snapshot
 length. The API converts the size and snapshot length into VPP's packet-ring
@@ -682,6 +687,10 @@ native routes plus the static UI.
 | `GET`    | `/api/host/interfaces` | List physical/external NICs, link state, and VPP host-interface correlation |
 | `GET`    | `/api/troubleshoot/vpp-graph` | Active VPP packet-processing node graph |
 | `GET`    | `/api/troubleshoot/acl-counters` | Per-interface ACL rule-match counters |
+| `POST`   | `/api/troubleshoot/trace` | Start a VPP packet trace (`node`, `count`) |
+| `GET`    | `/api/troubleshoot/trace/nodes` | List all registered VPP graph nodes |
+| `GET`    | `/api/troubleshoot/trace` | Read the current VPP trace buffer |
+| `DELETE` | `/api/troubleshoot/trace` | Clear the VPP trace buffer |
 | `GET`    | `/api/troubleshoot/capture/interfaces` | List VPP interfaces for capture |
 | `GET`    | `/api/troubleshoot/capture` | Current capture status and retained files |
 | `POST`   | `/api/troubleshoot/capture` | Start a capture (`interface`, `direction`, `max_bytes`, `snap_length`) |

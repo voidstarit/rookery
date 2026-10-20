@@ -77,6 +77,96 @@ func local_request_TroubleshootService_ListACLInterfaceCounters_0(ctx context.Co
 	return msg, metadata, err
 }
 
+func request_TroubleshootService_ListTraceNodes_0(ctx context.Context, marshaler runtime.Marshaler, client TroubleshootServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListTraceNodesRequest
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.ListTraceNodes(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_TroubleshootService_ListTraceNodes_0(ctx context.Context, marshaler runtime.Marshaler, server TroubleshootServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListTraceNodesRequest
+		metadata runtime.ServerMetadata
+	)
+	msg, err := server.ListTraceNodes(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_TroubleshootService_StartTrace_0(ctx context.Context, marshaler runtime.Marshaler, client TroubleshootServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq StartTraceRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.StartTrace(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_TroubleshootService_StartTrace_0(ctx context.Context, marshaler runtime.Marshaler, server TroubleshootServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq StartTraceRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.StartTrace(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_TroubleshootService_GetTrace_0(ctx context.Context, marshaler runtime.Marshaler, client TroubleshootServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetTraceRequest
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.GetTrace(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_TroubleshootService_GetTrace_0(ctx context.Context, marshaler runtime.Marshaler, server TroubleshootServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetTraceRequest
+		metadata runtime.ServerMetadata
+	)
+	msg, err := server.GetTrace(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_TroubleshootService_ClearTrace_0(ctx context.Context, marshaler runtime.Marshaler, client TroubleshootServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ClearTraceRequest
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.ClearTrace(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_TroubleshootService_ClearTrace_0(ctx context.Context, marshaler runtime.Marshaler, server TroubleshootServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ClearTraceRequest
+		metadata runtime.ServerMetadata
+	)
+	msg, err := server.ClearTrace(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 // RegisterTroubleshootServiceHandlerServer registers the http handlers for service TroubleshootService to "mux".
 // UnaryRPC     :call TroubleshootServiceServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
@@ -122,6 +212,86 @@ func RegisterTroubleshootServiceHandlerServer(ctx context.Context, mux *runtime.
 			return
 		}
 		forward_TroubleshootService_ListACLInterfaceCounters_0(annotatedContext, mux, outboundMarshaler, w, req, response_TroubleshootService_ListACLInterfaceCounters_0{resp.(*ListACLInterfaceCountersResponse)}, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_TroubleshootService_ListTraceNodes_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rookery.v1.TroubleshootService/ListTraceNodes", runtime.WithHTTPPathPattern("/api/troubleshoot/trace/nodes"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_TroubleshootService_ListTraceNodes_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_TroubleshootService_ListTraceNodes_0(annotatedContext, mux, outboundMarshaler, w, req, response_TroubleshootService_ListTraceNodes_0{resp.(*ListTraceNodesResponse)}, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_TroubleshootService_StartTrace_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rookery.v1.TroubleshootService/StartTrace", runtime.WithHTTPPathPattern("/api/troubleshoot/trace"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_TroubleshootService_StartTrace_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_TroubleshootService_StartTrace_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_TroubleshootService_GetTrace_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rookery.v1.TroubleshootService/GetTrace", runtime.WithHTTPPathPattern("/api/troubleshoot/trace"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_TroubleshootService_GetTrace_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_TroubleshootService_GetTrace_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodDelete, pattern_TroubleshootService_ClearTrace_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rookery.v1.TroubleshootService/ClearTrace", runtime.WithHTTPPathPattern("/api/troubleshoot/trace"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_TroubleshootService_ClearTrace_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_TroubleshootService_ClearTrace_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 
 	return nil
@@ -197,6 +367,74 @@ func RegisterTroubleshootServiceHandlerClient(ctx context.Context, mux *runtime.
 		}
 		forward_TroubleshootService_ListACLInterfaceCounters_0(annotatedContext, mux, outboundMarshaler, w, req, response_TroubleshootService_ListACLInterfaceCounters_0{resp.(*ListACLInterfaceCountersResponse)}, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodGet, pattern_TroubleshootService_ListTraceNodes_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/rookery.v1.TroubleshootService/ListTraceNodes", runtime.WithHTTPPathPattern("/api/troubleshoot/trace/nodes"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_TroubleshootService_ListTraceNodes_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_TroubleshootService_ListTraceNodes_0(annotatedContext, mux, outboundMarshaler, w, req, response_TroubleshootService_ListTraceNodes_0{resp.(*ListTraceNodesResponse)}, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_TroubleshootService_StartTrace_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/rookery.v1.TroubleshootService/StartTrace", runtime.WithHTTPPathPattern("/api/troubleshoot/trace"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_TroubleshootService_StartTrace_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_TroubleshootService_StartTrace_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_TroubleshootService_GetTrace_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/rookery.v1.TroubleshootService/GetTrace", runtime.WithHTTPPathPattern("/api/troubleshoot/trace"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_TroubleshootService_GetTrace_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_TroubleshootService_GetTrace_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodDelete, pattern_TroubleshootService_ClearTrace_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/rookery.v1.TroubleshootService/ClearTrace", runtime.WithHTTPPathPattern("/api/troubleshoot/trace"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_TroubleshootService_ClearTrace_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_TroubleshootService_ClearTrace_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	return nil
 }
 
@@ -209,12 +447,29 @@ func (m response_TroubleshootService_ListACLInterfaceCounters_0) XXX_ResponseBod
 	return response.Interfaces
 }
 
+type response_TroubleshootService_ListTraceNodes_0 struct {
+	*ListTraceNodesResponse
+}
+
+func (m response_TroubleshootService_ListTraceNodes_0) XXX_ResponseBody() interface{} {
+	response := m.ListTraceNodesResponse
+	return response.Nodes
+}
+
 var (
 	pattern_TroubleshootService_GetVPPGraph_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "troubleshoot", "vpp-graph"}, ""))
 	pattern_TroubleshootService_ListACLInterfaceCounters_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "troubleshoot", "acl-counters"}, ""))
+	pattern_TroubleshootService_ListTraceNodes_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "troubleshoot", "trace", "nodes"}, ""))
+	pattern_TroubleshootService_StartTrace_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "troubleshoot", "trace"}, ""))
+	pattern_TroubleshootService_GetTrace_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "troubleshoot", "trace"}, ""))
+	pattern_TroubleshootService_ClearTrace_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "troubleshoot", "trace"}, ""))
 )
 
 var (
 	forward_TroubleshootService_GetVPPGraph_0              = runtime.ForwardResponseMessage
 	forward_TroubleshootService_ListACLInterfaceCounters_0 = runtime.ForwardResponseMessage
+	forward_TroubleshootService_ListTraceNodes_0           = runtime.ForwardResponseMessage
+	forward_TroubleshootService_StartTrace_0               = runtime.ForwardResponseMessage
+	forward_TroubleshootService_GetTrace_0                 = runtime.ForwardResponseMessage
+	forward_TroubleshootService_ClearTrace_0               = runtime.ForwardResponseMessage
 )
