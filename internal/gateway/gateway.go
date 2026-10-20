@@ -59,6 +59,7 @@ type options struct {
 	networkRuntime    NetworkRuntime
 	networkWriter     NetworkWriter
 	logger            *slog.Logger
+	vppInterfaces     VPPInterfaceSource
 	vnfRuntime        VNFRuntime
 	vnfStatusProvider VNFStatusProvider
 	vnfWriter         VNFWriter
@@ -170,6 +171,14 @@ func WithLogger(logger *slog.Logger) Option {
 	}
 }
 
+// WithVPPInterfaceSource lets the host-interface view correlate Linux NICs
+// with their VPP host-interface counterparts.
+func WithVPPInterfaceSource(source VPPInterfaceSource) Option {
+	return func(opts *options) {
+		opts.vppInterfaces = source
+	}
+}
+
 // New builds the generated read-only gateway. By default it uses an in-process
 // bufconn listener for tests and embedding. Use WithGRPCListener to expose gRPC
 // on a real Unix or TCP socket.
@@ -202,7 +211,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	acls := &aclService{store: st, runtime: options.aclRuntime, readiness: ready}
 	vnfs := &vnfService{store: st, runtime: options.vnfRuntime, statusProvider: options.vnfStatusProvider, writer: options.vnfWriter}
 	backends := &storageBackendService{store: st, readiness: ready, disks: options.diskProvisioner, mu: options.diskMutex}
-	hostInterfaces := &hostService{}
+	hostInterfaces := &hostService{source: options.vppInterfaces}
 	troubleshoot := &troubleshootService{runtime: options.diagnostics, readiness: ready}
 	captures := &captureService{runtime: options.diagnostics, readiness: ready}
 	rookeryv1.RegisterSystemServiceServer(server, system)

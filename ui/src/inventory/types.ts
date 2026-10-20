@@ -307,6 +307,12 @@ export type HostInterface = {
   default_route: boolean;
   physical: boolean;
   wireless: boolean;
+  in_vpp?: boolean;
+  vpp_checked?: boolean;
+  vpp_sw_if_index?: number;
+  vpp_name?: string;
+  vpp_up?: boolean;
+  vpp_type?: string;
 };
 
 export type VNFLease = {

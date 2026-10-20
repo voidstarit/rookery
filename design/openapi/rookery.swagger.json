@@ -2462,6 +2462,25 @@
         },
         "wireless": {
           "type": "boolean"
+        },
+        "in_vpp": {
+          "type": "boolean"
+        },
+        "vpp_checked": {
+          "type": "boolean"
+        },
+        "vpp_sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "vpp_name": {
+          "type": "string"
+        },
+        "vpp_up": {
+          "type": "boolean"
+        },
+        "vpp_type": {
+          "type": "string"
         }
       }
     },

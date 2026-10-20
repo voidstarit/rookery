@@ -23,6 +23,12 @@ message HostInterface {
   bool default_route = 4;
   bool physical = 5;
   bool wireless = 6;
+  bool in_vpp = 7;
+  bool vpp_checked = 8;
+  optional uint32 vpp_sw_if_index = 9;
+  string vpp_name = 10;
+  bool vpp_up = 11;
+  string vpp_type = 12;
 }
 
 message ListHostInterfacesRequest {}

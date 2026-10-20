@@ -122,6 +122,7 @@ func runServe(args []string) error {
 
 	gatewayOptions := []gateway.Option{
 		gateway.WithLogger(logger),
+		gateway.WithVPPInterfaceSource(networkRunner),
 		gateway.WithVMController(qemuRunner),
 		gateway.WithInterfaceCounters(networkRunner),
 		gateway.WithACLRuntime(networkRunner),

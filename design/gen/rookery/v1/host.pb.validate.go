@@ -67,6 +67,20 @@ func (m *HostInterface) validate(all bool) error {
 
 	// no validation rules for Wireless
 
+	// no validation rules for InVpp
+
+	// no validation rules for VppChecked
+
+	// no validation rules for VppName
+
+	// no validation rules for VppUp
+
+	// no validation rules for VppType
+
+	if m.VppSwIfIndex != nil {
+		// no validation rules for VppSwIfIndex
+	}
+
 	if len(errors) > 0 {
 		return HostInterfaceMultiError(errors)
 	}

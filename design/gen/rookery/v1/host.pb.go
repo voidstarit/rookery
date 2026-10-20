@@ -30,6 +30,12 @@ type HostInterface struct {
 	DefaultRoute  bool                   `protobuf:"varint,4,opt,name=default_route,json=defaultRoute,proto3" json:"default_route,omitempty"`
 	Physical      bool                   `protobuf:"varint,5,opt,name=physical,proto3" json:"physical,omitempty"`
 	Wireless      bool                   `protobuf:"varint,6,opt,name=wireless,proto3" json:"wireless,omitempty"`
+	InVpp         bool                   `protobuf:"varint,7,opt,name=in_vpp,json=inVpp,proto3" json:"in_vpp,omitempty"`
+	VppChecked    bool                   `protobuf:"varint,8,opt,name=vpp_checked,json=vppChecked,proto3" json:"vpp_checked,omitempty"`
+	VppSwIfIndex  *uint32                `protobuf:"varint,9,opt,name=vpp_sw_if_index,json=vppSwIfIndex,proto3,oneof" json:"vpp_sw_if_index,omitempty"`
+	VppName       string                 `protobuf:"bytes,10,opt,name=vpp_name,json=vppName,proto3" json:"vpp_name,omitempty"`
+	VppUp         bool                   `protobuf:"varint,11,opt,name=vpp_up,json=vppUp,proto3" json:"vpp_up,omitempty"`
+	VppType       string                 `protobuf:"bytes,12,opt,name=vpp_type,json=vppType,proto3" json:"vpp_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -104,6 +110,48 @@ func (x *HostInterface) GetWireless() bool {
 		return x.Wireless
 	}
 	return false
+}
+
+func (x *HostInterface) GetInVpp() bool {
+	if x != nil {
+		return x.InVpp
+	}
+	return false
+}
+
+func (x *HostInterface) GetVppChecked() bool {
+	if x != nil {
+		return x.VppChecked
+	}
+	return false
+}
+
+func (x *HostInterface) GetVppSwIfIndex() uint32 {
+	if x != nil && x.VppSwIfIndex != nil {
+		return *x.VppSwIfIndex
+	}
+	return 0
+}
+
+func (x *HostInterface) GetVppName() string {
+	if x != nil {
+		return x.VppName
+	}
+	return ""
+}
+
+func (x *HostInterface) GetVppUp() bool {
+	if x != nil {
+		return x.VppUp
+	}
+	return false
+}
+
+func (x *HostInterface) GetVppType() string {
+	if x != nil {
+		return x.VppType
+	}
+	return ""
 }
 
 type ListHostInterfacesRequest struct {
@@ -191,14 +239,23 @@ var File_rookery_v1_host_proto protoreflect.FileDescriptor
 const file_rookery_v1_host_proto_rawDesc = "" +
 	"\n" +
 	"\x15rookery/v1/host.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\"\xae\x01\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\"\xf3\x02\n" +
 	"\rHostInterface\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x0e\n" +
 	"\x02up\x18\x02 \x01(\bR\x02up\x12\x1c\n" +
 	"\taddresses\x18\x03 \x03(\tR\taddresses\x12#\n" +
 	"\rdefault_route\x18\x04 \x01(\bR\fdefaultRoute\x12\x1a\n" +
 	"\bphysical\x18\x05 \x01(\bR\bphysical\x12\x1a\n" +
-	"\bwireless\x18\x06 \x01(\bR\bwireless\"\x1b\n" +
+	"\bwireless\x18\x06 \x01(\bR\bwireless\x12\x15\n" +
+	"\x06in_vpp\x18\a \x01(\bR\x05inVpp\x12\x1f\n" +
+	"\vvpp_checked\x18\b \x01(\bR\n" +
+	"vppChecked\x12*\n" +
+	"\x0fvpp_sw_if_index\x18\t \x01(\rH\x00R\fvppSwIfIndex\x88\x01\x01\x12\x19\n" +
+	"\bvpp_name\x18\n" +
+	" \x01(\tR\avppName\x12\x15\n" +
+	"\x06vpp_up\x18\v \x01(\bR\x05vppUp\x12\x19\n" +
+	"\bvpp_type\x18\f \x01(\tR\avppTypeB\x12\n" +
+	"\x10_vpp_sw_if_index\"\x1b\n" +
 	"\x19ListHostInterfacesRequest\"W\n" +
 	"\x1aListHostInterfacesResponse\x129\n" +
 	"\n" +
@@ -242,6 +299,7 @@ func file_rookery_v1_host_proto_init() {
 	if File_rookery_v1_host_proto != nil {
 		return
 	}
+	file_rookery_v1_host_proto_msgTypes[0].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

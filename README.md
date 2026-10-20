@@ -633,7 +633,7 @@ native routes plus the static UI.
 | `POST`   | `/api/networks`    | Create a VPP bridge domain        |
 | `GET`    | `/api/networks/{id}` | Get one network                 |
 | `DELETE` | `/api/networks/{id}` | Delete an empty network and its VNFs |
-| `GET`    | `/api/host/interfaces` | List host NICs for NAT44 outside selection |
+| `GET`    | `/api/host/interfaces` | List host NICs, linked state, and VPP host-interface correlation |
 | `GET`    | `/api/troubleshoot/vpp-graph` | Active VPP packet-processing node graph |
 | `GET`    | `/api/troubleshoot/acl-counters` | Per-interface ACL rule-match counters |
 | `GET`    | `/api/troubleshoot/capture/interfaces` | List VPP interfaces for capture |
@@ -856,8 +856,9 @@ curl -sS -X POST http://127.0.0.1:8080/api/vnfs \
 For a VPP DHCP client outside address, omit `outside_address` and
 `outside_gateway`. Use `nat44_pool` only when the ISP routes a separate NAT pool
 to the host. `GET /api/host/interfaces` reports which NIC carries the default
-route; that NIC and wireless interfaces are rejected by the server. Use a
-spare wired Ethernet NIC for the outside uplink.
+route and whether a matching `host-<nic>` interface currently exists in VPP;
+that default-route NIC and wireless interfaces are rejected by the server. Use
+a spare wired Ethernet NIC for the outside uplink.
 
 Use `PUT /api/vnfs/{id}` with `{"enabled":false}` to stop a DHCP VNF and remove
 its tap, or to remove NAT44 rules. Enabled VNFs are reconciled automatically

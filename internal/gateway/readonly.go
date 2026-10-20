@@ -12,7 +12,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
-	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -327,19 +326,13 @@ func storageBackendToProto(backend store.StorageBackend) *rookeryv1.StorageBacke
 
 type hostService struct {
 	rookeryv1.UnimplementedHostServiceServer
+	source VPPInterfaceSource
 }
 
-func (s *hostService) ListHostInterfaces(_ context.Context, _ *rookeryv1.ListHostInterfacesRequest) (*rookeryv1.ListHostInterfacesResponse, error) {
-	interfaces, err := host.ListHostInterfaces()
+func (s *hostService) ListHostInterfaces(ctx context.Context, _ *rookeryv1.ListHostInterfacesRequest) (*rookeryv1.ListHostInterfacesResponse, error) {
+	response, err := s.listInterfaces(ctx)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not list host interfaces")
-	}
-	response := &rookeryv1.ListHostInterfacesResponse{Interfaces: make([]*rookeryv1.HostInterface, 0, len(interfaces))}
-	for _, iface := range interfaces {
-		response.Interfaces = append(response.Interfaces, &rookeryv1.HostInterface{
-			Name: iface.Name, Up: iface.Up, Addresses: iface.Addresses,
-			DefaultRoute: iface.DefaultRoute, Physical: iface.Physical, Wireless: iface.Wireless,
-		})
 	}
 	return response, nil
 }

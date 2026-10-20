@@ -7,6 +7,7 @@ import type {
   ACLDirectionCounters,
   ACLInterfaceCounters,
   ACLRuleCounter,
+  HostInterface,
   Network,
   StatusResponse,
   VirtualInterface,
@@ -42,10 +43,11 @@ type BackendData = {
   vnfs: VNF[];
 };
 
-type Section = "networks" | "interfaces" | "acl" | "troubleshoot";
+type Section = "networks" | "hosts" | "interfaces" | "acl" | "troubleshoot";
 
 const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: "networks", label: "Networks" },
+  { id: "hosts", label: "Host interfaces" },
   { id: "interfaces", label: "Interfaces" },
   { id: "acl", label: "ACLs" },
   { id: "troubleshoot", label: "Troubleshoot" },
@@ -53,6 +55,7 @@ const SECTIONS: Array<{ id: Section; label: string }> = [
 
 export function NetworksTab() {
   const [networks, setNetworks] = useState<Network[]>([]);
+  const [hostInterfaces, setHostInterfaces] = useState<HostInterface[]>([]);
   const [interfaces, setInterfaces] = useState<VirtualInterface[]>([]);
   const [acls, setAcls] = useState<ACL[]>([]);
   const [vms, setVms] = useState<VM[]>([]);
@@ -60,6 +63,7 @@ export function NetworksTab() {
   const [vppReady, setVppReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [networkError, setNetworkError] = useState("");
+  const [hostError, setHostError] = useState("");
   const [interfaceError, setInterfaceError] = useState("");
   const [aclError, setAclError] = useState("");
   const [networkDialogOpen, setNetworkDialogOpen] = useState(false);
@@ -112,6 +116,22 @@ export function NetworksTab() {
     } catch (err) {
       if (showErrors) {
         setNetworkError(err instanceof Error ? err.message : String(err));
+      }
+    }
+  };
+
+  const loadHostInterfaces = async (showErrors = true) => {
+    try {
+      const data = await api<HostInterface[]>("/api/host/interfaces");
+      const list = Array.isArray(data) ? data : [];
+      list.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+      setHostInterfaces(list);
+      if (showErrors) {
+        setHostError("");
+      }
+    } catch (err) {
+      if (showErrors) {
+        setHostError(err instanceof Error ? err.message : String(err));
       }
     }
   };
@@ -179,6 +199,7 @@ export function NetworksTab() {
     setLoading(true);
     await Promise.allSettled([
       loadNetworks(),
+      loadHostInterfaces(),
       loadInterfaces(),
       loadACLs(),
       loadVMs(),
@@ -405,6 +426,12 @@ export function NetworksTab() {
         ? "Loading networks…"
         : "No Rookery Networks registered"
       : `${networks.length} network${networks.length === 1 ? "" : "s"} · ${interfaces.length} interface${interfaces.length === 1 ? "" : "s"} · ${vnfs.length} VNF${vnfs.length === 1 ? "" : "s"}`;
+  const hostSummary =
+    hostInterfaces.length === 0
+      ? loading
+        ? "Loading host interfaces…"
+        : "No host interfaces found"
+      : `${hostInterfaces.length} host interface${hostInterfaces.length === 1 ? "" : "s"} · ${hostInterfaces.filter((iface) => iface.in_vpp).length} in VPP`;
   const interfaceSummary =
     interfaces.length === 0
       ? loading
@@ -573,6 +600,104 @@ export function NetworksTab() {
               >
                 Create a network
               </button>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section class="panel panel-spaced" aria-labelledby="hosts-heading" hidden={section !== "hosts"}>
+        <div class="panel-head">
+          <div>
+            <h2 id="hosts-heading">Host interfaces</h2>
+            <p class="panel-subtitle">{hostSummary}</p>
+          </div>
+          <button class="button ghost" type="button" disabled={loading} onClick={() => void refreshAll()}>
+            {loading ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
+
+        <p class="field-hint">
+          Linux NICs visible to the server. “In VPP” means a matching <code>host-&lt;nic&gt;</code>
+          interface currently exists in VPP; the VPP state is shown as unknown when VPP
+          cannot be queried.
+        </p>
+
+        {hostError ? (
+          <div class="banner" role="alert">
+            {hostError}
+          </div>
+        ) : null}
+
+        <div class="table-wrap">
+          {hostInterfaces.length > 0 ? (
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Interface</th>
+                  <th scope="col">Addresses</th>
+                  <th scope="col">Link</th>
+                  <th scope="col">VPP</th>
+                  <th scope="col">Default route</th>
+                  <th scope="col">Type</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hostInterfaces.map((iface) => (
+                  <tr key={iface.name}>
+                    <td>
+                      <span class="vm-name mono">{iface.name}</span>
+                    </td>
+                    <td class="mono">
+                      {iface.addresses && iface.addresses.length > 0
+                        ? iface.addresses.join(", ")
+                        : "—"}
+                    </td>
+                    <td>
+                      <span class="status-badge" data-status={iface.up ? "running" : "disabled"}>
+                        {iface.up ? "up" : "down"}
+                      </span>
+                    </td>
+                    <td>
+                      {!iface.vpp_checked ? (
+                        <span class="status-badge" data-status="disabled">unknown</span>
+                      ) : iface.in_vpp ? (
+                        <>
+                          <span
+                            class="status-badge"
+                            data-status={iface.vpp_up ? "running" : "degraded"}
+                          >
+                            in VPP
+                          </span>
+                          <span class="vm-description mono">
+                            {iface.vpp_name || `host-${iface.name}`}
+                            {typeof iface.vpp_sw_if_index === "number"
+                              ? ` · sw_if_index ${iface.vpp_sw_if_index}`
+                              : ""}
+                          </span>
+                        </>
+                      ) : (
+                        <span class="status-badge" data-status="disabled">not in VPP</span>
+                      )}
+                    </td>
+                    <td class="mono">{iface.default_route ? "yes" : "—"}</td>
+                    <td>
+                      {iface.wireless
+                        ? "wireless"
+                        : iface.physical
+                          ? "physical"
+                          : "virtual"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div class="empty">
+              <div class="empty-mark" aria-hidden="true">
+                ⇄
+              </div>
+              <h3>No host interfaces found</h3>
+              <p>Linux network interfaces will appear here when available.</p>
             </div>
           )}
         </div>
