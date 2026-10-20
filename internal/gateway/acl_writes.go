@@ -19,7 +19,7 @@ import (
 type ACLRuntime interface {
 	EnsureVPPACL(ctx context.Context, aclID int64, rules []store.ACLRule) (uint32, error)
 	DeleteVPPACL(ctx context.Context, index uint32) error
-	SetInterfaceACLs(ctx context.Context, swIfIndex uint32, ingress, egress uint32) error
+	SetInterfaceACLs(ctx context.Context, swIfIndex uint32, ingress, egress []uint32) error
 }
 
 func (s *aclService) runtimeReady() error {
@@ -130,12 +130,16 @@ func (s *aclService) reconcileACLs(ctx context.Context) error {
 		return errors.Join(append(errs, err)...)
 	}
 	for _, iface := range interfaces {
-		var ingress, egress uint32
-		if iface.IngressACLID != nil {
-			ingress = aclIndexReference(indices[*iface.IngressACLID])
+		var ingress, egress []uint32
+		for _, acl := range iface.IngressACLs {
+			if index, ok := indices[acl.ID]; ok {
+				ingress = append(ingress, aclIndexReference(index))
+			}
 		}
-		if iface.EgressACLID != nil {
-			egress = aclIndexReference(indices[*iface.EgressACLID])
+		for _, acl := range iface.EgressACLs {
+			if index, ok := indices[acl.ID]; ok {
+				egress = append(egress, aclIndexReference(index))
+			}
 		}
 		if err := s.runtime.SetInterfaceACLs(ctx, iface.SwIfIndex, ingress, egress); err != nil {
 			errs = append(errs, fmt.Errorf("interface %s ACLs: %w", iface.Name, err))
@@ -293,63 +297,84 @@ func (s *interfaceService) SetInterfaceACLs(ctx context.Context, request *rooker
 	if err != nil {
 		return nil, storeReadError(err, store.ErrInterfaceNotFound, "interface not found")
 	}
-	var ingressID, egressID *int64
-	var ingress, egress store.ACL
-	if name := strings.TrimSpace(request.GetIngressAcl()); name != "" {
-		ingress, err = s.store.GetACLByName(ctx, name)
-		if err != nil {
-			return nil, aclStoreError(err)
-		}
-		ingressID = &ingress.ID
+
+	ingressNames := request.GetIngressAcls()
+	if len(ingressNames) == 0 && strings.TrimSpace(request.GetIngressAcl()) != "" {
+		ingressNames = []string{request.GetIngressAcl()}
 	}
-	if name := strings.TrimSpace(request.GetEgressAcl()); name != "" {
-		egress, err = s.store.GetACLByName(ctx, name)
-		if err != nil {
-			return nil, aclStoreError(err)
-		}
-		egressID = &egress.ID
+	egressNames := request.GetEgressAcls()
+	if len(egressNames) == 0 && strings.TrimSpace(request.GetEgressAcl()) != "" {
+		egressNames = []string{request.GetEgressAcl()}
 	}
-	var ingressRef, egressRef uint32
-	if ingressID != nil {
-		index, err := s.runtime.EnsureVPPACL(ctx, ingress.ID, ingress.Rules)
-		if err != nil {
-			return nil, status.Error(codes.Internal, "could not configure ingress ACL: "+err.Error())
-		}
-		ingress, err = s.store.SetACLVPPIndex(ctx, ingress.ID, index)
-		if err != nil {
-			return nil, status.Error(codes.Internal, "could not record ingress ACL index")
-		}
-		ingressRef = aclIndexReference(ingress.VPPIndex)
+
+	ingressIDs, ingressRefs, err := s.resolveInterfaceACLs(ctx, ingressNames)
+	if err != nil {
+		return nil, err
 	}
-	if egressID != nil {
-		index, err := s.runtime.EnsureVPPACL(ctx, egress.ID, egress.Rules)
-		if err != nil {
-			return nil, status.Error(codes.Internal, "could not configure egress ACL: "+err.Error())
-		}
-		egress, err = s.store.SetACLVPPIndex(ctx, egress.ID, index)
-		if err != nil {
-			return nil, status.Error(codes.Internal, "could not record egress ACL index")
-		}
-		egressRef = aclIndexReference(egress.VPPIndex)
+	egressIDs, egressRefs, err := s.resolveInterfaceACLs(ctx, egressNames)
+	if err != nil {
+		return nil, err
 	}
-	if err := s.runtime.SetInterfaceACLs(ctx, iface.SwIfIndex, ingressRef, egressRef); err != nil {
+
+	if err := s.runtime.SetInterfaceACLs(ctx, iface.SwIfIndex, ingressRefs, egressRefs); err != nil {
 		return nil, status.Error(codes.Internal, "could not apply interface ACLs: "+err.Error())
 	}
-	updated, err := s.store.SetInterfaceACLs(ctx, iface.ID, ingressID, egressID)
+	updated, err := s.store.SetInterfaceACLs(ctx, iface.ID, ingressIDs, egressIDs)
 	if err != nil {
-		var oldIngress, oldEgress uint32
-		if iface.IngressACLID != nil {
-			if old, getErr := s.store.GetACL(ctx, *iface.IngressACLID); getErr == nil {
-				oldIngress = aclIndexReference(old.VPPIndex)
-			}
-		}
-		if iface.EgressACLID != nil {
-			if old, getErr := s.store.GetACL(ctx, *iface.EgressACLID); getErr == nil {
-				oldEgress = aclIndexReference(old.VPPIndex)
-			}
-		}
+		oldIngress := s.interfaceACLRefs(ctx, iface.IngressACLs, iface.IngressACLID)
+		oldEgress := s.interfaceACLRefs(ctx, iface.EgressACLs, iface.EgressACLID)
 		_ = s.runtime.SetInterfaceACLs(ctx, iface.SwIfIndex, oldIngress, oldEgress)
 		return nil, aclStoreError(err)
 	}
 	return interfaceToProto(updated), nil
+}
+
+func (s *interfaceService) resolveInterfaceACLs(ctx context.Context, names []string) ([]int64, []uint32, error) {
+	ids := make([]int64, 0, len(names))
+	refs := make([]uint32, 0, len(names))
+	seen := make(map[string]struct{}, len(names))
+	for _, raw := range names {
+		name := strings.TrimSpace(raw)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[strings.ToLower(name)]; ok {
+			continue
+		}
+		seen[strings.ToLower(name)] = struct{}{}
+		acl, err := s.store.GetACLByName(ctx, name)
+		if err != nil {
+			return nil, nil, aclStoreError(err)
+		}
+		index, err := s.runtime.EnsureVPPACL(ctx, acl.ID, acl.Rules)
+		if err != nil {
+			return nil, nil, status.Error(codes.Internal, "could not configure ACL "+acl.Name+": "+err.Error())
+		}
+		acl, err = s.store.SetACLVPPIndex(ctx, acl.ID, index)
+		if err != nil {
+			return nil, nil, status.Error(codes.Internal, "could not record ACL index for "+acl.Name)
+		}
+		ids = append(ids, acl.ID)
+		refs = append(refs, aclIndexReference(acl.VPPIndex))
+	}
+	return ids, refs, nil
+}
+
+func (s *interfaceService) interfaceACLRefs(ctx context.Context, refs []store.InterfaceACL, legacy *int64) []uint32 {
+	ids := make([]int64, 0, len(refs)+1)
+	for _, ref := range refs {
+		ids = append(ids, ref.ID)
+	}
+	if len(ids) == 0 && legacy != nil {
+		ids = append(ids, *legacy)
+	}
+	result := make([]uint32, 0, len(ids))
+	for _, id := range ids {
+		acl, err := s.store.GetACL(ctx, id)
+		if err != nil {
+			continue
+		}
+		result = append(result, aclIndexReference(acl.VPPIndex))
+	}
+	return result
 }

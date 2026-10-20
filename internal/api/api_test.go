@@ -90,7 +90,7 @@ func (f *fakeDiskProvisioner) ListThinVolumes(_ context.Context, vg, thinPool st
 type fakeNetworkProvisioner struct {
 	ensuredACLs    []int64
 	deletedACLs    []uint32
-	interfaceACLs  map[uint32][2]uint32
+	interfaceACLs  map[uint32][2][]uint32
 	nextBD         uint32
 	createdBDs     []string
 	ensuredBDs     []uint32
@@ -138,11 +138,14 @@ func (f *fakeNetworkProvisioner) DeleteVPPACL(_ context.Context, index uint32) e
 	return nil
 }
 
-func (f *fakeNetworkProvisioner) SetInterfaceACLs(_ context.Context, swIfIndex uint32, ingress, egress uint32) error {
+func (f *fakeNetworkProvisioner) SetInterfaceACLs(_ context.Context, swIfIndex uint32, ingress, egress []uint32) error {
 	if f.interfaceACLs == nil {
-		f.interfaceACLs = make(map[uint32][2]uint32)
+		f.interfaceACLs = make(map[uint32][2][]uint32)
 	}
-	f.interfaceACLs[swIfIndex] = [2]uint32{ingress, egress}
+	f.interfaceACLs[swIfIndex] = [2][]uint32{
+		append([]uint32(nil), ingress...),
+		append([]uint32(nil), egress...),
+	}
 	return nil
 }
 
@@ -817,30 +820,59 @@ func TestACLCRUDAndInterfaceAssignment(t *testing.T) {
 	if acl.Name != "web-acl" || len(acl.Rules) != 2 {
 		t.Fatalf("created ACL = %+v", acl)
 	}
+	recorder = do(t, env.handler, http.MethodPost, "/api/acls", map[string]any{
+		"name":  "admin-acl",
+		"title": "Admin traffic",
+		"rules": []map[string]any{
+			{"action": "permit", "protocol": "tcp", "source": "10.0.0.0/8", "destination": "0.0.0.0/0", "destination_port_start": 22, "destination_port_end": 22},
+		},
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create second ACL status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	adminACL := decode[store.ACL](t, recorder)
 
 	recorder = do(t, env.handler, http.MethodPut, fmt.Sprintf("/api/interfaces/%d/acls", iface.ID), map[string]any{
-		"ingress_acl": "web-acl",
-		"egress_acl":  "",
+		"ingress_acls": []string{"web-acl", "admin-acl"},
+		"egress_acls":  []string{"admin-acl"},
 	})
 	if recorder.Code != http.StatusOK {
-		t.Fatalf("assign ACL status = %d, body = %s", recorder.Code, recorder.Body.String())
+		t.Fatalf("assign ACLs status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 	assigned := decode[store.VirtualInterface](t, recorder)
-	if assigned.IngressACLName != "web-acl" || assigned.EgressACLName != "" {
+	if assigned.IngressACLName != "web-acl" || assigned.EgressACLName != "admin-acl" {
 		t.Fatalf("assigned interface = %+v", assigned)
+	}
+	var lists struct {
+		IngressACLs []string `json:"ingress_acls"`
+		EgressACLs  []string `json:"egress_acls"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &lists); err != nil {
+		t.Fatalf("decode assigned ACL lists: %v", err)
+	}
+	if len(lists.IngressACLs) != 2 || lists.IngressACLs[0] != "web-acl" || lists.IngressACLs[1] != "admin-acl" ||
+		len(lists.EgressACLs) != 1 || lists.EgressACLs[0] != "admin-acl" {
+		t.Fatalf("assigned ACL lists = %+v", lists)
 	}
 	if len(env.networks.interfaceACLs) != 1 {
 		t.Fatalf("VPP interface ACLs = %+v", env.networks.interfaceACLs)
+	}
+	if refs := env.networks.interfaceACLs[iface.SwIfIndex]; len(refs[0]) != 2 || len(refs[1]) != 1 {
+		t.Fatalf("VPP interface ACL refs = %+v", refs)
 	}
 
 	recorder = do(t, env.handler, http.MethodDelete, fmt.Sprintf("/api/acls/%d", acl.ID), nil)
 	if recorder.Code != http.StatusConflict {
 		t.Fatalf("delete assigned ACL status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
+	recorder = do(t, env.handler, http.MethodDelete, fmt.Sprintf("/api/acls/%d", adminACL.ID), nil)
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("delete second assigned ACL status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
 
 	recorder = do(t, env.handler, http.MethodPut, fmt.Sprintf("/api/interfaces/%d/acls", iface.ID), map[string]any{
-		"ingress_acl": "",
-		"egress_acl":  "",
+		"ingress_acls": []string{},
+		"egress_acls":  []string{},
 	})
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("clear ACL status = %d, body = %s", recorder.Code, recorder.Body.String())
@@ -850,7 +882,11 @@ func TestACLCRUDAndInterfaceAssignment(t *testing.T) {
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("delete ACL status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
-	if len(env.networks.deletedACLs) != 1 {
+	recorder = do(t, env.handler, http.MethodDelete, fmt.Sprintf("/api/acls/%d", adminACL.ID), nil)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("delete second ACL status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if len(env.networks.deletedACLs) != 2 {
 		t.Fatalf("deleted VPP ACLs = %v", env.networks.deletedACLs)
 	}
 }

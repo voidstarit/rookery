@@ -39,12 +39,16 @@ func (s *Server) ReconcileACLs(ctx context.Context) error {
 		return errors.Join(append(errs, err)...)
 	}
 	for _, iface := range interfaces {
-		var ingress, egress uint32
-		if iface.IngressACLID != nil {
-			ingress = aclIndexRef(indices[*iface.IngressACLID])
+		var ingress, egress []uint32
+		for _, acl := range iface.IngressACLs {
+			if index, ok := indices[acl.ID]; ok {
+				ingress = append(ingress, aclIndexRef(index))
+			}
 		}
-		if iface.EgressACLID != nil {
-			egress = aclIndexRef(indices[*iface.EgressACLID])
+		for _, acl := range iface.EgressACLs {
+			if index, ok := indices[acl.ID]; ok {
+				egress = append(egress, aclIndexRef(index))
+			}
 		}
 		if err := s.networks.SetInterfaceACLs(ctx, iface.SwIfIndex, ingress, egress); err != nil {
 			errs = append(errs, fmt.Errorf("interface %s ACLs: %w", iface.Name, err))

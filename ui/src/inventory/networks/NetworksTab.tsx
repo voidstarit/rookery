@@ -798,11 +798,21 @@ export function NetworksTab() {
                     owner && (owner.status === "running" || owner.status === "starting")
                   );
                   const aclParts = [];
-                  if (iface.ingress_acl_name) {
-                    aclParts.push(`from: ${iface.ingress_acl_name}`);
+                  const ingressNames = iface.ingress_acls?.length
+                    ? iface.ingress_acls
+                    : iface.ingress_acl_name
+                      ? [iface.ingress_acl_name]
+                      : [];
+                  const egressNames = iface.egress_acls?.length
+                    ? iface.egress_acls
+                    : iface.egress_acl_name
+                      ? [iface.egress_acl_name]
+                      : [];
+                  if (ingressNames.length > 0) {
+                    aclParts.push(`from: ${ingressNames.join(" → ")}`);
                   }
-                  if (iface.egress_acl_name) {
-                    aclParts.push(`to: ${iface.egress_acl_name}`);
+                  if (egressNames.length > 0) {
+                    aclParts.push(`to: ${egressNames.join(" → ")}`);
                   }
                   const aclCounter = aclCounters.find((item) => item.interface === iface.name);
                   const aclExpanded = expandedACLInterface === iface.id;

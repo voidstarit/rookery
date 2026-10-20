@@ -279,23 +279,30 @@ type ACL struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+type InterfaceACL struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
 // VirtualInterface is a VPP vhost-user interface belonging to a network.
 type VirtualInterface struct {
-	ID             int64     `json:"id"`
-	Name           string    `json:"name"`
-	NetworkID      int64     `json:"network_id"`
-	NetworkName    string    `json:"network_name"`
-	SocketPath     string    `json:"socket_path"`
-	MAC            string    `json:"mac"`
-	SwIfIndex      uint32    `json:"sw_if_index"`
-	AttachedVMID   *string   `json:"attached_vm_id,omitempty"`
-	AttachedVMName string    `json:"attached_vm_name,omitempty"`
-	IngressACLID   *int64    `json:"ingress_acl_id,omitempty"`
-	IngressACLName string    `json:"ingress_acl_name,omitempty"`
-	EgressACLID    *int64    `json:"egress_acl_id,omitempty"`
-	EgressACLName  string    `json:"egress_acl_name,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID             int64          `json:"id"`
+	Name           string         `json:"name"`
+	NetworkID      int64          `json:"network_id"`
+	NetworkName    string         `json:"network_name"`
+	SocketPath     string         `json:"socket_path"`
+	MAC            string         `json:"mac"`
+	SwIfIndex      uint32         `json:"sw_if_index"`
+	AttachedVMID   *string        `json:"attached_vm_id,omitempty"`
+	AttachedVMName string         `json:"attached_vm_name,omitempty"`
+	IngressACLID   *int64         `json:"ingress_acl_id,omitempty"`
+	IngressACLName string         `json:"ingress_acl_name,omitempty"`
+	EgressACLID    *int64         `json:"egress_acl_id,omitempty"`
+	EgressACLName  string         `json:"egress_acl_name,omitempty"`
+	IngressACLs    []InterfaceACL `json:"-"`
+	EgressACLs     []InterfaceACL `json:"-"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
 }
 
 // VMInterface is the network interface summary returned with a VM.
@@ -1305,6 +1312,9 @@ func (s *Store) ListInterfaces(ctx context.Context) ([]VirtualInterface, error) 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate interfaces: %w", err)
 	}
+	if err := s.loadInterfaceACLs(ctx, interfaces); err != nil {
+		return nil, err
+	}
 	return interfaces, nil
 }
 
@@ -1320,7 +1330,68 @@ func (s *Store) GetInterface(ctx context.Context, id int64) (VirtualInterface, e
 	if err != nil {
 		return VirtualInterface{}, err
 	}
-	return iface, nil
+	list := []VirtualInterface{iface}
+	if err := s.loadInterfaceACLs(ctx, list); err != nil {
+		return VirtualInterface{}, err
+	}
+	return list[0], nil
+}
+
+// loadInterfaceACLs fills the ordered ACL lists for the given interfaces.
+func (s *Store) loadInterfaceACLs(ctx context.Context, interfaces []VirtualInterface) error {
+	if len(interfaces) == 0 {
+		return nil
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT ia.interface_id, ia.direction, ia.acl_id, a.name
+		FROM interface_acls AS ia
+		JOIN acls AS a ON a.id = ia.acl_id
+		ORDER BY ia.interface_id, ia.direction, ia.position`)
+	if err != nil {
+		return fmt.Errorf("query interface ACLs: %w", err)
+	}
+	defer rows.Close()
+
+	byID := make(map[int64]*VirtualInterface, len(interfaces))
+	for i := range interfaces {
+		byID[interfaces[i].ID] = &interfaces[i]
+	}
+	for rows.Next() {
+		var (
+			interfaceID int64
+			direction   string
+			aclID       int64
+			name        string
+		)
+		if err := rows.Scan(&interfaceID, &direction, &aclID, &name); err != nil {
+			return fmt.Errorf("scan interface ACL: %w", err)
+		}
+		iface := byID[interfaceID]
+		if iface == nil {
+			continue
+		}
+		ref := InterfaceACL{ID: aclID, Name: name}
+		if direction == "ingress" {
+			iface.IngressACLs = append(iface.IngressACLs, ref)
+		} else {
+			iface.EgressACLs = append(iface.EgressACLs, ref)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate interface ACLs: %w", err)
+	}
+	for i := range interfaces {
+		iface := &interfaces[i]
+		if len(iface.IngressACLs) > 0 {
+			iface.IngressACLID = &iface.IngressACLs[0].ID
+			iface.IngressACLName = iface.IngressACLs[0].Name
+		}
+		if len(iface.EgressACLs) > 0 {
+			iface.EgressACLID = &iface.EgressACLs[0].ID
+			iface.EgressACLName = iface.EgressACLs[0].Name
+		}
+	}
+	return nil
 }
 
 // SetInterfaceAttachment attaches or detaches a virtual interface.

@@ -397,13 +397,14 @@ TCP/UDP source/destination port ranges. The first matching rule
 wins; unmatched traffic is denied.
 
 ACLs are applied to Rookery Virtual Interfaces, not networks or VMs. Use **ACLs**
-on an interface row to choose a **From interface** and/or **To interface** ACL by
-name. "From interface" filters traffic coming from that VM into VPP; "To
-interface" filters traffic going from VPP to that VM. Rules are
-installed in VPP through the ACL plugin and survive API/VPP reconciliation.
-The editor and assignment dialog both show the full effective ACL text,
-including the implicit deny. An ACL cannot be deleted while assigned to an
-interface.
+on an interface row to choose one or more **From interface** and **To interface**
+ACLs by name. The dialog lets you order them: VPP evaluates the list in order,
+so the first matching rule across the selected ACLs wins. "From interface"
+filters traffic coming from that VM into VPP; "To interface" filters traffic
+going from VPP to that VM. Rules are installed in VPP through the ACL plugin and
+survive API/VPP reconciliation. The editor and assignment dialog both show the
+full effective ACL text, including the implicit deny. An ACL cannot be deleted
+while assigned to an interface.
 
 The **Network** tab includes a **Troubleshoot** section. It currently renders
 the active VPP packet-processing graph from `vppctl show vlib graphviz filter`;
@@ -680,7 +681,7 @@ native routes plus the static UI.
 | `POST`   | `/api/interfaces`  | Create a vhost-user interface      |
 | `GET`    | `/api/interfaces/{id}` | Get one interface              |
 | `PUT`    | `/api/interfaces/{id}` | Attach/detach to a VM          |
-| `PUT`    | `/api/interfaces/{id}/acls` | Assign ingress/egress ACLs by name |
+| `PUT`    | `/api/interfaces/{id}/acls` | Assign ordered ingress/egress ACL lists by name |
 | `DELETE` | `/api/interfaces/{id}` | Delete an unattached interface |
 | `GET`    | `/api/vms`         | List all VMs                       |
 | `POST`   | `/api/vms`         | Create a VM with an existing disk |

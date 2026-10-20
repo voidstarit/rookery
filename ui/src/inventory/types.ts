@@ -149,6 +149,8 @@ export type VirtualInterface = {
   ingress_acl_name?: string;
   egress_acl_id?: number;
   egress_acl_name?: string;
+  ingress_acls?: string[];
+  egress_acls?: string[];
   created_at: string;
   updated_at: string;
 };

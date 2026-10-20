@@ -64,6 +64,8 @@ message VirtualInterface {
   string egress_acl_name = 13;
   google.protobuf.Timestamp created_at = 14;
   google.protobuf.Timestamp updated_at = 15;
+  repeated string ingress_acls = 16;
+  repeated string egress_acls = 17;
 }
 
 message VMInterface {
@@ -107,6 +109,14 @@ message SetInterfaceACLsRequest {
   int64 id = 1 [(validate.rules).int64 = {gt: 0}];
   string ingress_acl = 2 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
   string egress_acl = 3 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
+  repeated string ingress_acls = 4 [(validate.rules).repeated = {
+    max_items: 32
+    items: {string: {ignore_empty: true, max_len: 64}}
+  }];
+  repeated string egress_acls = 5 [(validate.rules).repeated = {
+    max_items: 32
+    items: {string: {ignore_empty: true, max_len: 64}}
+  }];
 }
 
 message DeleteInterfaceRequest {

@@ -85,21 +85,27 @@ func (v *VPPNetwork) DeleteVPPACL(ctx context.Context, index uint32) error {
 	return checkVPPRetval("delete VPP ACL", reply.Retval)
 }
 
-// SetInterfaceACLs applies ingress and egress ACL indices to a VPP interface.
-// References are one-based so that VPP ACL index 0 remains usable; zero clears
-// that direction.
-func (v *VPPNetwork) SetInterfaceACLs(ctx context.Context, swIfIndex uint32, ingressRef, egressRef uint32) error {
+// SetInterfaceACLs applies ordered ingress and egress ACL index lists to a VPP
+// interface. References are one-based so that VPP ACL index 0 remains usable;
+// an empty list clears that direction.
+func (v *VPPNetwork) SetInterfaceACLs(ctx context.Context, swIfIndex uint32, ingressRefs, egressRefs []uint32) error {
 	if swIfIndex == 0 {
 		return errors.New("interface index is required")
 	}
-	acls := make([]uint32, 0, 2)
-	nInput := uint8(0)
-	if ingressRef != 0 {
-		acls = append(acls, ingressRef-1)
-		nInput = 1
+	if len(ingressRefs) > 255 || len(egressRefs) > 255 {
+		return errors.New("too many interface ACLs")
 	}
-	if egressRef != 0 {
-		acls = append(acls, egressRef-1)
+	acls := make([]uint32, 0, len(ingressRefs)+len(egressRefs))
+	for _, ref := range ingressRefs {
+		if ref != 0 {
+			acls = append(acls, ref-1)
+		}
+	}
+	nInput := uint8(len(acls))
+	for _, ref := range egressRefs {
+		if ref != 0 {
+			acls = append(acls, ref-1)
+		}
 	}
 	conn, err := v.connect()
 	if err != nil {

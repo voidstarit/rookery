@@ -177,8 +177,18 @@ func interfaceToProto(iface store.VirtualInterface) *rookeryv1.VirtualInterface 
 		AttachedVmId: iface.AttachedVMID, AttachedVmName: iface.AttachedVMName,
 		IngressAclId: iface.IngressACLID, IngressAclName: iface.IngressACLName,
 		EgressAclId: iface.EgressACLID, EgressAclName: iface.EgressACLName,
-		CreatedAt: timestamp(iface.CreatedAt), UpdatedAt: timestamp(iface.UpdatedAt),
+		IngressAcls: interfaceACLNames(iface.IngressACLs),
+		EgressAcls:  interfaceACLNames(iface.EgressACLs),
+		CreatedAt:   timestamp(iface.CreatedAt), UpdatedAt: timestamp(iface.UpdatedAt),
 	}
+}
+
+func interfaceACLNames(refs []store.InterfaceACL) []string {
+	names := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		names = append(names, ref.Name)
+	}
+	return names
 }
 
 type aclService struct {

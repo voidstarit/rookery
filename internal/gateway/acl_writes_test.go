@@ -28,7 +28,7 @@ func (f *fakeACLRuntime) DeleteVPPACL(_ context.Context, index uint32) error {
 	f.deleted = append(f.deleted, index)
 	return nil
 }
-func (f *fakeACLRuntime) SetInterfaceACLs(_ context.Context, _ uint32, _, _ uint32) error {
+func (f *fakeACLRuntime) SetInterfaceACLs(_ context.Context, _ uint32, _, _ []uint32) error {
 	return nil
 }
 

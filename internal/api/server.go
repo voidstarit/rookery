@@ -73,7 +73,7 @@ type NetworkProvisioner interface {
 	DeletePacketCapture(name string) error
 	EnsureVPPACL(ctx context.Context, aclID int64, rules []store.ACLRule) (uint32, error)
 	DeleteVPPACL(ctx context.Context, index uint32) error
-	SetInterfaceACLs(ctx context.Context, swIfIndex uint32, ingress, egress uint32) error
+	SetInterfaceACLs(ctx context.Context, swIfIndex uint32, ingress, egress []uint32) error
 }
 
 // NAT44Provisioner configures VPP NAT44 and the BVI/outside interfaces.

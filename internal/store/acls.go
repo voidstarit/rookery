@@ -131,11 +131,20 @@ func (s *Store) SetACLVPPIndex(ctx context.Context, id int64, index uint32) (ACL
 
 // DeleteACL removes an ACL if it is not assigned to any interface.
 func (s *Store) DeleteACL(ctx context.Context, id int64) error {
-	var interfaceID int64
+	var assigned int64
 	err := s.db.QueryRowContext(ctx, `
+		SELECT 1 FROM interface_acls WHERE acl_id = ? LIMIT 1`, id,
+	).Scan(&assigned)
+	switch {
+	case err == nil:
+		return ErrACLInUse
+	case !errors.Is(err, sql.ErrNoRows):
+		return fmt.Errorf("check ACL usage: %w", err)
+	}
+	err = s.db.QueryRowContext(ctx, `
 		SELECT id FROM virtual_interfaces
 		WHERE ingress_acl_id = ? OR egress_acl_id = ? LIMIT 1`, id, id,
-	).Scan(&interfaceID)
+	).Scan(&assigned)
 	switch {
 	case err == nil:
 		return ErrACLInUse
@@ -160,22 +169,53 @@ func (s *Store) DeleteACL(ctx context.Context, id int64) error {
 	return nil
 }
 
-// SetInterfaceACLs assigns ingress and/or egress ACLs to an interface.
-func (s *Store) SetInterfaceACLs(ctx context.Context, id int64, ingress, egress *int64) (VirtualInterface, error) {
-	if ingress != nil {
-		if _, err := s.GetACL(ctx, *ingress); err != nil {
+// SetInterfaceACLs replaces the ordered ingress and egress ACL lists assigned
+// to an interface. The legacy single-ACL columns are kept in sync with the
+// first entry of each list.
+func (s *Store) SetInterfaceACLs(ctx context.Context, id int64, ingress, egress []int64) (VirtualInterface, error) {
+	if _, err := s.GetInterface(ctx, id); err != nil {
+		return VirtualInterface{}, err
+	}
+	ingress = uniqueACLIDs(ingress)
+	egress = uniqueACLIDs(egress)
+	for _, aclID := range append(append([]int64{}, ingress...), egress...) {
+		if _, err := s.GetACL(ctx, aclID); err != nil {
 			return VirtualInterface{}, err
 		}
 	}
-	if egress != nil {
-		if _, err := s.GetACL(ctx, *egress); err != nil {
-			return VirtualInterface{}, err
-		}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return VirtualInterface{}, fmt.Errorf("begin interface ACL update: %w", err)
 	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM interface_acls WHERE interface_id = ?`, id); err != nil {
+		return VirtualInterface{}, fmt.Errorf("clear interface ACLs: %w", err)
+	}
+	insert := func(direction string, aclIDs []int64) error {
+		for position, aclID := range aclIDs {
+			if _, err := tx.ExecContext(ctx, `
+				INSERT INTO interface_acls (interface_id, direction, acl_id, position)
+				VALUES (?, ?, ?, ?)`, id, direction, aclID, position); err != nil {
+				return fmt.Errorf("insert %s interface ACL: %w", direction, err)
+			}
+		}
+		return nil
+	}
+	if err := insert("ingress", ingress); err != nil {
+		return VirtualInterface{}, err
+	}
+	if err := insert("egress", egress); err != nil {
+		return VirtualInterface{}, err
+	}
+
 	now := time.Now().UTC().UnixMilli()
-	res, err := s.db.ExecContext(ctx, `
+	res, err := tx.ExecContext(ctx, `
 		UPDATE virtual_interfaces SET ingress_acl_id = ?, egress_acl_id = ?, updated_at = ? WHERE id = ?`,
-		ingress, egress, now, id,
+		firstACLID(ingress), firstACLID(egress), now, id,
 	)
 	if err != nil {
 		return VirtualInterface{}, fmt.Errorf("update interface ACLs: %w", err)
@@ -187,7 +227,37 @@ func (s *Store) SetInterfaceACLs(ctx context.Context, id int64, ingress, egress 
 	if affected == 0 {
 		return VirtualInterface{}, ErrInterfaceNotFound
 	}
+	if err := tx.Commit(); err != nil {
+		return VirtualInterface{}, fmt.Errorf("commit interface ACL update: %w", err)
+	}
 	return s.GetInterface(ctx, id)
+}
+
+func uniqueACLIDs(ids []int64) []int64 {
+	if len(ids) == 0 {
+		return nil
+	}
+	seen := make(map[int64]struct{}, len(ids))
+	out := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if id < 1 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
+}
+
+func firstACLID(ids []int64) *int64 {
+	if len(ids) == 0 {
+		return nil
+	}
+	id := ids[0]
+	return &id
 }
 
 func scanACL(s scanner) (ACL, error) {

@@ -42,6 +42,8 @@ type VirtualInterface struct {
 	EgressAclName  string                 `protobuf:"bytes,13,opt,name=egress_acl_name,json=egressAclName,proto3" json:"egress_acl_name,omitempty"`
 	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	IngressAcls    []string               `protobuf:"bytes,16,rep,name=ingress_acls,json=ingressAcls,proto3" json:"ingress_acls,omitempty"`
+	EgressAcls     []string               `protobuf:"bytes,17,rep,name=egress_acls,json=egressAcls,proto3" json:"egress_acls,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -177,6 +179,20 @@ func (x *VirtualInterface) GetCreatedAt() *timestamppb.Timestamp {
 func (x *VirtualInterface) GetUpdatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.UpdatedAt
+	}
+	return nil
+}
+
+func (x *VirtualInterface) GetIngressAcls() []string {
+	if x != nil {
+		return x.IngressAcls
+	}
+	return nil
+}
+
+func (x *VirtualInterface) GetEgressAcls() []string {
+	if x != nil {
+		return x.EgressAcls
 	}
 	return nil
 }
@@ -530,6 +546,8 @@ type SetInterfaceACLsRequest struct {
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	IngressAcl    string                 `protobuf:"bytes,2,opt,name=ingress_acl,json=ingressAcl,proto3" json:"ingress_acl,omitempty"`
 	EgressAcl     string                 `protobuf:"bytes,3,opt,name=egress_acl,json=egressAcl,proto3" json:"egress_acl,omitempty"`
+	IngressAcls   []string               `protobuf:"bytes,4,rep,name=ingress_acls,json=ingressAcls,proto3" json:"ingress_acls,omitempty"`
+	EgressAcls    []string               `protobuf:"bytes,5,rep,name=egress_acls,json=egressAcls,proto3" json:"egress_acls,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -585,6 +603,20 @@ func (x *SetInterfaceACLsRequest) GetEgressAcl() string {
 	return ""
 }
 
+func (x *SetInterfaceACLsRequest) GetIngressAcls() []string {
+	if x != nil {
+		return x.IngressAcls
+	}
+	return nil
+}
+
+func (x *SetInterfaceACLsRequest) GetEgressAcls() []string {
+	if x != nil {
+		return x.EgressAcls
+	}
+	return nil
+}
+
 type DeleteInterfaceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -634,7 +666,7 @@ var File_rookery_v1_interface_proto protoreflect.FileDescriptor
 const file_rookery_v1_interface_proto_rawDesc = "" +
 	"\n" +
 	"\x1arookery/v1/interface.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\xf4\x04\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\xb8\x05\n" +
 	"\x10VirtualInterface\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +
@@ -655,7 +687,10 @@ const file_rookery_v1_interface_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAtB\x11\n" +
+	"updated_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12!\n" +
+	"\fingress_acls\x18\x10 \x03(\tR\vingressAcls\x12\x1f\n" +
+	"\vegress_acls\x18\x11 \x03(\tR\n" +
+	"egressAclsB\x11\n" +
 	"\x0f_attached_vm_idB\x11\n" +
 	"\x0f_ingress_acl_idB\x10\n" +
 	"\x0e_egress_acl_id\"\x98\x02\n" +
@@ -687,7 +722,7 @@ const file_rookery_v1_interface_proto_rawDesc = "" +
 	"\x16UpdateInterfaceRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x126\n" +
 	"\x0eattached_vm_id\x18\x02 \x01(\tB\v\xfaB\br\x06\xd0\x01\x01\xb0\x01\x01H\x00R\fattachedVmId\x88\x01\x01B\x11\n" +
-	"\x0f_attached_vm_id\"\x8a\x01\n" +
+	"\x0f_attached_vm_id\"\xf4\x01\n" +
 	"\x17SetInterfaceACLsRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x12+\n" +
 	"\vingress_acl\x18\x02 \x01(\tB\n" +
@@ -695,7 +730,10 @@ const file_rookery_v1_interface_proto_rawDesc = "" +
 	"ingressAcl\x12)\n" +
 	"\n" +
 	"egress_acl\x18\x03 \x01(\tB\n" +
-	"\xfaB\ar\x05\x18@\xd0\x01\x01R\tegressAcl\"1\n" +
+	"\xfaB\ar\x05\x18@\xd0\x01\x01R\tegressAcl\x124\n" +
+	"\fingress_acls\x18\x04 \x03(\tB\x11\xfaB\x0e\x92\x01\v\x10 \"\ar\x05\x18@\xd0\x01\x01R\vingressAcls\x122\n" +
+	"\vegress_acls\x18\x05 \x03(\tB\x11\xfaB\x0e\x92\x01\v\x10 \"\ar\x05\x18@\xd0\x01\x01R\n" +
+	"egressAcls\"1\n" +
 	"\x16DeleteInterfaceRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id2\xce\x05\n" +
 	"\x10InterfaceService\x12|\n" +

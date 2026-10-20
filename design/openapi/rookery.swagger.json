@@ -1903,6 +1903,18 @@
         },
         "egress_acl": {
           "type": "string"
+        },
+        "ingress_acls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "egress_acls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -3495,6 +3507,18 @@
         "updated_at": {
           "type": "string",
           "format": "date-time"
+        },
+        "ingress_acls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "egress_acls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     }

@@ -1065,6 +1065,68 @@ func (m *SetInterfaceACLsRequest) validate(all bool) error {
 
 	}
 
+	if len(m.GetIngressAcls()) > 32 {
+		err := SetInterfaceACLsRequestValidationError{
+			field:  "IngressAcls",
+			reason: "value must contain no more than 32 item(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	for idx, item := range m.GetIngressAcls() {
+		_, _ = idx, item
+
+		if item != "" {
+
+			if utf8.RuneCountInString(item) > 64 {
+				err := SetInterfaceACLsRequestValidationError{
+					field:  fmt.Sprintf("IngressAcls[%v]", idx),
+					reason: "value length must be at most 64 runes",
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			}
+
+		}
+
+	}
+
+	if len(m.GetEgressAcls()) > 32 {
+		err := SetInterfaceACLsRequestValidationError{
+			field:  "EgressAcls",
+			reason: "value must contain no more than 32 item(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	for idx, item := range m.GetEgressAcls() {
+		_, _ = idx, item
+
+		if item != "" {
+
+			if utf8.RuneCountInString(item) > 64 {
+				err := SetInterfaceACLsRequestValidationError{
+					field:  fmt.Sprintf("EgressAcls[%v]", idx),
+					reason: "value length must be at most 64 runes",
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			}
+
+		}
+
+	}
+
 	if len(errors) > 0 {
 		return SetInterfaceACLsRequestMultiError(errors)
 	}

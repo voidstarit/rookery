@@ -50,9 +50,13 @@ export function aclByName(acls: ACL[], name: string): ACL | undefined {
 }
 
 export function aclAssignments(acl: ACL, interfaces: VirtualInterface[]): VirtualInterface[] {
-  return interfaces.filter(
-    (iface) => iface.ingress_acl_name === acl.name || iface.egress_acl_name === acl.name
-  );
+  return interfaces.filter((iface) => {
+    const names = [
+      ...(iface.ingress_acls || (iface.ingress_acl_name ? [iface.ingress_acl_name] : [])),
+      ...(iface.egress_acls || (iface.egress_acl_name ? [iface.egress_acl_name] : [])),
+    ];
+    return names.some((name) => name.toLowerCase() === acl.name.toLowerCase());
+  });
 }
 
 export function defaultACLRule(): ACLRule {
