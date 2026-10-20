@@ -55,6 +55,9 @@ type NetworkProvisioner interface {
 	EnsureVhostUser(ctx context.Context, name, mac string, bdID uint32) (socketPath string, swIfIndex uint32, err error)
 	DeleteVhostUser(ctx context.Context, swIfIndex uint32) error
 	CreateTap(ctx context.Context, hostName, gatewayCIDR string, bdID uint32) (uint32, error)
+	CreateMemif(ctx context.Context, hostName, socketPath string, ifID uint32, mac net.HardwareAddr, bdID uint32) (uint32, error)
+	DeleteMemif(ctx context.Context, swIfIndex uint32) error
+	DeleteMemifByName(ctx context.Context, hostName string) error
 	DeleteTap(ctx context.Context, swIfIndex uint32) error
 	Ping(ctx context.Context) error
 	Identity() (string, error)
@@ -89,6 +92,7 @@ type NAT44Provisioner interface {
 // VNFManager runs type-specific network functions (DHCPv4/DHCPv6) per VNF.
 type VNFManager interface {
 	Start(ctx context.Context, vnf store.VNF, hostIf string) error
+	StartMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32) error
 	Stop(ctx context.Context, vnfID int64, removeLeases bool) error
 	Running(vnfID int64) bool
 	Leases(ctx context.Context, vnfID int64) ([]store.VNFLease, error)
@@ -111,6 +115,9 @@ type Server struct {
 	natMu      sync.Mutex
 	natRunning map[int64]bool
 
+	memifDHCP bool
+	memifDir  string
+
 	// resourceMu serializes host provisioning (disks, bridge domains, vhost
 	// interfaces) with VM attachment so resources cannot be removed mid-operation.
 	resourceMu sync.Mutex
@@ -128,6 +135,13 @@ func (s *Server) RunMutex() *sync.Mutex {
 // ResourceMutex returns the lock that serializes host resource provisioning.
 func (s *Server) ResourceMutex() *sync.Mutex {
 	return &s.resourceMu
+}
+
+// ConfigureMemifDHCP enables the memif transport for DHCPv4 VNFs and sets the
+// directory where VPP creates memif socket files.
+func (s *Server) ConfigureMemifDHCP(enabled bool, dir string) {
+	s.memifDHCP = enabled
+	s.memifDir = dir
 }
 
 func newServer(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMController, networks NetworkProvisioner, vnfs VNFManager, nat NAT44Provisioner, logger *slog.Logger) *Server {

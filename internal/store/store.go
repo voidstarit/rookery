@@ -229,17 +229,20 @@ type DNATRule struct {
 
 // VNF is a network function attached to a Nerd's Network.
 type VNF struct {
-	ID           int64     `json:"id"`
-	Name         string    `json:"name"`
-	NetworkID    int64     `json:"network_id"`
-	NetworkName  string    `json:"network_name"`
-	Type         string    `json:"type"`
-	Enabled      bool      `json:"enabled"`
-	Config       VNFConfig `json:"config"`
-	TapSwIfIndex uint32    `json:"tap_sw_if_index,omitempty"`
-	TapHostName  string    `json:"tap_host_name,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID             int64     `json:"id"`
+	Name           string    `json:"name"`
+	NetworkID      int64     `json:"network_id"`
+	NetworkName    string    `json:"network_name"`
+	Type           string    `json:"type"`
+	Enabled        bool      `json:"enabled"`
+	Config         VNFConfig `json:"config"`
+	TapSwIfIndex   uint32    `json:"tap_sw_if_index,omitempty"`
+	TapHostName    string    `json:"tap_host_name,omitempty"`
+	MemifSwIfIndex uint32    `json:"memif_sw_if_index,omitempty"`
+	MemifSocket    string    `json:"memif_socket,omitempty"`
+	MemifHostName  string    `json:"memif_host_name,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // VNFLease is one address handed out by a DHCP network function.
@@ -1078,10 +1081,12 @@ func (s *Store) CreateVNF(ctx context.Context, vnf VNF) (VNF, error) {
 	res, err := s.db.ExecContext(ctx, `
 		INSERT INTO vnfs
 			(name, network_id, type, enabled, config, tap_sw_if_index,
-			 tap_host_name, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 tap_host_name, memif_sw_if_index, memif_socket, memif_host_name,
+			 created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		vnf.Name, vnf.NetworkID, vnf.Type, vnf.Enabled, string(config),
-		vnf.TapSwIfIndex, vnf.TapHostName, now, now,
+		vnf.TapSwIfIndex, vnf.TapHostName, vnf.MemifSwIfIndex, vnf.MemifSocket,
+		vnf.MemifHostName, now, now,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -1157,10 +1162,12 @@ func (s *Store) UpdateVNF(ctx context.Context, id int64, vnf VNF) (VNF, error) {
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE vnfs
 		SET name = ?, enabled = ?, config = ?, tap_sw_if_index = ?,
-		    tap_host_name = ?, updated_at = ?
+		    tap_host_name = ?, memif_sw_if_index = ?, memif_socket = ?,
+		    memif_host_name = ?, updated_at = ?
 		WHERE id = ?`,
 		vnf.Name, vnf.Enabled, string(config), vnf.TapSwIfIndex,
-		vnf.TapHostName, now, id,
+		vnf.TapHostName, vnf.MemifSwIfIndex, vnf.MemifSocket, vnf.MemifHostName,
+		now, id,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -1600,7 +1607,8 @@ const networkSelect = `
 
 const vnfSelect = `
 	SELECT f.id, f.name, f.network_id, n.name, f.type, f.enabled, f.config,
-	       f.tap_sw_if_index, f.tap_host_name, f.created_at, f.updated_at
+	       f.tap_sw_if_index, f.tap_host_name, f.memif_sw_if_index, f.memif_socket,
+	       f.memif_host_name, f.created_at, f.updated_at
 	FROM vnfs AS f
 	JOIN networks AS n ON n.id = f.network_id`
 
@@ -1649,17 +1657,20 @@ func scanVNF(s scanner) (VNF, error) {
 		enabled   int64
 		config    string
 		tapSwIf   int64
+		memifSwIf int64
 		createdAt int64
 		updatedAt int64
 	)
 	if err := s.Scan(
 		&vnf.ID, &vnf.Name, &vnf.NetworkID, &vnf.NetworkName, &vnf.Type,
-		&enabled, &config, &tapSwIf, &vnf.TapHostName, &createdAt, &updatedAt,
+		&enabled, &config, &tapSwIf, &vnf.TapHostName, &memifSwIf, &vnf.MemifSocket,
+		&vnf.MemifHostName, &createdAt, &updatedAt,
 	); err != nil {
 		return VNF{}, err
 	}
 	vnf.Enabled = enabled != 0
 	vnf.TapSwIfIndex = uint32(tapSwIf)
+	vnf.MemifSwIfIndex = uint32(memifSwIf)
 	if strings.TrimSpace(config) != "" {
 		if err := json.Unmarshal([]byte(config), &vnf.Config); err != nil {
 			return VNF{}, fmt.Errorf("decode vnf %d config: %w", vnf.ID, err)

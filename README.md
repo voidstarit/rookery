@@ -458,6 +458,20 @@ address, hostname, expiry, and active state. The server does not use CoreDHCP's
 `range` plugin because that plugin imports the CGO `mattn/go-sqlite3` driver;
 leases are stored as JSON instead, keeping the project CGO-free.
 
+DHCPv4 can run over a VPP **memif** (the default) or a kernel tap. Set
+`-dhcp-transport tap` (or `NERDS_VMS_DHCP_TRANSPORT=tap`) to fall back to the
+old transport. VPP creates the memif master and its socket under
+`/run/rookery/memif/<vnf-id>.sock` (or `-memif-dir`), and the API process
+attaches as a slave. A
+gvisor netstack owns the DHCP service address, answers on UDP/67, and keeps
+CoreDHCP's existing allocator/lease plugin. The VPP memif interface uses the
+VNF name (for example `lab-dhcpv4`), not a numeric `vnf<id>`. On NAT networks
+the BVI keeps `.1` and the memif netstack uses `.2`. On plain L2 networks the
+memif netstack owns the configured gateway address; there is no separate
+gateway tap and no forwarding to the host. Use a NAT network when VMs need
+external connectivity. DHCPv6 has not been migrated yet and still uses the tap
+path.
+
 NAT44 is IPv4-only. Use a dedicated network whose only purpose is NAT. On
 enable, the NAT44 VNF:
 
@@ -566,8 +580,10 @@ vhost-user netdevs for interfaces attached through Rookery Networks.
 | `-vpp-socket`     | `NERDS_VMS_VPP_SOCKET` | `/run/vpp/api.sock` | `serve`, `init` | VPP binary API Unix socket |
 | `-qemu-bin`       | `NERDS_VMS_QEMU_BIN`   | `qemu-system-x86_64`| `serve`         | QEMU system emulator binary |
 | `-run-dir`        | `NERDS_VMS_RUN_DIR`    | `/run/nerds-vms`    | `serve`         | QEMU pid files and VNC Unix sockets |
+| `-memif-dir`      | `ROOKERY_MEMIF_DIR`    | `/run/rookery/memif`| `serve`         | VNF memif socket directory; `NERDS_VMS_MEMIF_DIR` is also accepted |
 | `-vhost-dir`      | `NERDS_VMS_VHOST_DIR`  | `/run/vpp`          | `serve`         | VPP vhost-user socket directory |
 | `-check-interval` | —                      | `10s`               | `serve`         | Readiness recheck interval |
+| `-dhcp-transport` | `NERDS_VMS_DHCP_TRANSPORT` | `memif`         | `serve`         | DHCP VNF transport: `memif` or `tap` (DHCPv4 only) |
 | `-gateway-addr`   | `NERDS_VMS_GATEWAY_ADDR` | —                 | `serve`         | Optional grpc-gateway HTTP listen address |
 | `-grpc-addr`      | `NERDS_VMS_GRPC_ADDR`  | —                   | `serve`         | Optional gRPC listen address |
 | `-size`           | —                      | `100%FREE`          | `init`          | Thin pool size when creating |

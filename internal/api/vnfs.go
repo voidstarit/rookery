@@ -689,6 +689,10 @@ func (s *Server) activateVNF(ctx context.Context, vnf store.VNF) (store.VNF, err
 		return vnf, err
 	}
 
+	if s.memifDHCP && vnf.Type == store.VNFTypeDHCPv4 {
+		return s.activateMemifVNF(ctx, vnf, network)
+	}
+
 	hostIf := fmt.Sprintf("vnf%d", vnf.ID)
 	tapSwIfIndex, err := s.networks.CreateTap(ctx, hostIf, vnfTapCIDR(vnf), network.BridgeDomainID)
 	if err != nil {
@@ -719,6 +723,11 @@ func (s *Server) stopVNF(ctx context.Context, vnf store.VNF, removeLeases bool) 
 		}
 	}
 	if s.networks != nil {
+		if vnf.MemifSwIfIndex > 0 || vnf.MemifSocket != "" {
+			if err := s.deleteMemif(ctx, vnf.MemifSwIfIndex, vnfMemifDeleteName(vnf)); err != nil {
+				errs = append(errs, fmt.Errorf("delete VNF memif: %w", err))
+			}
+		}
 		if err := s.deleteTap(ctx, vnf.TapSwIfIndex, vnf.TapHostName); err != nil {
 			errs = append(errs, fmt.Errorf("delete VNF tap: %w", err))
 		}

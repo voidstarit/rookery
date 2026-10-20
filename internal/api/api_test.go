@@ -101,6 +101,10 @@ type fakeNetworkProvisioner struct {
 	deletedIfs     []uint32
 	createdTaps    []string
 	deletedTaps    []uint32
+	createdMemifs  []string
+	deletedMemifs  []uint32
+	createMemifErr error
+	deleteMemifErr error
 	createBDErr    error
 	deleteBDErr    error
 	ensureBDErr    error
@@ -305,6 +309,30 @@ func (f *fakeNetworkProvisioner) DeleteTap(_ context.Context, swIfIndex uint32) 
 	return nil
 }
 
+func (f *fakeNetworkProvisioner) CreateMemif(_ context.Context, hostName, _ string, _ uint32, _ net.HardwareAddr, _ uint32) (uint32, error) {
+	if f.createMemifErr != nil {
+		return 0, f.createMemifErr
+	}
+	f.createdMemifs = append(f.createdMemifs, hostName)
+	return uint32(400 + len(f.createdMemifs)), nil
+}
+
+func (f *fakeNetworkProvisioner) DeleteMemif(_ context.Context, swIfIndex uint32) error {
+	if f.deleteMemifErr != nil {
+		return f.deleteMemifErr
+	}
+	f.deletedMemifs = append(f.deletedMemifs, swIfIndex)
+	return nil
+}
+
+func (f *fakeNetworkProvisioner) DeleteMemifByName(_ context.Context, _ string) error {
+	if f.deleteMemifErr != nil {
+		return f.deleteMemifErr
+	}
+	f.deletedMemifs = append(f.deletedMemifs, 0)
+	return nil
+}
+
 type fakeVNFManager struct {
 	running       map[int64]bool
 	started       []int64
@@ -333,6 +361,16 @@ func (f *fakeVNFManager) Start(_ context.Context, vnf store.VNF, hostIf string) 
 	f.running[vnf.ID] = true
 	f.started = append(f.started, vnf.ID)
 	f.startedHosts = append(f.startedHosts, hostIf)
+	return nil
+}
+
+func (f *fakeVNFManager) StartMemif(_ context.Context, vnf store.VNF, socketPath string, _ uint32) error {
+	if f.startErr != nil {
+		return f.startErr
+	}
+	f.running[vnf.ID] = true
+	f.started = append(f.started, vnf.ID)
+	f.startedHosts = append(f.startedHosts, socketPath)
 	return nil
 }
 
@@ -1625,6 +1663,45 @@ func createVNFAPI(t *testing.T, handler http.Handler, name string, networkID int
 		t.Fatalf("create vnf status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 	return decode[store.VNF](t, recorder)
+}
+
+func TestVNFDHCPv4MemifLifecycle(t *testing.T) {
+	env := newTestAPI(t)
+	env.server.ConfigureMemifDHCP(true, t.TempDir())
+	handler := env.handler
+	network := createNetworkAPI(t, handler, "lab")
+
+	vnf := createVNFAPI(t, handler, "lab-dhcpv4-memif", network.ID, store.VNFTypeDHCPv4, true)
+	stored, err := env.store.GetVNF(context.Background(), vnf.ID)
+	if err != nil {
+		t.Fatalf("get stored vnf: %v", err)
+	}
+	if stored.MemifSwIfIndex == 0 || stored.MemifSocket == "" {
+		t.Fatalf("stored vnf has no memif runtime: %+v", stored)
+	}
+	if stored.MemifHostName != stored.Name {
+		t.Fatalf("memif interface name = %q, want %q", stored.MemifHostName, stored.Name)
+	}
+	if stored.TapHostName != "" || stored.TapSwIfIndex != 0 {
+		t.Fatalf("memif VNF should not create a gateway tap: %+v", stored)
+	}
+	if len(env.networks.createdMemifs) != 1 || env.networks.createdMemifs[0] != stored.Name {
+		t.Fatalf("created memifs = %v, want %s", env.networks.createdMemifs, stored.Name)
+	}
+	if len(env.networks.createdTaps) != 0 {
+		t.Fatalf("created taps = %v, want none", env.networks.createdTaps)
+	}
+	if len(env.vnfs.startedHosts) != 1 || env.vnfs.startedHosts[0] != stored.MemifSocket {
+		t.Fatalf("started hosts = %v, want %s", env.vnfs.startedHosts, stored.MemifSocket)
+	}
+
+	recorder := do(t, handler, http.MethodDelete, fmt.Sprintf("/api/vnfs/%d", stored.ID), nil)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("delete vnf status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if len(env.networks.deletedMemifs) == 0 {
+		t.Fatal("delete did not remove the memif interface")
+	}
 }
 
 func TestVNFDHCPv4Lifecycle(t *testing.T) {

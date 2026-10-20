@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/voidstarit/rookery/internal/store"
@@ -388,6 +389,64 @@ func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF) error {
 	vnf = current
 	if !vnf.Enabled || s.vnfs.Running(vnf.ID) {
 		return nil
+	}
+
+	// The memif transport is now the default. Migrate an enabled DHCPv4 VNF
+	// that still has tap-era runtime fields or an old memif socket path.
+	if s.memifDHCP && vnf.Type == store.VNFTypeDHCPv4 &&
+		(vnf.MemifSocket == "" || vnf.MemifSocket != s.memifSocketPath(vnf.ID) ||
+			vnf.MemifHostName != vnfInterfaceName(vnf) ||
+			vnf.TapHostName != "" || vnf.TapSwIfIndex != 0) {
+		if err := s.stopVNF(ctx, vnf, false); err != nil {
+			s.logger.Warn("cleanup of old VNF runtime failed", "vnf", vnf.Name, "error", err)
+		}
+		if vnf.MemifSocket != "" {
+			_ = os.Remove(vnf.MemifSocket)
+		}
+		vnf.TapSwIfIndex = 0
+		vnf.TapHostName = ""
+		vnf.MemifSwIfIndex = 0
+		vnf.MemifSocket = ""
+		if _, err := s.store.UpdateVNF(ctx, vnf.ID, vnf); err != nil {
+			return fmt.Errorf("clear tap-era VNF runtime: %w", err)
+		}
+		activated, err := s.activateVNF(ctx, vnf)
+		if err != nil {
+			return err
+		}
+		s.logger.Info("VNF migrated to memif",
+			"vnf", activated.Name,
+			"type", activated.Type,
+			"memif", activated.MemifSocket,
+		)
+		return nil
+	}
+
+	if (vnf.MemifSwIfIndex > 0 || vnf.MemifSocket != "") && vnf.TapHostName == "" {
+		if err := s.vnfs.StartMemif(ctx, vnf, vnf.MemifSocket, uint32(vnf.ID)); err == nil {
+			s.logger.Info("VNF runtime restored on memif",
+				"vnf", vnf.Name,
+				"type", vnf.Type,
+				"memif", vnf.MemifSocket,
+			)
+			return nil
+		} else {
+			s.logger.Warn("VNF memif runtime could not be restored; recreating",
+				"vnf", vnf.Name,
+				"memif", vnf.MemifSocket,
+				"error", err,
+			)
+		}
+		if err := s.stopVNF(ctx, vnf, false); err != nil {
+			s.logger.Warn("cleanup of stale VNF memif failed", "vnf", vnf.Name, "error", err)
+		}
+		vnf.MemifSwIfIndex = 0
+		vnf.MemifSocket = ""
+		vnf.TapSwIfIndex = 0
+		vnf.TapHostName = ""
+		if _, err := s.store.UpdateVNF(ctx, vnf.ID, vnf); err != nil {
+			return fmt.Errorf("clear stale VNF memif: %w", err)
+		}
 	}
 
 	if vnf.TapHostName != "" {

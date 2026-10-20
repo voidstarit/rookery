@@ -141,6 +141,11 @@ func TestMigrationBackfillsVMDisks(t *testing.T) {
 			t.Fatalf("drop disks.%s: %v", column, err)
 		}
 	}
+	for _, column := range []string{"memif_sw_if_index", "memif_socket", "memif_host_name"} {
+		if _, err := db.Exec(`ALTER TABLE vnfs DROP COLUMN ` + column); err != nil {
+			t.Fatalf("drop vnfs.%s: %v", column, err)
+		}
+	}
 	if _, err := db.Exec(`PRAGMA user_version = 11`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
@@ -238,7 +243,7 @@ func TestMigrationPreservesLegacyVMsWithoutDisks(t *testing.T) {
 	if err := st.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 13 {
-		t.Fatalf("schema version = %d, want 13", version)
+	if version != 15 {
+		t.Fatalf("schema version = %d, want 15", version)
 	}
 }

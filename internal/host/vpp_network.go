@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -19,6 +20,7 @@ import (
 	"go.fd.io/govpp/binapi/interface_types"
 	"go.fd.io/govpp/binapi/ip_types"
 	"go.fd.io/govpp/binapi/l2"
+	"go.fd.io/govpp/binapi/memif"
 	"go.fd.io/govpp/binapi/tapv2"
 	"go.fd.io/govpp/binapi/vhost_user"
 	"go.fd.io/govpp/core"
@@ -610,6 +612,182 @@ func (v *VPPNetwork) DeleteTap(ctx context.Context, swIfIndex uint32) error {
 		return fmt.Errorf("delete DHCP tap %d: %w", swIfIndex, err)
 	}
 	return checkVPPRetval("delete VNF tap", reply.Retval)
+}
+
+// CreateMemif creates a VPP memif master interface, brings it up, and adds it
+// to the bridge domain. The userspace peer connects to socketPath as a slave.
+func (v *VPPNetwork) CreateMemif(ctx context.Context, name, socketPath string, ifID uint32, mac net.HardwareAddr, bdID uint32) (uint32, error) {
+	if strings.TrimSpace(name) == "" {
+		return 0, errors.New("memif interface name is required")
+	}
+	if len(name) > 63 {
+		return 0, fmt.Errorf("memif interface name %q exceeds the VPP limit of 63 characters", name)
+	}
+	if strings.TrimSpace(socketPath) == "" {
+		return 0, errors.New("memif socket path is required")
+	}
+	if len(mac) != 6 {
+		return 0, errors.New("memif MAC address must contain 6 bytes")
+	}
+
+	conn, err := v.connect()
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Disconnect()
+	memifClient := memif.NewServiceClient(conn)
+
+	// Reuse the VNF id as the memif socket id. Clear a stale registration first
+	// so deleting and recreating a VNF does not fail on an old socket path.
+	_, _ = memifClient.MemifSocketFilenameAddDelV2(ctx, &memif.MemifSocketFilenameAddDelV2{
+		IsAdd:    false,
+		SocketID: ifID,
+	})
+	socketReply, err := memifClient.MemifSocketFilenameAddDelV2(ctx, &memif.MemifSocketFilenameAddDelV2{
+		IsAdd:          true,
+		SocketID:       ifID,
+		SocketFilename: socketPath,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("register memif socket %s: %w", socketPath, err)
+	}
+	if err := checkVPPRetval("register memif socket", socketReply.Retval); err != nil {
+		return 0, err
+	}
+
+	hwAddr := ethernet_types.MacAddress{}
+	copy(hwAddr[:], mac)
+	reply, err := memifClient.MemifCreateV2(ctx, &memif.MemifCreateV2{
+		Role:       memif.MEMIF_ROLE_API_MASTER,
+		Mode:       memif.MEMIF_MODE_API_ETHERNET,
+		RxQueues:   1,
+		TxQueues:   1,
+		ID:         ifID,
+		SocketID:   socketReply.SocketID,
+		RingSize:   memifDHCPRingSize,
+		BufferSize: memifDHCPBufferSize,
+		HwAddr:     hwAddr,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("create VNF memif: %w", err)
+	}
+	if err := checkVPPRetval("create VNF memif", reply.Retval); err != nil {
+		return 0, err
+	}
+	swIfIndex := reply.SwIfIndex
+
+	rollback := func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), vppCleanupTimeout)
+		defer cancel()
+		_, _ = memifClient.MemifDelete(cleanupCtx, &memif.MemifDelete{SwIfIndex: swIfIndex})
+	}
+
+	nameReply, err := interfaces.NewServiceClient(conn).SwInterfaceSetInterfaceName(ctx, &interfaces.SwInterfaceSetInterfaceName{
+		SwIfIndex: swIfIndex,
+		Name:      name,
+	})
+	if err != nil {
+		rollback()
+		return 0, fmt.Errorf("name VNF memif: %w", err)
+	}
+	if err := checkVPPRetval("name VNF memif", nameReply.Retval); err != nil {
+		rollback()
+		return 0, err
+	}
+
+	flagsReply, err := interfaces.NewServiceClient(conn).SwInterfaceSetFlags(ctx, &interfaces.SwInterfaceSetFlags{
+		SwIfIndex: swIfIndex,
+		Flags:     interface_types.IF_STATUS_API_FLAG_ADMIN_UP,
+	})
+	if err != nil {
+		rollback()
+		return 0, fmt.Errorf("set VNF memif up: %w", err)
+	}
+	if err := checkVPPRetval("set VNF memif up", flagsReply.Retval); err != nil {
+		rollback()
+		return 0, err
+	}
+
+	l2Reply, err := l2.NewServiceClient(conn).SwInterfaceSetL2Bridge(ctx, &l2.SwInterfaceSetL2Bridge{
+		RxSwIfIndex: swIfIndex,
+		BdID:        bdID,
+		PortType:    l2.L2_API_PORT_TYPE_NORMAL,
+		Enable:      true,
+	})
+	if err != nil {
+		rollback()
+		return 0, fmt.Errorf("attach VNF memif to bridge domain: %w", err)
+	}
+	if err := checkVPPRetval("attach VNF memif to bridge domain", l2Reply.Retval); err != nil {
+		rollback()
+		return 0, err
+	}
+
+	return uint32(swIfIndex), nil
+}
+
+// DeleteMemif removes a VPP memif interface.
+func (v *VPPNetwork) DeleteMemif(ctx context.Context, swIfIndex uint32) error {
+	conn, err := v.connect()
+	if err != nil {
+		return err
+	}
+	defer conn.Disconnect()
+
+	reply, err := memif.NewServiceClient(conn).MemifDelete(ctx, &memif.MemifDelete{
+		SwIfIndex: interface_types.InterfaceIndex(swIfIndex),
+	})
+	if err != nil {
+		if isVPPNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("delete VNF memif %d: %w", swIfIndex, err)
+	}
+	return checkVPPRetval("delete VNF memif", reply.Retval)
+}
+
+// DeleteMemifByName removes a memif interface by its VPP name, tolerating a
+// stale sw_if_index after a VPP restart.
+func (v *VPPNetwork) DeleteMemifByName(ctx context.Context, name string) error {
+	if strings.TrimSpace(name) == "" {
+		return nil
+	}
+	conn, err := v.connect()
+	if err != nil {
+		return err
+	}
+	defer conn.Disconnect()
+
+	client := interfaces.NewServiceClient(conn)
+	stream, err := client.SwInterfaceDump(ctx, &interfaces.SwInterfaceDump{})
+	if err != nil {
+		return fmt.Errorf("dump VPP interfaces: %w", err)
+	}
+	for {
+		details, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("read VPP interface dump: %w", err)
+		}
+		if details.InterfaceName != name {
+			continue
+		}
+		if details.Tag != "" {
+			return nil
+		}
+		reply, err := memif.NewServiceClient(conn).MemifDelete(ctx, &memif.MemifDelete{
+			SwIfIndex: details.SwIfIndex,
+		})
+		if err != nil {
+			if isVPPNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("delete VNF memif %s: %w", name, err)
+		}
+		return checkVPPRetval("delete VNF memif", reply.Retval)
+	}
 }
 
 func (v *VPPNetwork) connect() (*core.Connection, error) {

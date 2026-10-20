@@ -36,9 +36,11 @@ func runServe(args []string) error {
 	grpcAddr := fs.String("grpc-addr", envDefault("NERDS_VMS_GRPC_ADDR", ""), "optional gRPC listen address")
 	dbPath := fs.String("db", envDefault("NERDS_VMS_DB", "nerds-vms.db"), "SQLite database path")
 	rateLimitValue := fs.String("rate-limit", envDefault("NERDS_VMS_RATE_LIMIT", "3"), "global HTTP request rate limit in requests per second (0 disables)")
+	dhcpTransport := fs.String("dhcp-transport", envDefault("NERDS_VMS_DHCP_TRANSPORT", "memif"), "DHCP VNF transport: memif or tap")
 	checkInterval := fs.Duration("check-interval", 10*time.Second, "readiness check interval")
 	qemuBin := fs.String("qemu-bin", envDefault("NERDS_VMS_QEMU_BIN", qemu.DefaultBinary), "QEMU system emulator binary")
 	runDir := fs.String("run-dir", envDefault("NERDS_VMS_RUN_DIR", qemu.DefaultRunDir), "directory for QEMU pid files and VNC sockets")
+	memifDir := fs.String("memif-dir", envDefault("ROOKERY_MEMIF_DIR", envDefault("NERDS_VMS_MEMIF_DIR", "/run/rookery/memif")), "directory for VNF memif sockets")
 	vhostDir := fs.String("vhost-dir", envDefault("NERDS_VMS_VHOST_DIR", host.DefaultVhostDir), "directory for VPP vhost-user sockets")
 
 	fs.Usage = func() {
@@ -63,6 +65,10 @@ func runServe(args []string) error {
 	rateLimit, err := strconv.ParseFloat(strings.TrimSpace(*rateLimitValue), 64)
 	if err != nil || math.IsNaN(rateLimit) || math.IsInf(rateLimit, 0) || rateLimit < 0 {
 		return fmt.Errorf("-rate-limit must be a non-negative number, got %q", *rateLimitValue)
+	}
+	transport := strings.ToLower(strings.TrimSpace(*dhcpTransport))
+	if transport != "tap" && transport != "memif" {
+		return fmt.Errorf("-dhcp-transport must be tap or memif, got %q", *dhcpTransport)
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -130,6 +136,7 @@ func runServe(args []string) error {
 
 	diskRunner := host.NewLVM()
 	apiServer := api.New(st, manager, diskRunner, qemuRunner, networkRunner, vnfManager, networkRunner, logger)
+	apiServer.ConfigureMemifDHCP(transport == "memif", *memifDir)
 	lifecycleService := lifecycle.New(st, apiServer, apiServer.ResourceMutex())
 
 	gatewayOptions := []gateway.Option{
@@ -220,11 +227,13 @@ func runServe(args []string) error {
 		"vpp_socket", vppSocket,
 		"qemu_bin", *qemuBin,
 		"run_dir", *runDir,
+		"memif_dir", *memifDir,
 		"vhost_dir", *vhostDir,
 		"vnf_dir", filepath.Join(*runDir, "vnfs"),
 		"vnf_backend", "coredhcp",
 		"rate_limit_rps", rateLimit,
 		"rate_limit_scope", "path",
+		"dhcp_transport", transport,
 	)
 
 	var runErr error

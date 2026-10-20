@@ -754,14 +754,19 @@ func TestVNFCrud(t *testing.T) {
 			DNS:        "1.1.1.1",
 			LeaseTime:  "12h",
 		},
-		TapSwIfIndex: 7,
-		TapHostName:  "vnf1",
+		TapSwIfIndex:   7,
+		TapHostName:    "vnf1",
+		MemifSwIfIndex: 9,
+		MemifSocket:    "/run/nerds-vms/memif/1.sock",
+		MemifHostName:  "lab-dhcpv4",
 	})
 	if err != nil {
 		t.Fatalf("create vnf: %v", err)
 	}
 	if created.ID < 1 || created.NetworkName != "lab" || !created.Enabled ||
-		created.Config.Gateway != "10.20.0.1/24" || created.TapSwIfIndex != 7 {
+		created.Config.Gateway != "10.20.0.1/24" || created.TapSwIfIndex != 7 ||
+		created.MemifSwIfIndex != 9 || created.MemifSocket != "/run/nerds-vms/memif/1.sock" ||
+		created.MemifHostName != "lab-dhcpv4" {
 		t.Fatalf("created vnf = %+v", created)
 	}
 
@@ -779,16 +784,21 @@ func TestVNFCrud(t *testing.T) {
 	}
 
 	updated, err := st.UpdateVNF(ctx, created.ID, store.VNF{
-		Name:         "lab-dhcpv4-renamed",
-		Enabled:      false,
-		Config:       created.Config,
-		TapSwIfIndex: 0,
-		TapHostName:  "",
+		Name:           "lab-dhcpv4-renamed",
+		Enabled:        false,
+		Config:         created.Config,
+		TapSwIfIndex:   0,
+		TapHostName:    "",
+		MemifSwIfIndex: 11,
+		MemifSocket:    "/run/nerds-vms/memif/2.sock",
+		MemifHostName:  "lab-dhcpv4-renamed",
 	})
 	if err != nil {
 		t.Fatalf("update vnf: %v", err)
 	}
-	if updated.Name != "lab-dhcpv4-renamed" || updated.Enabled || updated.TapSwIfIndex != 0 {
+	if updated.Name != "lab-dhcpv4-renamed" || updated.Enabled || updated.TapSwIfIndex != 0 ||
+		updated.MemifSwIfIndex != 11 || updated.MemifSocket != "/run/nerds-vms/memif/2.sock" ||
+		updated.MemifHostName != "lab-dhcpv4-renamed" {
 		t.Fatalf("updated vnf = %+v", updated)
 	}
 

@@ -49,6 +49,7 @@ type VNFManager struct {
 type managedVNF struct {
 	vnfType string
 	servers *coredhcpserver.Servers
+	memif   *memifDHCPv4
 	done    chan struct{}
 }
 
@@ -168,6 +169,46 @@ func (m *VNFManager) Start(ctx context.Context, vnf store.VNF, hostIf string) er
 	return nil
 }
 
+// StartMemif starts a userspace DHCPv4 server on a VPP memif slave. VPP must
+// already have created the memif master and its socket at socketPath.
+func (m *VNFManager) StartMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32) error {
+	if vnf.ID < 1 {
+		return errors.New("invalid VNF id")
+	}
+	if vnf.Type != store.VNFTypeDHCPv4 {
+		return fmt.Errorf("memif transport only supports DHCPv4, got %q", vnf.Type)
+	}
+	socketPath = strings.TrimSpace(socketPath)
+	if socketPath == "" {
+		return errors.New("memif socket path is required")
+	}
+	if err := m.stop(ctx, vnf.ID, false); err != nil {
+		return err
+	}
+	m.CleanupLegacyNetwork(vnf.NetworkID)
+
+	server, err := startMemifDHCPv4(ctx, memifDHCPv4Config{
+		VNF:         vnf,
+		Name:        vnfMemifName(vnf),
+		SocketPath:  socketPath,
+		InterfaceID: ifID,
+		MAC:         vnfMemifDHCPMAC(vnf.ID),
+		LeasePath:   m.leasePath(vnf.ID),
+		Port:        m.port(),
+	})
+	if err != nil {
+		return err
+	}
+
+	m.mu.Lock()
+	if m.servers == nil {
+		m.servers = make(map[int64]*managedVNF)
+	}
+	m.servers[vnf.ID] = &managedVNF{vnfType: vnf.Type, memif: server, done: make(chan struct{})}
+	m.mu.Unlock()
+	return nil
+}
+
 // Stop terminates the VNF server. Lease files are removed only when
 // removeLeases is true (VNF deletion).
 func (m *VNFManager) Stop(ctx context.Context, vnfID int64, removeLeases bool) error {
@@ -180,13 +221,17 @@ func (m *VNFManager) stop(ctx context.Context, vnfID int64, removeLeases bool) e
 	m.mu.Unlock()
 
 	if managed != nil {
-		managed.servers.Close()
-		select {
-		case <-managed.done:
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(vnfStopTimeout):
-			return errors.New("VNF server did not stop in time")
+		if managed.memif != nil {
+			managed.memif.Close()
+		} else if managed.servers != nil {
+			managed.servers.Close()
+			select {
+			case <-managed.done:
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(vnfStopTimeout):
+				return errors.New("VNF server did not stop in time")
+			}
 		}
 
 		m.mu.Lock()
@@ -526,6 +571,33 @@ func vnfDUIDMAC(vnfID int64) net.HardwareAddr {
 		0x02, 0x4e, 0x56, 0x46,
 		byte(uint64(vnfID) >> 8), byte(vnfID),
 	}
+}
+
+func vnfMemifMAC(vnfID int64) net.HardwareAddr {
+	return net.HardwareAddr{
+		0x02, 0x4d, 0x4d,
+		byte(uint64(vnfID) >> 16), byte(uint64(vnfID) >> 8), byte(vnfID),
+	}
+}
+
+func vnfMemifDHCPMAC(vnfID int64) net.HardwareAddr {
+	return net.HardwareAddr{
+		0x02, 0x4e, 0x4d,
+		byte(uint64(vnfID) >> 16), byte(uint64(vnfID) >> 8), byte(vnfID),
+	}
+}
+
+func vnfMemifName(vnf store.VNF) string {
+	if name := strings.TrimSpace(vnf.Name); name != "" {
+		return name
+	}
+	return fmt.Sprintf("vnf%d", vnf.ID)
+}
+
+// VNFMemifMAC returns the locally administered MAC used by the API side of a
+// VNF's memif interface.
+func VNFMemifMAC(vnfID int64) net.HardwareAddr {
+	return vnfMemifMAC(vnfID)
 }
 
 func broadcastIPv4(ipnet *net.IPNet) net.IP {
