@@ -11,6 +11,7 @@ import (
 )
 
 func TestMemifLinkLoopback(t *testing.T) {
+	const interfaceID = 0x8000000c // shared network memif ids use the high bit
 	socketPath := filepath.Join(t.TempDir(), "memif.sock")
 	socket, err := memif.NewSocket("rookery-test-master", socketPath)
 	if err != nil {
@@ -19,7 +20,7 @@ func TestMemifLinkLoopback(t *testing.T) {
 	defer socket.Delete()
 
 	master, err := socket.NewInterface(&memif.Arguments{
-		Id:               1,
+		Id:               interfaceID,
 		IsMaster:         true,
 		Name:             "master",
 		ConnectedFunc:    func(*memif.Interface) error { return nil },
@@ -32,7 +33,7 @@ func TestMemifLinkLoopback(t *testing.T) {
 	socket.StartPolling(errCh)
 	defer socket.StopPolling()
 
-	link, err := newMemifLink(socketPath, 1, "slave", nil)
+	link, err := newMemifLink(socketPath, interfaceID, "slave", nil)
 	if err != nil {
 		t.Fatalf("create slave link: %v", err)
 	}

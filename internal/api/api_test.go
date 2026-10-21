@@ -433,6 +433,7 @@ type fakeVNFManager struct {
 	leases        map[int64][]store.VNFLease
 	leaseErr      error
 	bgpStatus     map[int64]host.BGPStatus
+	sharedIfIDs   []uint32
 }
 
 func newFakeVNFManager() *fakeVNFManager {
@@ -467,10 +468,11 @@ func (f *fakeVNFManager) StartMemif(_ context.Context, vnf store.VNF, socketPath
 	return nil
 }
 
-func (f *fakeVNFManager) StartShared(_ context.Context, vnf store.VNF, socketPath string, _ uint32, address string) error {
+func (f *fakeVNFManager) StartShared(_ context.Context, vnf store.VNF, socketPath string, ifID uint32, address string) error {
 	if f.startErr != nil {
 		return f.startErr
 	}
+	f.sharedIfIDs = append(f.sharedIfIDs, ifID)
 	if f.startFailures > 0 {
 		f.startFailures--
 		return errors.New("simulated VNF start failure")
@@ -1153,6 +1155,9 @@ func TestVNFDHCPv4SharedMemifLifecycle(t *testing.T) {
 	}
 	if len(env.vnfs.startedHosts) != 1 || env.vnfs.startedHosts[0] != stored.MemifSocket+"@10.20.0.2/24" {
 		t.Fatalf("started hosts = %v, want shared socket + address", env.vnfs.startedHosts)
+	}
+	if len(env.vnfs.sharedIfIDs) != 1 || env.vnfs.sharedIfIDs[0] != host.NetworkVNFMemifID(network.ID) {
+		t.Fatalf("shared memif interface id = %v, want %d", env.vnfs.sharedIfIDs, host.NetworkVNFMemifID(network.ID))
 	}
 	current, err := env.store.GetNetwork(context.Background(), network.ID)
 	if err != nil {

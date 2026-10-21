@@ -375,7 +375,9 @@ func (s *Server) activateSharedVNF(ctx context.Context, vnf store.VNF, network s
 
 	vnf.Config.Gateway = gateway
 	vnf.Config.BindIP = serviceCIDR
-	if err := s.vnfs.StartShared(ctx, vnf, network.VNFMemifSocket, network.VNFMemifSwIfIndex, serviceCIDR); err != nil {
+	// The daemon needs the memif interface ID for the handshake, not the VPP
+	// sw_if_index stored on the network for cleanup/counters.
+	if err := s.vnfs.StartShared(ctx, vnf, network.VNFMemifSocket, host.NetworkVNFMemifID(network.ID), serviceCIDR); err != nil {
 		return vnf, err
 	}
 
