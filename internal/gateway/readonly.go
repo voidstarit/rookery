@@ -3,10 +3,10 @@ package gateway
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -35,7 +35,7 @@ type diskService struct {
 	runtime   DiskProvisioner
 	readiness Readiness
 	mu        *sync.Mutex
-	logger    *slog.Logger
+	logger    zerolog.Logger
 }
 
 func (s *diskService) ListDisks(ctx context.Context, _ *rookeryv1.ListDisksRequest) (*rookeryv1.ListDisksResponse, error) {

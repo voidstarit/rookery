@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
@@ -17,7 +18,7 @@ func TestClientServerRoundTrip(t *testing.T) {
 	manager.leases[1] = []store.VNFLease{{ClientID: "aa:bb", Address: "10.0.0.11", Active: true}}
 	manager.bgp[1] = host.BGPStatus{Running: true, SessionState: "SESSION_STATE_ACTIVE"}
 
-	server := NewServer(manager, t.TempDir(), nil)
+	server := NewServer(manager, t.TempDir(), zerolog.Nop())
 	listener, err := Listen("tcp://127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -27,7 +28,7 @@ func TestClientServerRoundTrip(t *testing.T) {
 	go func() { _ = grpcServer.Serve(listener) }()
 	t.Cleanup(grpcServer.Stop)
 
-	client, err := NewClient("tcp://"+listener.Addr().String(), nil)
+	client, err := NewClient("tcp://"+listener.Addr().String(), zerolog.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +61,7 @@ func TestClientServerRoundTrip(t *testing.T) {
 }
 
 func TestClientUnavailableDaemonReportsStopped(t *testing.T) {
-	client, err := NewClient("tcp://127.0.0.1:1", nil)
+	client, err := NewClient("tcp://127.0.0.1:1", zerolog.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}

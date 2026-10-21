@@ -32,6 +32,6 @@ func (s *Server) rollbackBridgeDomain(bdID uint32) {
 	ctx, cancel := context.WithTimeout(context.Background(), rollbackTimeout)
 	defer cancel()
 	if err := s.networks.DeleteBridgeDomain(ctx, bdID); err != nil {
-		s.logger.Error("rollback bridge domain failed", "bd_id", bdID, "error", err)
+		s.logger.Error().Uint32("bd_id", bdID).Err(err).Msg("rollback bridge domain failed")
 	}
 }

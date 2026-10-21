@@ -9,6 +9,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0
 	github.com/insomniacslk/dhcp v0.0.0-20241203100832-a481575ed0ef
 	github.com/osrg/gobgp/v3 v3.37.0
+	github.com/rs/zerolog v1.35.1
 	go.fd.io/govpp v0.13.0
 	// Official Go memif implementation (extras/v0.1.x is retracted because the
 	// module path moved, but it is the only published module with gomemif).
@@ -39,7 +40,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/lunixbochs/struc v0.0.0-20200521075829-a4cb8d33dbbe // indirect
-	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect

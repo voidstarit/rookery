@@ -5,12 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"net"
 	"net/http"
 	"sync"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -58,7 +58,7 @@ type options struct {
 	diagnostics       DiagnosticsRuntime
 	networkRuntime    NetworkRuntime
 	networkWriter     NetworkWriter
-	logger            *slog.Logger
+	logger            zerolog.Logger
 	vppInterfaces     VPPInterfaceSource
 	vnfRuntime        VNFRuntime
 	vnfStatusProvider VNFStatusProvider
@@ -165,7 +165,7 @@ func WithVNFWriter(writer VNFWriter) Option {
 }
 
 // WithLogger sets the gateway logger used by disk preparation scripts.
-func WithLogger(logger *slog.Logger) Option {
+func WithLogger(logger zerolog.Logger) Option {
 	return func(opts *options) {
 		opts.logger = logger
 	}
@@ -183,7 +183,7 @@ func WithVPPInterfaceSource(source VPPInterfaceSource) Option {
 // bufconn listener for tests and embedding. Use WithGRPCListener to expose gRPC
 // on a real Unix or TCP socket.
 func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
-	options := &options{}
+	options := &options{logger: zerolog.Nop()}
 	for _, option := range opts {
 		option(options)
 	}
@@ -192,9 +192,6 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	}
 	if options.vmMutex == nil {
 		options.vmMutex = &sync.Mutex{}
-	}
-	if options.logger == nil {
-		options.logger = slog.Default()
 	}
 	listener := options.grpcListener
 	useBufconn := listener == nil

@@ -5,13 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"gvisor.dev/gvisor/pkg/buffer"
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
@@ -81,7 +81,7 @@ func (p *bgpTCPProxy) handle(ctx context.Context, conn net.Conn) {
 		remote, err = net.DialTimeout("tcp", net.JoinHostPort(p.serverIP, strconv.Itoa(p.serverPort)), 3*time.Second)
 	}
 	if err != nil {
-		slog.Warn("BGP memif proxy connect failed", "error", err)
+		log.Warn().Err(err).Msg("BGP memif proxy connect failed")
 		return
 	}
 	defer remote.Close()
@@ -283,27 +283,27 @@ func startBGPMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID u
 	go proxy.acceptLoop(runCtx)
 
 	if passive {
-		slog.Info("BGP memif runtime started",
-			"vnf_id", vnf.ID,
-			"memif", socketPath,
-			"memif_name", vnfMemifName(vnf),
-			"interface_id", ifID,
-			"mac", vnfMemifBGPMAC(vnf.ID).String(),
-			"mode", "passive",
-			"listen", localIP.String()+":179",
-			"gobgp_listen", net.JoinHostPort("127.0.0.1", strconv.Itoa(gobgpPort)),
-		)
+		log.Info().
+			Int64("vnf_id", vnf.ID).
+			Str("memif", socketPath).
+			Str("memif_name", vnfMemifName(vnf)).
+			Uint32("interface_id", ifID).
+			Str("mac", vnfMemifBGPMAC(vnf.ID).String()).
+			Str("mode", "passive").
+			Str("listen", localIP.String()+":179").
+			Str("gobgp_listen", net.JoinHostPort("127.0.0.1", strconv.Itoa(gobgpPort))).
+			Msg("BGP memif runtime started")
 	} else {
-		slog.Info("BGP memif runtime started",
-			"vnf_id", vnf.ID,
-			"memif", socketPath,
-			"memif_name", vnfMemifName(vnf),
-			"interface_id", ifID,
-			"mac", vnfMemifBGPMAC(vnf.ID).String(),
-			"mode", "active",
-			"dial", peerIP.String()+":179",
-			"proxy_listen", net.JoinHostPort("127.0.0.1", strconv.Itoa(proxyPort)),
-		)
+		log.Info().
+			Int64("vnf_id", vnf.ID).
+			Str("memif", socketPath).
+			Str("memif_name", vnfMemifName(vnf)).
+			Uint32("interface_id", ifID).
+			Str("mac", vnfMemifBGPMAC(vnf.ID).String()).
+			Str("mode", "active").
+			Str("dial", peerIP.String()+":179").
+			Str("proxy_listen", net.JoinHostPort("127.0.0.1", strconv.Itoa(proxyPort))).
+			Msg("BGP memif runtime started")
 	}
 	return runtime, nil
 }
@@ -317,7 +317,7 @@ func (m *bgpMemifRuntime) pumpRX(ctx context.Context) {
 			}
 			// Transient memif read errors must not kill the receive path
 			// permanently; back off briefly and keep reading.
-			slog.Warn("BGP memif receive failed", "error", err)
+			log.Warn().Err(err).Msg("BGP memif receive failed")
 			select {
 			case <-ctx.Done():
 				return
@@ -345,7 +345,7 @@ func (m *bgpMemifRuntime) pumpTX(ctx context.Context) {
 		if errors.Is(err, errMemifClosed) || ctx.Err() != nil {
 			return
 		}
-		slog.Warn("BGP memif transmit failed", "error", err)
+		log.Warn().Err(err).Msg("BGP memif transmit failed")
 		select {
 		case <-ctx.Done():
 			return
@@ -375,7 +375,7 @@ func (m *bgpMemifRuntime) Close(ctx context.Context) {
 			m.stack.Close()
 			m.stack.Wait()
 		}
-		slog.Info("BGP memif runtime stopped")
+		log.Info().Msg("BGP memif runtime stopped")
 		close(m.done)
 	})
 }

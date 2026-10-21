@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +17,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"golang.org/x/net/websocket"
 
 	"github.com/voidstarit/rookery/internal/api"
@@ -700,7 +700,7 @@ func newTestAPIWithReadiness(t *testing.T, ready api.Readiness) *testAPI {
 	networkProvisioner := &fakeNetworkProvisioner{}
 	vnfManager := newFakeVNFManager()
 	natManager := &fakeNAT44{}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := zerolog.Nop()
 	apiServer := api.New(st, ready, provisioner, controller, networkProvisioner, vnfManager, natManager, logger)
 	lifecycleService := lifecycle.New(st, apiServer, apiServer.ResourceMutex())
 	gw, err := gateway.New(st, ready,

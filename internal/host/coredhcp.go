@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net"
 	"os"
 	"sort"
@@ -17,6 +16,7 @@ import (
 	"github.com/coredhcp/coredhcp/plugins"
 	"github.com/coredhcp/coredhcp/plugins/allocators/bitmap"
 	"github.com/insomniacslk/dhcp/dhcpv4"
+	"github.com/rs/zerolog/log"
 
 	"github.com/voidstarit/rookery/internal/store"
 )
@@ -336,6 +336,12 @@ func (s *coreDHCPState) renewLocked(record *coreDHCPLease, hostname string, now 
 	if hostname != "" {
 		record.Hostname = hostname
 	}
+	log.Trace().
+		Str("leases", s.leasePath).
+		Str("client_id", record.ClientID).
+		Str("address", record.Address.String()).
+		Str("hostname", record.Hostname).
+		Msg("DHCPv4 lease renewed")
 	s.saveLocked()
 }
 
@@ -352,6 +358,13 @@ func (s *coreDHCPState) allocateLocked(clientID string, hint net.IP, hostname st
 		}
 		s.leases[clientID] = record
 		s.byIP[staticIP.String()] = clientID
+		log.Trace().
+			Str("leases", s.leasePath).
+			Str("client_id", clientID).
+			Str("address", record.Address.String()).
+			Str("hostname", hostname).
+			Bool("static", true).
+			Msg("DHCPv4 lease allocated")
 		s.saveLocked()
 		return record, nil
 	}
@@ -382,6 +395,13 @@ func (s *coreDHCPState) allocateLocked(clientID string, hint net.IP, hostname st
 	}
 	s.leases[clientID] = record
 	s.byIP[ip.String()] = clientID
+	log.Trace().
+		Str("leases", s.leasePath).
+		Str("client_id", clientID).
+		Str("address", record.Address.String()).
+		Str("hostname", hostname).
+		Bool("static", false).
+		Msg("DHCPv4 lease allocated")
 	s.saveLocked()
 	return record, nil
 }
@@ -395,6 +415,12 @@ func (s *coreDHCPState) purgeExpiredLocked(now time.Time) {
 }
 
 func (s *coreDHCPState) freeLocked(record *coreDHCPLease) {
+	log.Trace().
+		Str("leases", s.leasePath).
+		Str("client_id", record.ClientID).
+		Str("address", record.Address.String()).
+		Str("hostname", record.Hostname).
+		Msg("DHCPv4 lease freed")
 	delete(s.leases, record.ClientID)
 	delete(s.byIP, record.Address.String())
 	if _, reserved := s.reservedByIP[record.Address.String()]; reserved {
@@ -428,7 +454,7 @@ func (s *coreDHCPState) loadLeases() error {
 	if err := json.Unmarshal(data, &file); err != nil {
 		backup := s.leasePath + ".corrupt"
 		_ = os.Rename(s.leasePath, backup)
-		slog.Warn("ignoring corrupt DHCP lease file", "path", s.leasePath, "backup", backup, "error", err)
+		log.Warn().Str("path", s.leasePath).Str("backup", backup).Err(err).Msg("ignoring corrupt DHCP lease file")
 		return nil
 	}
 
@@ -496,18 +522,18 @@ func (s *coreDHCPState) saveLocked() {
 func writeLeaseFile(path string, leases []leaseRecord) {
 	data, err := json.MarshalIndent(leaseFile{Leases: leases}, "", "  ")
 	if err != nil {
-		slog.Error("encode DHCP leases", "path", path, "error", err)
+		log.Error().Str("path", path).Err(err).Msg("encode DHCP leases")
 		return
 	}
 	data = append(data, '\n')
 
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		slog.Error("write DHCP leases", "path", tmp, "error", err)
+		log.Error().Str("path", tmp).Err(err).Msg("write DHCP leases")
 		return
 	}
 	if err := os.Rename(tmp, path); err != nil {
-		slog.Error("replace DHCP leases", "path", path, "error", err)
+		log.Error().Str("path", path).Err(err).Msg("replace DHCP leases")
 		_ = os.Remove(tmp)
 	}
 }

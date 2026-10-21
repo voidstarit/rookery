@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log/slog"
 	"math"
 	"net"
 	"net/http"
@@ -21,6 +20,7 @@ import (
 	"github.com/voidstarit/rookery/internal/gateway"
 	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/lifecycle"
+	"github.com/voidstarit/rookery/internal/logging"
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/readiness"
 	"github.com/voidstarit/rookery/internal/store"
@@ -44,6 +44,8 @@ func runServe(args []string) error {
 	runDir := fs.String("run-dir", envDefault("NERDS_VMS_RUN_DIR", qemu.DefaultRunDir), "directory for QEMU pid files and VNC sockets")
 	memifDir := fs.String("memif-dir", envDefault("ROOKERY_MEMIF_DIR", envDefault("NERDS_VMS_MEMIF_DIR", "/run/rookery/memif")), "directory for VNF memif sockets")
 	vhostDir := fs.String("vhost-dir", envDefault("NERDS_VMS_VHOST_DIR", host.DefaultVhostDir), "directory for VPP vhost-user sockets")
+	logLevel := fs.String("log-level", envDefault("NERDS_VMS_LOG_LEVEL", "info"), "log level: trace, debug, info, warn, error")
+	logFormat := fs.String("log-format", envDefault("NERDS_VMS_LOG_FORMAT", "console"), "log format: console or json")
 
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(), "Usage: rookery serve [flags]\n\n"+
@@ -73,11 +75,13 @@ func runServe(args []string) error {
 		return fmt.Errorf("-dhcp-transport must be tap or memif, got %q", *dhcpTransport)
 	}
 
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	slog.SetDefault(logger)
+	logger, err := logging.Setup(logging.Options{Level: *logLevel, Format: *logFormat, Service: "rookery"})
+	if err != nil {
+		return err
+	}
 
 	if rateLimit <= 0 {
-		logger.Warn("HTTP rate limiting disabled", "rate_limit_rps", rateLimit)
+		logger.Warn().Float64("rate_limit_rps", rateLimit).Msg("HTTP rate limiting disabled")
 	}
 
 	st, err := store.Open(*dbPath)
@@ -215,31 +219,31 @@ func runServe(args []string) error {
 	if grpcListener != nil {
 		grpcAddress = gatewayRuntime.GRPCAddress()
 	}
-	logger.Info("nerds-vms API listening",
-		"addr", httpURL(*addr),
-		"gateway_addr", *gatewayAddr,
-		"grpc_addr", grpcAddress,
-		"database", *dbPath,
-		"vg", vg,
-		"thin_pool", thinPool,
-		"vpp_socket", vppSocket,
-		"qemu_bin", *qemuBin,
-		"run_dir", *runDir,
-		"memif_dir", *memifDir,
-		"vhost_dir", *vhostDir,
-		"vnf_dir", filepath.Join(*runDir, "vnfs"),
-		"vnf_backend", "coredhcp",
-		"rate_limit_rps", rateLimit,
-		"rate_limit_scope", "path",
-		"dhcp_transport", transport,
-	)
+	logger.Info().
+		Str("addr", httpURL(*addr)).
+		Str("gateway_addr", *gatewayAddr).
+		Str("grpc_addr", grpcAddress).
+		Str("database", *dbPath).
+		Str("vg", vg).
+		Str("thin_pool", thinPool).
+		Str("vpp_socket", vppSocket).
+		Str("qemu_bin", *qemuBin).
+		Str("run_dir", *runDir).
+		Str("memif_dir", *memifDir).
+		Str("vhost_dir", *vhostDir).
+		Str("vnf_dir", filepath.Join(*runDir, "vnfs")).
+		Str("vnf_backend", "coredhcp").
+		Float64("rate_limit_rps", rateLimit).
+		Str("rate_limit_scope", "path").
+		Str("dhcp_transport", transport).
+		Msg("nerds-vms API listening")
 
 	var runErr error
 	select {
 	case err := <-serveErr:
 		runErr = err
 	case <-ctx.Done():
-		logger.Info("shutdown requested")
+		logger.Info().Msg("shutdown requested")
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -258,7 +262,7 @@ func runServe(args []string) error {
 	if runErr != nil && !errors.Is(runErr, http.ErrServerClosed) {
 		return fmt.Errorf("listen: %w", runErr)
 	}
-	logger.Info("stopped")
+	logger.Info().Msg("stopped")
 	return nil
 }
 

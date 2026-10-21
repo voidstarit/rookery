@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/voidstarit/rookery/internal/api"
 	"github.com/voidstarit/rookery/internal/gateway"
 	"github.com/voidstarit/rookery/internal/lifecycle"
@@ -26,7 +27,7 @@ func TestNativeVNFWrites(t *testing.T) {
 	}
 
 	ready := fakeReadiness{}
-	provider := api.New(st, ready, nil, nil, nil, nil, nil, nil)
+	provider := api.New(st, ready, nil, nil, nil, nil, nil, zerolog.Nop())
 	lifecycleService := lifecycle.New(st, provider, provider.ResourceMutex())
 	gw, err := gateway.New(st, ready, gateway.WithVNFWriter(lifecycleService), gateway.WithVNFStatusProvider(provider))
 	if err != nil {

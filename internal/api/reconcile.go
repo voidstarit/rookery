@@ -68,7 +68,7 @@ func (s *Server) reconcileInfrastructureWithRetries(ctx context.Context) error {
 		if lastErr == nil {
 			return nil
 		}
-		s.logger.Warn("infrastructure reconciliation failed", "attempt", attempt, "error", lastErr)
+		s.logger.Warn().Int("attempt", attempt).Err(lastErr).Msg("infrastructure reconciliation failed")
 		if attempt == 3 {
 			break
 		}
@@ -117,10 +117,10 @@ func (s *Server) watchVPP(ctx context.Context, initiallyDirty bool) {
 					reconcileCancel()
 				}
 				if reconcileErr != nil {
-					s.logger.Error("VPP resource rebuild failed; will retry", "error", reconcileErr)
+					s.logger.Error().Err(reconcileErr).Msg("VPP resource rebuild failed; will retry")
 					pendingReconcile = true
 				} else if reconcileReset {
-					s.logger.Info("VPP infrastructure rebuilt after restart")
+					s.logger.Info().Msg("VPP infrastructure rebuilt after restart")
 				}
 				reconcileDone = nil
 				reconcileCancel = nil
@@ -135,7 +135,7 @@ func (s *Server) watchVPP(ctx context.Context, initiallyDirty bool) {
 
 		if pingErr != nil {
 			if healthy {
-				s.logger.Warn("VPP API unavailable; waiting for it to return", "error", pingErr)
+				s.logger.Warn().Err(pingErr).Msg("VPP API unavailable; waiting for it to return")
 			}
 			healthy = false
 			pendingReconcile = true
@@ -146,7 +146,7 @@ func (s *Server) watchVPP(ctx context.Context, initiallyDirty bool) {
 			continue
 		}
 		if !healthy {
-			s.logger.Info("VPP API is reachable again")
+			s.logger.Info().Msg("VPP API is reachable again")
 			healthy = true
 			pendingReconcile = true
 		}
@@ -157,16 +157,16 @@ func (s *Server) watchVPP(ctx context.Context, initiallyDirty bool) {
 			lastVNFCheck = time.Now()
 			go func() {
 				if err := s.ReconcileVNFs(ctx); err != nil {
-					s.logger.Warn("periodic VNF reconciliation failed", "error", err)
+					s.logger.Warn().Err(err).Msg("periodic VNF reconciliation failed")
 				}
 			}()
 		}
 		if identityErr == nil && identity != "" {
 			if lastIdentity != "" && identity != lastIdentity {
-				s.logger.Warn("VPP restart detected; rebuilding VPP resources",
-					"old_identity", lastIdentity,
-					"new_identity", identity,
-				)
+				s.logger.Warn().
+					Str("old_identity", lastIdentity).
+					Str("new_identity", identity).
+					Msg("VPP restart detected; rebuilding VPP resources")
 				pendingReconcile = true
 				pendingReset = true
 				// Do not cancel the in-flight worker here. Starting a second
@@ -228,7 +228,7 @@ func (s *Server) resetRuntimeForVPPRestart(ctx context.Context) {
 	s.natMu.Unlock()
 	if s.vnfs != nil {
 		if err := s.vnfs.ResetRuntime(ctx); err != nil {
-			s.logger.Warn("reset VNF runtime after VPP restart failed", "error", err)
+			s.logger.Warn().Err(err).Msg("reset VNF runtime after VPP restart failed")
 		}
 	}
 }
@@ -260,7 +260,10 @@ func (s *Server) ReconcileNetworks(ctx context.Context) error {
 			errs = append(errs, fmt.Errorf("network %s: %w", network.Name, err))
 			continue
 		}
-		s.logger.Info("network bridge domain ready", "network", network.Name, "bd_id", network.BridgeDomainID)
+		s.logger.Info().
+			Str("network", network.Name).
+			Uint32("bd_id", network.BridgeDomainID).
+			Msg("network bridge domain ready")
 	}
 	return errors.Join(errs...)
 }
@@ -302,16 +305,16 @@ func (s *Server) ReconcileVhostUsers(ctx context.Context) error {
 				errs = append(errs, fmt.Errorf("interface %s: update runtime metadata: %w", iface.Name, err))
 				continue
 			}
-			s.logger.Info("vhost-user interface restored",
-				"interface", updated.Name,
-				"network", updated.NetworkName,
-				"sw_if_index", updated.SwIfIndex,
-			)
+			s.logger.Info().
+				Str("interface", updated.Name).
+				Str("network", updated.NetworkName).
+				Uint32("sw_if_index", updated.SwIfIndex).
+				Msg("vhost-user interface restored")
 			if updated.AttachedVMID != nil && s.vms != nil && s.vms.Running(*updated.AttachedVMID) {
-				s.logger.Warn("running VM must be restarted to reconnect its restored vhost-user interface",
-					"interface", updated.Name,
-					"vm", updated.AttachedVMName,
-				)
+				s.logger.Warn().
+					Str("interface", updated.Name).
+					Str("vm", updated.AttachedVMName).
+					Msg("running VM must be restarted to reconnect its restored vhost-user interface")
 			}
 		}
 	}
@@ -359,10 +362,10 @@ func (s *Server) reconcileNAT44(ctx context.Context, vnf store.VNF) error {
 	if err != nil {
 		return err
 	}
-	s.logger.Info("NAT44 activated during startup reconciliation",
-		"vnf", activated.Name,
-		"network", activated.NetworkName,
-	)
+	s.logger.Info().
+		Str("vnf", activated.Name).
+		Str("network", activated.NetworkName).
+		Msg("NAT44 activated during startup reconciliation")
 	return nil
 }
 
@@ -416,7 +419,7 @@ func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF) error {
 			vnf.MemifHostName != vnfInterfaceName(vnf) ||
 			vnf.TapHostName != "" || vnf.TapSwIfIndex != 0) {
 		if err := s.stopVNF(ctx, vnf, false); err != nil {
-			s.logger.Warn("cleanup of old VNF runtime failed", "vnf", vnf.Name, "error", err)
+			s.logger.Warn().Str("vnf", vnf.Name).Err(err).Msg("cleanup of old VNF runtime failed")
 		}
 		if vnf.MemifSocket != "" {
 			_ = os.Remove(vnf.MemifSocket)
@@ -432,31 +435,31 @@ func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF) error {
 		if err != nil {
 			return err
 		}
-		s.logger.Info("VNF migrated to memif",
-			"vnf", activated.Name,
-			"type", activated.Type,
-			"memif", activated.MemifSocket,
-		)
+		s.logger.Info().
+			Str("vnf", activated.Name).
+			Str("type", activated.Type).
+			Str("memif", activated.MemifSocket).
+			Msg("VNF migrated to memif")
 		return nil
 	}
 
 	if (vnf.MemifSwIfIndex > 0 || vnf.MemifSocket != "") && vnf.TapHostName == "" {
 		if err := s.vnfs.StartMemif(ctx, vnf, vnf.MemifSocket, uint32(vnf.ID)); err == nil {
-			s.logger.Info("VNF runtime restored on memif",
-				"vnf", vnf.Name,
-				"type", vnf.Type,
-				"memif", vnf.MemifSocket,
-			)
+			s.logger.Info().
+				Str("vnf", vnf.Name).
+				Str("type", vnf.Type).
+				Str("memif", vnf.MemifSocket).
+				Msg("VNF runtime restored on memif")
 			return nil
 		} else {
-			s.logger.Warn("VNF memif runtime could not be restored; recreating",
-				"vnf", vnf.Name,
-				"memif", vnf.MemifSocket,
-				"error", err,
-			)
+			s.logger.Warn().
+				Str("vnf", vnf.Name).
+				Str("memif", vnf.MemifSocket).
+				Err(err).
+				Msg("VNF memif runtime could not be restored; recreating")
 		}
 		if err := s.stopVNF(ctx, vnf, false); err != nil {
-			s.logger.Warn("cleanup of stale VNF memif failed", "vnf", vnf.Name, "error", err)
+			s.logger.Warn().Str("vnf", vnf.Name).Err(err).Msg("cleanup of stale VNF memif failed")
 		}
 		vnf.MemifSwIfIndex = 0
 		vnf.MemifSocket = ""
@@ -469,23 +472,23 @@ func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF) error {
 
 	if vnf.TapHostName != "" {
 		if err := s.vnfs.Start(ctx, vnf, vnf.TapHostName); err == nil {
-			s.logger.Info("VNF runtime restored",
-				"vnf", vnf.Name,
-				"type", vnf.Type,
-				"interface", vnf.TapHostName,
-			)
+			s.logger.Info().
+				Str("vnf", vnf.Name).
+				Str("type", vnf.Type).
+				Str("interface", vnf.TapHostName).
+				Msg("VNF runtime restored")
 			return nil
 		} else {
-			s.logger.Warn("VNF runtime could not use its existing tap; recreating",
-				"vnf", vnf.Name,
-				"interface", vnf.TapHostName,
-				"error", err,
-			)
+			s.logger.Warn().
+				Str("vnf", vnf.Name).
+				Str("interface", vnf.TapHostName).
+				Err(err).
+				Msg("VNF runtime could not use its existing tap; recreating")
 		}
 
 		// Remove the old runtime and tap before provisioning a replacement.
 		if err := s.stopVNF(ctx, vnf, false); err != nil {
-			s.logger.Warn("cleanup of stale VNF runtime failed", "vnf", vnf.Name, "error", err)
+			s.logger.Warn().Str("vnf", vnf.Name).Err(err).Msg("cleanup of stale VNF runtime failed")
 		}
 		vnf.TapSwIfIndex = 0
 		vnf.TapHostName = ""
@@ -498,10 +501,10 @@ func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF) error {
 	if err != nil {
 		return err
 	}
-	s.logger.Info("VNF activated during startup reconciliation",
-		"vnf", activated.Name,
-		"type", activated.Type,
-		"interface", activated.TapHostName,
-	)
+	s.logger.Info().
+		Str("vnf", activated.Name).
+		Str("type", activated.Type).
+		Str("interface", activated.TapHostName).
+		Msg("VNF activated during startup reconciliation")
 	return nil
 }

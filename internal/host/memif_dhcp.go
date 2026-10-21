@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"strings"
 	"sync"
@@ -14,6 +13,7 @@ import (
 	"github.com/coredhcp/coredhcp/handler"
 	"github.com/coredhcp/coredhcp/plugins"
 	"github.com/insomniacslk/dhcp/dhcpv4"
+	"github.com/rs/zerolog/log"
 
 	"gvisor.dev/gvisor/pkg/buffer"
 	"gvisor.dev/gvisor/pkg/tcpip"
@@ -177,16 +177,16 @@ func startMemifDHCPv4(ctx context.Context, cfg memifDHCPv4Config) (*memifDHCPv4,
 	go server.pumpMemifRX(runCtx)
 	go server.pumpMemifTX(runCtx)
 
-	slog.Info("VNF memif transport started",
-		"vnf_id", cfg.VNF.ID,
-		"type", cfg.VNF.Type,
-		"interface", cfg.Name,
-		"socket", cfg.SocketPath,
-		"interface_id", cfg.InterfaceID,
-		"bind", cfg.VNF.Config.BindIP,
-		"gateway", cfg.VNF.Config.Gateway,
-		"leases", cfg.LeasePath,
-	)
+	log.Info().
+		Int64("vnf_id", cfg.VNF.ID).
+		Str("type", cfg.VNF.Type).
+		Str("interface", cfg.Name).
+		Str("socket", cfg.SocketPath).
+		Uint32("interface_id", cfg.InterfaceID).
+		Str("bind", cfg.VNF.Config.BindIP).
+		Str("gateway", cfg.VNF.Config.Gateway).
+		Str("leases", cfg.LeasePath).
+		Msg("VNF memif transport started")
 	return server, nil
 }
 
@@ -199,7 +199,7 @@ func (m *memifDHCPv4) serveDHCP(ctx context.Context) {
 			if ctx.Err() != nil || errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
 				return
 			}
-			slog.Warn("memif DHCPv4 read failed", "vnf_id", m.vnfID, "error", err)
+			log.Warn().Int64("vnf_id", m.vnfID).Err(err).Msg("memif DHCPv4 read failed")
 			return
 		}
 		reply, dst := m.reply(buf[:n])
@@ -207,7 +207,7 @@ func (m *memifDHCPv4) serveDHCP(ctx context.Context) {
 			continue
 		}
 		if _, err := m.conn.WriteTo(reply.ToBytes(), dst); err != nil {
-			slog.Warn("memif DHCPv4 write failed", "vnf_id", m.vnfID, "dst", dst, "error", err)
+			log.Warn().Int64("vnf_id", m.vnfID).Stringer("dst", dst).Err(err).Msg("memif DHCPv4 write failed")
 		}
 	}
 }
@@ -269,7 +269,7 @@ func (m *memifDHCPv4) pumpMemifRX(ctx context.Context) {
 			}
 			// Transient memif read errors must not kill the receive path
 			// permanently; back off briefly and keep reading.
-			slog.Warn("memif DHCPv4 receive failed", "vnf_id", m.vnfID, "error", err)
+			log.Warn().Int64("vnf_id", m.vnfID).Err(err).Msg("memif DHCPv4 receive failed")
 			select {
 			case <-ctx.Done():
 				return
@@ -296,7 +296,7 @@ func (m *memifDHCPv4) pumpMemifTX(ctx context.Context) {
 		if ctx.Err() != nil || errors.Is(err, errMemifClosed) {
 			return
 		}
-		slog.Warn("memif DHCPv4 transmit failed", "vnf_id", m.vnfID, "error", err)
+		log.Warn().Int64("vnf_id", m.vnfID).Err(err).Msg("memif DHCPv4 transmit failed")
 		select {
 		case <-ctx.Done():
 			return

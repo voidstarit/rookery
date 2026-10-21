@@ -87,12 +87,23 @@ func (s *diskService) runDiskPreparationScript(ctx context.Context, operation st
 	err = command.Run()
 	text := strings.TrimSpace(output.String())
 	if err != nil {
-		s.logger.Error("disk preparation script failed", "script", script, "operation", operation, "disk", disk.Name, "error", err, "output", text)
+		s.logger.Error().
+			Str("script", script).
+			Str("operation", operation).
+			Str("disk", disk.Name).
+			Err(err).
+			Str("output", text).
+			Msg("disk preparation script failed")
 		if text == "" {
 			return fmt.Errorf("disk preparation script failed: %w", err)
 		}
 		return fmt.Errorf("disk preparation script failed: %w: %s", err, text)
 	}
-	s.logger.Info("disk preparation script completed", "script", script, "operation", operation, "disk", disk.Name, "output", text)
+	s.logger.Info().
+		Str("script", script).
+		Str("operation", operation).
+		Str("disk", disk.Name).
+		Str("output", text).
+		Msg("disk preparation script completed")
 	return nil
 }

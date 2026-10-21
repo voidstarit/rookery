@@ -2,11 +2,10 @@ package readiness
 
 import (
 	"context"
-	"io"
-	"log/slog"
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/voidstarit/rookery/internal/host"
 )
 
@@ -23,8 +22,8 @@ func (f fakeInspector) InspectVPP(context.Context, string) host.Result {
 	return f.vpp
 }
 
-func testLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
+func testLogger() zerolog.Logger {
+	return zerolog.Nop()
 }
 
 func TestNewManagerStartsChecking(t *testing.T) {

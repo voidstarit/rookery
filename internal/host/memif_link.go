@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net"
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"go.fd.io/govpp/extras/gomemif/memif"
 )
 
@@ -35,11 +35,11 @@ func newMemifLink(socketPath string, ifID uint32, name string, _ net.HardwareAdd
 		IsMaster: false,
 		Name:     name,
 		ConnectedFunc: func(*memif.Interface) error {
-			slog.Info("memif slave connected", "socket", socketPath, "interface_id", ifID, "name", name)
+			log.Info().Str("socket", socketPath).Uint32("interface_id", ifID).Str("name", name).Msg("memif slave connected")
 			return nil
 		},
 		DisconnectedFunc: func(*memif.Interface) error {
-			slog.Warn("memif slave disconnected", "socket", socketPath, "interface_id", ifID, "name", name)
+			log.Warn().Str("socket", socketPath).Uint32("interface_id", ifID).Str("name", name).Msg("memif slave disconnected")
 			return nil
 		},
 		MemoryConfig: memif.MemoryConfig{
@@ -112,7 +112,7 @@ func (l *memifLink) drainErrors(errCh <-chan error) {
 			if !ok {
 				return
 			}
-			slog.Warn("memif control channel error", "error", err)
+			log.Warn().Err(err).Msg("memif control channel error")
 		}
 	}
 }

@@ -36,15 +36,15 @@ func (s *Server) activateNAT44(ctx context.Context, vnf store.VNF) (store.VNF, e
 	rollbackBVI := func() {
 		if priorBVI == "" {
 			if err := s.nat.DeleteBVIByName(ctx, bviName); err != nil {
-				s.logger.Error("rollback NAT44 BVI failed", "network", network.Name, "bvi", bviName, "error", err)
+				s.logger.Error().Str("network", network.Name).Str("bvi", bviName).Err(err).Msg("rollback NAT44 BVI failed")
 			}
 			if _, err := s.store.SetNetworkBVI(ctx, network.ID, "", 0, ""); err != nil {
-				s.logger.Error("clear network BVI after failed NAT44 activation", "network", network.Name, "error", err)
+				s.logger.Error().Str("network", network.Name).Err(err).Msg("clear network BVI after failed NAT44 activation")
 			}
 			return
 		}
 		if _, err := s.store.SetNetworkBVI(ctx, network.ID, priorBVI, priorIndex, priorGateway); err != nil {
-			s.logger.Error("restore network BVI after failed NAT44 activation", "network", network.Name, "error", err)
+			s.logger.Error().Str("network", network.Name).Err(err).Msg("restore network BVI after failed NAT44 activation")
 		}
 	}
 	network, err = s.store.SetNetworkBVI(ctx, network.ID, bviName, bviIndex, vnf.Config.Gateway)

@@ -2,7 +2,6 @@ package vnfd
 
 import (
 	"context"
-	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -10,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
@@ -30,7 +30,7 @@ const (
 type Client struct {
 	conn   *grpc.ClientConn
 	client rookeryv1.VNFDaemonClient
-	logger *slog.Logger
+	logger zerolog.Logger
 
 	mu        sync.RWMutex
 	running   map[int64]bool
@@ -43,10 +43,7 @@ type Client struct {
 // NewClient connects to the VNF daemon. The connection is lazy, so a missing
 // daemon does not fail startup; runtimes report as not running until it
 // appears.
-func NewClient(addr string, logger *slog.Logger) (*Client, error) {
-	if logger == nil {
-		logger = slog.Default()
-	}
+func NewClient(addr string, logger zerolog.Logger) (*Client, error) {
 	target, err := dialTarget(addr)
 	if err != nil {
 		return nil, err
@@ -62,6 +59,7 @@ func NewClient(addr string, logger *slog.Logger) (*Client, error) {
 		running: make(map[int64]bool),
 		done:    make(chan struct{}),
 	}
+	logger.Trace().Str("target", target).Msg("VNF daemon client created")
 	// Prime the state cache with a short timeout so an absent daemon does not
 	// delay API startup; the background loop keeps it fresh afterwards.
 	c.refreshWithin(time.Second)
@@ -106,17 +104,45 @@ func (c *Client) refreshWithin(timeout time.Duration) {
 	defer cancel()
 	response, err := c.client.ListVNFStates(ctx, &rookeryv1.ListVNFStatesRequest{})
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	wasAvailable := c.available
 	if err != nil {
 		c.available = false
+		c.mu.Unlock()
+		if wasAvailable {
+			c.logger.Warn().Err(err).Msg("VNF daemon is unavailable")
+		} else {
+			c.logger.Trace().Err(err).Msg("VNF daemon is still unavailable")
+		}
 		return
 	}
-	c.available = true
 	next := make(map[int64]bool, len(response.GetVnfs()))
 	for _, item := range response.GetVnfs() {
-		next[item.GetId()] = item.GetRunning()
+		if item.GetRunning() {
+			next[item.GetId()] = true
+		}
 	}
+	changed := !wasAvailable || !sameRunning(c.running, next)
+	c.available = true
 	c.running = next
+	c.mu.Unlock()
+	if !wasAvailable {
+		c.logger.Info().Msg("connected to VNF daemon")
+	}
+	if changed {
+		c.logger.Trace().Int("vnfs", len(next)).Msg("VNF runtime state changed")
+	}
+}
+
+func sameRunning(a, b map[int64]bool) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for id := range b {
+		if !a[id] {
+			return false
+		}
+	}
+	return true
 }
 
 // availableNow reports whether the last status poll reached the daemon.
@@ -142,31 +168,50 @@ func (c *Client) StartMemif(ctx context.Context, vnf store.VNF, socketPath strin
 
 func (c *Client) ensure(ctx context.Context, vnf store.VNF, transport, tapHost string, socket string, ifID uint32) error {
 	if !c.availableNow() {
+		c.logger.Trace().
+			Int64("vnf_id", vnf.ID).
+			Str("type", vnf.Type).
+			Str("transport", transport).
+			Msg("VNF daemon is unavailable; not starting runtime")
 		return c.unavailableError()
 	}
+	c.logger.Trace().
+		Int64("vnf_id", vnf.ID).
+		Str("type", vnf.Type).
+		Str("transport", transport).
+		Str("tap", tapHost).
+		Str("memif", socket).
+		Uint32("interface_id", ifID).
+		Msg("ensuring VNF runtime")
 	callCtx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 	response, err := c.client.EnsureVNF(callCtx, &rookeryv1.EnsureVNFRequest{
 		Vnf: specFor(vnf, transport, tapHost, socket, ifID),
 	})
 	if err != nil {
+		c.logger.Trace().Int64("vnf_id", vnf.ID).Str("transport", transport).Err(err).Msg("ensure VNF runtime failed")
 		return grpcError("start VNF", err)
 	}
 	c.setRunning(vnf.ID, response.GetRunning())
+	c.logger.Trace().Int64("vnf_id", vnf.ID).Bool("running", response.GetRunning()).Msg("VNF runtime ensured")
 	return nil
 }
 
 // Stop removes a runtime through the daemon.
 func (c *Client) Stop(ctx context.Context, vnfID int64, removeLeases bool) error {
 	if !c.availableNow() {
+		c.logger.Trace().Int64("vnf_id", vnfID).Msg("VNF daemon is unavailable; not stopping runtime")
 		return c.unavailableError()
 	}
+	c.logger.Trace().Int64("vnf_id", vnfID).Bool("remove_leases", removeLeases).Msg("removing VNF runtime")
 	callCtx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 	if _, err := c.client.RemoveVNF(callCtx, &rookeryv1.RemoveVNFRequest{Id: vnfID, RemoveLeases: removeLeases}); err != nil {
+		c.logger.Trace().Int64("vnf_id", vnfID).Err(err).Msg("remove VNF runtime failed")
 		return grpcError("stop VNF", err)
 	}
 	c.setRunning(vnfID, false)
+	c.logger.Trace().Int64("vnf_id", vnfID).Msg("VNF runtime removed")
 	return nil
 }
 
@@ -190,10 +235,12 @@ func (c *Client) setRunning(vnfID int64, running bool) {
 
 // Leases returns the daemon's persisted leases for a VNF.
 func (c *Client) Leases(ctx context.Context, vnfID int64) ([]store.VNFLease, error) {
+	c.logger.Trace().Int64("vnf_id", vnfID).Msg("reading VNF leases")
 	callCtx, cancel := context.WithTimeout(ctx, statusTimeout)
 	defer cancel()
 	response, err := c.client.ListLeases(callCtx, &rookeryv1.ListLeasesRequest{Id: vnfID})
 	if err != nil {
+		c.logger.Trace().Int64("vnf_id", vnfID).Err(err).Msg("read VNF leases failed")
 		return nil, grpcError("read VNF leases", err)
 	}
 	leases := make([]store.VNFLease, 0, len(response.GetLeases()))
@@ -207,15 +254,18 @@ func (c *Client) Leases(ctx context.Context, vnfID int64) ([]store.VNFLease, err
 		}
 		leases = append(leases, lease)
 	}
+	c.logger.Trace().Int64("vnf_id", vnfID).Int("leases", len(leases)).Msg("VNF leases read")
 	return leases, nil
 }
 
 // BGPStatus returns the daemon's live GoBGP snapshot for a BGP VNF.
 func (c *Client) BGPStatus(ctx context.Context, vnfID int64) (host.BGPStatus, error) {
+	c.logger.Trace().Int64("vnf_id", vnfID).Msg("reading BGP status")
 	callCtx, cancel := context.WithTimeout(ctx, statusTimeout)
 	defer cancel()
 	response, err := c.client.GetBGPStatus(callCtx, &rookeryv1.GetBGPStatusRequest{Id: vnfID})
 	if err != nil {
+		c.logger.Trace().Int64("vnf_id", vnfID).Err(err).Msg("read BGP status failed")
 		return host.BGPStatus{}, grpcError("read BGP status", err)
 	}
 	status := host.BGPStatus{
@@ -235,31 +285,42 @@ func (c *Client) BGPStatus(ctx context.Context, vnfID int64) (host.BGPStatus, er
 			ASPath:  append([]uint32(nil), prefix.GetAsPath()...),
 		})
 	}
+	c.logger.Trace().
+		Int64("vnf_id", vnfID).
+		Bool("established", status.Established).
+		Str("session_state", status.SessionState).
+		Int("received", len(status.Received)).
+		Msg("BGP status read")
 	return status, nil
 }
 
 // CleanupLegacyNetwork asks the daemon to remove legacy DHCP runtime files.
 func (c *Client) CleanupLegacyNetwork(networkID int64) {
+	c.logger.Trace().Int64("network_id", networkID).Msg("cleaning up legacy VNF runtime")
 	ctx, cancel := context.WithTimeout(context.Background(), statusTimeout)
 	defer cancel()
 	if _, err := c.client.CleanupLegacyNetwork(ctx, &rookeryv1.CleanupLegacyNetworkRequest{NetworkId: networkID}); err != nil {
-		c.logger.Warn("cleanup legacy VNF runtime failed", "network_id", networkID, "error", err)
+		c.logger.Warn().Int64("network_id", networkID).Err(err).Msg("cleanup legacy VNF runtime failed")
 	}
 }
 
 // ResetRuntime stops every daemon runtime while keeping the desired specs.
 func (c *Client) ResetRuntime(ctx context.Context) error {
 	if !c.availableNow() {
+		c.logger.Trace().Msg("VNF daemon is unavailable; not resetting runtimes")
 		return c.unavailableError()
 	}
+	c.logger.Trace().Msg("resetting VNF runtimes")
 	callCtx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 	if _, err := c.client.ResetRuntime(callCtx, &rookeryv1.ResetRuntimeRequest{}); err != nil {
+		c.logger.Trace().Err(err).Msg("reset VNF runtimes failed")
 		return grpcError("reset VNF runtime", err)
 	}
 	c.mu.Lock()
 	c.running = make(map[int64]bool)
 	c.mu.Unlock()
+	c.logger.Trace().Msg("VNF runtimes reset")
 	return nil
 }
 

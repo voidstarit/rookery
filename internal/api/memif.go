@@ -71,11 +71,11 @@ func (s *Server) activateMemifVNF(ctx context.Context, vnf store.VNF, network st
 		_ = s.networks.DeleteMemif(ctx, memifSwIfIndex)
 		return vnf, err
 	}
-	s.logger.Info("VNF activated on memif",
-		"vnf", updated.Name,
-		"type", updated.Type,
-		"memif", socketPath,
-	)
+	s.logger.Info().
+		Str("vnf", updated.Name).
+		Str("type", updated.Type).
+		Str("memif", socketPath).
+		Msg("VNF activated on memif")
 	return updated, nil
 }
 

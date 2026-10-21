@@ -21,7 +21,7 @@ func (s *Server) handleDownloadPacketCapture(w http.ResponseWriter, r *http.Requ
 			writeError(w, http.StatusNotFound, "packet capture not found")
 			return
 		}
-		s.logger.Error("open packet capture failed", "error", err)
+		s.logger.Error().Err(err).Msg("open packet capture failed")
 		writeError(w, http.StatusInternalServerError, "could not open packet capture")
 		return
 	}
@@ -49,7 +49,7 @@ func (s *Server) handleWebSharkJSON(w http.ResponseWriter, r *http.Request) {
 	case "files":
 		files, err := s.networks.ListPacketCaptures()
 		if err != nil {
-			s.logger.Error("list packet captures failed", "error", err)
+			s.logger.Error().Err(err).Msg("list packet captures failed")
 			writeJSON(w, http.StatusInternalServerError, map[string]any{"err": 1, "errstr": "cannot list captures"})
 			return
 		}
@@ -86,7 +86,7 @@ func (s *Server) handleWebSharkCapture(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "packet capture not found")
 			return
 		}
-		s.logger.Error("open packet capture failed", "error", err)
+		s.logger.Error().Err(err).Msg("open packet capture failed")
 		writeError(w, http.StatusInternalServerError, "could not open packet capture")
 		return
 	}
@@ -108,7 +108,7 @@ func (s *Server) handleDeletePacketCapture(w http.ResponseWriter, r *http.Reques
 		case errors.Is(err, host.ErrCaptureFileActive):
 			writeError(w, http.StatusConflict, err.Error())
 		default:
-			s.logger.Error("delete packet capture failed", "error", err)
+			s.logger.Error().Err(err).Msg("delete packet capture failed")
 			writeError(w, http.StatusInternalServerError, "could not delete packet capture")
 		}
 		return

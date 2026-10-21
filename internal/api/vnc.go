@@ -63,7 +63,7 @@ func (s *Server) handleVNCProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	conn, err := net.DialTimeout("unix", socket, vncDialTimeout)
 	if err != nil {
-		s.logger.Error("connect vnc socket failed", "vm_id", id, "socket", socket, "error", err)
+		s.logger.Error().Str("vm_id", id).Str("socket", socket).Err(err).Msg("connect vnc socket failed")
 		writeError(w, http.StatusBadGateway, "vnc endpoint is unavailable")
 		return
 	}

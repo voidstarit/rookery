@@ -331,6 +331,20 @@ state. The server rechecks every 10 seconds. Run the server as root or as a user
 with permission to run `lvcreate`/`lvremove`, start QEMU, access `/dev/kvm`, and
 access the VPP socket; disk creation and deletion operate on the host.
 
+### Logging
+
+Both binaries log through `zerolog`. `-log-level` (`trace`, `debug`, `info`,
+`warn`, `error`; default `info`) and `-log-format` (`console` or `json`;
+default `console`, with colors only on a terminal) control the output and can
+also be set with `NERDS_VMS_LOG_LEVEL` and `NERDS_VMS_LOG_FORMAT`. Every line is
+tagged `service=rookery` or `service=vnfs`, and structured fields such as
+`vnf_id`, `network`, `method`, `path`, `status`, and `duration` stay typed
+integers, strings, and durations instead of being pre-formatted. Use
+`-log-format json` when shipping logs to journald, Loki, or ELK. At
+`-log-level trace`, the VNF daemon logs every control RPC (method, duration,
+status), client connection changes, supervision decisions, DHCPv4/DHCPv6 lease
+allocation, renewal, and release, and BGP advertised/installed/withdrawn routes.
+
 The UI has **Virtual machines**, **Disks**, **Installation media**,
 **Rookery Networks**, and **VNFs** tabs. The **Disks** tab manages storage
 backends and creates disks on the selected backend; VM creation additionally

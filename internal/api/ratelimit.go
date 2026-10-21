@@ -1,11 +1,12 @@
 package api
 
 import (
-	"log/slog"
 	"math"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // RateLimiter is a shared token-bucket limiter. The bucket holds one second's
@@ -94,9 +95,5 @@ func (l *RateLimiter) logRejection(r *http.Request) {
 	rate := l.rate
 	l.mu.Unlock()
 
-	slog.Warn("rate limit exceeded",
-		"method", r.Method,
-		"path", r.URL.Path,
-		"rate_limit_rps", rate,
-	)
+	log.Warn().Str("method", r.Method).Str("path", r.URL.Path).Float64("rate_limit_rps", rate).Msg("rate limit exceeded")
 }

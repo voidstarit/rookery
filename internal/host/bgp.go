@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net"
 	"strings"
 	"sync"
@@ -14,6 +13,7 @@ import (
 	"github.com/osrg/gobgp/v3/pkg/apiutil"
 	"github.com/osrg/gobgp/v3/pkg/packet/bgp"
 	"github.com/osrg/gobgp/v3/pkg/server"
+	"github.com/rs/zerolog/log"
 
 	"github.com/voidstarit/rookery/internal/store"
 )
@@ -162,7 +162,7 @@ func (b *bgpInstance) Status(ctx context.Context) BGPStatus {
 		status.SessionState = peer.State.SessionState.String()
 		status.Established = peer.State.SessionState == api.PeerState_ESTABLISHED
 	}); err != nil {
-		slog.Warn("could not list BGP peers", "vnf_id", b.vnfID, "error", err)
+		log.Warn().Int64("vnf_id", b.vnfID).Err(err).Msg("could not list BGP peers")
 	}
 	families := []api.Family_Afi{api.Family_AFI_IP, api.Family_AFI_IP6}
 	for _, afi := range families {
@@ -203,7 +203,7 @@ func (b *bgpInstance) Status(ctx context.Context) BGPStatus {
 			}
 		})
 		if err != nil {
-			slog.Warn("could not list BGP paths", "vnf_id", b.vnfID, "afi", afi.String(), "error", err)
+			log.Warn().Int64("vnf_id", b.vnfID).Str("afi", afi.String()).Err(err).Msg("could not list BGP paths")
 		}
 	}
 	return status
@@ -313,16 +313,16 @@ func startBGPServer(ctx context.Context, cfg bgpStartConfig) (*bgpInstance, erro
 	instance.wg.Add(1)
 	go instance.watchPeerState(runCtx)
 
-	slog.Info("BGP VNF started",
-		"vnf_id", cfg.VNF.ID,
-		"transport", cfg.VNF.Config.Transport,
-		"family", bgpAFI(cfg.LocalIP).String(),
-		"local_as", cfg.LocalAS,
-		"peer", cfg.Neighbor,
-		"peer_address", cfg.PeerIP.String(),
-		"peer_as", cfg.PeerAS,
-		"target_table", cfg.TargetTableID,
-	)
+	log.Info().
+		Int64("vnf_id", cfg.VNF.ID).
+		Str("transport", cfg.VNF.Config.Transport).
+		Str("family", bgpAFI(cfg.LocalIP).String()).
+		Uint32("local_as", cfg.LocalAS).
+		Str("peer", cfg.Neighbor).
+		Str("peer_address", cfg.PeerIP.String()).
+		Uint32("peer_as", cfg.PeerAS).
+		Uint32("target_table", cfg.TargetTableID).
+		Msg("BGP VNF started")
 	return instance, nil
 }
 
@@ -362,6 +362,11 @@ func (b *bgpInstance) advertise(ctx context.Context, cfg bgpStartConfig) error {
 		}); err != nil {
 			return fmt.Errorf("advertise BGP prefix %s: %w", network, err)
 		}
+		log.Trace().
+			Int64("vnf_id", b.vnfID).
+			Str("prefix", network.String()).
+			Str("next_hop", nextHopText).
+			Msg("advertised BGP prefix")
 	}
 	return nil
 }
@@ -377,7 +382,7 @@ func (b *bgpInstance) watchRoutes(ctx context.Context) {
 		},
 	}, b.handlePaths)
 	if err != nil && ctx.Err() == nil {
-		slog.Warn("BGP route watcher stopped", "vnf_id", b.vnfID, "error", err)
+		log.Warn().Int64("vnf_id", b.vnfID).Err(err).Msg("BGP route watcher stopped")
 	}
 }
 
@@ -393,15 +398,15 @@ func (b *bgpInstance) watchPeerState(ctx context.Context) {
 			return
 		}
 		state := event.Peer.State
-		slog.Info("BGP session state changed",
-			"vnf_id", b.vnfID,
-			"neighbor", event.Peer.Conf.GetNeighborAddress(),
-			"session_state", state.SessionState.String(),
-			"admin_state", state.AdminState.String(),
-		)
+		log.Info().
+			Int64("vnf_id", b.vnfID).
+			Str("neighbor", event.Peer.Conf.GetNeighborAddress()).
+			Str("session_state", state.SessionState.String()).
+			Str("admin_state", state.AdminState.String()).
+			Msg("BGP session state changed")
 	})
 	if err != nil && ctx.Err() == nil {
-		slog.Warn("BGP peer state watcher stopped", "vnf_id", b.vnfID, "error", err)
+		log.Warn().Int64("vnf_id", b.vnfID).Err(err).Msg("BGP peer state watcher stopped")
 	}
 }
 
@@ -423,7 +428,7 @@ func (b *bgpInstance) handlePaths(response *api.WatchEventResponse) {
 		}
 		prefixText, ok := bgpPathPrefix(path)
 		if !ok {
-			slog.Warn("BGP route NLRI parse failed", "vnf_id", b.vnfID, "nlri", path.Nlri)
+			log.Warn().Int64("vnf_id", b.vnfID).Interface("nlri", path.Nlri).Msg("BGP route NLRI parse failed")
 			continue
 		}
 		if path.IsWithdraw {
@@ -432,12 +437,12 @@ func (b *bgpInstance) handlePaths(response *api.WatchEventResponse) {
 		}
 		attrs, err := apiutil.GetNativePathAttributes(path)
 		if err != nil {
-			slog.Warn("BGP route attribute parse failed", "vnf_id", b.vnfID, "prefix", prefixText, "error", err)
+			log.Warn().Int64("vnf_id", b.vnfID).Str("prefix", prefixText).Err(err).Msg("BGP route attribute parse failed")
 			continue
 		}
 		nextHop, ok := bgpPathNextHop(attrs)
 		if !ok {
-			slog.Warn("BGP route next hop parse failed", "vnf_id", b.vnfID, "prefix", prefixText)
+			log.Warn().Int64("vnf_id", b.vnfID).Str("prefix", prefixText).Msg("BGP route next hop parse failed")
 			continue
 		}
 		b.installRoute(context.Background(), prefixText, nextHop)
@@ -466,15 +471,21 @@ func (b *bgpInstance) installRoute(ctx context.Context, prefix, nextHop string) 
 		return
 	}
 	if err := b.routeWriter.AddBGPRoute(ctx, b.targetTableID, prefix, nextHop); err != nil {
-		slog.Warn("could not install BGP route in VPP",
-			"vnf_id", b.vnfID,
-			"prefix", prefix,
-			"next_hop", nextHop,
-			"table", b.targetTableID,
-			"error", err,
-		)
+		log.Warn().
+			Int64("vnf_id", b.vnfID).
+			Str("prefix", prefix).
+			Str("next_hop", nextHop).
+			Uint32("table", b.targetTableID).
+			Err(err).
+			Msg("could not install BGP route in VPP")
 		return
 	}
+	log.Trace().
+		Int64("vnf_id", b.vnfID).
+		Str("prefix", prefix).
+		Str("next_hop", nextHop).
+		Uint32("table", b.targetTableID).
+		Msg("installed BGP route in VPP")
 	b.installedMu.Lock()
 	b.installed[prefix] = nextHop
 	b.installedMu.Unlock()
@@ -489,15 +500,20 @@ func (b *bgpInstance) removeRoute(ctx context.Context, prefix string) {
 	}
 	if b.routeWriter != nil {
 		if err := b.routeWriter.DeleteBGPRoute(ctx, b.targetTableID, prefix); err != nil {
-			slog.Warn("could not remove BGP route from VPP",
-				"vnf_id", b.vnfID,
-				"prefix", prefix,
-				"table", b.targetTableID,
-				"error", err,
-			)
+			log.Warn().
+				Int64("vnf_id", b.vnfID).
+				Str("prefix", prefix).
+				Uint32("table", b.targetTableID).
+				Err(err).
+				Msg("could not remove BGP route from VPP")
 			return
 		}
 	}
+	log.Trace().
+		Int64("vnf_id", b.vnfID).
+		Str("prefix", prefix).
+		Uint32("table", b.targetTableID).
+		Msg("removed BGP route from VPP")
 	b.installedMu.Lock()
 	delete(b.installed, prefix)
 	b.installedMu.Unlock()
@@ -527,15 +543,24 @@ func (b *bgpInstance) Close(ctx context.Context) {
 		for _, prefix := range prefixes {
 			if b.routeWriter != nil {
 				if err := b.routeWriter.DeleteBGPRoute(cleanupCtx, b.targetTableID, prefix); err != nil {
-					slog.Warn("could not remove BGP route during shutdown", "vnf_id", b.vnfID, "prefix", prefix, "error", err)
+					log.Warn().
+						Int64("vnf_id", b.vnfID).
+						Str("prefix", prefix).
+						Err(err).
+						Msg("could not remove BGP route during shutdown")
 					continue
 				}
 			}
+			log.Trace().
+				Int64("vnf_id", b.vnfID).
+				Str("prefix", prefix).
+				Uint32("table", b.targetTableID).
+				Msg("removed BGP route from VPP during shutdown")
 			b.installedMu.Lock()
 			delete(b.installed, prefix)
 			b.installedMu.Unlock()
 		}
-		slog.Info("BGP VNF stopped", "vnf_id", b.vnfID)
+		log.Info().Int64("vnf_id", b.vnfID).Msg("BGP VNF stopped")
 	})
 }
 

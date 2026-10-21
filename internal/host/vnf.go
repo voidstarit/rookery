@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"math/big"
 	"net"
 	"net/netip"
@@ -23,6 +22,7 @@ import (
 	coredhcpconfig "github.com/coredhcp/coredhcp/config"
 	coredhcpserver "github.com/coredhcp/coredhcp/server"
 	"github.com/insomniacslk/dhcp/dhcpv6"
+	"github.com/rs/zerolog/log"
 
 	"github.com/voidstarit/rookery/internal/store"
 )
@@ -154,21 +154,21 @@ func (m *VNFManager) Start(ctx context.Context, vnf store.VNF, hostIf string) er
 		return fmt.Errorf("start %s on %s: %w", vnf.Type, hostIf, err)
 	}
 
-	slog.Info("VNF started",
-		"vnf_id", vnf.ID,
-		"type", vnf.Type,
-		"interface", hostIf,
-		"gateway", vnf.Config.Gateway,
-		"range_start", vnf.Config.RangeStart,
-		"range_end", vnf.Config.RangeEnd,
-		"leases", leasePath,
-	)
+	log.Info().
+		Int64("vnf_id", vnf.ID).
+		Str("type", vnf.Type).
+		Str("interface", hostIf).
+		Str("gateway", vnf.Config.Gateway).
+		Str("range_start", vnf.Config.RangeStart).
+		Str("range_end", vnf.Config.RangeEnd).
+		Str("leases", leasePath).
+		Msg("VNF started")
 
 	managed := &managedVNF{vnfType: vnf.Type, servers: servers, done: make(chan struct{})}
 	go func() {
 		err := servers.Wait()
 		if err != nil && !errors.Is(err, net.ErrClosed) {
-			slog.Error("VNF stopped", "vnf_id", vnf.ID, "type", vnf.Type, "interface", hostIf, "error", err)
+			log.Error().Int64("vnf_id", vnf.ID).Str("type", vnf.Type).Str("interface", hostIf).Err(err).Msg("VNF stopped")
 		}
 		close(managed.done)
 	}()

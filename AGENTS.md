@@ -54,6 +54,17 @@ Standalone Ansible playbooks (no roles, no `ansible.cfg`) that manage thin-LVM V
 - Verify with `go test ./...`, `go vet ./...`, and `gofmt -l .`; run locally with `go run ./cmd/rookery serve -db /tmp/nerds-vms.db`.
 
 ## Conventions and gotchas
+- Both binaries log through `zerolog` via `internal/logging.Setup`. `-log-level`
+  (`NERDS_VMS_LOG_LEVEL`, default `info`) and `-log-format`
+  (`NERDS_VMS_LOG_FORMAT`, `console` or `json`) configure the global logger, and
+  every line is tagged `service=rookery` or `service=vnfs`. Components hold a
+  `zerolog.Logger` value (tests use `zerolog.Nop()`); package-level events in
+  `internal/host` and `internal/api` use `github.com/rs/zerolog/log`. Use typed
+  builders (`.Str`, `.Int64`, `.Uint32`, `.Bool`, `.Dur`, `.Err`) rather than
+  pre-formatting values into strings. At trace level, `internal/vnfd` logs every
+  daemon RPC (via `TraceInterceptor`), client availability changes, supervision
+  decisions, DHCP lease allocation/renewal/release, and BGP route
+  installs/withdrawals.
 - Every playbook except `setup-vpp.yml` sets `gather_facts: false`; do not use `ansible_facts` there without enabling fact gathering.
 - Defaults live in each playbook's `vars:` block; required values are validated at runtime, so pass e.g. `-e vg_name=vg0 -e disk_lv=...` explicitly.
 - `setup-vpp.yml` restarts VPP via handlers and calls `meta: flush_handlers` before waiting on `/run/vpp/cli.sock`; preserve that order when editing.

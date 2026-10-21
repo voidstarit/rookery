@@ -1,7 +1,7 @@
 package api
 
 import (
-	"log/slog"
+	"github.com/rs/zerolog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -35,7 +35,7 @@ func TestCutoverHandlerRoutes(t *testing.T) {
 }
 
 func TestNativeHandlerRoutes(t *testing.T) {
-	server := &Server{logger: slog.Default()}
+	server := &Server{logger: zerolog.Nop()}
 	handler := server.NativeHandler()
 
 	cases := []struct {

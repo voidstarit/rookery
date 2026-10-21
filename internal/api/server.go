@@ -6,8 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"net/http"
 	"runtime/debug"
@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/readiness"
@@ -115,7 +116,7 @@ type Server struct {
 	networks  NetworkProvisioner
 	vnfs      VNFManager
 	nat       NAT44Provisioner
-	logger    *slog.Logger
+	logger    zerolog.Logger
 	handler   http.Handler
 
 	natMu      sync.Mutex
@@ -150,16 +151,13 @@ func (s *Server) ConfigureMemifDHCP(enabled bool, dir string) {
 	s.memifDir = dir
 }
 
-func newServer(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMController, networks NetworkProvisioner, vnfs VNFManager, nat NAT44Provisioner, logger *slog.Logger) *Server {
-	if logger == nil {
-		logger = slog.Default()
-	}
+func newServer(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMController, networks NetworkProvisioner, vnfs VNFManager, nat NAT44Provisioner, logger zerolog.Logger) *Server {
 	return &Server{store: st, readiness: ready, disks: disks, vms: vms, networks: networks, vnfs: vnfs, nat: nat, logger: logger, natRunning: make(map[int64]bool)}
 }
 
 // New returns the API server with only the protocol-native routes used by
 // serve.
-func New(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMController, networks NetworkProvisioner, vnfs VNFManager, nat NAT44Provisioner, logger *slog.Logger) *Server {
+func New(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMController, networks NetworkProvisioner, vnfs VNFManager, nat NAT44Provisioner, logger zerolog.Logger) *Server {
 	s := newServer(st, ready, disks, vms, networks, vnfs, nat, logger)
 	s.handler = s.NativeHandler()
 	return s
@@ -171,11 +169,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) internalError(w http.ResponseWriter, r *http.Request, err error) {
-	s.logger.Error("request failed",
-		"method", r.Method,
-		"path", r.URL.Path,
-		"error", err,
-	)
+	s.logger.Error().Str("method", r.Method).Str("path", r.URL.Path).Err(err).Msg("request failed")
 	writeError(w, http.StatusInternalServerError, "internal server error")
 }
 
@@ -279,13 +273,13 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 		if recorder.status == 0 {
 			recorder.status = http.StatusOK
 		}
-		s.logger.Info("request",
-			"method", r.Method,
-			"path", r.URL.Path,
-			"status", recorder.status,
-			"bytes", recorder.bytes,
-			"duration", time.Since(start).Round(time.Microsecond),
-		)
+		s.logger.Info().
+			Str("method", r.Method).
+			Str("path", r.URL.Path).
+			Int("status", recorder.status).
+			Int("bytes", recorder.bytes).
+			Dur("duration", time.Since(start).Round(time.Microsecond)).
+			Msg("request")
 	})
 }
 
@@ -300,12 +294,12 @@ func (s *Server) recoverPanic(next http.Handler) http.Handler {
 				panic(recovered)
 			}
 
-			s.logger.Error("panic serving request",
-				"method", r.Method,
-				"path", r.URL.Path,
-				"panic", recovered,
-				"stack", string(debug.Stack()),
-			)
+			s.logger.Error().
+				Str("method", r.Method).
+				Str("path", r.URL.Path).
+				Str("panic", fmt.Sprint(recovered)).
+				Str("stack", string(debug.Stack())).
+				Msg("panic serving request")
 			writeError(w, http.StatusInternalServerError, "internal server error")
 		}()
 

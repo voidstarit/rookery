@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -18,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -61,7 +61,7 @@ type Server struct {
 
 	manager Manager
 	dir     string // desired-spec directory
-	logger  *slog.Logger
+	logger  zerolog.Logger
 
 	mu      sync.Mutex
 	desired map[int64]*desiredVNF
@@ -79,10 +79,7 @@ type Server struct {
 }
 
 // NewServer returns a daemon server persisting desired specs under dir.
-func NewServer(manager Manager, dir string, logger *slog.Logger) *Server {
-	if logger == nil {
-		logger = slog.Default()
-	}
+func NewServer(manager Manager, dir string, logger zerolog.Logger) *Server {
 	s := &Server{
 		manager:           manager,
 		dir:               dir,
@@ -109,6 +106,7 @@ func (s *Server) Load() error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	restored := 0
 	for _, entry := range entries {
 		name := entry.Name()
 		if entry.IsDir() || !strings.HasPrefix(name, "desired-") || !strings.HasSuffix(name, ".json") {
@@ -116,18 +114,27 @@ func (s *Server) Load() error {
 		}
 		data, err := os.ReadFile(filepath.Join(s.dir, name))
 		if err != nil {
-			s.logger.Warn("could not read persisted VNF spec", "file", name, "error", err)
+			s.logger.Warn().Str("file", name).Err(err).Msg("could not read persisted VNF spec")
 			continue
 		}
 		spec := &rookeryv1.VNFSpec{}
 		if err := protojson.Unmarshal(data, spec); err != nil {
-			s.logger.Warn("could not parse persisted VNF spec", "file", name, "error", err)
+			s.logger.Warn().Str("file", name).Err(err).Msg("could not parse persisted VNF spec")
 			continue
 		}
 		if spec.GetId() <= 0 {
 			continue
 		}
 		s.desired[spec.GetId()] = &desiredVNF{spec: spec, hash: specHash(spec)}
+		restored++
+		s.logger.Trace().
+			Int64("vnf_id", spec.GetId()).
+			Str("type", spec.GetType()).
+			Str("transport", spec.GetTransport()).
+			Msg("restored desired VNF spec")
+	}
+	if restored > 0 {
+		s.logger.Info().Int("vnfs", restored).Msg("restored desired VNF specs")
 	}
 	return nil
 }
@@ -171,6 +178,14 @@ func (s *Server) EnsureVNF(ctx context.Context, request *rookeryv1.EnsureVNFRequ
 		return nil, status.Error(codes.InvalidArgument, "vnf spec is required")
 	}
 	hash := specHash(spec)
+	s.logger.Trace().
+		Int64("vnf_id", spec.GetId()).
+		Str("type", spec.GetType()).
+		Str("transport", spec.GetTransport()).
+		Str("tap", spec.GetTapHostName()).
+		Str("memif", spec.GetMemifSocket()).
+		Uint32("interface_id", spec.GetMemifSwIfIndex()).
+		Msg("ensure VNF requested")
 
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
@@ -180,10 +195,12 @@ func (s *Server) EnsureVNF(ctx context.Context, request *rookeryv1.EnsureVNFRequ
 	running := s.manager.Running(spec.GetId())
 	s.mu.Unlock()
 	if current != nil && current.hash == hash && running && s.manager.Healthy(spec.GetId()) {
+		s.logger.Trace().Int64("vnf_id", spec.GetId()).Msg("VNF runtime is unchanged")
 		return s.state(spec.GetId()), nil
 	}
 
 	if running {
+		s.logger.Trace().Int64("vnf_id", spec.GetId()).Msg("VNF spec changed; stopping runtime")
 		if err := s.manager.Stop(ctx, spec.GetId(), false); err != nil {
 			s.setDetail(spec.GetId(), err.Error())
 			return nil, status.Error(codes.Internal, "could not restart VNF: "+err.Error())
@@ -191,6 +208,7 @@ func (s *Server) EnsureVNF(ctx context.Context, request *rookeryv1.EnsureVNFRequ
 	}
 
 	vnf := storeVNF(spec)
+	s.logger.Trace().Int64("vnf_id", spec.GetId()).Str("transport", spec.GetTransport()).Msg("starting VNF runtime")
 	var err error
 	switch spec.GetTransport() {
 	case "memif":
@@ -211,7 +229,7 @@ func (s *Server) EnsureVNF(ctx context.Context, request *rookeryv1.EnsureVNFRequ
 		return nil, status.Error(codes.Internal, "could not start VNF: "+err.Error())
 	}
 	if err := s.persist(spec); err != nil {
-		s.logger.Warn("could not persist VNF spec", "vnf_id", spec.GetId(), "error", err)
+		s.logger.Warn().Int64("vnf_id", spec.GetId()).Err(err).Msg("could not persist VNF spec")
 	}
 	s.mu.Lock()
 	s.desired[spec.GetId()] = &desiredVNF{spec: spec, hash: hash}
@@ -223,6 +241,10 @@ func (s *Server) EnsureVNF(ctx context.Context, request *rookeryv1.EnsureVNFRequ
 
 // RemoveVNF stops a runtime and forgets its spec.
 func (s *Server) RemoveVNF(ctx context.Context, request *rookeryv1.RemoveVNFRequest) (*emptypb.Empty, error) {
+	s.logger.Trace().
+		Int64("vnf_id", request.GetId()).
+		Bool("remove_leases", request.GetRemoveLeases()).
+		Msg("remove VNF requested")
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
 	if err := s.manager.Stop(ctx, request.GetId(), request.GetRemoveLeases()); err != nil {
@@ -235,12 +257,14 @@ func (s *Server) RemoveVNF(ctx context.Context, request *rookeryv1.RemoveVNFRequ
 	delete(s.lastTry, request.GetId())
 	s.mu.Unlock()
 	s.forget(request.GetId())
+	s.logger.Trace().Int64("vnf_id", request.GetId()).Msg("VNF removed")
 	return &emptypb.Empty{}, nil
 }
 
 // ResetRuntime stops every runtime but keeps the desired specs. Supervision
 // pauses briefly so the API can rebuild VPP resources before runtimes restart.
 func (s *Server) ResetRuntime(ctx context.Context, _ *rookeryv1.ResetRuntimeRequest) (*emptypb.Empty, error) {
+	s.logger.Trace().Msg("reset VNF runtime requested")
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
 	if err := s.manager.ResetRuntime(ctx); err != nil {
@@ -248,12 +272,15 @@ func (s *Server) ResetRuntime(ctx context.Context, _ *rookeryv1.ResetRuntimeRequ
 	}
 	s.mu.Lock()
 	s.pausedUntil = s.now().Add(resetGracePeriod)
+	pausedUntil := s.pausedUntil
 	s.mu.Unlock()
+	s.logger.Trace().Time("supervision_resumes", pausedUntil).Msg("VNF runtimes reset")
 	return &emptypb.Empty{}, nil
 }
 
 // CleanupLegacyNetwork removes files left by the legacy per-network DHCP.
 func (s *Server) CleanupLegacyNetwork(_ context.Context, request *rookeryv1.CleanupLegacyNetworkRequest) (*emptypb.Empty, error) {
+	s.logger.Trace().Int64("network_id", request.GetNetworkId()).Msg("cleanup legacy network requested")
 	s.manager.CleanupLegacyNetwork(request.GetNetworkId())
 	return &emptypb.Empty{}, nil
 }
@@ -268,9 +295,15 @@ func (s *Server) ListVNFStates(context.Context, *rookeryv1.ListVNFStatesRequest)
 	s.mu.Unlock()
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	response := &rookeryv1.ListVNFStatesResponse{Vnfs: make([]*rookeryv1.VNFState, 0, len(ids))}
+	running := 0
 	for _, id := range ids {
-		response.Vnfs = append(response.Vnfs, s.state(id))
+		state := s.state(id)
+		if state.GetRunning() {
+			running++
+		}
+		response.Vnfs = append(response.Vnfs, state)
 	}
+	s.logger.Trace().Int("vnfs", len(ids)).Int("running", running).Msg("listed VNF states")
 	return response, nil
 }
 
@@ -280,8 +313,10 @@ func (s *Server) GetVNFState(_ context.Context, request *rookeryv1.GetVNFStateRe
 	_, ok := s.desired[request.GetId()]
 	s.mu.Unlock()
 	if !ok {
+		s.logger.Trace().Int64("vnf_id", request.GetId()).Msg("VNF state requested for an unknown VNF")
 		return nil, status.Error(codes.NotFound, "vnf is not managed by the daemon")
 	}
+	s.logger.Trace().Int64("vnf_id", request.GetId()).Msg("VNF state requested")
 	return s.state(request.GetId()), nil
 }
 
@@ -311,6 +346,7 @@ func (s *Server) ListLeases(ctx context.Context, request *rookeryv1.ListLeasesRe
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not read VNF leases: "+err.Error())
 	}
+	s.logger.Trace().Int64("vnf_id", request.GetId()).Int("leases", len(leases)).Msg("listing VNF leases")
 	response := &rookeryv1.ListLeasesResponse{
 		VnfId:  request.GetId(),
 		Type:   desired.spec.GetType(),
@@ -338,8 +374,15 @@ func (s *Server) GetBGPStatus(ctx context.Context, request *rookeryv1.GetBGPStat
 	}
 	snapshot, err := s.manager.BGPStatus(ctx, request.GetId())
 	if err != nil {
+		s.logger.Trace().Int64("vnf_id", request.GetId()).Err(err).Msg("BGP status request failed")
 		return nil, status.Error(codes.Internal, "could not read BGP status: "+err.Error())
 	}
+	s.logger.Trace().
+		Int64("vnf_id", request.GetId()).
+		Bool("established", snapshot.Established).
+		Str("session_state", snapshot.SessionState).
+		Int("received", len(snapshot.Received)).
+		Msg("BGP status requested")
 	result := &rookeryv1.VNFBGPStatus{
 		VnfId:        request.GetId(),
 		Type:         desired.spec.GetType(),
@@ -386,6 +429,7 @@ func (s *Server) superviseOnce(ctx context.Context) {
 	}
 	s.mu.Unlock()
 	if paused {
+		s.logger.Trace().Msg("VNF supervision is paused after a runtime reset")
 		return
 	}
 	for _, id := range ids {
@@ -396,6 +440,10 @@ func (s *Server) superviseOnce(ctx context.Context) {
 		last := s.lastTry[id]
 		s.mu.Unlock()
 		if !last.IsZero() && s.now().Sub(last) < s.restartBackoff {
+			s.logger.Trace().
+				Int64("vnf_id", id).
+				Dur("retry_in", s.restartBackoff-s.now().Sub(last)).
+				Msg("VNF runtime restart delayed")
 			continue
 		}
 		s.mu.Lock()
@@ -404,9 +452,9 @@ func (s *Server) superviseOnce(ctx context.Context) {
 		if spec == nil {
 			continue
 		}
-		s.logger.Info("restarting VNF runtime after failure", "vnf_id", id)
+		s.logger.Info().Int64("vnf_id", id).Msg("restarting VNF runtime after failure")
 		if _, err := s.EnsureVNF(ctx, &rookeryv1.EnsureVNFRequest{Vnf: spec}); err != nil {
-			s.logger.Warn("VNF runtime restart failed", "vnf_id", id, "error", err)
+			s.logger.Warn().Int64("vnf_id", id).Err(err).Msg("VNF runtime restart failed")
 			s.mu.Lock()
 			s.lastTry[id] = s.now()
 			s.mu.Unlock()

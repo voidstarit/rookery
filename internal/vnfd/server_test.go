@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/store"
@@ -84,7 +85,7 @@ func tapSpec(id int64, name string) *rookeryv1.VNFSpec {
 func TestEnsureIsIdempotentAndRestartsOnChange(t *testing.T) {
 	ctx := context.Background()
 	manager := newFakeManager()
-	server := NewServer(manager, t.TempDir(), nil)
+	server := NewServer(manager, t.TempDir(), zerolog.Nop())
 
 	if _, err := server.EnsureVNF(ctx, &rookeryv1.EnsureVNFRequest{Vnf: tapSpec(1, "dhcp")}); err != nil {
 		t.Fatalf("ensure: %v", err)
@@ -110,7 +111,7 @@ func TestEnsureIsIdempotentAndRestartsOnChange(t *testing.T) {
 }
 
 func TestEnsureMemifNeedsSocket(t *testing.T) {
-	server := NewServer(newFakeManager(), t.TempDir(), nil)
+	server := NewServer(newFakeManager(), t.TempDir(), zerolog.Nop())
 	spec := tapSpec(1, "dhcp")
 	spec.Transport = "memif"
 	spec.TapHostName = ""
@@ -122,7 +123,7 @@ func TestEnsureMemifNeedsSocket(t *testing.T) {
 func TestSuperviseRestartsDeadRuntime(t *testing.T) {
 	ctx := context.Background()
 	manager := newFakeManager()
-	server := NewServer(manager, t.TempDir(), nil)
+	server := NewServer(manager, t.TempDir(), zerolog.Nop())
 	server.restartBackoff = 0
 	if _, err := server.EnsureVNF(ctx, &rookeryv1.EnsureVNFRequest{Vnf: tapSpec(1, "dhcp")}); err != nil {
 		t.Fatalf("ensure: %v", err)
@@ -161,7 +162,7 @@ func TestLeasesAndBGPStatus(t *testing.T) {
 		Running: true, Established: true,
 		Received: []host.BGPReceivedPrefix{{Prefix: "6.6.6.0/24", NextHop: "10.40.0.100", ASPath: []uint32{65040}}},
 	}
-	server := NewServer(manager, t.TempDir(), nil)
+	server := NewServer(manager, t.TempDir(), zerolog.Nop())
 	if _, err := server.EnsureVNF(ctx, &rookeryv1.EnsureVNFRequest{Vnf: tapSpec(1, "dhcp")}); err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +188,7 @@ func TestRemoveVNFForgetsState(t *testing.T) {
 	ctx := context.Background()
 	manager := newFakeManager()
 	dir := t.TempDir()
-	server := NewServer(manager, dir, nil)
+	server := NewServer(manager, dir, zerolog.Nop())
 	if _, err := server.EnsureVNF(ctx, &rookeryv1.EnsureVNFRequest{Vnf: tapSpec(1, "dhcp")}); err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +202,7 @@ func TestRemoveVNFForgetsState(t *testing.T) {
 		t.Fatalf("states after remove = %+v, err = %v", states, err)
 	}
 	// A fresh server (daemon restart) must not resurrect the removed VNF.
-	fresh := NewServer(newFakeManager(), dir, nil)
+	fresh := NewServer(newFakeManager(), dir, zerolog.Nop())
 	if err := fresh.Load(); err != nil {
 		t.Fatal(err)
 	}
@@ -214,13 +215,13 @@ func TestLoadRestoresDesiredSpecs(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	manager := newFakeManager()
-	server := NewServer(manager, dir, nil)
+	server := NewServer(manager, dir, zerolog.Nop())
 	if _, err := server.EnsureVNF(ctx, &rookeryv1.EnsureVNFRequest{Vnf: tapSpec(1, "dhcp")}); err != nil {
 		t.Fatal(err)
 	}
 
 	restartedManager := newFakeManager()
-	restarted := NewServer(restartedManager, dir, nil)
+	restarted := NewServer(restartedManager, dir, zerolog.Nop())
 	if err := restarted.Load(); err != nil {
 		t.Fatal(err)
 	}

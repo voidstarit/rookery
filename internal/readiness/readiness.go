@@ -4,10 +4,10 @@ package readiness
 
 import (
 	"context"
-	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/voidstarit/rookery/internal/host"
 )
 
@@ -57,7 +57,7 @@ type Status struct {
 type Manager struct {
 	cfg       Config
 	inspector Inspector
-	logger    *slog.Logger
+	logger    zerolog.Logger
 	interval  time.Duration
 
 	mu     sync.RWMutex
@@ -66,10 +66,7 @@ type Manager struct {
 
 // NewManager returns a readiness manager. The initial status is "checking";
 // call Run or Refresh to populate it.
-func NewManager(cfg Config, inspector Inspector, logger *slog.Logger, interval time.Duration) *Manager {
-	if logger == nil {
-		logger = slog.Default()
-	}
+func NewManager(cfg Config, inspector Inspector, logger zerolog.Logger, interval time.Duration) *Manager {
 	if interval <= 0 {
 		interval = 10 * time.Second
 	}
@@ -201,19 +198,19 @@ func (m *Manager) logTransition(previous, next Status) {
 		return
 	}
 
-	args := []any{
-		"ready", next.Ready,
-		"thin_pool_state", next.ThinPool.State,
-		"vpp_state", next.VPP.State,
-	}
 	if next.Ready {
-		m.logger.Info("VM prerequisites ready", args...)
+		m.logger.Info().
+			Bool("ready", next.Ready).
+			Str("thin_pool_state", next.ThinPool.State).
+			Str("vpp_state", next.VPP.State).
+			Msg("VM prerequisites ready")
 		return
 	}
-
-	args = append(args,
-		"thin_pool_detail", next.ThinPool.Detail,
-		"vpp_detail", next.VPP.Detail,
-	)
-	m.logger.Warn("VM prerequisites not ready", args...)
+	m.logger.Warn().
+		Bool("ready", next.Ready).
+		Str("thin_pool_state", next.ThinPool.State).
+		Str("vpp_state", next.VPP.State).
+		Str("thin_pool_detail", next.ThinPool.Detail).
+		Str("vpp_detail", next.VPP.Detail).
+		Msg("VM prerequisites not ready")
 }

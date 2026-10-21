@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net"
 	"net/netip"
 	"os"
@@ -17,6 +16,7 @@ import (
 	"github.com/coredhcp/coredhcp/plugins"
 	"github.com/insomniacslk/dhcp/dhcpv6"
 	"github.com/insomniacslk/dhcp/iana"
+	"github.com/rs/zerolog/log"
 )
 
 var registerCoreDHCPv6 sync.Once
@@ -304,6 +304,12 @@ func (s *coreDHCPv6State) leaseForLocked(clientID string, now time.Time) *coreDH
 
 func (s *coreDHCPv6State) renewLocked(record *coreDHCPv6Lease, now time.Time) {
 	record.Expires = now.Add(s.leaseTime)
+	log.Trace().
+		Str("leases", s.leasePath).
+		Str("client_id", record.ClientID).
+		Str("address", record.Address.String()).
+		Str("hostname", record.Hostname).
+		Msg("DHCPv6 lease renewed")
 	s.saveLocked()
 }
 
@@ -338,6 +344,11 @@ func (s *coreDHCPv6State) allocateLocked(clientID string, requested netip.Addr, 
 	}
 	s.leases[clientID] = record
 	s.byIP[chosen.String()] = clientID
+	log.Trace().
+		Str("leases", s.leasePath).
+		Str("client_id", clientID).
+		Str("address", record.Address.String()).
+		Msg("DHCPv6 lease allocated")
 	s.saveLocked()
 	return record, nil
 }
@@ -351,6 +362,12 @@ func (s *coreDHCPv6State) purgeExpiredLocked(now time.Time) {
 }
 
 func (s *coreDHCPv6State) freeLocked(record *coreDHCPv6Lease) {
+	log.Trace().
+		Str("leases", s.leasePath).
+		Str("client_id", record.ClientID).
+		Str("address", record.Address.String()).
+		Str("hostname", record.Hostname).
+		Msg("DHCPv6 lease freed")
 	delete(s.leases, record.ClientID)
 	delete(s.byIP, record.Address.String())
 }
@@ -375,7 +392,7 @@ func (s *coreDHCPv6State) loadLeases() error {
 	if err := json.Unmarshal(data, &file); err != nil {
 		backup := s.leasePath + ".corrupt"
 		_ = os.Rename(s.leasePath, backup)
-		slog.Warn("ignoring corrupt DHCPv6 lease file", "path", s.leasePath, "backup", backup, "error", err)
+		log.Warn().Str("path", s.leasePath).Str("backup", backup).Err(err).Msg("ignoring corrupt DHCPv6 lease file")
 		return nil
 	}
 

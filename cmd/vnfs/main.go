@@ -13,13 +13,13 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 
+	"github.com/voidstarit/rookery/internal/logging"
 	"google.golang.org/grpc"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
@@ -44,6 +44,8 @@ func run(args []string) error {
 	listen := fs.String("listen", envDefault("NERDS_VMS_VNF_LISTEN", "unix:///run/rookery/vnfs.sock"), "control listen address (unix:///path or tcp://host:port)")
 	runDir := fs.String("run-dir", envDefault("NERDS_VMS_RUN_DIR", qemu.DefaultRunDir), "directory for VNF lease and state files")
 	vhostDir := fs.String("vhost-dir", envDefault("NERDS_VMS_VHOST_DIR", host.DefaultVhostDir), "directory for VPP vhost-user sockets")
+	logLevel := fs.String("log-level", envDefault("NERDS_VMS_LOG_LEVEL", "info"), "log level: trace, debug, info, warn, error")
+	logFormat := fs.String("log-format", envDefault("NERDS_VMS_LOG_FORMAT", "console"), "log format: console or json")
 
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(), "Usage: vnfs [flags]\n\n"+
@@ -64,8 +66,10 @@ func run(args []string) error {
 		return fmt.Errorf("unexpected arguments: %s", strings.Join(fs.Args(), " "))
 	}
 
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	slog.SetDefault(logger)
+	logger, err := logging.Setup(logging.Options{Level: *logLevel, Format: *logFormat, Service: "vnfs"})
+	if err != nil {
+		return err
+	}
 
 	manager, err := host.NewVNFManager(*runDir)
 	if err != nil {
@@ -79,14 +83,14 @@ func run(args []string) error {
 
 	server := vnfd.NewServer(manager, manager.Dir, logger)
 	if err := server.Load(); err != nil {
-		logger.Warn("could not restore persisted VNF specs", "error", err)
+		logger.Warn().Err(err).Msg("could not restore persisted VNF specs")
 	}
 
 	listener, err := vnfd.Listen(*listen)
 	if err != nil {
 		return err
 	}
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(vnfd.TraceInterceptor(logger)))
 	rookeryv1.RegisterVNFDaemonServer(grpcServer, server)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -101,7 +105,11 @@ func run(args []string) error {
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(signalCh)
 
-	logger.Info("VNF daemon listening", "addr", *listen, "vpp_socket", *vppSocket, "state_dir", manager.Dir)
+	logger.Info().
+		Str("addr", *listen).
+		Str("vpp_socket", *vppSocket).
+		Str("state_dir", manager.Dir).
+		Msg("VNF daemon listening")
 
 	select {
 	case err := <-errCh:
@@ -112,13 +120,13 @@ func run(args []string) error {
 		}
 		return nil
 	case sig := <-signalCh:
-		logger.Info("shutting down VNF daemon", "signal", sig.String())
+		logger.Info().Str("signal", sig.String()).Msg("shutting down VNF daemon")
 	}
 	cancel()
 	grpcServer.GracefulStop()
 	_ = listener.Close()
 	if err := server.Close(); err != nil {
-		logger.Warn("stopping VNF runtimes", "error", err)
+		logger.Warn().Err(err).Msg("stopping VNF runtimes")
 	}
 	return nil
 }
