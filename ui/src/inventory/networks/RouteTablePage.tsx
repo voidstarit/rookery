@@ -5,11 +5,12 @@ import type { FIBRoute, Route, RouteTable, VirtualInterface } from "../types";
 type RouteTablePageProps = {
   table: RouteTable;
   interfaces: VirtualInterface[];
+  bviInterfaces: string[];
   onBack: () => void;
   onChanged: () => void;
 };
 
-export function RouteTablePage({ table, interfaces, onBack, onChanged }: RouteTablePageProps) {
+export function RouteTablePage({ table, interfaces, bviInterfaces, onBack, onChanged }: RouteTablePageProps) {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [fibRoutes, setFibRoutes] = useState<FIBRoute[]>([]);
   const [loading, setLoading] = useState(true);
@@ -19,7 +20,8 @@ export function RouteTablePage({ table, interfaces, onBack, onChanged }: RouteTa
   const [fibError, setFibError] = useState("");
   const [prefix, setPrefix] = useState(table.ipv6 ? "2001:db8::/64" : "10.0.0.0/24");
   const [nextHop, setNextHop] = useState(table.ipv6 ? "2001:db8::1" : "10.0.0.1");
-  const [interfaceID, setInterfaceID] = useState("");
+  const [egress, setEgress] = useState("");
+  const [preference, setPreference] = useState("");
 
   const loadFIB = async () => {
     setFibLoading(true);
@@ -72,16 +74,28 @@ export function RouteTablePage({ table, interfaces, onBack, onChanged }: RouteTa
     if (saving) {
       return;
     }
+    if (!prefix.trim()) {
+      setError("Enter a destination prefix.");
+      return;
+    }
+    if (!nextHop.trim() && !egress) {
+      setError("Enter a next hop or select an egress interface for an attached route.");
+      return;
+    }
     setError("");
     setSaving(true);
     try {
+      const egressName = egress.startsWith("bvi:") ? egress.slice(4) : "";
+      const ifaceID = egress && !egressName ? Number(egress) : 0;
       await api<Route>(`/api/route-tables/${table.id}/routes`, {
         method: "POST",
         body: JSON.stringify({
           ipv6: table.ipv6,
           prefix: prefix.trim(),
           next_hop: nextHop.trim(),
-          ...(interfaceID ? { interface_id: Number(interfaceID) } : {}),
+          ...(ifaceID ? { interface_id: ifaceID } : {}),
+          ...(egressName ? { egress_interface: egressName } : {}),
+          preference: Math.max(0, Math.trunc(Number(preference) || 0)),
         }),
       });
       const refreshed = await api<Route[]>(`/api/route-tables/${table.id}/routes?ipv6=${table.ipv6}`);
@@ -153,24 +167,48 @@ export function RouteTablePage({ table, interfaces, onBack, onChanged }: RouteTa
             <span class="field-label">Next hop</span>
             <input
               type="text"
-              required
-              placeholder={table.ipv6 ? "2001:db8::1" : "10.0.0.1"}
+              placeholder={egress ? "optional for attached route" : table.ipv6 ? "2001:db8::1" : "10.0.0.1"}
               value={nextHop}
               onInput={(event) => setNextHop(event.currentTarget.value)}
             />
           </label>
           <label class="field">
             <span class="field-label">Egress interface</span>
-            <select value={interfaceID} onChange={(event) => setInterfaceID(event.currentTarget.value)}>
+            <select value={egress} onChange={(event) => setEgress(event.currentTarget.value)}>
               <option value="">Resolve via table</option>
               {interfaces.map((iface) => (
                 <option value={String(iface.id)} key={iface.id}>
                   {iface.name}
                 </option>
               ))}
+              {bviInterfaces.length > 0 ? (
+                <optgroup label="Network gateways (BVI)">
+                  {bviInterfaces.map((name) => (
+                    <option value={`bvi:${name}`} key={name}>
+                      {name}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
             </select>
           </label>
-          <button class="button primary" type="submit" disabled={saving || !prefix.trim() || !nextHop.trim()}>
+          <label class="field">
+            <span class="field-label">Metric / preference</span>
+            <input
+              type="number"
+              min="0"
+              max="255"
+              step="1"
+              placeholder="0"
+              value={preference}
+              onInput={(event) => setPreference(event.currentTarget.value)}
+            />
+          </label>
+          <button
+            class="button primary"
+            type="submit"
+            disabled={saving}
+          >
             {saving ? "Adding…" : "Add route"}
           </button>
         </form>
@@ -191,6 +229,7 @@ export function RouteTablePage({ table, interfaces, onBack, onChanged }: RouteTa
                   <th scope="col">Prefix</th>
                   <th scope="col">Next hop</th>
                   <th scope="col">Interface</th>
+                  <th scope="col">Preference</th>
                   <th scope="col">
                     <span class="sr-only">Actions</span>
                   </th>
@@ -200,8 +239,11 @@ export function RouteTablePage({ table, interfaces, onBack, onChanged }: RouteTa
                 {routes.map((route) => (
                   <tr key={route.id}>
                     <td class="mono">{route.prefix}</td>
-                    <td class="mono">{route.next_hop}</td>
-                    <td class="mono">{route.interface_name || "resolved by table"}</td>
+                    <td class="mono">{route.next_hop || "attached"}</td>
+                    <td class="mono">
+                      {route.egress_interface || route.interface_name || "resolved by table"}
+                    </td>
+                    <td class="mono">{route.preference || 0}</td>
                     <td>
                       <button class="row-action danger" type="button" onClick={() => void deleteRoute(route)}>
                         Delete

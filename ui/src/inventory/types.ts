@@ -159,6 +159,16 @@ export type VirtualInterface = {
   updated_at: string;
 };
 
+export type InterfaceCounters = {
+  name: string;
+  sw_if_index?: number;
+  rx_packets?: number;
+  tx_packets?: number;
+  rx_bytes?: number;
+  tx_bytes?: number;
+  sampled_at?: string;
+};
+
 export type RouteTable = {
   id: number;
   name: string;
@@ -180,6 +190,8 @@ export type Route = {
   next_hop: string;
   interface_id?: number;
   interface_name?: string;
+  egress_interface?: string;
+  preference?: number;
   created_at: string;
   updated_at: string;
 };
@@ -314,7 +326,7 @@ export type ACL = {
   updated_at: string;
 };
 
-export type VNFType = "dhcpv4" | "dhcpv6" | "nat44";
+export type VNFType = "dhcpv4" | "dhcpv6" | "nat44" | "bgp";
 
 export type DNATRule = {
   protocol: "tcp" | "udp";
@@ -336,6 +348,18 @@ export type VNFConfig = {
   outside_gateway?: string;
   nat44_pool?: string;
   dnat_rules?: DNATRule[];
+  transport?: "memif" | "tap";
+  local_as?: number;
+  router_id?: string;
+  peer_as?: number;
+  peer_ip?: string;
+  local_ip?: string;
+  peer_gateway?: string;
+  multihop_ttl?: number;
+  password?: string;
+  passive?: boolean;
+  target_table_id?: number;
+  advertise_prefixes?: string[];
 };
 
 export type DHCPStaticAssignment = {
@@ -381,6 +405,25 @@ export type VNFLease = {
   hostname?: string;
   expires_at: string;
   active: boolean;
+};
+
+export type VNFBGPReceivedPrefix = {
+  prefix: string;
+  next_hop: string;
+  as_path?: number[];
+};
+
+export type VNFBGPStatus = {
+  vnf_id: number;
+  type: string;
+  running: boolean;
+  established: boolean;
+  session_state: string;
+  peer_address: string;
+  peer_as: number;
+  local_as: number;
+  advertised: string[];
+  received: VNFBGPReceivedPrefix[];
 };
 
 export type StatusResponse = {

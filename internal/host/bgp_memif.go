@@ -1,0 +1,374 @@
+package host
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"gvisor.dev/gvisor/pkg/buffer"
+	"gvisor.dev/gvisor/pkg/tcpip"
+	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
+	"gvisor.dev/gvisor/pkg/tcpip/header"
+	"gvisor.dev/gvisor/pkg/tcpip/link/channel"
+	"gvisor.dev/gvisor/pkg/tcpip/link/ethernet"
+	"gvisor.dev/gvisor/pkg/tcpip/network/arp"
+	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
+	"gvisor.dev/gvisor/pkg/tcpip/stack"
+	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
+
+	"github.com/voidstarit/rookery/internal/store"
+)
+
+type bgpMemifRuntime struct {
+	stack  *stack.Stack
+	link   *channel.Endpoint
+	memif  *memifLink
+	server *bgpInstance
+	proxy  *bgpTCPProxy
+
+	cancel    context.CancelFunc
+	closeOnce sync.Once
+	done      chan struct{}
+}
+
+type bgpTCPProxy struct {
+	listener   net.Listener
+	stack      *stack.Stack
+	peerIP     net.IP
+	serverIP   string
+	serverPort int
+	active     bool
+	closeOnce  sync.Once
+}
+
+func (p *bgpTCPProxy) Close() {
+	p.closeOnce.Do(func() {
+		if p.listener != nil {
+			_ = p.listener.Close()
+		}
+	})
+}
+
+func (p *bgpTCPProxy) acceptLoop(ctx context.Context) {
+	for {
+		conn, err := p.listener.Accept()
+		if err != nil {
+			return
+		}
+		go p.handle(ctx, conn)
+	}
+}
+
+func (p *bgpTCPProxy) handle(ctx context.Context, conn net.Conn) {
+	defer conn.Close()
+	var remote net.Conn
+	var err error
+	if p.active {
+		remote, err = gonet.DialTCPWithBind(ctx, p.stack,
+			tcpip.FullAddress{NIC: 1},
+			tcpip.FullAddress{NIC: 1, Addr: tcpip.AddrFromSlice(p.peerIP.To4()), Port: 179},
+			header.IPv4ProtocolNumber)
+	} else {
+		remote, err = net.DialTimeout("tcp", net.JoinHostPort(p.serverIP, strconv.Itoa(p.serverPort)), 3*time.Second)
+	}
+	if err != nil {
+		slog.Warn("BGP memif proxy connect failed", "error", err)
+		return
+	}
+	defer remote.Close()
+	proxyConnections(conn, remote)
+}
+
+func proxyConnections(a, b net.Conn) {
+	done := make(chan struct{}, 2)
+	copyOne := func(dst, src net.Conn) {
+		_, _ = io.Copy(dst, src)
+		_ = dst.Close()
+		done <- struct{}{}
+	}
+	go copyOne(a, b)
+	go copyOne(b, a)
+	<-done
+}
+
+// startBGPMemif starts an embedded GoBGP instance behind a gVisor netstack
+// connected to a VPP memif. GoBGP itself still uses a loopback TCP socket;
+// the proxy translates that stream to the actual peer over gVisor.
+func startBGPMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32, routeWriter BGPRouteWriter) (*bgpMemifRuntime, error) {
+	if vnf.Type != store.VNFTypeBGP {
+		return nil, fmt.Errorf("memif BGP runtime only supports BGP VNFs, got %q", vnf.Type)
+	}
+	if vnf.Config.Transport != "memif" {
+		return nil, errors.New("BGP transport is not memif")
+	}
+	if strings.TrimSpace(socketPath) == "" {
+		return nil, errors.New("memif socket path is required")
+	}
+	localIP, localNet, err := net.ParseCIDR(strings.TrimSpace(vnf.Config.LocalIP))
+	if err != nil || localIP.To4() == nil {
+		return nil, errors.New("BGP local_ip must be an IPv4 CIDR")
+	}
+	peerIP := net.ParseIP(strings.TrimSpace(vnf.Config.PeerIP)).To4()
+	if peerIP == nil {
+		return nil, errors.New("BGP peer_ip must be an IPv4 address")
+	}
+	prefixes, err := bgpPrefixes(vnf.Config.AdvertisePrefixes)
+	if err != nil {
+		return nil, err
+	}
+
+	s := stack.New(stack.Options{
+		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol, arp.NewProtocol},
+		TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol},
+	})
+	// The gVisor NIC needs its own MAC, distinct from the VPP memif master's
+	// VNFMemifMAC, so bridge-domain learning maps the BGP address correctly.
+	link := channel.New(memifDHCPRingSize, memifDHCPMTU, tcpip.LinkAddress(vnfMemifBGPMAC(vnf.ID)))
+	eth := ethernet.New(link)
+	if err := s.CreateNIC(1, eth); err != nil {
+		return nil, fmt.Errorf("create BGP netstack NIC: %v", err)
+	}
+	local4 := localIP.To4()
+	ones, _ := localNet.Mask.Size()
+	if err := s.AddProtocolAddress(1, tcpip.ProtocolAddress{
+		Protocol: header.IPv4ProtocolNumber,
+		AddressWithPrefix: tcpip.AddressWithPrefix{
+			Address:   tcpip.AddrFromSlice(local4),
+			PrefixLen: ones,
+		},
+	}, stack.AddressProperties{}); err != nil {
+		return nil, fmt.Errorf("assign BGP netstack address: %v", err)
+	}
+	ttl := vnf.Config.MultihopTTL
+	if ttl == 0 {
+		ttl = defaultBGPMultihopTTL
+	}
+	ttlOption := tcpip.DefaultTTLOption(uint8(ttl))
+	_ = s.SetNetworkProtocolOption(ipv4.ProtocolNumber, &ttlOption)
+	// The default route is on-link unless a peer gateway is configured. With a
+	// gateway, ALL off-subnet traffic (the BGP session and ICMP echo replies to
+	// routed sources alike) goes through it, so ping answers survive a BVI hop
+	// just like the TCP session. Same-subnet destinations keep using the
+	// connected route for the local prefix.
+	routes := []tcpip.Route{{Destination: header.IPv4EmptySubnet, NIC: 1}}
+	if gateway := net.ParseIP(strings.TrimSpace(vnf.Config.PeerGateway)).To4(); gateway != nil {
+		routes[0].Gateway = tcpip.AddrFromSlice(gateway)
+	}
+	s.SetRouteTable(routes)
+
+	memif, err := newMemifLink(socketPath, ifID, vnfMemifName(vnf), vnfMemifBGPMAC(vnf.ID))
+	if err != nil {
+		s.Close()
+		s.Wait()
+		return nil, err
+	}
+
+	runtime := &bgpMemifRuntime{
+		stack: s,
+		link:  link,
+		memif: memif,
+		done:  make(chan struct{}),
+	}
+
+	// Create the local TCP relay. In passive mode GoBGP listens on loopback
+	// and the gVisor listener accepts the real peer. In active mode GoBGP
+	// dials a loopback listener which then dials the real peer through gVisor.
+	var gobgpPort int
+	var proxyPort int
+	passive := vnf.Config.Passive
+	if passive {
+		gobgpPort, err = freeTCPPort()
+		if err != nil {
+			runtime.closeStack()
+			return nil, err
+		}
+	} else {
+		proxyPort, err = freeTCPPort()
+		if err != nil {
+			runtime.closeStack()
+			return nil, err
+		}
+	}
+
+	// Start gVisor pumps before BGP so established sessions can carry traffic.
+	runCtx, cancel := context.WithCancel(context.Background())
+	runtime.cancel = cancel
+	go runtime.pumpRX(runCtx)
+	go runtime.pumpTX(runCtx)
+
+	var proxy *bgpTCPProxy
+	if passive {
+		listener, err := gonet.ListenTCP(s, tcpip.FullAddress{NIC: 1, Port: 179}, header.IPv4ProtocolNumber)
+		if err != nil {
+			runtime.Close(ctx)
+			return nil, fmt.Errorf("listen for BGP on memif: %v", err)
+		}
+		proxy = &bgpTCPProxy{
+			listener: listener, stack: s, serverIP: "127.0.0.1", serverPort: gobgpPort,
+		}
+	} else {
+		listener, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(proxyPort)))
+		if err != nil {
+			runtime.Close(ctx)
+			return nil, fmt.Errorf("listen for GoBGP proxy: %w", err)
+		}
+		proxy = &bgpTCPProxy{
+			listener: listener, stack: s, peerIP: peerIP, active: true,
+		}
+	}
+	runtime.proxy = proxy
+
+	cfg := bgpStartConfig{
+		VNF: vnf, LocalIP: local4, LocalNet: localNet, PeerIP: peerIP,
+		PeerGateway: net.ParseIP(strings.TrimSpace(vnf.Config.PeerGateway)).To4(),
+		LocalAS:     vnf.Config.LocalAS, PeerAS: vnf.Config.PeerAS, RouterID: vnf.Config.RouterID,
+		Password: "", Passive: passive, MultihopTTL: uint8(ttl),
+		TargetTableID: vnf.Config.TargetTableID, Advertise: prefixes, RouteWriter: routeWriter,
+		Neighbor: "127.0.0.1",
+	}
+	if passive {
+		cfg.ListenAddress = []string{"127.0.0.1"}
+		cfg.ListenPort = int32(gobgpPort)
+		cfg.LocalAddress = "127.0.0.1"
+	} else {
+		cfg.LocalAddress = "127.0.0.1"
+		cfg.RemoteAddress = "127.0.0.1"
+		cfg.RemotePort = uint32(proxyPort)
+		// GoBGP defaults a zero port to 179 and opens a listener. Active
+		// memif mode has no GoBGP-facing listener; use -1 to suppress it.
+		cfg.ListenPort = -1
+	}
+	server, err := startBGPServer(ctx, cfg)
+	if err != nil {
+		runtime.Close(ctx)
+		return nil, err
+	}
+	runtime.server = server
+	go proxy.acceptLoop(runCtx)
+
+	if passive {
+		slog.Info("BGP memif runtime started",
+			"vnf_id", vnf.ID,
+			"memif", socketPath,
+			"memif_name", vnfMemifName(vnf),
+			"interface_id", ifID,
+			"mac", vnfMemifBGPMAC(vnf.ID).String(),
+			"mode", "passive",
+			"listen", localIP.String()+":179",
+			"gobgp_listen", net.JoinHostPort("127.0.0.1", strconv.Itoa(gobgpPort)),
+		)
+	} else {
+		slog.Info("BGP memif runtime started",
+			"vnf_id", vnf.ID,
+			"memif", socketPath,
+			"memif_name", vnfMemifName(vnf),
+			"interface_id", ifID,
+			"mac", vnfMemifBGPMAC(vnf.ID).String(),
+			"mode", "active",
+			"dial", peerIP.String()+":179",
+			"proxy_listen", net.JoinHostPort("127.0.0.1", strconv.Itoa(proxyPort)),
+		)
+	}
+	return runtime, nil
+}
+
+func (m *bgpMemifRuntime) pumpRX(ctx context.Context) {
+	for {
+		frame, err := m.memif.readFrame(ctx)
+		if err != nil {
+			if errors.Is(err, errMemifClosed) || ctx.Err() != nil {
+				return
+			}
+			// Transient memif read errors must not kill the receive path
+			// permanently; back off briefly and keep reading.
+			slog.Warn("BGP memif receive failed", "error", err)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(100 * time.Millisecond):
+			}
+			continue
+		}
+		pkt := stack.NewPacketBuffer(stack.PacketBufferOptions{Payload: buffer.MakeWithData(frame)})
+		m.link.InjectInbound(header.IPv4ProtocolNumber, pkt)
+	}
+}
+
+func (m *bgpMemifRuntime) pumpTX(ctx context.Context) {
+	for {
+		pkt := m.link.ReadContext(ctx)
+		if pkt == nil {
+			return
+		}
+		view := pkt.ToView()
+		err := m.memif.writeFrame(view.AsSlice())
+		pkt.DecRef()
+		if err == nil {
+			continue
+		}
+		if errors.Is(err, errMemifClosed) || ctx.Err() != nil {
+			return
+		}
+		slog.Warn("BGP memif transmit failed", "error", err)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+}
+
+func (m *bgpMemifRuntime) Close(ctx context.Context) {
+	m.closeOnce.Do(func() {
+		if m.cancel != nil {
+			m.cancel()
+		}
+		if m.proxy != nil {
+			m.proxy.Close()
+		}
+		if m.server != nil {
+			m.server.Close(ctx)
+		}
+		if m.memif != nil {
+			m.memif.close()
+		}
+		if m.link != nil {
+			m.link.Close()
+		}
+		if m.stack != nil {
+			m.stack.Close()
+			m.stack.Wait()
+		}
+		slog.Info("BGP memif runtime stopped")
+		close(m.done)
+	})
+}
+
+func (m *bgpMemifRuntime) closeStack() {
+	if m.memif != nil {
+		m.memif.close()
+	}
+	if m.link != nil {
+		m.link.Close()
+	}
+	if m.stack != nil {
+		m.stack.Close()
+		m.stack.Wait()
+	}
+}
+
+func freeTCPPort() (int, error) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, err
+	}
+	defer listener.Close()
+	return listener.Addr().(*net.TCPAddr).Port, nil
+}

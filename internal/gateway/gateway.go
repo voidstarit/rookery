@@ -207,7 +207,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	disks := &diskService{store: st, runtime: options.diskProvisioner, readiness: ready, mu: options.diskMutex, logger: options.logger}
 	media := &mediaService{store: st}
 	networks := &networkService{store: st, runtime: options.networkRuntime, readiness: ready, writer: options.networkWriter, mu: options.diskMutex}
-	interfaces := &interfaceService{store: st, runtime: options.aclRuntime, attachments: options.interfaceRuntime, vms: options.vmController, readiness: ready, resourceMu: options.diskMutex, runMu: options.vmMutex}
+	interfaces := &interfaceService{store: st, runtime: options.aclRuntime, attachments: options.interfaceRuntime, vms: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, runMu: options.vmMutex}
 	acls := &aclService{store: st, runtime: options.aclRuntime, readiness: ready}
 	routeTables := &routeTableService{store: st, runtime: options.aclRuntime, readiness: ready}
 	vnfs := &vnfService{store: st, runtime: options.vnfRuntime, statusProvider: options.vnfStatusProvider, writer: options.vnfWriter}

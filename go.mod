@@ -8,6 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0
 	github.com/insomniacslk/dhcp v0.0.0-20241203100832-a481575ed0ef
+	github.com/osrg/gobgp/v3 v3.37.0
 	go.fd.io/govpp v0.13.0
 	// Official Go memif implementation (extras/v0.1.x is retracted because the
 	// module path moved, but it is the only published module with gomemif).
@@ -20,7 +21,13 @@ require (
 )
 
 require (
+	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
+	github.com/eapache/channels v1.1.0 // indirect
+	github.com/eapache/queue v1.1.0 // indirect
 	github.com/google/btree v1.1.2 // indirect
+	github.com/k-sone/critbitgo v1.4.0 // indirect
+	github.com/vishvananda/netlink v1.2.1 // indirect
+	github.com/vishvananda/netns v0.0.5 // indirect
 	golang.org/x/time v0.7.0 // indirect
 )
 

@@ -2242,6 +2242,84 @@
           "TroubleshootService"
         ]
       }
+    },
+    "/api/interfaces/counters": {
+      "get": {
+        "operationId": "InterfaceService_ListInterfaceCounters",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1InterfaceCounters"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "InterfaceService"
+        ]
+      },
+      "delete": {
+        "operationId": "InterfaceService_ResetInterfaceCounters",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "InterfaceService"
+        ]
+      }
+    },
+    "/api/vnfs/{id}/bgp": {
+      "get": {
+        "operationId": "VNFService_GetVNFBGP",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VNFBGPStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "VNFService"
+        ]
+      }
     }
   },
   "definitions": {
@@ -3702,6 +3780,50 @@
             "type": "object",
             "$ref": "#/definitions/v1DNATRule"
           }
+        },
+        "transport": {
+          "type": "string",
+          "description": "BGP configuration. IPv4 unicast only for now."
+        },
+        "local_as": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "peer_as": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "multihop_ttl": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "target_table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "router_id": {
+          "type": "string"
+        },
+        "peer_ip": {
+          "type": "string"
+        },
+        "local_ip": {
+          "type": "string"
+        },
+        "peer_gateway": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        },
+        "passive": {
+          "type": "boolean"
+        },
+        "advertise_prefixes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -3930,6 +4052,13 @@
         "interface_id": {
           "type": "string",
           "format": "int64"
+        },
+        "egress_interface": {
+          "type": "string"
+        },
+        "preference": {
+          "type": "integer",
+          "format": "int64"
         }
       }
     },
@@ -4100,6 +4229,13 @@
         "updated_at": {
           "type": "string",
           "format": "date-time"
+        },
+        "egress_interface": {
+          "type": "string"
+        },
+        "preference": {
+          "type": "integer",
+          "format": "int64"
         }
       }
     },
@@ -4180,6 +4316,101 @@
         "captured_at": {
           "type": "string",
           "format": "date-time"
+        }
+      }
+    },
+    "v1InterfaceCounters": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "rx_packets": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "tx_packets": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "rx_bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "tx_bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "sampled_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1VNFBGPReceivedPrefix": {
+      "type": "object",
+      "properties": {
+        "prefix": {
+          "type": "string"
+        },
+        "next_hop": {
+          "type": "string"
+        },
+        "as_path": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      }
+    },
+    "v1VNFBGPStatus": {
+      "type": "object",
+      "properties": {
+        "vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "type": {
+          "type": "string"
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "established": {
+          "type": "boolean"
+        },
+        "session_state": {
+          "type": "string"
+        },
+        "peer_address": {
+          "type": "string"
+        },
+        "peer_as": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "local_as": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "advertised": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "received": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VNFBGPReceivedPrefix"
+          }
         }
       }
     }

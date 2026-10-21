@@ -3,7 +3,8 @@ import { APIError, api } from "../../shared/api";
 import { showToast } from "../../shared/toast";
 import type { Network, StatusResponse, VNF } from "../types";
 import { formatDate } from "./format";
-import { VNFDialog } from "./VNFDialog";
+import { VNFPage } from "./VNFPage";
+import { VNFBGPStatusDialog } from "./VNFBGPStatusDialog";
 import { VNFLeasesDialog } from "./VNFLeasesDialog";
 import { VNFSessionsDialog } from "./VNFSessionsDialog";
 import { navigate, useRoute } from "../router";
@@ -22,6 +23,7 @@ export function VNFsTab() {
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [leasesVNF, setLeasesVNF] = useState<VNF | null>(null);
   const [sessionsVNF, setSessionsVNF] = useState<VNF | null>(null);
+  const [bgpVNF, setBGPVNF] = useState<VNF | null>(null);
   const route = useRoute();
 
   useEffect(() => {
@@ -29,6 +31,7 @@ export function VNFsTab() {
       setDialog(null);
       setLeasesVNF(null);
       setSessionsVNF(null);
+      setBGPVNF(null);
       return;
     }
     const action = route.segments[1];
@@ -36,6 +39,7 @@ export function VNFsTab() {
       const networkID = Number(route.query.get("network")) || undefined;
       setLeasesVNF(null);
       setSessionsVNF(null);
+      setBGPVNF(null);
       setDialog({ vnf: null, networkID });
       return;
     }
@@ -46,12 +50,14 @@ export function VNFsTab() {
         setDialog(mode === "edit" ? { vnf } : null);
         setLeasesVNF(mode === "leases" ? vnf : null);
         setSessionsVNF(mode === "sessions" ? vnf : null);
+        setBGPVNF(mode === "bgp" ? vnf : null);
       }
       return;
     }
     setDialog(null);
     setLeasesVNF(null);
     setSessionsVNF(null);
+    setBGPVNF(null);
   }, [route.path, route.search, vnfs]);
 
   const publishVNFs = (list: VNF[]) => {
@@ -213,6 +219,23 @@ export function VNFsTab() {
     }
   };
 
+  if (dialog) {
+    return (
+      <VNFPage
+        key={dialog.vnf ? `edit-${dialog.vnf.id}` : `new-${dialog.networkID ?? "default"}`}
+        vnf={dialog.vnf}
+        networks={networks}
+        vppReady={vppReady}
+        initialNetworkID={dialog.networkID}
+        onClose={() => {
+          setDialog(null);
+          navigate("/vnfs", true);
+        }}
+        onSaved={handleSaved}
+      />
+    );
+  }
+
   const enabled = vnfs.filter((vnf) => vnf.enabled).length;
   const leaseCount = vnfs.reduce((sum, vnf) => sum + (vnf.lease_count || 0), 0);
   const summary =
@@ -277,7 +300,7 @@ export function VNFsTab() {
                 {vnfs.map((vnf) => {
                   const network = networks.find((item) => item.id === vnf.network_id);
                   const typeLabel =
-                    vnf.type === "nat44" ? "NAT44" : vnf.type === "dhcpv6" ? "DHCPv6" : "DHCPv4";
+                    vnf.type === "nat44" ? "NAT44" : vnf.type === "bgp" ? "BGP" : vnf.type === "dhcpv6" ? "DHCPv6" : "DHCPv4";
                   const dnatCount = Array.isArray(vnf.config.dnat_rules) ? vnf.config.dnat_rules.length : 0;
                   return (
                     <tr key={vnf.id}>
@@ -306,21 +329,31 @@ export function VNFsTab() {
                           {vnf.status || "disabled"}
                         </span>
                       </td>
-                      <td class={vnf.lease_count && vnf.type !== "nat44" ? "mono" : "mono muted"}>
-                        {vnf.type === "nat44" ? "—" : String(vnf.lease_count || 0)}
+                      <td class={vnf.lease_count && vnf.type !== "nat44" && vnf.type !== "bgp" ? "mono" : "mono muted"}>
+                        {vnf.type === "nat44" || vnf.type === "bgp" ? "—" : String(vnf.lease_count || 0)}
                       </td>
                       <td class="updated hide-sm">{formatDate(vnf.updated_at)}</td>
                       <td>
                         <div class="actions">
-                          <button
-                            class="row-action"
-                            type="button"
-                            onClick={() =>
-                              navigate(`/vnfs/${vnf.id}/${vnf.type === "nat44" ? "sessions" : "leases"}`)
-                            }
-                          >
-                            {vnf.type === "nat44" ? "Sessions" : "Leases"}
-                          </button>
+                          {vnf.type === "bgp" ? (
+                            <button
+                              class="row-action"
+                              type="button"
+                              onClick={() => navigate(`/vnfs/${vnf.id}/bgp`)}
+                            >
+                              Status
+                            </button>
+                          ) : (
+                            <button
+                              class="row-action"
+                              type="button"
+                              onClick={() =>
+                                navigate(`/vnfs/${vnf.id}/${vnf.type === "nat44" ? "sessions" : "leases"}`)
+                              }
+                            >
+                              {vnf.type === "nat44" ? "Sessions" : "Leases"}
+                            </button>
+                          )}
                           <button class="row-action" type="button" onClick={() => navigate(`/vnfs/${vnf.id}/edit`)}>
                             Edit
                           </button>
@@ -349,7 +382,7 @@ export function VNFsTab() {
                 ◈
               </div>
               <h3>No network functions yet</h3>
-              <p>Add a DHCPv4 or DHCPv6 function and attach it to a Network.</p>
+              <p>Add a DHCP, NAT44, or BGP function and attach it to a Network.</p>
               <button
                 class="button primary"
                 type="button"
@@ -362,21 +395,6 @@ export function VNFsTab() {
           )}
         </div>
       </section>
-
-      {dialog ? (
-        <VNFDialog
-          key={dialog.vnf ? `edit-${dialog.vnf.id}` : `new-${dialog.networkID ?? "default"}`}
-          vnf={dialog.vnf}
-          networks={networks}
-          vppReady={vppReady}
-          initialNetworkID={dialog.networkID}
-          onClose={() => {
-            setDialog(null);
-            navigate("/vnfs", true);
-          }}
-          onSaved={handleSaved}
-        />
-      ) : null}
 
       {leasesVNF ? (
         <VNFLeasesDialog
@@ -395,6 +413,17 @@ export function VNFsTab() {
           vnf={sessionsVNF}
           onClose={() => {
             setSessionsVNF(null);
+            navigate("/vnfs", true);
+          }}
+        />
+      ) : null}
+
+      {bgpVNF ? (
+        <VNFBGPStatusDialog
+          key={`bgp-${bgpVNF.id}`}
+          vnf={bgpVNF}
+          onClose={() => {
+            setBGPVNF(null);
             navigate("/vnfs", true);
           }}
         />

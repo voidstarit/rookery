@@ -31,11 +31,17 @@ func newMemifLink(socketPath string, ifID uint32, name string, _ net.HardwareAdd
 	}
 
 	iface, err := socket.NewInterface(&memif.Arguments{
-		Id:               ifID,
-		IsMaster:         false,
-		Name:             name,
-		ConnectedFunc:    func(*memif.Interface) error { return nil },
-		DisconnectedFunc: func(*memif.Interface) error { return nil },
+		Id:       ifID,
+		IsMaster: false,
+		Name:     name,
+		ConnectedFunc: func(*memif.Interface) error {
+			slog.Info("memif slave connected", "socket", socketPath, "interface_id", ifID, "name", name)
+			return nil
+		},
+		DisconnectedFunc: func(*memif.Interface) error {
+			slog.Warn("memif slave disconnected", "socket", socketPath, "interface_id", ifID, "name", name)
+			return nil
+		},
 		MemoryConfig: memif.MemoryConfig{
 			NumQueuePairs:    1,
 			Log2RingSize:     10,

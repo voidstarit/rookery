@@ -176,11 +176,13 @@ const (
 	VNFTypeDHCPv6 = "dhcpv6"
 	// VNFTypeNAT44 is a VPP NAT44 function.
 	VNFTypeNAT44 = "nat44"
+	// VNFTypeBGP is an embedded IPv4 BGP speaker.
+	VNFTypeBGP = "bgp"
 )
 
 // ValidVNFType reports whether type is a supported network function.
 func ValidVNFType(vnfType string) bool {
-	return vnfType == VNFTypeDHCPv4 || vnfType == VNFTypeDHCPv6 || vnfType == VNFTypeNAT44
+	return vnfType == VNFTypeDHCPv4 || vnfType == VNFTypeDHCPv6 || vnfType == VNFTypeNAT44 || vnfType == VNFTypeBGP
 }
 
 // VNFConfig is the shared configuration for DHCP network functions. IPv4 and
@@ -210,6 +212,20 @@ type VNFConfig struct {
 	// outside interface. The external address is the outside interface's
 	// address, so rules keep working when the address is DHCP-assigned.
 	DNATRules []DNATRule `json:"dnat_rules,omitempty"`
+
+	// BGP configuration. IPv4 unicast only for now.
+	Transport         string   `json:"transport,omitempty"`
+	LocalAS           uint32   `json:"local_as,omitempty"`
+	RouterID          string   `json:"router_id,omitempty"`
+	PeerAS            uint32   `json:"peer_as,omitempty"`
+	PeerIP            string   `json:"peer_ip,omitempty"`
+	LocalIP           string   `json:"local_ip,omitempty"`
+	PeerGateway       string   `json:"peer_gateway,omitempty"`
+	MultihopTTL       uint32   `json:"multihop_ttl,omitempty"`
+	Password          string   `json:"password,omitempty"`
+	Passive           bool     `json:"passive,omitempty"`
+	TargetTableID     uint32   `json:"target_table_id,omitempty"`
+	AdvertisePrefixes []string `json:"advertise_prefixes,omitempty"`
 }
 
 // DHCPStaticAssignment reserves one IPv4 address for a MAC address.

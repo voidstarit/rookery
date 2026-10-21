@@ -9,6 +9,7 @@ import type {
   ACLInterfaceCounters,
   ACLRuleCounter,
   HostInterface,
+  InterfaceCounters,
   Network,
   StatusResponse,
   VirtualInterface,
@@ -40,6 +41,22 @@ function formatDate(value: string | undefined): string {
     return "—";
   }
   return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+// Whole-number byte formatting for the live traffic columns; decimals like
+// "1.5 KB/s" are dropped so the values stay easy to scan.
+function formatWholeBytes(bytes: number): string {
+  const value = Math.trunc(Number(bytes) || 0);
+  if (value >= 1024 ** 3) {
+    return `${Math.trunc(value / 1024 ** 3)} GB`;
+  }
+  if (value >= 1024 ** 2) {
+    return `${Math.trunc(value / 1024 ** 2)} MB`;
+  }
+  if (value >= 1024) {
+    return `${Math.trunc(value / 1024)} KB`;
+  }
+  return `${value} B`;
 }
 
 type BackendData = {
@@ -97,6 +114,11 @@ export function NetworksTab() {
   const [aclCounters, setACLCounters] = useState<ACLInterfaceCounters[]>([]);
   const [aclCounterError, setACLCounterError] = useState("");
   const [aclCountersLoaded, setACLCountersLoaded] = useState(false);
+  const [interfaceCounters, setInterfaceCounters] = useState<Record<string, InterfaceCounters>>({});
+  const [interfaceRates, setInterfaceRates] = useState<Record<string, { rx: number; tx: number }>>({});
+  const [countersError, setCountersError] = useState("");
+  const countersInFlightRef = useRef(false);
+  const lastCountersRef = useRef<{ at: number; bytes: Record<string, { rx: number; tx: number }> } | null>(null);
   const route = useRoute();
 
   useEffect(() => {
@@ -380,6 +402,102 @@ export function NetworksTab() {
       aclCountersInFlight = false;
       aclCountersLastLoaded = Date.now();
       setACLCountersLoaded(true);
+    }
+  };
+
+  const loadInterfaceCounters = async () => {
+    if (countersInFlightRef.current) {
+      return;
+    }
+    countersInFlightRef.current = true;
+    try {
+      const data = await api<InterfaceCounters[]>("/api/interfaces/counters");
+      const list = Array.isArray(data) ? data : [];
+      const now = Date.now();
+      const previous = lastCountersRef.current;
+      const bytes: Record<string, { rx: number; tx: number }> = {};
+      const rates: Record<string, { rx: number; tx: number }> = {};
+      const seconds = previous && now > previous.at ? (now - previous.at) / 1000 : 0;
+      for (const item of list) {
+        const rxBytes = Number(item.rx_bytes) || 0;
+        const txBytes = Number(item.tx_bytes) || 0;
+        bytes[item.name] = { rx: rxBytes, tx: txBytes };
+        const previousBytes = previous?.bytes[item.name];
+        if (previousBytes && seconds > 0) {
+          rates[item.name] = {
+            rx: rxBytes >= previousBytes.rx ? (rxBytes - previousBytes.rx) / seconds : 0,
+            tx: txBytes >= previousBytes.tx ? (txBytes - previousBytes.tx) / seconds : 0,
+          };
+        }
+      }
+      lastCountersRef.current = { at: now, bytes };
+      const byName: Record<string, InterfaceCounters> = {};
+      for (const item of list) {
+        byName[item.name] = item;
+      }
+      setInterfaceCounters(byName);
+      setInterfaceRates(rates);
+      setCountersError("");
+    } catch (err) {
+      setCountersError(err instanceof Error ? err.message : String(err));
+    } finally {
+      countersInFlightRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    // The shell keeps this component mounted and just hides the panel when
+    // another tab is selected, and `section` can stay "interfaces" after
+    // navigating away, so also require the current route to be inside the
+    // Network tab and the panel to actually be visible.
+    const root = route.segments[0];
+    const inNetworkTab =
+      root === "networks" ||
+      root === "interfaces" ||
+      root === "acls" ||
+      root === "route-tables";
+    const networksPanel = document.getElementById("networks-panel");
+    if (
+      section !== "interfaces" ||
+      !inNetworkTab ||
+      !vppReady ||
+      (networksPanel !== null && networksPanel.hidden)
+    ) {
+      return;
+    }
+    const poll = () => {
+      if (!document.hidden) {
+        void loadInterfaceCounters();
+      }
+    };
+    poll();
+    const timer = window.setInterval(poll, 2000);
+    return () => {
+      window.clearInterval(timer);
+    };
+    // loadInterfaceCounters only uses refs and state setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section, route.path, vppReady]);
+
+  const resetInterfaceCounters = async () => {
+    if (
+      !window.confirm(
+        "Reset VPP interface counters?\n\nThis clears the RX/TX counters for all VPP interfaces."
+      )
+    ) {
+      return;
+    }
+    try {
+      await api("/api/interfaces/counters", { method: "DELETE" });
+      lastCountersRef.current = null;
+      setInterfaceRates({});
+      setCountersError("");
+      showToast("Reset interface counters");
+      void loadInterfaceCounters();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setCountersError(message);
+      showToast(`Could not reset interface counters: ${message}`, true);
     }
   };
 
@@ -876,7 +994,14 @@ export function NetworksTab() {
         <div class="panel-head">
           <div>
             <h2 id="interfaces-heading">Rookery Virtual Interfaces</h2>
-            <p class="panel-subtitle">{interfaceSummary}</p>
+            <p class="panel-subtitle">
+              {interfaceSummary}
+              {vppReady ? (
+                <span class="live-indicator" data-live={countersError ? "false" : "true"}>
+                  {countersError ? "counters unavailable" : "live counters"}
+                </span>
+              ) : null}
+            </p>
           </div>
           <div class="actions">
             <button
@@ -885,6 +1010,15 @@ export function NetworksTab() {
               onClick={() => void loadACLCounters(true)}
             >
               Refresh counters
+            </button>
+            <button
+              class="button ghost"
+              type="button"
+              disabled={!vppReady}
+              title={vppReady ? "" : "VPP must be ready to reset interface counters."}
+              onClick={() => void resetInterfaceCounters()}
+            >
+              Reset counters
             </button>
             <button
               class="button primary"
@@ -913,6 +1047,10 @@ export function NetworksTab() {
           </div>
         ) : null}
 
+        {countersError ? (
+          <p class="field-hint">Live counters unavailable: {countersError}</p>
+        ) : null}
+
         <div class="table-wrap">
           {interfaces.length > 0 ? (
             <table>
@@ -922,6 +1060,8 @@ export function NetworksTab() {
                   <th scope="col">Network</th>
                   <th scope="col">MAC</th>
                   <th scope="col">Attached VM</th>
+                  <th scope="col">TX/RX</th>
+                  <th scope="col">Speed</th>
                   <th scope="col">ACLs</th>
                   <th scope="col" class="hide-sm">
                     Updated
@@ -937,6 +1077,8 @@ export function NetworksTab() {
                     ? vms.find((vm) => vm.id === iface.attached_vm_id)
                     : null;
                   const attached = Boolean(iface.attached_vm_id);
+                  const counter = interfaceCounters[iface.name];
+                  const rate = interfaceRates[iface.name];
                   const ownerRunning = Boolean(
                     owner && (owner.status === "running" || owner.status === "starting")
                   );
@@ -978,6 +1120,26 @@ export function NetworksTab() {
                       <td class="mono">{iface.mac || "—"}</td>
                       <td class={attached ? "mono" : "mono muted"}>
                         {owner ? owner.name : iface.attached_vm_name || "unattached"}
+                      </td>
+                      <td class={counter ? "mono traffic-cell" : "mono muted traffic-cell"}>
+                        {counter ? (
+                          <>
+                            <span class="traffic-line">↓ {formatWholeBytes(counter.rx_bytes ?? 0)}</span>
+                            <span class="traffic-line">↑ {formatWholeBytes(counter.tx_bytes ?? 0)}</span>
+                          </>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td class={rate ? "mono traffic-cell" : "mono muted traffic-cell"}>
+                        {rate ? (
+                          <>
+                            <span class="traffic-line">↓ {formatWholeBytes(rate.rx)}/s</span>
+                            <span class="traffic-line">↑ {formatWholeBytes(rate.tx)}/s</span>
+                          </>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td class={aclParts.length ? "mono" : "mono muted"}>
                         {aclParts.length ? (
@@ -1062,7 +1224,7 @@ export function NetworksTab() {
                     </tr>
                     {aclExpanded && aclParts.length > 0 ? (
                       <tr class="acl-details-row">
-                        <td colSpan={7}>
+                        <td colSpan={9}>
                           <div class="interface-acl-details">
                             <div class="interface-acl-details-head">
                               <strong>ACL details for {iface.name}</strong>
@@ -1246,6 +1408,10 @@ export function NetworksTab() {
             key={`route-page-${routeTableRoutes.ipv6 ? "v6" : "v4"}-${routeTableRoutes.id}`}
             table={routeTableRoutes}
             interfaces={interfaces}
+            bviInterfaces={networks
+              .filter((network) => Boolean(network.bvi_host_name))
+              .map((network) => network.bvi_host_name || "")
+              .filter(Boolean)}
             onBack={() => {
               setRouteTableRoutes(null);
               navigate("/networks/routes", true);

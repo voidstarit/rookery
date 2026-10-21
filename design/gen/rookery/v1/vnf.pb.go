@@ -159,6 +159,19 @@ type VNFConfig struct {
 	OutsideGateway    string                  `protobuf:"bytes,10,opt,name=outside_gateway,json=outsideGateway,proto3" json:"outside_gateway,omitempty"`
 	Nat44Pool         string                  `protobuf:"bytes,11,opt,name=nat44_pool,json=nat44Pool,proto3" json:"nat44_pool,omitempty"`
 	DnatRules         []*DNATRule             `protobuf:"bytes,12,rep,name=dnat_rules,json=dnatRules,proto3" json:"dnat_rules,omitempty"`
+	// BGP configuration. IPv4 unicast only for now.
+	Transport         string   `protobuf:"bytes,13,opt,name=transport,proto3" json:"transport,omitempty"`
+	LocalAs           uint32   `protobuf:"varint,14,opt,name=local_as,json=localAs,proto3" json:"local_as,omitempty"`
+	RouterId          string   `protobuf:"bytes,15,opt,name=router_id,json=routerId,proto3" json:"router_id,omitempty"`
+	PeerAs            uint32   `protobuf:"varint,16,opt,name=peer_as,json=peerAs,proto3" json:"peer_as,omitempty"`
+	PeerIp            string   `protobuf:"bytes,17,opt,name=peer_ip,json=peerIp,proto3" json:"peer_ip,omitempty"`
+	LocalIp           string   `protobuf:"bytes,18,opt,name=local_ip,json=localIp,proto3" json:"local_ip,omitempty"`
+	PeerGateway       string   `protobuf:"bytes,19,opt,name=peer_gateway,json=peerGateway,proto3" json:"peer_gateway,omitempty"`
+	MultihopTtl       uint32   `protobuf:"varint,20,opt,name=multihop_ttl,json=multihopTtl,proto3" json:"multihop_ttl,omitempty"`
+	Password          string   `protobuf:"bytes,21,opt,name=password,proto3" json:"password,omitempty"`
+	Passive           bool     `protobuf:"varint,22,opt,name=passive,proto3" json:"passive,omitempty"`
+	TargetTableId     uint32   `protobuf:"varint,23,opt,name=target_table_id,json=targetTableId,proto3" json:"target_table_id,omitempty"`
+	AdvertisePrefixes []string `protobuf:"bytes,24,rep,name=advertise_prefixes,json=advertisePrefixes,proto3" json:"advertise_prefixes,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -273,6 +286,90 @@ func (x *VNFConfig) GetNat44Pool() string {
 func (x *VNFConfig) GetDnatRules() []*DNATRule {
 	if x != nil {
 		return x.DnatRules
+	}
+	return nil
+}
+
+func (x *VNFConfig) GetTransport() string {
+	if x != nil {
+		return x.Transport
+	}
+	return ""
+}
+
+func (x *VNFConfig) GetLocalAs() uint32 {
+	if x != nil {
+		return x.LocalAs
+	}
+	return 0
+}
+
+func (x *VNFConfig) GetRouterId() string {
+	if x != nil {
+		return x.RouterId
+	}
+	return ""
+}
+
+func (x *VNFConfig) GetPeerAs() uint32 {
+	if x != nil {
+		return x.PeerAs
+	}
+	return 0
+}
+
+func (x *VNFConfig) GetPeerIp() string {
+	if x != nil {
+		return x.PeerIp
+	}
+	return ""
+}
+
+func (x *VNFConfig) GetLocalIp() string {
+	if x != nil {
+		return x.LocalIp
+	}
+	return ""
+}
+
+func (x *VNFConfig) GetPeerGateway() string {
+	if x != nil {
+		return x.PeerGateway
+	}
+	return ""
+}
+
+func (x *VNFConfig) GetMultihopTtl() uint32 {
+	if x != nil {
+		return x.MultihopTtl
+	}
+	return 0
+}
+
+func (x *VNFConfig) GetPassword() string {
+	if x != nil {
+		return x.Password
+	}
+	return ""
+}
+
+func (x *VNFConfig) GetPassive() bool {
+	if x != nil {
+		return x.Passive
+	}
+	return false
+}
+
+func (x *VNFConfig) GetTargetTableId() uint32 {
+	if x != nil {
+		return x.TargetTableId
+	}
+	return 0
+}
+
+func (x *VNFConfig) GetAdvertisePrefixes() []string {
+	if x != nil {
+		return x.AdvertisePrefixes
 	}
 	return nil
 }
@@ -1073,6 +1170,226 @@ func (x *ListVNFSessionsResponse) GetSessions() []string {
 	return nil
 }
 
+type VNFBGPReceivedPrefix struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Prefix        string                 `protobuf:"bytes,1,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	NextHop       string                 `protobuf:"bytes,2,opt,name=next_hop,json=nextHop,proto3" json:"next_hop,omitempty"`
+	AsPath        []uint32               `protobuf:"varint,3,rep,packed,name=as_path,json=asPath,proto3" json:"as_path,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VNFBGPReceivedPrefix) Reset() {
+	*x = VNFBGPReceivedPrefix{}
+	mi := &file_rookery_v1_vnf_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VNFBGPReceivedPrefix) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VNFBGPReceivedPrefix) ProtoMessage() {}
+
+func (x *VNFBGPReceivedPrefix) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnf_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VNFBGPReceivedPrefix.ProtoReflect.Descriptor instead.
+func (*VNFBGPReceivedPrefix) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *VNFBGPReceivedPrefix) GetPrefix() string {
+	if x != nil {
+		return x.Prefix
+	}
+	return ""
+}
+
+func (x *VNFBGPReceivedPrefix) GetNextHop() string {
+	if x != nil {
+		return x.NextHop
+	}
+	return ""
+}
+
+func (x *VNFBGPReceivedPrefix) GetAsPath() []uint32 {
+	if x != nil {
+		return x.AsPath
+	}
+	return nil
+}
+
+type VNFBGPStatus struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	VnfId         int64                   `protobuf:"varint,1,opt,name=vnf_id,json=vnfId,proto3" json:"vnf_id,omitempty"`
+	Type          string                  `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	Running       bool                    `protobuf:"varint,3,opt,name=running,proto3" json:"running,omitempty"`
+	Established   bool                    `protobuf:"varint,4,opt,name=established,proto3" json:"established,omitempty"`
+	SessionState  string                  `protobuf:"bytes,5,opt,name=session_state,json=sessionState,proto3" json:"session_state,omitempty"`
+	PeerAddress   string                  `protobuf:"bytes,6,opt,name=peer_address,json=peerAddress,proto3" json:"peer_address,omitempty"`
+	PeerAs        uint32                  `protobuf:"varint,7,opt,name=peer_as,json=peerAs,proto3" json:"peer_as,omitempty"`
+	LocalAs       uint32                  `protobuf:"varint,8,opt,name=local_as,json=localAs,proto3" json:"local_as,omitempty"`
+	Advertised    []string                `protobuf:"bytes,9,rep,name=advertised,proto3" json:"advertised,omitempty"`
+	Received      []*VNFBGPReceivedPrefix `protobuf:"bytes,10,rep,name=received,proto3" json:"received,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VNFBGPStatus) Reset() {
+	*x = VNFBGPStatus{}
+	mi := &file_rookery_v1_vnf_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VNFBGPStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VNFBGPStatus) ProtoMessage() {}
+
+func (x *VNFBGPStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnf_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VNFBGPStatus.ProtoReflect.Descriptor instead.
+func (*VNFBGPStatus) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *VNFBGPStatus) GetVnfId() int64 {
+	if x != nil {
+		return x.VnfId
+	}
+	return 0
+}
+
+func (x *VNFBGPStatus) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *VNFBGPStatus) GetRunning() bool {
+	if x != nil {
+		return x.Running
+	}
+	return false
+}
+
+func (x *VNFBGPStatus) GetEstablished() bool {
+	if x != nil {
+		return x.Established
+	}
+	return false
+}
+
+func (x *VNFBGPStatus) GetSessionState() string {
+	if x != nil {
+		return x.SessionState
+	}
+	return ""
+}
+
+func (x *VNFBGPStatus) GetPeerAddress() string {
+	if x != nil {
+		return x.PeerAddress
+	}
+	return ""
+}
+
+func (x *VNFBGPStatus) GetPeerAs() uint32 {
+	if x != nil {
+		return x.PeerAs
+	}
+	return 0
+}
+
+func (x *VNFBGPStatus) GetLocalAs() uint32 {
+	if x != nil {
+		return x.LocalAs
+	}
+	return 0
+}
+
+func (x *VNFBGPStatus) GetAdvertised() []string {
+	if x != nil {
+		return x.Advertised
+	}
+	return nil
+}
+
+func (x *VNFBGPStatus) GetReceived() []*VNFBGPReceivedPrefix {
+	if x != nil {
+		return x.Received
+	}
+	return nil
+}
+
+type GetVNFBGPRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetVNFBGPRequest) Reset() {
+	*x = GetVNFBGPRequest{}
+	mi := &file_rookery_v1_vnf_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetVNFBGPRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetVNFBGPRequest) ProtoMessage() {}
+
+func (x *GetVNFBGPRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnf_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetVNFBGPRequest.ProtoReflect.Descriptor instead.
+func (*GetVNFBGPRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *GetVNFBGPRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
 var File_rookery_v1_vnf_proto protoreflect.FileDescriptor
 
 const file_rookery_v1_vnf_proto_rawDesc = "" +
@@ -1088,7 +1405,7 @@ const file_rookery_v1_vnf_proto_rawDesc = "" +
 	"\rexternal_port\x18\x02 \x01(\x05B\v\xfaB\b\x1a\x06\x18\xff\xff\x03(\x01R\fexternalPort\x12\"\n" +
 	"\blocal_ip\x18\x03 \x01(\tB\a\xfaB\x04r\x02x\x01R\alocalIp\x12*\n" +
 	"\n" +
-	"local_port\x18\x04 \x01(\x05B\v\xfaB\b\x1a\x06\x18\xff\xff\x03(\x01R\tlocalPort\"\xc3\x04\n" +
+	"local_port\x18\x04 \x01(\x05B\v\xfaB\b\x1a\x06\x18\xff\xff\x03(\x01R\tlocalPort\"\x87\b\n" +
 	"\tVNFConfig\x12!\n" +
 	"\agateway\x18\x01 \x01(\tB\a\xfaB\x04r\x02\x18@R\agateway\x12(\n" +
 	"\vrange_start\x18\x02 \x01(\tB\a\xfaB\x04r\x02\x18@R\n" +
@@ -1106,7 +1423,19 @@ const file_rookery_v1_vnf_proto_rawDesc = "" +
 	"\n" +
 	"nat44_pool\x18\v \x01(\tB\b\xfaB\x05r\x03\x18\x80\x01R\tnat44Pool\x12>\n" +
 	"\n" +
-	"dnat_rules\x18\f \x03(\v2\x14.rookery.v1.DNATRuleB\t\xfaB\x06\x92\x01\x03\x10\x80\x02R\tdnatRules\"\xe7\x03\n" +
+	"dnat_rules\x18\f \x03(\v2\x14.rookery.v1.DNATRuleB\t\xfaB\x06\x92\x01\x03\x10\x80\x02R\tdnatRules\x121\n" +
+	"\ttransport\x18\r \x01(\tB\x13\xfaB\x10r\x0eR\x00R\x05memifR\x03tapR\ttransport\x12\x19\n" +
+	"\blocal_as\x18\x0e \x01(\rR\alocalAs\x12$\n" +
+	"\trouter_id\x18\x0f \x01(\tB\a\xfaB\x04r\x02\x18@R\brouterId\x12\x17\n" +
+	"\apeer_as\x18\x10 \x01(\rR\x06peerAs\x12 \n" +
+	"\apeer_ip\x18\x11 \x01(\tB\a\xfaB\x04r\x02\x18@R\x06peerIp\x12\"\n" +
+	"\blocal_ip\x18\x12 \x01(\tB\a\xfaB\x04r\x02\x18@R\alocalIp\x12*\n" +
+	"\fpeer_gateway\x18\x13 \x01(\tB\a\xfaB\x04r\x02\x18@R\vpeerGateway\x12!\n" +
+	"\fmultihop_ttl\x18\x14 \x01(\rR\vmultihopTtl\x12$\n" +
+	"\bpassword\x18\x15 \x01(\tB\b\xfaB\x05r\x03\x18\x80\x01R\bpassword\x12\x18\n" +
+	"\apassive\x18\x16 \x01(\bR\apassive\x12&\n" +
+	"\x0ftarget_table_id\x18\x17 \x01(\rR\rtargetTableId\x128\n" +
+	"\x12advertise_prefixes\x18\x18 \x03(\tB\t\xfaB\x06\x92\x01\x03\x10\x80\bR\x11advertisePrefixes\"\xe7\x03\n" +
 	"\x03VNF\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +
@@ -1141,12 +1470,12 @@ const file_rookery_v1_vnf_proto_rawDesc = "" +
 	"\x10ListVNFsResponse\x12#\n" +
 	"\x04vnfs\x18\x01 \x03(\v2\x0f.rookery.v1.VNFR\x04vnfs\"(\n" +
 	"\rGetVNFRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\x83\x02\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\x88\x02\n" +
 	"\x10CreateVNFRequest\x12;\n" +
 	"\x04name\x18\x01 \x01(\tB'\xfaB$r\"\x10\x01\x18@2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$R\x04name\x12&\n" +
 	"\n" +
-	"network_id\x18\x02 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\tnetworkId\x120\n" +
-	"\x04type\x18\x03 \x01(\tB\x1c\xfaB\x19r\x17R\x06dhcpv4R\x06dhcpv6R\x05nat44R\x04type\x12\x1d\n" +
+	"network_id\x18\x02 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\tnetworkId\x125\n" +
+	"\x04type\x18\x03 \x01(\tB!\xfaB\x1er\x1cR\x06dhcpv4R\x06dhcpv6R\x05nat44R\x03bgpR\x04type\x12\x1d\n" +
 	"\aenabled\x18\x04 \x01(\bH\x00R\aenabled\x88\x01\x01\x12-\n" +
 	"\x06config\x18\x05 \x01(\v2\x15.rookery.v1.VNFConfigR\x06configB\n" +
 	"\n" +
@@ -1175,7 +1504,27 @@ const file_rookery_v1_vnf_proto_rawDesc = "" +
 	"\x17ListVNFSessionsResponse\x12\x15\n" +
 	"\x06vnf_id\x18\x01 \x01(\x03R\x05vnfId\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x1a\n" +
-	"\bsessions\x18\x03 \x03(\tR\bsessions2\x8e\x06\n" +
+	"\bsessions\x18\x03 \x03(\tR\bsessions\"b\n" +
+	"\x14VNFBGPReceivedPrefix\x12\x16\n" +
+	"\x06prefix\x18\x01 \x01(\tR\x06prefix\x12\x19\n" +
+	"\bnext_hop\x18\x02 \x01(\tR\anextHop\x12\x17\n" +
+	"\aas_path\x18\x03 \x03(\rR\x06asPath\"\xcf\x02\n" +
+	"\fVNFBGPStatus\x12\x15\n" +
+	"\x06vnf_id\x18\x01 \x01(\x03R\x05vnfId\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12\x18\n" +
+	"\arunning\x18\x03 \x01(\bR\arunning\x12 \n" +
+	"\vestablished\x18\x04 \x01(\bR\vestablished\x12#\n" +
+	"\rsession_state\x18\x05 \x01(\tR\fsessionState\x12!\n" +
+	"\fpeer_address\x18\x06 \x01(\tR\vpeerAddress\x12\x17\n" +
+	"\apeer_as\x18\a \x01(\rR\x06peerAs\x12\x19\n" +
+	"\blocal_as\x18\b \x01(\rR\alocalAs\x12\x1e\n" +
+	"\n" +
+	"advertised\x18\t \x03(\tR\n" +
+	"advertised\x12<\n" +
+	"\breceived\x18\n" +
+	" \x03(\v2 .rookery.v1.VNFBGPReceivedPrefixR\breceived\"+\n" +
+	"\x10GetVNFBGPRequest\x12\x17\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id2\xef\x06\n" +
 	"\n" +
 	"VNFService\x12^\n" +
 	"\bListVNFs\x12\x1b.rookery.v1.ListVNFsRequest\x1a\x1c.rookery.v1.ListVNFsResponse\"\x17\x82\xd3\xe4\x93\x02\x11b\x04vnfs\x12\t/api/vnfs\x12L\n" +
@@ -1186,7 +1535,8 @@ const file_rookery_v1_vnf_proto_rawDesc = "" +
 	"\n" +
 	"RestartVNF\x12\x1d.rookery.v1.RestartVNFRequest\x1a\x0f.rookery.v1.VNF\"\x1e\x82\xd3\xe4\x93\x02\x18\"\x16/api/vnfs/{id}/restart\x12s\n" +
 	"\rListVNFLeases\x12 .rookery.v1.ListVNFLeasesRequest\x1a!.rookery.v1.ListVNFLeasesResponse\"\x1d\x82\xd3\xe4\x93\x02\x17\x12\x15/api/vnfs/{id}/leases\x12{\n" +
-	"\x0fListVNFSessions\x12\".rookery.v1.ListVNFSessionsRequest\x1a#.rookery.v1.ListVNFSessionsResponse\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/api/vnfs/{id}/sessionsB?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
+	"\x0fListVNFSessions\x12\".rookery.v1.ListVNFSessionsRequest\x1a#.rookery.v1.ListVNFSessionsResponse\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/api/vnfs/{id}/sessions\x12_\n" +
+	"\tGetVNFBGP\x12\x1c.rookery.v1.GetVNFBGPRequest\x1a\x18.rookery.v1.VNFBGPStatus\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/api/vnfs/{id}/bgpB?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
 
 var (
 	file_rookery_v1_vnf_proto_rawDescOnce sync.Once
@@ -1200,7 +1550,7 @@ func file_rookery_v1_vnf_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_vnf_proto_rawDescData
 }
 
-var file_rookery_v1_vnf_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_rookery_v1_vnf_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_rookery_v1_vnf_proto_goTypes = []any{
 	(*DHCPStaticAssignment)(nil),    // 0: rookery.v1.DHCPStaticAssignment
 	(*DNATRule)(nil),                // 1: rookery.v1.DNATRule
@@ -1218,41 +1568,47 @@ var file_rookery_v1_vnf_proto_goTypes = []any{
 	(*ListVNFLeasesResponse)(nil),   // 13: rookery.v1.ListVNFLeasesResponse
 	(*ListVNFSessionsRequest)(nil),  // 14: rookery.v1.ListVNFSessionsRequest
 	(*ListVNFSessionsResponse)(nil), // 15: rookery.v1.ListVNFSessionsResponse
-	(*timestamppb.Timestamp)(nil),   // 16: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),           // 17: google.protobuf.Empty
+	(*VNFBGPReceivedPrefix)(nil),    // 16: rookery.v1.VNFBGPReceivedPrefix
+	(*VNFBGPStatus)(nil),            // 17: rookery.v1.VNFBGPStatus
+	(*GetVNFBGPRequest)(nil),        // 18: rookery.v1.GetVNFBGPRequest
+	(*timestamppb.Timestamp)(nil),   // 19: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),           // 20: google.protobuf.Empty
 }
 var file_rookery_v1_vnf_proto_depIdxs = []int32{
 	0,  // 0: rookery.v1.VNFConfig.static_assignments:type_name -> rookery.v1.DHCPStaticAssignment
 	1,  // 1: rookery.v1.VNFConfig.dnat_rules:type_name -> rookery.v1.DNATRule
 	2,  // 2: rookery.v1.VNF.config:type_name -> rookery.v1.VNFConfig
-	16, // 3: rookery.v1.VNF.created_at:type_name -> google.protobuf.Timestamp
-	16, // 4: rookery.v1.VNF.updated_at:type_name -> google.protobuf.Timestamp
-	16, // 5: rookery.v1.VNFLease.expires_at:type_name -> google.protobuf.Timestamp
+	19, // 3: rookery.v1.VNF.created_at:type_name -> google.protobuf.Timestamp
+	19, // 4: rookery.v1.VNF.updated_at:type_name -> google.protobuf.Timestamp
+	19, // 5: rookery.v1.VNFLease.expires_at:type_name -> google.protobuf.Timestamp
 	3,  // 6: rookery.v1.ListVNFsResponse.vnfs:type_name -> rookery.v1.VNF
 	2,  // 7: rookery.v1.CreateVNFRequest.config:type_name -> rookery.v1.VNFConfig
 	2,  // 8: rookery.v1.UpdateVNFRequest.config:type_name -> rookery.v1.VNFConfig
 	4,  // 9: rookery.v1.ListVNFLeasesResponse.leases:type_name -> rookery.v1.VNFLease
-	5,  // 10: rookery.v1.VNFService.ListVNFs:input_type -> rookery.v1.ListVNFsRequest
-	7,  // 11: rookery.v1.VNFService.GetVNF:input_type -> rookery.v1.GetVNFRequest
-	8,  // 12: rookery.v1.VNFService.CreateVNF:input_type -> rookery.v1.CreateVNFRequest
-	9,  // 13: rookery.v1.VNFService.UpdateVNF:input_type -> rookery.v1.UpdateVNFRequest
-	10, // 14: rookery.v1.VNFService.DeleteVNF:input_type -> rookery.v1.DeleteVNFRequest
-	11, // 15: rookery.v1.VNFService.RestartVNF:input_type -> rookery.v1.RestartVNFRequest
-	12, // 16: rookery.v1.VNFService.ListVNFLeases:input_type -> rookery.v1.ListVNFLeasesRequest
-	14, // 17: rookery.v1.VNFService.ListVNFSessions:input_type -> rookery.v1.ListVNFSessionsRequest
-	6,  // 18: rookery.v1.VNFService.ListVNFs:output_type -> rookery.v1.ListVNFsResponse
-	3,  // 19: rookery.v1.VNFService.GetVNF:output_type -> rookery.v1.VNF
-	3,  // 20: rookery.v1.VNFService.CreateVNF:output_type -> rookery.v1.VNF
-	3,  // 21: rookery.v1.VNFService.UpdateVNF:output_type -> rookery.v1.VNF
-	17, // 22: rookery.v1.VNFService.DeleteVNF:output_type -> google.protobuf.Empty
-	3,  // 23: rookery.v1.VNFService.RestartVNF:output_type -> rookery.v1.VNF
-	13, // 24: rookery.v1.VNFService.ListVNFLeases:output_type -> rookery.v1.ListVNFLeasesResponse
-	15, // 25: rookery.v1.VNFService.ListVNFSessions:output_type -> rookery.v1.ListVNFSessionsResponse
-	18, // [18:26] is the sub-list for method output_type
-	10, // [10:18] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	16, // 10: rookery.v1.VNFBGPStatus.received:type_name -> rookery.v1.VNFBGPReceivedPrefix
+	5,  // 11: rookery.v1.VNFService.ListVNFs:input_type -> rookery.v1.ListVNFsRequest
+	7,  // 12: rookery.v1.VNFService.GetVNF:input_type -> rookery.v1.GetVNFRequest
+	8,  // 13: rookery.v1.VNFService.CreateVNF:input_type -> rookery.v1.CreateVNFRequest
+	9,  // 14: rookery.v1.VNFService.UpdateVNF:input_type -> rookery.v1.UpdateVNFRequest
+	10, // 15: rookery.v1.VNFService.DeleteVNF:input_type -> rookery.v1.DeleteVNFRequest
+	11, // 16: rookery.v1.VNFService.RestartVNF:input_type -> rookery.v1.RestartVNFRequest
+	12, // 17: rookery.v1.VNFService.ListVNFLeases:input_type -> rookery.v1.ListVNFLeasesRequest
+	14, // 18: rookery.v1.VNFService.ListVNFSessions:input_type -> rookery.v1.ListVNFSessionsRequest
+	18, // 19: rookery.v1.VNFService.GetVNFBGP:input_type -> rookery.v1.GetVNFBGPRequest
+	6,  // 20: rookery.v1.VNFService.ListVNFs:output_type -> rookery.v1.ListVNFsResponse
+	3,  // 21: rookery.v1.VNFService.GetVNF:output_type -> rookery.v1.VNF
+	3,  // 22: rookery.v1.VNFService.CreateVNF:output_type -> rookery.v1.VNF
+	3,  // 23: rookery.v1.VNFService.UpdateVNF:output_type -> rookery.v1.VNF
+	20, // 24: rookery.v1.VNFService.DeleteVNF:output_type -> google.protobuf.Empty
+	3,  // 25: rookery.v1.VNFService.RestartVNF:output_type -> rookery.v1.VNF
+	13, // 26: rookery.v1.VNFService.ListVNFLeases:output_type -> rookery.v1.ListVNFLeasesResponse
+	15, // 27: rookery.v1.VNFService.ListVNFSessions:output_type -> rookery.v1.ListVNFSessionsResponse
+	17, // 28: rookery.v1.VNFService.GetVNFBGP:output_type -> rookery.v1.VNFBGPStatus
+	20, // [20:29] is the sub-list for method output_type
+	11, // [11:20] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_rookery_v1_vnf_proto_init() }
@@ -1269,7 +1625,7 @@ func file_rookery_v1_vnf_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_vnf_proto_rawDesc), len(file_rookery_v1_vnf_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

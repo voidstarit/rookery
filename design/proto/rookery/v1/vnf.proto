@@ -51,6 +51,10 @@ service VNFService {
   rpc ListVNFSessions(ListVNFSessionsRequest) returns (ListVNFSessionsResponse) {
     option (google.api.http) = {get: "/api/vnfs/{id}/sessions"};
   }
+
+  rpc GetVNFBGP(GetVNFBGPRequest) returns (VNFBGPStatus) {
+    option (google.api.http) = {get: "/api/vnfs/{id}/bgp"};
+  }
 }
 
 message DHCPStaticAssignment {
@@ -80,6 +84,20 @@ message VNFConfig {
   string outside_gateway = 10 [(validate.rules).string = {max_len: 64}];
   string nat44_pool = 11 [(validate.rules).string = {max_len: 128}];
   repeated DNATRule dnat_rules = 12 [(validate.rules).repeated = {max_items: 256}];
+
+  // BGP configuration. IPv4 unicast only for now.
+  string transport = 13 [(validate.rules).string = {in: ["", "memif", "tap"]}];
+  uint32 local_as = 14;
+  string router_id = 15 [(validate.rules).string = {max_len: 64}];
+  uint32 peer_as = 16;
+  string peer_ip = 17 [(validate.rules).string = {max_len: 64}];
+  string local_ip = 18 [(validate.rules).string = {max_len: 64}];
+  string peer_gateway = 19 [(validate.rules).string = {max_len: 64}];
+  uint32 multihop_ttl = 20;
+  string password = 21 [(validate.rules).string = {max_len: 128}];
+  bool passive = 22;
+  uint32 target_table_id = 23;
+  repeated string advertise_prefixes = 24 [(validate.rules).repeated = {max_items: 1024}];
 }
 
 message VNF {
@@ -126,7 +144,7 @@ message CreateVNFRequest {
     pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
   }];
   int64 network_id = 2 [(validate.rules).int64 = {gt: 0}];
-  string type = 3 [(validate.rules).string = {in: ["dhcpv4", "dhcpv6", "nat44"]}];
+  string type = 3 [(validate.rules).string = {in: ["dhcpv4", "dhcpv6", "nat44", "bgp"]}];
   optional bool enabled = 4;
   VNFConfig config = 5;
 }
@@ -168,4 +186,27 @@ message ListVNFSessionsResponse {
   int64 vnf_id = 1;
   string type = 2;
   repeated string sessions = 3;
+}
+
+message VNFBGPReceivedPrefix {
+  string prefix = 1;
+  string next_hop = 2;
+  repeated uint32 as_path = 3;
+}
+
+message VNFBGPStatus {
+  int64 vnf_id = 1;
+  string type = 2;
+  bool running = 3;
+  bool established = 4;
+  string session_state = 5;
+  string peer_address = 6;
+  uint32 peer_as = 7;
+  uint32 local_as = 8;
+  repeated string advertised = 9;
+  repeated VNFBGPReceivedPrefix received = 10;
+}
+
+message GetVNFBGPRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
 }

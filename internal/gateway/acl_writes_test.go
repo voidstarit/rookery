@@ -41,7 +41,7 @@ func (f *fakeACLRuntime) DeleteRouteTable(_ context.Context, _ uint32, _ bool) e
 func (f *fakeACLRuntime) SetInterfaceRouteTable(_ context.Context, _ uint32, _ bool, _ uint32) error {
 	return nil
 }
-func (f *fakeACLRuntime) AddRoute(_ context.Context, _ uint32, _ bool, _, _ string, _ uint32) error {
+func (f *fakeACLRuntime) AddRoute(_ context.Context, _ uint32, _ bool, _, _, _ string, _ uint32, _ uint32) error {
 	return nil
 }
 func (f *fakeACLRuntime) DeleteRoute(_ context.Context, _ uint32, _ bool, _ string) error {

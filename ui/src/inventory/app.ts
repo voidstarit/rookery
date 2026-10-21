@@ -279,10 +279,13 @@ export function startInventory(): void {
     if (route.path === "/") {
       window.history.replaceState(null, "", "/vms");
     }
-    // Route-table detail/create pages are full-page views. Hiding the
+    // Route-table and VNF form pages are full-page views. Hiding the
     // inventory chrome makes the URL a true refreshable page instead of a
-    // panel embedded inside the Networks tab.
-    document.body.classList.toggle("route-page-mode", route.path.startsWith("/route-tables"));
+    // panel/dialog embedded inside an inventory tab.
+    const fullPage = route.path.startsWith("/route-tables") ||
+      route.path === "/vnfs/new" ||
+      /^\/vnfs\/[^/]+\/edit$/.test(route.path);
+    document.body.classList.toggle("route-page-mode", fullPage);
     selectTab(tabForPath(route.path), false, false);
   };
 

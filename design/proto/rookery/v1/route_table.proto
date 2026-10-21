@@ -102,6 +102,8 @@ message Route {
   string next_hop = 6;
   optional int64 interface_id = 7;
   string interface_name = 8;
+  string egress_interface = 11;
+  uint32 preference = 12;
   google.protobuf.Timestamp created_at = 9;
   google.protobuf.Timestamp updated_at = 10;
 }
@@ -119,8 +121,10 @@ message CreateRouteRequest {
   int64 route_table_id = 1;
   bool ipv6 = 2;
   string prefix = 3 [(validate.rules).string = {min_len: 1, max_len: 64}];
-  string next_hop = 4 [(validate.rules).string = {min_len: 1, max_len: 64}];
+  string next_hop = 4 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
   optional int64 interface_id = 5 [(validate.rules).int64 = {gt: 0}];
+  string egress_interface = 6 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
+  uint32 preference = 7;
 }
 
 message DeleteRouteRequest {

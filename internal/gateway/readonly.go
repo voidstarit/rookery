@@ -145,6 +145,7 @@ type interfaceService struct {
 	runtime     ACLRuntime
 	attachments InterfaceRuntime
 	vms         VMController
+	counters    InterfaceCounterSource
 	readiness   Readiness
 	resourceMu  *sync.Mutex
 	runMu       *sync.Mutex
@@ -158,6 +159,45 @@ func (s *interfaceService) ListInterfaces(ctx context.Context, _ *rookeryv1.List
 	response := &rookeryv1.ListInterfacesResponse{Interfaces: make([]*rookeryv1.VirtualInterface, 0, len(interfaces))}
 	for _, iface := range interfaces {
 		response.Interfaces = append(response.Interfaces, interfaceToProto(iface))
+	}
+	return response, nil
+}
+
+// ListInterfaceCounters returns cumulative VPP RX/TX counters for every
+// registered virtual interface. Missing names (for example interfaces that
+// VPP has not recreated yet after a restart) are omitted.
+func (s *interfaceService) ListInterfaceCounters(ctx context.Context, _ *rookeryv1.ListInterfaceCountersRequest) (*rookeryv1.ListInterfaceCountersResponse, error) {
+	if s.counters == nil {
+		return nil, status.Error(codes.Unavailable, "VPP network runtime is not configured")
+	}
+	if err := s.vppReady(); err != nil {
+		return nil, err
+	}
+	interfaces, err := s.store.ListInterfaces(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not list interfaces")
+	}
+	names := make([]string, 0, len(interfaces))
+	for _, iface := range interfaces {
+		names = append(names, iface.Name)
+	}
+	counters, err := s.counters.InterfaceCounters(ctx, names)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not read VPP interface counters: "+err.Error())
+	}
+	sampledAt := timestamppb.New(time.Now().UTC())
+	response := &rookeryv1.ListInterfaceCountersResponse{}
+	for _, iface := range interfaces {
+		counter, ok := counters[iface.Name]
+		if !ok {
+			continue
+		}
+		response.Interfaces = append(response.Interfaces, &rookeryv1.InterfaceCounters{
+			Name: iface.Name, SwIfIndex: iface.SwIfIndex,
+			RxPackets: counter.RXPackets, TxPackets: counter.TXPackets,
+			RxBytes: counter.RXBytes, TxBytes: counter.TXBytes,
+			SampledAt: sampledAt,
+		})
 	}
 	return response, nil
 }
@@ -286,6 +326,11 @@ func vnfToProto(vnf store.VNF) *rookeryv1.VNF {
 			StaticAssignments: static, OutsideInterface: vnf.Config.OutsideInterface,
 			OutsideAddress: vnf.Config.OutsideAddress, OutsideGateway: vnf.Config.OutsideGateway,
 			Nat44Pool: vnf.Config.NAT44Pool, DnatRules: dnat,
+			Transport: vnf.Config.Transport, LocalAs: vnf.Config.LocalAS, RouterId: vnf.Config.RouterID,
+			PeerAs: vnf.Config.PeerAS, PeerIp: vnf.Config.PeerIP, LocalIp: vnf.Config.LocalIP,
+			PeerGateway: vnf.Config.PeerGateway, MultihopTtl: vnf.Config.MultihopTTL,
+			Password: vnf.Config.Password, Passive: vnf.Config.Passive, TargetTableId: vnf.Config.TargetTableID,
+			AdvertisePrefixes: append([]string(nil), vnf.Config.AdvertisePrefixes...),
 		},
 		TapSwIfIndex: vnf.TapSwIfIndex, TapHostName: vnf.TapHostName,
 		CreatedAt: timestamp(vnf.CreatedAt), UpdatedAt: timestamp(vnf.UpdatedAt),

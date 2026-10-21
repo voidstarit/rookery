@@ -29,6 +29,7 @@ type VMController interface {
 // InterfaceCounterSource supplies VPP interface counters for VM metrics.
 type InterfaceCounterSource interface {
 	InterfaceCounters(ctx context.Context, names []string) (map[string]host.InterfaceCounters, error)
+	ResetInterfaceCounters(ctx context.Context) error
 }
 
 func (s *vmService) runtimeUnavailable() error {

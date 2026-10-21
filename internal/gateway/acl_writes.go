@@ -24,7 +24,7 @@ type ACLRuntime interface {
 	EnsureRouteTable(ctx context.Context, tableID uint32, ipv6 bool, name string) error
 	DeleteRouteTable(ctx context.Context, tableID uint32, ipv6 bool) error
 	SetInterfaceRouteTable(ctx context.Context, swIfIndex uint32, ipv6 bool, tableID uint32) error
-	AddRoute(ctx context.Context, tableID uint32, ipv6 bool, prefix, nextHop string, swIfIndex uint32) error
+	AddRoute(ctx context.Context, tableID uint32, ipv6 bool, prefix, nextHop, egressName string, swIfIndex uint32, preference uint32) error
 	DeleteRoute(ctx context.Context, tableID uint32, ipv6 bool, prefix string) error
 	DumpFIBRoutes(ctx context.Context, tableID uint32, ipv6 bool) ([]host.FIBRoute, error)
 }

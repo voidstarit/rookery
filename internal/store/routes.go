@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -15,22 +16,28 @@ var (
 	ErrRouteExists   = errors.New("route already exists")
 )
 
+// routeNamePattern validates VPP interface names used as route egress.
+var routeNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
+
 // Route is a static IP FIB entry inside a route table/VRF.
 type Route struct {
-	ID            int64     `json:"id"`
-	TableID       uint32    `json:"table_id"`
-	IPv6          bool      `json:"ipv6"`
-	Prefix        string    `json:"prefix"`
-	NextHop       string    `json:"next_hop"`
-	InterfaceID   *int64    `json:"interface_id,omitempty"`
-	InterfaceName string    `json:"interface_name,omitempty"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID              int64     `json:"id"`
+	TableID         uint32    `json:"table_id"`
+	IPv6            bool      `json:"ipv6"`
+	Prefix          string    `json:"prefix"`
+	NextHop         string    `json:"next_hop"`
+	InterfaceID     *int64    `json:"interface_id,omitempty"`
+	InterfaceName   string    `json:"interface_name,omitempty"`
+	EgressInterface string    `json:"egress_interface,omitempty"`
+	Preference      uint32    `json:"preference,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 const routeSelect = `
 	SELECT r.id, r.table_id, r.is_ipv6, r.prefix, r.next_hop,
 	       r.interface_id, COALESCE(i.name, ''),
+	       r.egress_interface, r.preference,
 	       r.created_at, r.updated_at
 	FROM routes AS r
 	LEFT JOIN virtual_interfaces AS i ON i.id = r.interface_id`
@@ -96,6 +103,7 @@ func (s *Store) GetRoute(ctx context.Context, id int64) (Route, error) {
 func (s *Store) CreateRoute(ctx context.Context, route Route) (Route, error) {
 	route.Prefix = strings.TrimSpace(route.Prefix)
 	route.NextHop = strings.TrimSpace(route.NextHop)
+	route.EgressInterface = strings.TrimSpace(route.EgressInterface)
 	ip, network, err := net.ParseCIDR(route.Prefix)
 	if err != nil {
 		return Route{}, fmt.Errorf("invalid route prefix %q: %w", route.Prefix, err)
@@ -107,9 +115,13 @@ func (s *Store) CreateRoute(ctx context.Context, route Route) (Route, error) {
 		return Route{}, errors.New("IPv6 route table cannot contain an IPv4 prefix")
 	}
 	route.Prefix = network.String()
-	nextHop := net.ParseIP(route.NextHop)
-	if nextHop == nil || (nextHop.To4() == nil) != route.IPv6 {
-		return Route{}, errors.New("next-hop address family does not match the route table")
+	if route.NextHop != "" {
+		nextHop := net.ParseIP(route.NextHop)
+		if nextHop == nil || (nextHop.To4() == nil) != route.IPv6 {
+			return Route{}, errors.New("next-hop address family does not match the route table")
+		}
+	} else if route.InterfaceID == nil && route.EgressInterface == "" {
+		return Route{}, errors.New("next-hop is required when no egress interface is set")
 	}
 	if route.TableID != 0 {
 		if _, err := s.GetRouteTableByID(ctx, route.TableID, route.IPv6); err != nil {
@@ -121,11 +133,20 @@ func (s *Store) CreateRoute(ctx context.Context, route Route) (Route, error) {
 			return Route{}, err
 		}
 	}
+	if route.InterfaceID != nil && route.EgressInterface != "" {
+		return Route{}, errors.New("interface_id and egress_interface are mutually exclusive")
+	}
+	if route.EgressInterface != "" {
+		if len(route.EgressInterface) > 64 || !routeNamePattern.MatchString(route.EgressInterface) {
+			return Route{}, fmt.Errorf("invalid egress interface name %q", route.EgressInterface)
+		}
+	}
 	now := time.Now().UTC().UnixMilli()
 	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO routes (table_id, is_ipv6, prefix, next_hop, interface_id, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		route.TableID, route.IPv6, route.Prefix, route.NextHop, route.InterfaceID, now, now,
+		INSERT INTO routes (table_id, is_ipv6, prefix, next_hop, interface_id, egress_interface, preference, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		route.TableID, route.IPv6, route.Prefix, route.NextHop, route.InterfaceID,
+		route.EgressInterface, route.Preference, now, now,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -176,7 +197,8 @@ func scanRoute(s scanner) (Route, error) {
 	)
 	if err := s.Scan(
 		&route.ID, &route.TableID, &ipv6, &route.Prefix, &route.NextHop,
-		&ifaceID, &route.InterfaceName, &createdAt, &updatedAt,
+		&ifaceID, &route.InterfaceName, &route.EgressInterface, &route.Preference,
+		&createdAt, &updatedAt,
 	); err != nil {
 		return Route{}, err
 	}

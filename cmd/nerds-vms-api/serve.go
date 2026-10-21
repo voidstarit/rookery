@@ -117,6 +117,7 @@ func runServe(args []string) error {
 	if err != nil {
 		return fmt.Errorf("prepare network functions: %w", err)
 	}
+	vnfManager.SetBGPRouteWriter(networkRunner)
 	defer func() {
 		if err := vnfManager.Close(); err != nil {
 			logger.Error("stop network functions", "error", err)

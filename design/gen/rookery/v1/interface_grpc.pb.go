@@ -20,12 +20,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	InterfaceService_ListInterfaces_FullMethodName   = "/rookery.v1.InterfaceService/ListInterfaces"
-	InterfaceService_GetInterface_FullMethodName     = "/rookery.v1.InterfaceService/GetInterface"
-	InterfaceService_CreateInterface_FullMethodName  = "/rookery.v1.InterfaceService/CreateInterface"
-	InterfaceService_UpdateInterface_FullMethodName  = "/rookery.v1.InterfaceService/UpdateInterface"
-	InterfaceService_SetInterfaceACLs_FullMethodName = "/rookery.v1.InterfaceService/SetInterfaceACLs"
-	InterfaceService_DeleteInterface_FullMethodName  = "/rookery.v1.InterfaceService/DeleteInterface"
+	InterfaceService_ListInterfaces_FullMethodName         = "/rookery.v1.InterfaceService/ListInterfaces"
+	InterfaceService_GetInterface_FullMethodName           = "/rookery.v1.InterfaceService/GetInterface"
+	InterfaceService_CreateInterface_FullMethodName        = "/rookery.v1.InterfaceService/CreateInterface"
+	InterfaceService_UpdateInterface_FullMethodName        = "/rookery.v1.InterfaceService/UpdateInterface"
+	InterfaceService_SetInterfaceACLs_FullMethodName       = "/rookery.v1.InterfaceService/SetInterfaceACLs"
+	InterfaceService_DeleteInterface_FullMethodName        = "/rookery.v1.InterfaceService/DeleteInterface"
+	InterfaceService_ListInterfaceCounters_FullMethodName  = "/rookery.v1.InterfaceService/ListInterfaceCounters"
+	InterfaceService_ResetInterfaceCounters_FullMethodName = "/rookery.v1.InterfaceService/ResetInterfaceCounters"
 )
 
 // InterfaceServiceClient is the client API for InterfaceService service.
@@ -40,6 +42,16 @@ type InterfaceServiceClient interface {
 	UpdateInterface(ctx context.Context, in *UpdateInterfaceRequest, opts ...grpc.CallOption) (*VirtualInterface, error)
 	SetInterfaceACLs(ctx context.Context, in *SetInterfaceACLsRequest, opts ...grpc.CallOption) (*VirtualInterface, error)
 	DeleteInterface(ctx context.Context, in *DeleteInterfaceRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// ListInterfaceCounters returns cumulative VPP RX/TX counters for every
+	// registered virtual interface. It must be declared after GetInterface:
+	// grpc-gateway registers handlers in declaration order and tries the newest
+	// first, so the literal /api/interfaces/counters path must be registered
+	// after the /api/interfaces/{id} pattern to win over it.
+	ListInterfaceCounters(ctx context.Context, in *ListInterfaceCountersRequest, opts ...grpc.CallOption) (*ListInterfaceCountersResponse, error)
+	// ResetInterfaceCounters clears the RX/TX counters for all VPP interfaces
+	// (vppctl clear interfaces). Like ListInterfaceCounters it must stay after
+	// DeleteInterface so the literal path beats /api/interfaces/{id}.
+	ResetInterfaceCounters(ctx context.Context, in *ResetInterfaceCountersRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type interfaceServiceClient struct {
@@ -110,6 +122,26 @@ func (c *interfaceServiceClient) DeleteInterface(ctx context.Context, in *Delete
 	return out, nil
 }
 
+func (c *interfaceServiceClient) ListInterfaceCounters(ctx context.Context, in *ListInterfaceCountersRequest, opts ...grpc.CallOption) (*ListInterfaceCountersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListInterfaceCountersResponse)
+	err := c.cc.Invoke(ctx, InterfaceService_ListInterfaceCounters_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *interfaceServiceClient) ResetInterfaceCounters(ctx context.Context, in *ResetInterfaceCountersRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, InterfaceService_ResetInterfaceCounters_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // InterfaceServiceServer is the server API for InterfaceService service.
 // All implementations must embed UnimplementedInterfaceServiceServer
 // for forward compatibility.
@@ -122,6 +154,16 @@ type InterfaceServiceServer interface {
 	UpdateInterface(context.Context, *UpdateInterfaceRequest) (*VirtualInterface, error)
 	SetInterfaceACLs(context.Context, *SetInterfaceACLsRequest) (*VirtualInterface, error)
 	DeleteInterface(context.Context, *DeleteInterfaceRequest) (*emptypb.Empty, error)
+	// ListInterfaceCounters returns cumulative VPP RX/TX counters for every
+	// registered virtual interface. It must be declared after GetInterface:
+	// grpc-gateway registers handlers in declaration order and tries the newest
+	// first, so the literal /api/interfaces/counters path must be registered
+	// after the /api/interfaces/{id} pattern to win over it.
+	ListInterfaceCounters(context.Context, *ListInterfaceCountersRequest) (*ListInterfaceCountersResponse, error)
+	// ResetInterfaceCounters clears the RX/TX counters for all VPP interfaces
+	// (vppctl clear interfaces). Like ListInterfaceCounters it must stay after
+	// DeleteInterface so the literal path beats /api/interfaces/{id}.
+	ResetInterfaceCounters(context.Context, *ResetInterfaceCountersRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedInterfaceServiceServer()
 }
 
@@ -149,6 +191,12 @@ func (UnimplementedInterfaceServiceServer) SetInterfaceACLs(context.Context, *Se
 }
 func (UnimplementedInterfaceServiceServer) DeleteInterface(context.Context, *DeleteInterfaceRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteInterface not implemented")
+}
+func (UnimplementedInterfaceServiceServer) ListInterfaceCounters(context.Context, *ListInterfaceCountersRequest) (*ListInterfaceCountersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListInterfaceCounters not implemented")
+}
+func (UnimplementedInterfaceServiceServer) ResetInterfaceCounters(context.Context, *ResetInterfaceCountersRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResetInterfaceCounters not implemented")
 }
 func (UnimplementedInterfaceServiceServer) mustEmbedUnimplementedInterfaceServiceServer() {}
 func (UnimplementedInterfaceServiceServer) testEmbeddedByValue()                          {}
@@ -279,6 +327,42 @@ func _InterfaceService_DeleteInterface_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InterfaceService_ListInterfaceCounters_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListInterfaceCountersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InterfaceServiceServer).ListInterfaceCounters(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InterfaceService_ListInterfaceCounters_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InterfaceServiceServer).ListInterfaceCounters(ctx, req.(*ListInterfaceCountersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InterfaceService_ResetInterfaceCounters_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResetInterfaceCountersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InterfaceServiceServer).ResetInterfaceCounters(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InterfaceService_ResetInterfaceCounters_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InterfaceServiceServer).ResetInterfaceCounters(ctx, req.(*ResetInterfaceCountersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // InterfaceService_ServiceDesc is the grpc.ServiceDesc for InterfaceService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -309,6 +393,14 @@ var InterfaceService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteInterface",
 			Handler:    _InterfaceService_DeleteInterface_Handler,
+		},
+		{
+			MethodName: "ListInterfaceCounters",
+			Handler:    _InterfaceService_ListInterfaceCounters_Handler,
+		},
+		{
+			MethodName: "ResetInterfaceCounters",
+			Handler:    _InterfaceService_ResetInterfaceCounters_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

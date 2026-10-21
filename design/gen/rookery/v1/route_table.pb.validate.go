@@ -571,6 +571,10 @@ func (m *Route) validate(all bool) error {
 
 	// no validation rules for InterfaceName
 
+	// no validation rules for EgressInterface
+
+	// no validation rules for Preference
+
 	if all {
 		switch v := interface{}(m.GetCreatedAt()).(type) {
 		case interface{ ValidateAll() error }:
@@ -989,16 +993,37 @@ func (m *CreateRouteRequest) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
-	if l := utf8.RuneCountInString(m.GetNextHop()); l < 1 || l > 64 {
-		err := CreateRouteRequestValidationError{
-			field:  "NextHop",
-			reason: "value length must be between 1 and 64 runes, inclusive",
+	if m.GetNextHop() != "" {
+
+		if utf8.RuneCountInString(m.GetNextHop()) > 64 {
+			err := CreateRouteRequestValidationError{
+				field:  "NextHop",
+				reason: "value length must be at most 64 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
 		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
+
 	}
+
+	if m.GetEgressInterface() != "" {
+
+		if utf8.RuneCountInString(m.GetEgressInterface()) > 64 {
+			err := CreateRouteRequestValidationError{
+				field:  "EgressInterface",
+				reason: "value length must be at most 64 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	// no validation rules for Preference
 
 	if m.InterfaceId != nil {
 

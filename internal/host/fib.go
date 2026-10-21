@@ -5,11 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"sort"
 	"strings"
 
 	"go.fd.io/govpp/binapi/fib_types"
-	"go.fd.io/govpp/binapi/ip"
+	ipapi "go.fd.io/govpp/binapi/ip"
 	"go.fd.io/govpp/binapi/ip_types"
 )
 
@@ -92,9 +93,9 @@ func (v *VPPNetwork) DumpFIBRoutes(ctx context.Context, tableID uint32, ipv6 boo
 	}
 	defer conn.Disconnect()
 
-	stream, err := ip.NewServiceClient(conn).IPRouteV2Dump(ctx, &ip.IPRouteV2Dump{
+	stream, err := ipapi.NewServiceClient(conn).IPRouteV2Dump(ctx, &ipapi.IPRouteV2Dump{
 		Src:   0,
-		Table: ip.IPTable{TableID: tableID, IsIP6: ipv6},
+		Table: ipapi.IPTable{TableID: tableID, IsIP6: ipv6},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("dump VPP routes: %w", err)
@@ -160,4 +161,94 @@ func fibPathNextHop(proto fib_types.FibPathNhProto, address ip_types.AddressUnio
 
 func cleanFIBPathType(value string) string {
 	return strings.TrimPrefix(value, "FIB_API_PATH_TYPE_")
+}
+
+// bgpFIBRouteSource is the VPP FIB source used for BGP-learned routes.
+// Value 9 is FIB_SOURCE_CLI in VPP's fib_source_t enum, chosen deliberately:
+// its priority (0x81) sits above the API source (0x80), so a BGP route wins
+// over API/interface-installed routes for the same prefix, stays distinct
+// from static API routes, and `show ip fib` labels it "CLI" (like
+// `vppctl ip route add`).
+const bgpFIBRouteSource uint8 = 9
+
+// AddBGPRoute installs an IPv4 route learned from BGP into a VPP table.
+// VPP decodes sw_if_index 0 as interface 0 (local0); a recursive path must
+// send the ~0 sentinel instead and resolve its next hop in tableID.
+func (v *VPPNetwork) AddBGPRoute(ctx context.Context, tableID uint32, prefix, nextHop string) error {
+	prefix = strings.TrimSpace(prefix)
+	if !strings.Contains(prefix, "/") {
+		return errors.New("BGP route prefix must include a mask length")
+	}
+	parsedPrefix, err := ip_types.ParsePrefix(prefix)
+	if err != nil {
+		return fmt.Errorf("parse BGP route prefix: %w", err)
+	}
+	if parsedPrefix.Address.Af != ip_types.ADDRESS_IP4 {
+		return errors.New("only IPv4 BGP routes are supported")
+	}
+	nh := net.ParseIP(strings.TrimSpace(nextHop)).To4()
+	if nh == nil {
+		return errors.New("BGP route next hop must be IPv4")
+	}
+	address := ip_types.AddressUnionIP4(ip_types.IP4Address{nh[0], nh[1], nh[2], nh[3]})
+	route := ipapi.IPRouteV2{
+		TableID: tableID,
+		Prefix:  parsedPrefix,
+		Src:     bgpFIBRouteSource,
+		Paths: []fib_types.FibPath{{
+			SwIfIndex: ^uint32(0),
+			TableID:   tableID,
+			Type:      fib_types.FIB_API_PATH_TYPE_NORMAL,
+			Proto:     fib_types.FIB_API_PATH_NH_PROTO_IP4,
+			Nh:        fib_types.FibPathNh{Address: address},
+		}},
+	}
+	return v.changeRouteV2(ctx, true, route)
+}
+
+// DeleteBGPRoute removes an IPv4 route previously learned from BGP.
+// A prefix without a mask length is treated as a /32 so that routes tracked
+// by older runtimes (which stored bare IPs) are still cleaned up on shutdown.
+func (v *VPPNetwork) DeleteBGPRoute(ctx context.Context, tableID uint32, prefix string) error {
+	prefix = strings.TrimSpace(prefix)
+	if !strings.Contains(prefix, "/") {
+		prefix += "/32"
+	}
+	parsedPrefix, err := ip_types.ParsePrefix(prefix)
+	if err != nil {
+		return fmt.Errorf("parse BGP route prefix: %w", err)
+	}
+	if parsedPrefix.Address.Af != ip_types.ADDRESS_IP4 {
+		return errors.New("only IPv4 BGP routes are supported")
+	}
+	return v.changeRouteV2(ctx, false, ipapi.IPRouteV2{
+		TableID: tableID,
+		Prefix:  parsedPrefix,
+		Src:     bgpFIBRouteSource,
+	})
+}
+
+func (v *VPPNetwork) changeRouteV2(ctx context.Context, isAdd bool, route ipapi.IPRouteV2) error {
+	conn, err := v.connect()
+	if err != nil {
+		return err
+	}
+	defer conn.Disconnect()
+	reply, err := ipapi.NewServiceClient(conn).IPRouteAddDelV2(ctx, &ipapi.IPRouteAddDelV2{
+		IsAdd: isAdd,
+		Route: route,
+	})
+	if err != nil {
+		if !isAdd && isVPPNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("change BGP route: %w", err)
+	}
+	if err := checkVPPRetval("change BGP route", reply.Retval); err != nil {
+		if !isAdd && isVPPNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }

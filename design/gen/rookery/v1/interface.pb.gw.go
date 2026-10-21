@@ -251,6 +251,48 @@ func local_request_InterfaceService_DeleteInterface_0(ctx context.Context, marsh
 	return msg, metadata, err
 }
 
+func request_InterfaceService_ListInterfaceCounters_0(ctx context.Context, marshaler runtime.Marshaler, client InterfaceServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListInterfaceCountersRequest
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.ListInterfaceCounters(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_InterfaceService_ListInterfaceCounters_0(ctx context.Context, marshaler runtime.Marshaler, server InterfaceServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListInterfaceCountersRequest
+		metadata runtime.ServerMetadata
+	)
+	msg, err := server.ListInterfaceCounters(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_InterfaceService_ResetInterfaceCounters_0(ctx context.Context, marshaler runtime.Marshaler, client InterfaceServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ResetInterfaceCountersRequest
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.ResetInterfaceCounters(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_InterfaceService_ResetInterfaceCounters_0(ctx context.Context, marshaler runtime.Marshaler, server InterfaceServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ResetInterfaceCountersRequest
+		metadata runtime.ServerMetadata
+	)
+	msg, err := server.ResetInterfaceCounters(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 // RegisterInterfaceServiceHandlerServer registers the http handlers for service InterfaceService to "mux".
 // UnaryRPC     :call InterfaceServiceServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
@@ -376,6 +418,46 @@ func RegisterInterfaceServiceHandlerServer(ctx context.Context, mux *runtime.Ser
 			return
 		}
 		forward_InterfaceService_DeleteInterface_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_InterfaceService_ListInterfaceCounters_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rookery.v1.InterfaceService/ListInterfaceCounters", runtime.WithHTTPPathPattern("/api/interfaces/counters"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_InterfaceService_ListInterfaceCounters_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_InterfaceService_ListInterfaceCounters_0(annotatedContext, mux, outboundMarshaler, w, req, response_InterfaceService_ListInterfaceCounters_0{resp.(*ListInterfaceCountersResponse)}, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodDelete, pattern_InterfaceService_ResetInterfaceCounters_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rookery.v1.InterfaceService/ResetInterfaceCounters", runtime.WithHTTPPathPattern("/api/interfaces/counters"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_InterfaceService_ResetInterfaceCounters_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_InterfaceService_ResetInterfaceCounters_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 
 	return nil
@@ -519,6 +601,40 @@ func RegisterInterfaceServiceHandlerClient(ctx context.Context, mux *runtime.Ser
 		}
 		forward_InterfaceService_DeleteInterface_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodGet, pattern_InterfaceService_ListInterfaceCounters_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/rookery.v1.InterfaceService/ListInterfaceCounters", runtime.WithHTTPPathPattern("/api/interfaces/counters"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_InterfaceService_ListInterfaceCounters_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_InterfaceService_ListInterfaceCounters_0(annotatedContext, mux, outboundMarshaler, w, req, response_InterfaceService_ListInterfaceCounters_0{resp.(*ListInterfaceCountersResponse)}, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodDelete, pattern_InterfaceService_ResetInterfaceCounters_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/rookery.v1.InterfaceService/ResetInterfaceCounters", runtime.WithHTTPPathPattern("/api/interfaces/counters"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_InterfaceService_ResetInterfaceCounters_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_InterfaceService_ResetInterfaceCounters_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	return nil
 }
 
@@ -531,20 +647,33 @@ func (m response_InterfaceService_ListInterfaces_0) XXX_ResponseBody() interface
 	return response.Interfaces
 }
 
+type response_InterfaceService_ListInterfaceCounters_0 struct {
+	*ListInterfaceCountersResponse
+}
+
+func (m response_InterfaceService_ListInterfaceCounters_0) XXX_ResponseBody() interface{} {
+	response := m.ListInterfaceCountersResponse
+	return response.Interfaces
+}
+
 var (
-	pattern_InterfaceService_ListInterfaces_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "interfaces"}, ""))
-	pattern_InterfaceService_GetInterface_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "interfaces", "id"}, ""))
-	pattern_InterfaceService_CreateInterface_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "interfaces"}, ""))
-	pattern_InterfaceService_UpdateInterface_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "interfaces", "id"}, ""))
-	pattern_InterfaceService_SetInterfaceACLs_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"api", "interfaces", "id", "acls"}, ""))
-	pattern_InterfaceService_DeleteInterface_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "interfaces", "id"}, ""))
+	pattern_InterfaceService_ListInterfaces_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "interfaces"}, ""))
+	pattern_InterfaceService_GetInterface_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "interfaces", "id"}, ""))
+	pattern_InterfaceService_CreateInterface_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "interfaces"}, ""))
+	pattern_InterfaceService_UpdateInterface_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "interfaces", "id"}, ""))
+	pattern_InterfaceService_SetInterfaceACLs_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"api", "interfaces", "id", "acls"}, ""))
+	pattern_InterfaceService_DeleteInterface_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "interfaces", "id"}, ""))
+	pattern_InterfaceService_ListInterfaceCounters_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "interfaces", "counters"}, ""))
+	pattern_InterfaceService_ResetInterfaceCounters_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "interfaces", "counters"}, ""))
 )
 
 var (
-	forward_InterfaceService_ListInterfaces_0   = runtime.ForwardResponseMessage
-	forward_InterfaceService_GetInterface_0     = runtime.ForwardResponseMessage
-	forward_InterfaceService_CreateInterface_0  = runtime.ForwardResponseMessage
-	forward_InterfaceService_UpdateInterface_0  = runtime.ForwardResponseMessage
-	forward_InterfaceService_SetInterfaceACLs_0 = runtime.ForwardResponseMessage
-	forward_InterfaceService_DeleteInterface_0  = runtime.ForwardResponseMessage
+	forward_InterfaceService_ListInterfaces_0         = runtime.ForwardResponseMessage
+	forward_InterfaceService_GetInterface_0           = runtime.ForwardResponseMessage
+	forward_InterfaceService_CreateInterface_0        = runtime.ForwardResponseMessage
+	forward_InterfaceService_UpdateInterface_0        = runtime.ForwardResponseMessage
+	forward_InterfaceService_SetInterfaceACLs_0       = runtime.ForwardResponseMessage
+	forward_InterfaceService_DeleteInterface_0        = runtime.ForwardResponseMessage
+	forward_InterfaceService_ListInterfaceCounters_0  = runtime.ForwardResponseMessage
+	forward_InterfaceService_ResetInterfaceCounters_0 = runtime.ForwardResponseMessage
 )

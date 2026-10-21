@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -45,6 +46,19 @@ type vnfConfigPayload struct {
 	OutsideGateway    string                        `json:"outside_gateway"`
 	NAT44Pool         string                        `json:"nat44_pool"`
 	DNATRules         []dnatRulePayload             `json:"dnat_rules"`
+
+	Transport         string   `json:"transport"`
+	LocalAS           uint32   `json:"local_as"`
+	RouterID          string   `json:"router_id"`
+	PeerAS            uint32   `json:"peer_as"`
+	PeerIP            string   `json:"peer_ip"`
+	LocalIP           string   `json:"local_ip"`
+	PeerGateway       string   `json:"peer_gateway"`
+	MultihopTTL       uint32   `json:"multihop_ttl"`
+	Password          string   `json:"password"`
+	Passive           bool     `json:"passive"`
+	TargetTableID     uint32   `json:"target_table_id"`
+	AdvertisePrefixes []string `json:"advertise_prefixes"`
 }
 
 type dhcpStaticAssignmentPayload struct {
@@ -88,12 +102,15 @@ func (p vnfPayload) toType() (string, error) {
 	}
 	vnfType := strings.TrimSpace(*p.Type)
 	if !store.ValidVNFType(vnfType) {
-		return "", fmt.Errorf("type must be %q or %q", store.VNFTypeDHCPv4, store.VNFTypeDHCPv6)
+		return "", fmt.Errorf("unsupported VNF type %q", vnfType)
 	}
 	return vnfType, nil
 }
 
 func (p vnfConfigPayload) toConfig(vnfType string) (store.VNFConfig, error) {
+	if vnfType == store.VNFTypeBGP {
+		return normalizeBGPConfig(p)
+	}
 	gateway := strings.TrimSpace(p.Gateway)
 	rangeStart := strings.TrimSpace(p.RangeStart)
 	rangeEnd := strings.TrimSpace(p.RangeEnd)
@@ -689,7 +706,8 @@ func (s *Server) activateVNF(ctx context.Context, vnf store.VNF) (store.VNF, err
 		return vnf, err
 	}
 
-	if s.memifDHCP && vnf.Type == store.VNFTypeDHCPv4 {
+	if (s.memifDHCP && vnf.Type == store.VNFTypeDHCPv4) ||
+		(vnf.Type == store.VNFTypeBGP && vnf.Config.Transport == "memif") {
 		return s.activateMemifVNF(ctx, vnf, network)
 	}
 
@@ -778,6 +796,17 @@ func (s *Server) VNFStatus(ctx context.Context, vnf store.VNF) (status, detail s
 	return view.Status, view.StatusDetail, view.LeaseCount
 }
 
+// VNFBGP returns the BGP session and RIB snapshot for a BGP VNF.
+func (s *Server) VNFBGP(ctx context.Context, vnf store.VNF) (host.BGPStatus, error) {
+	if s.vnfs == nil {
+		return host.BGPStatus{}, errors.New("VNF runtime is not configured")
+	}
+	if vnf.Type != store.VNFTypeBGP {
+		return host.BGPStatus{}, errors.New("BGP status is available for BGP VNFs only")
+	}
+	return s.vnfs.BGPStatus(ctx, vnf.ID)
+}
+
 // VNFSessions returns NAT44 sessions for a VNF, or an empty list when the NAT
 // runtime is unavailable.
 func (s *Server) VNFSessions(ctx context.Context, vnf store.VNF) ([]string, error) {
@@ -795,4 +824,95 @@ func (s *Server) VNFSessions(ctx context.Context, vnf store.VNF) ([]string, erro
 		sessions = []string{}
 	}
 	return sessions, nil
+}
+
+func normalizeBGPConfig(p vnfConfigPayload) (store.VNFConfig, error) {
+	transport := strings.ToLower(strings.TrimSpace(p.Transport))
+	if transport == "" {
+		transport = "memif"
+	}
+	if transport != "memif" && transport != "tap" {
+		return store.VNFConfig{}, errors.New("config.transport must be memif or tap")
+	}
+	if p.LocalAS == 0 {
+		return store.VNFConfig{}, errors.New("config.local_as is required")
+	}
+	if p.PeerAS == 0 {
+		return store.VNFConfig{}, errors.New("config.peer_as is required")
+	}
+	routerID := net.ParseIP(strings.TrimSpace(p.RouterID)).To4()
+	if routerID == nil {
+		return store.VNFConfig{}, errors.New("config.router_id must be an IPv4 address")
+	}
+	localIP, localNet, err := net.ParseCIDR(strings.TrimSpace(p.LocalIP))
+	if err != nil || localIP.To4() == nil {
+		return store.VNFConfig{}, errors.New("config.local_ip must be an IPv4 CIDR")
+	}
+	local4 := localIP.To4()
+	ones, bits := localNet.Mask.Size()
+	if bits != 32 || ones > 32 {
+		return store.VNFConfig{}, errors.New("config.local_ip must be an IPv4 CIDR")
+	}
+	peerIP := net.ParseIP(strings.TrimSpace(p.PeerIP)).To4()
+	if peerIP == nil {
+		return store.VNFConfig{}, errors.New("config.peer_ip must be an IPv4 address")
+	}
+	if peerIP.Equal(local4) {
+		return store.VNFConfig{}, errors.New("config.peer_ip cannot equal config.local_ip")
+	}
+	peerGateway := strings.TrimSpace(p.PeerGateway)
+	if peerGateway != "" {
+		gw := net.ParseIP(peerGateway).To4()
+		if gw == nil {
+			return store.VNFConfig{}, errors.New("config.peer_gateway must be an IPv4 address")
+		}
+		if !localNet.Contains(gw) {
+			return store.VNFConfig{}, errors.New("config.peer_gateway must be inside config.local_ip subnet")
+		}
+		peerGateway = gw.String()
+	} else if !localNet.Contains(peerIP) {
+		return store.VNFConfig{}, errors.New("config.peer_gateway is required when peer_ip is outside the local subnet")
+	}
+	ttl := p.MultihopTTL
+	if ttl == 0 {
+		ttl = 1
+	}
+	if ttl > 255 {
+		return store.VNFConfig{}, errors.New("config.multihop_ttl must be between 1 and 255")
+	}
+	password := strings.TrimSpace(p.Password)
+	if password != "" && transport == "memif" {
+		return store.VNFConfig{}, errors.New("BGP TCP MD5 password requires tap transport")
+	}
+	if len(p.AdvertisePrefixes) > 1024 {
+		return store.VNFConfig{}, errors.New("config.advertise_prefixes can contain at most 1024 prefixes")
+	}
+	prefixes := make([]string, 0, len(p.AdvertisePrefixes))
+	seen := make(map[string]bool, len(p.AdvertisePrefixes))
+	for i, value := range p.AdvertisePrefixes {
+		ip, network, err := net.ParseCIDR(strings.TrimSpace(value))
+		if err != nil || ip.To4() == nil {
+			return store.VNFConfig{}, fmt.Errorf("config.advertise_prefixes[%d] must be an IPv4 CIDR", i)
+		}
+		prefix := network.String()
+		if seen[prefix] {
+			continue
+		}
+		seen[prefix] = true
+		prefixes = append(prefixes, prefix)
+	}
+	return store.VNFConfig{
+		Transport:         transport,
+		LocalAS:           p.LocalAS,
+		RouterID:          routerID.String(),
+		PeerAS:            p.PeerAS,
+		PeerIP:            peerIP.String(),
+		LocalIP:           fmt.Sprintf("%s/%d", local4.String(), ones),
+		PeerGateway:       peerGateway,
+		MultihopTTL:       ttl,
+		Password:          password,
+		Passive:           p.Passive,
+		TargetTableID:     p.TargetTableID,
+		AdvertisePrefixes: prefixes,
+	}, nil
 }

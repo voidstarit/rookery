@@ -221,14 +221,19 @@ func (s *routeTableService) CreateRoute(ctx context.Context, request *rookeryv1.
 		interfaceID = &id
 		swIfIndex = iface.SwIfIndex
 	}
+	egress := strings.TrimSpace(request.GetEgressInterface())
+	if interfaceID != nil && egress != "" {
+		return nil, status.Error(codes.InvalidArgument, "interface_id and egress_interface are mutually exclusive")
+	}
 	created, err := s.store.CreateRoute(ctx, store.Route{
 		TableID: table.TableID, IPv6: table.IPv6, Prefix: request.GetPrefix(),
 		NextHop: request.GetNextHop(), InterfaceID: interfaceID,
+		EgressInterface: egress, Preference: request.GetPreference(),
 	})
 	if err != nil {
 		return nil, routeStoreError(err)
 	}
-	if err := s.runtime.AddRoute(ctx, created.TableID, created.IPv6, created.Prefix, created.NextHop, swIfIndex); err != nil {
+	if err := s.runtime.AddRoute(ctx, created.TableID, created.IPv6, created.Prefix, created.NextHop, created.EgressInterface, swIfIndex, created.Preference); err != nil {
 		_ = s.store.DeleteRoute(ctx, created.ID)
 		return nil, status.Error(codes.InvalidArgument, "could not install route: "+err.Error())
 	}
@@ -288,7 +293,8 @@ func routeToProto(route store.Route, routeTableID int64) *rookeryv1.Route {
 	return &rookeryv1.Route{
 		Id: route.ID, RouteTableId: routeTableID, TableId: route.TableID, Ipv6: route.IPv6,
 		Prefix: route.Prefix, NextHop: route.NextHop, InterfaceId: route.InterfaceID,
-		InterfaceName: route.InterfaceName, CreatedAt: timestamp(route.CreatedAt),
+		InterfaceName: route.InterfaceName, EgressInterface: route.EgressInterface,
+		Preference: route.Preference, CreatedAt: timestamp(route.CreatedAt),
 		UpdatedAt: timestamp(route.UpdatedAt),
 	}
 }

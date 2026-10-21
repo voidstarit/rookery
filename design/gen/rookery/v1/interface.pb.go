@@ -693,6 +693,214 @@ func (x *DeleteInterfaceRequest) GetId() int64 {
 	return 0
 }
 
+type InterfaceCounters struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	SwIfIndex     uint32                 `protobuf:"varint,2,opt,name=sw_if_index,json=swIfIndex,proto3" json:"sw_if_index,omitempty"`
+	RxPackets     uint64                 `protobuf:"varint,3,opt,name=rx_packets,json=rxPackets,proto3" json:"rx_packets,omitempty"`
+	TxPackets     uint64                 `protobuf:"varint,4,opt,name=tx_packets,json=txPackets,proto3" json:"tx_packets,omitempty"`
+	RxBytes       uint64                 `protobuf:"varint,5,opt,name=rx_bytes,json=rxBytes,proto3" json:"rx_bytes,omitempty"`
+	TxBytes       uint64                 `protobuf:"varint,6,opt,name=tx_bytes,json=txBytes,proto3" json:"tx_bytes,omitempty"`
+	SampledAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=sampled_at,json=sampledAt,proto3" json:"sampled_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InterfaceCounters) Reset() {
+	*x = InterfaceCounters{}
+	mi := &file_rookery_v1_interface_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InterfaceCounters) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InterfaceCounters) ProtoMessage() {}
+
+func (x *InterfaceCounters) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_interface_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InterfaceCounters.ProtoReflect.Descriptor instead.
+func (*InterfaceCounters) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_interface_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *InterfaceCounters) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *InterfaceCounters) GetSwIfIndex() uint32 {
+	if x != nil {
+		return x.SwIfIndex
+	}
+	return 0
+}
+
+func (x *InterfaceCounters) GetRxPackets() uint64 {
+	if x != nil {
+		return x.RxPackets
+	}
+	return 0
+}
+
+func (x *InterfaceCounters) GetTxPackets() uint64 {
+	if x != nil {
+		return x.TxPackets
+	}
+	return 0
+}
+
+func (x *InterfaceCounters) GetRxBytes() uint64 {
+	if x != nil {
+		return x.RxBytes
+	}
+	return 0
+}
+
+func (x *InterfaceCounters) GetTxBytes() uint64 {
+	if x != nil {
+		return x.TxBytes
+	}
+	return 0
+}
+
+func (x *InterfaceCounters) GetSampledAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.SampledAt
+	}
+	return nil
+}
+
+type ListInterfaceCountersRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListInterfaceCountersRequest) Reset() {
+	*x = ListInterfaceCountersRequest{}
+	mi := &file_rookery_v1_interface_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListInterfaceCountersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListInterfaceCountersRequest) ProtoMessage() {}
+
+func (x *ListInterfaceCountersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_interface_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListInterfaceCountersRequest.ProtoReflect.Descriptor instead.
+func (*ListInterfaceCountersRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_interface_proto_rawDescGZIP(), []int{10}
+}
+
+type ListInterfaceCountersResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Interfaces    []*InterfaceCounters   `protobuf:"bytes,1,rep,name=interfaces,proto3" json:"interfaces,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListInterfaceCountersResponse) Reset() {
+	*x = ListInterfaceCountersResponse{}
+	mi := &file_rookery_v1_interface_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListInterfaceCountersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListInterfaceCountersResponse) ProtoMessage() {}
+
+func (x *ListInterfaceCountersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_interface_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListInterfaceCountersResponse.ProtoReflect.Descriptor instead.
+func (*ListInterfaceCountersResponse) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_interface_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ListInterfaceCountersResponse) GetInterfaces() []*InterfaceCounters {
+	if x != nil {
+		return x.Interfaces
+	}
+	return nil
+}
+
+type ResetInterfaceCountersRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResetInterfaceCountersRequest) Reset() {
+	*x = ResetInterfaceCountersRequest{}
+	mi := &file_rookery_v1_interface_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResetInterfaceCountersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResetInterfaceCountersRequest) ProtoMessage() {}
+
+func (x *ResetInterfaceCountersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_interface_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResetInterfaceCountersRequest.ProtoReflect.Descriptor instead.
+func (*ResetInterfaceCountersRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_interface_proto_rawDescGZIP(), []int{12}
+}
+
 var File_rookery_v1_interface_proto protoreflect.FileDescriptor
 
 const file_rookery_v1_interface_proto_rawDesc = "" +
@@ -771,7 +979,24 @@ const file_rookery_v1_interface_proto_rawDesc = "" +
 	"\vegress_acls\x18\x05 \x03(\tB\x11\xfaB\x0e\x92\x01\v\x10 \"\ar\x05\x18@\xd0\x01\x01R\n" +
 	"egressAcls\"1\n" +
 	"\x16DeleteInterfaceRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id2\xce\x05\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\xf6\x01\n" +
+	"\x11InterfaceCounters\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1e\n" +
+	"\vsw_if_index\x18\x02 \x01(\rR\tswIfIndex\x12\x1d\n" +
+	"\n" +
+	"rx_packets\x18\x03 \x01(\x04R\trxPackets\x12\x1d\n" +
+	"\n" +
+	"tx_packets\x18\x04 \x01(\x04R\ttxPackets\x12\x19\n" +
+	"\brx_bytes\x18\x05 \x01(\x04R\arxBytes\x12\x19\n" +
+	"\btx_bytes\x18\x06 \x01(\x04R\atxBytes\x129\n" +
+	"\n" +
+	"sampled_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tsampledAt\"\x1e\n" +
+	"\x1cListInterfaceCountersRequest\"^\n" +
+	"\x1dListInterfaceCountersResponse\x12=\n" +
+	"\n" +
+	"interfaces\x18\x01 \x03(\v2\x1d.rookery.v1.InterfaceCountersR\n" +
+	"interfaces\"\x1f\n" +
+	"\x1dResetInterfaceCountersRequest2\xea\a\n" +
 	"\x10InterfaceService\x12|\n" +
 	"\x0eListInterfaces\x12!.rookery.v1.ListInterfacesRequest\x1a\".rookery.v1.ListInterfacesResponse\"#\x82\xd3\xe4\x93\x02\x1db\n" +
 	"interfaces\x12\x0f/api/interfaces\x12k\n" +
@@ -779,7 +1004,10 @@ const file_rookery_v1_interface_proto_rawDesc = "" +
 	"\x0fCreateInterface\x12\".rookery.v1.CreateInterfaceRequest\x1a\x1c.rookery.v1.VirtualInterface\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/api/interfaces\x12t\n" +
 	"\x0fUpdateInterface\x12\".rookery.v1.UpdateInterfaceRequest\x1a\x1c.rookery.v1.VirtualInterface\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\x1a\x14/api/interfaces/{id}\x12{\n" +
 	"\x10SetInterfaceACLs\x12#.rookery.v1.SetInterfaceACLsRequest\x1a\x1c.rookery.v1.VirtualInterface\"$\x82\xd3\xe4\x93\x02\x1e:\x01*\x1a\x19/api/interfaces/{id}/acls\x12k\n" +
-	"\x0fDeleteInterface\x12\".rookery.v1.DeleteInterfaceRequest\x1a\x16.google.protobuf.Empty\"\x1c\x82\xd3\xe4\x93\x02\x16*\x14/api/interfaces/{id}B?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
+	"\x0fDeleteInterface\x12\".rookery.v1.DeleteInterfaceRequest\x1a\x16.google.protobuf.Empty\"\x1c\x82\xd3\xe4\x93\x02\x16*\x14/api/interfaces/{id}\x12\x9a\x01\n" +
+	"\x15ListInterfaceCounters\x12(.rookery.v1.ListInterfaceCountersRequest\x1a).rookery.v1.ListInterfaceCountersResponse\",\x82\xd3\xe4\x93\x02&b\n" +
+	"interfaces\x12\x18/api/interfaces/counters\x12}\n" +
+	"\x16ResetInterfaceCounters\x12).rookery.v1.ResetInterfaceCountersRequest\x1a\x16.google.protobuf.Empty\" \x82\xd3\xe4\x93\x02\x1a*\x18/api/interfaces/countersB?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
 
 var (
 	file_rookery_v1_interface_proto_rawDescOnce sync.Once
@@ -793,41 +1021,51 @@ func file_rookery_v1_interface_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_interface_proto_rawDescData
 }
 
-var file_rookery_v1_interface_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_rookery_v1_interface_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_rookery_v1_interface_proto_goTypes = []any{
-	(*VirtualInterface)(nil),        // 0: rookery.v1.VirtualInterface
-	(*VMInterface)(nil),             // 1: rookery.v1.VMInterface
-	(*ListInterfacesRequest)(nil),   // 2: rookery.v1.ListInterfacesRequest
-	(*ListInterfacesResponse)(nil),  // 3: rookery.v1.ListInterfacesResponse
-	(*GetInterfaceRequest)(nil),     // 4: rookery.v1.GetInterfaceRequest
-	(*CreateInterfaceRequest)(nil),  // 5: rookery.v1.CreateInterfaceRequest
-	(*UpdateInterfaceRequest)(nil),  // 6: rookery.v1.UpdateInterfaceRequest
-	(*SetInterfaceACLsRequest)(nil), // 7: rookery.v1.SetInterfaceACLsRequest
-	(*DeleteInterfaceRequest)(nil),  // 8: rookery.v1.DeleteInterfaceRequest
-	(*timestamppb.Timestamp)(nil),   // 9: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),           // 10: google.protobuf.Empty
+	(*VirtualInterface)(nil),              // 0: rookery.v1.VirtualInterface
+	(*VMInterface)(nil),                   // 1: rookery.v1.VMInterface
+	(*ListInterfacesRequest)(nil),         // 2: rookery.v1.ListInterfacesRequest
+	(*ListInterfacesResponse)(nil),        // 3: rookery.v1.ListInterfacesResponse
+	(*GetInterfaceRequest)(nil),           // 4: rookery.v1.GetInterfaceRequest
+	(*CreateInterfaceRequest)(nil),        // 5: rookery.v1.CreateInterfaceRequest
+	(*UpdateInterfaceRequest)(nil),        // 6: rookery.v1.UpdateInterfaceRequest
+	(*SetInterfaceACLsRequest)(nil),       // 7: rookery.v1.SetInterfaceACLsRequest
+	(*DeleteInterfaceRequest)(nil),        // 8: rookery.v1.DeleteInterfaceRequest
+	(*InterfaceCounters)(nil),             // 9: rookery.v1.InterfaceCounters
+	(*ListInterfaceCountersRequest)(nil),  // 10: rookery.v1.ListInterfaceCountersRequest
+	(*ListInterfaceCountersResponse)(nil), // 11: rookery.v1.ListInterfaceCountersResponse
+	(*ResetInterfaceCountersRequest)(nil), // 12: rookery.v1.ResetInterfaceCountersRequest
+	(*timestamppb.Timestamp)(nil),         // 13: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),                 // 14: google.protobuf.Empty
 }
 var file_rookery_v1_interface_proto_depIdxs = []int32{
-	9,  // 0: rookery.v1.VirtualInterface.created_at:type_name -> google.protobuf.Timestamp
-	9,  // 1: rookery.v1.VirtualInterface.updated_at:type_name -> google.protobuf.Timestamp
+	13, // 0: rookery.v1.VirtualInterface.created_at:type_name -> google.protobuf.Timestamp
+	13, // 1: rookery.v1.VirtualInterface.updated_at:type_name -> google.protobuf.Timestamp
 	0,  // 2: rookery.v1.ListInterfacesResponse.interfaces:type_name -> rookery.v1.VirtualInterface
-	2,  // 3: rookery.v1.InterfaceService.ListInterfaces:input_type -> rookery.v1.ListInterfacesRequest
-	4,  // 4: rookery.v1.InterfaceService.GetInterface:input_type -> rookery.v1.GetInterfaceRequest
-	5,  // 5: rookery.v1.InterfaceService.CreateInterface:input_type -> rookery.v1.CreateInterfaceRequest
-	6,  // 6: rookery.v1.InterfaceService.UpdateInterface:input_type -> rookery.v1.UpdateInterfaceRequest
-	7,  // 7: rookery.v1.InterfaceService.SetInterfaceACLs:input_type -> rookery.v1.SetInterfaceACLsRequest
-	8,  // 8: rookery.v1.InterfaceService.DeleteInterface:input_type -> rookery.v1.DeleteInterfaceRequest
-	3,  // 9: rookery.v1.InterfaceService.ListInterfaces:output_type -> rookery.v1.ListInterfacesResponse
-	0,  // 10: rookery.v1.InterfaceService.GetInterface:output_type -> rookery.v1.VirtualInterface
-	0,  // 11: rookery.v1.InterfaceService.CreateInterface:output_type -> rookery.v1.VirtualInterface
-	0,  // 12: rookery.v1.InterfaceService.UpdateInterface:output_type -> rookery.v1.VirtualInterface
-	0,  // 13: rookery.v1.InterfaceService.SetInterfaceACLs:output_type -> rookery.v1.VirtualInterface
-	10, // 14: rookery.v1.InterfaceService.DeleteInterface:output_type -> google.protobuf.Empty
-	9,  // [9:15] is the sub-list for method output_type
-	3,  // [3:9] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	13, // 3: rookery.v1.InterfaceCounters.sampled_at:type_name -> google.protobuf.Timestamp
+	9,  // 4: rookery.v1.ListInterfaceCountersResponse.interfaces:type_name -> rookery.v1.InterfaceCounters
+	2,  // 5: rookery.v1.InterfaceService.ListInterfaces:input_type -> rookery.v1.ListInterfacesRequest
+	4,  // 6: rookery.v1.InterfaceService.GetInterface:input_type -> rookery.v1.GetInterfaceRequest
+	5,  // 7: rookery.v1.InterfaceService.CreateInterface:input_type -> rookery.v1.CreateInterfaceRequest
+	6,  // 8: rookery.v1.InterfaceService.UpdateInterface:input_type -> rookery.v1.UpdateInterfaceRequest
+	7,  // 9: rookery.v1.InterfaceService.SetInterfaceACLs:input_type -> rookery.v1.SetInterfaceACLsRequest
+	8,  // 10: rookery.v1.InterfaceService.DeleteInterface:input_type -> rookery.v1.DeleteInterfaceRequest
+	10, // 11: rookery.v1.InterfaceService.ListInterfaceCounters:input_type -> rookery.v1.ListInterfaceCountersRequest
+	12, // 12: rookery.v1.InterfaceService.ResetInterfaceCounters:input_type -> rookery.v1.ResetInterfaceCountersRequest
+	3,  // 13: rookery.v1.InterfaceService.ListInterfaces:output_type -> rookery.v1.ListInterfacesResponse
+	0,  // 14: rookery.v1.InterfaceService.GetInterface:output_type -> rookery.v1.VirtualInterface
+	0,  // 15: rookery.v1.InterfaceService.CreateInterface:output_type -> rookery.v1.VirtualInterface
+	0,  // 16: rookery.v1.InterfaceService.UpdateInterface:output_type -> rookery.v1.VirtualInterface
+	0,  // 17: rookery.v1.InterfaceService.SetInterfaceACLs:output_type -> rookery.v1.VirtualInterface
+	14, // 18: rookery.v1.InterfaceService.DeleteInterface:output_type -> google.protobuf.Empty
+	11, // 19: rookery.v1.InterfaceService.ListInterfaceCounters:output_type -> rookery.v1.ListInterfaceCountersResponse
+	14, // 20: rookery.v1.InterfaceService.ResetInterfaceCounters:output_type -> google.protobuf.Empty
+	13, // [13:21] is the sub-list for method output_type
+	5,  // [5:13] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_rookery_v1_interface_proto_init() }
@@ -844,7 +1082,7 @@ func file_rookery_v1_interface_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_interface_proto_rawDesc), len(file_rookery_v1_interface_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

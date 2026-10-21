@@ -10,7 +10,7 @@ import type {
   VNFType,
 } from "../types";
 
-type VNFDialogProps = {
+type VNFPageProps = {
   vnf: VNF | null;
   networks: Network[];
   vppReady: boolean;
@@ -35,6 +35,18 @@ type FormState = {
   nat44Pool: string;
   dnatRules: DNATRule[];
   staticAssignments: DHCPStaticAssignment[];
+  transport: "memif" | "tap";
+  localAS: string;
+  routerID: string;
+  peerAS: string;
+  peerIP: string;
+  localIP: string;
+  peerGateway: string;
+  multihopTTL: string;
+  password: string;
+  passive: boolean;
+  targetTableID: string;
+  advertisePrefixes: string;
 };
 
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._-]*";
@@ -60,10 +72,40 @@ function defaultForm(vnf: VNF | null, networks: Network[], vppReady: boolean, in
     staticAssignments: Array.isArray(config.static_assignments)
       ? config.static_assignments.map((assignment) => ({ ...assignment }))
       : [],
+    transport: config.transport === "tap" ? "tap" : "memif",
+    localAS: String(config.local_as ?? 64512),
+    routerID: config.router_id ?? "10.20.0.1",
+    peerAS: String(config.peer_as ?? 64513),
+    peerIP: config.peer_ip ?? "169.254.0.2",
+    localIP: config.local_ip ?? "169.254.0.1/30",
+    peerGateway: config.peer_gateway ?? "",
+    multihopTTL: String(config.multihop_ttl ?? 1),
+    password: config.password ?? "",
+    passive: config.passive ?? false,
+    targetTableID: String(config.target_table_id ?? 0),
+    advertisePrefixes: Array.isArray(config.advertise_prefixes) ? config.advertise_prefixes.join("\n") : "",
   };
 }
 
 function applyTypeDefaults(state: FormState, type: VNFType): FormState {
+  if (type === "bgp") {
+    return {
+      ...state,
+      type,
+      transport: "memif",
+      localAS: "64512",
+      routerID: "10.20.0.1",
+      peerAS: "64513",
+      peerIP: "169.254.0.2",
+      localIP: "169.254.0.1/30",
+      peerGateway: "",
+      multihopTTL: "1",
+      password: "",
+      passive: false,
+      targetTableID: "0",
+      advertisePrefixes: "",
+    };
+  }
   if (type === "dhcpv6") {
     return {
       ...state,
@@ -113,6 +155,9 @@ function outsideInterfaceHint(interfaces: HostInterface[], selected: string): st
 }
 
 function typeHint(type: VNFType): string {
+  if (type === "bgp") {
+    return "Embedded IPv4 BGP speaker. Select memif for userspace/gVisor or tap for kernel TCP with TCP MD5 support.";
+  }
   if (type === "nat44") {
     return "IPv4 NAT44 gateway. A dedicated network BVI owns the gateway; the outside NIC is taken over by VPP.";
   }
@@ -122,23 +167,23 @@ function typeHint(type: VNFType): string {
   return "IPv4 address pool served on a VPP tap.";
 }
 
-export function VNFDialog({ vnf, networks, vppReady, initialNetworkID, onClose, onSaved }: VNFDialogProps) {
+export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, onSaved }: VNFPageProps) {
   const [form, setForm] = useState<FormState>(() => defaultForm(vnf, networks, vppReady, initialNetworkID));
   const [hostInterfaces, setHostInterfaces] = useState<HostInterface[]>([]);
   const [hostInterfacesLoading, setHostInterfacesLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
-  const dialogRef = useRef<HTMLDialogElement | null>(null);
   const nameRef = useRef<HTMLInputElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
 
   const editing = vnf !== null;
   const nat44 = form.type === "nat44";
+  const bgp = form.type === "bgp";
 
   useEffect(() => {
-    dialogRef.current?.showModal();
     nameRef.current?.focus();
-  }, []);
+    document.title = `${vnf ? "Edit" : "Add"} VNF · rookery`;
+  }, [vnf]);
 
   useEffect(() => {
     if (!nat44) {
@@ -173,7 +218,7 @@ export function VNFDialog({ vnf, networks, vppReady, initialNetworkID, onClose, 
 
   const close = () => {
     if (!saving) {
-      dialogRef.current?.close();
+      onClose();
     }
   };
 
@@ -184,11 +229,11 @@ export function VNFDialog({ vnf, networks, vppReady, initialNetworkID, onClose, 
     }
     setFormError("");
 
-    if (!form.gateway.trim()) {
+    if (!bgp && !form.gateway.trim()) {
       setFormError("Gateway CIDR is required.");
       return;
     }
-    if (!nat44 && (!form.rangeStart.trim() || !form.rangeEnd.trim())) {
+    if (!bgp && !nat44 && (!form.rangeStart.trim() || !form.rangeEnd.trim())) {
       setFormError("Range start and end are required.");
       return;
     }
@@ -206,7 +251,26 @@ export function VNFDialog({ vnf, networks, vppReady, initialNetworkID, onClose, 
       return;
     }
 
-    const config: VNFConfig = nat44
+    const advertised = form.advertisePrefixes
+      .split(/[\n,]+/)
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const config: VNFConfig = bgp
+      ? {
+          transport: form.transport,
+          local_as: Number(form.localAS),
+          router_id: form.routerID.trim(),
+          peer_as: Number(form.peerAS),
+          peer_ip: form.peerIP.trim(),
+          local_ip: form.localIP.trim(),
+          peer_gateway: form.peerGateway.trim(),
+          multihop_ttl: Number(form.multihopTTL),
+          password: form.transport === "tap" ? form.password : "",
+          passive: form.passive,
+          target_table_id: Number(form.targetTableID),
+          advertise_prefixes: advertised,
+        }
+      : nat44
       ? {
           gateway: form.gateway.trim(),
           outside_interface: form.outsideInterface,
@@ -313,7 +377,13 @@ export function VNFDialog({ vnf, networks, vppReady, initialNetworkID, onClose, 
     }));
   };
 
-  const enabledHint = nat44
+  const enabledHint = bgp
+    ? vppReady
+      ? form.transport === "memif"
+        ? "Creates a memif and starts the embedded BGP speaker on gVisor. TCP MD5 is unavailable on this transport."
+        : "Creates a VPP tap and starts the embedded BGP speaker on kernel TCP; TCP MD5 is supported."
+      : "VPP is not ready. The BGP VNF can be created disabled and started later."
+    : nat44
     ? !vppReady
       ? "VPP is not ready. Save disabled and start the NAT44 VNF later."
       : form.enabled
@@ -324,32 +394,16 @@ export function VNFDialog({ vnf, networks, vppReady, initialNetworkID, onClose, 
       : "VPP is not ready. The VNF can be created disabled and started later.";
 
   return (
-    <dialog
-      ref={dialogRef}
-      id="vnf-dialog"
-      class="vnf-dialog"
-      aria-labelledby="vnf-dialog-title"
-      onClose={onClose}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          close();
-        }
-      }}
-      onCancel={(event) => {
-        if (saving) {
-          event.preventDefault();
-        }
-      }}
-    >
-      <form ref={formRef} novalidate onSubmit={(event) => void submit(event)}>
-        <header class="dialog-head">
+    <div class="vnf-page">
+      <form ref={formRef} class="vnf-page-form" novalidate onSubmit={(event) => void submit(event)}>
+        <header class="route-page-head">
           <div>
+            <button class="back-link" type="button" disabled={saving} onClick={close}>
+              ← VNFs
+            </button>
             <p class="eyebrow">Network function</p>
-            <h2 id="vnf-dialog-title">{editing ? "Edit VNF" : "Add VNF"}</h2>
+            <h2 id="vnf-dialog-title">{editing ? `Edit ${vnf?.name ?? "VNF"}` : "Add VNF"}</h2>
           </div>
-          <button class="icon-button" type="button" aria-label="Close dialog" onClick={close}>
-            ×
-          </button>
         </header>
 
         <div class="form-grid">
@@ -401,25 +455,28 @@ export function VNFDialog({ vnf, networks, vppReady, initialNetworkID, onClose, 
               <option value="dhcpv4">DHCPv4</option>
               <option value="dhcpv6">DHCPv6</option>
               <option value="nat44">NAT44</option>
+              <option value="bgp">BGP</option>
             </select>
             <span class="field-hint">{typeHint(form.type)}</span>
           </label>
 
-          <label class="field">
-            <span class="field-label">Gateway CIDR</span>
-            <input
-              type="text"
-              required
-              placeholder={nat44 ? "10.20.0.1/24 (network BVI gateway)" : form.type === "dhcpv6" ? "fd00:20::1/64" : "10.20.0.1/24"}
-              autocomplete="off"
-              spellcheck={false}
-              value={form.gateway}
-              onInput={(event) => update("gateway", event.currentTarget.value)}
-            />
-          </label>
+          {!bgp ? (
+            <label class="field">
+              <span class="field-label">Gateway CIDR</span>
+              <input
+                type="text"
+                required
+                placeholder={nat44 ? "10.20.0.1/24 (network BVI gateway)" : form.type === "dhcpv6" ? "fd00:20::1/64" : "10.20.0.1/24"}
+                autocomplete="off"
+                spellcheck={false}
+                value={form.gateway}
+                onInput={(event) => update("gateway", event.currentTarget.value)}
+              />
+            </label>
+          ) : null}
         </div>
 
-        {!nat44 ? (
+        {!nat44 && !bgp ? (
           <>
           <div class="form-grid">
             <label class="field">
@@ -537,6 +594,141 @@ export function VNFDialog({ vnf, networks, vppReady, initialNetworkID, onClose, 
               </div>
             </div>
           ) : null}
+          </>
+        ) : bgp ? (
+          <>
+            <div class="form-grid">
+              <label class="field">
+                <span class="field-label">Transport</span>
+                <select
+                  value={form.transport}
+                  onChange={(event) => update("transport", event.currentTarget.value as "memif" | "tap")}
+                >
+                  <option value="memif">memif + gVisor</option>
+                  <option value="tap">VPP tap + kernel TCP</option>
+                </select>
+                <span class="field-hint">
+                  TCP MD5 passwords require the tap transport; memif/gVisor does not support TCP MD5.
+                </span>
+              </label>
+              <label class="field checkbox-field">
+                <span class="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={form.passive}
+                    onChange={(event) => update("passive", event.currentTarget.checked)}
+                  />
+                  <span>Passive mode — wait for the peer to connect</span>
+                </span>
+              </label>
+              <label class="field">
+                <span class="field-label">Local AS</span>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  value={form.localAS}
+                  onInput={(event) => update("localAS", event.currentTarget.value)}
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">Router ID</span>
+                <input
+                  type="text"
+                  required
+                  placeholder="10.20.0.1"
+                  autocomplete="off"
+                  value={form.routerID}
+                  onInput={(event) => update("routerID", event.currentTarget.value)}
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">Peer AS</span>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  value={form.peerAS}
+                  onInput={(event) => update("peerAS", event.currentTarget.value)}
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">Peer IPv4 address</span>
+                <input
+                  type="text"
+                  required
+                  placeholder="169.254.0.2"
+                  autocomplete="off"
+                  value={form.peerIP}
+                  onInput={(event) => update("peerIP", event.currentTarget.value)}
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">Local IPv4 CIDR</span>
+                <input
+                  type="text"
+                  required
+                  placeholder="169.254.0.1/30"
+                  autocomplete="off"
+                  value={form.localIP}
+                  onInput={(event) => update("localIP", event.currentTarget.value)}
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">Peer gateway <em>optional</em></span>
+                <input
+                  type="text"
+                  placeholder="169.254.0.2 (for routed/multihop peers)"
+                  autocomplete="off"
+                  value={form.peerGateway}
+                  onInput={(event) => update("peerGateway", event.currentTarget.value)}
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">Multihop TTL</span>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  max={255}
+                  value={form.multihopTTL}
+                  onInput={(event) => update("multihopTTL", event.currentTarget.value)}
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">Target VPP table ID</span>
+                <input
+                  type="number"
+                  required
+                  min={0}
+                  value={form.targetTableID}
+                  onInput={(event) => update("targetTableID", event.currentTarget.value)}
+                />
+                <span class="field-hint">0 is the default VRF; received IPv4 routes are installed here.</span>
+              </label>
+              <label class="field">
+                <span class="field-label">TCP MD5 password <em>tap only</em></span>
+                <input
+                  type="password"
+                  disabled={form.transport === "memif"}
+                  placeholder={form.transport === "memif" ? "Unavailable on memif" : "optional"}
+                  autocomplete="new-password"
+                  value={form.password}
+                  onInput={(event) => update("password", event.currentTarget.value)}
+                />
+              </label>
+              <label class="field field-wide">
+                <span class="field-label">Advertised IPv4 prefixes <em>optional</em></span>
+                <textarea
+                  rows={4}
+                  placeholder={"10.10.0.0/16\n10.20.0.0/24"}
+                  spellcheck={false}
+                  value={form.advertisePrefixes}
+                  onInput={(event) => update("advertisePrefixes", event.currentTarget.value)}
+                />
+                <span class="field-hint">One IPv4 CIDR per line. These prefixes are advertised to the peer.</span>
+              </label>
+            </div>
           </>
         ) : (
           <div class="form-grid">
@@ -736,6 +928,6 @@ export function VNFDialog({ vnf, networks, vppReady, initialNetworkID, onClose, 
           </button>
         </footer>
       </form>
-    </dialog>
+    </div>
   );
 }

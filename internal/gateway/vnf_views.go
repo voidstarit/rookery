@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
+	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -18,10 +19,12 @@ type VNFRuntime interface {
 	Leases(ctx context.Context, vnfID int64) ([]store.VNFLease, error)
 }
 
-// VNFStatusProvider supplies the legacy API's status and NAT session views.
+// VNFStatusProvider supplies the legacy API's status, NAT session, and BGP
+// runtime views.
 type VNFStatusProvider interface {
 	VNFStatus(ctx context.Context, vnf store.VNF) (status, detail string, leaseCount int)
 	VNFSessions(ctx context.Context, vnf store.VNF) ([]string, error)
+	VNFBGP(ctx context.Context, vnf store.VNF) (host.BGPStatus, error)
 }
 
 func (s *vnfService) vnfView(ctx context.Context, vnf store.VNF) *rookeryv1.VNF {
@@ -84,6 +87,41 @@ func (s *vnfService) ListVNFSessions(ctx context.Context, request *rookeryv1.Lis
 		}
 	}
 	return &rookeryv1.ListVNFSessionsResponse{VnfId: vnf.ID, Type: vnf.Type, Sessions: sessions}, nil
+}
+
+// GetVNFBGP returns the BGP session state, advertised prefixes, and received
+// prefixes for a BGP VNF.
+func (s *vnfService) GetVNFBGP(ctx context.Context, request *rookeryv1.GetVNFBGPRequest) (*rookeryv1.VNFBGPStatus, error) {
+	vnf, err := s.store.GetVNF(ctx, request.GetId())
+	if err != nil {
+		return nil, storeReadError(err, store.ErrVNFNotFound, "vnf not found")
+	}
+	if vnf.Type != store.VNFTypeBGP {
+		return nil, status.Error(codes.InvalidArgument, "BGP status is available for BGP VNFs only")
+	}
+	result := &rookeryv1.VNFBGPStatus{VnfId: vnf.ID, Type: vnf.Type}
+	if s.statusProvider == nil {
+		return result, nil
+	}
+	snapshot, err := s.statusProvider.VNFBGP(ctx, vnf)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not read BGP status: "+err.Error())
+	}
+	result.Running = snapshot.Running
+	result.Established = snapshot.Established
+	result.SessionState = snapshot.SessionState
+	result.PeerAddress = snapshot.PeerAddress
+	result.PeerAs = snapshot.PeerAS
+	result.LocalAs = snapshot.LocalAS
+	result.Advertised = append([]string(nil), snapshot.Advertised...)
+	for _, prefix := range snapshot.Received {
+		result.Received = append(result.Received, &rookeryv1.VNFBGPReceivedPrefix{
+			Prefix:  prefix.Prefix,
+			NextHop: prefix.NextHop,
+			AsPath:  append([]uint32(nil), prefix.ASPath...),
+		})
+	}
+	return result, nil
 }
 
 func leaseBelongsToVNF(vnf store.VNF, address string) bool {

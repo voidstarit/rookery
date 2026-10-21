@@ -248,6 +248,9 @@ func nextIPv4CIDR(gatewayCIDR string) (string, error) {
 }
 
 func vnfTapCIDR(vnf store.VNF) string {
+	if vnf.Type == store.VNFTypeBGP {
+		return strings.TrimSpace(vnf.Config.LocalIP)
+	}
 	if strings.TrimSpace(vnf.Config.BindIP) != "" {
 		return strings.TrimSpace(vnf.Config.BindIP)
 	}

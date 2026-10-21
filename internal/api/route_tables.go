@@ -52,7 +52,7 @@ func (s *Server) ReconcileRouteTables(ctx context.Context) error {
 			swIfIndex = interfaceIndex[*route.InterfaceID]
 		}
 		_ = s.networks.DeleteRoute(ctx, route.TableID, route.IPv6, route.Prefix)
-		if err := s.networks.AddRoute(ctx, route.TableID, route.IPv6, route.Prefix, route.NextHop, swIfIndex); err != nil {
+		if err := s.networks.AddRoute(ctx, route.TableID, route.IPv6, route.Prefix, route.NextHop, route.EgressInterface, swIfIndex, route.Preference); err != nil {
 			errs = append(errs, fmt.Errorf("route %s in table %d: %w", route.Prefix, route.TableID, err))
 		}
 	}

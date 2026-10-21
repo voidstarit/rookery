@@ -129,6 +129,15 @@ func (v *VPPNetwork) InterfaceCounters(ctx context.Context, names []string) (map
 	return result, nil
 }
 
+// ResetInterfaceCounters clears the RX/TX counters for all VPP interfaces.
+func (v *VPPNetwork) ResetInterfaceCounters(ctx context.Context) error {
+	out, err := v.runCLI(ctx, "clear", "interfaces")
+	if err != nil {
+		return fmt.Errorf("clear interfaces: %w: %s", err, out)
+	}
+	return nil
+}
+
 // CreateBridgeDomain creates a VPP bridge domain and returns its ID.
 func (v *VPPNetwork) CreateBridgeDomain(ctx context.Context, name string, reserved []uint32) (uint32, error) {
 	conn, err := v.connect()
@@ -843,9 +852,31 @@ func (v *VPPNetwork) DeleteRouteTable(ctx context.Context, tableID uint32, ipv6 
 	return checkVPPRetval("delete route table", reply.Retval)
 }
 
+// SwIfIndexByName resolves a VPP interface name to its sw_if_index, or 0 when
+// the interface does not exist.
+func (v *VPPNetwork) SwIfIndexByName(ctx context.Context, name string) (uint32, error) {
+	interfaces, err := v.VPPInterfaces(ctx)
+	if err != nil {
+		return 0, err
+	}
+	for _, iface := range interfaces {
+		if iface.Name == name {
+			return iface.SwIfIndex, nil
+		}
+	}
+	return 0, fmt.Errorf("VPP interface %q not found", name)
+}
+
 // AddRoute installs a static route in an IP FIB/VRF table. swIfIndex may be 0
-// when VPP can resolve the next hop through a connected route in the table.
-func (v *VPPNetwork) AddRoute(ctx context.Context, tableID uint32, ipv6 bool, prefix, nextHop string, swIfIndex uint32) error {
+// when VPP can resolve the next hop through a connected route in the table;
+// egressName selects a non-inventory interface (for example a BVI) by name.
+// An empty nextHop with an egress interface installs an attached (glean) route
+// that forwards directly into the interface's L2 domain.
+//
+// VPP decodes sw_if_index 0 as interface 0 (local0), not as "no interface";
+// a recursive path must send the ~0 sentinel and resolve its next hop in the
+// route's own table via the path table_id.
+func (v *VPPNetwork) AddRoute(ctx context.Context, tableID uint32, ipv6 bool, prefix, nextHop, egressName string, swIfIndex uint32, preference uint32) error {
 	parsedPrefix, err := ip_types.ParsePrefix(strings.TrimSpace(prefix))
 	if err != nil {
 		return fmt.Errorf("parse route prefix: %w", err)
@@ -853,25 +884,46 @@ func (v *VPPNetwork) AddRoute(ctx context.Context, tableID uint32, ipv6 bool, pr
 	if (parsedPrefix.Address.Af == ip_types.ADDRESS_IP6) != ipv6 {
 		return errors.New("route prefix family does not match the table")
 	}
-	nh, err := ip_types.ParseAddress(strings.TrimSpace(nextHop))
-	if err != nil {
-		return fmt.Errorf("parse route next hop: %w", err)
+	if egressName = strings.TrimSpace(egressName); egressName != "" {
+		swIfIndex, err = v.SwIfIndexByName(ctx, egressName)
+		if err != nil {
+			return fmt.Errorf("resolve egress interface %q: %w", egressName, err)
+		}
 	}
-	if (nh.Af == ip_types.ADDRESS_IP6) != ipv6 {
-		return errors.New("route next-hop family does not match the table")
+	var nhAddress ip_types.AddressUnion
+	if nextHop = strings.TrimSpace(nextHop); nextHop != "" {
+		nh, err := ip_types.ParseAddress(nextHop)
+		if err != nil {
+			return fmt.Errorf("parse route next hop: %w", err)
+		}
+		if (nh.Af == ip_types.ADDRESS_IP6) != ipv6 {
+			return errors.New("route next-hop family does not match the table")
+		}
+		nhAddress = nh.Un
+	} else if swIfIndex == 0 {
+		return errors.New("route needs a next hop or an egress interface")
 	}
 	proto := fib_types.FIB_API_PATH_NH_PROTO_IP4
 	if ipv6 {
 		proto = fib_types.FIB_API_PATH_NH_PROTO_IP6
 	}
+	pathIfIndex := swIfIndex
+	pathTableID := uint32(0)
+	if pathIfIndex == 0 {
+		// Recursive next-hop lookup in this route's own table.
+		pathIfIndex = ^uint32(0)
+		pathTableID = tableID
+	}
 	route := ipapi.IPRoute{
 		TableID: tableID,
 		Prefix:  parsedPrefix,
 		Paths: []fib_types.FibPath{{
-			SwIfIndex: swIfIndex,
-			Type:      fib_types.FIB_API_PATH_TYPE_NORMAL,
-			Proto:     proto,
-			Nh:        fib_types.FibPathNh{Address: nh.Un},
+			SwIfIndex:  pathIfIndex,
+			TableID:    pathTableID,
+			Type:       fib_types.FIB_API_PATH_TYPE_NORMAL,
+			Proto:      proto,
+			Preference: uint8(preference),
+			Nh:         fib_types.FibPathNh{Address: nhAddress},
 		}},
 	}
 	return v.changeRoute(ctx, true, route)

@@ -264,10 +264,18 @@ func (m *memifDHCPv4) pumpMemifRX(ctx context.Context) {
 	for {
 		frame, err := m.memif.readFrame(ctx)
 		if err != nil {
-			if ctx.Err() == nil && !errors.Is(err, errMemifClosed) {
-				slog.Warn("memif DHCPv4 receive failed", "vnf_id", m.vnfID, "error", err)
+			if ctx.Err() != nil || errors.Is(err, errMemifClosed) {
+				return
 			}
-			return
+			// Transient memif read errors must not kill the receive path
+			// permanently; back off briefly and keep reading.
+			slog.Warn("memif DHCPv4 receive failed", "vnf_id", m.vnfID, "error", err)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(100 * time.Millisecond):
+			}
+			continue
 		}
 		m.injectFrame(frame)
 	}
@@ -280,14 +288,20 @@ func (m *memifDHCPv4) pumpMemifTX(ctx context.Context) {
 			return
 		}
 		view := pkt.ToView()
-		if err := m.memif.writeFrame(view.AsSlice()); err != nil {
-			if ctx.Err() == nil && !errors.Is(err, errMemifClosed) {
-				slog.Warn("memif DHCPv4 transmit failed", "vnf_id", m.vnfID, "error", err)
-			}
-			pkt.DecRef()
+		err := m.memif.writeFrame(view.AsSlice())
+		pkt.DecRef()
+		if err == nil {
+			continue
+		}
+		if ctx.Err() != nil || errors.Is(err, errMemifClosed) {
 			return
 		}
-		pkt.DecRef()
+		slog.Warn("memif DHCPv4 transmit failed", "vnf_id", m.vnfID, "error", err)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(100 * time.Millisecond):
+		}
 	}
 }
 

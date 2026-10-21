@@ -32,6 +32,7 @@ var noContentMethods = map[string]bool{
 	"/rookery.v1.MediaService/DeleteMedia":                   true,
 	"/rookery.v1.NetworkService/DeleteNetwork":               true,
 	"/rookery.v1.InterfaceService/DeleteInterface":           true,
+	"/rookery.v1.InterfaceService/ResetInterfaceCounters":    true,
 	"/rookery.v1.ACLService/DeleteACL":                       true,
 	"/rookery.v1.VNFService/DeleteVNF":                       true,
 	"/rookery.v1.StorageBackendService/DeleteStorageBackend": true,

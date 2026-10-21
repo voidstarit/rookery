@@ -105,6 +105,7 @@ type fakeNetworkProvisioner struct {
 	deletedMemifs  []uint32
 	createMemifErr error
 	deleteMemifErr error
+	resetCounters  int
 	createBDErr    error
 	deleteBDErr    error
 	ensureBDErr    error
@@ -164,6 +165,11 @@ func (f *fakeNetworkProvisioner) InterfaceCounters(_ context.Context, names []st
 		}
 	}
 	return result, nil
+}
+
+func (f *fakeNetworkProvisioner) ResetInterfaceCounters(_ context.Context) error {
+	f.resetCounters++
+	return nil
 }
 
 func (f *fakeNetworkProvisioner) Identity() (string, error) { return "fake-vpp", nil }
@@ -368,7 +374,7 @@ func (f *fakeNetworkProvisioner) SetInterfaceRouteTable(_ context.Context, _ uin
 	return nil
 }
 
-func (f *fakeNetworkProvisioner) AddRoute(_ context.Context, _ uint32, _ bool, _, _ string, _ uint32) error {
+func (f *fakeNetworkProvisioner) AddRoute(_ context.Context, _ uint32, _ bool, _, _, _ string, _ uint32, _ uint32) error {
 	return nil
 }
 
@@ -402,10 +408,15 @@ type fakeVNFManager struct {
 	stopErr       error
 	leases        map[int64][]store.VNFLease
 	leaseErr      error
+	bgpStatus     map[int64]host.BGPStatus
 }
 
 func newFakeVNFManager() *fakeVNFManager {
-	return &fakeVNFManager{running: make(map[int64]bool), leases: make(map[int64][]store.VNFLease)}
+	return &fakeVNFManager{
+		running:   make(map[int64]bool),
+		leases:    make(map[int64][]store.VNFLease),
+		bgpStatus: make(map[int64]host.BGPStatus),
+	}
 }
 
 func (f *fakeVNFManager) Start(_ context.Context, vnf store.VNF, hostIf string) error {
@@ -455,6 +466,10 @@ func (f *fakeVNFManager) Leases(_ context.Context, vnfID int64) ([]store.VNFLeas
 		return nil, f.leaseErr
 	}
 	return f.leases[vnfID], nil
+}
+
+func (f *fakeVNFManager) BGPStatus(_ context.Context, vnfID int64) (host.BGPStatus, error) {
+	return f.bgpStatus[vnfID], nil
 }
 
 func (f *fakeVNFManager) CleanupLegacyNetwork(networkID int64) {
@@ -894,12 +909,27 @@ func TestRouteTableAssignment(t *testing.T) {
 		t.Fatalf("created route = %+v", route)
 	}
 
+	recorder = do(t, env.handler, http.MethodPost, fmt.Sprintf("/api/route-tables/%d/routes", table.ID), map[string]any{
+		"ipv6":             true,
+		"prefix":           "2001:db8:11::/64",
+		"next_hop":         "2001:db8::1",
+		"egress_interface": "bvi1",
+		"preference":       5,
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create egress route status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	egressRoute := decode[store.Route](t, recorder)
+	if egressRoute.EgressInterface != "bvi1" || egressRoute.Preference != 5 || egressRoute.InterfaceID != nil {
+		t.Fatalf("egress route = %+v", egressRoute)
+	}
+
 	recorder = do(t, env.handler, http.MethodGet, fmt.Sprintf("/api/route-tables/%d/routes?ipv6=true", table.ID), nil)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("list routes status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 	routes := decode[[]store.Route](t, recorder)
-	if len(routes) != 1 || routes[0].Prefix != "2001:db8:10::/64" {
+	if len(routes) != 2 || routes[0].Prefix != "2001:db8:10::/64" {
 		t.Fatalf("routes = %+v", routes)
 	}
 
@@ -924,6 +954,11 @@ func TestRouteTableAssignment(t *testing.T) {
 	recorder = do(t, env.handler, http.MethodDelete, fmt.Sprintf("/api/routes/%d", route.ID), nil)
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("delete route status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+
+	recorder = do(t, env.handler, http.MethodDelete, fmt.Sprintf("/api/routes/%d", egressRoute.ID), nil)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("delete egress route status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 
 	recorder = do(t, env.handler, http.MethodDelete, fmt.Sprintf("/api/route-tables/%d", table.ID), nil)
@@ -980,6 +1015,124 @@ func TestListFIBRoutes(t *testing.T) {
 	}
 	if len(routes[0].Paths) != 1 || routes[0].Paths[0].InterfaceName != "vhost-test" || routes[0].Paths[0].NextHop != "10.20.0.1" {
 		t.Fatalf("FIB paths = %+v", routes[0].Paths)
+	}
+}
+
+func TestCreateBGPConfig(t *testing.T) {
+	env := newTestAPI(t)
+	network := createNetworkAPI(t, env.handler, "bgp-net")
+	payload := map[string]any{
+		"name":       "lab-bgp",
+		"network_id": network.ID,
+		"type":       store.VNFTypeBGP,
+		"enabled":    false,
+		"config": map[string]any{
+			"transport":          "memif",
+			"local_as":           64512,
+			"router_id":          "10.20.0.1",
+			"peer_as":            64513,
+			"peer_ip":            "169.254.0.2",
+			"local_ip":           "169.254.0.1/30",
+			"multihop_ttl":       2,
+			"target_table_id":    42,
+			"advertise_prefixes": []string{"10.10.0.0/16", "10.20.0.0/24"},
+		},
+	}
+	recorder := do(t, env.handler, http.MethodPost, "/api/vnfs", payload)
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create BGP VNF status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	vnf := decode[store.VNF](t, recorder)
+	if vnf.Type != store.VNFTypeBGP || vnf.Config.Transport != "memif" || vnf.Config.LocalAS != 64512 ||
+		vnf.Config.TargetTableID != 42 || len(vnf.Config.AdvertisePrefixes) != 2 {
+		t.Fatalf("created BGP VNF = %+v", vnf)
+	}
+
+	payload["name"] = "bgp-memif-password"
+	payload["config"].(map[string]any)["password"] = "secret"
+	recorder = do(t, env.handler, http.MethodPost, "/api/vnfs", payload)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("memif BGP password status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+
+	network2 := createNetworkAPI(t, env.handler, "bgp-tap-net")
+	payload["name"] = "bgp-tap-password"
+	payload["network_id"] = network2.ID
+	payload["config"].(map[string]any)["transport"] = "tap"
+	recorder = do(t, env.handler, http.MethodPost, "/api/vnfs", payload)
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("tap BGP password status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestActivateBGPMemif(t *testing.T) {
+	env := newTestAPI(t)
+	env.server.ConfigureMemifDHCP(true, t.TempDir())
+	network := createNetworkAPI(t, env.handler, "bgp-memif-net")
+	recorder := do(t, env.handler, http.MethodPost, "/api/vnfs", map[string]any{
+		"name":       "bgp-memif",
+		"network_id": network.ID,
+		"type":       store.VNFTypeBGP,
+		"enabled":    true,
+		"config": map[string]any{
+			"transport":       "memif",
+			"local_as":        64512,
+			"router_id":       "10.20.0.1",
+			"peer_as":         64513,
+			"peer_ip":         "169.254.0.2",
+			"local_ip":        "169.254.0.1/30",
+			"multihop_ttl":    1,
+			"target_table_id": 0,
+		},
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("activate BGP VNF status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	vnf := decode[store.VNF](t, recorder)
+	if !vnf.Enabled {
+		t.Fatalf("activated BGP VNF = %+v", vnf)
+	}
+	stored, err := env.store.GetVNF(context.Background(), vnf.ID)
+	if err != nil {
+		t.Fatalf("get activated BGP VNF: %v", err)
+	}
+	if stored.MemifHostName != "bgp-memif" || stored.MemifSwIfIndex == 0 {
+		t.Fatalf("stored BGP VNF = %+v", stored)
+	}
+	if len(env.networks.createdMemifs) != 1 || env.networks.createdMemifs[0] != "bgp-memif" {
+		t.Fatalf("created memifs = %+v", env.networks.createdMemifs)
+	}
+}
+
+func TestActivateBGPTap(t *testing.T) {
+	env := newTestAPI(t)
+	network := createNetworkAPI(t, env.handler, "bgp-tap-activate-net")
+	recorder := do(t, env.handler, http.MethodPost, "/api/vnfs", map[string]any{
+		"name":       "bgp-tap",
+		"network_id": network.ID,
+		"type":       store.VNFTypeBGP,
+		"enabled":    true,
+		"config": map[string]any{
+			"transport":       "tap",
+			"local_as":        64512,
+			"router_id":       "10.20.0.1",
+			"peer_as":         64513,
+			"peer_ip":         "169.254.0.2",
+			"local_ip":        "169.254.0.1/30",
+			"password":        "secret",
+			"target_table_id": 0,
+		},
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("activate BGP tap status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	vnf := decode[store.VNF](t, recorder)
+	stored, err := env.store.GetVNF(context.Background(), vnf.ID)
+	if err != nil {
+		t.Fatalf("get BGP tap VNF: %v", err)
+	}
+	if stored.TapHostName == "" || stored.TapSwIfIndex == 0 {
+		t.Fatalf("stored BGP tap VNF = %+v", stored)
 	}
 }
 

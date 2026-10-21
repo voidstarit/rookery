@@ -1268,6 +1268,19 @@ dialog form {
   overflow: auto;
 }
 
+.vnf-page {
+  width: 100%;
+  padding: 0.5rem 0 2rem;
+}
+
+.vnf-page-form {
+  width: 100%;
+}
+
+.vnf-page .route-page-head {
+  margin-bottom: 1.5rem;
+}
+
 .trace-form {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(8rem, 0.5fr) auto auto auto;
@@ -2579,6 +2592,78 @@ textarea:disabled {
 
 .acl-inline-counter.muted {
   color: var(--faint);
+}
+
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: 0.6rem;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.live-indicator::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.live-indicator[data-live="true"]::before {
+  background: #34d399;
+  animation: live-pulse 2s ease-in-out infinite;
+}
+
+.live-indicator[data-live="false"]::before {
+  background: var(--faint);
+}
+
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.traffic-cell {
+  white-space: nowrap;
+}
+
+.traffic-line {
+  display: block;
+  line-height: 1.35;
+}
+
+.bgp-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.bgp-peer,
+.bgp-local {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.79rem;
+}
+
+.bgp-section-title {
+  margin: 1rem 0 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
 }
 
 .acl-details-row td {

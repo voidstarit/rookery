@@ -28,6 +28,7 @@ const (
 	VNFService_RestartVNF_FullMethodName      = "/rookery.v1.VNFService/RestartVNF"
 	VNFService_ListVNFLeases_FullMethodName   = "/rookery.v1.VNFService/ListVNFLeases"
 	VNFService_ListVNFSessions_FullMethodName = "/rookery.v1.VNFService/ListVNFSessions"
+	VNFService_GetVNFBGP_FullMethodName       = "/rookery.v1.VNFService/GetVNFBGP"
 )
 
 // VNFServiceClient is the client API for VNFService service.
@@ -44,6 +45,7 @@ type VNFServiceClient interface {
 	RestartVNF(ctx context.Context, in *RestartVNFRequest, opts ...grpc.CallOption) (*VNF, error)
 	ListVNFLeases(ctx context.Context, in *ListVNFLeasesRequest, opts ...grpc.CallOption) (*ListVNFLeasesResponse, error)
 	ListVNFSessions(ctx context.Context, in *ListVNFSessionsRequest, opts ...grpc.CallOption) (*ListVNFSessionsResponse, error)
+	GetVNFBGP(ctx context.Context, in *GetVNFBGPRequest, opts ...grpc.CallOption) (*VNFBGPStatus, error)
 }
 
 type vNFServiceClient struct {
@@ -134,6 +136,16 @@ func (c *vNFServiceClient) ListVNFSessions(ctx context.Context, in *ListVNFSessi
 	return out, nil
 }
 
+func (c *vNFServiceClient) GetVNFBGP(ctx context.Context, in *GetVNFBGPRequest, opts ...grpc.CallOption) (*VNFBGPStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VNFBGPStatus)
+	err := c.cc.Invoke(ctx, VNFService_GetVNFBGP_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VNFServiceServer is the server API for VNFService service.
 // All implementations must embed UnimplementedVNFServiceServer
 // for forward compatibility.
@@ -148,6 +160,7 @@ type VNFServiceServer interface {
 	RestartVNF(context.Context, *RestartVNFRequest) (*VNF, error)
 	ListVNFLeases(context.Context, *ListVNFLeasesRequest) (*ListVNFLeasesResponse, error)
 	ListVNFSessions(context.Context, *ListVNFSessionsRequest) (*ListVNFSessionsResponse, error)
+	GetVNFBGP(context.Context, *GetVNFBGPRequest) (*VNFBGPStatus, error)
 	mustEmbedUnimplementedVNFServiceServer()
 }
 
@@ -181,6 +194,9 @@ func (UnimplementedVNFServiceServer) ListVNFLeases(context.Context, *ListVNFLeas
 }
 func (UnimplementedVNFServiceServer) ListVNFSessions(context.Context, *ListVNFSessionsRequest) (*ListVNFSessionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListVNFSessions not implemented")
+}
+func (UnimplementedVNFServiceServer) GetVNFBGP(context.Context, *GetVNFBGPRequest) (*VNFBGPStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetVNFBGP not implemented")
 }
 func (UnimplementedVNFServiceServer) mustEmbedUnimplementedVNFServiceServer() {}
 func (UnimplementedVNFServiceServer) testEmbeddedByValue()                    {}
@@ -347,6 +363,24 @@ func _VNFService_ListVNFSessions_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VNFService_GetVNFBGP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetVNFBGPRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VNFServiceServer).GetVNFBGP(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VNFService_GetVNFBGP_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VNFServiceServer).GetVNFBGP(ctx, req.(*GetVNFBGPRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VNFService_ServiceDesc is the grpc.ServiceDesc for VNFService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -385,6 +419,10 @@ var VNFService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListVNFSessions",
 			Handler:    _VNFService_ListVNFSessions_Handler,
+		},
+		{
+			MethodName: "GetVNFBGP",
+			Handler:    _VNFService_GetVNFBGP_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

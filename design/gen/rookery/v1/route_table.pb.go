@@ -314,19 +314,21 @@ func (x *ListFIBRoutesResponse) GetRoutes() []*FIBRoute {
 }
 
 type Route struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	RouteTableId  int64                  `protobuf:"varint,2,opt,name=route_table_id,json=routeTableId,proto3" json:"route_table_id,omitempty"`
-	TableId       uint32                 `protobuf:"varint,3,opt,name=table_id,json=tableId,proto3" json:"table_id,omitempty"`
-	Ipv6          bool                   `protobuf:"varint,4,opt,name=ipv6,proto3" json:"ipv6,omitempty"`
-	Prefix        string                 `protobuf:"bytes,5,opt,name=prefix,proto3" json:"prefix,omitempty"`
-	NextHop       string                 `protobuf:"bytes,6,opt,name=next_hop,json=nextHop,proto3" json:"next_hop,omitempty"`
-	InterfaceId   *int64                 `protobuf:"varint,7,opt,name=interface_id,json=interfaceId,proto3,oneof" json:"interface_id,omitempty"`
-	InterfaceName string                 `protobuf:"bytes,8,opt,name=interface_name,json=interfaceName,proto3" json:"interface_name,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	RouteTableId    int64                  `protobuf:"varint,2,opt,name=route_table_id,json=routeTableId,proto3" json:"route_table_id,omitempty"`
+	TableId         uint32                 `protobuf:"varint,3,opt,name=table_id,json=tableId,proto3" json:"table_id,omitempty"`
+	Ipv6            bool                   `protobuf:"varint,4,opt,name=ipv6,proto3" json:"ipv6,omitempty"`
+	Prefix          string                 `protobuf:"bytes,5,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	NextHop         string                 `protobuf:"bytes,6,opt,name=next_hop,json=nextHop,proto3" json:"next_hop,omitempty"`
+	InterfaceId     *int64                 `protobuf:"varint,7,opt,name=interface_id,json=interfaceId,proto3,oneof" json:"interface_id,omitempty"`
+	InterfaceName   string                 `protobuf:"bytes,8,opt,name=interface_name,json=interfaceName,proto3" json:"interface_name,omitempty"`
+	EgressInterface string                 `protobuf:"bytes,11,opt,name=egress_interface,json=egressInterface,proto3" json:"egress_interface,omitempty"`
+	Preference      uint32                 `protobuf:"varint,12,opt,name=preference,proto3" json:"preference,omitempty"`
+	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Route) Reset() {
@@ -413,6 +415,20 @@ func (x *Route) GetInterfaceName() string {
 		return x.InterfaceName
 	}
 	return ""
+}
+
+func (x *Route) GetEgressInterface() string {
+	if x != nil {
+		return x.EgressInterface
+	}
+	return ""
+}
+
+func (x *Route) GetPreference() uint32 {
+	if x != nil {
+		return x.Preference
+	}
+	return 0
 }
 
 func (x *Route) GetCreatedAt() *timestamppb.Timestamp {
@@ -526,14 +542,16 @@ func (x *ListRoutesResponse) GetRoutes() []*Route {
 }
 
 type CreateRouteRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RouteTableId  int64                  `protobuf:"varint,1,opt,name=route_table_id,json=routeTableId,proto3" json:"route_table_id,omitempty"`
-	Ipv6          bool                   `protobuf:"varint,2,opt,name=ipv6,proto3" json:"ipv6,omitempty"`
-	Prefix        string                 `protobuf:"bytes,3,opt,name=prefix,proto3" json:"prefix,omitempty"`
-	NextHop       string                 `protobuf:"bytes,4,opt,name=next_hop,json=nextHop,proto3" json:"next_hop,omitempty"`
-	InterfaceId   *int64                 `protobuf:"varint,5,opt,name=interface_id,json=interfaceId,proto3,oneof" json:"interface_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	RouteTableId    int64                  `protobuf:"varint,1,opt,name=route_table_id,json=routeTableId,proto3" json:"route_table_id,omitempty"`
+	Ipv6            bool                   `protobuf:"varint,2,opt,name=ipv6,proto3" json:"ipv6,omitempty"`
+	Prefix          string                 `protobuf:"bytes,3,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	NextHop         string                 `protobuf:"bytes,4,opt,name=next_hop,json=nextHop,proto3" json:"next_hop,omitempty"`
+	InterfaceId     *int64                 `protobuf:"varint,5,opt,name=interface_id,json=interfaceId,proto3,oneof" json:"interface_id,omitempty"`
+	EgressInterface string                 `protobuf:"bytes,6,opt,name=egress_interface,json=egressInterface,proto3" json:"egress_interface,omitempty"`
+	Preference      uint32                 `protobuf:"varint,7,opt,name=preference,proto3" json:"preference,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *CreateRouteRequest) Reset() {
@@ -597,6 +615,20 @@ func (x *CreateRouteRequest) GetNextHop() string {
 func (x *CreateRouteRequest) GetInterfaceId() int64 {
 	if x != nil && x.InterfaceId != nil {
 		return *x.InterfaceId
+	}
+	return 0
+}
+
+func (x *CreateRouteRequest) GetEgressInterface() string {
+	if x != nil {
+		return x.EgressInterface
+	}
+	return ""
+}
+
+func (x *CreateRouteRequest) GetPreference() uint32 {
+	if x != nil {
+		return x.Preference
 	}
 	return 0
 }
@@ -1028,7 +1060,7 @@ const file_rookery_v1_route_table_proto_rawDesc = "" +
 	"\x0eroute_table_id\x18\x01 \x01(\x03R\frouteTableId\x12\x12\n" +
 	"\x04ipv6\x18\x02 \x01(\bR\x04ipv6\"E\n" +
 	"\x15ListFIBRoutesResponse\x12,\n" +
-	"\x06routes\x18\x01 \x03(\v2\x14.rookery.v1.FIBRouteR\x06routes\"\xf5\x02\n" +
+	"\x06routes\x18\x01 \x03(\v2\x14.rookery.v1.FIBRouteR\x06routes\"\xc0\x03\n" +
 	"\x05Route\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12$\n" +
 	"\x0eroute_table_id\x18\x02 \x01(\x03R\frouteTableId\x12\x19\n" +
@@ -1037,7 +1069,11 @@ const file_rookery_v1_route_table_proto_rawDesc = "" +
 	"\x06prefix\x18\x05 \x01(\tR\x06prefix\x12\x19\n" +
 	"\bnext_hop\x18\x06 \x01(\tR\anextHop\x12&\n" +
 	"\finterface_id\x18\a \x01(\x03H\x00R\vinterfaceId\x88\x01\x01\x12%\n" +
-	"\x0einterface_name\x18\b \x01(\tR\rinterfaceName\x129\n" +
+	"\x0einterface_name\x18\b \x01(\tR\rinterfaceName\x12)\n" +
+	"\x10egress_interface\x18\v \x01(\tR\x0fegressInterface\x12\x1e\n" +
+	"\n" +
+	"preference\x18\f \x01(\rR\n" +
+	"preference\x129\n" +
 	"\n" +
 	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
@@ -1048,13 +1084,19 @@ const file_rookery_v1_route_table_proto_rawDesc = "" +
 	"\x0eroute_table_id\x18\x01 \x01(\x03R\frouteTableId\x12\x12\n" +
 	"\x04ipv6\x18\x02 \x01(\bR\x04ipv6\"?\n" +
 	"\x12ListRoutesResponse\x12)\n" +
-	"\x06routes\x18\x01 \x03(\v2\x11.rookery.v1.RouteR\x06routes\"\xd9\x01\n" +
+	"\x06routes\x18\x01 \x03(\v2\x11.rookery.v1.RouteR\x06routes\"\xb1\x02\n" +
 	"\x12CreateRouteRequest\x12$\n" +
 	"\x0eroute_table_id\x18\x01 \x01(\x03R\frouteTableId\x12\x12\n" +
 	"\x04ipv6\x18\x02 \x01(\bR\x04ipv6\x12!\n" +
-	"\x06prefix\x18\x03 \x01(\tB\t\xfaB\x06r\x04\x10\x01\x18@R\x06prefix\x12$\n" +
-	"\bnext_hop\x18\x04 \x01(\tB\t\xfaB\x06r\x04\x10\x01\x18@R\anextHop\x12/\n" +
-	"\finterface_id\x18\x05 \x01(\x03B\a\xfaB\x04\"\x02 \x00H\x00R\vinterfaceId\x88\x01\x01B\x0f\n" +
+	"\x06prefix\x18\x03 \x01(\tB\t\xfaB\x06r\x04\x10\x01\x18@R\x06prefix\x12%\n" +
+	"\bnext_hop\x18\x04 \x01(\tB\n" +
+	"\xfaB\ar\x05\x18@\xd0\x01\x01R\anextHop\x12/\n" +
+	"\finterface_id\x18\x05 \x01(\x03B\a\xfaB\x04\"\x02 \x00H\x00R\vinterfaceId\x88\x01\x01\x125\n" +
+	"\x10egress_interface\x18\x06 \x01(\tB\n" +
+	"\xfaB\ar\x05\x18@\xd0\x01\x01R\x0fegressInterface\x12\x1e\n" +
+	"\n" +
+	"preference\x18\a \x01(\rR\n" +
+	"preferenceB\x0f\n" +
 	"\r_interface_id\"-\n" +
 	"\x12DeleteRouteRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\xbe\x02\n" +

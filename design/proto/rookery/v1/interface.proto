@@ -46,6 +46,25 @@ service InterfaceService {
   rpc DeleteInterface(DeleteInterfaceRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {delete: "/api/interfaces/{id}"};
   }
+
+  // ListInterfaceCounters returns cumulative VPP RX/TX counters for every
+  // registered virtual interface. It must be declared after GetInterface:
+  // grpc-gateway registers handlers in declaration order and tries the newest
+  // first, so the literal /api/interfaces/counters path must be registered
+  // after the /api/interfaces/{id} pattern to win over it.
+  rpc ListInterfaceCounters(ListInterfaceCountersRequest) returns (ListInterfaceCountersResponse) {
+    option (google.api.http) = {
+      get: "/api/interfaces/counters"
+      response_body: "interfaces"
+    };
+  }
+
+  // ResetInterfaceCounters clears the RX/TX counters for all VPP interfaces
+  // (vppctl clear interfaces). Like ListInterfaceCounters it must stay after
+  // DeleteInterface so the literal path beats /api/interfaces/{id}.
+  rpc ResetInterfaceCounters(ResetInterfaceCountersRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/interfaces/counters"};
+  }
 }
 
 message VirtualInterface {
@@ -126,3 +145,21 @@ message SetInterfaceACLsRequest {
 message DeleteInterfaceRequest {
   int64 id = 1 [(validate.rules).int64 = {gt: 0}];
 }
+
+message InterfaceCounters {
+  string name = 1;
+  uint32 sw_if_index = 2;
+  uint64 rx_packets = 3;
+  uint64 tx_packets = 4;
+  uint64 rx_bytes = 5;
+  uint64 tx_bytes = 6;
+  google.protobuf.Timestamp sampled_at = 7;
+}
+
+message ListInterfaceCountersRequest {}
+
+message ListInterfaceCountersResponse {
+  repeated InterfaceCounters interfaces = 1;
+}
+
+message ResetInterfaceCountersRequest {}

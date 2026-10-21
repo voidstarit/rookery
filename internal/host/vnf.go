@@ -42,15 +42,18 @@ type VNFManager struct {
 	LegacyDir string
 	Port      int
 
-	mu      sync.Mutex
-	servers map[int64]*managedVNF
+	mu          sync.Mutex
+	servers     map[int64]*managedVNF
+	routeWriter BGPRouteWriter
 }
 
 type managedVNF struct {
-	vnfType string
-	servers *coredhcpserver.Servers
-	memif   *memifDHCPv4
-	done    chan struct{}
+	vnfType  string
+	servers  *coredhcpserver.Servers
+	memif    *memifDHCPv4
+	bgp      *bgpInstance
+	bgpMemif *bgpMemifRuntime
+	done     chan struct{}
 }
 
 type leaseRecord struct {
@@ -89,7 +92,13 @@ func NewVNFManager(runDir string) (*VNFManager, error) {
 	}, nil
 }
 
-// Start configures the VNF tap and starts the type-specific DHCP server.
+// SetBGPRouteWriter wires the BGP runtime to the VPP FIB so learned routes
+// can be installed in the configured target table.
+func (m *VNFManager) SetBGPRouteWriter(writer BGPRouteWriter) {
+	m.routeWriter = writer
+}
+
+// Start configures the VNF tap and starts the type-specific server.
 func (m *VNFManager) Start(ctx context.Context, vnf store.VNF, hostIf string) error {
 	if vnf.ID < 1 {
 		return errors.New("invalid VNF id")
@@ -100,6 +109,10 @@ func (m *VNFManager) Start(ctx context.Context, vnf store.VNF, hostIf string) er
 	hostIf = strings.TrimSpace(hostIf)
 	if hostIf == "" {
 		return errors.New("tap interface name is required")
+	}
+
+	if vnf.Type == store.VNFTypeBGP {
+		return m.startBGPTap(ctx, vnf, hostIf)
 	}
 
 	leasePath := m.leasePath(vnf.ID)
@@ -175,8 +188,24 @@ func (m *VNFManager) StartMemif(ctx context.Context, vnf store.VNF, socketPath s
 	if vnf.ID < 1 {
 		return errors.New("invalid VNF id")
 	}
+	if vnf.Type == store.VNFTypeBGP {
+		if err := m.stop(ctx, vnf.ID, false); err != nil {
+			return err
+		}
+		runtime, err := startBGPMemif(ctx, vnf, socketPath, ifID, m.routeWriter)
+		if err != nil {
+			return err
+		}
+		m.mu.Lock()
+		if m.servers == nil {
+			m.servers = make(map[int64]*managedVNF)
+		}
+		m.servers[vnf.ID] = &managedVNF{vnfType: vnf.Type, bgpMemif: runtime, done: make(chan struct{})}
+		m.mu.Unlock()
+		return nil
+	}
 	if vnf.Type != store.VNFTypeDHCPv4 {
-		return fmt.Errorf("memif transport only supports DHCPv4, got %q", vnf.Type)
+		return fmt.Errorf("memif transport only supports DHCPv4 and BGP, got %q", vnf.Type)
 	}
 	socketPath = strings.TrimSpace(socketPath)
 	if socketPath == "" {
@@ -221,7 +250,11 @@ func (m *VNFManager) stop(ctx context.Context, vnfID int64, removeLeases bool) e
 	m.mu.Unlock()
 
 	if managed != nil {
-		if managed.memif != nil {
+		if managed.bgp != nil {
+			managed.bgp.Close(ctx)
+		} else if managed.bgpMemif != nil {
+			managed.bgpMemif.Close(ctx)
+		} else if managed.memif != nil {
 			managed.memif.Close()
 		} else if managed.servers != nil {
 			managed.servers.Close()
@@ -253,6 +286,26 @@ func (m *VNFManager) Running(vnfID int64) bool {
 	defer m.mu.Unlock()
 	_, ok := m.servers[vnfID]
 	return ok
+}
+
+// BGPStatus returns the session and RIB snapshot for a running BGP VNF. A
+// VNF that is not running yields a status with Running=false; a running VNF
+// of another type is an error.
+func (m *VNFManager) BGPStatus(ctx context.Context, vnfID int64) (BGPStatus, error) {
+	m.mu.Lock()
+	managed := m.servers[vnfID]
+	m.mu.Unlock()
+	if managed == nil {
+		return BGPStatus{}, nil
+	}
+	switch {
+	case managed.bgp != nil:
+		return managed.bgp.Status(ctx), nil
+	case managed.bgpMemif != nil && managed.bgpMemif.server != nil:
+		return managed.bgpMemif.server.Status(ctx), nil
+	default:
+		return BGPStatus{}, fmt.Errorf("VNF %d is not a BGP VNF", vnfID)
+	}
 }
 
 // Leases returns the persisted leases for a VNF and marks whether they are active.
@@ -583,6 +636,17 @@ func vnfMemifMAC(vnfID int64) net.HardwareAddr {
 func vnfMemifDHCPMAC(vnfID int64) net.HardwareAddr {
 	return net.HardwareAddr{
 		0x02, 0x4e, 0x4d,
+		byte(uint64(vnfID) >> 16), byte(uint64(vnfID) >> 8), byte(vnfID),
+	}
+}
+
+// vnfMemifBGPMAC is the gVisor-side MAC for BGP memif VNFs. It must differ
+// from vnfMemifMAC (which belongs to the VPP memif master port); reusing the
+// master's MAC makes the two ends of the link claim the same address and
+// breaks L2 learning/forwarding on the bridge domain.
+func vnfMemifBGPMAC(vnfID int64) net.HardwareAddr {
+	return net.HardwareAddr{
+		0x02, 0x4f, 0x4d,
 		byte(uint64(vnfID) >> 16), byte(uint64(vnfID) >> 8), byte(vnfID),
 	}
 }

@@ -162,6 +162,20 @@ func (s *interfaceService) DeleteInterface(ctx context.Context, request *rookery
 	return &emptypb.Empty{}, nil
 }
 
+// ResetInterfaceCounters clears the RX/TX counters for all VPP interfaces.
+func (s *interfaceService) ResetInterfaceCounters(ctx context.Context, _ *rookeryv1.ResetInterfaceCountersRequest) (*emptypb.Empty, error) {
+	if s.counters == nil {
+		return nil, status.Error(codes.Unavailable, "VPP network runtime is not configured")
+	}
+	if err := s.vppReady(); err != nil {
+		return nil, err
+	}
+	if err := s.counters.ResetInterfaceCounters(ctx); err != nil {
+		return nil, status.Error(codes.Internal, "could not reset VPP interface counters: "+err.Error())
+	}
+	return &emptypb.Empty{}, nil
+}
+
 func gatewayMAC() (string, error) {
 	address := make([]byte, 6)
 	if _, err := rand.Read(address); err != nil {

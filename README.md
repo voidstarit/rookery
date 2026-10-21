@@ -470,9 +470,19 @@ served locally; the upstream `ffmpeg-core.wasm` is omitted, so RTP audio playbac
 is unavailable while packet dissection works.
 
 Network functions (**VNFs**) are attached to Rookery Networks. The **VNFs** tab
-supports `dhcpv4`, `dhcpv6`, and `nat44` functions; the VNF record has a type,
-network, enable flag, and type-specific configuration. A network can have one
-VNF of each type. DHCP VNFs each create a VPP tap (`vnf<id>`) in the network's
+supports `dhcpv4`, `dhcpv6`, `nat44`, and `bgp` functions; the VNF record has a
+type, network, enable flag, and type-specific configuration. A network can have
+one VNF of each type. Adding or editing a VNF opens a full page at `/vnfs/new`
+or `/vnfs/{id}/edit`, so refreshing keeps the form open; lease and session
+views remain dialogs.
+
+BGP VNFs are embedded GoBGP IPv4 speakers with one peer. Choose a `memif`
+transport for a gVisor userspace stack over VPP, or `tap` for kernel TCP. The
+configuration accepts local/peer ASNs, router ID, local IPv4 CIDR, peer IPv4,
+optional peer gateway, multihop TTL, passive mode, an optional TCP MD5 password
+(tap only), a raw target VPP table ID, and advertised IPv4 prefixes. Received
+best paths are installed in the target VPP table and withdrawn when the session
+or VNF stops. IPv6 is not implemented yet. DHCP VNFs each create a VPP tap (`vnf<id>`) in the network's
 bridge domain, assign their configured address to the Linux tap, and run an
 in-process CoreDHCP server bound to that tap.
 

@@ -1327,3 +1327,489 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = DeleteInterfaceRequestValidationError{}
+
+// Validate checks the field values on InterfaceCounters with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *InterfaceCounters) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on InterfaceCounters with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// InterfaceCountersMultiError, or nil if none found.
+func (m *InterfaceCounters) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *InterfaceCounters) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Name
+
+	// no validation rules for SwIfIndex
+
+	// no validation rules for RxPackets
+
+	// no validation rules for TxPackets
+
+	// no validation rules for RxBytes
+
+	// no validation rules for TxBytes
+
+	if all {
+		switch v := interface{}(m.GetSampledAt()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, InterfaceCountersValidationError{
+					field:  "SampledAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, InterfaceCountersValidationError{
+					field:  "SampledAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetSampledAt()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return InterfaceCountersValidationError{
+				field:  "SampledAt",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return InterfaceCountersMultiError(errors)
+	}
+
+	return nil
+}
+
+// InterfaceCountersMultiError is an error wrapping multiple validation errors
+// returned by InterfaceCounters.ValidateAll() if the designated constraints
+// aren't met.
+type InterfaceCountersMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m InterfaceCountersMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m InterfaceCountersMultiError) AllErrors() []error { return m }
+
+// InterfaceCountersValidationError is the validation error returned by
+// InterfaceCounters.Validate if the designated constraints aren't met.
+type InterfaceCountersValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e InterfaceCountersValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e InterfaceCountersValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e InterfaceCountersValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e InterfaceCountersValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e InterfaceCountersValidationError) ErrorName() string {
+	return "InterfaceCountersValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e InterfaceCountersValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sInterfaceCounters.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = InterfaceCountersValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = InterfaceCountersValidationError{}
+
+// Validate checks the field values on ListInterfaceCountersRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ListInterfaceCountersRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ListInterfaceCountersRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ListInterfaceCountersRequestMultiError, or nil if none found.
+func (m *ListInterfaceCountersRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ListInterfaceCountersRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if len(errors) > 0 {
+		return ListInterfaceCountersRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// ListInterfaceCountersRequestMultiError is an error wrapping multiple
+// validation errors returned by ListInterfaceCountersRequest.ValidateAll() if
+// the designated constraints aren't met.
+type ListInterfaceCountersRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ListInterfaceCountersRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ListInterfaceCountersRequestMultiError) AllErrors() []error { return m }
+
+// ListInterfaceCountersRequestValidationError is the validation error returned
+// by ListInterfaceCountersRequest.Validate if the designated constraints
+// aren't met.
+type ListInterfaceCountersRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ListInterfaceCountersRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ListInterfaceCountersRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ListInterfaceCountersRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ListInterfaceCountersRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ListInterfaceCountersRequestValidationError) ErrorName() string {
+	return "ListInterfaceCountersRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ListInterfaceCountersRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListInterfaceCountersRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ListInterfaceCountersRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ListInterfaceCountersRequestValidationError{}
+
+// Validate checks the field values on ListInterfaceCountersResponse with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ListInterfaceCountersResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ListInterfaceCountersResponse with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the result is a list of violation errors wrapped in
+// ListInterfaceCountersResponseMultiError, or nil if none found.
+func (m *ListInterfaceCountersResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ListInterfaceCountersResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	for idx, item := range m.GetInterfaces() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ListInterfaceCountersResponseValidationError{
+						field:  fmt.Sprintf("Interfaces[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ListInterfaceCountersResponseValidationError{
+						field:  fmt.Sprintf("Interfaces[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ListInterfaceCountersResponseValidationError{
+					field:  fmt.Sprintf("Interfaces[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return ListInterfaceCountersResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// ListInterfaceCountersResponseMultiError is an error wrapping multiple
+// validation errors returned by ListInterfaceCountersResponse.ValidateAll()
+// if the designated constraints aren't met.
+type ListInterfaceCountersResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ListInterfaceCountersResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ListInterfaceCountersResponseMultiError) AllErrors() []error { return m }
+
+// ListInterfaceCountersResponseValidationError is the validation error
+// returned by ListInterfaceCountersResponse.Validate if the designated
+// constraints aren't met.
+type ListInterfaceCountersResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ListInterfaceCountersResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ListInterfaceCountersResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ListInterfaceCountersResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ListInterfaceCountersResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ListInterfaceCountersResponseValidationError) ErrorName() string {
+	return "ListInterfaceCountersResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ListInterfaceCountersResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListInterfaceCountersResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ListInterfaceCountersResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ListInterfaceCountersResponseValidationError{}
+
+// Validate checks the field values on ResetInterfaceCountersRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ResetInterfaceCountersRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ResetInterfaceCountersRequest with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the result is a list of violation errors wrapped in
+// ResetInterfaceCountersRequestMultiError, or nil if none found.
+func (m *ResetInterfaceCountersRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ResetInterfaceCountersRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if len(errors) > 0 {
+		return ResetInterfaceCountersRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// ResetInterfaceCountersRequestMultiError is an error wrapping multiple
+// validation errors returned by ResetInterfaceCountersRequest.ValidateAll()
+// if the designated constraints aren't met.
+type ResetInterfaceCountersRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ResetInterfaceCountersRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ResetInterfaceCountersRequestMultiError) AllErrors() []error { return m }
+
+// ResetInterfaceCountersRequestValidationError is the validation error
+// returned by ResetInterfaceCountersRequest.Validate if the designated
+// constraints aren't met.
+type ResetInterfaceCountersRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ResetInterfaceCountersRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ResetInterfaceCountersRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ResetInterfaceCountersRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ResetInterfaceCountersRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ResetInterfaceCountersRequestValidationError) ErrorName() string {
+	return "ResetInterfaceCountersRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ResetInterfaceCountersRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sResetInterfaceCountersRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ResetInterfaceCountersRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ResetInterfaceCountersRequestValidationError{}

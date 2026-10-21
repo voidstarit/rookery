@@ -531,6 +531,93 @@ func (m *VNFConfig) validate(all bool) error {
 
 	}
 
+	if _, ok := _VNFConfig_Transport_InLookup[m.GetTransport()]; !ok {
+		err := VNFConfigValidationError{
+			field:  "Transport",
+			reason: "value must be in list [ memif tap]",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	// no validation rules for LocalAs
+
+	if utf8.RuneCountInString(m.GetRouterId()) > 64 {
+		err := VNFConfigValidationError{
+			field:  "RouterId",
+			reason: "value length must be at most 64 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	// no validation rules for PeerAs
+
+	if utf8.RuneCountInString(m.GetPeerIp()) > 64 {
+		err := VNFConfigValidationError{
+			field:  "PeerIp",
+			reason: "value length must be at most 64 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetLocalIp()) > 64 {
+		err := VNFConfigValidationError{
+			field:  "LocalIp",
+			reason: "value length must be at most 64 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetPeerGateway()) > 64 {
+		err := VNFConfigValidationError{
+			field:  "PeerGateway",
+			reason: "value length must be at most 64 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	// no validation rules for MultihopTtl
+
+	if utf8.RuneCountInString(m.GetPassword()) > 128 {
+		err := VNFConfigValidationError{
+			field:  "Password",
+			reason: "value length must be at most 128 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	// no validation rules for Passive
+
+	// no validation rules for TargetTableId
+
+	if len(m.GetAdvertisePrefixes()) > 1024 {
+		err := VNFConfigValidationError{
+			field:  "AdvertisePrefixes",
+			reason: "value must contain no more than 1024 item(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
 	if len(errors) > 0 {
 		return VNFConfigMultiError(errors)
 	}
@@ -607,6 +694,12 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = VNFConfigValidationError{}
+
+var _VNFConfig_Transport_InLookup = map[string]struct{}{
+	"":      {},
+	"memif": {},
+	"tap":   {},
+}
 
 // Validate checks the field values on VNF with the rules defined in the proto
 // definition for this message. If any rules are violated, the first error
@@ -1369,7 +1462,7 @@ func (m *CreateVNFRequest) validate(all bool) error {
 	if _, ok := _CreateVNFRequest_Type_InLookup[m.GetType()]; !ok {
 		err := CreateVNFRequestValidationError{
 			field:  "Type",
-			reason: "value must be in list [dhcpv4 dhcpv6 nat44]",
+			reason: "value must be in list [dhcpv4 dhcpv6 nat44 bgp]",
 		}
 		if !all {
 			return err
@@ -1494,6 +1587,7 @@ var _CreateVNFRequest_Type_InLookup = map[string]struct{}{
 	"dhcpv4": {},
 	"dhcpv6": {},
 	"nat44":  {},
+	"bgp":    {},
 }
 
 // Validate checks the field values on UpdateVNFRequest with the rules defined
@@ -2367,3 +2461,369 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = ListVNFSessionsResponseValidationError{}
+
+// Validate checks the field values on VNFBGPReceivedPrefix with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *VNFBGPReceivedPrefix) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on VNFBGPReceivedPrefix with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// VNFBGPReceivedPrefixMultiError, or nil if none found.
+func (m *VNFBGPReceivedPrefix) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *VNFBGPReceivedPrefix) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Prefix
+
+	// no validation rules for NextHop
+
+	if len(errors) > 0 {
+		return VNFBGPReceivedPrefixMultiError(errors)
+	}
+
+	return nil
+}
+
+// VNFBGPReceivedPrefixMultiError is an error wrapping multiple validation
+// errors returned by VNFBGPReceivedPrefix.ValidateAll() if the designated
+// constraints aren't met.
+type VNFBGPReceivedPrefixMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m VNFBGPReceivedPrefixMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m VNFBGPReceivedPrefixMultiError) AllErrors() []error { return m }
+
+// VNFBGPReceivedPrefixValidationError is the validation error returned by
+// VNFBGPReceivedPrefix.Validate if the designated constraints aren't met.
+type VNFBGPReceivedPrefixValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e VNFBGPReceivedPrefixValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e VNFBGPReceivedPrefixValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e VNFBGPReceivedPrefixValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e VNFBGPReceivedPrefixValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e VNFBGPReceivedPrefixValidationError) ErrorName() string {
+	return "VNFBGPReceivedPrefixValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e VNFBGPReceivedPrefixValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sVNFBGPReceivedPrefix.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = VNFBGPReceivedPrefixValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = VNFBGPReceivedPrefixValidationError{}
+
+// Validate checks the field values on VNFBGPStatus with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *VNFBGPStatus) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on VNFBGPStatus with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in VNFBGPStatusMultiError, or
+// nil if none found.
+func (m *VNFBGPStatus) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *VNFBGPStatus) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for VnfId
+
+	// no validation rules for Type
+
+	// no validation rules for Running
+
+	// no validation rules for Established
+
+	// no validation rules for SessionState
+
+	// no validation rules for PeerAddress
+
+	// no validation rules for PeerAs
+
+	// no validation rules for LocalAs
+
+	for idx, item := range m.GetReceived() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, VNFBGPStatusValidationError{
+						field:  fmt.Sprintf("Received[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, VNFBGPStatusValidationError{
+						field:  fmt.Sprintf("Received[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return VNFBGPStatusValidationError{
+					field:  fmt.Sprintf("Received[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return VNFBGPStatusMultiError(errors)
+	}
+
+	return nil
+}
+
+// VNFBGPStatusMultiError is an error wrapping multiple validation errors
+// returned by VNFBGPStatus.ValidateAll() if the designated constraints aren't met.
+type VNFBGPStatusMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m VNFBGPStatusMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m VNFBGPStatusMultiError) AllErrors() []error { return m }
+
+// VNFBGPStatusValidationError is the validation error returned by
+// VNFBGPStatus.Validate if the designated constraints aren't met.
+type VNFBGPStatusValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e VNFBGPStatusValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e VNFBGPStatusValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e VNFBGPStatusValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e VNFBGPStatusValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e VNFBGPStatusValidationError) ErrorName() string { return "VNFBGPStatusValidationError" }
+
+// Error satisfies the builtin error interface
+func (e VNFBGPStatusValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sVNFBGPStatus.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = VNFBGPStatusValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = VNFBGPStatusValidationError{}
+
+// Validate checks the field values on GetVNFBGPRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *GetVNFBGPRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetVNFBGPRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// GetVNFBGPRequestMultiError, or nil if none found.
+func (m *GetVNFBGPRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetVNFBGPRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetId() <= 0 {
+		err := GetVNFBGPRequestValidationError{
+			field:  "Id",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return GetVNFBGPRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// GetVNFBGPRequestMultiError is an error wrapping multiple validation errors
+// returned by GetVNFBGPRequest.ValidateAll() if the designated constraints
+// aren't met.
+type GetVNFBGPRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetVNFBGPRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetVNFBGPRequestMultiError) AllErrors() []error { return m }
+
+// GetVNFBGPRequestValidationError is the validation error returned by
+// GetVNFBGPRequest.Validate if the designated constraints aren't met.
+type GetVNFBGPRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetVNFBGPRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetVNFBGPRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetVNFBGPRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetVNFBGPRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetVNFBGPRequestValidationError) ErrorName() string { return "GetVNFBGPRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e GetVNFBGPRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetVNFBGPRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetVNFBGPRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetVNFBGPRequestValidationError{}
