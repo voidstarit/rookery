@@ -92,6 +92,7 @@ export function NetworksTab() {
   const [loading, setLoading] = useState(true);
   const [networkError, setNetworkError] = useState("");
   const [hostError, setHostError] = useState("");
+  const [hostAction, setHostAction] = useState("");
   const [interfaceError, setInterfaceError] = useState("");
   const [aclError, setAclError] = useState("");
   const [networkDialogOpen, setNetworkDialogOpen] = useState(false);
@@ -263,6 +264,50 @@ export function NetworksTab() {
       if (showErrors) {
         setHostError(err instanceof Error ? err.message : String(err));
       }
+    }
+  };
+
+  const attachHostInterface = async (iface: HostInterface) => {
+    if (
+      !window.confirm(
+        `Bring ${iface.name} into VPP?\n\nThis flushes host IP addresses on the NIC; the host will lose connectivity on it.`,
+      )
+    ) {
+      return;
+    }
+    setHostAction(iface.name);
+    setHostError("");
+    try {
+      await api<HostInterface>(`/api/host/interfaces/${encodeURIComponent(iface.name)}/attach`, {
+        method: "POST",
+      });
+      showToast(`Attached ${iface.name} to VPP`);
+      await loadHostInterfaces();
+    } catch (err) {
+      setHostError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setHostAction("");
+    }
+  };
+
+  const detachHostInterface = async (iface: HostInterface) => {
+    if (
+      !window.confirm(
+        `Detach ${iface.name} from VPP?\n\nThe Linux NIC becomes available to the host again; you may need to renew its DHCP lease.`,
+      )
+    ) {
+      return;
+    }
+    setHostAction(iface.name);
+    setHostError("");
+    try {
+      await api<void>(`/api/host/interfaces/${encodeURIComponent(iface.name)}`, { method: "DELETE" });
+      showToast(`Detached ${iface.name} from VPP`);
+      await loadHostInterfaces();
+    } catch (err) {
+      setHostError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setHostAction("");
     }
   };
 
@@ -906,7 +951,9 @@ export function NetworksTab() {
           Physical NICs and external interfaces visible to the server; Rookery/VPP
           taps and host interfaces are hidden. “In VPP” means a matching
           <code>host-&lt;nic&gt;</code> interface currently exists in VPP; the VPP state is
-          shown as unknown when VPP cannot be queried.
+          shown as unknown when VPP cannot be queried. Attach takes a physical NIC
+          into VPP (flushing its host addresses); persisted attachments are
+          recreated after a VPP restart.
         </p>
 
         {hostError ? (
@@ -926,6 +973,7 @@ export function NetworksTab() {
                   <th scope="col">VPP</th>
                   <th scope="col">Default route</th>
                   <th scope="col">Type</th>
+                  <th scope="col">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -960,6 +1008,7 @@ export function NetworksTab() {
                             {typeof iface.vpp_sw_if_index === "number"
                               ? ` · sw_if_index ${iface.vpp_sw_if_index}`
                               : ""}
+                            {iface.managed ? " · persisted" : ""}
                           </span>
                         </>
                       ) : (
@@ -973,6 +1022,42 @@ export function NetworksTab() {
                         : iface.physical
                           ? "physical"
                           : "virtual"}
+                    </td>
+                    <td>
+                      {iface.in_vpp ? (
+                        <button
+                          class="button ghost"
+                          type="button"
+                          disabled={hostAction === iface.name || !vppReady}
+                          onClick={() => void detachHostInterface(iface)}
+                        >
+                          {hostAction === iface.name ? "Detaching…" : "Detach"}
+                        </button>
+                      ) : (
+                        <button
+                          class="button ghost"
+                          type="button"
+                          disabled={
+                            hostAction === iface.name ||
+                            !vppReady ||
+                            !iface.physical ||
+                            iface.wireless ||
+                            iface.default_route
+                          }
+                          title={
+                            iface.default_route
+                              ? "The host default-route interface cannot be attached"
+                              : iface.wireless
+                                ? "Wireless interfaces cannot be attached"
+                                : !iface.physical
+                                  ? "Only physical interfaces can be attached"
+                                  : "Take this NIC into VPP"
+                          }
+                          onClick={() => void attachHostInterface(iface)}
+                        >
+                          {hostAction === iface.name ? "Attaching…" : "Attach to VPP"}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -1475,6 +1560,9 @@ export function NetworksTab() {
                       <td>
                         <span class="vm-name">{table.name}</span>
                         {table.is_default ? <span class="vm-description">default VRF</span> : null}
+                        {table.network_id ? (
+                          <span class="vm-description">network VRF · network {table.network_id}</span>
+                        ) : null}
                       </td>
                       <td class="mono">{table.ipv6 ? "IPv6" : "IPv4"}</td>
                       <td class="mono">{table.table_id}</td>
@@ -1495,6 +1583,8 @@ export function NetworksTab() {
                           </button>
                           {table.is_default ? (
                             <span class="muted">built-in</span>
+                          ) : table.managed ? (
+                            <span class="muted">network-managed</span>
                           ) : (
                             <button
                               class="row-action danger"

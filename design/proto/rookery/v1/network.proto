@@ -44,6 +44,9 @@ message Network {
   string ipv4_gateway = 7;
   google.protobuf.Timestamp created_at = 8;
   google.protobuf.Timestamp updated_at = 9;
+  string ipv4_cidr = 10;
+  string ipv6_cidr = 11;
+  uint32 route_table_id = 12;
 }
 
 message ListNetworksRequest {}
@@ -62,6 +65,8 @@ message CreateNetworkRequest {
     max_len: 64
     pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
   }];
+  string ipv4_cidr = 2 [(validate.rules).string = {min_len: 1}];
+  string ipv6_cidr = 3 [(validate.rules).string = {min_len: 1}];
 }
 
 message DeleteNetworkRequest {

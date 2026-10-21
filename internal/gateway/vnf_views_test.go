@@ -17,7 +17,6 @@ type fakeVNFRuntime struct {
 	leases []store.VNFLease
 }
 
-func (f *fakeVNFRuntime) Running(int64) bool { return true }
 func (f *fakeVNFRuntime) Leases(context.Context, int64) ([]store.VNFLease, error) {
 	return f.leases, nil
 }

@@ -141,6 +141,8 @@ message RouteTable {
   int64 route_count = 7;
   google.protobuf.Timestamp created_at = 8;
   google.protobuf.Timestamp updated_at = 9;
+  int64 network_id = 10;
+  bool managed = 11;
 }
 
 message ListRouteTablesRequest {}

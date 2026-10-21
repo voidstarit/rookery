@@ -32,20 +32,20 @@ func runServe(args []string) error {
 	var hostCfg hostFlags
 	hostCfg.register(fs)
 
-	addr := fs.String("addr", envDefault("NERDS_VMS_ADDR", "127.0.0.1:8080"), "HTTP listen address")
-	gatewayAddr := fs.String("gateway-addr", envDefault("NERDS_VMS_GATEWAY_ADDR", ""), "optional grpc-gateway HTTP listen address")
-	grpcAddr := fs.String("grpc-addr", envDefault("NERDS_VMS_GRPC_ADDR", ""), "optional gRPC listen address")
-	dbPath := fs.String("db", envDefault("NERDS_VMS_DB", "nerds-vms.db"), "SQLite database path")
-	rateLimitValue := fs.String("rate-limit", envDefault("NERDS_VMS_RATE_LIMIT", "3"), "global HTTP request rate limit in requests per second (0 disables)")
-	dhcpTransport := fs.String("dhcp-transport", envDefault("NERDS_VMS_DHCP_TRANSPORT", "memif"), "DHCP VNF transport: memif or tap")
-	vnfAddr := fs.String("vnf-addr", envDefault("NERDS_VMS_VNF_ADDR", "unix:///run/rookery/vnfs.sock"), "VNF daemon control address (unix:///path or tcp://host:port)")
+	addr := fs.String("addr", envDefault("ROOKERY_ADDR", "127.0.0.1:8080"), "HTTP listen address")
+	gatewayAddr := fs.String("gateway-addr", envDefault("ROOKERY_GATEWAY_ADDR", ""), "optional grpc-gateway HTTP listen address")
+	grpcAddr := fs.String("grpc-addr", envDefault("ROOKERY_GRPC_ADDR", ""), "optional gRPC listen address")
+	dbPath := fs.String("db", envDefault("ROOKERY_DB", "nerds-vms.db"), "SQLite database path")
+	rateLimitValue := fs.String("rate-limit", envDefault("ROOKERY_RATE_LIMIT", "3"), "global HTTP request rate limit in requests per second (0 disables)")
+	dhcpTransport := fs.String("dhcp-transport", envDefault("ROOKERY_DHCP_TRANSPORT", "memif"), "DHCP VNF transport: memif or tap")
+	vnfAddr := fs.String("vnf-addr", envDefault("ROOKERY_VNF_ADDR", "unix:///run/rookery/vnfs.sock"), "VNF daemon control address (unix:///path or tcp://host:port)")
 	checkInterval := fs.Duration("check-interval", 10*time.Second, "readiness check interval")
-	qemuBin := fs.String("qemu-bin", envDefault("NERDS_VMS_QEMU_BIN", qemu.DefaultBinary), "QEMU system emulator binary")
-	runDir := fs.String("run-dir", envDefault("NERDS_VMS_RUN_DIR", qemu.DefaultRunDir), "directory for QEMU pid files and VNC sockets")
-	memifDir := fs.String("memif-dir", envDefault("ROOKERY_MEMIF_DIR", envDefault("NERDS_VMS_MEMIF_DIR", "/run/rookery/memif")), "directory for VNF memif sockets")
-	vhostDir := fs.String("vhost-dir", envDefault("NERDS_VMS_VHOST_DIR", host.DefaultVhostDir), "directory for VPP vhost-user sockets")
-	logLevel := fs.String("log-level", envDefault("NERDS_VMS_LOG_LEVEL", "info"), "log level: trace, debug, info, warn, error")
-	logFormat := fs.String("log-format", envDefault("NERDS_VMS_LOG_FORMAT", "console"), "log format: console or json")
+	qemuBin := fs.String("qemu-bin", envDefault("ROOKERY_QEMU_BIN", qemu.DefaultBinary), "QEMU system emulator binary")
+	runDir := fs.String("run-dir", envDefault("ROOKERY_RUN_DIR", qemu.DefaultRunDir), "directory for QEMU pid files and VNC sockets")
+	memifDir := fs.String("memif-dir", envDefault("ROOKERY_MEMIF_DIR", "/run/rookery/memif"), "directory for VNF memif sockets")
+	vhostDir := fs.String("vhost-dir", envDefault("ROOKERY_VHOST_DIR", host.DefaultVhostDir), "directory for VPP vhost-user sockets")
+	logLevel := fs.String("log-level", envDefault("ROOKERY_LOG_LEVEL", "info"), "log level: trace, debug, info, warn, error")
+	logFormat := fs.String("log-format", envDefault("ROOKERY_LOG_FORMAT", "console"), "log format: console or json")
 
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(), "Usage: rookery serve [flags]\n\n"+
@@ -151,6 +151,7 @@ func runServe(args []string) error {
 		gateway.WithDiskMutex(apiServer.ResourceMutex()),
 		gateway.WithVMMutex(apiServer.RunMutex()),
 		gateway.WithInterfaceRuntime(networkRunner),
+		gateway.WithHostWriter(networkRunner),
 		gateway.WithDiagnosticsRuntime(networkRunner),
 		gateway.WithNetworkRuntime(networkRunner), gateway.WithNetworkWriter(lifecycleService),
 		gateway.WithVNFRuntime(vnfClient),

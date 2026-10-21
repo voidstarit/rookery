@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/voidstarit/rookery/internal/host"
+	"github.com/voidstarit/rookery/internal/netutil"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -118,6 +119,18 @@ func (p vnfConfigPayload) toConfig(vnfType string) (store.VNFConfig, error) {
 	if gateway == "" {
 		return store.VNFConfig{}, errors.New("config.gateway is required")
 	}
+	transport := strings.ToLower(strings.TrimSpace(p.Transport))
+	switch transport {
+	case "", vnfTransportShared, vnfTransportDedicated, vnfTransportTap:
+	case "memif":
+		transport = vnfTransportDedicated
+	default:
+		return store.VNFConfig{}, fmt.Errorf("config.transport must be shared, dedicated, or tap, got %q", p.Transport)
+	}
+	if vnfType == store.VNFTypeDHCPv6 {
+		// DHCPv6 has no memif transport yet; keep it on the tap path.
+		transport = vnfTransportTap
+	}
 	if vnfType != store.VNFTypeDHCPv4 && len(p.StaticAssignments) > 0 {
 		return store.VNFConfig{}, errors.New("config.static_assignments is supported for DHCPv4 only")
 	}
@@ -168,6 +181,7 @@ func (p vnfConfigPayload) toConfig(vnfType string) (store.VNFConfig, error) {
 			LeaseTime:         leaseTime,
 			BindIP:            bindIP,
 			StaticAssignments: staticAssignments,
+			Transport:         transport,
 		}, nil
 	case store.VNFTypeNAT44:
 		return normalizeNAT44Config(p)
@@ -622,7 +636,7 @@ func leaseBelongsToVNF(vnf store.VNF, address string) bool {
 func (s *Server) viewVNF(ctx context.Context, vnf store.VNF) vnfView {
 	view := vnfView{VNF: vnf, Status: "disabled"}
 	if vnf.Enabled {
-		if s.vnfRunning(vnf) {
+		if s.vnfRunning(ctx, vnf) {
 			view.Status = "running"
 		} else {
 			view.Status = "degraded"
@@ -641,13 +655,13 @@ func (s *Server) viewVNF(ctx context.Context, vnf store.VNF) vnfView {
 	return view
 }
 
-func (s *Server) vnfRunning(vnf store.VNF) bool {
+func (s *Server) vnfRunning(ctx context.Context, vnf store.VNF) bool {
 	if vnf.Type == store.VNFTypeNAT44 {
 		s.natMu.Lock()
 		defer s.natMu.Unlock()
 		return s.natRunning[vnf.ID]
 	}
-	return s.vnfs != nil && s.vnfs.Running(vnf.ID)
+	return s.vnfs != nil && s.vnfs.Running(ctx, vnf.ID)
 }
 
 func (s *Server) setNAT44Running(vnfID int64, running bool) {
@@ -679,6 +693,16 @@ func applyNATGatewayToDHCPConfig(network store.Network, vnfType string, config *
 	if start == nil || end == nil || !natSubnet.Contains(start) || !natSubnet.Contains(end) {
 		return fmt.Errorf("DHCPv4 range must be inside the network NAT subnet %s", natSubnet)
 	}
+	if network.IPv4CIDR != "" {
+		if !netutil.InRange(network.IPv4CIDR, config.RangeStart, config.RangeEnd) {
+			return fmt.Errorf("DHCPv4 range %s-%s must stay inside %s and avoid the first %d reserved addresses", config.RangeStart, config.RangeEnd, network.IPv4CIDR, netutil.ReservedHosts)
+		}
+		for _, assignment := range config.StaticAssignments {
+			if !netutil.Contains(network.IPv4CIDR, assignment.IP) || netutil.IsReserved(network.IPv4CIDR, assignment.IP) {
+				return fmt.Errorf("DHCPv4 static assignment %s (%s) must stay inside %s and avoid the first %d reserved addresses", assignment.MAC, assignment.IP, network.IPv4CIDR, netutil.ReservedHosts)
+			}
+		}
+	}
 	bindCIDR, err := nextIPv4CIDR(network.IPv4Gateway)
 	if err != nil {
 		return err
@@ -703,19 +727,38 @@ func (s *Server) activateVNF(ctx context.Context, vnf store.VNF) (store.VNF, err
 	if err != nil {
 		return vnf, fmt.Errorf("get VNF network: %w", err)
 	}
+	network, err = s.ensureNetworkCIDRs(ctx, network)
+	if err != nil {
+		return vnf, err
+	}
+	if err := s.validateVNFNetwork(vnf, network); err != nil {
+		return vnf, err
+	}
 	if err := s.cleanupLegacyNetworkVNF(ctx, network); err != nil {
 		return vnf, err
 	}
 
-	if (s.memifDHCP && vnf.Type == store.VNFTypeDHCPv4) ||
-		(vnf.Type == store.VNFTypeBGP && vnf.Config.Transport == "memif") {
+	transport := s.effectiveVNFTransport(network, vnf)
+	if s.memifDHCP && vnf.Type == store.VNFTypeDHCPv4 {
+		switch transport {
+		case vnfTransportShared:
+			return s.activateSharedVNF(ctx, vnf, network)
+		case vnfTransportDedicated:
+			return s.activateMemifVNF(ctx, vnf, network)
+		}
+	}
+	if vnf.Type == store.VNFTypeBGP && vnf.Config.Transport == "memif" {
 		return s.activateMemifVNF(ctx, vnf, network)
 	}
 
 	hostIf := fmt.Sprintf("vnf%d", vnf.ID)
-	tapSwIfIndex, err := s.networks.CreateTap(ctx, hostIf, vnfTapCIDR(vnf), network.BridgeDomainID)
+	tapSwIfIndex, err := s.networks.CreateTap(ctx, hostIf, vnfTapCIDR(vnf), network.BridgeDomainID, network.RouteTableID)
 	if err != nil {
 		return vnf, fmt.Errorf("create VNF tap: %w", err)
+	}
+	if err := s.bindNetworkInterface(ctx, network, tapSwIfIndex); err != nil {
+		_ = s.networks.DeleteTap(ctx, tapSwIfIndex)
+		return vnf, err
 	}
 	if err := s.vnfs.Start(ctx, vnf, hostIf); err != nil {
 		_ = s.networks.DeleteTap(ctx, tapSwIfIndex)
@@ -742,7 +785,12 @@ func (s *Server) stopVNF(ctx context.Context, vnf store.VNF, removeLeases bool) 
 		}
 	}
 	if s.networks != nil {
-		if vnf.MemifSwIfIndex > 0 || vnf.MemifSocket != "" {
+		sharedMemif := strings.TrimSpace(vnf.Config.Transport) == vnfTransportShared
+		if network, err := s.store.GetNetwork(ctx, vnf.NetworkID); err == nil &&
+			network.VNFMemifSocket != "" && vnf.MemifSocket == network.VNFMemifSocket {
+			sharedMemif = true
+		}
+		if !sharedMemif && (vnf.MemifSwIfIndex > 0 || vnf.MemifSocket != "") {
 			if err := s.deleteMemif(ctx, vnf.MemifSwIfIndex, vnfMemifDeleteName(vnf)); err != nil {
 				errs = append(errs, fmt.Errorf("delete VNF memif: %w", err))
 			}

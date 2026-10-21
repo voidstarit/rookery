@@ -336,14 +336,15 @@ access the VPP socket; disk creation and deletion operate on the host.
 Both binaries log through `zerolog`. `-log-level` (`trace`, `debug`, `info`,
 `warn`, `error`; default `info`) and `-log-format` (`console` or `json`;
 default `console`, with colors only on a terminal) control the output and can
-also be set with `NERDS_VMS_LOG_LEVEL` and `NERDS_VMS_LOG_FORMAT`. Every line is
+also be set with `ROOKERY_LOG_LEVEL` and `ROOKERY_LOG_FORMAT`. Every line is
 tagged `service=rookery` or `service=vnfs`, and structured fields such as
 `vnf_id`, `network`, `method`, `path`, `status`, and `duration` stay typed
 integers, strings, and durations instead of being pre-formatted. Use
 `-log-format json` when shipping logs to journald, Loki, or ELK. At
 `-log-level trace`, the VNF daemon logs every control RPC (method, duration,
-status), client connection changes, supervision decisions, DHCPv4/DHCPv6 lease
-allocation, renewal, and release, and BGP advertised/installed/withdrawn routes.
+status), client connection changes, supervision decisions, DHCPv4/DHCPv6
+request/reply details, and BGP advertised/installed/withdrawn routes. DHCP lease
+allocation and release are logged at `info`; renewals at `debug`.
 
 The UI has **Virtual machines**, **Disks**, **Installation media**,
 **Rookery Networks**, and **VNFs** tabs. The **Disks** tab manages storage
@@ -502,6 +503,64 @@ advertised prefixes, and received prefixes with next hop and AS path. DHCP VNFs 
 bridge domain, assign their configured address to the Linux tap, and run an
 in-process CoreDHCP server bound to that tap.
 
+### Host interfaces
+
+The **Host interfaces** section (under **Rookery Networks**) lists the Linux
+NICs visible to the server. Physical, non-wireless interfaces that do not carry
+the host default route can be **Attached to VPP**; this creates a
+`host-<nic>` AF_PACKET interface in VPP (flushing host IP addresses on the
+NIC). Attachments are persisted and recreated after a VPP restart. **Detach**
+removes the VPP interface and returns the NIC to the host; the host may need to
+renew DHCP. An interface used by a NAT44 VNF cannot be detached here.
+
+### Network addressing
+
+Every Rookery Network requires an IPv4 CIDR and an IPv6 CIDR. The create dialog
+defaults to `10.0.0.0/16` and `fd00:20::/64`. The first five host addresses of
+each prefix are reserved for Rookery:
+
+- `.1` — network BVI (gateway)
+- `.2` — shared VNF memif stack
+- `.3`–`.5` — reserved for future internal use
+
+DHCP ranges, DHCP static assignments, and NAT44 DNAT local addresses must stay
+inside the network prefix and outside the reserved addresses. The NAT44 gateway
+must be the network BVI address (`.1`). The IPv6 CIDR currently defines the
+allowed IPv6 range and reservations; IPv6 BVI/memif address assignment follows
+with shared DHCPv6.
+
+### Shared VNF networking
+
+DHCPv4 VNFs use one shared memif per network by default. Creating a network
+creates the VPP memif master (`net<id>-vnf`) and stores its socket and
+interface index on the network; the first shared VNF also creates the network
+BVI owning the gateway (`.1`) and assigns the VNF address `.2` (the next host
+address) to the shared gVisor stack. All DHCPv4 VNFs on that network use the
+same stack, so there is no per-VNF memif or gateway tap.
+
+Each network also has its own VPP VRF table
+(`100000 + network ID`, IPv4 and IPv6). The network BVI, shared VNF memif,
+per-VNF taps/memifs, and vhost-user interfaces are all bound to that table, so
+overlapping CIDRs across networks are valid and isolated. The table ID is
+returned as `route_table_id`; use it as a BGP `target_table_id` to install
+learned routes in the network's VRF.
+
+The network VRF appears in the **Route tables** tab as `network-<name>` for
+both IPv4 and IPv6, with table ID `100000 + network ID` and a
+`network-managed` label. You can add static routes there; route table IDs from
+`100000` upward are reserved for network VRFs and cannot be created manually.
+
+The default is controlled by `networks.vnf_transport` (currently `shared`).
+Each VNF can override it with `config.transport`:
+
+- `shared` — network-wide memif and `.2` VNF address (DHCPv4 default)
+- `dedicated` — per-VNF memif, as in earlier releases
+- `tap` — VNF tap interface
+
+DHCPv6 currently remains on a tap, and BGP keeps its dedicated memif/tap
+transport. Running VNFs keep their existing transport until restarted; a VPP
+restart or VNF restart migrates DHCPv4 to the shared memif.
+
 DHCP and BGP runtimes live in a separate `vnfs` daemon, so restarting the API
 does not interrupt them. Run it alongside the API:
 
@@ -517,7 +576,9 @@ NAT44) and drives the daemon over an internal gRPC control channel
 (`-vnf-addr`, default `unix:///run/rookery/vnfs.sock`; `tcp://host:port` is
 supported). The API starts even when the daemon is absent — enabled VNFs show
 `degraded` until it is reachable, and desired runtimes are re-ensured within
-about 20 seconds.
+when the daemon is reachable. The API queries runtime state on demand (VNF
+views and start/stop/restart decisions) instead of polling; the daemon restores
+its persisted desired specs on its own restart.
 
 DHCPv4 uses CoreDHCP's DHCPv4 server with a per-VNF bitmap allocator. DHCPv6
 uses CoreDHCP's DHCPv6 server with stateful IA_NA allocation from the configured
@@ -534,7 +595,7 @@ address, hostname, expiry, and active state. The server does not use CoreDHCP's
 leases are stored as JSON instead, keeping the project CGO-free.
 
 DHCPv4 can run over a VPP **memif** (the default) or a kernel tap. Set
-`-dhcp-transport tap` (or `NERDS_VMS_DHCP_TRANSPORT=tap`) to fall back to the
+`-dhcp-transport tap` (or `ROOKERY_DHCP_TRANSPORT=tap`) to fall back to the
 old transport. VPP creates the memif master and its socket under
 `/run/rookery/memif/<vnf-id>.sock` (or `-memif-dir`), and the API process
 attaches as a slave. A
@@ -647,20 +708,20 @@ vhost-user netdevs for interfaces attached through Rookery Networks.
 
 | Flag              | Environment variable   | Default             | Used by         | Description |
 | ----------------- | ---------------------- | ------------------- | --------------- | ----------- |
-| `-addr`           | `NERDS_VMS_ADDR`       | `127.0.0.1:8080`    | `serve`         | HTTP listen address |
-| `-db`             | `NERDS_VMS_DB`         | `nerds-vms.db`      | `serve`         | SQLite database path |
-| `-rate-limit`     | `NERDS_VMS_RATE_LIMIT` | `3`                 | `serve`         | HTTP requests per second for each URL path; `0` disables |
-| `-vg`             | `NERDS_VMS_VG`         | empty               | `serve`, `init` | Bootstrap LVM volume group; optional for `serve` |
-| `-thin-pool`      | `NERDS_VMS_THIN_POOL`  | `nerds-vms`         | `serve`, `init` | Bootstrap thin pool name or `<vg>/<name>`; `serve` can use UI backends instead |
-| `-vpp-socket`     | `NERDS_VMS_VPP_SOCKET` | `/run/vpp/api.sock` | `serve`, `init` | VPP binary API Unix socket |
-| `-qemu-bin`       | `NERDS_VMS_QEMU_BIN`   | `qemu-system-x86_64`| `serve`         | QEMU system emulator binary |
-| `-run-dir`        | `NERDS_VMS_RUN_DIR`    | `/run/nerds-vms`    | `serve`         | QEMU pid files and VNC Unix sockets |
-| `-memif-dir`      | `ROOKERY_MEMIF_DIR`    | `/run/rookery/memif`| `serve`         | VNF memif socket directory; `NERDS_VMS_MEMIF_DIR` is also accepted |
-| `-vhost-dir`      | `NERDS_VMS_VHOST_DIR`  | `/run/vpp`          | `serve`         | VPP vhost-user socket directory |
+| `-addr`           | `ROOKERY_ADDR`       | `127.0.0.1:8080`    | `serve`         | HTTP listen address |
+| `-db`             | `ROOKERY_DB`         | `nerds-vms.db`      | `serve`         | SQLite database path |
+| `-rate-limit`     | `ROOKERY_RATE_LIMIT` | `3`                 | `serve`         | HTTP requests per second for each URL path; `0` disables |
+| `-vg`             | `ROOKERY_VG`         | empty               | `serve`, `init` | Bootstrap LVM volume group; optional for `serve` |
+| `-thin-pool`      | `ROOKERY_THIN_POOL`  | `nerds-vms`         | `serve`, `init` | Bootstrap thin pool name or `<vg>/<name>`; `serve` can use UI backends instead |
+| `-vpp-socket`     | `ROOKERY_VPP_SOCKET` | `/run/vpp/api.sock` | `serve`, `init` | VPP binary API Unix socket |
+| `-qemu-bin`       | `ROOKERY_QEMU_BIN`   | `qemu-system-x86_64`| `serve`         | QEMU system emulator binary |
+| `-run-dir`        | `ROOKERY_RUN_DIR`    | `/run/nerds-vms`    | `serve`         | QEMU pid files and VNC Unix sockets |
+| `-memif-dir`      | `ROOKERY_MEMIF_DIR`    | `/run/rookery/memif`| `serve`         | VNF memif socket directory |
+| `-vhost-dir`      | `ROOKERY_VHOST_DIR`  | `/run/vpp`          | `serve`         | VPP vhost-user socket directory |
 | `-check-interval` | —                      | `10s`               | `serve`         | Readiness recheck interval |
-| `-dhcp-transport` | `NERDS_VMS_DHCP_TRANSPORT` | `memif`         | `serve`         | DHCP VNF transport: `memif` or `tap` (DHCPv4 only) |
-| `-gateway-addr`   | `NERDS_VMS_GATEWAY_ADDR` | —                 | `serve`         | Optional grpc-gateway HTTP listen address |
-| `-grpc-addr`      | `NERDS_VMS_GRPC_ADDR`  | —                   | `serve`         | Optional gRPC listen address |
+| `-dhcp-transport` | `ROOKERY_DHCP_TRANSPORT` | `memif`         | `serve`         | DHCP VNF transport: `memif` or `tap` (DHCPv4 only) |
+| `-gateway-addr`   | `ROOKERY_GATEWAY_ADDR` | —                 | `serve`         | Optional grpc-gateway HTTP listen address |
+| `-grpc-addr`      | `ROOKERY_GRPC_ADDR`  | —                   | `serve`         | Optional gRPC listen address |
 | `-size`           | —                      | `100%FREE`          | `init`          | Thin pool size when creating |
 
 The database directory is created automatically and migrations run on startup.

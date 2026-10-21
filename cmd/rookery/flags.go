@@ -15,13 +15,13 @@ type hostFlags struct {
 
 func (h *hostFlags) register(fs *flag.FlagSet) {
 	fs.StringVar(&h.vg, "vg",
-		envDefault("NERDS_VMS_VG", ""),
+		envDefault("ROOKERY_VG", ""),
 		"LVM volume group (or pass -thin-pool <vg>/<name>)")
 	fs.StringVar(&h.thinPool, "thin-pool",
-		envDefault("NERDS_VMS_THIN_POOL", "nerds-vms"),
+		envDefault("ROOKERY_THIN_POOL", "nerds-vms"),
 		"LVM thin pool name, optionally as <vg>/<name>")
 	fs.StringVar(&h.vppSocket, "vpp-socket",
-		envDefault("NERDS_VMS_VPP_SOCKET", "/run/vpp/api.sock"),
+		envDefault("ROOKERY_VPP_SOCKET", "/run/vpp/api.sock"),
 		"VPP binary API socket (not the CLI or vhost-user socket)")
 }
 

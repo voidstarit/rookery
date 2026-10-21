@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
+	"github.com/voidstarit/rookery/internal/netutil"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -65,6 +66,7 @@ func defaultRouteTable(ipv6 bool) *rookeryv1.RouteTable {
 func routeTableToProto(table store.RouteTable) *rookeryv1.RouteTable {
 	return &rookeryv1.RouteTable{
 		Id: table.ID, Name: table.Name, TableId: table.TableID, Ipv6: table.IPv6,
+		NetworkId: table.NetworkID, Managed: table.NetworkID != 0,
 		CreatedAt: timestamp(table.CreatedAt), UpdatedAt: timestamp(table.UpdatedAt),
 	}
 }
@@ -79,6 +81,9 @@ func (s *routeTableService) CreateRouteTable(ctx context.Context, request *rooke
 	}
 	if request.GetTableId() == 0 {
 		return nil, status.Error(codes.InvalidArgument, "table_id must be greater than zero")
+	}
+	if request.GetTableId() >= netutil.NetworkRouteTableBase {
+		return nil, status.Errorf(codes.InvalidArgument, "table ids %d and above are reserved for network VRFs", netutil.NetworkRouteTableBase)
 	}
 	created, err := s.store.CreateRouteTable(ctx, store.RouteTable{
 		Name: name, TableID: request.GetTableId(), IPv6: request.GetIpv6(),
@@ -107,6 +112,9 @@ func (s *routeTableService) DeleteRouteTable(ctx context.Context, request *rooke
 	table, err := s.store.GetRouteTable(ctx, request.GetId())
 	if err != nil {
 		return nil, routeTableStoreError(err)
+	}
+	if table.NetworkID != 0 {
+		return nil, status.Error(codes.FailedPrecondition, "route table is managed by its network")
 	}
 	if err := s.store.DeleteRouteTable(ctx, table.ID); err != nil {
 		return nil, routeTableStoreError(err)

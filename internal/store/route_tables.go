@@ -23,12 +23,13 @@ type RouteTable struct {
 	Name      string    `json:"name"`
 	TableID   uint32    `json:"table_id"`
 	IPv6      bool      `json:"ipv6"`
+	NetworkID int64     `json:"network_id,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
 const routeTableSelect = `
-	SELECT id, name, table_id, is_ipv6, created_at, updated_at
+	SELECT id, name, table_id, is_ipv6, network_id, created_at, updated_at
 	FROM route_tables`
 
 // ListRouteTables returns custom route tables ordered by family and table id.
@@ -92,9 +93,9 @@ func (s *Store) CreateRouteTable(ctx context.Context, table RouteTable) (RouteTa
 	}
 	now := time.Now().UTC().UnixMilli()
 	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO route_tables (name, table_id, is_ipv6, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?)`,
-		table.Name, table.TableID, table.IPv6, now, now,
+		INSERT INTO route_tables (name, table_id, is_ipv6, network_id, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		table.Name, table.TableID, table.IPv6, table.NetworkID, now, now,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -117,6 +118,9 @@ func (s *Store) DeleteRouteTable(ctx context.Context, id int64) error {
 	table, err := s.GetRouteTable(ctx, id)
 	if err != nil {
 		return err
+	}
+	if table.NetworkID != 0 {
+		return ErrRouteTableInUse
 	}
 	var used int64
 	column := "ipv4_table_id"
@@ -148,6 +152,53 @@ func (s *Store) DeleteRouteTable(ctx context.Context, id int64) error {
 	}
 	if affected == 0 {
 		return ErrRouteTableNotFound
+	}
+	return nil
+}
+
+// UpsertNetworkRouteTable creates or updates the route-table record owned by a
+// network. Each network has an IPv4 and an IPv6 record with the same table ID.
+func (s *Store) UpsertNetworkRouteTable(ctx context.Context, networkID int64, name string, tableID uint32, ipv6 bool) (RouteTable, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = fmt.Sprintf("network-%d", networkID)
+	}
+	existing, err := s.GetRouteTableByID(ctx, tableID, ipv6)
+	switch {
+	case err == nil:
+		if existing.NetworkID != networkID {
+			return RouteTable{}, ErrRouteTableIDTaken
+		}
+		if existing.Name != name {
+			now := time.Now().UTC().UnixMilli()
+			if _, err := s.db.ExecContext(ctx,
+				`UPDATE route_tables SET name = ?, updated_at = ? WHERE id = ?`,
+				name, now, existing.ID,
+			); err != nil {
+				return RouteTable{}, fmt.Errorf("rename network route table: %w", err)
+			}
+			return s.GetRouteTable(ctx, existing.ID)
+		}
+		return existing, nil
+	case !errors.Is(err, ErrRouteTableNotFound):
+		return RouteTable{}, err
+	}
+	created, err := s.CreateRouteTable(ctx, RouteTable{Name: name, TableID: tableID, IPv6: ipv6, NetworkID: networkID})
+	if errors.Is(err, ErrRouteTableNameTaken) {
+		name = fmt.Sprintf("%s-%d", name, networkID)
+		created, err = s.CreateRouteTable(ctx, RouteTable{Name: name, TableID: tableID, IPv6: ipv6, NetworkID: networkID})
+	}
+	if err != nil {
+		return RouteTable{}, err
+	}
+	return created, nil
+}
+
+// DeleteRouteTablesByNetwork removes the route-table records owned by a
+// network.
+func (s *Store) DeleteRouteTablesByNetwork(ctx context.Context, networkID int64) error {
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM route_tables WHERE network_id = ?`, networkID); err != nil {
+		return fmt.Errorf("delete network route tables: %w", err)
 	}
 	return nil
 }
@@ -206,7 +257,7 @@ func scanRouteTable(s scanner) (RouteTable, error) {
 		createdAt int64
 		updatedAt int64
 	)
-	if err := s.Scan(&table.ID, &table.Name, &table.TableID, &ipv6, &createdAt, &updatedAt); err != nil {
+	if err := s.Scan(&table.ID, &table.Name, &table.TableID, &ipv6, &table.NetworkID, &createdAt, &updatedAt); err != nil {
 		return RouteTable{}, err
 	}
 	table.IPv6 = ipv6 != 0

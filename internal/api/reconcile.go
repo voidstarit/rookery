@@ -10,16 +10,17 @@ import (
 	"github.com/voidstarit/rookery/internal/store"
 )
 
-const (
-	vppWatchInterval = 5 * time.Second
-	vnfCheckInterval = 20 * time.Second
-)
+const vppWatchInterval = 5 * time.Second
 
 // RunInfrastructureReconciler waits for VPP, restores all VPP-backed
 // resources, then watches the VPP API for restarts and repeats reconciliation.
 func (s *Server) RunInfrastructureReconciler(ctx context.Context) {
 	if s.readiness == nil || s.vnfs == nil || s.networks == nil {
 		return
+	}
+
+	if err := s.reconcileVMStatuses(ctx); err != nil {
+		s.logger.Warn().Err(err).Msg("VM status reconciliation failed")
 	}
 
 	wait := time.NewTicker(2 * time.Second)
@@ -52,13 +53,55 @@ func (s *Server) reconcileInfrastructure(ctx context.Context) error {
 	if err := s.ReconcileACLs(ctx); err != nil {
 		errs = append(errs, err)
 	}
+	if err := s.ReconcileHostInterfaces(ctx); err != nil {
+		errs = append(errs, err)
+	}
 	if err := s.ReconcileNAT44s(ctx); err != nil {
 		errs = append(errs, err)
 	}
 	if err := s.ReconcileVNFs(ctx); err != nil {
 		errs = append(errs, err)
 	}
+	if err := s.reconcileVNFBindings(ctx); err != nil {
+		errs = append(errs, err)
+	}
 	return errors.Join(errs...)
+}
+
+// reconcileVMStatuses aligns stored VM status with live QEMU processes. It
+// runs before the VPP wait so an API restart cannot leave a running VM marked
+// stopped (or a stale "running" VM that is no longer alive).
+func (s *Server) reconcileVMStatuses(ctx context.Context) error {
+	if s.vms == nil {
+		return nil
+	}
+	vms, err := s.store.ListVMs(ctx)
+	if err != nil {
+		return fmt.Errorf("list VMs: %w", err)
+	}
+	for _, vm := range vms {
+		running := s.vms.Running(vm.ID)
+		target := vm.Status
+		switch {
+		case running && vm.Status != store.StatusRunning:
+			target = store.StatusRunning
+		case !running && vm.Status == store.StatusRunning:
+			target = store.StatusStopped
+		}
+		if target == vm.Status {
+			continue
+		}
+		if _, err := s.store.SetVMStatus(ctx, vm.ID, target); err != nil {
+			return fmt.Errorf("update VM %s status: %w", vm.ID, err)
+		}
+		s.logger.Info().
+			Str("vm_id", vm.ID).
+			Str("vm", vm.Name).
+			Str("from", vm.Status).
+			Str("to", target).
+			Msg("VM status reconciled")
+	}
+	return nil
 }
 
 func (s *Server) reconcileInfrastructureWithRetries(ctx context.Context) error {
@@ -89,7 +132,6 @@ func (s *Server) watchVPP(ctx context.Context, initiallyDirty bool) {
 	healthy := true
 	pendingReconcile := initiallyDirty
 	pendingReset := false
-	lastVNFCheck := time.Time{}
 
 	var reconcileDone chan struct{}
 	var reconcileCancel context.CancelFunc
@@ -149,17 +191,6 @@ func (s *Server) watchVPP(ctx context.Context, initiallyDirty bool) {
 			s.logger.Info().Msg("VPP API is reachable again")
 			healthy = true
 			pendingReconcile = true
-		}
-		// The VNF daemon is a separate process that may restart independently
-		// of the API. Re-ensure enabled VNFs periodically; runtimes already
-		// running are left untouched (EnsureVNF is idempotent).
-		if healthy && s.vnfs != nil && time.Since(lastVNFCheck) >= vnfCheckInterval {
-			lastVNFCheck = time.Now()
-			go func() {
-				if err := s.ReconcileVNFs(ctx); err != nil {
-					s.logger.Warn().Err(err).Msg("periodic VNF reconciliation failed")
-				}
-			}()
 		}
 		if identityErr == nil && identity != "" {
 			if lastIdentity != "" && identity != lastIdentity {
@@ -260,6 +291,10 @@ func (s *Server) ReconcileNetworks(ctx context.Context) error {
 			errs = append(errs, fmt.Errorf("network %s: %w", network.Name, err))
 			continue
 		}
+		if _, err := s.ensureNetworkVNFResources(ctx, network, network.IPv4Gateway); err != nil {
+			errs = append(errs, fmt.Errorf("network %s VNF resources: %w", network.Name, err))
+			continue
+		}
 		s.logger.Info().
 			Str("network", network.Name).
 			Uint32("bd_id", network.BridgeDomainID).
@@ -298,6 +333,10 @@ func (s *Server) ReconcileVhostUsers(ctx context.Context) error {
 			errs = append(errs, fmt.Errorf("interface %s: %w", iface.Name, err))
 			continue
 		}
+		if err := s.bindNetworkInterface(ctx, network, swIfIndex); err != nil {
+			errs = append(errs, fmt.Errorf("interface %s: %w", iface.Name, err))
+			continue
+		}
 		changed := socket != iface.SocketPath || swIfIndex != iface.SwIfIndex
 		if changed {
 			updated, err := s.store.SetInterfaceRuntime(ctx, iface.ID, swIfIndex, socket)
@@ -321,7 +360,39 @@ func (s *Server) ReconcileVhostUsers(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// ReconcileNAT44s restores enabled NAT44 VNFs and their BVI/outside state.
+// ReconcileHostInterfaces recreates persisted host NIC takeovers after a VPP
+// restart and refreshes their sw_if_index.
+func (s *Server) ReconcileHostInterfaces(ctx context.Context) error {
+	if s.nat == nil || s.networks == nil {
+		return nil
+	}
+	records, err := s.store.ListHostInterfaceRecords(ctx)
+	if err != nil {
+		return fmt.Errorf("list host interfaces for reconciliation: %w", err)
+	}
+	var errs []error
+	for _, record := range records {
+		name, err := s.nat.EnsureHostInterface(ctx, record.NIC)
+		if err != nil {
+			s.logger.Warn().Str("nic", record.NIC).Err(err).Msg("host interface reconciliation failed")
+			errs = append(errs, fmt.Errorf("host interface %s: %w", record.NIC, err))
+			continue
+		}
+		if interfaces, err := s.networks.VPPInterfaces(ctx); err == nil {
+			for _, iface := range interfaces {
+				if iface.Name == name {
+					if err := s.store.SetHostInterfaceRuntime(ctx, record.NIC, iface.SwIfIndex); err != nil {
+						errs = append(errs, fmt.Errorf("host interface %s metadata: %w", record.NIC, err))
+					}
+					break
+				}
+			}
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// ReconcileNAT44s restores enabled NAT44 VNFs and their BVI/outside state.// ReconcileNAT44s restores enabled NAT44 VNFs and their BVI/outside state.
 func (s *Server) ReconcileNAT44s(ctx context.Context) error {
 	if s.nat == nil {
 		return nil
@@ -335,7 +406,7 @@ func (s *Server) ReconcileNAT44s(ctx context.Context) error {
 	}
 	var errs []error
 	for _, vnf := range vnfs {
-		if vnf.Type != store.VNFTypeNAT44 || !vnf.Enabled || s.vnfRunning(vnf) {
+		if vnf.Type != store.VNFTypeNAT44 || !vnf.Enabled || s.vnfRunning(ctx, vnf) {
 			continue
 		}
 		if err := s.reconcileNAT44(ctx, vnf); err != nil {
@@ -355,7 +426,7 @@ func (s *Server) reconcileNAT44(ctx context.Context, vnf store.VNF) error {
 	if err != nil {
 		return fmt.Errorf("reload NAT44 VNF: %w", err)
 	}
-	if !current.Enabled || s.vnfRunning(current) {
+	if !current.Enabled || s.vnfRunning(ctx, current) {
 		return nil
 	}
 	activated, err := s.activateNAT44(ctx, current)
@@ -384,11 +455,49 @@ func (s *Server) ReconcileVNFs(ctx context.Context) error {
 
 	var errs []error
 	for _, vnf := range vnfs {
-		if !vnf.Enabled || vnf.Type == store.VNFTypeNAT44 || s.vnfs.Running(vnf.ID) {
+		if !vnf.Enabled || vnf.Type == store.VNFTypeNAT44 || s.vnfs.Running(ctx, vnf.ID) {
 			continue
 		}
 		if err := s.reconcileVNF(ctx, vnf); err != nil {
 			errs = append(errs, fmt.Errorf("VNF %s: %w", vnf.Name, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// reconcileVNFBindings moves already-running VNF interfaces into their
+// network's VRF. New/recreated interfaces are bound during activation; this
+// covers VNFs that survived an API upgrade without a VPP restart.
+func (s *Server) reconcileVNFBindings(ctx context.Context) error {
+	if s.networks == nil || s.vnfs == nil {
+		return nil
+	}
+	vnfs, err := s.store.ListVNFs(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("list VNFs for VRF binding: %w", err)
+	}
+	var errs []error
+	for _, vnf := range vnfs {
+		if !vnf.Enabled || vnf.Type == store.VNFTypeNAT44 || !s.vnfs.Running(ctx, vnf.ID) {
+			continue
+		}
+		network, err := s.store.GetNetwork(ctx, vnf.NetworkID)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("VNF %s network: %w", vnf.Name, err))
+			continue
+		}
+		network, err = s.ensureNetworkRouteTable(ctx, network)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("VNF %s: %w", vnf.Name, err))
+			continue
+		}
+		for _, swIfIndex := range []uint32{vnf.TapSwIfIndex, vnf.MemifSwIfIndex} {
+			if swIfIndex == 0 {
+				continue
+			}
+			if err := s.bindNetworkInterface(ctx, network, swIfIndex); err != nil {
+				errs = append(errs, fmt.Errorf("VNF %s: %w", vnf.Name, err))
+			}
 		}
 	}
 	return errors.Join(errs...)
@@ -408,8 +517,24 @@ func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF) error {
 		return fmt.Errorf("reload VNF: %w", err)
 	}
 	vnf = current
-	if !vnf.Enabled || s.vnfs.Running(vnf.ID) {
+	if !vnf.Enabled || s.vnfs.Running(ctx, vnf.ID) {
 		return nil
+	}
+	if s.memifDHCP && vnf.Type == store.VNFTypeDHCPv4 {
+		network, err := s.store.GetNetwork(ctx, vnf.NetworkID)
+		if err == nil && s.effectiveVNFTransport(network, vnf) == vnfTransportShared {
+			updated, err := s.activateSharedVNF(ctx, vnf, network)
+			if err != nil {
+				return err
+			}
+			s.logger.Info().
+				Str("vnf", updated.Name).
+				Str("type", updated.Type).
+				Str("memif", updated.MemifSocket).
+				Str("address", updated.Config.BindIP).
+				Msg("VNF restored on shared memif during reconciliation")
+			return nil
+		}
 	}
 
 	// The memif transport is now the default. Migrate an enabled DHCPv4 VNF

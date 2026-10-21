@@ -44,16 +44,19 @@ type VNFManager struct {
 
 	mu          sync.Mutex
 	servers     map[int64]*managedVNF
+	shared      map[int64]*sharedNetwork
 	routeWriter BGPRouteWriter
 }
 
 type managedVNF struct {
-	vnfType  string
-	servers  *coredhcpserver.Servers
-	memif    *memifDHCPv4
-	bgp      *bgpInstance
-	bgpMemif *bgpMemifRuntime
-	done     chan struct{}
+	vnfType   string
+	servers   *coredhcpserver.Servers
+	memif     *memifDHCPv4
+	bgp       *bgpInstance
+	bgpMemif  *bgpMemifRuntime
+	shared    *sharedNetwork
+	networkID int64
+	done      chan struct{}
 }
 
 type leaseRecord struct {
@@ -89,6 +92,7 @@ func NewVNFManager(runDir string) (*VNFManager, error) {
 		LegacyDir: filepath.Join(abs, "dhcp"),
 		Port:      defaultDHCPPort,
 		servers:   make(map[int64]*managedVNF),
+		shared:    make(map[int64]*sharedNetwork),
 	}, nil
 }
 
@@ -238,6 +242,86 @@ func (m *VNFManager) StartMemif(ctx context.Context, vnf store.VNF, socketPath s
 	return nil
 }
 
+// StartShared starts a VNF on its network's shared memif. One gVisor stack is
+// created per network and all userspace VNFs on that network register listeners
+// on it; the memif itself is owned by the API (VPP master) and must already
+// exist at socketPath.
+func (m *VNFManager) StartShared(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32, address string) error {
+	if vnf.ID < 1 {
+		return errors.New("invalid VNF id")
+	}
+	if vnf.NetworkID < 1 {
+		return errors.New("invalid network id")
+	}
+	if vnf.Type != store.VNFTypeDHCPv4 {
+		return fmt.Errorf("shared memif transport currently supports DHCPv4, got %q", vnf.Type)
+	}
+	if strings.TrimSpace(socketPath) == "" {
+		return errors.New("shared memif socket path is required")
+	}
+	if err := m.stop(ctx, vnf.ID, false); err != nil {
+		return err
+	}
+	m.CleanupLegacyNetwork(vnf.NetworkID)
+
+	m.mu.Lock()
+	network := m.shared[vnf.NetworkID]
+	m.mu.Unlock()
+	if network != nil && network.address != address {
+		return fmt.Errorf("shared VNF memif for network %d already uses %s", vnf.NetworkID, network.address)
+	}
+	if network == nil {
+		created, err := startSharedNetwork(ctx, sharedNetworkConfig{
+			NetworkID:   vnf.NetworkID,
+			SocketPath:  socketPath,
+			InterfaceID: ifID,
+			Address:     address,
+			MAC:         NetworkVNFStackMAC(vnf.NetworkID),
+		})
+		if err != nil {
+			return err
+		}
+		m.mu.Lock()
+		if existing := m.shared[vnf.NetworkID]; existing != nil {
+			m.mu.Unlock()
+			created.close()
+			network = existing
+		} else {
+			m.shared[vnf.NetworkID] = created
+			network = created
+			m.mu.Unlock()
+		}
+	}
+
+	if err := network.addDHCPv4(vnf, m.leasePath(vnf.ID), m.port()); err != nil {
+		if network.removeVNF(vnf.ID) {
+			m.mu.Lock()
+			if m.shared[vnf.NetworkID] == network {
+				delete(m.shared, vnf.NetworkID)
+			}
+			m.mu.Unlock()
+			network.close()
+		}
+		return err
+	}
+
+	m.mu.Lock()
+	m.servers[vnf.ID] = &managedVNF{
+		vnfType:   vnf.Type,
+		shared:    network,
+		networkID: vnf.NetworkID,
+		done:      make(chan struct{}),
+	}
+	m.mu.Unlock()
+	log.Info().
+		Int64("vnf_id", vnf.ID).
+		Int64("network_id", vnf.NetworkID).
+		Str("socket", socketPath).
+		Str("address", address).
+		Msg("VNF started on shared memif")
+	return nil
+}
+
 // Stop terminates the VNF server. Lease files are removed only when
 // removeLeases is true (VNF deletion).
 func (m *VNFManager) Stop(ctx context.Context, vnfID int64, removeLeases bool) error {
@@ -250,7 +334,17 @@ func (m *VNFManager) stop(ctx context.Context, vnfID int64, removeLeases bool) e
 	m.mu.Unlock()
 
 	if managed != nil {
-		if managed.bgp != nil {
+		if managed.shared != nil {
+			empty := managed.shared.removeVNF(vnfID)
+			if empty {
+				m.mu.Lock()
+				if m.shared[managed.networkID] == managed.shared {
+					delete(m.shared, managed.networkID)
+				}
+				m.mu.Unlock()
+				managed.shared.close()
+			}
+		} else if managed.bgp != nil {
 			managed.bgp.Close(ctx)
 		} else if managed.bgpMemif != nil {
 			managed.bgpMemif.Close(ctx)
@@ -297,6 +391,9 @@ func (m *VNFManager) Healthy(vnfID int64) bool {
 	m.mu.Unlock()
 	if managed == nil {
 		return false
+	}
+	if managed.shared != nil {
+		return !managed.shared.isClosed()
 	}
 	if managed.servers != nil {
 		select {
@@ -396,6 +493,16 @@ func (m *VNFManager) Close() error {
 		if err := m.stop(ctx, id, false); err != nil {
 			errs = append(errs, err)
 		}
+	}
+	m.mu.Lock()
+	remaining := make([]*sharedNetwork, 0, len(m.shared))
+	for id, network := range m.shared {
+		remaining = append(remaining, network)
+		delete(m.shared, id)
+	}
+	m.mu.Unlock()
+	for _, network := range remaining {
+		network.close()
 	}
 	return errors.Join(errs...)
 }

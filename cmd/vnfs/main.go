@@ -40,12 +40,12 @@ func main() {
 
 func run(args []string) error {
 	fs := flag.NewFlagSet("vnfs", flag.ContinueOnError)
-	vppSocket := fs.String("vpp-socket", envDefault("NERDS_VMS_VPP_SOCKET", "/run/vpp/api.sock"), "VPP binary API socket used for BGP route installs")
-	listen := fs.String("listen", envDefault("NERDS_VMS_VNF_LISTEN", "unix:///run/rookery/vnfs.sock"), "control listen address (unix:///path or tcp://host:port)")
-	runDir := fs.String("run-dir", envDefault("NERDS_VMS_RUN_DIR", qemu.DefaultRunDir), "directory for VNF lease and state files")
-	vhostDir := fs.String("vhost-dir", envDefault("NERDS_VMS_VHOST_DIR", host.DefaultVhostDir), "directory for VPP vhost-user sockets")
-	logLevel := fs.String("log-level", envDefault("NERDS_VMS_LOG_LEVEL", "info"), "log level: trace, debug, info, warn, error")
-	logFormat := fs.String("log-format", envDefault("NERDS_VMS_LOG_FORMAT", "console"), "log format: console or json")
+	vppSocket := fs.String("vpp-socket", envDefault("ROOKERY_VPP_SOCKET", "/run/vpp/api.sock"), "VPP binary API socket used for BGP route installs")
+	listen := fs.String("listen", envDefault("ROOKERY_VNF_LISTEN", "unix:///run/rookery/vnfs.sock"), "control listen address (unix:///path or tcp://host:port)")
+	runDir := fs.String("run-dir", envDefault("ROOKERY_RUN_DIR", qemu.DefaultRunDir), "directory for VNF lease and state files")
+	vhostDir := fs.String("vhost-dir", envDefault("ROOKERY_VHOST_DIR", host.DefaultVhostDir), "directory for VPP vhost-user sockets")
+	logLevel := fs.String("log-level", envDefault("ROOKERY_LOG_LEVEL", "info"), "log level: trace, debug, info, warn, error")
+	logFormat := fs.String("log-format", envDefault("ROOKERY_LOG_FORMAT", "console"), "log format: console or json")
 
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(), "Usage: vnfs [flags]\n\n"+

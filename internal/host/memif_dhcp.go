@@ -243,6 +243,13 @@ func (m *memifDHCPv4) reply(payload []byte) (*dhcpv4.DHCPv4, *net.UDPAddr) {
 	if resp == nil {
 		return nil, nil
 	}
+	log.Trace().
+		Int64("vnf_id", m.vnfID).
+		Str("client_id", req.ClientHWAddr.String()).
+		Str("request", req.MessageType().String()).
+		Str("reply", resp.MessageType().String()).
+		Str("address", resp.YourIPAddr.String()).
+		Msg("DHCPv4 reply prepared")
 
 	switch {
 	case !req.GatewayIPAddr.IsUnspecified():

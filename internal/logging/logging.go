@@ -1,6 +1,6 @@
 // Package logging configures the process-wide zerolog logger used by the API
 // server and the VNF daemon. Both binaries expose -log-level and -log-format
-// flags (and NERDS_VMS_LOG_LEVEL / NERDS_VMS_LOG_FORMAT) so operators can
+// flags (and ROOKERY_LOG_LEVEL / ROOKERY_LOG_FORMAT) so operators can
 // switch between human-readable console output and JSON without code changes.
 package logging
 

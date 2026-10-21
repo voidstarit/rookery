@@ -217,17 +217,28 @@ func (v *VPPNetwork) AddInterfaceIPv4(ctx context.Context, name, cidr string) er
 	if strings.TrimSpace(name) == "" || strings.TrimSpace(cidr) == "" {
 		return errors.New("interface name and IPv4 CIDR are required")
 	}
+	if ip, _, err := net.ParseCIDR(cidr); err != nil || ip.To4() == nil {
+		return errors.New("interface name and IPv4 CIDR are required")
+	}
+	return v.AddInterfaceAddress(ctx, name, cidr)
+}
+
+// AddInterfaceAddress adds an IPv4 or IPv6 address to an interface.
+func (v *VPPNetwork) AddInterfaceAddress(ctx context.Context, name, cidr string) error {
+	if strings.TrimSpace(name) == "" || strings.TrimSpace(cidr) == "" {
+		return errors.New("interface name and CIDR are required")
+	}
 	out, err := v.runCLI(ctx, "set", "interface", "ip", "address", name, cidr)
 	if err == nil {
 		return nil
 	}
-	if cliAlreadyExists(out) && v.interfaceHasIPv4(ctx, name, cidr) {
+	if cliAlreadyExists(out) && v.interfaceHasAddress(ctx, name, cidr) {
 		return nil
 	}
 	return fmt.Errorf("set %s address %s: %w: %s", name, cidr, err, out)
 }
 
-func (v *VPPNetwork) interfaceHasIPv4(ctx context.Context, name, cidr string) bool {
+func (v *VPPNetwork) interfaceHasAddress(ctx context.Context, name, cidr string) bool {
 	targetIP, targetNet, err := net.ParseCIDR(cidr)
 	if err != nil {
 		return false
@@ -238,7 +249,7 @@ func (v *VPPNetwork) interfaceHasIPv4(ctx context.Context, name, cidr string) bo
 	}
 	for _, field := range strings.Fields(out) {
 		ip, ipnet, parseErr := net.ParseCIDR(field)
-		if parseErr != nil || ip.To4() == nil {
+		if parseErr != nil {
 			continue
 		}
 		if ip.Equal(targetIP) && ipnet.String() == targetNet.String() {
@@ -259,7 +270,7 @@ func linuxInterfaceMAC(name string) (string, error) {
 	return iface.HardwareAddr.String(), nil
 }
 
-// EnsureHostInterface takes over a Linux NIC as a VPP AF_PACKET outside interface.
+// EnsureHostInterface takes over a Linux NIC as a VPP AF_PACKET host interface.
 func (v *VPPNetwork) EnsureHostInterface(ctx context.Context, nic string) (string, error) {
 	nic = strings.TrimSpace(nic)
 	if nic == "" {
@@ -269,7 +280,7 @@ func (v *VPPNetwork) EnsureHostInterface(ctx context.Context, nic string) (strin
 		return "", fmt.Errorf("refusing to take over %s: it is a loopback or VPP-managed interface", nic)
 	}
 	if isWirelessInterface(nic) {
-		return "", fmt.Errorf("refusing to take over %s: wireless NICs are not supported as a VPP NAT44 outside uplink", nic)
+		return "", fmt.Errorf("refusing to take over %s: wireless NICs are not supported as VPP host interfaces", nic)
 	}
 	if defaultRouteInterfaces()[nic] {
 		return "", fmt.Errorf("refusing to take over %s: it carries a host default route", nic)
@@ -320,6 +331,65 @@ func (v *VPPNetwork) EnsureHostInterface(ctx context.Context, nic string) (strin
 		return "", fmt.Errorf("bring VPP outside interface %s up: %w: %s", vppName, err, out)
 	}
 	return vppName, nil
+}
+
+// InterfaceRouteTable returns an interface's IPv4/IPv6 VRF table.
+func (v *VPPNetwork) InterfaceRouteTable(ctx context.Context, swIfIndex uint32, ipv6 bool) (uint32, error) {
+	if swIfIndex == 0 {
+		return 0, errors.New("interface index is required")
+	}
+	conn, err := v.connect()
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Disconnect()
+	reply, err := interfaces.NewServiceClient(conn).SwInterfaceGetTable(ctx, &interfaces.SwInterfaceGetTable{
+		SwIfIndex: interface_types.InterfaceIndex(swIfIndex),
+		IsIPv6:    ipv6,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("get interface route table: %w", err)
+	}
+	if err := checkVPPRetval("get interface route table", reply.Retval); err != nil {
+		return 0, err
+	}
+	return reply.VrfID, nil
+}
+
+// DelInterfaceIPv4 removes an IPv4 address from an interface. Missing
+// addresses are tolerated; a failed change of VRF will surface the remaining
+// address error from SetInterfaceRouteTable.
+func (v *VPPNetwork) DelInterfaceIPv4(ctx context.Context, name, cidr string) error {
+	if strings.TrimSpace(name) == "" || strings.TrimSpace(cidr) == "" {
+		return errors.New("interface name and IPv4 CIDR are required")
+	}
+	_, _ = v.runCLI(ctx, "set", "interface", "ip", "address", "del", name, cidr)
+	return nil
+}
+
+// DeleteHostInterface removes a VPP host-interface created from a Linux NIC.// DeleteHostInterface removes a VPP host-interface created from a Linux NIC.
+// The Linux NIC itself is not modified; it may need DHCP renewed afterwards.
+func (v *VPPNetwork) DeleteHostInterface(ctx context.Context, nic string) error {
+	nic = strings.TrimSpace(nic)
+	if nic == "" {
+		return errors.New("host interface name is required")
+	}
+	name := "host-" + nic
+	conn, err := v.connect()
+	if err != nil {
+		return err
+	}
+	defer conn.Disconnect()
+	if _, err := findInterface(ctx, conn, name); errors.Is(err, errVPPInterfaceNotFound) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	out, err := v.runCLI(ctx, "delete", "host-interface", "name", nic)
+	if err != nil {
+		return fmt.Errorf("delete VPP host interface %s: %w: %s", name, err, out)
+	}
+	return nil
 }
 
 // ApplyNAT44 configures VPP NAT44 with bviName inside and outsideName outside.

@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
+	"github.com/voidstarit/rookery/internal/netutil"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -21,7 +22,7 @@ type NetworkRuntime interface {
 
 // NetworkWriter is the native network lifecycle service implemented by internal/api.
 type NetworkWriter interface {
-	CreateNetwork(ctx context.Context, name string) (store.Network, error)
+	CreateNetwork(ctx context.Context, name, ipv4CIDR, ipv6CIDR string) (store.Network, error)
 	DeleteNetwork(ctx context.Context, id int64) error
 }
 
@@ -40,8 +41,12 @@ func (s *networkService) CreateNetwork(ctx context.Context, request *rookeryv1.C
 	if name == "" {
 		return nil, status.Error(codes.InvalidArgument, "name is required")
 	}
+	ipv4CIDR, ipv6CIDR, err := netutil.NormalizeNetworkCIDRs(request.GetIpv4Cidr(), request.GetIpv6Cidr())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
 	if s.writer != nil {
-		created, err := s.writer.CreateNetwork(ctx, name)
+		created, err := s.writer.CreateNetwork(ctx, name, ipv4CIDR, ipv6CIDR)
 		if err != nil {
 			return nil, mapNetworkWriteError(err)
 		}
@@ -64,7 +69,9 @@ func (s *networkService) CreateNetwork(ctx context.Context, request *rookeryv1.C
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not create VPP bridge domain: "+err.Error())
 	}
-	created, err := s.store.CreateNetwork(ctx, store.Network{Name: name, BridgeDomainID: bdID})
+	created, err := s.store.CreateNetwork(ctx, store.Network{
+		Name: name, BridgeDomainID: bdID, IPv4CIDR: ipv4CIDR, IPv6CIDR: ipv6CIDR,
+	})
 	if err != nil {
 		_ = s.runtime.DeleteBridgeDomain(context.Background(), bdID)
 		if errors.Is(err, store.ErrNetworkNameTaken) {
@@ -143,6 +150,6 @@ func mapNetworkWriteError(err error) error {
 	case 503:
 		return status.Error(codes.Unavailable, message)
 	default:
-		return status.Error(codes.Internal, "network operation failed")
+		return status.Error(codes.Internal, message)
 	}
 }

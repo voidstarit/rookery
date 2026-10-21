@@ -35,7 +35,7 @@ type FormState = {
   nat44Pool: string;
   dnatRules: DNATRule[];
   staticAssignments: DHCPStaticAssignment[];
-  transport: "memif" | "tap";
+  transport: "inherit" | "shared" | "dedicated" | "tap" | "memif";
   localAS: string;
   routerID: string;
   peerAS: string;
@@ -50,17 +50,34 @@ type FormState = {
   advertisePrefixes: string;
 };
 
-const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._-]*";
+const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
+
+function firstIPv4Host(cidr: string | undefined): string {
+  if (!cidr) {
+    return "";
+  }
+  const [addr, bits] = cidr.trim().split("/");
+  const parts = addr.split(".").map(Number);
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255) || !bits) {
+    return "";
+  }
+  const value = ((((parts[0] << 24) >>> 0) + (parts[1] << 16) + (parts[2] << 8) + parts[3] + 1) >>> 0);
+  return `${(value >>> 24) & 255}.${(value >>> 16) & 255}.${(value >>> 8) & 255}.${value & 255}/${bits}`;
+}
 
 function defaultForm(vnf: VNF | null, networks: Network[], vppReady: boolean, initialNetworkID?: number): FormState {
   const type = vnf?.type ?? "dhcpv4";
   const config = vnf?.config ?? {};
+  const selectedNetwork = networks.find(
+    (network) => network.id === (vnf?.network_id ?? initialNetworkID ?? networks[0]?.id),
+  );
+  const defaultGateway = firstIPv4Host(selectedNetwork?.ipv4_cidr) || "10.0.0.1/16";
   return {
     name: vnf?.name ?? "",
     networkID: vnf?.network_id ?? initialNetworkID ?? networks[0]?.id ?? 0,
     type,
     enabled: vnf ? vnf.enabled : vppReady,
-    gateway: config.gateway ?? (type === "dhcpv6" ? "fd00:20::1/64" : "10.20.0.1/24"),
+    gateway: config.gateway ?? (type === "dhcpv6" ? "fd00:20::1/64" : defaultGateway),
     dns: config.dns ?? (type === "dhcpv6" ? "2001:4860:4860::8888" : "1.1.1.1"),
     rangeStart: config.range_start ?? (type === "dhcpv6" ? "fd00:20::100" : "10.20.0.100"),
     rangeEnd: config.range_end ?? (type === "dhcpv6" ? "fd00:20::200" : "10.20.0.200"),
@@ -73,7 +90,14 @@ function defaultForm(vnf: VNF | null, networks: Network[], vppReady: boolean, in
     staticAssignments: Array.isArray(config.static_assignments)
       ? config.static_assignments.map((assignment) => ({ ...assignment }))
       : [],
-    transport: config.transport === "tap" ? "tap" : "memif",
+    transport:
+      type === "bgp"
+        ? config.transport === "tap"
+          ? "tap"
+          : "memif"
+        : config.transport === "shared" || config.transport === "dedicated" || config.transport === "tap"
+          ? config.transport
+          : "inherit",
     localAS: String(config.local_as ?? 64512),
     routerID: config.router_id ?? "10.20.0.1",
     peerAS: String(config.peer_as ?? 64513),
@@ -113,6 +137,7 @@ function applyTypeDefaults(state: FormState, type: VNFType): FormState {
     return {
       ...state,
       type,
+      transport: "tap",
       gateway: "fd00:20::1/64",
       dns: "2001:4860:4860::8888",
       rangeStart: "fd00:20::100",
@@ -133,6 +158,7 @@ function applyTypeDefaults(state: FormState, type: VNFType): FormState {
   return {
     ...state,
     type,
+    transport: "inherit",
     gateway: "10.20.0.1/24",
     dns: "1.1.1.1",
     rangeStart: "10.20.0.100",
@@ -165,9 +191,9 @@ function typeHint(type: VNFType): string {
     return "IPv4 NAT44 gateway. A dedicated network BVI owns the gateway; the outside NIC is taken over by VPP.";
   }
   if (type === "dhcpv6") {
-    return "IPv6 address pool with stateful IA_NA leases on a VPP tap.";
+    return "IPv6 address pool with stateful IA_NA leases on a VPP tap (shared memif is DHCPv4-only for now).";
   }
-  return "IPv4 address pool served on a VPP tap.";
+  return "IPv4 address pool served on the network-shared memif by default (VNF address .2).";
 }
 
 export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, onSaved }: VNFPageProps) {
@@ -260,7 +286,7 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
       .filter(Boolean);
     const config: VNFConfig = bgp
       ? {
-          transport: form.transport,
+          transport: form.transport === "tap" ? "tap" : "memif",
           local_as: Number(form.localAS),
           router_id: form.routerID.trim(),
           peer_as: Number(form.peerAS),
@@ -294,6 +320,9 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
           range_end: form.rangeEnd.trim(),
           dns: form.dns.trim(),
           lease_time: form.leaseTime.trim() || "12h",
+          ...(form.transport === "shared" || form.transport === "dedicated" || form.transport === "tap"
+            ? { transport: form.transport }
+            : {}),
           ...(form.type === "dhcpv4"
             ? {
                 static_assignments: form.staticAssignments.map((assignment) => ({
@@ -434,7 +463,18 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
               required
               disabled={editing}
               value={String(form.networkID)}
-              onChange={(event) => update("networkID", Number(event.currentTarget.value))}
+              onChange={(event) => {
+                const networkID = Number(event.currentTarget.value);
+                const network = networks.find((item) => item.id === networkID);
+                setForm((current) => ({
+                  ...current,
+                  networkID,
+                  gateway:
+                    current.type === "dhcpv6"
+                      ? current.gateway
+                      : firstIPv4Host(network?.ipv4_cidr) || current.gateway,
+                }));
+              }}
             >
               {networks.map((network) => (
                 <option value={String(network.id)} key={network.id}>
@@ -452,7 +492,15 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
               value={form.type}
               onChange={(event) => {
                 if (!editing) {
-                  setForm((current) => applyTypeDefaults(current, event.currentTarget.value as VNFType));
+                  const type = event.currentTarget.value as VNFType;
+                  setForm((current) => {
+                    const next = applyTypeDefaults(current, type);
+                    const network = networks.find((item) => item.id === next.networkID);
+                    if ((type === "dhcpv4" || type === "nat44") && network?.ipv4_cidr) {
+                      next.gateway = firstIPv4Host(network.ipv4_cidr) || next.gateway;
+                    }
+                    return next;
+                  });
                 }
               }}
             >
@@ -476,6 +524,9 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                 value={form.gateway}
                 onInput={(event) => update("gateway", event.currentTarget.value)}
               />
+              <span class="field-hint">
+                Network range: {networks.find((item) => item.id === form.networkID)?.ipv4_cidr || "not set"}
+              </span>
             </label>
           ) : null}
         </div>
@@ -507,6 +558,24 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                 onInput={(event) => update("rangeStart", event.currentTarget.value)}
               />
             </label>
+
+            {form.type === "dhcpv4" ? (
+              <label class="field">
+                <span class="field-label">VNF networking</span>
+                <select
+                  value={form.transport}
+                  onChange={(event) => update("transport", event.currentTarget.value as FormState["transport"])}
+                >
+                  <option value="inherit">Inherit network default (shared)</option>
+                  <option value="shared">Shared network memif</option>
+                  <option value="dedicated">Dedicated memif</option>
+                  <option value="tap">Tap</option>
+                </select>
+                <span class="field-hint">
+                  Shared uses one memif per network; the stack owns .2 and the BVI owns .1.
+                </span>
+              </label>
+            ) : null}
 
             <label class="field">
               <span class="field-label">Range end</span>

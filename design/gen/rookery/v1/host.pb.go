@@ -7,9 +7,11 @@
 package rookeryv1
 
 import (
+	_ "github.com/envoyproxy/protoc-gen-validate/validate"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -36,6 +38,7 @@ type HostInterface struct {
 	VppName       string                 `protobuf:"bytes,10,opt,name=vpp_name,json=vppName,proto3" json:"vpp_name,omitempty"`
 	VppUp         bool                   `protobuf:"varint,11,opt,name=vpp_up,json=vppUp,proto3" json:"vpp_up,omitempty"`
 	VppType       string                 `protobuf:"bytes,12,opt,name=vpp_type,json=vppType,proto3" json:"vpp_type,omitempty"`
+	Managed       bool                   `protobuf:"varint,13,opt,name=managed,proto3" json:"managed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -154,6 +157,13 @@ func (x *HostInterface) GetVppType() string {
 	return ""
 }
 
+func (x *HostInterface) GetManaged() bool {
+	if x != nil {
+		return x.Managed
+	}
+	return false
+}
+
 type ListHostInterfacesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -234,12 +244,100 @@ func (x *ListHostInterfacesResponse) GetInterfaces() []*HostInterface {
 	return nil
 }
 
+type AttachHostInterfaceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AttachHostInterfaceRequest) Reset() {
+	*x = AttachHostInterfaceRequest{}
+	mi := &file_rookery_v1_host_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AttachHostInterfaceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AttachHostInterfaceRequest) ProtoMessage() {}
+
+func (x *AttachHostInterfaceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_host_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AttachHostInterfaceRequest.ProtoReflect.Descriptor instead.
+func (*AttachHostInterfaceRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_host_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *AttachHostInterfaceRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type DetachHostInterfaceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DetachHostInterfaceRequest) Reset() {
+	*x = DetachHostInterfaceRequest{}
+	mi := &file_rookery_v1_host_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DetachHostInterfaceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DetachHostInterfaceRequest) ProtoMessage() {}
+
+func (x *DetachHostInterfaceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_host_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DetachHostInterfaceRequest.ProtoReflect.Descriptor instead.
+func (*DetachHostInterfaceRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_host_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *DetachHostInterfaceRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
 var File_rookery_v1_host_proto protoreflect.FileDescriptor
 
 const file_rookery_v1_host_proto_rawDesc = "" +
 	"\n" +
 	"\x15rookery/v1/host.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\"\xf3\x02\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x17validate/validate.proto\"\x8d\x03\n" +
 	"\rHostInterface\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x0e\n" +
 	"\x02up\x18\x02 \x01(\bR\x02up\x12\x1c\n" +
@@ -254,16 +352,23 @@ const file_rookery_v1_host_proto_rawDesc = "" +
 	"\bvpp_name\x18\n" +
 	" \x01(\tR\avppName\x12\x15\n" +
 	"\x06vpp_up\x18\v \x01(\bR\x05vppUp\x12\x19\n" +
-	"\bvpp_type\x18\f \x01(\tR\avppTypeB\x12\n" +
+	"\bvpp_type\x18\f \x01(\tR\avppType\x12\x18\n" +
+	"\amanaged\x18\r \x01(\bR\amanagedB\x12\n" +
 	"\x10_vpp_sw_if_index\"\x1b\n" +
 	"\x19ListHostInterfacesRequest\"W\n" +
 	"\x1aListHostInterfacesResponse\x129\n" +
 	"\n" +
 	"interfaces\x18\x01 \x03(\v2\x19.rookery.v1.HostInterfaceR\n" +
-	"interfaces2\x9d\x01\n" +
+	"interfaces\"9\n" +
+	"\x1aAttachHostInterfaceRequest\x12\x1b\n" +
+	"\x04name\x18\x01 \x01(\tB\a\xfaB\x04r\x02\x10\x01R\x04name\"9\n" +
+	"\x1aDetachHostInterfaceRequest\x12\x1b\n" +
+	"\x04name\x18\x01 \x01(\tB\a\xfaB\x04r\x02\x10\x01R\x04name2\xa3\x03\n" +
 	"\vHostService\x12\x8d\x01\n" +
 	"\x12ListHostInterfaces\x12%.rookery.v1.ListHostInterfacesRequest\x1a&.rookery.v1.ListHostInterfacesResponse\"(\x82\xd3\xe4\x93\x02\"b\n" +
-	"interfaces\x12\x14/api/host/interfacesB?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
+	"interfaces\x12\x14/api/host/interfaces\x12\x87\x01\n" +
+	"\x13AttachHostInterface\x12&.rookery.v1.AttachHostInterfaceRequest\x1a\x19.rookery.v1.HostInterface\"-\x82\xd3\xe4\x93\x02':\x01*\"\"/api/host/interfaces/{name}/attach\x12z\n" +
+	"\x13DetachHostInterface\x12&.rookery.v1.DetachHostInterfaceRequest\x1a\x16.google.protobuf.Empty\"#\x82\xd3\xe4\x93\x02\x1d*\x1b/api/host/interfaces/{name}B?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
 
 var (
 	file_rookery_v1_host_proto_rawDescOnce sync.Once
@@ -277,18 +382,25 @@ func file_rookery_v1_host_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_host_proto_rawDescData
 }
 
-var file_rookery_v1_host_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_rookery_v1_host_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_rookery_v1_host_proto_goTypes = []any{
 	(*HostInterface)(nil),              // 0: rookery.v1.HostInterface
 	(*ListHostInterfacesRequest)(nil),  // 1: rookery.v1.ListHostInterfacesRequest
 	(*ListHostInterfacesResponse)(nil), // 2: rookery.v1.ListHostInterfacesResponse
+	(*AttachHostInterfaceRequest)(nil), // 3: rookery.v1.AttachHostInterfaceRequest
+	(*DetachHostInterfaceRequest)(nil), // 4: rookery.v1.DetachHostInterfaceRequest
+	(*emptypb.Empty)(nil),              // 5: google.protobuf.Empty
 }
 var file_rookery_v1_host_proto_depIdxs = []int32{
 	0, // 0: rookery.v1.ListHostInterfacesResponse.interfaces:type_name -> rookery.v1.HostInterface
 	1, // 1: rookery.v1.HostService.ListHostInterfaces:input_type -> rookery.v1.ListHostInterfacesRequest
-	2, // 2: rookery.v1.HostService.ListHostInterfaces:output_type -> rookery.v1.ListHostInterfacesResponse
-	2, // [2:3] is the sub-list for method output_type
-	1, // [1:2] is the sub-list for method input_type
+	3, // 2: rookery.v1.HostService.AttachHostInterface:input_type -> rookery.v1.AttachHostInterfaceRequest
+	4, // 3: rookery.v1.HostService.DetachHostInterface:input_type -> rookery.v1.DetachHostInterfaceRequest
+	2, // 4: rookery.v1.HostService.ListHostInterfaces:output_type -> rookery.v1.ListHostInterfacesResponse
+	0, // 5: rookery.v1.HostService.AttachHostInterface:output_type -> rookery.v1.HostInterface
+	5, // 6: rookery.v1.HostService.DetachHostInterface:output_type -> google.protobuf.Empty
+	4, // [4:7] is the sub-list for method output_type
+	1, // [1:4] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
 	1, // [1:1] is the sub-list for extension extendee
 	0, // [0:1] is the sub-list for field type_name
@@ -306,7 +418,7 @@ func file_rookery_v1_host_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_host_proto_rawDesc), len(file_rookery_v1_host_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -23,6 +23,10 @@ func (f *fakeInterfaceRuntime) CreateVhostUser(_ context.Context, name, _ string
 	f.created = append(f.created, name)
 	return "/run/vpp/" + name + ".sock", 7, nil
 }
+func (f *fakeInterfaceRuntime) SetInterfaceRouteTable(context.Context, uint32, bool, uint32) error {
+	return nil
+}
+
 func (f *fakeInterfaceRuntime) DeleteVhostUser(_ context.Context, swIfIndex uint32) error {
 	f.deleted = append(f.deleted, swIfIndex)
 	return nil

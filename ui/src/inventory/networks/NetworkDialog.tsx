@@ -7,10 +7,12 @@ type NetworkDialogProps = {
   onSaved: (network: Network) => void;
 };
 
-const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._-]*";
+const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
 export function NetworkDialog({ onClose, onSaved }: NetworkDialogProps) {
   const [name, setName] = useState("");
+  const [ipv4CIDR, setIpv4CIDR] = useState("10.0.0.0/16");
+  const [ipv6CIDR, setIpv6CIDR] = useState("fd00:20::/64");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDialogElement | null>(null);
@@ -38,7 +40,11 @@ export function NetworkDialog({ onClose, onSaved }: NetworkDialogProps) {
     try {
       const network = await api<Network>("/api/networks", {
         method: "POST",
-        body: JSON.stringify({ name: name.trim() }),
+        body: JSON.stringify({
+          name: name.trim(),
+          ipv4_cidr: ipv4CIDR.trim(),
+          ipv6_cidr: ipv6CIDR.trim(),
+        }),
       });
       onSaved(network);
     } catch (err) {
@@ -92,6 +98,34 @@ export function NetworkDialog({ onClose, onSaved }: NetworkDialogProps) {
               onInput={(event) => setName(event.currentTarget.value)}
             />
             <span class="field-hint">Letters, digits, dots, dashes and underscores.</span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">IPv4 network CIDR</span>
+            <input
+              type="text"
+              required
+              autocomplete="off"
+              spellcheck={false}
+              placeholder="10.0.0.0/16"
+              value={ipv4CIDR}
+              onInput={(event) => setIpv4CIDR(event.currentTarget.value)}
+            />
+            <span class="field-hint">Address range for this network; .1 is the BVI and .2 the VNF stack.</span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">IPv6 network CIDR</span>
+            <input
+              type="text"
+              required
+              autocomplete="off"
+              spellcheck={false}
+              placeholder="fd00:20::/64"
+              value={ipv6CIDR}
+              onInput={(event) => setIpv6CIDR(event.currentTarget.value)}
+            />
+            <span class="field-hint">IPv6 range reserved for this network.</span>
           </label>
         </div>
 

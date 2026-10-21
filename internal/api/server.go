@@ -55,13 +55,16 @@ type NetworkProvisioner interface {
 	CreateVhostUser(ctx context.Context, name, mac string, bdID uint32) (socketPath string, swIfIndex uint32, err error)
 	EnsureVhostUser(ctx context.Context, name, mac string, bdID uint32) (socketPath string, swIfIndex uint32, err error)
 	DeleteVhostUser(ctx context.Context, swIfIndex uint32) error
-	CreateTap(ctx context.Context, hostName, gatewayCIDR string, bdID uint32) (uint32, error)
+	CreateTap(ctx context.Context, hostName, gatewayCIDR string, bdID uint32, tableID uint32) (uint32, error)
 	CreateMemif(ctx context.Context, hostName, socketPath string, ifID uint32, mac net.HardwareAddr, bdID uint32) (uint32, error)
+	EnsureMemif(ctx context.Context, hostName, socketPath string, ifID uint32, mac net.HardwareAddr, bdID uint32) (uint32, error)
 	DeleteMemif(ctx context.Context, swIfIndex uint32) error
 	DeleteMemifByName(ctx context.Context, hostName string) error
 	EnsureRouteTable(ctx context.Context, tableID uint32, ipv6 bool, name string) error
 	DeleteRouteTable(ctx context.Context, tableID uint32, ipv6 bool) error
 	SetInterfaceRouteTable(ctx context.Context, swIfIndex uint32, ipv6 bool, tableID uint32) error
+	InterfaceRouteTable(ctx context.Context, swIfIndex uint32, ipv6 bool) (uint32, error)
+	DelInterfaceIPv4(ctx context.Context, name, cidr string) error
 	AddRoute(ctx context.Context, tableID uint32, ipv6 bool, prefix, nextHop, egressName string, swIfIndex uint32, preference uint32) error
 	DeleteRoute(ctx context.Context, tableID uint32, ipv6 bool, prefix string) error
 	DeleteTap(ctx context.Context, swIfIndex uint32) error
@@ -99,8 +102,9 @@ type NAT44Provisioner interface {
 type VNFManager interface {
 	Start(ctx context.Context, vnf store.VNF, hostIf string) error
 	StartMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32) error
+	StartShared(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32, address string) error
 	Stop(ctx context.Context, vnfID int64, removeLeases bool) error
-	Running(vnfID int64) bool
+	Running(ctx context.Context, vnfID int64) bool
 	Leases(ctx context.Context, vnfID int64) ([]store.VNFLease, error)
 	BGPStatus(ctx context.Context, vnfID int64) (host.BGPStatus, error)
 	CleanupLegacyNetwork(networkID int64)

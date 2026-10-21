@@ -461,7 +461,7 @@ func (v *VPPNetwork) DeleteVhostUser(ctx context.Context, swIfIndex uint32) erro
 
 // CreateTap creates a VPP tap interface, brings it up, and adds it to the
 // bridge domain. The host side is named hostName and configured with gatewayCIDR.
-func (v *VPPNetwork) CreateTap(ctx context.Context, hostName, gatewayCIDR string, bdID uint32) (uint32, error) {
+func (v *VPPNetwork) CreateTap(ctx context.Context, hostName, gatewayCIDR string, bdID uint32, tableID uint32) (uint32, error) {
 	if len(hostName) > 15 {
 		return 0, fmt.Errorf("tap host interface name %q is too long", hostName)
 	}
@@ -476,22 +476,6 @@ func (v *VPPNetwork) CreateTap(ctx context.Context, hostName, gatewayCIDR string
 		HostIfName:    hostName,
 		Tag:           "nerds-vnf:" + hostName,
 	}
-	if strings.Contains(gatewayCIDR, ":") {
-		prefix, err := ip_types.ParseIP6Prefix(gatewayCIDR)
-		if err != nil {
-			return 0, fmt.Errorf("parse VNF gateway %q: %w", gatewayCIDR, err)
-		}
-		tap.HostIP6PrefixSet = true
-		tap.HostIP6Prefix = ip_types.IP6AddressWithPrefix(prefix)
-	} else {
-		prefix, err := ip_types.ParseIP4Prefix(gatewayCIDR)
-		if err != nil {
-			return 0, fmt.Errorf("parse VNF gateway %q: %w", gatewayCIDR, err)
-		}
-		tap.HostIP4PrefixSet = true
-		tap.HostIP4Prefix = ip_types.IP4AddressWithPrefix(prefix)
-	}
-
 	conn, err := v.connect()
 	if err != nil {
 		return 0, err
@@ -554,6 +538,21 @@ func (v *VPPNetwork) CreateTap(ctx context.Context, hostName, gatewayCIDR string
 		rollback()
 		return 0, err
 	}
+
+	if tableID != 0 {
+		if err := v.SetInterfaceRouteTable(ctx, uint32(swIfIndex), false, tableID); err != nil {
+			rollback()
+			return 0, err
+		}
+		if err := v.SetInterfaceRouteTable(ctx, uint32(swIfIndex), true, tableID); err != nil {
+			rollback()
+			return 0, err
+		}
+	}
+	// The host-side tap address is configured by VNFManager.Start; the VPP tap
+	// interface stays L2-only. Assigning the VNF address here would duplicate
+	// the shared memif/BVI service address inside the network VRF.
+	_ = gatewayCIDR
 
 	return uint32(swIfIndex), nil
 }
@@ -623,6 +622,26 @@ func (v *VPPNetwork) DeleteTap(ctx context.Context, swIfIndex uint32) error {
 		return fmt.Errorf("delete DHCP tap %d: %w", swIfIndex, err)
 	}
 	return checkVPPRetval("delete VNF tap", reply.Retval)
+}
+
+// EnsureMemif finds an existing memif by name, or creates it and its socket.
+// It is used for the shared per-network VNF memif, which survives API restarts
+// but is recreated after a VPP restart.
+func (v *VPPNetwork) EnsureMemif(ctx context.Context, name, socketPath string, ifID uint32, mac net.HardwareAddr, bdID uint32) (uint32, error) {
+	conn, err := v.connect()
+	if err != nil {
+		return 0, err
+	}
+	index, findErr := findInterface(ctx, conn, name)
+	conn.Disconnect()
+	if findErr == nil {
+		return index, nil
+	}
+	if !errors.Is(findErr, errVPPInterfaceNotFound) {
+		return 0, findErr
+	}
+	_ = os.Remove(socketPath)
+	return v.CreateMemif(ctx, name, socketPath, ifID, mac, bdID)
 }
 
 // CreateMemif creates a VPP memif master interface, brings it up, and adds it

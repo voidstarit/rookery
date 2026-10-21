@@ -1327,6 +1327,10 @@ func (m *RouteTable) validate(all bool) error {
 		}
 	}
 
+	// no validation rules for NetworkId
+
+	// no validation rules for Managed
+
 	if len(errors) > 0 {
 		return RouteTableMultiError(errors)
 	}

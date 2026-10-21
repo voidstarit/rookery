@@ -2,14 +2,27 @@ package gateway
 
 import (
 	"context"
+	"errors"
+	"strings"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/host"
+	"github.com/voidstarit/rookery/internal/store"
 )
 
 // VPPInterfaceSource lists the interfaces currently present in VPP.
 type VPPInterfaceSource interface {
 	VPPInterfaces(ctx context.Context) ([]host.VPPInterface, error)
+}
+
+// HostWriter takes host NICs into and out of VPP.
+type HostWriter interface {
+	EnsureHostInterface(ctx context.Context, nic string) (string, error)
+	DeleteHostInterface(ctx context.Context, nic string) error
 }
 
 func (s *hostService) listInterfaces(ctx context.Context) (*rookeryv1.ListHostInterfacesResponse, error) {
@@ -27,12 +40,20 @@ func (s *hostService) listInterfaces(ctx context.Context) (*rookeryv1.ListHostIn
 			}
 		}
 	}
+	managed := make(map[string]bool)
+	if s.store != nil {
+		if records, err := s.store.ListHostInterfaceRecords(ctx); err == nil {
+			for _, record := range records {
+				managed[record.NIC] = true
+			}
+		}
+	}
 	response := &rookeryv1.ListHostInterfacesResponse{Interfaces: make([]*rookeryv1.HostInterface, 0, len(interfaces))}
 	for _, iface := range interfaces {
 		item := &rookeryv1.HostInterface{
 			Name: iface.Name, Up: iface.Up, Addresses: iface.Addresses,
 			DefaultRoute: iface.DefaultRoute, Physical: iface.Physical, Wireless: iface.Wireless,
-			VppChecked: vppChecked,
+			VppChecked: vppChecked, Managed: managed[iface.Name],
 		}
 		for _, name := range []string{"host-" + iface.Name, iface.Name} {
 			if vppIface, ok := byName[name]; ok {
@@ -47,4 +68,111 @@ func (s *hostService) listInterfaces(ctx context.Context) (*rookeryv1.ListHostIn
 		response.Interfaces = append(response.Interfaces, item)
 	}
 	return response, nil
+}
+
+func (s *hostService) attachable(iface host.HostInterface) error {
+	switch {
+	case iface.Wireless:
+		return status.Error(codes.InvalidArgument, "wireless interfaces cannot be attached")
+	case iface.DefaultRoute:
+		return status.Error(codes.InvalidArgument, "the interface carrying the host default route cannot be attached")
+	case !iface.Physical:
+		return status.Error(codes.InvalidArgument, "only physical host interfaces can be attached")
+	}
+	return nil
+}
+
+func (s *hostService) vppInterface(ctx context.Context, nic string) (host.VPPInterface, bool) {
+	if s.source == nil {
+		return host.VPPInterface{}, false
+	}
+	interfaces, err := s.source.VPPInterfaces(ctx)
+	if err != nil {
+		return host.VPPInterface{}, false
+	}
+	for _, iface := range interfaces {
+		if iface.Name == "host-"+nic {
+			return iface, true
+		}
+	}
+	return host.VPPInterface{}, false
+}
+
+func (s *hostService) AttachHostInterface(ctx context.Context, request *rookeryv1.AttachHostInterfaceRequest) (*rookeryv1.HostInterface, error) {
+	name := strings.TrimSpace(request.GetName())
+	if name == "" {
+		return nil, status.Error(codes.InvalidArgument, "interface name is required")
+	}
+	if s.writer == nil {
+		return nil, status.Error(codes.Unavailable, "VPP host-interface runtime is not configured")
+	}
+	interfaces, err := host.ListHostInterfaces()
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not list host interfaces")
+	}
+	var target *host.HostInterface
+	for i := range interfaces {
+		if interfaces[i].Name == name {
+			target = &interfaces[i]
+			break
+		}
+	}
+	if target == nil {
+		return nil, status.Error(codes.NotFound, "host interface not found")
+	}
+	if err := s.attachable(*target); err != nil {
+		return nil, err
+	}
+	if _, err := s.writer.EnsureHostInterface(ctx, name); err != nil {
+		return nil, status.Error(codes.Internal, "could not attach host interface: "+err.Error())
+	}
+	record := store.HostInterfaceRecord{NIC: name, VPPName: "host-" + name, Purpose: "manual"}
+	if iface, ok := s.vppInterface(ctx, name); ok {
+		record.SwIfIndex = iface.SwIfIndex
+	}
+	if s.store != nil {
+		if _, err := s.store.UpsertHostInterfaceRecord(ctx, record); err != nil {
+			return nil, status.Error(codes.Internal, "could not persist host interface: "+err.Error())
+		}
+	}
+	response, err := s.listInterfaces(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not list host interfaces")
+	}
+	for _, item := range response.GetInterfaces() {
+		if item.GetName() == name {
+			return item, nil
+		}
+	}
+	return &rookeryv1.HostInterface{Name: name, InVpp: true, VppName: "host-" + name, Managed: true}, nil
+}
+
+func (s *hostService) DetachHostInterface(ctx context.Context, request *rookeryv1.DetachHostInterfaceRequest) (*emptypb.Empty, error) {
+	name := strings.TrimSpace(request.GetName())
+	if name == "" {
+		return nil, status.Error(codes.InvalidArgument, "interface name is required")
+	}
+	if s.writer == nil {
+		return nil, status.Error(codes.Unavailable, "VPP host-interface runtime is not configured")
+	}
+	if s.store != nil {
+		vnfs, err := s.store.ListVNFs(ctx, nil)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "could not read VNFs")
+		}
+		for _, vnf := range vnfs {
+			if vnf.Type == store.VNFTypeNAT44 && vnf.Config.OutsideInterface == name {
+				return nil, status.Error(codes.FailedPrecondition, "interface is in use by a NAT44 VNF")
+			}
+		}
+	}
+	if err := s.writer.DeleteHostInterface(ctx, name); err != nil {
+		return nil, status.Error(codes.Internal, "could not detach host interface: "+err.Error())
+	}
+	if s.store != nil {
+		if err := s.store.DeleteHostInterfaceRecord(ctx, name); err != nil && !errors.Is(err, store.ErrNotFound) {
+			return nil, status.Error(codes.Internal, "could not remove host interface record")
+		}
+	}
+	return &emptypb.Empty{}, nil
 }

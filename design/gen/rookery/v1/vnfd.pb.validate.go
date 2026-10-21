@@ -85,7 +85,7 @@ func (m *VNFSpec) validate(all bool) error {
 	if _, ok := _VNFSpec_Transport_InLookup[m.GetTransport()]; !ok {
 		err := VNFSpecValidationError{
 			field:  "Transport",
-			reason: "value must be in list [memif tap]",
+			reason: "value must be in list [memif tap shared]",
 		}
 		if !all {
 			return err
@@ -127,6 +127,8 @@ func (m *VNFSpec) validate(all bool) error {
 	// no validation rules for MemifSocket
 
 	// no validation rules for MemifSwIfIndex
+
+	// no validation rules for SharedAddress
 
 	if len(errors) > 0 {
 		return VNFSpecMultiError(errors)
@@ -212,8 +214,9 @@ var _VNFSpec_Type_InLookup = map[string]struct{}{
 }
 
 var _VNFSpec_Transport_InLookup = map[string]struct{}{
-	"memif": {},
-	"tap":   {},
+	"memif":  {},
+	"tap":    {},
+	"shared": {},
 }
 
 // Validate checks the field values on EnsureVNFRequest with the rules defined

@@ -60,6 +60,7 @@ type options struct {
 	networkWriter     NetworkWriter
 	logger            zerolog.Logger
 	vppInterfaces     VPPInterfaceSource
+	hostWriter        HostWriter
 	vnfRuntime        VNFRuntime
 	vnfStatusProvider VNFStatusProvider
 	vnfWriter         VNFWriter
@@ -179,6 +180,13 @@ func WithVPPInterfaceSource(source VPPInterfaceSource) Option {
 	}
 }
 
+// WithHostWriter enables attaching and detaching host interfaces in VPP.
+func WithHostWriter(writer HostWriter) Option {
+	return func(opts *options) {
+		opts.hostWriter = writer
+	}
+}
+
 // New builds the generated read-only gateway. By default it uses an in-process
 // bufconn listener for tests and embedding. Use WithGRPCListener to expose gRPC
 // on a real Unix or TCP socket.
@@ -198,7 +206,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	if useBufconn {
 		listener = bufconn.Listen(1 << 20)
 	}
-	server := grpc.NewServer(grpc.UnaryInterceptor(validationInterceptor))
+	server := grpc.NewServer(grpc.ChainUnaryInterceptor(errorLogInterceptor(options.logger), validationInterceptor))
 	system := &systemService{store: st, readiness: ready}
 	vms := &vmService{store: st, runtime: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, mu: options.vmMutex}
 	disks := &diskService{store: st, runtime: options.diskProvisioner, readiness: ready, mu: options.diskMutex, logger: options.logger}
@@ -209,7 +217,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	routeTables := &routeTableService{store: st, runtime: options.aclRuntime, readiness: ready}
 	vnfs := &vnfService{store: st, runtime: options.vnfRuntime, statusProvider: options.vnfStatusProvider, writer: options.vnfWriter}
 	backends := &storageBackendService{store: st, readiness: ready, disks: options.diskProvisioner, mu: options.diskMutex}
-	hostInterfaces := &hostService{source: options.vppInterfaces}
+	hostInterfaces := &hostService{source: options.vppInterfaces, store: st, writer: options.hostWriter}
 	troubleshoot := &troubleshootService{runtime: options.diagnostics, readiness: ready}
 	captures := &captureService{runtime: options.diagnostics, readiness: ready}
 	rookeryv1.RegisterSystemServiceServer(server, system)
@@ -304,6 +312,23 @@ func (g *Gateway) Close() {
 	}
 	if g.listener != nil {
 		_ = g.listener.Close()
+	}
+}
+
+// errorLogInterceptor logs every failed RPC with its gRPC method, status code,
+// and underlying error. The request logger only records the HTTP status, so
+// without this the cause of a 500 (for example a failed QEMU start) is lost.
+func errorLogInterceptor(logger zerolog.Logger) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		response, err := handler(ctx, req)
+		if err != nil {
+			logger.Error().
+				Str("method", info.FullMethod).
+				Str("code", status.Code(err).String()).
+				Err(err).
+				Msg("API request failed")
+		}
+		return response, err
 	}
 }
 

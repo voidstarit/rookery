@@ -110,10 +110,18 @@ func (q *QEMU) Start(ctx context.Context, vm store.VM) error {
 	if err != nil {
 		q.cleanup(socket, pidfile, monitor)
 		message := strings.TrimSpace(string(out))
-		if message == "" {
-			return fmt.Errorf("start qemu: %w", err)
+		note := ""
+		if holders := imageLockHolders(disks); len(holders) > 0 {
+			refs := make([]string, 0, len(holders))
+			for _, holder := range holders {
+				refs = append(refs, fmt.Sprintf("pid %d (%s)", holder.pid, holder.name))
+			}
+			note = "; image is in use by " + strings.Join(refs, ", ")
 		}
-		return fmt.Errorf("start qemu: %w: %s", err, message)
+		if message == "" {
+			return fmt.Errorf("start qemu: %w%s", err, note)
+		}
+		return fmt.Errorf("start qemu: %w: %s%s", err, message, note)
 	}
 	if !q.Running(vm.ID) {
 		q.cleanup(socket, pidfile, monitor)
@@ -130,19 +138,35 @@ func (q *QEMU) Stop(ctx context.Context, vmID string) error {
 		return err
 	}
 
-	pid, ok := readPID(pidfile)
-	if !ok || !processAlive(pid) || !processMatches(pid, vmID) {
+	targets := make([]int, 0, 1)
+	if pid, ok := readPID(pidfile); ok && processAlive(pid) && processMatches(pid, vmID) {
+		targets = append(targets, pid)
+	} else {
+		// The pid file can be lost (for example when the run directory was
+		// cleaned while QEMU kept running). Find the process by its -uuid.
+		targets = matchingVMPIDs(vmID)
+	}
+	if len(targets) == 0 {
 		q.cleanup(socket, pidfile, monitor)
 		return nil
 	}
 
-	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
-		return fmt.Errorf("stop qemu pid %d: %w", pid, err)
+	for _, pid := range targets {
+		if err := syscall.Kill(pid, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
+			return fmt.Errorf("stop qemu pid %d: %w", pid, err)
+		}
 	}
 
 	deadline := time.Now().Add(stopTimeout)
 	for time.Now().Before(deadline) {
-		if !processAlive(pid) || !processMatches(pid, vmID) {
+		alive := false
+		for _, pid := range targets {
+			if processAlive(pid) && processMatches(pid, vmID) {
+				alive = true
+				break
+			}
+		}
+		if !alive {
 			q.cleanup(socket, pidfile, monitor)
 			return nil
 		}
@@ -153,21 +177,29 @@ func (q *QEMU) Stop(ctx context.Context, vmID string) error {
 		}
 	}
 
-	if err := syscall.Kill(pid, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
-		return fmt.Errorf("kill qemu pid %d: %w", pid, err)
+	for _, pid := range targets {
+		if err := syscall.Kill(pid, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
+			return fmt.Errorf("kill qemu pid %d: %w", pid, err)
+		}
 	}
 	q.cleanup(socket, pidfile, monitor)
 	return nil
 }
 
-// Running reports whether the VM has a live QEMU process.
+// Running reports whether the VM has a live QEMU process. The pid file is the
+// fast path; when it is missing or stale, a QEMU process started with
+// "-uuid <vmID>" is treated as running so an API restart or a cleaned run
+// directory cannot launch a second QEMU against the same disk.
 func (q *QEMU) Running(vmID string) bool {
 	_, pidfile, _, err := q.paths(vmID)
 	if err != nil {
 		return false
 	}
 	pid, ok := readPID(pidfile)
-	return ok && processAlive(pid) && processMatches(pid, vmID)
+	if ok && processAlive(pid) && processMatches(pid, vmID) {
+		return true
+	}
+	return len(matchingVMPIDs(vmID)) > 0
 }
 
 // VNCSocket returns the Unix socket path for a VM's VNC server.
@@ -263,6 +295,88 @@ func processMatches(pid int, vmID string) bool {
 		return false
 	}
 	return strings.Contains(string(data), vmID)
+}
+
+// matchingVMPIDs returns PIDs whose command line carries this VM's QEMU UUID.
+func matchingVMPIDs(vmID string) []int {
+	return cmdlinePIDs(func(args []string) bool {
+		for i := 0; i+1 < len(args); i++ {
+			if args[i] == "-uuid" && args[i+1] == vmID {
+				return true
+			}
+		}
+		for _, arg := range args {
+			if arg == "-uuid="+vmID {
+				return true
+			}
+		}
+		return false
+	})
+}
+
+type processRef struct {
+	pid  int
+	name string
+}
+
+// imageLockHolders finds live processes whose command line references one of
+// the VM disks. It is used to explain QEMU "Failed to get write lock" errors.
+func imageLockHolders(disks []store.VMDisk) []processRef {
+	paths := make(map[string]struct{}, len(disks))
+	for _, disk := range disks {
+		paths[disk.Device] = struct{}{}
+	}
+	if len(paths) == 0 {
+		return nil
+	}
+	holders := make([]processRef, 0, 1)
+	for _, pid := range cmdlinePIDs(func(args []string) bool {
+		for _, arg := range args {
+			if _, ok := paths[arg]; ok {
+				return true
+			}
+		}
+		return false
+	}) {
+		holders = append(holders, processRef{pid: pid, name: processName(pid)})
+	}
+	return holders
+}
+
+func cmdlinePIDs(match func([]string) bool) []int {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil
+	}
+	self := os.Getpid()
+	pids := make([]int, 0, 1)
+	for _, entry := range entries {
+		pid, err := strconv.Atoi(entry.Name())
+		if err != nil || pid == self {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "cmdline"))
+		if err != nil || len(data) == 0 {
+			continue
+		}
+		args := strings.Split(strings.TrimRight(string(data), "\x00"), "\x00")
+		if match(args) {
+			pids = append(pids, pid)
+		}
+	}
+	return pids
+}
+
+func processName(pid int) string {
+	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "comm"))
+	if err != nil {
+		return "unknown"
+	}
+	name := strings.TrimSpace(string(data))
+	if name == "" {
+		return "unknown"
+	}
+	return name
 }
 
 func vmDisks(vm store.VM) []store.VMDisk {

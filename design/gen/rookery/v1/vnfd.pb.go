@@ -36,8 +36,11 @@ type VNFSpec struct {
 	TapHostName    string     `protobuf:"bytes,7,opt,name=tap_host_name,json=tapHostName,proto3" json:"tap_host_name,omitempty"`
 	MemifSocket    string     `protobuf:"bytes,8,opt,name=memif_socket,json=memifSocket,proto3" json:"memif_socket,omitempty"`
 	MemifSwIfIndex uint32     `protobuf:"varint,9,opt,name=memif_sw_if_index,json=memifSwIfIndex,proto3" json:"memif_sw_if_index,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// shared_address is the IPv4 CIDR assigned to the network's shared VNF
+	// memif stack (normally .2/prefix). It is required for transport "shared".
+	SharedAddress string `protobuf:"bytes,10,opt,name=shared_address,json=sharedAddress,proto3" json:"shared_address,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *VNFSpec) Reset() {
@@ -131,6 +134,13 @@ func (x *VNFSpec) GetMemifSwIfIndex() uint32 {
 		return x.MemifSwIfIndex
 	}
 	return 0
+}
+
+func (x *VNFSpec) GetSharedAddress() string {
+	if x != nil {
+		return x.SharedAddress
+	}
+	return ""
 }
 
 type EnsureVNFRequest struct {
@@ -646,18 +656,20 @@ var File_rookery_v1_vnfd_proto protoreflect.FileDescriptor
 const file_rookery_v1_vnfd_proto_rawDesc = "" +
 	"\n" +
 	"\x15rookery/v1/vnfd.proto\x12\n" +
-	"rookery.v1\x1a\x1bgoogle/protobuf/empty.proto\x1a\x14rookery/v1/vnf.proto\x1a\x17validate/validate.proto\"\xd7\x02\n" +
+	"rookery.v1\x1a\x1bgoogle/protobuf/empty.proto\x1a\x14rookery/v1/vnf.proto\x1a\x17validate/validate.proto\"\x86\x03\n" +
 	"\aVNFSpec\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12.\n" +
 	"\x04type\x18\x03 \x01(\tB\x1a\xfaB\x17r\x15R\x06dhcpv4R\x06dhcpv6R\x03bgpR\x04type\x12\x1d\n" +
 	"\n" +
-	"network_id\x18\x04 \x01(\x03R\tnetworkId\x12/\n" +
-	"\ttransport\x18\x05 \x01(\tB\x11\xfaB\x0er\fR\x05memifR\x03tapR\ttransport\x12-\n" +
+	"network_id\x18\x04 \x01(\x03R\tnetworkId\x127\n" +
+	"\ttransport\x18\x05 \x01(\tB\x19\xfaB\x16r\x14R\x05memifR\x03tapR\x06sharedR\ttransport\x12-\n" +
 	"\x06config\x18\x06 \x01(\v2\x15.rookery.v1.VNFConfigR\x06config\x12\"\n" +
 	"\rtap_host_name\x18\a \x01(\tR\vtapHostName\x12!\n" +
 	"\fmemif_socket\x18\b \x01(\tR\vmemifSocket\x12)\n" +
-	"\x11memif_sw_if_index\x18\t \x01(\rR\x0ememifSwIfIndex\"C\n" +
+	"\x11memif_sw_if_index\x18\t \x01(\rR\x0ememifSwIfIndex\x12%\n" +
+	"\x0eshared_address\x18\n" +
+	" \x01(\tR\rsharedAddress\"C\n" +
 	"\x10EnsureVNFRequest\x12/\n" +
 	"\x03vnf\x18\x01 \x01(\v2\x13.rookery.v1.VNFSpecB\b\xfaB\x05\x8a\x01\x02\x10\x01R\x03vnf\"P\n" +
 	"\x10RemoveVNFRequest\x12\x17\n" +

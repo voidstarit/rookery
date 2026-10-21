@@ -26,7 +26,11 @@ func TestMigrationConvertsNetworkDHCPToVNF(t *testing.T) {
 	if _, err := db.Exec(`DROP TABLE vnfs`); err != nil {
 		t.Fatalf("drop vnfs table: %v", err)
 	}
-	for _, column := range []string{"bvi_host_name", "bvi_sw_if_index", "ipv4_gateway"} {
+	for _, column := range []string{
+		"bvi_host_name", "bvi_sw_if_index", "ipv4_gateway",
+		"vnf_transport", "vnf_memif_socket", "vnf_memif_sw_if_index", "vnf_memif_host_name",
+		"ipv4_cidr", "ipv6_cidr", "route_table_id",
+	} {
 		if _, err := db.Exec(`ALTER TABLE networks DROP COLUMN ` + column); err != nil {
 			t.Fatalf("drop networks.%s: %v", column, err)
 		}
@@ -174,6 +178,14 @@ func TestMigrationBackfillsVMDisks(t *testing.T) {
 			t.Fatalf("drop vnfs.%s: %v", column, err)
 		}
 	}
+	for _, column := range []string{
+		"vnf_transport", "vnf_memif_socket", "vnf_memif_sw_if_index", "vnf_memif_host_name",
+		"ipv4_cidr", "ipv6_cidr", "route_table_id",
+	} {
+		if _, err := db.Exec(`ALTER TABLE networks DROP COLUMN ` + column); err != nil {
+			t.Fatalf("drop networks.%s: %v", column, err)
+		}
+	}
 	if _, err := db.Exec(`PRAGMA user_version = 11`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
@@ -271,7 +283,7 @@ func TestMigrationPreservesLegacyVMsWithoutDisks(t *testing.T) {
 	if err := st.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 19 {
-		t.Fatalf("schema version = %d, want 19", version)
+	if version != 24 {
+		t.Fatalf("schema version = %d, want 24", version)
 	}
 }

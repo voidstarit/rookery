@@ -234,6 +234,18 @@ func (s *coreDHCPState) handle(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) 
 	s.purgeExpiredLocked(now)
 
 	clientID := req.ClientHWAddr.String()
+	requested := req.RequestedIPAddress()
+	if requested != nil && requested.IsUnspecified() {
+		requested = nil
+	}
+	log.Trace().
+		Str("leases", s.leasePath).
+		Str("client_id", clientID).
+		Str("hostname", req.HostName()).
+		Str("message_type", req.MessageType().String()).
+		Str("requested_ip", ipText(requested)).
+		Str("client_ip", req.ClientIPAddr.String()).
+		Msg("DHCPv4 request")
 	switch req.MessageType() {
 	case dhcpv4.MessageTypeDiscover, dhcpv4.MessageTypeRequest:
 		hint := req.RequestedIPAddress()
@@ -299,6 +311,11 @@ func (s *coreDHCPState) handle(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) 
 }
 
 func (s *coreDHCPState) nak(resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+	log.Debug().
+		Str("leases", s.leasePath).
+		Str("client_id", resp.ClientHWAddr.String()).
+		Str("current_ip", resp.ClientIPAddr.String()).
+		Msg("DHCPv4 request denied")
 	resp.UpdateOption(dhcpv4.OptMessageType(dhcpv4.MessageTypeNak))
 	resp.YourIPAddr = net.IPv4zero
 	resp.Options.Update(dhcpv4.OptServerIdentifier(s.serverID))
@@ -336,7 +353,7 @@ func (s *coreDHCPState) renewLocked(record *coreDHCPLease, hostname string, now 
 	if hostname != "" {
 		record.Hostname = hostname
 	}
-	log.Trace().
+	log.Debug().
 		Str("leases", s.leasePath).
 		Str("client_id", record.ClientID).
 		Str("address", record.Address.String()).
@@ -358,7 +375,7 @@ func (s *coreDHCPState) allocateLocked(clientID string, hint net.IP, hostname st
 		}
 		s.leases[clientID] = record
 		s.byIP[staticIP.String()] = clientID
-		log.Trace().
+		log.Info().
 			Str("leases", s.leasePath).
 			Str("client_id", clientID).
 			Str("address", record.Address.String()).
@@ -395,7 +412,7 @@ func (s *coreDHCPState) allocateLocked(clientID string, hint net.IP, hostname st
 	}
 	s.leases[clientID] = record
 	s.byIP[ip.String()] = clientID
-	log.Trace().
+	log.Info().
 		Str("leases", s.leasePath).
 		Str("client_id", clientID).
 		Str("address", record.Address.String()).
@@ -415,7 +432,7 @@ func (s *coreDHCPState) purgeExpiredLocked(now time.Time) {
 }
 
 func (s *coreDHCPState) freeLocked(record *coreDHCPLease) {
-	log.Trace().
+	log.Info().
 		Str("leases", s.leasePath).
 		Str("client_id", record.ClientID).
 		Str("address", record.Address.String()).
@@ -498,6 +515,15 @@ func (s *coreDHCPState) loadLeases() error {
 			Hostname: lease.Hostname,
 		}
 		s.byIP[ip.String()] = key
+		log.Trace().
+			Str("leases", s.leasePath).
+			Str("client_id", key).
+			Str("address", ip.String()).
+			Str("hostname", lease.Hostname).
+			Msg("loaded DHCPv4 lease")
+	}
+	if len(s.leases) > 0 {
+		log.Info().Str("leases", s.leasePath).Int("count", len(s.leases)).Msg("loaded DHCPv4 leases")
 	}
 	return nil
 }
@@ -536,6 +562,13 @@ func writeLeaseFile(path string, leases []leaseRecord) {
 		log.Error().Str("path", path).Err(err).Msg("replace DHCP leases")
 		_ = os.Remove(tmp)
 	}
+}
+
+func ipText(ip net.IP) string {
+	if ip == nil {
+		return ""
+	}
+	return ip.String()
 }
 
 func bytesCompare(a, b net.IP) int {

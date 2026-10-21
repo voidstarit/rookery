@@ -48,6 +48,15 @@ func (f *fakeManager) StartMemif(_ context.Context, vnf store.VNF, socketPath st
 	return nil
 }
 
+func (f *fakeManager) StartShared(_ context.Context, vnf store.VNF, socketPath string, _ uint32, address string) error {
+	if f.startErr != nil {
+		return f.startErr
+	}
+	f.running[vnf.ID] = true
+	f.starts = append(f.starts, vnf.Type+":shared:"+socketPath+"@"+address)
+	return nil
+}
+
 func (f *fakeManager) Stop(_ context.Context, vnfID int64, _ bool) error {
 	delete(f.running, vnfID)
 	f.stopped = append(f.stopped, vnfID)

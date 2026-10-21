@@ -12,7 +12,7 @@ type VMDialogProps = {
   onSaved: (vm: VM) => void;
 };
 
-const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._-]*";
+const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
 function vmDisks(vm: VM | null): VMDisk[] {
   if (!vm) {

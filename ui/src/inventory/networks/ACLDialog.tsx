@@ -10,7 +10,7 @@ type ACLDialogProps = {
   onSaved: (acl: ACL) => void;
 };
 
-const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._-]*";
+const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
 function normalizeRules(rules: ACLRule[]): ACLRule[] {
   return rules.map((rule) => {

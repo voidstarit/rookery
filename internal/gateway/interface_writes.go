@@ -20,6 +20,7 @@ import (
 type InterfaceRuntime interface {
 	CreateVhostUser(ctx context.Context, name, mac string, bdID uint32) (socketPath string, swIfIndex uint32, err error)
 	DeleteVhostUser(ctx context.Context, swIfIndex uint32) error
+	SetInterfaceRouteTable(ctx context.Context, swIfIndex uint32, ipv6 bool, tableID uint32) error
 }
 
 func (s *interfaceService) vppReady() error {
@@ -77,6 +78,16 @@ func (s *interfaceService) CreateInterface(ctx context.Context, request *rookery
 	socket, swIfIndex, err := s.attachments.CreateVhostUser(ctx, name, mac, network.BridgeDomainID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not create VPP vhost-user interface: "+err.Error())
+	}
+	if network.RouteTableID != 0 {
+		if err := s.attachments.SetInterfaceRouteTable(ctx, swIfIndex, false, network.RouteTableID); err != nil {
+			_ = s.attachments.DeleteVhostUser(context.Background(), swIfIndex)
+			return nil, status.Error(codes.Internal, "could not bind interface to the network VRF: "+err.Error())
+		}
+		if err := s.attachments.SetInterfaceRouteTable(ctx, swIfIndex, true, network.RouteTableID); err != nil {
+			_ = s.attachments.DeleteVhostUser(context.Background(), swIfIndex)
+			return nil, status.Error(codes.Internal, "could not bind interface to the network VRF: "+err.Error())
+		}
 	}
 	created, err := s.store.CreateInterface(ctx, store.VirtualInterface{
 		Name: name, NetworkID: network.ID, SocketPath: socket, MAC: mac,

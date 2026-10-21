@@ -42,6 +42,12 @@ func (f *fakeBackend) CreateBridgeDomain(_ context.Context, _ string, _ []uint32
 	return 123, nil
 }
 func (f *fakeBackend) DeleteBridgeDomain(context.Context, uint32) error { return nil }
+func (f *fakeBackend) PrepareNetworkVNFs(_ context.Context, network store.Network) (store.Network, error) {
+	return network, nil
+}
+
+func (f *fakeBackend) CleanupNetworkVNFs(context.Context, store.Network) error       { return nil }
+func (f *fakeBackend) DeleteNetworkRouteTables(context.Context, store.Network) error { return nil }
 
 func TestVNFAndNetworkLifecycle(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "lifecycle.db"))
@@ -72,7 +78,7 @@ func TestVNFAndNetworkLifecycle(t *testing.T) {
 		t.Fatalf("stop calls = %d", backend.stopped)
 	}
 
-	created, err := service.CreateNetwork(context.Background(), "lab-2")
+	created, err := service.CreateNetwork(context.Background(), "lab-2", "10.30.0.0/24", "fd00:30::/64")
 	if err != nil {
 		t.Fatal(err)
 	}

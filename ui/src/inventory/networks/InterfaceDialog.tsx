@@ -9,7 +9,7 @@ type InterfaceDialogProps = {
   onSaved: (iface: VirtualInterface) => void;
 };
 
-const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._-]*";
+const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
 export function InterfaceDialog({ networks, vms, onClose, onSaved }: InterfaceDialogProps) {
   const [name, setName] = useState("");

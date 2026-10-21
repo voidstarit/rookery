@@ -54,6 +54,10 @@ func (s *Server) activateMemifVNF(ctx context.Context, vnf store.VNF, network st
 	if err != nil {
 		return vnf, fmt.Errorf("create VNF memif: %w", err)
 	}
+	if err := s.bindNetworkInterface(ctx, network, memifSwIfIndex); err != nil {
+		_ = s.networks.DeleteMemif(ctx, memifSwIfIndex)
+		return vnf, err
+	}
 	if err := s.vnfs.StartMemif(ctx, vnf, socketPath, uint32(vnf.ID)); err != nil {
 		_ = s.networks.DeleteMemif(ctx, memifSwIfIndex)
 		return vnf, err

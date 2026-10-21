@@ -135,7 +135,9 @@ func networkToProto(network store.Network) *rookeryv1.Network {
 		Id: network.ID, Name: network.Name, BridgeDomainId: network.BridgeDomainID,
 		InterfaceCount: int32(network.InterfaceCount), BviHostName: network.BVIHostName,
 		BviSwIfIndex: network.BVISwIfIndex, Ipv4Gateway: network.IPv4Gateway,
-		CreatedAt: timestamp(network.CreatedAt), UpdatedAt: timestamp(network.UpdatedAt),
+		Ipv4Cidr: network.IPv4CIDR, Ipv6Cidr: network.IPv6CIDR,
+		RouteTableId: network.RouteTableID,
+		CreatedAt:    timestamp(network.CreatedAt), UpdatedAt: timestamp(network.UpdatedAt),
 	}
 }
 
@@ -385,6 +387,8 @@ func storageBackendToProto(backend store.StorageBackend) *rookeryv1.StorageBacke
 type hostService struct {
 	rookeryv1.UnimplementedHostServiceServer
 	source VPPInterfaceSource
+	store  *store.Store
+	writer HostWriter
 }
 
 func (s *hostService) ListHostInterfaces(ctx context.Context, _ *rookeryv1.ListHostInterfacesRequest) (*rookeryv1.ListHostInterfacesResponse, error) {

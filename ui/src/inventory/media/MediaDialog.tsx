@@ -7,7 +7,7 @@ type MediaDialogProps = {
   onSaved: (media: Media) => void;
 };
 
-const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._-]*";
+const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
 export function MediaDialog({ onClose, onSaved }: MediaDialogProps) {
   const [name, setName] = useState("");

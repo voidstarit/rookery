@@ -175,6 +175,11 @@ func (s *coreDHCPv6State) handle(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) 
 		return nil, true
 	}
 	clientKey := clientID.String()
+	log.Trace().
+		Str("leases", s.leasePath).
+		Str("client_id", clientKey).
+		Str("message_type", msg.Type().String()).
+		Msg("DHCPv6 request")
 
 	now := time.Now()
 	s.mu.Lock()
@@ -304,7 +309,7 @@ func (s *coreDHCPv6State) leaseForLocked(clientID string, now time.Time) *coreDH
 
 func (s *coreDHCPv6State) renewLocked(record *coreDHCPv6Lease, now time.Time) {
 	record.Expires = now.Add(s.leaseTime)
-	log.Trace().
+	log.Debug().
 		Str("leases", s.leasePath).
 		Str("client_id", record.ClientID).
 		Str("address", record.Address.String()).
@@ -344,7 +349,7 @@ func (s *coreDHCPv6State) allocateLocked(clientID string, requested netip.Addr, 
 	}
 	s.leases[clientID] = record
 	s.byIP[chosen.String()] = clientID
-	log.Trace().
+	log.Info().
 		Str("leases", s.leasePath).
 		Str("client_id", clientID).
 		Str("address", record.Address.String()).
@@ -362,7 +367,7 @@ func (s *coreDHCPv6State) purgeExpiredLocked(now time.Time) {
 }
 
 func (s *coreDHCPv6State) freeLocked(record *coreDHCPv6Lease) {
-	log.Trace().
+	log.Info().
 		Str("leases", s.leasePath).
 		Str("client_id", record.ClientID).
 		Str("address", record.Address.String()).
@@ -415,6 +420,15 @@ func (s *coreDHCPv6State) loadLeases() error {
 			Hostname: lease.Hostname,
 		}
 		s.byIP[addr.String()] = lease.ClientID
+		log.Trace().
+			Str("leases", s.leasePath).
+			Str("client_id", lease.ClientID).
+			Str("address", addr.String()).
+			Str("hostname", lease.Hostname).
+			Msg("loaded DHCPv6 lease")
+	}
+	if len(s.leases) > 0 {
+		log.Info().Str("leases", s.leasePath).Int("count", len(s.leases)).Msg("loaded DHCPv6 leases")
 	}
 	return nil
 }

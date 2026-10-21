@@ -42,7 +42,7 @@ func TestNetworkWriteRoutes(t *testing.T) {
 	server := httptest.NewServer(gw.Handler)
 	t.Cleanup(server.Close)
 
-	created, err := http.Post(server.URL+"/api/networks", "application/json", strings.NewReader(`{"name":"lab-1"}`))
+	created, err := http.Post(server.URL+"/api/networks", "application/json", strings.NewReader(`{"name":"lab-1","ipv4_cidr":"10.20.0.0/24","ipv6_cidr":"fd00:20::/64"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,8 +77,8 @@ type fakeNetworkWriter struct {
 	deleted []int64
 }
 
-func (f *fakeNetworkWriter) CreateNetwork(_ context.Context, name string) (store.Network, error) {
-	return store.Network{ID: 1, Name: name, BridgeDomainID: 601}, nil
+func (f *fakeNetworkWriter) CreateNetwork(_ context.Context, name, ipv4CIDR, ipv6CIDR string) (store.Network, error) {
+	return store.Network{ID: 1, Name: name, BridgeDomainID: 601, IPv4CIDR: ipv4CIDR, IPv6CIDR: ipv6CIDR}, nil
 }
 func (f *fakeNetworkWriter) DeleteNetwork(_ context.Context, id int64) error {
 	f.deleted = append(f.deleted, id)

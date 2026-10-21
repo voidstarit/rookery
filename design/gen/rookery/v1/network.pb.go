@@ -36,6 +36,9 @@ type Network struct {
 	Ipv4Gateway    string                 `protobuf:"bytes,7,opt,name=ipv4_gateway,json=ipv4Gateway,proto3" json:"ipv4_gateway,omitempty"`
 	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Ipv4Cidr       string                 `protobuf:"bytes,10,opt,name=ipv4_cidr,json=ipv4Cidr,proto3" json:"ipv4_cidr,omitempty"`
+	Ipv6Cidr       string                 `protobuf:"bytes,11,opt,name=ipv6_cidr,json=ipv6Cidr,proto3" json:"ipv6_cidr,omitempty"`
+	RouteTableId   uint32                 `protobuf:"varint,12,opt,name=route_table_id,json=routeTableId,proto3" json:"route_table_id,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -131,6 +134,27 @@ func (x *Network) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *Network) GetIpv4Cidr() string {
+	if x != nil {
+		return x.Ipv4Cidr
+	}
+	return ""
+}
+
+func (x *Network) GetIpv6Cidr() string {
+	if x != nil {
+		return x.Ipv6Cidr
+	}
+	return ""
+}
+
+func (x *Network) GetRouteTableId() uint32 {
+	if x != nil {
+		return x.RouteTableId
+	}
+	return 0
 }
 
 type ListNetworksRequest struct {
@@ -260,6 +284,8 @@ func (x *GetNetworkRequest) GetId() int64 {
 type CreateNetworkRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Ipv4Cidr      string                 `protobuf:"bytes,2,opt,name=ipv4_cidr,json=ipv4Cidr,proto3" json:"ipv4_cidr,omitempty"`
+	Ipv6Cidr      string                 `protobuf:"bytes,3,opt,name=ipv6_cidr,json=ipv6Cidr,proto3" json:"ipv6_cidr,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -297,6 +323,20 @@ func (*CreateNetworkRequest) Descriptor() ([]byte, []int) {
 func (x *CreateNetworkRequest) GetName() string {
 	if x != nil {
 		return x.Name
+	}
+	return ""
+}
+
+func (x *CreateNetworkRequest) GetIpv4Cidr() string {
+	if x != nil {
+		return x.Ipv4Cidr
+	}
+	return ""
+}
+
+func (x *CreateNetworkRequest) GetIpv6Cidr() string {
+	if x != nil {
+		return x.Ipv6Cidr
 	}
 	return ""
 }
@@ -350,7 +390,7 @@ var File_rookery_v1_network_proto protoreflect.FileDescriptor
 const file_rookery_v1_network_proto_rawDesc = "" +
 	"\n" +
 	"\x18rookery/v1/network.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\xe4\x02\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\xc4\x03\n" +
 	"\aNetwork\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12(\n" +
@@ -362,14 +402,20 @@ const file_rookery_v1_network_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x15\n" +
+	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x1b\n" +
+	"\tipv4_cidr\x18\n" +
+	" \x01(\tR\bipv4Cidr\x12\x1b\n" +
+	"\tipv6_cidr\x18\v \x01(\tR\bipv6Cidr\x12$\n" +
+	"\x0eroute_table_id\x18\f \x01(\rR\frouteTableId\"\x15\n" +
 	"\x13ListNetworksRequest\"G\n" +
 	"\x14ListNetworksResponse\x12/\n" +
 	"\bnetworks\x18\x01 \x03(\v2\x13.rookery.v1.NetworkR\bnetworks\",\n" +
 	"\x11GetNetworkRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"S\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\x9f\x01\n" +
 	"\x14CreateNetworkRequest\x12;\n" +
-	"\x04name\x18\x01 \x01(\tB'\xfaB$r\"\x10\x01\x18@2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$R\x04name\"/\n" +
+	"\x04name\x18\x01 \x01(\tB'\xfaB$r\"\x10\x01\x18@2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$R\x04name\x12$\n" +
+	"\tipv4_cidr\x18\x02 \x01(\tB\a\xfaB\x04r\x02\x10\x01R\bipv4Cidr\x12$\n" +
+	"\tipv6_cidr\x18\x03 \x01(\tB\a\xfaB\x04r\x02\x10\x01R\bipv6Cidr\"/\n" +
 	"\x14DeleteNetworkRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id2\xab\x03\n" +
 	"\x0eNetworkService\x12r\n" +

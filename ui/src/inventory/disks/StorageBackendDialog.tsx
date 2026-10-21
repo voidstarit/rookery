@@ -8,7 +8,7 @@ type StorageBackendDialogProps = {
   onSaved: (backend: StorageBackend) => void;
 };
 
-const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._-]*";
+const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
 export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBackendDialogProps) {
   const editing = backend !== null;

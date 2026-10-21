@@ -77,6 +77,8 @@ func (m *HostInterface) validate(all bool) error {
 
 	// no validation rules for VppType
 
+	// no validation rules for Managed
+
 	if m.VppSwIfIndex != nil {
 		// no validation rules for VppSwIfIndex
 	}
@@ -396,3 +398,229 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = ListHostInterfacesResponseValidationError{}
+
+// Validate checks the field values on AttachHostInterfaceRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *AttachHostInterfaceRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on AttachHostInterfaceRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// AttachHostInterfaceRequestMultiError, or nil if none found.
+func (m *AttachHostInterfaceRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *AttachHostInterfaceRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if utf8.RuneCountInString(m.GetName()) < 1 {
+		err := AttachHostInterfaceRequestValidationError{
+			field:  "Name",
+			reason: "value length must be at least 1 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return AttachHostInterfaceRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// AttachHostInterfaceRequestMultiError is an error wrapping multiple
+// validation errors returned by AttachHostInterfaceRequest.ValidateAll() if
+// the designated constraints aren't met.
+type AttachHostInterfaceRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m AttachHostInterfaceRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m AttachHostInterfaceRequestMultiError) AllErrors() []error { return m }
+
+// AttachHostInterfaceRequestValidationError is the validation error returned
+// by AttachHostInterfaceRequest.Validate if the designated constraints aren't met.
+type AttachHostInterfaceRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e AttachHostInterfaceRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e AttachHostInterfaceRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e AttachHostInterfaceRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e AttachHostInterfaceRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e AttachHostInterfaceRequestValidationError) ErrorName() string {
+	return "AttachHostInterfaceRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e AttachHostInterfaceRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sAttachHostInterfaceRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = AttachHostInterfaceRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = AttachHostInterfaceRequestValidationError{}
+
+// Validate checks the field values on DetachHostInterfaceRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *DetachHostInterfaceRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on DetachHostInterfaceRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// DetachHostInterfaceRequestMultiError, or nil if none found.
+func (m *DetachHostInterfaceRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *DetachHostInterfaceRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if utf8.RuneCountInString(m.GetName()) < 1 {
+		err := DetachHostInterfaceRequestValidationError{
+			field:  "Name",
+			reason: "value length must be at least 1 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return DetachHostInterfaceRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// DetachHostInterfaceRequestMultiError is an error wrapping multiple
+// validation errors returned by DetachHostInterfaceRequest.ValidateAll() if
+// the designated constraints aren't met.
+type DetachHostInterfaceRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m DetachHostInterfaceRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m DetachHostInterfaceRequestMultiError) AllErrors() []error { return m }
+
+// DetachHostInterfaceRequestValidationError is the validation error returned
+// by DetachHostInterfaceRequest.Validate if the designated constraints aren't met.
+type DetachHostInterfaceRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e DetachHostInterfaceRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e DetachHostInterfaceRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e DetachHostInterfaceRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e DetachHostInterfaceRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e DetachHostInterfaceRequestValidationError) ErrorName() string {
+	return "DetachHostInterfaceRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e DetachHostInterfaceRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sDetachHostInterfaceRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = DetachHostInterfaceRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = DetachHostInterfaceRequestValidationError{}

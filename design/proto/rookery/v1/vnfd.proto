@@ -37,11 +37,14 @@ message VNFSpec {
   int64 network_id = 4;
   // transport tells the daemon how the VNF reaches VPP: "memif" uses the
   // memif socket created by the API, anything else uses tap_host_name.
-  string transport = 5 [(validate.rules).string = {in: ["memif", "tap"]}];
+  string transport = 5 [(validate.rules).string = {in: ["memif", "tap", "shared"]}];
   VNFConfig config = 6;
   string tap_host_name = 7;
   string memif_socket = 8;
   uint32 memif_sw_if_index = 9;
+  // shared_address is the IPv4 CIDR assigned to the network's shared VNF
+  // memif stack (normally .2/prefix). It is required for transport "shared".
+  string shared_address = 10;
 }
 
 message EnsureVNFRequest {

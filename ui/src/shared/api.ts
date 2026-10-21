@@ -108,10 +108,14 @@ async function requestOnce<T>(path: string, options: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    const message =
-      data && typeof data === "object" && "error" in data && typeof data.error === "string"
-        ? data.error
-        : `Request failed (${response.status})`;
+    let message = `Request failed (${response.status})`;
+    if (data && typeof data === "object") {
+      if ("error" in data && typeof data.error === "string") {
+        message = data.error;
+      } else if ("message" in data && typeof data.message === "string") {
+        message = data.message;
+      }
+    }
     throw new APIError(message, response.status);
   }
 

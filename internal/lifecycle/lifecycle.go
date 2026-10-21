@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
+	"github.com/voidstarit/rookery/internal/netutil"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -29,6 +30,9 @@ type Backend interface {
 	DeleteBVI(ctx context.Context, name string) error
 	CreateBridgeDomain(ctx context.Context, name string, reserved []uint32) (uint32, error)
 	DeleteBridgeDomain(ctx context.Context, bdID uint32) error
+	PrepareNetworkVNFs(ctx context.Context, network store.Network) (store.Network, error)
+	CleanupNetworkVNFs(ctx context.Context, network store.Network) error
+	DeleteNetworkRouteTables(ctx context.Context, network store.Network) error
 }
 
 // Service provides VNF and network lifecycle operations.
@@ -83,6 +87,12 @@ func (e *NetworkError) Error() string {
 func (e *NetworkError) Unwrap() error { return e.Err }
 func (e *NetworkError) NetworkStatus() (int, string) {
 	if e.Status >= 500 {
+		if e.Err != nil {
+			return e.Status, e.Err.Error()
+		}
+		if e.Message != "" {
+			return e.Status, e.Message
+		}
 		return e.Status, "network operation failed"
 	}
 	return e.Status, e.Error()
@@ -351,7 +361,7 @@ func networkInputError(message string) error {
 	return &NetworkError{Status: http.StatusBadRequest, Message: message}
 }
 
-func (s *Service) CreateNetwork(ctx context.Context, name string) (store.Network, error) {
+func (s *Service) CreateNetwork(ctx context.Context, name, ipv4CIDR, ipv6CIDR string) (store.Network, error) {
 	name = strings.TrimSpace(name)
 	switch {
 	case name == "":
@@ -360,6 +370,10 @@ func (s *Service) CreateNetwork(ctx context.Context, name string) (store.Network
 		return store.Network{}, networkInputError("name must be at most 64 characters")
 	case !lvmNamePattern.MatchString(name):
 		return store.Network{}, networkInputError("name must start with a letter or digit and contain only letters, digits, dots, dashes, and underscores")
+	}
+	ipv4CIDR, ipv6CIDR, err := netutil.NormalizeNetworkCIDRs(ipv4CIDR, ipv6CIDR)
+	if err != nil {
+		return store.Network{}, networkInputError(err.Error())
 	}
 	if blocked, message := s.backend.VPPBlocked(); blocked {
 		return store.Network{}, &NetworkError{Status: http.StatusServiceUnavailable, Message: message}
@@ -378,7 +392,9 @@ func (s *Service) CreateNetwork(ctx context.Context, name string) (store.Network
 	if err != nil {
 		return store.Network{}, &NetworkError{Status: http.StatusInternalServerError, Err: fmt.Errorf("could not create VPP bridge domain: %w", err)}
 	}
-	created, err := s.store.CreateNetwork(ctx, store.Network{Name: name, BridgeDomainID: bdID})
+	created, err := s.store.CreateNetwork(ctx, store.Network{
+		Name: name, BridgeDomainID: bdID, IPv4CIDR: ipv4CIDR, IPv6CIDR: ipv6CIDR,
+	})
 	if err != nil {
 		_ = s.backend.DeleteBridgeDomain(context.Background(), bdID)
 		if errors.Is(err, store.ErrNetworkNameTaken) {
@@ -386,7 +402,20 @@ func (s *Service) CreateNetwork(ctx context.Context, name string) (store.Network
 		}
 		return store.Network{}, &NetworkError{Status: http.StatusInternalServerError, Err: err}
 	}
-	return created, nil
+	prepared, err := s.backend.PrepareNetworkVNFs(ctx, created)
+	if err != nil {
+		if current, getErr := s.store.GetNetwork(ctx, created.ID); getErr == nil {
+			_ = s.backend.CleanupNetworkVNFs(ctx, current)
+			if current.BVIHostName != "" {
+				_ = s.backend.DeleteBVI(ctx, current.BVIHostName)
+			}
+			_ = s.backend.DeleteNetworkRouteTables(ctx, current)
+		}
+		_ = s.store.DeleteNetwork(ctx, created.ID)
+		_ = s.backend.DeleteBridgeDomain(context.Background(), bdID)
+		return store.Network{}, &NetworkError{Status: http.StatusInternalServerError, Err: fmt.Errorf("prepare network VNF resources: %w", err)}
+	}
+	return prepared, nil
 }
 
 func (s *Service) DeleteNetwork(ctx context.Context, id int64) error {
@@ -422,10 +451,16 @@ func (s *Service) DeleteNetwork(ctx context.Context, id int64) error {
 			return &NetworkError{Status: http.StatusInternalServerError, Err: fmt.Errorf("stop network VNFs: %w", err)}
 		}
 	}
+	if err := s.backend.CleanupNetworkVNFs(ctx, network); err != nil {
+		return &NetworkError{Status: http.StatusInternalServerError, Err: fmt.Errorf("delete network VNF resources: %w", err)}
+	}
 	if network.BVIHostName != "" {
 		if err := s.backend.DeleteBVI(ctx, network.BVIHostName); err != nil {
 			return &NetworkError{Status: http.StatusInternalServerError, Err: fmt.Errorf("delete network BVI: %w", err)}
 		}
+	}
+	if err := s.backend.DeleteNetworkRouteTables(ctx, network); err != nil {
+		return &NetworkError{Status: http.StatusInternalServerError, Err: fmt.Errorf("delete network route tables: %w", err)}
 	}
 	if err := s.backend.DeleteBridgeDomain(ctx, network.BridgeDomainID); err != nil {
 		return &NetworkError{Status: http.StatusInternalServerError, Err: fmt.Errorf("delete VPP bridge domain: %w", err)}

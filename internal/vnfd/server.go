@@ -34,6 +34,7 @@ import (
 type Manager interface {
 	Start(ctx context.Context, vnf store.VNF, hostIf string) error
 	StartMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32) error
+	StartShared(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32, address string) error
 	Stop(ctx context.Context, vnfID int64, removeLeases bool) error
 	Running(vnfID int64) bool
 	Healthy(vnfID int64) bool
@@ -208,21 +209,35 @@ func (s *Server) EnsureVNF(ctx context.Context, request *rookeryv1.EnsureVNFRequ
 	}
 
 	vnf := storeVNF(spec)
-	s.logger.Trace().Int64("vnf_id", spec.GetId()).Str("transport", spec.GetTransport()).Msg("starting VNF runtime")
+	s.logger.Trace().
+		Int64("vnf_id", spec.GetId()).
+		Str("transport", spec.GetTransport()).
+		Str("shared_address", spec.GetSharedAddress()).
+		Msg("starting VNF runtime")
 	var err error
 	switch spec.GetTransport() {
+	case "shared":
+		if strings.TrimSpace(spec.GetMemifSocket()) == "" {
+			err = errors.New("shared memif socket path is required")
+		} else if strings.TrimSpace(spec.GetSharedAddress()) == "" {
+			err = errors.New("shared memif address is required")
+		} else {
+			err = s.manager.StartShared(ctx, vnf, spec.GetMemifSocket(), spec.GetMemifSwIfIndex(), spec.GetSharedAddress())
+		}
 	case "memif":
 		if strings.TrimSpace(spec.GetMemifSocket()) == "" {
 			err = errors.New("memif socket path is required")
 		} else {
 			err = s.manager.StartMemif(ctx, vnf, spec.GetMemifSocket(), spec.GetMemifSwIfIndex())
 		}
-	default:
+	case "tap":
 		if strings.TrimSpace(spec.GetTapHostName()) == "" {
 			err = errors.New("tap interface name is required")
 		} else {
 			err = s.manager.Start(ctx, vnf, spec.GetTapHostName())
 		}
+	default:
+		err = fmt.Errorf("unsupported VNF transport %q", spec.GetTransport())
 	}
 	if err != nil {
 		s.setDetail(spec.GetId(), err.Error())

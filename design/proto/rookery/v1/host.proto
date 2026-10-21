@@ -3,6 +3,8 @@ syntax = "proto3";
 package rookery.v1;
 
 import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "validate/validate.proto";
 
 option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
 
@@ -13,6 +15,21 @@ service HostService {
       get: "/api/host/interfaces"
       response_body: "interfaces"
     };
+  }
+
+  // AttachHostInterface takes over a host NIC into VPP and persists it so it
+  // is recreated after a VPP restart.
+  rpc AttachHostInterface(AttachHostInterfaceRequest) returns (HostInterface) {
+    option (google.api.http) = {
+      post: "/api/host/interfaces/{name}/attach"
+      body: "*"
+    };
+  }
+
+  // DetachHostInterface removes the VPP host-interface; the Linux NIC becomes
+  // available to the host again.
+  rpc DetachHostInterface(DetachHostInterfaceRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/host/interfaces/{name}"};
   }
 }
 
@@ -29,10 +46,19 @@ message HostInterface {
   string vpp_name = 10;
   bool vpp_up = 11;
   string vpp_type = 12;
+  bool managed = 13;
 }
 
 message ListHostInterfacesRequest {}
 
 message ListHostInterfacesResponse {
   repeated HostInterface interfaces = 1;
+}
+
+message AttachHostInterfaceRequest {
+  string name = 1 [(validate.rules).string = {min_len: 1}];
+}
+
+message DetachHostInterfaceRequest {
+  string name = 1 [(validate.rules).string = {min_len: 1}];
 }

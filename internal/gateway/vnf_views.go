@@ -15,7 +15,6 @@ import (
 
 // VNFRuntime supplies DHCP runtime state.
 type VNFRuntime interface {
-	Running(vnfID int64) bool
 	Leases(ctx context.Context, vnfID int64) ([]store.VNFLease, error)
 }
 

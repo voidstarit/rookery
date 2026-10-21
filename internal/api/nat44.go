@@ -8,6 +8,7 @@ import (
 	"net"
 	"strings"
 
+	"github.com/voidstarit/rookery/internal/netutil"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -22,16 +23,33 @@ func (s *Server) activateNAT44(ctx context.Context, vnf store.VNF) (store.VNF, e
 	if err != nil {
 		return vnf, fmt.Errorf("get NAT44 network: %w", err)
 	}
+	network, err = s.ensureNetworkCIDRs(ctx, network)
+	if err != nil {
+		return vnf, err
+	}
+	expectedGateway, err := netutil.HostCIDR(network.IPv4CIDR, 1)
+	if err == nil && expectedGateway != "" && vnf.Config.Gateway != expectedGateway {
+		return vnf, fmt.Errorf("NAT44 gateway must be the network BVI address %s", expectedGateway)
+	}
+	if err := s.validateVNFNetwork(vnf, network); err != nil {
+		return vnf, err
+	}
 
 	outside, err := s.nat.EnsureHostInterface(ctx, vnf.Config.OutsideInterface)
 	if err != nil {
 		return vnf, err
 	}
+	s.recordHostInterface(ctx, vnf.Config.OutsideInterface, "nat44")
 
 	priorBVI, priorIndex, priorGateway := network.BVIHostName, network.BVISwIfIndex, network.IPv4Gateway
 	bviName, bviIndex, err := s.nat.EnsureBVI(ctx, network.ID, network.BridgeDomainID)
 	if err != nil {
 		return vnf, fmt.Errorf("ensure network BVI: %w", err)
+	}
+	if network.RouteTableID != 0 && s.networks != nil {
+		if err := s.bindNetworkBVI(ctx, network, bviName, bviIndex, vnf.Config.Gateway); err != nil {
+			return vnf, err
+		}
 	}
 	rollbackBVI := func() {
 		if priorBVI == "" {
@@ -154,6 +172,27 @@ func (s *Server) cleanupNetworkBVIAfterNATDelete(ctx context.Context, networkID 
 	return nil
 }
 
+func (s *Server) recordHostInterface(ctx context.Context, nic, purpose string) {
+	nic = strings.TrimSpace(nic)
+	if nic == "" || s.store == nil {
+		return
+	}
+	record := store.HostInterfaceRecord{NIC: nic, VPPName: "host-" + nic, Purpose: purpose}
+	if s.networks != nil {
+		if interfaces, err := s.networks.VPPInterfaces(ctx); err == nil {
+			for _, iface := range interfaces {
+				if iface.Name == record.VPPName {
+					record.SwIfIndex = iface.SwIfIndex
+					break
+				}
+			}
+		}
+	}
+	if _, err := s.store.UpsertHostInterfaceRecord(ctx, record); err != nil {
+		s.logger.Warn().Str("nic", nic).Err(err).Msg("could not persist host interface takeover")
+	}
+}
+
 func (s *Server) configureDHCPv4ForNAT(ctx context.Context, network store.Network, natGateway string) error {
 	vnfs, err := s.store.ListVNFsByNetwork(ctx, network.ID)
 	if err != nil {
@@ -189,7 +228,7 @@ func (s *Server) configureDHCPv4ForNAT(ctx context.Context, network store.Networ
 		vnf.Config.Gateway = natGateway
 		vnf.Config.BindIP = bindCIDR
 		if !changed {
-			if vnf.Enabled && !s.vnfs.Running(vnf.ID) {
+			if vnf.Enabled && !s.vnfs.Running(ctx, vnf.ID) {
 				if vnf.TapHostName != "" {
 					if err := s.vnfs.Start(ctx, vnf, vnf.TapHostName); err == nil {
 						continue

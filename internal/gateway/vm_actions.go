@@ -56,6 +56,12 @@ func (s *vmService) StartVM(ctx context.Context, request *rookeryv1.StartVMReque
 		return nil, status.Error(codes.Aborted, "vm has no disk")
 	}
 	if s.runtime.Running(vm.ID) {
+		// The QEMU process is already alive (possibly with a stale "stopped" or
+		// "error" status after an API restart or a lost pid file). Repair the
+		// stored status, but keep the existing start contract.
+		if _, err := s.store.SetVMStatus(ctx, vm.ID, store.StatusRunning); err != nil {
+			return nil, status.Error(codes.Internal, "could not update VM status")
+		}
 		return nil, status.Error(codes.AlreadyExists, "vm is already running")
 	}
 	if err := s.runtime.Start(ctx, vm); err != nil {

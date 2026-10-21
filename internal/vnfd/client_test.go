@@ -41,7 +41,7 @@ func TestClientServerRoundTrip(t *testing.T) {
 	if err := client.Start(ctx, vnf, "vnf1"); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	if !client.Running(1) {
+	if !client.Running(ctx, 1) {
 		t.Fatal("running = false after start")
 	}
 	leases, err := client.Leases(ctx, 1)
@@ -55,7 +55,7 @@ func TestClientServerRoundTrip(t *testing.T) {
 	if err := client.Stop(ctx, 1, true); err != nil {
 		t.Fatalf("stop: %v", err)
 	}
-	if client.Running(1) {
+	if client.Running(context.Background(), 1) {
 		t.Fatal("running = true after stop")
 	}
 }
@@ -66,7 +66,7 @@ func TestClientUnavailableDaemonReportsStopped(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
-	if client.Running(1) {
+	if client.Running(context.Background(), 1) {
 		t.Fatal("running = true without a daemon")
 	}
 }

@@ -7,11 +7,14 @@ import (
 )
 
 func TestRequestValidation(t *testing.T) {
-	if err := (&rookeryv1.CreateNetworkRequest{Name: "lab-1"}).Validate(); err != nil {
+	if err := (&rookeryv1.CreateNetworkRequest{Name: "lab-1", Ipv4Cidr: "10.20.0.0/24", Ipv6Cidr: "fd00:20::/64"}).Validate(); err != nil {
 		t.Fatalf("valid network rejected: %v", err)
 	}
-	if err := (&rookeryv1.CreateNetworkRequest{Name: "not valid"}).Validate(); err == nil {
+	if err := (&rookeryv1.CreateNetworkRequest{Name: "not valid", Ipv4Cidr: "10.20.0.0/24", Ipv6Cidr: "fd00:20::/64"}).Validate(); err == nil {
 		t.Fatal("invalid network name accepted")
+	}
+	if err := (&rookeryv1.CreateNetworkRequest{Name: "lab-1"}).Validate(); err == nil {
+		t.Fatal("network without CIDRs accepted")
 	}
 	if err := (&rookeryv1.GetVMRequest{Id: "not-a-uuid"}).Validate(); err == nil {
 		t.Fatal("invalid VM UUID accepted")

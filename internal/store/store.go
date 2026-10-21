@@ -151,22 +151,29 @@ type VMMedia struct {
 
 // Network is a VPP bridge domain presented as a Nerd's Network.
 type Network struct {
-	ID               int64     `json:"id"`
-	Name             string    `json:"name"`
-	BridgeDomainID   uint32    `json:"bridge_domain_id"`
-	InterfaceCount   int       `json:"interface_count"`
-	DHCPEnabled      bool      `json:"-"`
-	DHCPGateway      string    `json:"-"`
-	DHCPRangeStart   string    `json:"-"`
-	DHCPRangeEnd     string    `json:"-"`
-	DHCPDNS          string    `json:"-"`
-	DHCPTapSwIfIndex uint32    `json:"-"`
-	DHCPTapHostName  string    `json:"-"`
-	BVIHostName      string    `json:"bvi_host_name,omitempty"`
-	BVISwIfIndex     uint32    `json:"bvi_sw_if_index,omitempty"`
-	IPv4Gateway      string    `json:"ipv4_gateway,omitempty"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID                int64     `json:"id"`
+	Name              string    `json:"name"`
+	BridgeDomainID    uint32    `json:"bridge_domain_id"`
+	InterfaceCount    int       `json:"interface_count"`
+	DHCPEnabled       bool      `json:"-"`
+	DHCPGateway       string    `json:"-"`
+	DHCPRangeStart    string    `json:"-"`
+	DHCPRangeEnd      string    `json:"-"`
+	DHCPDNS           string    `json:"-"`
+	DHCPTapSwIfIndex  uint32    `json:"-"`
+	DHCPTapHostName   string    `json:"-"`
+	BVIHostName       string    `json:"bvi_host_name,omitempty"`
+	BVISwIfIndex      uint32    `json:"bvi_sw_if_index,omitempty"`
+	IPv4Gateway       string    `json:"ipv4_gateway,omitempty"`
+	VNFTransport      string    `json:"vnf_transport,omitempty"`
+	VNFMemifSocket    string    `json:"vnf_memif_socket,omitempty"`
+	VNFMemifSwIfIndex uint32    `json:"vnf_memif_sw_if_index,omitempty"`
+	VNFMemifHostName  string    `json:"vnf_memif_host_name,omitempty"`
+	IPv4CIDR          string    `json:"ipv4_cidr"`
+	IPv6CIDR          string    `json:"ipv6_cidr"`
+	RouteTableID      uint32    `json:"route_table_id,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 const (
@@ -1014,10 +1021,14 @@ func (s *Store) checkBootMedia(ctx context.Context, mediaID *int64) error {
 func (s *Store) CreateNetwork(ctx context.Context, network Network) (Network, error) {
 	now := time.Now().UTC().UnixMilli()
 
+	transport := strings.TrimSpace(network.VNFTransport)
+	if transport == "" {
+		transport = "shared"
+	}
 	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO networks (name, bridge_domain_id, created_at, updated_at)
-		VALUES (?, ?, ?, ?)`,
-		network.Name, network.BridgeDomainID, now, now,
+		INSERT INTO networks (name, bridge_domain_id, vnf_transport, ipv4_cidr, ipv6_cidr, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		network.Name, network.BridgeDomainID, transport, network.IPv4CIDR, network.IPv6CIDR, now, now,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -1242,6 +1253,88 @@ func (s *Store) SetNetworkBVI(ctx context.Context, id int64, hostName string, sw
 	)
 	if err != nil {
 		return Network{}, fmt.Errorf("update network BVI: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return Network{}, fmt.Errorf("read updated rows: %w", err)
+	}
+	if affected == 0 {
+		return Network{}, ErrNetworkNotFound
+	}
+	return s.GetNetwork(ctx, id)
+}
+
+// SetNetworkVNFTransport updates the network's default VNF transport.
+func (s *Store) SetNetworkVNFTransport(ctx context.Context, id int64, transport string) (Network, error) {
+	now := time.Now().UTC().UnixMilli()
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE networks SET vnf_transport = ?, updated_at = ? WHERE id = ?`,
+		transport, now, id,
+	)
+	if err != nil {
+		return Network{}, fmt.Errorf("update network VNF transport: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return Network{}, fmt.Errorf("read updated rows: %w", err)
+	}
+	if affected == 0 {
+		return Network{}, ErrNetworkNotFound
+	}
+	return s.GetNetwork(ctx, id)
+}
+
+// SetNetworkRouteTable stores the VPP VRF table assigned to a network.
+func (s *Store) SetNetworkRouteTable(ctx context.Context, id int64, tableID uint32) (Network, error) {
+	now := time.Now().UTC().UnixMilli()
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE networks SET route_table_id = ?, updated_at = ? WHERE id = ?`,
+		tableID, now, id,
+	)
+	if err != nil {
+		return Network{}, fmt.Errorf("update network route table: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return Network{}, fmt.Errorf("read updated rows: %w", err)
+	}
+	if affected == 0 {
+		return Network{}, ErrNetworkNotFound
+	}
+	return s.GetNetwork(ctx, id)
+}
+
+// SetNetworkCIDRs stores the network address ranges.
+func (s *Store) SetNetworkCIDRs(ctx context.Context, id int64, ipv4CIDR, ipv6CIDR string) (Network, error) {
+	now := time.Now().UTC().UnixMilli()
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE networks SET ipv4_cidr = ?, ipv6_cidr = ?, updated_at = ? WHERE id = ?`,
+		ipv4CIDR, ipv6CIDR, now, id,
+	)
+	if err != nil {
+		return Network{}, fmt.Errorf("update network CIDRs: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return Network{}, fmt.Errorf("read updated rows: %w", err)
+	}
+	if affected == 0 {
+		return Network{}, ErrNetworkNotFound
+	}
+	return s.GetNetwork(ctx, id)
+}
+
+// SetNetworkVNFMemif stores the shared VNF memif metadata for a network.
+func (s *Store) SetNetworkVNFMemif(ctx context.Context, id int64, hostName, socketPath string, swIfIndex uint32) (Network, error) {
+	now := time.Now().UTC().UnixMilli()
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE networks
+		SET vnf_memif_host_name = ?, vnf_memif_socket = ?, vnf_memif_sw_if_index = ?, updated_at = ?
+		WHERE id = ?`,
+		hostName, socketPath, swIfIndex, now, id,
+	)
+	if err != nil {
+		return Network{}, fmt.Errorf("update network VNF memif: %w", err)
 	}
 	affected, err := res.RowsAffected()
 	if err != nil {
@@ -1696,7 +1789,9 @@ const networkSelect = `
 	       n.dhcp_enabled, n.dhcp_gateway, n.dhcp_range_start, n.dhcp_range_end,
 	       n.dhcp_dns, n.dhcp_tap_sw_if_index, n.dhcp_tap_host_name,
 	       n.bvi_host_name, n.bvi_sw_if_index, n.ipv4_gateway,
-	       n.created_at, n.updated_at
+	       n.vnf_transport, n.vnf_memif_socket, n.vnf_memif_sw_if_index,
+	       n.vnf_memif_host_name, n.ipv4_cidr, n.ipv6_cidr,
+	       n.route_table_id, n.created_at, n.updated_at
 	FROM networks AS n`
 
 const vnfSelect = `
@@ -1723,20 +1818,24 @@ const interfaceSelect = `
 
 func scanNetwork(s scanner) (Network, error) {
 	var (
-		network   Network
-		bdID      int64
-		dhcp      int64
-		tapSwIf   int64
-		bviSwIf   int64
-		createdAt int64
-		updatedAt int64
+		network      Network
+		bdID         int64
+		dhcp         int64
+		tapSwIf      int64
+		bviSwIf      int64
+		vnfMemif     int64
+		routeTableID int64
+		createdAt    int64
+		updatedAt    int64
 	)
 	if err := s.Scan(
 		&network.ID, &network.Name, &bdID, &network.InterfaceCount,
 		&dhcp, &network.DHCPGateway, &network.DHCPRangeStart, &network.DHCPRangeEnd,
 		&network.DHCPDNS, &tapSwIf, &network.DHCPTapHostName,
 		&network.BVIHostName, &bviSwIf, &network.IPv4Gateway,
-		&createdAt, &updatedAt,
+		&network.VNFTransport, &network.VNFMemifSocket, &vnfMemif,
+		&network.VNFMemifHostName, &network.IPv4CIDR, &network.IPv6CIDR,
+		&routeTableID, &createdAt, &updatedAt,
 	); err != nil {
 		return Network{}, err
 	}
@@ -1744,6 +1843,8 @@ func scanNetwork(s scanner) (Network, error) {
 	network.DHCPEnabled = dhcp != 0
 	network.DHCPTapSwIfIndex = uint32(tapSwIf)
 	network.BVISwIfIndex = uint32(bviSwIf)
+	network.VNFMemifSwIfIndex = uint32(vnfMemif)
+	network.RouteTableID = uint32(routeTableID)
 	network.CreatedAt = time.UnixMilli(createdAt).UTC()
 	network.UpdatedAt = time.UnixMilli(updatedAt).UTC()
 	return network, nil

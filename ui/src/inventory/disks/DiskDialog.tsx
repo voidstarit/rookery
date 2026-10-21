@@ -9,7 +9,7 @@ type DiskDialogProps = {
   onSaved: (disk: Disk) => void;
 };
 
-const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._-]*";
+const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
 export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProps) {
   const defaultBackend = backends.find((item) => item.name === "default") || backends[0];

@@ -688,6 +688,8 @@ type RouteTable struct {
 	RouteCount     int64                  `protobuf:"varint,7,opt,name=route_count,json=routeCount,proto3" json:"route_count,omitempty"`
 	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	NetworkId      int64                  `protobuf:"varint,10,opt,name=network_id,json=networkId,proto3" json:"network_id,omitempty"`
+	Managed        bool                   `protobuf:"varint,11,opt,name=managed,proto3" json:"managed,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -783,6 +785,20 @@ func (x *RouteTable) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *RouteTable) GetNetworkId() int64 {
+	if x != nil {
+		return x.NetworkId
+	}
+	return 0
+}
+
+func (x *RouteTable) GetManaged() bool {
+	if x != nil {
+		return x.Managed
+	}
+	return false
 }
 
 type ListRouteTablesRequest struct {
@@ -1099,7 +1115,7 @@ const file_rookery_v1_route_table_proto_rawDesc = "" +
 	"preferenceB\x0f\n" +
 	"\r_interface_id\"-\n" +
 	"\x12DeleteRouteRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\xbe\x02\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\xf7\x02\n" +
 	"\n" +
 	"RouteTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
@@ -1114,7 +1130,11 @@ const file_rookery_v1_route_table_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x18\n" +
+	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x1d\n" +
+	"\n" +
+	"network_id\x18\n" +
+	" \x01(\x03R\tnetworkId\x12\x18\n" +
+	"\amanaged\x18\v \x01(\bR\amanaged\"\x18\n" +
 	"\x16ListRouteTablesRequest\"T\n" +
 	"\x17ListRouteTablesResponse\x129\n" +
 	"\froute_tables\x18\x01 \x03(\v2\x16.rookery.v1.RouteTableR\vrouteTables\"\x8f\x01\n" +

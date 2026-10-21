@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -19,7 +20,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	HostService_ListHostInterfaces_FullMethodName = "/rookery.v1.HostService/ListHostInterfaces"
+	HostService_ListHostInterfaces_FullMethodName  = "/rookery.v1.HostService/ListHostInterfaces"
+	HostService_AttachHostInterface_FullMethodName = "/rookery.v1.HostService/AttachHostInterface"
+	HostService_DetachHostInterface_FullMethodName = "/rookery.v1.HostService/DetachHostInterface"
 )
 
 // HostServiceClient is the client API for HostService service.
@@ -29,6 +32,12 @@ const (
 // HostService exposes Linux host network information used by network functions.
 type HostServiceClient interface {
 	ListHostInterfaces(ctx context.Context, in *ListHostInterfacesRequest, opts ...grpc.CallOption) (*ListHostInterfacesResponse, error)
+	// AttachHostInterface takes over a host NIC into VPP and persists it so it
+	// is recreated after a VPP restart.
+	AttachHostInterface(ctx context.Context, in *AttachHostInterfaceRequest, opts ...grpc.CallOption) (*HostInterface, error)
+	// DetachHostInterface removes the VPP host-interface; the Linux NIC becomes
+	// available to the host again.
+	DetachHostInterface(ctx context.Context, in *DetachHostInterfaceRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type hostServiceClient struct {
@@ -49,6 +58,26 @@ func (c *hostServiceClient) ListHostInterfaces(ctx context.Context, in *ListHost
 	return out, nil
 }
 
+func (c *hostServiceClient) AttachHostInterface(ctx context.Context, in *AttachHostInterfaceRequest, opts ...grpc.CallOption) (*HostInterface, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HostInterface)
+	err := c.cc.Invoke(ctx, HostService_AttachHostInterface_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) DetachHostInterface(ctx context.Context, in *DetachHostInterfaceRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, HostService_DetachHostInterface_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HostServiceServer is the server API for HostService service.
 // All implementations must embed UnimplementedHostServiceServer
 // for forward compatibility.
@@ -56,6 +85,12 @@ func (c *hostServiceClient) ListHostInterfaces(ctx context.Context, in *ListHost
 // HostService exposes Linux host network information used by network functions.
 type HostServiceServer interface {
 	ListHostInterfaces(context.Context, *ListHostInterfacesRequest) (*ListHostInterfacesResponse, error)
+	// AttachHostInterface takes over a host NIC into VPP and persists it so it
+	// is recreated after a VPP restart.
+	AttachHostInterface(context.Context, *AttachHostInterfaceRequest) (*HostInterface, error)
+	// DetachHostInterface removes the VPP host-interface; the Linux NIC becomes
+	// available to the host again.
+	DetachHostInterface(context.Context, *DetachHostInterfaceRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedHostServiceServer()
 }
 
@@ -68,6 +103,12 @@ type UnimplementedHostServiceServer struct{}
 
 func (UnimplementedHostServiceServer) ListHostInterfaces(context.Context, *ListHostInterfacesRequest) (*ListHostInterfacesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListHostInterfaces not implemented")
+}
+func (UnimplementedHostServiceServer) AttachHostInterface(context.Context, *AttachHostInterfaceRequest) (*HostInterface, error) {
+	return nil, status.Error(codes.Unimplemented, "method AttachHostInterface not implemented")
+}
+func (UnimplementedHostServiceServer) DetachHostInterface(context.Context, *DetachHostInterfaceRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method DetachHostInterface not implemented")
 }
 func (UnimplementedHostServiceServer) mustEmbedUnimplementedHostServiceServer() {}
 func (UnimplementedHostServiceServer) testEmbeddedByValue()                     {}
@@ -108,6 +149,42 @@ func _HostService_ListHostInterfaces_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HostService_AttachHostInterface_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AttachHostInterfaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).AttachHostInterface(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostService_AttachHostInterface_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).AttachHostInterface(ctx, req.(*AttachHostInterfaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_DetachHostInterface_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DetachHostInterfaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).DetachHostInterface(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostService_DetachHostInterface_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).DetachHostInterface(ctx, req.(*DetachHostInterfaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // HostService_ServiceDesc is the grpc.ServiceDesc for HostService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -118,6 +195,14 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListHostInterfaces",
 			Handler:    _HostService_ListHostInterfaces_Handler,
+		},
+		{
+			MethodName: "AttachHostInterface",
+			Handler:    _HostService_AttachHostInterface_Handler,
+		},
+		{
+			MethodName: "DetachHostInterface",
+			Handler:    _HostService_DetachHostInterface_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -330,7 +331,7 @@ func (f *fakeNetworkProvisioner) DeleteVhostUser(_ context.Context, swIfIndex ui
 	return nil
 }
 
-func (f *fakeNetworkProvisioner) CreateTap(_ context.Context, hostName, _ string, _ uint32) (uint32, error) {
+func (f *fakeNetworkProvisioner) CreateTap(_ context.Context, hostName, _ string, _ uint32, _ uint32) (uint32, error) {
 	if f.createTapErr != nil {
 		return 0, f.createTapErr
 	}
@@ -354,6 +355,15 @@ func (f *fakeNetworkProvisioner) CreateMemif(_ context.Context, hostName, _ stri
 	return uint32(400 + len(f.createdMemifs)), nil
 }
 
+func (f *fakeNetworkProvisioner) EnsureMemif(ctx context.Context, hostName, socketPath string, ifID uint32, mac net.HardwareAddr, bdID uint32) (uint32, error) {
+	for i, name := range f.createdMemifs {
+		if name == hostName {
+			return uint32(400 + i + 1), nil
+		}
+	}
+	return f.CreateMemif(ctx, hostName, socketPath, ifID, mac, bdID)
+}
+
 func (f *fakeNetworkProvisioner) DeleteMemif(_ context.Context, swIfIndex uint32) error {
 	if f.deleteMemifErr != nil {
 		return f.deleteMemifErr
@@ -371,6 +381,20 @@ func (f *fakeNetworkProvisioner) DeleteRouteTable(_ context.Context, _ uint32, _
 }
 
 func (f *fakeNetworkProvisioner) SetInterfaceRouteTable(_ context.Context, _ uint32, _ bool, _ uint32) error {
+	return nil
+}
+func (f *fakeNetworkProvisioner) InterfaceRouteTable(_ context.Context, _ uint32, _ bool) (uint32, error) {
+	return 0, nil
+}
+
+func (f *fakeNetworkProvisioner) DelInterfaceIPv4(_ context.Context, _, _ string) error {
+	return nil
+}
+func (f *fakeNetworkProvisioner) EnsureHostInterface(_ context.Context, nic string) (string, error) {
+	return "host-" + nic, nil
+}
+
+func (f *fakeNetworkProvisioner) DeleteHostInterface(_ context.Context, _ string) error {
 	return nil
 }
 
@@ -443,6 +467,20 @@ func (f *fakeVNFManager) StartMemif(_ context.Context, vnf store.VNF, socketPath
 	return nil
 }
 
+func (f *fakeVNFManager) StartShared(_ context.Context, vnf store.VNF, socketPath string, _ uint32, address string) error {
+	if f.startErr != nil {
+		return f.startErr
+	}
+	if f.startFailures > 0 {
+		f.startFailures--
+		return errors.New("simulated VNF start failure")
+	}
+	f.running[vnf.ID] = true
+	f.started = append(f.started, vnf.ID)
+	f.startedHosts = append(f.startedHosts, socketPath+"@"+address)
+	return nil
+}
+
 func (f *fakeVNFManager) Stop(_ context.Context, vnfID int64, _ bool) error {
 	if f.stopErr != nil {
 		return f.stopErr
@@ -457,7 +495,7 @@ func (f *fakeVNFManager) ResetRuntime(_ context.Context) error {
 	return nil
 }
 
-func (f *fakeVNFManager) Running(vnfID int64) bool {
+func (f *fakeVNFManager) Running(_ context.Context, vnfID int64) bool {
 	return f.running[vnfID]
 }
 
@@ -498,6 +536,11 @@ func (f *fakeNAT44) EnsureBVI(_ context.Context, networkID int64, _ uint32) (str
 	if f.ensureErr != nil {
 		return "", 0, f.ensureErr
 	}
+	for i, id := range f.bvis {
+		if id == networkID {
+			return fmt.Sprintf("bvi%d", networkID), uint32(900 + i + 1), nil
+		}
+	}
 	f.bvis = append(f.bvis, networkID)
 	return fmt.Sprintf("bvi%d", networkID), uint32(900 + len(f.bvis)), nil
 }
@@ -517,7 +560,13 @@ func (f *fakeNAT44) bvisContain(networkID int64) bool {
 }
 
 func (f *fakeNAT44) AddInterfaceIPv4(_ context.Context, name, cidr string) error {
-	f.addedIPs = append(f.addedIPs, name+" "+cidr)
+	entry := name + " " + cidr
+	for _, existing := range f.addedIPs {
+		if existing == entry {
+			return nil
+		}
+	}
+	f.addedIPs = append(f.addedIPs, entry)
 	return nil
 }
 
@@ -709,6 +758,7 @@ func newTestAPIWithReadiness(t *testing.T, ready api.Readiness) *testAPI {
 		gateway.WithInterfaceCounters(networkProvisioner),
 		gateway.WithACLRuntime(networkProvisioner),
 		gateway.WithInterfaceRuntime(networkProvisioner),
+		gateway.WithHostWriter(networkProvisioner),
 		gateway.WithNetworkRuntime(networkProvisioner),
 		gateway.WithDiagnosticsRuntime(networkProvisioner),
 		gateway.WithVNFRuntime(vnfManager),
@@ -821,8 +871,15 @@ func createMediaAPI(t *testing.T, handler http.Handler, name string) store.Media
 
 func createNetworkAPI(t *testing.T, handler http.Handler, name string) store.Network {
 	t.Helper()
+	return createNetworkAPICIDR(t, handler, name, "10.20.0.0/24", "fd00:20::/64")
+}
 
-	recorder := do(t, handler, http.MethodPost, "/api/networks", map[string]any{"name": name})
+func createNetworkAPICIDR(t *testing.T, handler http.Handler, name, ipv4CIDR, ipv6CIDR string) store.Network {
+	t.Helper()
+
+	recorder := do(t, handler, http.MethodPost, "/api/networks", map[string]any{
+		"name": name, "ipv4_cidr": ipv4CIDR, "ipv6_cidr": ipv6CIDR,
+	})
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("create network %q status = %d, body = %s", name, recorder.Code, recorder.Body.String())
 	}
@@ -1055,13 +1112,62 @@ func TestCreateBGPConfig(t *testing.T) {
 		t.Fatalf("memif BGP password status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 
-	network2 := createNetworkAPI(t, env.handler, "bgp-tap-net")
+	network2 := createNetworkAPICIDR(t, env.handler, "bgp-tap-net", "10.99.0.0/24", "fd00:99::/64")
 	payload["name"] = "bgp-tap-password"
 	payload["network_id"] = network2.ID
 	payload["config"].(map[string]any)["transport"] = "tap"
 	recorder = do(t, env.handler, http.MethodPost, "/api/vnfs", payload)
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("tap BGP password status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestVNFDHCPv4SharedMemifLifecycle(t *testing.T) {
+	env := newTestAPI(t)
+	env.server.ConfigureMemifDHCP(true, t.TempDir())
+	handler := env.handler
+	network := createNetworkAPI(t, handler, "shared-net")
+
+	vnf := createVNFAPI(t, handler, "lab-dhcpv4-shared", network.ID, store.VNFTypeDHCPv4, true)
+	stored, err := env.store.GetVNF(context.Background(), vnf.ID)
+	if err != nil {
+		t.Fatalf("get stored vnf: %v", err)
+	}
+	if stored.Config.BindIP != "10.20.0.2/24" {
+		t.Fatalf("bind address = %q, want 10.20.0.2/24", stored.Config.BindIP)
+	}
+	if stored.MemifHostName != fmt.Sprintf("net%d-vnf", network.ID) {
+		t.Fatalf("memif host name = %q, want net%d-vnf", stored.MemifHostName, network.ID)
+	}
+	if stored.MemifSwIfIndex == 0 || stored.MemifSocket == "" {
+		t.Fatalf("stored VNF has no shared memif: %+v", stored)
+	}
+	if stored.TapHostName != "" || stored.TapSwIfIndex != 0 {
+		t.Fatalf("shared memif VNF should not create a tap: %+v", stored)
+	}
+	if len(env.networks.createdMemifs) != 1 || env.networks.createdMemifs[0] != stored.MemifHostName {
+		t.Fatalf("created memifs = %v, want %s", env.networks.createdMemifs, stored.MemifHostName)
+	}
+	if len(env.nat.bvis) != 1 || env.nat.bvis[0] != network.ID {
+		t.Fatalf("network BVIs = %v, want network %d", env.nat.bvis, network.ID)
+	}
+	if len(env.vnfs.startedHosts) != 1 || env.vnfs.startedHosts[0] != stored.MemifSocket+"@10.20.0.2/24" {
+		t.Fatalf("started hosts = %v, want shared socket + address", env.vnfs.startedHosts)
+	}
+	current, err := env.store.GetNetwork(context.Background(), network.ID)
+	if err != nil {
+		t.Fatalf("get network: %v", err)
+	}
+	if current.VNFMemifSocket != stored.MemifSocket || current.VNFMemifSwIfIndex != stored.MemifSwIfIndex {
+		t.Fatalf("network shared memif = %+v, want %s", current, stored.MemifSocket)
+	}
+
+	// Stopping the VNF must keep the network-owned shared memif.
+	if err := env.server.StopVNF(context.Background(), stored, false); err != nil {
+		t.Fatalf("stop VNF: %v", err)
+	}
+	if len(env.networks.deletedMemifs) != 0 {
+		t.Fatalf("shared memif deleted with VNF: %v", env.networks.deletedMemifs)
 	}
 }
 
@@ -1099,7 +1205,7 @@ func TestActivateBGPMemif(t *testing.T) {
 	if stored.MemifHostName != "bgp-memif" || stored.MemifSwIfIndex == 0 {
 		t.Fatalf("stored BGP VNF = %+v", stored)
 	}
-	if len(env.networks.createdMemifs) != 1 || env.networks.createdMemifs[0] != "bgp-memif" {
+	if !slices.Contains(env.networks.createdMemifs, "bgp-memif") {
 		t.Fatalf("created memifs = %+v", env.networks.createdMemifs)
 	}
 }
@@ -2056,6 +2162,9 @@ func TestVNFDHCPv4MemifLifecycle(t *testing.T) {
 	env.server.ConfigureMemifDHCP(true, t.TempDir())
 	handler := env.handler
 	network := createNetworkAPI(t, handler, "lab")
+	if _, err := env.store.SetNetworkVNFTransport(context.Background(), network.ID, "dedicated"); err != nil {
+		t.Fatalf("set network transport: %v", err)
+	}
 
 	vnf := createVNFAPI(t, handler, "lab-dhcpv4-memif", network.ID, store.VNFTypeDHCPv4, true)
 	stored, err := env.store.GetVNF(context.Background(), vnf.ID)
@@ -2071,7 +2180,7 @@ func TestVNFDHCPv4MemifLifecycle(t *testing.T) {
 	if stored.TapHostName != "" || stored.TapSwIfIndex != 0 {
 		t.Fatalf("memif VNF should not create a gateway tap: %+v", stored)
 	}
-	if len(env.networks.createdMemifs) != 1 || env.networks.createdMemifs[0] != stored.Name {
+	if !slices.Contains(env.networks.createdMemifs, stored.Name) {
 		t.Fatalf("created memifs = %v, want %s", env.networks.createdMemifs, stored.Name)
 	}
 	if len(env.networks.createdTaps) != 0 {
@@ -2657,7 +2766,7 @@ func TestRunInfrastructureReconcilerStartsEnabledVNFs(t *testing.T) {
 		close(done)
 	}()
 	deadline := time.Now().Add(5 * time.Second)
-	for !env.vnfs.Running(vnf.ID) && time.Now().Before(deadline) {
+	for !env.vnfs.Running(context.Background(), vnf.ID) && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	cancel()
@@ -2666,7 +2775,7 @@ func TestRunInfrastructureReconcilerStartsEnabledVNFs(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("VNF reconciler did not stop")
 	}
-	if !env.vnfs.Running(vnf.ID) {
+	if !env.vnfs.Running(context.Background(), vnf.ID) {
 		t.Fatal("enabled VNF was not started by the reconciler")
 	}
 	foundBD := false
@@ -2720,7 +2829,7 @@ func TestReconcileRecreatesUnusableTap(t *testing.T) {
 	if got.TapHostName != fmt.Sprintf("vnf%d", vnf.ID) || got.TapSwIfIndex == 0 {
 		t.Fatalf("vnf after recreation = %+v", got)
 	}
-	if !env.vnfs.Running(vnf.ID) {
+	if !env.vnfs.Running(context.Background(), vnf.ID) {
 		t.Fatal("recreated VNF is not running")
 	}
 }
@@ -2750,6 +2859,30 @@ func TestReconcileVhostUsersUpdatesRuntimeMetadata(t *testing.T) {
 	}
 	if got.SwIfIndex != 501 || got.SocketPath != "/run/vpp/vm-reconcile.sock" {
 		t.Fatalf("reconciled interface = %+v", got)
+	}
+}
+
+func TestReconcileHostInterfaceRecords(t *testing.T) {
+	env := newTestAPI(t)
+	ctx := context.Background()
+	if _, err := env.store.UpsertHostInterfaceRecord(ctx, store.HostInterfaceRecord{
+		NIC: "enp1s0", VPPName: "host-enp1s0", Purpose: "manual",
+	}); err != nil {
+		t.Fatalf("seed host interface: %v", err)
+	}
+	env.networks.vppInterfaces = []host.VPPInterface{{Name: "host-enp1s0", SwIfIndex: 77, Up: true}}
+	if err := env.server.ReconcileHostInterfaces(ctx); err != nil {
+		t.Fatalf("reconcile host interfaces: %v", err)
+	}
+	if !slices.Contains(env.nat.hostIfs, "enp1s0") {
+		t.Fatalf("host interfaces ensured = %v, want enp1s0", env.nat.hostIfs)
+	}
+	record, err := env.store.GetHostInterfaceRecord(ctx, "enp1s0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.SwIfIndex != 77 {
+		t.Fatalf("sw_if_index = %d, want 77", record.SwIfIndex)
 	}
 }
 
@@ -2807,8 +2940,10 @@ func TestNAT44VNFAndDHCPIntegration(t *testing.T) {
 	if gotDHCP.Config.BindIP != "10.20.0.2/24" || gotDHCP.Config.Gateway != "10.20.0.1/24" {
 		t.Fatalf("DHCP VNF after NAT = %+v", gotDHCP.Config)
 	}
-	if len(env.vnfs.stopped) == 0 || len(env.vnfs.started) < 2 {
-		t.Fatalf("DHCP VNF was not restarted: stopped=%v started=%v", env.vnfs.stopped, env.vnfs.started)
+	// The DHCP VNF was already configured from the network gateway/BVI when
+	// it was created, so applying NAT must not restart it.
+	if len(env.vnfs.stopped) != 0 || len(env.vnfs.started) != 1 {
+		t.Fatalf("DHCP VNF restart state: stopped=%v started=%v", env.vnfs.stopped, env.vnfs.started)
 	}
 
 	env.nat.sessions = []string{"udp 10.20.0.100:1234 -> 198.51.100.10:1234 -> 1.1.1.1:53"}
@@ -2893,8 +3028,8 @@ func TestNAT44DeleteCleansUpFailedBVI(t *testing.T) {
 
 func TestNAT44OutsideFailureDoesNotLeaveBVI(t *testing.T) {
 	env := newTestAPI(t)
-	env.nat.ensureErr = errors.New("outside NIC unavailable")
 	network := createNetworkAPI(t, env.handler, "nat-lab")
+	env.nat.ensureErr = errors.New("outside NIC unavailable")
 	recorder := do(t, env.handler, http.MethodPost, "/api/vnfs", map[string]any{
 		"name":       "nat44",
 		"network_id": network.ID,
@@ -2908,15 +3043,15 @@ func TestNAT44OutsideFailureDoesNotLeaveBVI(t *testing.T) {
 	if recorder.Code != http.StatusInternalServerError {
 		t.Fatalf("create nat44 status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
-	if len(env.nat.bvis) != 0 {
-		t.Fatalf("BVI was created before outside activation: %v", env.nat.bvis)
+	if len(env.nat.bvis) != 1 {
+		t.Fatalf("network-owned BVI was not preserved: %v", env.nat.bvis)
 	}
 	got, err := env.store.GetNetwork(context.Background(), network.ID)
 	if err != nil {
 		t.Fatalf("get network: %v", err)
 	}
-	if got.BVIHostName != "" || got.IPv4Gateway != "" {
-		t.Fatalf("failed activation left network BVI: %+v", got)
+	if got.BVIHostName == "" || got.IPv4Gateway == "" {
+		t.Fatalf("failed activation removed the network-owned BVI: %+v", got)
 	}
 }
 
@@ -2945,15 +3080,15 @@ func TestNAT44DNATFailureRollsBack(t *testing.T) {
 	if len(env.nat.applied) != 1 || len(env.nat.removed) != 1 {
 		t.Fatalf("NAT44 was not rolled back: applied=%v removed=%v", env.nat.applied, env.nat.removed)
 	}
-	if len(env.nat.deletedBVI) != 1 {
-		t.Fatalf("BVI was not rolled back: %v", env.nat.deletedBVI)
+	if len(env.nat.deletedBVI) != 0 {
+		t.Fatalf("network-owned BVI was deleted: %v", env.nat.deletedBVI)
 	}
 	got, err := env.store.GetNetwork(context.Background(), network.ID)
 	if err != nil {
 		t.Fatalf("get network: %v", err)
 	}
-	if got.BVIHostName != "" || got.IPv4Gateway != "" {
-		t.Fatalf("failed DNAT activation left network BVI: %+v", got)
+	if got.BVIHostName == "" || got.IPv4Gateway == "" {
+		t.Fatalf("failed DNAT activation removed the network BVI: %+v", got)
 	}
 	vnfs, err := env.store.ListVNFs(context.Background(), nil)
 	if err != nil {
@@ -3323,6 +3458,47 @@ func TestEditVMInterfaces(t *testing.T) {
 	}
 }
 
+func TestNetworkVRFsAppearInRouteTables(t *testing.T) {
+	env := newTestAPI(t)
+	network := createNetworkAPI(t, env.handler, "lab")
+	recorder := do(t, env.handler, http.MethodGet, "/api/route-tables", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("list route tables status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var tables []struct {
+		Name      string `json:"name"`
+		TableID   uint32 `json:"table_id"`
+		IPv6      bool   `json:"ipv6"`
+		NetworkID int64  `json:"network_id"`
+		Managed   bool   `json:"managed"`
+	}
+	tables = decode[[]struct {
+		Name      string `json:"name"`
+		TableID   uint32 `json:"table_id"`
+		IPv6      bool   `json:"ipv6"`
+		NetworkID int64  `json:"network_id"`
+		Managed   bool   `json:"managed"`
+	}](t, recorder)
+	wantTable := uint32(100000 + network.ID)
+	seenV4, seenV6 := false, false
+	for _, table := range tables {
+		if table.TableID != wantTable || table.NetworkID != network.ID {
+			continue
+		}
+		if !table.Managed {
+			t.Fatalf("network route table is not managed: %+v", table)
+		}
+		if table.IPv6 {
+			seenV6 = true
+		} else {
+			seenV4 = true
+		}
+	}
+	if !seenV4 || !seenV6 {
+		t.Fatalf("network route tables missing: v4=%v v6=%v tables=%+v", seenV4, seenV6, tables)
+	}
+}
+
 func TestNetworkInterfaceCRUD(t *testing.T) {
 	env := newTestAPI(t)
 	handler := env.handler
@@ -3335,7 +3511,7 @@ func TestNetworkInterfaceCRUD(t *testing.T) {
 		t.Fatalf("bridge domain calls = %v", env.networks.createdBDs)
 	}
 
-	recorder := do(t, handler, http.MethodPost, "/api/networks", map[string]any{"name": "LAB"})
+	recorder := do(t, handler, http.MethodPost, "/api/networks", map[string]any{"name": "LAB", "ipv4_cidr": "10.99.0.0/24", "ipv6_cidr": "fd00:99::/64"})
 	if recorder.Code != http.StatusConflict {
 		t.Fatalf("duplicate network status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
@@ -3496,7 +3672,7 @@ func TestNetworkInterfaceVPPFailures(t *testing.T) {
 	handler := env.handler
 
 	env.networks.createBDErr = errors.New("VPP unavailable")
-	recorder := do(t, handler, http.MethodPost, "/api/networks", map[string]any{"name": "lab"})
+	recorder := do(t, handler, http.MethodPost, "/api/networks", map[string]any{"name": "lab", "ipv4_cidr": "10.20.0.0/24", "ipv6_cidr": "fd00:20::/64"})
 	if recorder.Code != http.StatusInternalServerError {
 		t.Fatalf("create network failure status = %d, want 500", recorder.Code)
 	}
@@ -4047,7 +4223,7 @@ func TestCreateBlockedWhenNotReady(t *testing.T) {
 		t.Fatalf("disk create error = %q, want thin pool reason", payload.Error)
 	}
 
-	recorder = do(t, handler, http.MethodPost, "/api/networks", map[string]any{"name": "lab"})
+	recorder = do(t, handler, http.MethodPost, "/api/networks", map[string]any{"name": "lab", "ipv4_cidr": "10.20.0.0/24", "ipv6_cidr": "fd00:20::/64"})
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("network create status = %d, body = %s, want 503", recorder.Code, recorder.Body.String())
 	}

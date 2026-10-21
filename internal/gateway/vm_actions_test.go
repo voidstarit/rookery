@@ -160,3 +160,56 @@ func TestVMActionsAndMetrics(t *testing.T) {
 	_ = missing.Body.Close()
 
 }
+
+func TestStartVMRepairsStatusWhenQEMUIsAlreadyRunning(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "vm-actions-idempotent.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	backend, err := st.CreateStorageBackend(ctx, store.StorageBackend{
+		Name: "default", Driver: "lvm-thin", Config: store.StorageBackendConfig{VG: "vg0", ThinPool: "pool"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	disk, err := st.CreateDisk(ctx, store.Disk{
+		Name: "vm-disk", SizeGB: 10, VG: "vg0", ThinPool: "pool", StorageBackendID: &backend.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm, err := st.CreateVM(ctx, store.VM{
+		Name: "vm-idempotent", VCPUs: 2, MemoryMB: 1024, DiskIDs: []int64{disk.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	runtime := &fakeVMController{running: true}
+	gw, err := gateway.New(st, fakeReadiness{status: readiness.Status{Ready: true}}, gateway.WithVMController(runtime))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	server := httptest.NewServer(gw.Handler)
+	t.Cleanup(server.Close)
+
+	response, err := http.Post(server.URL+"/api/vms/"+vm.ID+"/start", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusConflict {
+		t.Fatalf("start status = %d, body = %s, want 409", response.StatusCode, readBody(t, response))
+	}
+	loaded, err := st.GetVM(ctx, vm.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Status != store.StatusRunning {
+		t.Fatalf("stored status = %q, want running", loaded.Status)
+	}
+}

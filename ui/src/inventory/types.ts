@@ -4,6 +4,8 @@ export type Network = {
   bridge_domain_id: number;
   bvi_host_name?: string;
   ipv4_gateway?: string;
+  ipv4_cidr?: string;
+  ipv6_cidr?: string;
   created_at?: string;
   updated_at?: string;
 };
@@ -177,6 +179,8 @@ export type RouteTable = {
   is_default?: boolean;
   interface_count?: number;
   route_count?: number;
+  network_id?: number;
+  managed?: boolean;
   created_at?: string;
   updated_at?: string;
 };
@@ -348,7 +352,7 @@ export type VNFConfig = {
   outside_gateway?: string;
   nat44_pool?: string;
   dnat_rules?: DNATRule[];
-  transport?: "memif" | "tap";
+  transport?: "shared" | "dedicated" | "tap" | "memif";
   local_as?: number;
   router_id?: string;
   peer_as?: number;
@@ -398,6 +402,7 @@ export type HostInterface = {
   vpp_name?: string;
   vpp_up?: boolean;
   vpp_type?: string;
+  managed?: boolean;
 };
 
 export type VNFLease = {

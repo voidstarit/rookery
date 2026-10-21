@@ -128,6 +128,12 @@ func (m *Network) validate(all bool) error {
 		}
 	}
 
+	// no validation rules for Ipv4Cidr
+
+	// no validation rules for Ipv6Cidr
+
+	// no validation rules for RouteTableId
+
 	if len(errors) > 0 {
 		return NetworkMultiError(errors)
 	}
@@ -593,6 +599,28 @@ func (m *CreateNetworkRequest) validate(all bool) error {
 		err := CreateNetworkRequestValidationError{
 			field:  "Name",
 			reason: "value does not match regex pattern \"^[A-Za-z0-9][A-Za-z0-9._-]*$\"",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetIpv4Cidr()) < 1 {
+		err := CreateNetworkRequestValidationError{
+			field:  "Ipv4Cidr",
+			reason: "value length must be at least 1 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetIpv6Cidr()) < 1 {
+		err := CreateNetworkRequestValidationError{
+			field:  "Ipv6Cidr",
+			reason: "value length must be at least 1 runes",
 		}
 		if !all {
 			return err
