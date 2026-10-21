@@ -159,7 +159,9 @@ type VNFConfig struct {
 	OutsideGateway    string                  `protobuf:"bytes,10,opt,name=outside_gateway,json=outsideGateway,proto3" json:"outside_gateway,omitempty"`
 	Nat44Pool         string                  `protobuf:"bytes,11,opt,name=nat44_pool,json=nat44Pool,proto3" json:"nat44_pool,omitempty"`
 	DnatRules         []*DNATRule             `protobuf:"bytes,12,rep,name=dnat_rules,json=dnatRules,proto3" json:"dnat_rules,omitempty"`
-	// BGP configuration. IPv4 unicast only for now.
+	// Transport override for DHCPv4: shared, dedicated, or tap. memif is a
+	// legacy alias for dedicated memif. Empty selects the network default.
+	// BGP supports tap and memif (dedicated) transport.
 	Transport         string   `protobuf:"bytes,13,opt,name=transport,proto3" json:"transport,omitempty"`
 	LocalAs           uint32   `protobuf:"varint,14,opt,name=local_as,json=localAs,proto3" json:"local_as,omitempty"`
 	RouterId          string   `protobuf:"bytes,15,opt,name=router_id,json=routerId,proto3" json:"router_id,omitempty"`
@@ -1415,7 +1417,7 @@ const file_rookery_v1_vnf_proto_rawDesc = "" +
 	"\rexternal_port\x18\x02 \x01(\x05B\v\xfaB\b\x1a\x06\x18\xff\xff\x03(\x01R\fexternalPort\x12\"\n" +
 	"\blocal_ip\x18\x03 \x01(\tB\a\xfaB\x04r\x02x\x01R\alocalIp\x12*\n" +
 	"\n" +
-	"local_port\x18\x04 \x01(\x05B\v\xfaB\b\x1a\x06\x18\xff\xff\x03(\x01R\tlocalPort\"\xae\b\n" +
+	"local_port\x18\x04 \x01(\x05B\v\xfaB\b\x1a\x06\x18\xff\xff\x03(\x01R\tlocalPort\"\xc1\b\n" +
 	"\tVNFConfig\x12!\n" +
 	"\agateway\x18\x01 \x01(\tB\a\xfaB\x04r\x02\x18@R\agateway\x12(\n" +
 	"\vrange_start\x18\x02 \x01(\tB\a\xfaB\x04r\x02\x18@R\n" +
@@ -1433,8 +1435,8 @@ const file_rookery_v1_vnf_proto_rawDesc = "" +
 	"\n" +
 	"nat44_pool\x18\v \x01(\tB\b\xfaB\x05r\x03\x18\x80\x01R\tnat44Pool\x12>\n" +
 	"\n" +
-	"dnat_rules\x18\f \x03(\v2\x14.rookery.v1.DNATRuleB\t\xfaB\x06\x92\x01\x03\x10\x80\x02R\tdnatRules\x121\n" +
-	"\ttransport\x18\r \x01(\tB\x13\xfaB\x10r\x0eR\x00R\x05memifR\x03tapR\ttransport\x12\x19\n" +
+	"dnat_rules\x18\f \x03(\v2\x14.rookery.v1.DNATRuleB\t\xfaB\x06\x92\x01\x03\x10\x80\x02R\tdnatRules\x12D\n" +
+	"\ttransport\x18\r \x01(\tB&\xfaB#r!R\x00R\x05memifR\x03tapR\x06sharedR\tdedicatedR\ttransport\x12\x19\n" +
 	"\blocal_as\x18\x0e \x01(\rR\alocalAs\x12$\n" +
 	"\trouter_id\x18\x0f \x01(\tB\a\xfaB\x04r\x02\x18@R\brouterId\x12\x17\n" +
 	"\apeer_as\x18\x10 \x01(\rR\x06peerAs\x12 \n" +

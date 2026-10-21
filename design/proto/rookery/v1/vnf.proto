@@ -85,8 +85,10 @@ message VNFConfig {
   string nat44_pool = 11 [(validate.rules).string = {max_len: 128}];
   repeated DNATRule dnat_rules = 12 [(validate.rules).repeated = {max_items: 256}];
 
-  // BGP configuration. IPv4 unicast only for now.
-  string transport = 13 [(validate.rules).string = {in: ["", "memif", "tap"]}];
+  // Transport override for DHCPv4: shared, dedicated, or tap. memif is a
+  // legacy alias for dedicated memif. Empty selects the network default.
+  // BGP supports tap and memif (dedicated) transport.
+  string transport = 13 [(validate.rules).string = {in: ["", "memif", "tap", "shared", "dedicated"]}];
   uint32 local_as = 14;
   string router_id = 15 [(validate.rules).string = {max_len: 64}];
   uint32 peer_as = 16;

@@ -534,7 +534,7 @@ func (m *VNFConfig) validate(all bool) error {
 	if _, ok := _VNFConfig_Transport_InLookup[m.GetTransport()]; !ok {
 		err := VNFConfigValidationError{
 			field:  "Transport",
-			reason: "value must be in list [ memif tap]",
+			reason: "value must be in list [ memif tap shared dedicated]",
 		}
 		if !all {
 			return err
@@ -711,9 +711,11 @@ var _ interface {
 } = VNFConfigValidationError{}
 
 var _VNFConfig_Transport_InLookup = map[string]struct{}{
-	"":      {},
-	"memif": {},
-	"tap":   {},
+	"":          {},
+	"memif":     {},
+	"tap":       {},
+	"shared":    {},
+	"dedicated": {},
 }
 
 // Validate checks the field values on VNF with the rules defined in the proto

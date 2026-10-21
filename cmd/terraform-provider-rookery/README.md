@@ -82,7 +82,9 @@ replaced when changed. `rookery_route` is also immutable.
 `rookery_vnf.config_json` uses protobuf JSON. Write proto field names (for
 example `range_start`, `outside_interface`, `advertise_prefixes`) and use
 `jsonencode({...})`. The provider reads configuration back with proto field
-names.
+names. For DHCPv4, `transport` can be omitted (use the network default),
+`"shared"`, `"dedicated"`, or `"tap"`; `"memif"` is the legacy alias for a
+dedicated memif.
 
 ## Data sources
 
