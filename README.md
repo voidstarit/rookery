@@ -331,6 +331,71 @@ state. The server rechecks every 10 seconds. Run the server as root or as a user
 with permission to run `lvcreate`/`lvremove`, start QEMU, access `/dev/kvm`, and
 access the VPP socket; disk creation and deletion operate on the host.
 
+### Public mTLS API
+
+`serve` starts two public mTLS listeners for API clients:
+
+- `-mtls-addr` (default `:8443`, env `ROOKERY_MTLS_ADDR`) serves the generated
+  HTTPS gateway API.
+- `-grpc-mtls-addr` (default `:9443`, env `ROOKERY_GRPC_MTLS_ADDR`) serves the
+  generated gRPC services, which is what the Terraform provider uses.
+
+Both require a client certificate signed by the server's CA. The UI, native
+routes, and certificate-management endpoints are not exposed on either
+listener. Set either address empty to disable that listener. Enabling either
+listener initializes the CA under `-pki-dir`; `serve` fails at startup if that
+directory cannot be created.
+
+The **Client certificates** item in the left sidebar (under **Access**) issues
+client certificates:
+
+- Download the CA certificate once and distribute it to clients.
+- Issue a certificate for a client name; the client certificate, private key,
+  and CA are shown once and can be downloaded or copied. Rookery never stores
+  the private key.
+- Revoke certificates from the list; revocation is checked on every TLS
+  handshake (session tickets are disabled).
+
+The CA and server keys live under `-pki-dir` (default `/var/lib/rookery/pki`,
+env `ROOKERY_PKI_DIR`) with `0700`/`0600` permissions. Protect and back up that
+directory: losing the CA invalidates every issued client certificate and
+changes the certificate clients must trust.
+The server certificate is generated for `localhost`, the hostname, all host IP
+addresses, and any comma-separated `-mtls-sans` (env `ROOKERY_MTLS_SANS`)
+entries; add public DNS names or IPs there if clients connect through them.
+
+Example HTTPS client:
+
+```bash
+curl --cert client.crt --key client.key --cacert ca.crt \
+  https://api.example.com:8443/api/status
+```
+
+The local UI/API listener is still unauthenticated and should remain bound to
+localhost or sit behind an access-controlled proxy.
+
+### Terraform provider
+
+`cmd/terraform-provider-rookery/` implements a Terraform provider that creates
+Rookery resources over the public mTLS gRPC listener. It
+covers storage backends, disks, media, networks, interfaces, ACLs, route tables
+and routes, VNFs, VMs, and host-interface takeover. Matching data sources look
+up existing resources, and `rookery_status` exposes current readiness. Configure
+it with the CA, client certificate, and private key downloaded from the
+**Client certificates** dialog:
+
+```hcl
+provider "rookery" {
+  endpoint  = "api.example.com:9443"
+  ca_file   = "ca.crt"
+  cert_file = "client.crt"
+  key_file  = "client.key"
+}
+```
+
+See `cmd/terraform-provider-rookery/README.md` for the resource and data source
+list, local `dev_overrides` setup, import formats, and examples.
+
 ### Logging
 
 Both binaries log through `zerolog`. `-log-level` (`trace`, `debug`, `info`,
@@ -721,6 +786,10 @@ vhost-user netdevs for interfaces attached through Rookery Networks.
 | `-check-interval` | —                      | `10s`               | `serve`         | Readiness recheck interval |
 | `-dhcp-transport` | `ROOKERY_DHCP_TRANSPORT` | `memif`         | `serve`         | DHCP VNF transport: `memif` or `tap` (DHCPv4 only) |
 | `-gateway-addr`   | `ROOKERY_GATEWAY_ADDR` | —                 | `serve`         | Optional grpc-gateway HTTP listen address |
+| `-mtls-addr`      | `ROOKERY_MTLS_ADDR`    | `:8443`             | `serve`         | Public mTLS API listen address; empty disables |
+| `-mtls-sans`      | `ROOKERY_MTLS_SANS`    | —                   | `serve`         | Extra comma-separated DNS/IP SANs for the mTLS server certificate |
+| `-grpc-mtls-addr` | `ROOKERY_GRPC_MTLS_ADDR` | `:9443`            | `serve`         | Public mTLS gRPC listen address; empty disables |
+| `-pki-dir`        | `ROOKERY_PKI_DIR`      | `/var/lib/rookery/pki` | `serve`       | CA and server certificate directory |
 | `-grpc-addr`      | `ROOKERY_GRPC_ADDR`  | —                   | `serve`         | Optional gRPC listen address |
 | `-size`           | —                      | `100%FREE`          | `init`          | Thin pool size when creating |
 
@@ -1138,7 +1207,7 @@ make ui-install   # npm ci
 make ui-typecheck
 make ui-build     # typecheck + bundle
 make ui-watch     # rebuild while developing
-make build        # UI bundle + Go binary in bin/
+make build        # UI bundle + Go binaries in bin/
 make test         # UI build + go test ./...
 ```
 

@@ -283,7 +283,7 @@ func TestMigrationPreservesLegacyVMsWithoutDisks(t *testing.T) {
 	if err := st.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 24 {
-		t.Fatalf("schema version = %d, want 24", version)
+	if version != 25 {
+		t.Fatalf("schema version = %d, want 25", version)
 	}
 }

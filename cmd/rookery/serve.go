@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"flag"
 	"fmt"
@@ -21,6 +22,7 @@ import (
 	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/lifecycle"
 	"github.com/voidstarit/rookery/internal/logging"
+	"github.com/voidstarit/rookery/internal/pki"
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/readiness"
 	"github.com/voidstarit/rookery/internal/store"
@@ -46,6 +48,10 @@ func runServe(args []string) error {
 	vhostDir := fs.String("vhost-dir", envDefault("ROOKERY_VHOST_DIR", host.DefaultVhostDir), "directory for VPP vhost-user sockets")
 	logLevel := fs.String("log-level", envDefault("ROOKERY_LOG_LEVEL", "info"), "log level: trace, debug, info, warn, error")
 	logFormat := fs.String("log-format", envDefault("ROOKERY_LOG_FORMAT", "console"), "log format: console or json")
+	mtlsAddr := fs.String("mtls-addr", envDefault("ROOKERY_MTLS_ADDR", ":8443"), "public mTLS API listen address (empty disables)")
+	pkiDir := fs.String("pki-dir", envDefault("ROOKERY_PKI_DIR", "/var/lib/rookery/pki"), "directory for the mTLS CA and server certificate")
+	mtlsSANs := fs.String("mtls-sans", envDefault("ROOKERY_MTLS_SANS", ""), "comma-separated extra DNS/IP SANs for the mTLS server certificate")
+	grpcMTLSAddr := fs.String("grpc-mtls-addr", envDefault("ROOKERY_GRPC_MTLS_ADDR", ":9443"), "public mTLS gRPC listen address (empty disables)")
 
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(), "Usage: rookery serve [flags]\n\n"+
@@ -139,6 +145,20 @@ func runServe(args []string) error {
 	diskRunner := host.NewLVM()
 	apiServer := api.New(st, manager, diskRunner, qemuRunner, networkRunner, vnfClient, networkRunner, logger)
 	apiServer.ConfigureMemifDHCP(transport == "memif", *memifDir)
+	var pkiManager *pki.Manager
+	if strings.TrimSpace(*mtlsAddr) != "" || strings.TrimSpace(*grpcMTLSAddr) != "" {
+		extraSANs := make([]string, 0)
+		for _, san := range strings.Split(*mtlsSANs, ",") {
+			if san = strings.TrimSpace(san); san != "" {
+				extraSANs = append(extraSANs, san)
+			}
+		}
+		pkiManager, err = pki.New(*pkiDir, st, extraSANs, logger)
+		if err != nil {
+			return fmt.Errorf("prepare mTLS certificates: %w", err)
+		}
+		apiServer.ConfigurePKI(pkiManager)
+	}
 	lifecycleService := lifecycle.New(st, apiServer, apiServer.ResourceMutex())
 
 	gatewayOptions := []gateway.Option{
@@ -167,16 +187,44 @@ func runServe(args []string) error {
 		grpcListener = listener
 		gatewayOptions = append(gatewayOptions, gateway.WithGRPCListener(listener))
 	}
+	var grpcMTLSListener net.Listener
+	if pkiManager != nil && strings.TrimSpace(*grpcMTLSAddr) != "" {
+		listener, err := net.Listen("tcp", *grpcMTLSAddr)
+		if err != nil {
+			if grpcListener != nil {
+				_ = grpcListener.Close()
+			}
+			return fmt.Errorf("listen mTLS gRPC: %w", err)
+		}
+		grpcMTLSListener = tls.NewListener(listener, pkiManager.TLSConfig())
+		gatewayOptions = append(gatewayOptions, gateway.WithExtraGRPCListener(grpcMTLSListener))
+	}
 	gatewayRuntime, err := gateway.New(st, manager, gatewayOptions...)
 	if err != nil {
 		if grpcListener != nil {
 			_ = grpcListener.Close()
+		}
+		if grpcMTLSListener != nil {
+			_ = grpcMTLSListener.Close()
 		}
 		return fmt.Errorf("prepare grpc-gateway: %w", err)
 	}
 	defer gatewayRuntime.Close()
 	gatewayHandler := apiServer.LogRequests(api.SecurityHeaders(gatewayRuntime.Handler))
 	rateLimiter := api.NewPathRateLimiter(rateLimit)
+
+	var mtlsHTTP *http.Server
+	if pkiManager != nil && strings.TrimSpace(*mtlsAddr) != "" {
+		mtlsHTTP = &http.Server{
+			Addr:              *mtlsAddr,
+			Handler:           rateLimiter.Middleware(gatewayHandler),
+			TLSConfig:         pkiManager.TLSConfig(),
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       15 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       60 * time.Second,
+		}
+	}
 
 	var gatewayHTTP *http.Server
 	if *gatewayAddr != "" {
@@ -209,9 +257,16 @@ func runServe(args []string) error {
 	if gatewayHTTP != nil {
 		servers = append(servers, gatewayHTTP)
 	}
+	if mtlsHTTP != nil {
+		servers = append(servers, mtlsHTTP)
+	}
 	serveErr := make(chan error, len(servers))
 	for _, server := range servers {
 		go func(server *http.Server) {
+			if server == mtlsHTTP {
+				serveErr <- server.ListenAndServeTLS("", "")
+				return
+			}
 			serveErr <- server.ListenAndServe()
 		}(server)
 	}
@@ -224,6 +279,9 @@ func runServe(args []string) error {
 		Str("addr", httpURL(*addr)).
 		Str("gateway_addr", *gatewayAddr).
 		Str("grpc_addr", grpcAddress).
+		Str("mtls_addr", *mtlsAddr).
+		Str("grpc_mtls_addr", *grpcMTLSAddr).
+		Str("pki_dir", *pkiDir).
 		Str("database", *dbPath).
 		Str("vg", vg).
 		Str("thin_pool", thinPool).
@@ -237,7 +295,7 @@ func runServe(args []string) error {
 		Float64("rate_limit_rps", rateLimit).
 		Str("rate_limit_scope", "path").
 		Str("dhcp_transport", transport).
-		Msg("nerds-vms API listening")
+		Msg("rookery API listening")
 
 	var runErr error
 	select {

@@ -13,7 +13,7 @@ func CutoverHandler(gateway, legacy http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
-		case strings.HasPrefix(path, "/api/troubleshoot/capture/files/"):
+		case strings.HasPrefix(path, "/api/troubleshoot/capture/files/"), strings.HasPrefix(path, "/api/pki/"):
 			legacy.ServeHTTP(w, r)
 		case strings.HasPrefix(path, "/ws/"), strings.HasPrefix(path, "/webshark"):
 			legacy.ServeHTTP(w, r)
@@ -35,6 +35,10 @@ func (s *Server) LogRequests(next http.Handler) http.Handler {
 func (s *Server) NativeHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ws/vms/{id}/vnc", s.handleVNCProxy)
+	mux.HandleFunc("GET /api/pki/ca", s.handlePKICA)
+	mux.HandleFunc("GET /api/pki/clients", s.handlePKIListClients)
+	mux.HandleFunc("POST /api/pki/clients", s.handlePKIIssueClient)
+	mux.HandleFunc("DELETE /api/pki/clients/{id}", s.handlePKIRevokeClient)
 	mux.HandleFunc("GET /api/troubleshoot/capture/files/{name}", s.handleDownloadPacketCapture)
 	mux.HandleFunc("DELETE /api/troubleshoot/capture/files/{name}", s.handleDeletePacketCapture)
 	mux.HandleFunc("GET /webshark/json", s.handleWebSharkJSON)

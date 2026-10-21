@@ -17,6 +17,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/voidstarit/rookery/internal/host"
+	"github.com/voidstarit/rookery/internal/pki"
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/readiness"
 	"github.com/voidstarit/rookery/internal/store"
@@ -120,6 +121,7 @@ type Server struct {
 	networks  NetworkProvisioner
 	vnfs      VNFManager
 	nat       NAT44Provisioner
+	pki       *pki.Manager
 	logger    zerolog.Logger
 	handler   http.Handler
 

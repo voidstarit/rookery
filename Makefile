@@ -4,6 +4,7 @@ STATIC_DIR := internal/webui/static
 BIN_DIR := bin
 API_BIN := $(BIN_DIR)/rookery
 VNF_BIN := $(BIN_DIR)/vnfs
+PROVIDER_BIN := $(BIN_DIR)/terraform-provider-rookery
 
 PROTOC ?= protoc
 PROTO_ROOT := design/proto
@@ -38,6 +39,7 @@ build: ui-build
 	mkdir -p $(BIN_DIR)
 	go build -o $(API_BIN) ./cmd/rookery
 	go build -o $(VNF_BIN) ./cmd/vnfs
+	go build -o $(PROVIDER_BIN) ./cmd/terraform-provider-rookery
 
 test: ui-build
 	go test ./...

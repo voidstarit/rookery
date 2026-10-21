@@ -38,32 +38,34 @@ type Readiness interface {
 type Gateway struct {
 	Handler http.Handler
 
-	server   *grpc.Server
-	conn     *grpc.ClientConn
-	listener net.Listener
+	server         *grpc.Server
+	conn           *grpc.ClientConn
+	listener       net.Listener
+	extraListeners []net.Listener
 }
 
 // Option customizes the gateway's gRPC listener.
 type Option func(*options)
 
 type options struct {
-	grpcListener      net.Listener
-	vmController      VMController
-	interfaceCounters InterfaceCounterSource
-	aclRuntime        ACLRuntime
-	diskProvisioner   DiskProvisioner
-	diskMutex         *sync.Mutex
-	vmMutex           *sync.Mutex
-	interfaceRuntime  InterfaceRuntime
-	diagnostics       DiagnosticsRuntime
-	networkRuntime    NetworkRuntime
-	networkWriter     NetworkWriter
-	logger            zerolog.Logger
-	vppInterfaces     VPPInterfaceSource
-	hostWriter        HostWriter
-	vnfRuntime        VNFRuntime
-	vnfStatusProvider VNFStatusProvider
-	vnfWriter         VNFWriter
+	grpcListener       net.Listener
+	grpcExtraListeners []net.Listener
+	vmController       VMController
+	interfaceCounters  InterfaceCounterSource
+	aclRuntime         ACLRuntime
+	diskProvisioner    DiskProvisioner
+	diskMutex          *sync.Mutex
+	vmMutex            *sync.Mutex
+	interfaceRuntime   InterfaceRuntime
+	diagnostics        DiagnosticsRuntime
+	networkRuntime     NetworkRuntime
+	networkWriter      NetworkWriter
+	logger             zerolog.Logger
+	vppInterfaces      VPPInterfaceSource
+	hostWriter         HostWriter
+	vnfRuntime         VNFRuntime
+	vnfStatusProvider  VNFStatusProvider
+	vnfWriter          VNFWriter
 }
 
 // WithGRPCListener exposes the generated gRPC server on listener instead of an
@@ -71,6 +73,18 @@ type options struct {
 func WithGRPCListener(listener net.Listener) Option {
 	return func(opts *options) {
 		opts.grpcListener = listener
+	}
+}
+
+// WithExtraGRPCListener additionally serves the same gRPC services on another
+// listener, for example a TLS listener that requires client certificates. The
+// HTTP gateway continues to dial the primary listener (or the in-process
+// bufconn listener when no primary listener is configured).
+func WithExtraGRPCListener(listener net.Listener) Option {
+	return func(opts *options) {
+		if listener != nil {
+			opts.grpcExtraListeners = append(opts.grpcExtraListeners, listener)
+		}
 	}
 }
 
@@ -241,6 +255,11 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	go func() {
 		_ = server.Serve(listener)
 	}()
+	for _, extra := range options.grpcExtraListeners {
+		go func(listener net.Listener) {
+			_ = server.Serve(listener)
+		}(extra)
+	}
 
 	dialTarget := listener.Addr().String()
 	dialOptions := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
@@ -254,6 +273,9 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	if err != nil {
 		server.Stop()
 		_ = listener.Close()
+		for _, extra := range options.grpcExtraListeners {
+			_ = extra.Close()
+		}
 		return nil, err
 	}
 
@@ -284,11 +306,17 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 			_ = conn.Close()
 			server.Stop()
 			_ = listener.Close()
+			for _, extra := range options.grpcExtraListeners {
+				_ = extra.Close()
+			}
 			return nil, err
 		}
 	}
 
-	return &Gateway{Handler: mux, server: server, conn: conn, listener: listener}, nil
+	return &Gateway{
+		Handler: mux, server: server, conn: conn,
+		listener: listener, extraListeners: options.grpcExtraListeners,
+	}, nil
 }
 
 // GRPCAddress returns the address of the exposed gRPC listener.
@@ -312,6 +340,9 @@ func (g *Gateway) Close() {
 	}
 	if g.listener != nil {
 		_ = g.listener.Close()
+	}
+	for _, listener := range g.extraListeners {
+		_ = listener.Close()
 	}
 }
 

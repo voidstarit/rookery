@@ -11,3 +11,13 @@
 # UI dependencies and typecheck cache
 /ui/node_modules/
 /ui/*.tsbuildinfo
+
+# Terraform provider build output and local state
+/terraform-provider-rookery
+/cmd/terraform-provider-rookery/terraform-provider-rookery
+/cmd/terraform-provider-rookery/**/.terraform/
+/cmd/terraform-provider-rookery/**/*.tfstate
+/cmd/terraform-provider-rookery/**/*.tfstate.*
+
+# Local Terraform provider test credentials
+/cmd/terraform-provider-rookery/examples/msd/
