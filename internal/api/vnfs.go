@@ -59,6 +59,7 @@ type vnfConfigPayload struct {
 	Passive           bool     `json:"passive"`
 	TargetTableID     uint32   `json:"target_table_id"`
 	AdvertisePrefixes []string `json:"advertise_prefixes"`
+	NextHop           string   `json:"next_hop"`
 }
 
 type dhcpStaticAssignmentPayload struct {
@@ -845,26 +846,36 @@ func normalizeBGPConfig(p vnfConfigPayload) (store.VNFConfig, error) {
 		return store.VNFConfig{}, errors.New("config.router_id must be an IPv4 address")
 	}
 	localIP, localNet, err := net.ParseCIDR(strings.TrimSpace(p.LocalIP))
-	if err != nil || localIP.To4() == nil {
-		return store.VNFConfig{}, errors.New("config.local_ip must be an IPv4 CIDR")
+	if err != nil || localIP == nil {
+		return store.VNFConfig{}, errors.New("config.local_ip must be an IPv4 or IPv6 CIDR")
 	}
-	local4 := localIP.To4()
+	ipv6 := localIP.To4() == nil
 	ones, bits := localNet.Mask.Size()
-	if bits != 32 || ones > 32 {
-		return store.VNFConfig{}, errors.New("config.local_ip must be an IPv4 CIDR")
+	if (ipv6 && bits != 128) || (!ipv6 && bits != 32) || ones > bits {
+		return store.VNFConfig{}, errors.New("config.local_ip must be an IPv4 or IPv6 CIDR")
 	}
-	peerIP := net.ParseIP(strings.TrimSpace(p.PeerIP)).To4()
-	if peerIP == nil {
-		return store.VNFConfig{}, errors.New("config.peer_ip must be an IPv4 address")
+	local := localIP
+	if !ipv6 {
+		local = localIP.To4()
 	}
-	if peerIP.Equal(local4) {
+	peerIP := net.ParseIP(strings.TrimSpace(p.PeerIP))
+	if peerIP == nil || (peerIP.To4() == nil) != ipv6 {
+		return store.VNFConfig{}, errors.New("config.peer_ip must use the same address family as config.local_ip")
+	}
+	if !ipv6 {
+		peerIP = peerIP.To4()
+	}
+	if peerIP.Equal(local) {
 		return store.VNFConfig{}, errors.New("config.peer_ip cannot equal config.local_ip")
 	}
 	peerGateway := strings.TrimSpace(p.PeerGateway)
 	if peerGateway != "" {
-		gw := net.ParseIP(peerGateway).To4()
-		if gw == nil {
-			return store.VNFConfig{}, errors.New("config.peer_gateway must be an IPv4 address")
+		gw := net.ParseIP(peerGateway)
+		if gw == nil || (gw.To4() == nil) != ipv6 {
+			return store.VNFConfig{}, errors.New("config.peer_gateway must use the same address family as config.local_ip")
+		}
+		if !ipv6 {
+			gw = gw.To4()
 		}
 		if !localNet.Contains(gw) {
 			return store.VNFConfig{}, errors.New("config.peer_gateway must be inside config.local_ip subnet")
@@ -875,7 +886,7 @@ func normalizeBGPConfig(p vnfConfigPayload) (store.VNFConfig, error) {
 	}
 	ttl := p.MultihopTTL
 	if ttl == 0 {
-		ttl = 1
+		ttl = 64
 	}
 	if ttl > 255 {
 		return store.VNFConfig{}, errors.New("config.multihop_ttl must be between 1 and 255")
@@ -884,6 +895,17 @@ func normalizeBGPConfig(p vnfConfigPayload) (store.VNFConfig, error) {
 	if password != "" && transport == "memif" {
 		return store.VNFConfig{}, errors.New("BGP TCP MD5 password requires tap transport")
 	}
+	nextHop := ""
+	if value := strings.TrimSpace(p.NextHop); value != "" {
+		ip := net.ParseIP(value)
+		if ip == nil || (ip.To4() == nil) != ipv6 {
+			return store.VNFConfig{}, errors.New("config.next_hop must use the same address family as config.local_ip")
+		}
+		if !ipv6 {
+			ip = ip.To4()
+		}
+		nextHop = ip.String()
+	}
 	if len(p.AdvertisePrefixes) > 1024 {
 		return store.VNFConfig{}, errors.New("config.advertise_prefixes can contain at most 1024 prefixes")
 	}
@@ -891,8 +913,8 @@ func normalizeBGPConfig(p vnfConfigPayload) (store.VNFConfig, error) {
 	seen := make(map[string]bool, len(p.AdvertisePrefixes))
 	for i, value := range p.AdvertisePrefixes {
 		ip, network, err := net.ParseCIDR(strings.TrimSpace(value))
-		if err != nil || ip.To4() == nil {
-			return store.VNFConfig{}, fmt.Errorf("config.advertise_prefixes[%d] must be an IPv4 CIDR", i)
+		if err != nil || ip == nil || (ip.To4() == nil) != ipv6 {
+			return store.VNFConfig{}, fmt.Errorf("config.advertise_prefixes[%d] must match the local_ip address family", i)
 		}
 		prefix := network.String()
 		if seen[prefix] {
@@ -907,12 +929,13 @@ func normalizeBGPConfig(p vnfConfigPayload) (store.VNFConfig, error) {
 		RouterID:          routerID.String(),
 		PeerAS:            p.PeerAS,
 		PeerIP:            peerIP.String(),
-		LocalIP:           fmt.Sprintf("%s/%d", local4.String(), ones),
+		LocalIP:           fmt.Sprintf("%s/%d", local.String(), ones),
 		PeerGateway:       peerGateway,
 		MultihopTTL:       ttl,
 		Password:          password,
 		Passive:           p.Passive,
 		TargetTableID:     p.TargetTableID,
 		AdvertisePrefixes: prefixes,
+		NextHop:           nextHop,
 	}, nil
 }

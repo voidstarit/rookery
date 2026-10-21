@@ -172,8 +172,11 @@ type VNFConfig struct {
 	Passive           bool     `protobuf:"varint,22,opt,name=passive,proto3" json:"passive,omitempty"`
 	TargetTableId     uint32   `protobuf:"varint,23,opt,name=target_table_id,json=targetTableId,proto3" json:"target_table_id,omitempty"`
 	AdvertisePrefixes []string `protobuf:"bytes,24,rep,name=advertise_prefixes,json=advertisePrefixes,proto3" json:"advertise_prefixes,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// next_hop overrides the BGP NEXT_HOP for advertised prefixes. Empty means
+	// use local_ip. Must match the local_ip address family.
+	NextHop       string `protobuf:"bytes,25,opt,name=next_hop,json=nextHop,proto3" json:"next_hop,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *VNFConfig) Reset() {
@@ -372,6 +375,13 @@ func (x *VNFConfig) GetAdvertisePrefixes() []string {
 		return x.AdvertisePrefixes
 	}
 	return nil
+}
+
+func (x *VNFConfig) GetNextHop() string {
+	if x != nil {
+		return x.NextHop
+	}
+	return ""
 }
 
 type VNF struct {
@@ -1405,7 +1415,7 @@ const file_rookery_v1_vnf_proto_rawDesc = "" +
 	"\rexternal_port\x18\x02 \x01(\x05B\v\xfaB\b\x1a\x06\x18\xff\xff\x03(\x01R\fexternalPort\x12\"\n" +
 	"\blocal_ip\x18\x03 \x01(\tB\a\xfaB\x04r\x02x\x01R\alocalIp\x12*\n" +
 	"\n" +
-	"local_port\x18\x04 \x01(\x05B\v\xfaB\b\x1a\x06\x18\xff\xff\x03(\x01R\tlocalPort\"\x87\b\n" +
+	"local_port\x18\x04 \x01(\x05B\v\xfaB\b\x1a\x06\x18\xff\xff\x03(\x01R\tlocalPort\"\xae\b\n" +
 	"\tVNFConfig\x12!\n" +
 	"\agateway\x18\x01 \x01(\tB\a\xfaB\x04r\x02\x18@R\agateway\x12(\n" +
 	"\vrange_start\x18\x02 \x01(\tB\a\xfaB\x04r\x02\x18@R\n" +
@@ -1435,7 +1445,9 @@ const file_rookery_v1_vnf_proto_rawDesc = "" +
 	"\bpassword\x18\x15 \x01(\tB\b\xfaB\x05r\x03\x18\x80\x01R\bpassword\x12\x18\n" +
 	"\apassive\x18\x16 \x01(\bR\apassive\x12&\n" +
 	"\x0ftarget_table_id\x18\x17 \x01(\rR\rtargetTableId\x128\n" +
-	"\x12advertise_prefixes\x18\x18 \x03(\tB\t\xfaB\x06\x92\x01\x03\x10\x80\bR\x11advertisePrefixes\"\xe7\x03\n" +
+	"\x12advertise_prefixes\x18\x18 \x03(\tB\t\xfaB\x06\x92\x01\x03\x10\x80\bR\x11advertisePrefixes\x12%\n" +
+	"\bnext_hop\x18\x19 \x01(\tB\n" +
+	"\xfaB\ar\x05\x18@\xd0\x01\x01R\anextHop\"\xe7\x03\n" +
 	"\x03VNF\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +

@@ -476,13 +476,15 @@ one VNF of each type. Adding or editing a VNF opens a full page at `/vnfs/new`
 or `/vnfs/{id}/edit`, so refreshing keeps the form open; lease and session
 views remain dialogs.
 
-BGP VNFs are embedded GoBGP IPv4 speakers with one peer. Choose a `memif`
-transport for a gVisor userspace stack over VPP, or `tap` for kernel TCP. The
-configuration accepts local/peer ASNs, router ID, local IPv4 CIDR, peer IPv4,
-optional peer gateway, multihop TTL, passive mode, an optional TCP MD5 password
-(tap only), a raw target VPP table ID, and advertised IPv4 prefixes. Received
-best paths are installed in the target VPP table and withdrawn when the session
-or VNF stops. IPv6 is not implemented yet. DHCP VNFs each create a VPP tap (`vnf<id>`) in the network's
+BGP VNFs are embedded GoBGP speakers with one peer, using the address family of
+`local_ip` (IPv4 or IPv6 unicast). Choose a `memif` transport for a gVisor
+userspace stack over VPP, or `tap` for kernel TCP. The configuration accepts
+local/peer ASNs, router ID, local CIDR, peer address, optional peer gateway,
+an optional advertised next hop (defaults to `local_ip`), multihop TTL
+(default 64), passive mode, an optional TCP MD5 password (tap only), a raw
+target VPP table ID, and advertised prefixes matching the session family. Received best paths are installed in the target VPP table and withdrawn
+when the session or VNF stops; the BGP Status dialog shows the session state,
+advertised prefixes, and received prefixes with next hop and AS path. DHCP VNFs each create a VPP tap (`vnf<id>`) in the network's
 bridge domain, assign their configured address to the Linux tap, and run an
 in-process CoreDHCP server bound to that tap.
 

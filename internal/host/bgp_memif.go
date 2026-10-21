@@ -20,6 +20,7 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/link/ethernet"
 	"gvisor.dev/gvisor/pkg/tcpip/network/arp"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
+	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 
@@ -42,6 +43,7 @@ type bgpTCPProxy struct {
 	listener   net.Listener
 	stack      *stack.Stack
 	peerIP     net.IP
+	proto      tcpip.NetworkProtocolNumber
 	serverIP   string
 	serverPort int
 	active     bool
@@ -73,8 +75,8 @@ func (p *bgpTCPProxy) handle(ctx context.Context, conn net.Conn) {
 	if p.active {
 		remote, err = gonet.DialTCPWithBind(ctx, p.stack,
 			tcpip.FullAddress{NIC: 1},
-			tcpip.FullAddress{NIC: 1, Addr: tcpip.AddrFromSlice(p.peerIP.To4()), Port: 179},
-			header.IPv4ProtocolNumber)
+			tcpip.FullAddress{NIC: 1, Addr: tcpip.AddrFromSlice(p.peerIP), Port: 179},
+			p.proto)
 	} else {
 		remote, err = net.DialTimeout("tcp", net.JoinHostPort(p.serverIP, strconv.Itoa(p.serverPort)), 3*time.Second)
 	}
@@ -112,12 +114,38 @@ func startBGPMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID u
 		return nil, errors.New("memif socket path is required")
 	}
 	localIP, localNet, err := net.ParseCIDR(strings.TrimSpace(vnf.Config.LocalIP))
-	if err != nil || localIP.To4() == nil {
-		return nil, errors.New("BGP local_ip must be an IPv4 CIDR")
+	if err != nil || localIP == nil {
+		return nil, errors.New("BGP local_ip must be an IPv4 or IPv6 CIDR")
 	}
-	peerIP := net.ParseIP(strings.TrimSpace(vnf.Config.PeerIP)).To4()
-	if peerIP == nil {
-		return nil, errors.New("BGP peer_ip must be an IPv4 address")
+	isIPv6 := localIP.To4() == nil
+	peerIP := net.ParseIP(strings.TrimSpace(vnf.Config.PeerIP))
+	if peerIP == nil || (peerIP.To4() == nil) != isIPv6 {
+		return nil, errors.New("BGP peer_ip must match the local_ip address family")
+	}
+	if !isIPv6 {
+		peerIP = peerIP.To4()
+	}
+	gateway := net.ParseIP(strings.TrimSpace(vnf.Config.PeerGateway))
+	if gateway != nil && (gateway.To4() == nil) != isIPv6 {
+		return nil, errors.New("BGP peer_gateway must match the local_ip address family")
+	}
+	if !isIPv6 && gateway != nil {
+		gateway = gateway.To4()
+	}
+	nextHop := net.ParseIP(strings.TrimSpace(vnf.Config.NextHop))
+	if nextHop != nil && (nextHop.To4() == nil) != isIPv6 {
+		return nil, errors.New("BGP next_hop must match the local_ip address family")
+	}
+	if !isIPv6 && nextHop != nil {
+		nextHop = nextHop.To4()
+	}
+	local := localIP
+	networkProtocol := header.IPv6ProtocolNumber
+	emptySubnet := header.IPv6EmptySubnet
+	if !isIPv6 {
+		local = localIP.To4()
+		networkProtocol = header.IPv4ProtocolNumber
+		emptySubnet = header.IPv4EmptySubnet
 	}
 	prefixes, err := bgpPrefixes(vnf.Config.AdvertisePrefixes)
 	if err != nil {
@@ -125,7 +153,7 @@ func startBGPMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID u
 	}
 
 	s := stack.New(stack.Options{
-		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol, arp.NewProtocol},
+		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol, ipv6.NewProtocol, arp.NewProtocol},
 		TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol},
 	})
 	// The gVisor NIC needs its own MAC, distinct from the VPP memif master's
@@ -135,12 +163,11 @@ func startBGPMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID u
 	if err := s.CreateNIC(1, eth); err != nil {
 		return nil, fmt.Errorf("create BGP netstack NIC: %v", err)
 	}
-	local4 := localIP.To4()
 	ones, _ := localNet.Mask.Size()
 	if err := s.AddProtocolAddress(1, tcpip.ProtocolAddress{
-		Protocol: header.IPv4ProtocolNumber,
+		Protocol: networkProtocol,
 		AddressWithPrefix: tcpip.AddressWithPrefix{
-			Address:   tcpip.AddrFromSlice(local4),
+			Address:   tcpip.AddrFromSlice(local),
 			PrefixLen: ones,
 		},
 	}, stack.AddressProperties{}); err != nil {
@@ -152,13 +179,14 @@ func startBGPMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID u
 	}
 	ttlOption := tcpip.DefaultTTLOption(uint8(ttl))
 	_ = s.SetNetworkProtocolOption(ipv4.ProtocolNumber, &ttlOption)
+	_ = s.SetNetworkProtocolOption(ipv6.ProtocolNumber, &ttlOption)
 	// The default route is on-link unless a peer gateway is configured. With a
 	// gateway, ALL off-subnet traffic (the BGP session and ICMP echo replies to
 	// routed sources alike) goes through it, so ping answers survive a BVI hop
 	// just like the TCP session. Same-subnet destinations keep using the
 	// connected route for the local prefix.
-	routes := []tcpip.Route{{Destination: header.IPv4EmptySubnet, NIC: 1}}
-	if gateway := net.ParseIP(strings.TrimSpace(vnf.Config.PeerGateway)).To4(); gateway != nil {
+	routes := []tcpip.Route{{Destination: emptySubnet, NIC: 1}}
+	if gateway != nil {
 		routes[0].Gateway = tcpip.AddrFromSlice(gateway)
 	}
 	s.SetRouteTable(routes)
@@ -205,13 +233,14 @@ func startBGPMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID u
 
 	var proxy *bgpTCPProxy
 	if passive {
-		listener, err := gonet.ListenTCP(s, tcpip.FullAddress{NIC: 1, Port: 179}, header.IPv4ProtocolNumber)
+		listener, err := gonet.ListenTCP(s, tcpip.FullAddress{NIC: 1, Port: 179}, networkProtocol)
 		if err != nil {
 			runtime.Close(ctx)
 			return nil, fmt.Errorf("listen for BGP on memif: %v", err)
 		}
 		proxy = &bgpTCPProxy{
-			listener: listener, stack: s, serverIP: "127.0.0.1", serverPort: gobgpPort,
+			listener: listener, stack: s, proto: networkProtocol,
+			serverIP: "127.0.0.1", serverPort: gobgpPort,
 		}
 	} else {
 		listener, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(proxyPort)))
@@ -220,15 +249,15 @@ func startBGPMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID u
 			return nil, fmt.Errorf("listen for GoBGP proxy: %w", err)
 		}
 		proxy = &bgpTCPProxy{
-			listener: listener, stack: s, peerIP: peerIP, active: true,
+			listener: listener, stack: s, peerIP: peerIP, proto: networkProtocol, active: true,
 		}
 	}
 	runtime.proxy = proxy
 
 	cfg := bgpStartConfig{
-		VNF: vnf, LocalIP: local4, LocalNet: localNet, PeerIP: peerIP,
-		PeerGateway: net.ParseIP(strings.TrimSpace(vnf.Config.PeerGateway)).To4(),
-		LocalAS:     vnf.Config.LocalAS, PeerAS: vnf.Config.PeerAS, RouterID: vnf.Config.RouterID,
+		VNF: vnf, LocalIP: local, LocalNet: localNet, PeerIP: peerIP,
+		PeerGateway: gateway, NextHop: nextHop,
+		LocalAS: vnf.Config.LocalAS, PeerAS: vnf.Config.PeerAS, RouterID: vnf.Config.RouterID,
 		Password: "", Passive: passive, MultihopTTL: uint8(ttl),
 		TargetTableID: vnf.Config.TargetTableID, Advertise: prefixes, RouteWriter: routeWriter,
 		Neighbor: "127.0.0.1",

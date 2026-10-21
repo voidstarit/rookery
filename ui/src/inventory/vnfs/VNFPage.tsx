@@ -42,6 +42,7 @@ type FormState = {
   peerIP: string;
   localIP: string;
   peerGateway: string;
+  nextHop: string;
   multihopTTL: string;
   password: string;
   passive: boolean;
@@ -79,6 +80,7 @@ function defaultForm(vnf: VNF | null, networks: Network[], vppReady: boolean, in
     peerIP: config.peer_ip ?? "169.254.0.2",
     localIP: config.local_ip ?? "169.254.0.1/30",
     peerGateway: config.peer_gateway ?? "",
+    nextHop: config.next_hop ?? "",
     multihopTTL: String(config.multihop_ttl ?? 1),
     password: config.password ?? "",
     passive: config.passive ?? false,
@@ -99,6 +101,7 @@ function applyTypeDefaults(state: FormState, type: VNFType): FormState {
       peerIP: "169.254.0.2",
       localIP: "169.254.0.1/30",
       peerGateway: "",
+      nextHop: "",
       multihopTTL: "1",
       password: "",
       passive: false,
@@ -156,7 +159,7 @@ function outsideInterfaceHint(interfaces: HostInterface[], selected: string): st
 
 function typeHint(type: VNFType): string {
   if (type === "bgp") {
-    return "Embedded IPv4 BGP speaker. Select memif for userspace/gVisor or tap for kernel TCP with TCP MD5 support.";
+    return "Embedded IPv4/IPv6 BGP speaker. Select memif for userspace/gVisor or tap for kernel TCP with TCP MD5 support.";
   }
   if (type === "nat44") {
     return "IPv4 NAT44 gateway. A dedicated network BVI owns the gateway; the outside NIC is taken over by VPP.";
@@ -264,6 +267,7 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
           peer_ip: form.peerIP.trim(),
           local_ip: form.localIP.trim(),
           peer_gateway: form.peerGateway.trim(),
+          next_hop: form.nextHop.trim(),
           multihop_ttl: Number(form.multihopTTL),
           password: form.transport === "tap" ? form.password : "",
           passive: form.passive,
@@ -653,7 +657,7 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                 />
               </label>
               <label class="field">
-                <span class="field-label">Peer IPv4 address</span>
+                <span class="field-label">Peer IPv4/IPv6 address</span>
                 <input
                   type="text"
                   required
@@ -664,7 +668,7 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                 />
               </label>
               <label class="field">
-                <span class="field-label">Local IPv4 CIDR</span>
+                <span class="field-label">Local IPv4/IPv6 CIDR</span>
                 <input
                   type="text"
                   required
@@ -682,6 +686,16 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                   autocomplete="off"
                   value={form.peerGateway}
                   onInput={(event) => update("peerGateway", event.currentTarget.value)}
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">Advertised next hop <em>optional</em></span>
+                <input
+                  type="text"
+                  placeholder="defaults to local_ip"
+                  autocomplete="off"
+                  value={form.nextHop}
+                  onInput={(event) => update("nextHop", event.currentTarget.value)}
                 />
               </label>
               <label class="field">

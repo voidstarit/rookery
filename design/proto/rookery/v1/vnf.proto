@@ -98,6 +98,9 @@ message VNFConfig {
   bool passive = 22;
   uint32 target_table_id = 23;
   repeated string advertise_prefixes = 24 [(validate.rules).repeated = {max_items: 1024}];
+  // next_hop overrides the BGP NEXT_HOP for advertised prefixes. Empty means
+  // use local_ip. Must match the local_ip address family.
+  string next_hop = 25 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
 }
 
 message VNF {

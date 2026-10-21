@@ -35,6 +35,7 @@ type bgpStartConfig struct {
 	LocalNet      *net.IPNet
 	PeerIP        net.IP
 	PeerGateway   net.IP
+	NextHop       net.IP
 	LocalAS       uint32
 	PeerAS        uint32
 	RouterID      string
@@ -69,12 +70,67 @@ type bgpInstance struct {
 	closeOnce     sync.Once
 }
 
-// BGPReceivedPrefix is a received IPv4 unicast prefix with its next hop and
-// AS path.
+// BGPReceivedPrefix is a received unicast prefix with its next hop and AS path.
 type BGPReceivedPrefix struct {
 	Prefix  string
 	NextHop string
 	ASPath  []uint32
+}
+
+// bgpIsIPv6 reports whether the address belongs to the IPv6 family.
+func bgpIsIPv6(ip net.IP) bool { return ip != nil && ip.To4() == nil }
+
+// bgpAFI returns the GoBGP AFI for an address family.
+func bgpAFI(ip net.IP) api.Family_Afi {
+	if bgpIsIPv6(ip) {
+		return api.Family_AFI_IP6
+	}
+	return api.Family_AFI_IP
+}
+
+// bgpPathPrefix extracts the printable prefix from a native path NLRI.
+func bgpPathPrefix(path *api.Path) (string, bool) {
+	nlri, err := apiutil.GetNativeNlri(path)
+	if err != nil {
+		return "", false
+	}
+	switch value := nlri.(type) {
+	case *bgp.IPAddrPrefix:
+		return value.String(), true
+	case *bgp.IPv6AddrPrefix:
+		return value.String(), true
+	}
+	return "", false
+}
+
+// bgpPathNextHop extracts the IPv4 or IPv6 next hop from path attributes.
+func bgpPathNextHop(attrs []bgp.PathAttributeInterface) (string, bool) {
+	for _, attr := range attrs {
+		switch value := attr.(type) {
+		case *bgp.PathAttributeNextHop:
+			if value.Value != nil && !value.Value.IsUnspecified() {
+				return value.Value.String(), true
+			}
+		case *bgp.PathAttributeMpReachNLRI:
+			if value.Nexthop != nil && !value.Nexthop.IsUnspecified() {
+				return value.Nexthop.String(), true
+			}
+		}
+	}
+	return "", false
+}
+
+// bgpPathASPath extracts the flattened AS path from path attributes.
+func bgpPathASPath(attrs []bgp.PathAttributeInterface) []uint32 {
+	result := make([]uint32, 0, 4)
+	for _, attr := range attrs {
+		if value, ok := attr.(*bgp.PathAttributeAsPath); ok {
+			for _, segment := range value.Value {
+				result = append(result, segment.GetAS()...)
+			}
+		}
+	}
+	return result
 }
 
 // BGPStatus is a snapshot of a BGP VNF's session and routing state.
@@ -89,7 +145,7 @@ type BGPStatus struct {
 	Received     []BGPReceivedPrefix
 }
 
-// Status snapshots the GoBGP session state and IPv4 unicast RIB.
+// Status snapshots the GoBGP session state and IPv4/IPv6 unicast RIB.
 func (b *bgpInstance) Status(ctx context.Context) BGPStatus {
 	status := BGPStatus{
 		Running:     true,
@@ -108,55 +164,47 @@ func (b *bgpInstance) Status(ctx context.Context) BGPStatus {
 	}); err != nil {
 		slog.Warn("could not list BGP peers", "vnf_id", b.vnfID, "error", err)
 	}
-	err := b.server.ListPath(ctx, &api.ListPathRequest{
-		TableType: api.TableType_GLOBAL,
-		Family:    &api.Family{Afi: api.Family_AFI_IP, Safi: api.Family_SAFI_UNICAST},
-	}, func(destination *api.Destination) {
-		if destination == nil {
-			return
-		}
-		for _, path := range destination.Paths {
-			if path == nil || path.GetIsWithdraw() {
-				continue
+	families := []api.Family_Afi{api.Family_AFI_IP, api.Family_AFI_IP6}
+	for _, afi := range families {
+		err := b.server.ListPath(ctx, &api.ListPathRequest{
+			TableType: api.TableType_GLOBAL,
+			Family:    &api.Family{Afi: afi, Safi: api.Family_SAFI_UNICAST},
+		}, func(destination *api.Destination) {
+			if destination == nil {
+				return
 			}
-			// Locally originated paths may carry a nil Family; only filter by
-			// family when it is present.
-			if path.Family != nil && (path.Family.Afi != api.Family_AFI_IP || path.Family.Safi != api.Family_SAFI_UNICAST) {
-				continue
-			}
-			nlri, err := apiutil.GetNativeNlri(path)
-			if err != nil {
-				continue
-			}
-			prefix, ok := nlri.(*bgp.IPAddrPrefix)
-			if !ok {
-				continue
-			}
-			prefixText := prefix.String()
-			if path.NeighborIp == "" || path.NeighborIp == "<nil>" {
-				// Locally originated (GoBGP reports "<nil>" for local paths):
-				// an advertised prefix.
-				status.Advertised = append(status.Advertised, prefixText)
-				continue
-			}
-			received := BGPReceivedPrefix{Prefix: prefixText, ASPath: []uint32{}}
-			if attrs, attrErr := apiutil.GetNativePathAttributes(path); attrErr == nil {
-				for _, attr := range attrs {
-					switch value := attr.(type) {
-					case *bgp.PathAttributeNextHop:
-						received.NextHop = value.Value.String()
-					case *bgp.PathAttributeAsPath:
-						for _, segment := range value.Value {
-							received.ASPath = append(received.ASPath, segment.GetAS()...)
-						}
-					}
+			for _, path := range destination.Paths {
+				if path == nil || path.GetIsWithdraw() {
+					continue
 				}
+				// Locally originated paths may carry a nil Family; only filter
+				// by family when it is present.
+				if path.Family != nil && (path.Family.Afi != afi || path.Family.Safi != api.Family_SAFI_UNICAST) {
+					continue
+				}
+				prefixText, ok := bgpPathPrefix(path)
+				if !ok {
+					continue
+				}
+				if path.NeighborIp == "" || path.NeighborIp == "<nil>" {
+					// Locally originated (GoBGP reports "<nil>" for local
+					// paths): an advertised prefix.
+					status.Advertised = append(status.Advertised, prefixText)
+					continue
+				}
+				received := BGPReceivedPrefix{Prefix: prefixText, ASPath: []uint32{}}
+				if attrs, attrErr := apiutil.GetNativePathAttributes(path); attrErr == nil {
+					if nextHop, ok := bgpPathNextHop(attrs); ok {
+						received.NextHop = nextHop
+					}
+					received.ASPath = bgpPathASPath(attrs)
+				}
+				status.Received = append(status.Received, received)
 			}
-			status.Received = append(status.Received, received)
+		})
+		if err != nil {
+			slog.Warn("could not list BGP paths", "vnf_id", b.vnfID, "afi", afi.String(), "error", err)
 		}
-	})
-	if err != nil {
-		slog.Warn("could not list BGP paths", "vnf_id", b.vnfID, "error", err)
 	}
 	return status
 }
@@ -171,8 +219,16 @@ func startBGPServer(ctx context.Context, cfg bgpStartConfig) (*bgpInstance, erro
 	if cfg.RouterID == "" || net.ParseIP(cfg.RouterID).To4() == nil {
 		return nil, errors.New("BGP router ID must be IPv4")
 	}
-	if cfg.LocalIP.To4() == nil || cfg.PeerIP.To4() == nil {
-		return nil, errors.New("BGP local and peer addresses must be IPv4")
+	if cfg.LocalIP == nil || cfg.PeerIP == nil {
+		return nil, errors.New("BGP local and peer addresses are required")
+	}
+	if bgpIsIPv6(cfg.LocalIP) != bgpIsIPv6(cfg.PeerIP) {
+		return nil, errors.New("BGP local and peer addresses must use the same address family")
+	}
+	for _, network := range cfg.Advertise {
+		if bgpIsIPv6(network.IP) != bgpIsIPv6(cfg.LocalIP) {
+			return nil, errors.New("BGP advertised prefixes must match the local address family")
+		}
 	}
 	if cfg.Password != "" && cfg.VNF.Config.Transport == "memif" {
 		return nil, errors.New("BGP TCP MD5 password requires tap transport")
@@ -185,11 +241,14 @@ func startBGPServer(ctx context.Context, cfg bgpStartConfig) (*bgpInstance, erro
 	go bgpServer.Serve()
 
 	global := &api.Global{
-		Asn:             cfg.LocalAS,
-		RouterId:        cfg.RouterID,
-		ListenPort:      cfg.ListenPort,
+		Asn:        cfg.LocalAS,
+		RouterId:   cfg.RouterID,
+		ListenPort: cfg.ListenPort,
+		// GoBGP's global AfiSafi list indexes: 0 = IPv4 unicast, 1 = IPv6
+		// unicast (oc.IntToAfiSafiTypeMap). Both RIBs are enabled; the peer
+		// config selects the negotiated session family.
 		ListenAddresses: append([]string(nil), cfg.ListenAddress...),
-		Families:        []uint32{0},
+		Families:        []uint32{0, 1},
 		BindToDevice:    cfg.BindToDevice,
 	}
 	if err := bgpServer.StartBgp(ctx, &api.StartBgpRequest{Global: global}); err != nil {
@@ -218,7 +277,7 @@ func startBGPServer(ctx context.Context, cfg bgpStartConfig) (*bgpInstance, erro
 		},
 		AfiSafis: []*api.AfiSafi{{
 			Config: &api.AfiSafiConfig{
-				Family:  &api.Family{Afi: api.Family_AFI_IP, Safi: api.Family_SAFI_UNICAST},
+				Family:  &api.Family{Afi: bgpAFI(cfg.LocalIP), Safi: api.Family_SAFI_UNICAST},
 				Enabled: true,
 			},
 		}},
@@ -257,8 +316,10 @@ func startBGPServer(ctx context.Context, cfg bgpStartConfig) (*bgpInstance, erro
 	slog.Info("BGP VNF started",
 		"vnf_id", cfg.VNF.ID,
 		"transport", cfg.VNF.Config.Transport,
+		"family", bgpAFI(cfg.LocalIP).String(),
 		"local_as", cfg.LocalAS,
 		"peer", cfg.Neighbor,
+		"peer_address", cfg.PeerIP.String(),
 		"peer_as", cfg.PeerAS,
 		"target_table", cfg.TargetTableID,
 	)
@@ -269,13 +330,27 @@ func (b *bgpInstance) advertise(ctx context.Context, cfg bgpStartConfig) error {
 	if len(cfg.Advertise) == 0 {
 		return nil
 	}
-	nextHop := cfg.LocalIP.String()
+	nextHop := cfg.LocalIP
+	if cfg.NextHop != nil {
+		nextHop = cfg.NextHop
+	}
+	nextHopText := nextHop.String()
 	for _, network := range cfg.Advertise {
 		ones, _ := network.Mask.Size()
-		nlri := bgp.NewIPAddrPrefix(uint8(ones), network.IP.String())
-		attrs := []bgp.PathAttributeInterface{
-			bgp.NewPathAttributeOrigin(0),
-			bgp.NewPathAttributeNextHop(nextHop),
+		var nlri bgp.AddrPrefixInterface
+		var attrs []bgp.PathAttributeInterface
+		if bgpIsIPv6(network.IP) {
+			nlri = bgp.NewIPv6AddrPrefix(uint8(ones), network.IP.String())
+			attrs = []bgp.PathAttributeInterface{
+				bgp.NewPathAttributeOrigin(0),
+				bgp.NewPathAttributeMpReachNLRI(nextHopText, []bgp.AddrPrefixInterface{nlri}),
+			}
+		} else {
+			nlri = bgp.NewIPAddrPrefix(uint8(ones), network.IP.String())
+			attrs = []bgp.PathAttributeInterface{
+				bgp.NewPathAttributeOrigin(0),
+				bgp.NewPathAttributeNextHop(nextHopText),
+			}
 		}
 		path, err := apiutil.NewPath(nlri, false, attrs, time.Now())
 		if err != nil {
@@ -339,32 +414,30 @@ func (b *bgpInstance) handlePaths(response *api.WatchEventResponse) {
 		if path == nil || path.Family == nil {
 			continue
 		}
-		if path.Family.Afi != api.Family_AFI_IP || path.Family.Safi != api.Family_SAFI_UNICAST {
+		if (path.Family.Afi != api.Family_AFI_IP && path.Family.Afi != api.Family_AFI_IP6) ||
+			path.Family.Safi != api.Family_SAFI_UNICAST {
 			continue
 		}
 		if path.NeighborIp == "" || (b.neighbor != "" && path.NeighborIp != b.neighbor) {
 			continue
 		}
-		nlri, err := apiutil.GetNativeNlri(path)
-		if err != nil {
-			slog.Warn("BGP route NLRI parse failed", "vnf_id", b.vnfID, "error", err)
-			continue
-		}
-		prefix, ok := nlri.(*bgp.IPAddrPrefix)
+		prefixText, ok := bgpPathPrefix(path)
 		if !ok {
+			slog.Warn("BGP route NLRI parse failed", "vnf_id", b.vnfID, "nlri", path.Nlri)
 			continue
 		}
-		// IPAddrPrefix.String() includes the mask length ("6.6.6.0/24").
-		// The Prefix net.IPNet field renders without it, which would make
-		// AddBGPRoute install a bare-IP /32 route.
-		prefixText := prefix.String()
 		if path.IsWithdraw {
 			b.removeRoute(context.Background(), prefixText)
 			continue
 		}
-		nextHop, err := bgpNextHop(path)
+		attrs, err := apiutil.GetNativePathAttributes(path)
 		if err != nil {
-			slog.Warn("BGP route next hop parse failed", "vnf_id", b.vnfID, "prefix", prefixText, "error", err)
+			slog.Warn("BGP route attribute parse failed", "vnf_id", b.vnfID, "prefix", prefixText, "error", err)
+			continue
+		}
+		nextHop, ok := bgpPathNextHop(attrs)
+		if !ok {
+			slog.Warn("BGP route next hop parse failed", "vnf_id", b.vnfID, "prefix", prefixText)
 			continue
 		}
 		b.installRoute(context.Background(), prefixText, nextHop)
@@ -376,13 +449,8 @@ func bgpNextHop(path *api.Path) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for _, attr := range attrs {
-		if nh, ok := attr.(*bgp.PathAttributeNextHop); ok {
-			if nh.Value == nil || nh.Value.To4() == nil || nh.Value.IsUnspecified() {
-				return "", errors.New("missing IPv4 next hop")
-			}
-			return nh.Value.To4().String(), nil
-		}
+	if nextHop, ok := bgpPathNextHop(attrs); ok {
+		return nextHop, nil
 	}
 	return "", errors.New("missing BGP next-hop attribute")
 }
@@ -475,8 +543,8 @@ func bgpPrefixes(values []string) ([]*net.IPNet, error) {
 	prefixes := make([]*net.IPNet, 0, len(values))
 	for _, value := range values {
 		ip, network, err := net.ParseCIDR(strings.TrimSpace(value))
-		if err != nil || ip.To4() == nil {
-			return nil, fmt.Errorf("invalid IPv4 BGP prefix %q", value)
+		if err != nil || ip == nil {
+			return nil, fmt.Errorf("invalid BGP prefix %q", value)
 		}
 		prefixes = append(prefixes, network)
 	}
@@ -488,12 +556,30 @@ func (m *VNFManager) startBGPTap(ctx context.Context, vnf store.VNF, hostIf stri
 		return errors.New("BGP transport is not tap")
 	}
 	localIP, localNet, err := net.ParseCIDR(strings.TrimSpace(vnf.Config.LocalIP))
-	if err != nil || localIP.To4() == nil {
-		return errors.New("BGP local_ip must be an IPv4 CIDR")
+	if err != nil || localIP == nil {
+		return errors.New("BGP local_ip must be an IPv4 or IPv6 CIDR")
 	}
-	peerIP := net.ParseIP(strings.TrimSpace(vnf.Config.PeerIP)).To4()
-	if peerIP == nil {
-		return errors.New("BGP peer_ip must be an IPv4 address")
+	ipv6 := localIP.To4() == nil
+	peerIP := net.ParseIP(strings.TrimSpace(vnf.Config.PeerIP))
+	if peerIP == nil || (peerIP.To4() == nil) != ipv6 {
+		return errors.New("BGP peer_ip must match the local_ip address family")
+	}
+	if !ipv6 {
+		peerIP = peerIP.To4()
+	}
+	gateway := net.ParseIP(strings.TrimSpace(vnf.Config.PeerGateway))
+	if gateway != nil && (gateway.To4() == nil) != ipv6 {
+		return errors.New("BGP peer_gateway must match the local_ip address family")
+	}
+	if !ipv6 && gateway != nil {
+		gateway = gateway.To4()
+	}
+	nextHop := net.ParseIP(strings.TrimSpace(vnf.Config.NextHop))
+	if nextHop != nil && (nextHop.To4() == nil) != ipv6 {
+		return errors.New("BGP next_hop must match the local_ip address family")
+	}
+	if !ipv6 && nextHop != nil {
+		nextHop = nextHop.To4()
 	}
 	prefixes, err := bgpPrefixes(vnf.Config.AdvertisePrefixes)
 	if err != nil {
@@ -512,19 +598,25 @@ func (m *VNFManager) startBGPTap(ctx context.Context, vnf store.VNF, hostIf stri
 	if out, err := runIP(ctx, "link", "set", "up", "dev", hostIf); err != nil {
 		return fmt.Errorf("bring BGP tap up: %w: %s", err, out)
 	}
-	if gateway := strings.TrimSpace(vnf.Config.PeerGateway); gateway != "" {
-		if out, err := runIP(ctx, "route", "replace", peerIP.String()+"/32", "via", gateway, "dev", hostIf); err != nil {
+	if gateway != nil {
+		peerRoute := peerIP.String() + "/32"
+		routeArgs := []string{"route", "replace", peerRoute, "via", gateway.String(), "dev", hostIf}
+		if ipv6 {
+			peerRoute = peerIP.String() + "/128"
+			routeArgs = []string{"-6", "route", "replace", peerRoute, "via", gateway.String(), "dev", hostIf}
+		}
+		if out, err := runIP(ctx, routeArgs...); err != nil {
 			return fmt.Errorf("configure BGP peer route: %w: %s", err, out)
 		}
 	}
 	server, err := startBGPServer(ctx, bgpStartConfig{
-		VNF: vnf, LocalIP: localIP.To4(), LocalNet: localNet, PeerIP: peerIP,
-		PeerGateway: net.ParseIP(strings.TrimSpace(vnf.Config.PeerGateway)).To4(),
-		LocalAS:     vnf.Config.LocalAS, PeerAS: vnf.Config.PeerAS, RouterID: vnf.Config.RouterID,
+		VNF: vnf, LocalIP: localIP, LocalNet: localNet, PeerIP: peerIP,
+		PeerGateway: gateway, NextHop: nextHop,
+		LocalAS: vnf.Config.LocalAS, PeerAS: vnf.Config.PeerAS, RouterID: vnf.Config.RouterID,
 		Password: vnf.Config.Password, Passive: vnf.Config.Passive, MultihopTTL: uint8(ttl),
 		TargetTableID: vnf.Config.TargetTableID, Advertise: prefixes, RouteWriter: m.routeWriter,
-		Neighbor: peerIP.String(), LocalAddress: localIP.To4().String(),
-		ListenAddress: []string{localIP.To4().String()}, ListenPort: 179,
+		Neighbor: peerIP.String(), LocalAddress: localIP.String(),
+		ListenAddress: []string{localIP.String()}, ListenPort: 179,
 		BindToDevice: hostIf,
 	})
 	if err != nil {

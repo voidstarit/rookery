@@ -102,6 +102,7 @@ func vnfConfigPayloadFromProto(config *rookeryv1.VNFConfig) *vnfConfigPayload {
 		PeerGateway: config.GetPeerGateway(), MultihopTTL: config.GetMultihopTtl(),
 		Password: config.GetPassword(), Passive: config.GetPassive(), TargetTableID: config.GetTargetTableId(),
 		AdvertisePrefixes: append([]string(nil), config.GetAdvertisePrefixes()...),
+		NextHop:           config.GetNextHop(),
 	}
 	for _, assignment := range config.GetStaticAssignments() {
 		payload.StaticAssignments = append(payload.StaticAssignments, dhcpStaticAssignmentPayload{MAC: assignment.GetMac(), IP: assignment.GetIp()})

@@ -360,6 +360,7 @@ export type VNFConfig = {
   passive?: boolean;
   target_table_id?: number;
   advertise_prefixes?: string[];
+  next_hop?: string;
 };
 
 export type DHCPStaticAssignment = {

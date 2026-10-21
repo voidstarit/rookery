@@ -171,9 +171,9 @@ func cleanFIBPathType(value string) string {
 // `vppctl ip route add`).
 const bgpFIBRouteSource uint8 = 9
 
-// AddBGPRoute installs an IPv4 route learned from BGP into a VPP table.
-// VPP decodes sw_if_index 0 as interface 0 (local0); a recursive path must
-// send the ~0 sentinel instead and resolve its next hop in tableID.
+// AddBGPRoute installs an IPv4 or IPv6 route learned from BGP into a VPP
+// table. VPP decodes sw_if_index 0 as interface 0 (local0); a recursive path
+// must send the ~0 sentinel instead and resolve its next hop in tableID.
 func (v *VPPNetwork) AddBGPRoute(ctx context.Context, tableID uint32, prefix, nextHop string) error {
 	prefix = strings.TrimSpace(prefix)
 	if !strings.Contains(prefix, "/") {
@@ -183,14 +183,31 @@ func (v *VPPNetwork) AddBGPRoute(ctx context.Context, tableID uint32, prefix, ne
 	if err != nil {
 		return fmt.Errorf("parse BGP route prefix: %w", err)
 	}
-	if parsedPrefix.Address.Af != ip_types.ADDRESS_IP4 {
-		return errors.New("only IPv4 BGP routes are supported")
+	nh := net.ParseIP(strings.TrimSpace(nextHop))
+	var (
+		address ip_types.AddressUnion
+		proto   fib_types.FibPathNhProto
+	)
+	switch parsedPrefix.Address.Af {
+	case ip_types.ADDRESS_IP4:
+		nh4 := nh.To4()
+		if nh4 == nil {
+			return errors.New("BGP route next hop family does not match the prefix")
+		}
+		address = ip_types.AddressUnionIP4(ip_types.IP4Address{nh4[0], nh4[1], nh4[2], nh4[3]})
+		proto = fib_types.FIB_API_PATH_NH_PROTO_IP4
+	case ip_types.ADDRESS_IP6:
+		nh16 := nh.To16()
+		if nh16 == nil {
+			return errors.New("BGP route next hop family does not match the prefix")
+		}
+		var addr6 ip_types.IP6Address
+		copy(addr6[:], nh16)
+		address = ip_types.AddressUnionIP6(addr6)
+		proto = fib_types.FIB_API_PATH_NH_PROTO_IP6
+	default:
+		return errors.New("only IPv4 and IPv6 BGP routes are supported")
 	}
-	nh := net.ParseIP(strings.TrimSpace(nextHop)).To4()
-	if nh == nil {
-		return errors.New("BGP route next hop must be IPv4")
-	}
-	address := ip_types.AddressUnionIP4(ip_types.IP4Address{nh[0], nh[1], nh[2], nh[3]})
 	route := ipapi.IPRouteV2{
 		TableID: tableID,
 		Prefix:  parsedPrefix,
@@ -199,27 +216,32 @@ func (v *VPPNetwork) AddBGPRoute(ctx context.Context, tableID uint32, prefix, ne
 			SwIfIndex: ^uint32(0),
 			TableID:   tableID,
 			Type:      fib_types.FIB_API_PATH_TYPE_NORMAL,
-			Proto:     fib_types.FIB_API_PATH_NH_PROTO_IP4,
+			Proto:     proto,
 			Nh:        fib_types.FibPathNh{Address: address},
 		}},
 	}
 	return v.changeRouteV2(ctx, true, route)
 }
 
-// DeleteBGPRoute removes an IPv4 route previously learned from BGP.
-// A prefix without a mask length is treated as a /32 so that routes tracked
-// by older runtimes (which stored bare IPs) are still cleaned up on shutdown.
+// DeleteBGPRoute removes an IPv4 or IPv6 route previously learned from BGP.
+// A prefix without a mask length is treated as a host route so that routes
+// tracked by older runtimes (which stored bare IPs) are still cleaned up on
+// shutdown.
 func (v *VPPNetwork) DeleteBGPRoute(ctx context.Context, tableID uint32, prefix string) error {
 	prefix = strings.TrimSpace(prefix)
 	if !strings.Contains(prefix, "/") {
-		prefix += "/32"
+		if ip := net.ParseIP(prefix); ip != nil && ip.To4() == nil {
+			prefix += "/128"
+		} else {
+			prefix += "/32"
+		}
 	}
 	parsedPrefix, err := ip_types.ParsePrefix(prefix)
 	if err != nil {
 		return fmt.Errorf("parse BGP route prefix: %w", err)
 	}
-	if parsedPrefix.Address.Af != ip_types.ADDRESS_IP4 {
-		return errors.New("only IPv4 BGP routes are supported")
+	if parsedPrefix.Address.Af != ip_types.ADDRESS_IP4 && parsedPrefix.Address.Af != ip_types.ADDRESS_IP6 {
+		return errors.New("only IPv4 and IPv6 BGP routes are supported")
 	}
 	return v.changeRouteV2(ctx, false, ipapi.IPRouteV2{
 		TableID: tableID,

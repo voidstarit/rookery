@@ -331,6 +331,7 @@ func vnfToProto(vnf store.VNF) *rookeryv1.VNF {
 			PeerGateway: vnf.Config.PeerGateway, MultihopTtl: vnf.Config.MultihopTTL,
 			Password: vnf.Config.Password, Passive: vnf.Config.Passive, TargetTableId: vnf.Config.TargetTableID,
 			AdvertisePrefixes: append([]string(nil), vnf.Config.AdvertisePrefixes...),
+			NextHop:           vnf.Config.NextHop,
 		},
 		TapSwIfIndex: vnf.TapSwIfIndex, TapHostName: vnf.TapHostName,
 		CreatedAt: timestamp(vnf.CreatedAt), UpdatedAt: timestamp(vnf.UpdatedAt),

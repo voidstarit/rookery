@@ -213,7 +213,7 @@ type VNFConfig struct {
 	// address, so rules keep working when the address is DHCP-assigned.
 	DNATRules []DNATRule `json:"dnat_rules,omitempty"`
 
-	// BGP configuration. IPv4 unicast only for now.
+	// BGP configuration. Address family follows LocalIP (IPv4 or IPv6).
 	Transport         string   `json:"transport,omitempty"`
 	LocalAS           uint32   `json:"local_as,omitempty"`
 	RouterID          string   `json:"router_id,omitempty"`
@@ -226,6 +226,9 @@ type VNFConfig struct {
 	Passive           bool     `json:"passive,omitempty"`
 	TargetTableID     uint32   `json:"target_table_id,omitempty"`
 	AdvertisePrefixes []string `json:"advertise_prefixes,omitempty"`
+	// NextHop overrides the NEXT_HOP announced with advertised prefixes.
+	// Empty means LocalIP is advertised.
+	NextHop string `json:"next_hop,omitempty"`
 }
 
 // DHCPStaticAssignment reserves one IPv4 address for a MAC address.

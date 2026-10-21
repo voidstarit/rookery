@@ -3824,6 +3824,9 @@
           "items": {
             "type": "string"
           }
+        },
+        "next_hop": {
+          "type": "string"
         }
       }
     },

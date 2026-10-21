@@ -618,6 +618,21 @@ func (m *VNFConfig) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
+	if m.GetNextHop() != "" {
+
+		if utf8.RuneCountInString(m.GetNextHop()) > 64 {
+			err := VNFConfigValidationError{
+				field:  "NextHop",
+				reason: "value length must be at most 64 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
 	if len(errors) > 0 {
 		return VNFConfigMultiError(errors)
 	}
