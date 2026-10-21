@@ -6,7 +6,7 @@
 
 # Go build output
 /bin/
-/nerds-vms-api
+/rookery
 
 # UI dependencies and typecheck cache
 /ui/node_modules/

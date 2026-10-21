@@ -2,7 +2,8 @@ UI_DIR := ui
 UI_STAMP := $(UI_DIR)/node_modules/.package-lock.json
 STATIC_DIR := internal/webui/static
 BIN_DIR := bin
-API_BIN := $(BIN_DIR)/nerds-vms-api
+API_BIN := $(BIN_DIR)/rookery
+VNF_BIN := $(BIN_DIR)/vnfs
 
 PROTOC ?= protoc
 PROTO_ROOT := design/proto
@@ -35,7 +36,8 @@ ui-watch: $(UI_STAMP)
 
 build: ui-build
 	mkdir -p $(BIN_DIR)
-	go build -o $(API_BIN) ./cmd/nerds-vms-api
+	go build -o $(API_BIN) ./cmd/rookery
+	go build -o $(VNF_BIN) ./cmd/vnfs
 
 test: ui-build
 	go test ./...

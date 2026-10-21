@@ -1,4 +1,4 @@
-// Command nerds-vms-api runs the VM management API and embedded web UI.
+// Command rookery runs the VM management API and embedded web UI.
 //
 // It also has an init subcommand that prepares the host prerequisites.
 package main
@@ -40,14 +40,14 @@ func run(args []string) error {
 		}
 	}
 
-	// Keep `nerds-vms-api -addr ...` working as an alias for serve.
+	// Keep `rookery -addr ...` working as an alias for serve.
 	return runServe(args)
 }
 
 func printUsage(w io.Writer) {
 	fmt.Fprint(w, `Usage:
-  nerds-vms-api [serve] [flags]
-  nerds-vms-api init [flags]
+  rookery [serve] [flags]
+  rookery init [flags]
 
 Commands:
   serve   Start the API and web UI. This is the default command.
@@ -58,12 +58,12 @@ The server starts even when prerequisites are missing. Check the UI or
 GET /api/status; VM creation is blocked until both prerequisites are ready.
 
 Examples:
-  sudo nerds-vms-api init -vg vg0 -thin-pool nerds-vms -vpp-socket /run/vpp/api.sock
-  nerds-vms-api serve -vg vg0 -thin-pool nerds-vms -vpp-socket /run/vpp/api.sock
-  nerds-vms-api serve
+  sudo rookery init -vg vg0 -thin-pool nerds-vms -vpp-socket /run/vpp/api.sock
+  rookery serve -vg vg0 -thin-pool nerds-vms -vpp-socket /run/vpp/api.sock
+  rookery serve
 
-Flags are command-specific. Use "nerds-vms-api serve -h" or
-"nerds-vms-api init -h" for details.
+Flags are command-specific. Use "rookery serve -h" or
+"rookery init -h" for details.
 `)
 }
 

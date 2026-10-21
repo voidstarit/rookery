@@ -288,6 +288,26 @@ func (m *VNFManager) Running(vnfID int64) bool {
 	return ok
 }
 
+// Healthy reports whether the runtime behind a running VNF is still alive.
+// CoreDHCP servers close their done channel when the server exits; other
+// runtimes are considered healthy while they are in the manager's map.
+func (m *VNFManager) Healthy(vnfID int64) bool {
+	m.mu.Lock()
+	managed := m.servers[vnfID]
+	m.mu.Unlock()
+	if managed == nil {
+		return false
+	}
+	if managed.servers != nil {
+		select {
+		case <-managed.done:
+			return false
+		default:
+		}
+	}
+	return true
+}
+
 // BGPStatus returns the session and RIB snapshot for a running BGP VNF. A
 // VNF that is not running yields a status with Running=false; a running VNF
 // of another type is an error.

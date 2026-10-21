@@ -91,7 +91,7 @@ func (c *Checker) InspectThinPool(ctx context.Context, vg, name string) Result {
 	if !info.Exists {
 		return Result{
 			State:  StateMissing,
-			Detail: fmt.Sprintf("thin pool %s/%s does not exist; run `nerds-vms-api init -vg %s -thin-pool %s`", vg, name, vg, name),
+			Detail: fmt.Sprintf("thin pool %s/%s does not exist; run `rookery init -vg %s -thin-pool %s`", vg, name, vg, name),
 		}
 	}
 	if !info.IsThinPool {

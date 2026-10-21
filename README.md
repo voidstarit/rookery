@@ -292,7 +292,7 @@ The socket is VPP's **binary API** socket, not the CLI socket
 Build a standalone binary:
 
 ```bash
-go build -o bin/nerds-vms-api ./cmd/nerds-vms-api
+go build -o bin/rookery ./cmd/rookery
 ```
 
 ### Initialize
@@ -302,7 +302,7 @@ pool only if it does not exist, and then checks that the VPP API socket exists
 and answers a GoVPP `control_ping`.
 
 ```bash
-sudo ./bin/nerds-vms-api init \
+sudo ./bin/rookery init \
   -vg vg0 \
   -thin-pool nerds-vms \
   -size 100%FREE \
@@ -319,7 +319,7 @@ Run as root or as a user with permission to create logical volumes.
 ### Serve
 
 ```bash
-./bin/nerds-vms-api serve \
+./bin/rookery serve \
   -vg vg0 \
   -thin-pool nerds-vms \
   -vpp-socket /run/vpp/api.sock
@@ -487,6 +487,23 @@ when the session or VNF stops; the BGP Status dialog shows the session state,
 advertised prefixes, and received prefixes with next hop and AS path. DHCP VNFs each create a VPP tap (`vnf<id>`) in the network's
 bridge domain, assign their configured address to the Linux tap, and run an
 in-process CoreDHCP server bound to that tap.
+
+DHCP and BGP runtimes live in a separate `vnfs` daemon, so restarting the API
+does not interrupt them. Run it alongside the API:
+
+```sh
+sudo vnfs -vpp-socket /run/vpp/api.sock -listen unix:///run/rookery/vnfs.sock
+```
+
+`vnfs` owns the CoreDHCP servers, the gVisor memif stacks, and GoBGP, writes
+leases under `-run-dir`, restores its desired VNFs after its own restart, and
+connects directly to the VPP binary API to install/withdraw BGP-learned routes.
+The API keeps the database and all VPP provisioning (memif/tap creation, BVIs,
+NAT44) and drives the daemon over an internal gRPC control channel
+(`-vnf-addr`, default `unix:///run/rookery/vnfs.sock`; `tcp://host:port` is
+supported). The API starts even when the daemon is absent — enabled VNFs show
+`degraded` until it is reachable, and desired runtimes are re-ensured within
+about 20 seconds.
 
 DHCPv4 uses CoreDHCP's DHCPv4 server with a per-VNF bitmap allocator. DHCPv6
 uses CoreDHCP's DHCPv6 server with stateful IA_NA allocation from the configured

@@ -10,7 +10,10 @@ import (
 	"github.com/voidstarit/rookery/internal/store"
 )
 
-const vppWatchInterval = 5 * time.Second
+const (
+	vppWatchInterval = 5 * time.Second
+	vnfCheckInterval = 20 * time.Second
+)
 
 // RunInfrastructureReconciler waits for VPP, restores all VPP-backed
 // resources, then watches the VPP API for restarts and repeats reconciliation.
@@ -86,6 +89,7 @@ func (s *Server) watchVPP(ctx context.Context, initiallyDirty bool) {
 	healthy := true
 	pendingReconcile := initiallyDirty
 	pendingReset := false
+	lastVNFCheck := time.Time{}
 
 	var reconcileDone chan struct{}
 	var reconcileCancel context.CancelFunc
@@ -145,6 +149,17 @@ func (s *Server) watchVPP(ctx context.Context, initiallyDirty bool) {
 			s.logger.Info("VPP API is reachable again")
 			healthy = true
 			pendingReconcile = true
+		}
+		// The VNF daemon is a separate process that may restart independently
+		// of the API. Re-ensure enabled VNFs periodically; runtimes already
+		// running are left untouched (EnsureVNF is idempotent).
+		if healthy && s.vnfs != nil && time.Since(lastVNFCheck) >= vnfCheckInterval {
+			lastVNFCheck = time.Now()
+			go func() {
+				if err := s.ReconcileVNFs(ctx); err != nil {
+					s.logger.Warn("periodic VNF reconciliation failed", "error", err)
+				}
+			}()
 		}
 		if identityErr == nil && identity != "" {
 			if lastIdentity != "" && identity != lastIdentity {

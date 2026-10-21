@@ -24,6 +24,7 @@ import (
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/readiness"
 	"github.com/voidstarit/rookery/internal/store"
+	"github.com/voidstarit/rookery/internal/vnfd"
 )
 
 func runServe(args []string) error {
@@ -37,6 +38,7 @@ func runServe(args []string) error {
 	dbPath := fs.String("db", envDefault("NERDS_VMS_DB", "nerds-vms.db"), "SQLite database path")
 	rateLimitValue := fs.String("rate-limit", envDefault("NERDS_VMS_RATE_LIMIT", "3"), "global HTTP request rate limit in requests per second (0 disables)")
 	dhcpTransport := fs.String("dhcp-transport", envDefault("NERDS_VMS_DHCP_TRANSPORT", "memif"), "DHCP VNF transport: memif or tap")
+	vnfAddr := fs.String("vnf-addr", envDefault("NERDS_VMS_VNF_ADDR", "unix:///run/rookery/vnfs.sock"), "VNF daemon control address (unix:///path or tcp://host:port)")
 	checkInterval := fs.Duration("check-interval", 10*time.Second, "readiness check interval")
 	qemuBin := fs.String("qemu-bin", envDefault("NERDS_VMS_QEMU_BIN", qemu.DefaultBinary), "QEMU system emulator binary")
 	runDir := fs.String("run-dir", envDefault("NERDS_VMS_RUN_DIR", qemu.DefaultRunDir), "directory for QEMU pid files and VNC sockets")
@@ -44,7 +46,7 @@ func runServe(args []string) error {
 	vhostDir := fs.String("vhost-dir", envDefault("NERDS_VMS_VHOST_DIR", host.DefaultVhostDir), "directory for VPP vhost-user sockets")
 
 	fs.Usage = func() {
-		fmt.Fprint(fs.Output(), "Usage: nerds-vms-api serve [flags]\n\n"+
+		fmt.Fprint(fs.Output(), "Usage: rookery serve [flags]\n\n"+
 			"Start the VM management API and embedded UI. The server starts even\n"+
 			"when prerequisites are unavailable; creation is blocked until ready.\n\nFlags:\n")
 		fs.PrintDefaults()
@@ -113,16 +115,11 @@ func runServe(args []string) error {
 	if err != nil {
 		return fmt.Errorf("prepare VPP networking: %w", err)
 	}
-	vnfManager, err := host.NewVNFManager(*runDir)
+	vnfClient, err := vnfd.NewClient(*vnfAddr, logger)
 	if err != nil {
-		return fmt.Errorf("prepare network functions: %w", err)
+		return fmt.Errorf("prepare VNF daemon client: %w", err)
 	}
-	vnfManager.SetBGPRouteWriter(networkRunner)
-	defer func() {
-		if err := vnfManager.Close(); err != nil {
-			logger.Error("stop network functions", "error", err)
-		}
-	}()
+	defer vnfClient.Close()
 
 	manager := readiness.NewManager(
 		readiness.Config{
@@ -136,7 +133,7 @@ func runServe(args []string) error {
 	)
 
 	diskRunner := host.NewLVM()
-	apiServer := api.New(st, manager, diskRunner, qemuRunner, networkRunner, vnfManager, networkRunner, logger)
+	apiServer := api.New(st, manager, diskRunner, qemuRunner, networkRunner, vnfClient, networkRunner, logger)
 	apiServer.ConfigureMemifDHCP(transport == "memif", *memifDir)
 	lifecycleService := lifecycle.New(st, apiServer, apiServer.ResourceMutex())
 
@@ -152,7 +149,7 @@ func runServe(args []string) error {
 		gateway.WithInterfaceRuntime(networkRunner),
 		gateway.WithDiagnosticsRuntime(networkRunner),
 		gateway.WithNetworkRuntime(networkRunner), gateway.WithNetworkWriter(lifecycleService),
-		gateway.WithVNFRuntime(vnfManager),
+		gateway.WithVNFRuntime(vnfClient),
 		gateway.WithVNFStatusProvider(apiServer),
 		gateway.WithVNFWriter(lifecycleService),
 	}

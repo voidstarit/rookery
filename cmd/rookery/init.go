@@ -18,7 +18,7 @@ func runInit(args []string) error {
 	size := fs.String("size", host.DefaultThinPoolSize, "thin pool size for creation (LVM --size or --extents syntax)")
 
 	fs.Usage = func() {
-		fmt.Fprint(fs.Output(), "Usage: nerds-vms-api init [flags]\n\n"+
+		fmt.Fprint(fs.Output(), "Usage: rookery init [flags]\n\n"+
 			"Idempotently create the LVM thin pool if needed and verify the VPP\n"+
 			"binary API socket with a GoVPP control ping. Re-running is safe.\n\nFlags:\n")
 		fs.PrintDefaults()
@@ -70,7 +70,7 @@ func runInit(args []string) error {
 	}
 	fmt.Printf("FD.io VPP: control ping succeeded via %s\n", vppSocket)
 
-	fmt.Printf("\ninitialization complete\nstart the server with:\n  nerds-vms-api serve -vg %s -thin-pool %s -vpp-socket %s\n",
+	fmt.Printf("\ninitialization complete\nstart the server with:\n  rookery serve -vg %s -thin-pool %s -vpp-socket %s\n",
 		vg, thinPool, vppSocket)
 	return nil
 }
