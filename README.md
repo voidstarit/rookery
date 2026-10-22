@@ -1172,6 +1172,15 @@ for creating the clone LV/device. Its JSON contains `operation` (`create` or
 failure the script output is logged and the operation is rolled back; clones
 created by a script are removed by the script on deletion.
 
+`scripts/lvm-thin-snapshot-disk.sh` implements this contract for LVM thin
+backends. It reads `ROOKERY_DISK_JSON`, creates a thin snapshot of the template,
+clears the thin-snapshot activation-skip flag, activates the clone, and
+optionally extends it to the requested `disk.size_gb`. On `delete` it removes
+the clone; it also refuses to remove an unrelated pre-existing LV during
+create-failure cleanup. Set the backend's `preparation_script` to the script's
+absolute path. See `scripts/README.md` for requirements and standalone CLI
+usage.
+
 Media fields: `name` (required, unique, max 127 chars) and `path` (required,
 absolute path to an existing regular file). `size_bytes` is read from the file
 and cannot be set by clients. Media entries are read-only: the API never copies
