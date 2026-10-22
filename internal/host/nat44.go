@@ -33,6 +33,11 @@ const (
 	afPacketHostTag          = "rookery-afpacket-rx69632-v1"
 	afPacketRXFrameSize      = 69632
 	afPacketRXFramesPerBlock = 1
+
+	// dhcpAddressTimeout tolerates a slow upstream DHCP server after the
+	// outside NIC is recreated. DHCP clients on shared outside NICs are not
+	// restarted when one is already configured or an address is present.
+	dhcpAddressTimeout = 90 * time.Second
 )
 
 // HostInterface is a Linux network interface available for NAT outside use.
@@ -335,8 +340,10 @@ func (v *VPPNetwork) EnsureHostInterface(ctx context.Context, nic string) (strin
 	existing, findErr := findInterfaceDetails(ctx, conn, vppName)
 	if findErr == nil {
 		if existing.Tag == afPacketHostTag {
-			if out, err := v.runCLI(ctx, "set", "interface", "mac", "address", vppName, mac); err != nil {
-				return "", fmt.Errorf("set VPP outside interface %s MAC to %s: %w: %s", vppName, mac, err, out)
+			if current := net.HardwareAddr(existing.L2Address[:]).String(); current != mac {
+				if out, err := v.runCLI(ctx, "set", "interface", "mac", "address", vppName, mac); err != nil {
+					return "", fmt.Errorf("set VPP outside interface %s MAC to %s: %w: %s", vppName, mac, err, out)
+				}
 			}
 			if out, err := v.runCLI(ctx, "set", "interface", "state", vppName, "up"); err != nil {
 				return "", fmt.Errorf("bring existing VPP outside interface %s up: %w: %s", vppName, err, out)
@@ -488,11 +495,15 @@ func (v *VPPNetwork) ApplyNAT44(ctx context.Context, bviName, outsideName, outsi
 		if hostname == "" {
 			hostname = "rookery"
 		}
-		if out, err := v.runCLI(ctx, "set", "dhcp", "client", "intfc", outsideName, "hostname", hostname); err != nil && !cliAlreadyExists(out) {
-			return fmt.Errorf("start VPP DHCP client on %s: %w: %s", outsideName, err, out)
-		}
-		if err := waitForVPPIPv4(ctx, v, outsideName, 30*time.Second); err != nil {
-			return err
+		if !v.interfaceHasIPv4(ctx, outsideName) {
+			if !v.dhcpClientConfigured(ctx, outsideName) {
+				if out, err := v.runCLI(ctx, "set", "dhcp", "client", "intfc", outsideName, "hostname", hostname); err != nil && !cliAlreadyExists(out) {
+					return fmt.Errorf("start VPP DHCP client on %s: %w: %s", outsideName, err, out)
+				}
+			}
+			if err := waitForVPPIPv4(ctx, v, outsideName, dhcpAddressTimeout); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -954,14 +965,8 @@ func cliNATAddressExists(output, outsideName string) bool {
 func waitForVPPIPv4(ctx context.Context, v *VPPNetwork, interfaceName string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {
-		out, err := v.runCLI(ctx, "show", "interface", "address", interfaceName)
-		if err == nil {
-			for _, field := range strings.Fields(out) {
-				ip, _, parseErr := net.ParseCIDR(field)
-				if parseErr == nil && ip.To4() != nil {
-					return nil
-				}
-			}
+		if v.interfaceHasIPv4(ctx, interfaceName) {
+			return nil
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf("VPP outside interface %s did not obtain an IPv4 address", interfaceName)
@@ -972,6 +977,34 @@ func waitForVPPIPv4(ctx context.Context, v *VPPNetwork, interfaceName string, ti
 		case <-time.After(500 * time.Millisecond):
 		}
 	}
+}
+
+// interfaceHasIPv4 reports whether VPP has installed any IPv4 address on the
+// named interface. It lets NAT activation reuse an existing DHCP lease instead
+// of restarting the DHCP client and briefly removing the address.
+func (v *VPPNetwork) interfaceHasIPv4(ctx context.Context, interfaceName string) bool {
+	out, err := v.runCLI(ctx, "show", "interface", "address", interfaceName)
+	if err != nil {
+		return false
+	}
+	for _, field := range strings.Fields(out) {
+		ip, _, parseErr := net.ParseCIDR(field)
+		if parseErr == nil && ip.To4() != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// dhcpClientConfigured reports whether VPP already has a DHCP client on the
+// interface. Several NAT44 VNFs may share one outside NIC; restarting the
+// client for each VNF resets an otherwise valid lease.
+func (v *VPPNetwork) dhcpClientConfigured(ctx context.Context, interfaceName string) bool {
+	out, err := v.runCLIRaw(ctx, "show", "dhcp", "client", "intfc", interfaceName)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(out, interfaceName)
 }
 
 func cliAlreadyExists(output string) bool {
