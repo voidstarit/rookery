@@ -859,7 +859,7 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                       </button>
                     </div>
                     <div class="acl-rule-fields">
-                      <label class="field">
+                      <label class="field dhcp-option-code">
                         <span class="field-label">Code</span>
                         <input
                           type="number"
@@ -881,7 +881,7 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                           );
                         })()}
                       </label>
-                      <label class="field">
+                      <label class="field dhcp-option-format">
                         <span class="field-label">Format</span>
                         <select
                           value={option.format}
@@ -897,7 +897,7 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                           <option value="domain-list">domain-list</option>
                         </select>
                       </label>
-                      <label class="field">
+                      <label class="field dhcp-option-value">
                         <span class="field-label">Value</span>
                         <input
                           type="text"

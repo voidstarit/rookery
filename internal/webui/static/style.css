@@ -2003,6 +2003,18 @@ textarea:disabled {
   grid-column: span 6;
 }
 
+.dhcp-option-code {
+  grid-column: span 2;
+}
+
+.dhcp-option-format {
+  grid-column: span 3;
+}
+
+.dhcp-option-value {
+  grid-column: span 7;
+}
+
 .acl-rule-fields {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -2157,6 +2169,15 @@ textarea:disabled {
   .dhcp-static-field {
     grid-column: span 2;
   }
+
+  .dhcp-option-code,
+  .dhcp-option-format {
+    grid-column: span 1;
+  }
+
+  .dhcp-option-value {
+    grid-column: span 2;
+  }
 }
 
 @media (max-width: 640px) {
@@ -2182,6 +2203,12 @@ textarea:disabled {
   }
 
   .dhcp-static-field {
+    grid-column: span 1;
+  }
+
+  .dhcp-option-code,
+  .dhcp-option-format,
+  .dhcp-option-value {
     grid-column: span 1;
   }
 }
