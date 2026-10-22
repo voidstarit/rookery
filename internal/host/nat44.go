@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,6 +22,17 @@ import (
 	"go.fd.io/govpp/core"
 
 	"github.com/voidstarit/rookery/internal/store"
+)
+
+const (
+	// afPacketHostTag records the RX ring layout used for a VPP host
+	// interface. The default VPP AF_PACKET RX frame is only 2048 bytes, while
+	// GRO can hand the socket 64 KiB GSO packets; those arrive truncated
+	// (tp_len != tp_snaplen) and are dropped as partial packets. Recreate
+	// older host interfaces once so download traffic is not discarded.
+	afPacketHostTag          = "rookery-afpacket-rx69632-v1"
+	afPacketRXFrameSize      = 69632
+	afPacketRXFramesPerBlock = 1
 )
 
 // HostInterface is a Linux network interface available for NAT outside use.
@@ -117,6 +129,9 @@ func (v *VPPNetwork) EnsureBVI(ctx context.Context, networkID int64, bdID uint32
 	defer conn.Disconnect()
 
 	if index, err := findInterface(ctx, conn, name); err == nil {
+		if err := setInterfaceMTU(ctx, conn, index, defaultInterfaceMTU); err != nil {
+			return "", 0, fmt.Errorf("set BVI MTU: %w", err)
+		}
 		return name, index, nil
 	} else if !errors.Is(err, errVPPInterfaceNotFound) {
 		return "", 0, err
@@ -151,6 +166,10 @@ func (v *VPPNetwork) EnsureBVI(ctx context.Context, networkID int64, bdID uint32
 	if err := checkVPPRetval("name BVI", nameReply.Retval); err != nil {
 		rollback()
 		return "", 0, err
+	}
+	if err := setInterfaceMTU(ctx, conn, swIfIndex, defaultInterfaceMTU); err != nil {
+		rollback()
+		return "", 0, fmt.Errorf("set BVI MTU: %w", err)
 	}
 
 	bridgeReply, err := bviClient.SwInterfaceSetL2Bridge(ctx, &l2.SwInterfaceSetL2Bridge{
@@ -270,6 +289,17 @@ func linuxInterfaceMAC(name string) (string, error) {
 	return iface.HardwareAddr.String(), nil
 }
 
+func linuxInterfaceMTU(name string) (uint32, error) {
+	iface, err := net.InterfaceByName(name)
+	if err != nil {
+		return 0, fmt.Errorf("read host interface %s: %w", name, err)
+	}
+	if iface.MTU <= 0 {
+		return defaultInterfaceMTU, nil
+	}
+	return uint32(iface.MTU), nil
+}
+
 // EnsureHostInterface takes over a Linux NIC as a VPP AF_PACKET host interface.
 func (v *VPPNetwork) EnsureHostInterface(ctx context.Context, nic string) (string, error) {
 	nic = strings.TrimSpace(nic)
@@ -293,21 +323,40 @@ func (v *VPPNetwork) EnsureHostInterface(ctx context.Context, nic string) (strin
 	if err != nil {
 		return "", err
 	}
+	hostMTU, err := linuxInterfaceMTU(nic)
+	if err != nil {
+		return "", err
+	}
 	conn, err := v.connect()
 	if err != nil {
 		return "", err
 	}
 	defer conn.Disconnect()
-	if _, err := findInterface(ctx, conn, vppName); err == nil {
-		if out, err := v.runCLI(ctx, "set", "interface", "mac", "address", vppName, mac); err != nil {
-			return "", fmt.Errorf("set VPP outside interface %s MAC to %s: %w: %s", vppName, mac, err, out)
+	existing, findErr := findInterfaceDetails(ctx, conn, vppName)
+	if findErr == nil {
+		if existing.Tag == afPacketHostTag {
+			if out, err := v.runCLI(ctx, "set", "interface", "mac", "address", vppName, mac); err != nil {
+				return "", fmt.Errorf("set VPP outside interface %s MAC to %s: %w: %s", vppName, mac, err, out)
+			}
+			if out, err := v.runCLI(ctx, "set", "interface", "state", vppName, "up"); err != nil {
+				return "", fmt.Errorf("bring existing VPP outside interface %s up: %w: %s", vppName, err, out)
+			}
+			if err := setInterfaceMTU(ctx, conn, uint32(existing.SwIfIndex), hostMTU); err != nil {
+				return "", fmt.Errorf("set existing VPP outside interface %s MTU: %w", vppName, err)
+			}
+			return vppName, nil
 		}
-		if out, err := v.runCLI(ctx, "set", "interface", "state", vppName, "up"); err != nil {
-			return "", fmt.Errorf("bring existing VPP outside interface %s up: %w: %s", vppName, err, out)
+		// Older Rookery versions created AF_PACKET rings with VPP's 2048-byte
+		// RX frames. Recreate the takeover once with frames large enough for
+		// GRO/GSO packets.
+		if out, err := v.runCLI(ctx, "delete", "host-interface", "name", nic); err != nil && !isVPPNotFound(err) {
+			return "", fmt.Errorf("recreate VPP host-interface for %s: delete: %w: %s", nic, err, out)
 		}
-		return vppName, nil
-	} else if !errors.Is(err, errVPPInterfaceNotFound) {
-		return "", err
+		if err := waitForVPPInterfaceGone(ctx, conn, vppName); err != nil {
+			return "", fmt.Errorf("recreate VPP host-interface for %s: %w", nic, err)
+		}
+	} else if !errors.Is(findErr, errVPPInterfaceNotFound) {
+		return "", findErr
 	}
 
 	if out, err := exec.CommandContext(ctx, "ip", "addr", "flush", "dev", nic).CombinedOutput(); err != nil {
@@ -316,7 +365,11 @@ func (v *VPPNetwork) EnsureHostInterface(ctx context.Context, nic string) (strin
 	if out, err := exec.CommandContext(ctx, "ip", "link", "set", "up", "dev", nic).CombinedOutput(); err != nil {
 		return "", fmt.Errorf("bring host interface %s up: %w: %s", nic, err, strings.TrimSpace(string(out)))
 	}
-	createArgs := []string{"create", "host-interface", "name", nic}
+	createArgs := []string{
+		"create", "host-interface", "name", nic,
+		"rx-size", strconv.Itoa(afPacketRXFrameSize),
+		"rx-per-block", strconv.Itoa(afPacketRXFramesPerBlock),
+	}
 	if mac != "" {
 		createArgs = append(createArgs, "hw-addr", mac)
 	}
@@ -324,13 +377,39 @@ func (v *VPPNetwork) EnsureHostInterface(ctx context.Context, nic string) (strin
 	if err != nil {
 		return "", fmt.Errorf("create VPP host-interface for %s: %w: %s", nic, err, createOut)
 	}
-	if _, err := findInterface(ctx, conn, vppName); err != nil {
+	details, err := findInterfaceDetails(ctx, conn, vppName)
+	if err != nil {
 		return "", fmt.Errorf("VPP did not create interface %s: %w: %s", vppName, err, createOut)
+	}
+	if err := setInterfaceTag(ctx, conn, uint32(details.SwIfIndex), afPacketHostTag); err != nil {
+		return "", fmt.Errorf("tag VPP outside interface %s: %w", vppName, err)
+	}
+	if err := setInterfaceMTU(ctx, conn, uint32(details.SwIfIndex), hostMTU); err != nil {
+		return "", fmt.Errorf("set VPP outside interface %s MTU: %w", vppName, err)
 	}
 	if out, err := v.runCLI(ctx, "set", "interface", "state", vppName, "up"); err != nil {
 		return "", fmt.Errorf("bring VPP outside interface %s up: %w: %s", vppName, err, out)
 	}
 	return vppName, nil
+}
+
+func waitForVPPInterfaceGone(ctx context.Context, conn *core.Connection, name string) error {
+	deadline := time.Now().Add(vppCleanupTimeout)
+	for {
+		if _, err := findInterface(ctx, conn, name); errors.Is(err, errVPPInterfaceNotFound) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out waiting for VPP interface %s to disappear", name)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
 }
 
 // InterfaceRouteTable returns an interface's IPv4/IPv6 VRF table.

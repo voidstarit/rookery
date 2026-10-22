@@ -32,6 +32,11 @@ const (
 	// DefaultVhostDir is where VPP vhost-user sockets are created.
 	DefaultVhostDir   = "/run/vpp"
 	vppCleanupTimeout = 3 * time.Second
+
+	// defaultInterfaceMTU is used for Rookery-created software interfaces.
+	// VPP defaults to jumbo (9000) MTUs, which do not match the guest virtio
+	// NICs or typical upstream networks. Keep every layer at Ethernet MTU.
+	defaultInterfaceMTU = 1500
 )
 
 // VPPNetwork provisions VPP bridge domains and vhost-user interfaces.
@@ -315,6 +320,10 @@ func (v *VPPNetwork) CreateVhostUser(ctx context.Context, name, mac string, bdID
 		rollback()
 		return "", 0, err
 	}
+	if err := setInterfaceMTU(ctx, conn, uint32(swIfIndex), defaultInterfaceMTU); err != nil {
+		rollback()
+		return "", 0, fmt.Errorf("set vhost-user interface MTU: %w", err)
+	}
 
 	flagsReply, err := interfaces.NewServiceClient(conn).SwInterfaceSetFlags(ctx, &interfaces.SwInterfaceSetFlags{
 		SwIfIndex: swIfIndex,
@@ -427,6 +436,9 @@ func (v *VPPNetwork) EnsureVhostUser(ctx context.Context, name, mac string, bdID
 		if err := checkVPPRetval("attach vhost-user interface to bridge domain", l2Reply.Retval); err != nil {
 			return "", 0, err
 		}
+		if err := setInterfaceMTU(ctx, conn, foundIndex, defaultInterfaceMTU); err != nil {
+			return "", 0, fmt.Errorf("set vhost-user interface %s MTU: %w", name, err)
+		}
 		return foundSocket, foundIndex, nil
 	}
 
@@ -509,6 +521,10 @@ func (v *VPPNetwork) CreateTap(ctx context.Context, hostName, gatewayCIDR string
 	if err := checkVPPRetval("name VNF tap", nameReply.Retval); err != nil {
 		rollback()
 		return 0, err
+	}
+	if err := setInterfaceMTU(ctx, conn, uint32(swIfIndex), defaultInterfaceMTU); err != nil {
+		rollback()
+		return 0, fmt.Errorf("set VNF tap MTU: %w", err)
 	}
 
 	flagsReply, err := interfaces.NewServiceClient(conn).SwInterfaceSetFlags(ctx, &interfaces.SwInterfaceSetFlags{
@@ -734,6 +750,9 @@ func (v *VPPNetwork) createHostTap(ctx context.Context, name string, bdID uint32
 }
 
 func (v *VPPNetwork) setTapUpAndAttach(ctx context.Context, conn *core.Connection, swIfIndex uint32, bdID uint32) error {
+	if err := setInterfaceMTU(ctx, conn, swIfIndex, defaultInterfaceMTU); err != nil {
+		return fmt.Errorf("set host tap MTU: %w", err)
+	}
 	flagsReply, err := interfaces.NewServiceClient(conn).SwInterfaceSetFlags(ctx, &interfaces.SwInterfaceSetFlags{
 		SwIfIndex: interface_types.InterfaceIndex(swIfIndex),
 		Flags:     interface_types.IF_STATUS_API_FLAG_ADMIN_UP,
@@ -807,6 +826,9 @@ func configureHostTap(ctx context.Context, name, ipv4Address string) error {
 			return fmt.Errorf("configure host tap %s address: %w: %s", name, err, out)
 		}
 	}
+	if out, err := runIP(ctx, "link", "set", "dev", name, "mtu", strconv.Itoa(defaultInterfaceMTU)); err != nil {
+		return fmt.Errorf("set host tap %s MTU: %w: %s", name, err, out)
+	}
 	if out, err := runIP(ctx, "link", "set", "up", "dev", name); err != nil {
 		return fmt.Errorf("bring host tap %s up: %w: %s", name, err, out)
 	}
@@ -842,10 +864,15 @@ func (v *VPPNetwork) EnsureMemif(ctx context.Context, name, socketPath string, i
 		return 0, err
 	}
 	index, findErr := findInterface(ctx, conn, name)
-	conn.Disconnect()
 	if findErr == nil {
+		if err := setInterfaceMTU(ctx, conn, index, defaultInterfaceMTU); err != nil {
+			conn.Disconnect()
+			return 0, fmt.Errorf("set VNF memif MTU: %w", err)
+		}
+		conn.Disconnect()
 		return index, nil
 	}
+	conn.Disconnect()
 	if !errors.Is(findErr, errVPPInterfaceNotFound) {
 		return 0, findErr
 	}
@@ -932,6 +959,10 @@ func (v *VPPNetwork) CreateMemif(ctx context.Context, name, socketPath string, i
 	if err := checkVPPRetval("name VNF memif", nameReply.Retval); err != nil {
 		rollback()
 		return 0, err
+	}
+	if err := setInterfaceMTU(ctx, conn, uint32(swIfIndex), defaultInterfaceMTU); err != nil {
+		rollback()
+		return 0, fmt.Errorf("set VNF memif MTU: %w", err)
 	}
 
 	flagsReply, err := interfaces.NewServiceClient(conn).SwInterfaceSetFlags(ctx, &interfaces.SwInterfaceSetFlags{
@@ -1222,6 +1253,48 @@ func (v *VPPNetwork) connect() (*core.Connection, error) {
 		return nil, fmt.Errorf("connect to VPP API %s: %w", v.Socket, err)
 	}
 	return conn, nil
+}
+
+// setInterfaceMTU sets the L3 and per-protocol MTUs. VPP's default MTU is
+// 9000 even when the underlying Linux NIC is 1500; leaving that mismatch in
+// place lets VPP emit frames the physical NIC or guest cannot receive.
+func setInterfaceMTU(ctx context.Context, conn *core.Connection, swIfIndex uint32, mtu uint32) error {
+	if mtu == 0 {
+		mtu = defaultInterfaceMTU
+	}
+	reply, err := interfaces.NewServiceClient(conn).SwInterfaceSetMtu(ctx, &interfaces.SwInterfaceSetMtu{
+		SwIfIndex: interface_types.InterfaceIndex(swIfIndex),
+		Mtu:       []uint32{mtu, mtu, mtu, mtu},
+	})
+	if err != nil {
+		return fmt.Errorf("set interface MTU: %w", err)
+	}
+	return checkVPPRetval("set interface MTU", reply.Retval)
+}
+
+func (v *VPPNetwork) setInterfaceMTUByName(ctx context.Context, name string, mtu uint32) error {
+	conn, err := v.connect()
+	if err != nil {
+		return err
+	}
+	defer conn.Disconnect()
+	swIfIndex, err := findInterface(ctx, conn, name)
+	if err != nil {
+		return err
+	}
+	return setInterfaceMTU(ctx, conn, swIfIndex, mtu)
+}
+
+func setInterfaceTag(ctx context.Context, conn *core.Connection, swIfIndex uint32, tag string) error {
+	reply, err := interfaces.NewServiceClient(conn).SwInterfaceTagAddDel(ctx, &interfaces.SwInterfaceTagAddDel{
+		IsAdd:     true,
+		SwIfIndex: interface_types.InterfaceIndex(swIfIndex),
+		Tag:       tag,
+	})
+	if err != nil {
+		return fmt.Errorf("set interface tag: %w", err)
+	}
+	return checkVPPRetval("set interface tag", reply.Retval)
 }
 
 func checkVPPRetval(operation string, retval int32) error {

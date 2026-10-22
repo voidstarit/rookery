@@ -585,9 +585,14 @@ The **Host interfaces** section (under **Rookery Networks**) lists the Linux
 NICs visible to the server. Physical, non-wireless interfaces that do not carry
 the host default route can be **Attached to VPP**; this creates a
 `host-<nic>` AF_PACKET interface in VPP (flushing host IP addresses on the
-NIC). Attachments are persisted and recreated after a VPP restart. **Detach**
-removes the VPP interface and returns the NIC to the host; the host may need to
-renew DHCP. An interface used by a NAT44 VNF cannot be detached here.
+NIC). Attachments are persisted and recreated after a VPP restart. AF_PACKET
+interfaces use 64 KiB RX frames so GRO/GSO bursts are not truncated, and
+Rookery-created vhost/memif/BVI/tap interfaces use a 1500-byte MTU matching
+the guest and typical physical networks. Upgrading from a version that used
+VPP's 2048-byte RX frames recreates the host takeover once and reapplies
+NAT44. **Detach** removes the VPP interface and returns the NIC to the host;
+the host may need to renew DHCP. An interface used by a NAT44 VNF cannot be
+detached here.
 
 ### Host taps
 
