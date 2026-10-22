@@ -2320,6 +2320,106 @@
           "VNFService"
         ]
       }
+    },
+    "/api/host/taps": {
+      "get": {
+        "summary": "ListHostTaps lists persistent taps that connect a Rookery Network to the\nLinux host.",
+        "operationId": "HostService_ListHostTaps",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1HostTap"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "network_id",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "HostService"
+        ]
+      },
+      "post": {
+        "summary": "CreateHostTap creates a VPP tap on a network bridge domain and persists it\nso it is recreated after an API or VPP restart.",
+        "operationId": "HostService_CreateHostTap",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1HostTap"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateHostTapRequest"
+            }
+          }
+        ],
+        "tags": [
+          "HostService"
+        ]
+      }
+    },
+    "/api/host/taps/{id}": {
+      "delete": {
+        "summary": "DeleteHostTap removes a persistent network host tap.",
+        "operationId": "HostService_DeleteHostTap",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "HostService"
+        ]
+      }
     }
   },
   "definitions": {
@@ -4413,6 +4513,68 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1VNFBGPReceivedPrefix"
+          }
+        }
+      }
+    },
+    "v1CreateHostTapRequest": {
+      "type": "object",
+      "properties": {
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "ipv4_address": {
+          "type": "string"
+        }
+      }
+    },
+    "v1HostTap": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "network_name": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv4_address": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "HostTap is a VPP tap that bridges a Rookery Network to the Linux host. The\nhost-side interface is named `name`; `ipv4_address` is optional and, when\nset, is assigned to that interface."
+    },
+    "v1ListHostTapsResponse": {
+      "type": "object",
+      "properties": {
+        "taps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1HostTap"
           }
         }
       }

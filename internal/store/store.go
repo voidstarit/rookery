@@ -61,6 +61,10 @@ var (
 	ErrInterfaceNameTaken = errors.New("interface name already exists")
 	// ErrInterfaceInUse is returned when a virtual interface is attached to a VM.
 	ErrInterfaceInUse = errors.New("interface is attached to a vm")
+	// ErrNetworkHostTapNotFound is returned when a host tap does not exist.
+	ErrNetworkHostTapNotFound = errors.New("network host tap not found")
+	// ErrNetworkHostTapNameTaken is returned when a host interface name is already in use.
+	ErrNetworkHostTapNameTaken = errors.New("network host tap name already exists")
 	// ErrVNFNotFound is returned when a network function does not exist.
 	ErrVNFNotFound = errors.New("vnf not found")
 	// ErrVNFNameTaken is returned when a network function name is already in use.

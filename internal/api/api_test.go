@@ -89,47 +89,49 @@ func (f *fakeDiskProvisioner) ListThinVolumes(_ context.Context, vg, thinPool st
 }
 
 type fakeNetworkProvisioner struct {
-	ensuredACLs    []int64
-	deletedACLs    []uint32
-	interfaceACLs  map[uint32][2][]uint32
-	nextBD         uint32
-	createdBDs     []string
-	ensuredBDs     []uint32
-	ensuredNames   []string
-	deletedBDs     []uint32
-	createdIfs     []string
-	ensuredIfs     []string
-	deletedIfs     []uint32
-	createdTaps    []string
-	deletedTaps    []uint32
-	createdMemifs  []string
-	deletedMemifs  []uint32
-	createMemifErr error
-	deleteMemifErr error
-	resetCounters  int
-	createBDErr    error
-	deleteBDErr    error
-	ensureBDErr    error
-	createIfErr    error
-	ensureIfErr    error
-	deleteIfErr    error
-	createTapErr   error
-	deleteTapErr   error
-	graph          host.VPPGraph
-	graphErr       error
-	vppInterfaces  []host.VPPInterface
-	interfacesErr  error
-	captureStatus  host.PacketCaptureStatus
-	captureErr     error
-	captureFiles   []host.PacketCaptureFile
-	captureData    map[string][]byte
-	deletedCapture string
-	aclCounters    []host.ACLInterfaceCounters
-	aclCounterErr  error
-	fibRoutes      []host.FIBRoute
-	fibErr         error
-	traceResult    host.TraceResult
-	traceErr       error
+	ensuredACLs     []int64
+	deletedACLs     []uint32
+	interfaceACLs   map[uint32][2][]uint32
+	nextBD          uint32
+	createdBDs      []string
+	ensuredBDs      []uint32
+	ensuredNames    []string
+	deletedBDs      []uint32
+	createdIfs      []string
+	ensuredIfs      []string
+	deletedIfs      []uint32
+	createdTaps     []string
+	deletedTaps     []uint32
+	ensuredHostTaps []string
+	deletedHostTaps []string
+	createdMemifs   []string
+	deletedMemifs   []uint32
+	createMemifErr  error
+	deleteMemifErr  error
+	resetCounters   int
+	createBDErr     error
+	deleteBDErr     error
+	ensureBDErr     error
+	createIfErr     error
+	ensureIfErr     error
+	deleteIfErr     error
+	createTapErr    error
+	deleteTapErr    error
+	graph           host.VPPGraph
+	graphErr        error
+	vppInterfaces   []host.VPPInterface
+	interfacesErr   error
+	captureStatus   host.PacketCaptureStatus
+	captureErr      error
+	captureFiles    []host.PacketCaptureFile
+	captureData     map[string][]byte
+	deletedCapture  string
+	aclCounters     []host.ACLInterfaceCounters
+	aclCounterErr   error
+	fibRoutes       []host.FIBRoute
+	fibErr          error
+	traceResult     host.TraceResult
+	traceErr        error
 }
 
 func (f *fakeNetworkProvisioner) Ping(_ context.Context) error { return nil }
@@ -344,6 +346,16 @@ func (f *fakeNetworkProvisioner) DeleteTap(_ context.Context, swIfIndex uint32) 
 		return f.deleteTapErr
 	}
 	f.deletedTaps = append(f.deletedTaps, swIfIndex)
+	return nil
+}
+
+func (f *fakeNetworkProvisioner) EnsureHostTap(_ context.Context, name string, _ uint32, _ string) (uint32, error) {
+	f.ensuredHostTaps = append(f.ensuredHostTaps, name)
+	return uint32(400 + len(f.ensuredHostTaps)), nil
+}
+
+func (f *fakeNetworkProvisioner) DeleteHostTapByName(_ context.Context, name string) error {
+	f.deletedHostTaps = append(f.deletedHostTaps, name)
 	return nil
 }
 
@@ -761,6 +773,7 @@ func newTestAPIWithReadiness(t *testing.T, ready api.Readiness) *testAPI {
 		gateway.WithACLRuntime(networkProvisioner),
 		gateway.WithInterfaceRuntime(networkProvisioner),
 		gateway.WithHostWriter(networkProvisioner),
+		gateway.WithHostTapWriter(lifecycleService),
 		gateway.WithNetworkRuntime(networkProvisioner),
 		gateway.WithDiagnosticsRuntime(networkProvisioner),
 		gateway.WithVNFRuntime(vnfManager),
@@ -2652,6 +2665,88 @@ func TestReconcileNetworks(t *testing.T) {
 	env.networks.ensureBDErr = errors.New("bridge domain unavailable")
 	if err := env.server.ReconcileNetworks(context.Background()); err == nil {
 		t.Fatal("expected bridge-domain reconciliation error")
+	}
+}
+
+func TestHostTapLifecycle(t *testing.T) {
+	env := newTestAPI(t)
+	network := createNetworkAPI(t, env.handler, "lab")
+
+	for _, address := range []string{"192.168.1.10/24", "10.20.0.2", "10.20.0.0/24", "10.20.0.255/24", "10.20.0.50/16"} {
+		recorder := do(t, env.handler, http.MethodPost, "/api/host/taps", map[string]any{
+			"network_id":   network.ID,
+			"ipv4_address": address,
+		})
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("invalid address %q status = %d, body = %s", address, recorder.Code, recorder.Body.String())
+		}
+	}
+
+	recorder := do(t, env.handler, http.MethodPost, "/api/host/taps", map[string]any{
+		"network_id":   network.ID,
+		"name":         "hostnet1",
+		"ipv4_address": "10.20.0.50",
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create host tap status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	created := decode[store.NetworkHostTap](t, recorder)
+	if created.ID == 0 || created.NetworkID != network.ID || created.Name != "hostnet1" ||
+		created.IPv4Address != "10.20.0.50/24" || created.SwIfIndex == 0 {
+		t.Fatalf("created host tap = %+v", created)
+	}
+	if len(env.networks.ensuredHostTaps) != 1 || env.networks.ensuredHostTaps[0] != "hostnet1" {
+		t.Fatalf("ensured host taps = %v", env.networks.ensuredHostTaps)
+	}
+
+	taps := decode[[]store.NetworkHostTap](t, do(t, env.handler, http.MethodGet, "/api/host/taps", nil))
+	if len(taps) != 1 || taps[0].ID != created.ID {
+		t.Fatalf("host taps = %+v", taps)
+	}
+	filtered := decode[[]store.NetworkHostTap](t, do(t, env.handler, http.MethodGet,
+		fmt.Sprintf("/api/host/taps?network_id=%d", network.ID), nil))
+	if len(filtered) != 1 || filtered[0].ID != created.ID {
+		t.Fatalf("filtered host taps = %+v", filtered)
+	}
+
+	if err := env.server.ReconcileNetworkHostTaps(context.Background()); err != nil {
+		t.Fatalf("reconcile host taps: %v", err)
+	}
+	taps = decode[[]store.NetworkHostTap](t, do(t, env.handler, http.MethodGet, "/api/host/taps", nil))
+	if len(taps) != 1 || taps[0].SwIfIndex != 402 {
+		t.Fatalf("reconciled host taps = %+v", taps)
+	}
+
+	recorder = do(t, env.handler, http.MethodDelete, fmt.Sprintf("/api/host/taps/%d", created.ID), nil)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("delete host tap status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if len(env.networks.deletedHostTaps) != 1 || env.networks.deletedHostTaps[0] != "hostnet1" {
+		t.Fatalf("deleted host taps = %v", env.networks.deletedHostTaps)
+	}
+	taps = decode[[]store.NetworkHostTap](t, do(t, env.handler, http.MethodGet, "/api/host/taps", nil))
+	if len(taps) != 0 {
+		t.Fatalf("host taps after delete = %+v", taps)
+	}
+
+	recorder = do(t, env.handler, http.MethodPost, "/api/host/taps", map[string]any{
+		"network_id":   network.ID,
+		"ipv4_address": "10.20.0.60",
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create default host tap status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	defaultTap := decode[store.NetworkHostTap](t, recorder)
+	if defaultTap.Name != fmt.Sprintf("hostnet%d", network.ID) {
+		t.Fatalf("default host tap name = %q", defaultTap.Name)
+	}
+	recorder = do(t, env.handler, http.MethodDelete, fmt.Sprintf("/api/networks/%d", network.ID), nil)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("delete network status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	taps = decode[[]store.NetworkHostTap](t, do(t, env.handler, http.MethodGet, "/api/host/taps", nil))
+	if len(taps) != 0 {
+		t.Fatalf("host taps after network delete = %+v", taps)
 	}
 }
 

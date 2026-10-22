@@ -405,6 +405,17 @@ export type HostInterface = {
   managed?: boolean;
 };
 
+export type HostTap = {
+  id: number;
+  network_id: number;
+  network_name: string;
+  name: string;
+  sw_if_index: number;
+  ipv4_address?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type VNFLease = {
   client_id: string;
   address: string;

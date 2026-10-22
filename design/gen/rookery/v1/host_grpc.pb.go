@@ -23,6 +23,9 @@ const (
 	HostService_ListHostInterfaces_FullMethodName  = "/rookery.v1.HostService/ListHostInterfaces"
 	HostService_AttachHostInterface_FullMethodName = "/rookery.v1.HostService/AttachHostInterface"
 	HostService_DetachHostInterface_FullMethodName = "/rookery.v1.HostService/DetachHostInterface"
+	HostService_ListHostTaps_FullMethodName        = "/rookery.v1.HostService/ListHostTaps"
+	HostService_CreateHostTap_FullMethodName       = "/rookery.v1.HostService/CreateHostTap"
+	HostService_DeleteHostTap_FullMethodName       = "/rookery.v1.HostService/DeleteHostTap"
 )
 
 // HostServiceClient is the client API for HostService service.
@@ -38,6 +41,14 @@ type HostServiceClient interface {
 	// DetachHostInterface removes the VPP host-interface; the Linux NIC becomes
 	// available to the host again.
 	DetachHostInterface(ctx context.Context, in *DetachHostInterfaceRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// ListHostTaps lists persistent taps that connect a Rookery Network to the
+	// Linux host.
+	ListHostTaps(ctx context.Context, in *ListHostTapsRequest, opts ...grpc.CallOption) (*ListHostTapsResponse, error)
+	// CreateHostTap creates a VPP tap on a network bridge domain and persists it
+	// so it is recreated after an API or VPP restart.
+	CreateHostTap(ctx context.Context, in *CreateHostTapRequest, opts ...grpc.CallOption) (*HostTap, error)
+	// DeleteHostTap removes a persistent network host tap.
+	DeleteHostTap(ctx context.Context, in *DeleteHostTapRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type hostServiceClient struct {
@@ -78,6 +89,36 @@ func (c *hostServiceClient) DetachHostInterface(ctx context.Context, in *DetachH
 	return out, nil
 }
 
+func (c *hostServiceClient) ListHostTaps(ctx context.Context, in *ListHostTapsRequest, opts ...grpc.CallOption) (*ListHostTapsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListHostTapsResponse)
+	err := c.cc.Invoke(ctx, HostService_ListHostTaps_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) CreateHostTap(ctx context.Context, in *CreateHostTapRequest, opts ...grpc.CallOption) (*HostTap, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HostTap)
+	err := c.cc.Invoke(ctx, HostService_CreateHostTap_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) DeleteHostTap(ctx context.Context, in *DeleteHostTapRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, HostService_DeleteHostTap_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HostServiceServer is the server API for HostService service.
 // All implementations must embed UnimplementedHostServiceServer
 // for forward compatibility.
@@ -91,6 +132,14 @@ type HostServiceServer interface {
 	// DetachHostInterface removes the VPP host-interface; the Linux NIC becomes
 	// available to the host again.
 	DetachHostInterface(context.Context, *DetachHostInterfaceRequest) (*emptypb.Empty, error)
+	// ListHostTaps lists persistent taps that connect a Rookery Network to the
+	// Linux host.
+	ListHostTaps(context.Context, *ListHostTapsRequest) (*ListHostTapsResponse, error)
+	// CreateHostTap creates a VPP tap on a network bridge domain and persists it
+	// so it is recreated after an API or VPP restart.
+	CreateHostTap(context.Context, *CreateHostTapRequest) (*HostTap, error)
+	// DeleteHostTap removes a persistent network host tap.
+	DeleteHostTap(context.Context, *DeleteHostTapRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedHostServiceServer()
 }
 
@@ -109,6 +158,15 @@ func (UnimplementedHostServiceServer) AttachHostInterface(context.Context, *Atta
 }
 func (UnimplementedHostServiceServer) DetachHostInterface(context.Context, *DetachHostInterfaceRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method DetachHostInterface not implemented")
+}
+func (UnimplementedHostServiceServer) ListHostTaps(context.Context, *ListHostTapsRequest) (*ListHostTapsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListHostTaps not implemented")
+}
+func (UnimplementedHostServiceServer) CreateHostTap(context.Context, *CreateHostTapRequest) (*HostTap, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateHostTap not implemented")
+}
+func (UnimplementedHostServiceServer) DeleteHostTap(context.Context, *DeleteHostTapRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteHostTap not implemented")
 }
 func (UnimplementedHostServiceServer) mustEmbedUnimplementedHostServiceServer() {}
 func (UnimplementedHostServiceServer) testEmbeddedByValue()                     {}
@@ -185,6 +243,60 @@ func _HostService_DetachHostInterface_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HostService_ListHostTaps_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListHostTapsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).ListHostTaps(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostService_ListHostTaps_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).ListHostTaps(ctx, req.(*ListHostTapsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_CreateHostTap_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateHostTapRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).CreateHostTap(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostService_CreateHostTap_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).CreateHostTap(ctx, req.(*CreateHostTapRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_DeleteHostTap_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteHostTapRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).DeleteHostTap(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostService_DeleteHostTap_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).DeleteHostTap(ctx, req.(*DeleteHostTapRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // HostService_ServiceDesc is the grpc.ServiceDesc for HostService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -203,6 +315,18 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DetachHostInterface",
 			Handler:    _HostService_DetachHostInterface_Handler,
+		},
+		{
+			MethodName: "ListHostTaps",
+			Handler:    _HostService_ListHostTaps_Handler,
+		},
+		{
+			MethodName: "CreateHostTap",
+			Handler:    _HostService_CreateHostTap_Handler,
+		},
+		{
+			MethodName: "DeleteHostTap",
+			Handler:    _HostService_DeleteHostTap_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

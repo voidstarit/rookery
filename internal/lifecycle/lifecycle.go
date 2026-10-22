@@ -33,6 +33,9 @@ type Backend interface {
 	PrepareNetworkVNFs(ctx context.Context, network store.Network) (store.Network, error)
 	CleanupNetworkVNFs(ctx context.Context, network store.Network) error
 	DeleteNetworkRouteTables(ctx context.Context, network store.Network) error
+	CreateNetworkHostTap(ctx context.Context, network store.Network, name, ipv4Address string) (store.NetworkHostTap, error)
+	DeleteNetworkHostTap(ctx context.Context, tap store.NetworkHostTap) error
+	CleanupNetworkHostTaps(ctx context.Context, network store.Network) error
 }
 
 // Service provides VNF and network lifecycle operations.
@@ -454,6 +457,9 @@ func (s *Service) DeleteNetwork(ctx context.Context, id int64) error {
 	if err := s.backend.CleanupNetworkVNFs(ctx, network); err != nil {
 		return &NetworkError{Status: http.StatusInternalServerError, Err: fmt.Errorf("delete network VNF resources: %w", err)}
 	}
+	if err := s.backend.CleanupNetworkHostTaps(ctx, network); err != nil {
+		return &NetworkError{Status: http.StatusInternalServerError, Err: fmt.Errorf("delete network host taps: %w", err)}
+	}
 	if network.BVIHostName != "" {
 		if err := s.backend.DeleteBVI(ctx, network.BVIHostName); err != nil {
 			return &NetworkError{Status: http.StatusInternalServerError, Err: fmt.Errorf("delete network BVI: %w", err)}
@@ -476,4 +482,45 @@ func (s *Service) DeleteNetwork(ctx context.Context, id int64) error {
 	default:
 		return nil
 	}
+}
+
+// CreateNetworkHostTap creates a persistent host tap on a Rookery Network.
+func (s *Service) CreateNetworkHostTap(ctx context.Context, networkID int64, name, ipv4Address string) (store.NetworkHostTap, error) {
+	s.resourceMu.Lock()
+	defer s.resourceMu.Unlock()
+	network, err := s.store.GetNetwork(ctx, networkID)
+	if err != nil {
+		if errors.Is(err, store.ErrNetworkNotFound) {
+			return store.NetworkHostTap{}, &NetworkError{Status: http.StatusNotFound, Message: "network not found"}
+		}
+		return store.NetworkHostTap{}, &NetworkError{Status: http.StatusInternalServerError, Err: err}
+	}
+	if blocked, message := s.backend.VPPBlocked(); blocked {
+		return store.NetworkHostTap{}, &NetworkError{Status: http.StatusServiceUnavailable, Message: message}
+	}
+	tap, err := s.backend.CreateNetworkHostTap(ctx, network, name, ipv4Address)
+	if err != nil {
+		return store.NetworkHostTap{}, err
+	}
+	return tap, nil
+}
+
+// DeleteNetworkHostTap removes a persistent host tap and its record.
+func (s *Service) DeleteNetworkHostTap(ctx context.Context, id int64) error {
+	s.resourceMu.Lock()
+	defer s.resourceMu.Unlock()
+	tap, err := s.store.GetNetworkHostTap(ctx, id)
+	if err != nil {
+		if errors.Is(err, store.ErrNetworkHostTapNotFound) {
+			return &NetworkError{Status: http.StatusNotFound, Message: "host tap not found"}
+		}
+		return &NetworkError{Status: http.StatusInternalServerError, Err: err}
+	}
+	if blocked, message := s.backend.VPPBlocked(); blocked {
+		return &NetworkError{Status: http.StatusServiceUnavailable, Message: message}
+	}
+	if err := s.backend.DeleteNetworkHostTap(ctx, tap); err != nil {
+		return err
+	}
+	return nil
 }

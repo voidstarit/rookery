@@ -12,6 +12,7 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -332,12 +333,307 @@ func (x *DetachHostInterfaceRequest) GetName() string {
 	return ""
 }
 
+// HostTap is a VPP tap that bridges a Rookery Network to the Linux host. The
+// host-side interface is named `name`; `ipv4_address` is optional and, when
+// set, is assigned to that interface.
+type HostTap struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	NetworkId     int64                  `protobuf:"varint,2,opt,name=network_id,json=networkId,proto3" json:"network_id,omitempty"`
+	NetworkName   string                 `protobuf:"bytes,3,opt,name=network_name,json=networkName,proto3" json:"network_name,omitempty"`
+	Name          string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
+	SwIfIndex     uint32                 `protobuf:"varint,5,opt,name=sw_if_index,json=swIfIndex,proto3" json:"sw_if_index,omitempty"`
+	Ipv4Address   string                 `protobuf:"bytes,6,opt,name=ipv4_address,json=ipv4Address,proto3" json:"ipv4_address,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HostTap) Reset() {
+	*x = HostTap{}
+	mi := &file_rookery_v1_host_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HostTap) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostTap) ProtoMessage() {}
+
+func (x *HostTap) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_host_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostTap.ProtoReflect.Descriptor instead.
+func (*HostTap) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_host_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *HostTap) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *HostTap) GetNetworkId() int64 {
+	if x != nil {
+		return x.NetworkId
+	}
+	return 0
+}
+
+func (x *HostTap) GetNetworkName() string {
+	if x != nil {
+		return x.NetworkName
+	}
+	return ""
+}
+
+func (x *HostTap) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *HostTap) GetSwIfIndex() uint32 {
+	if x != nil {
+		return x.SwIfIndex
+	}
+	return 0
+}
+
+func (x *HostTap) GetIpv4Address() string {
+	if x != nil {
+		return x.Ipv4Address
+	}
+	return ""
+}
+
+func (x *HostTap) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *HostTap) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+type ListHostTapsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NetworkId     int64                  `protobuf:"varint,1,opt,name=network_id,json=networkId,proto3" json:"network_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListHostTapsRequest) Reset() {
+	*x = ListHostTapsRequest{}
+	mi := &file_rookery_v1_host_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListHostTapsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListHostTapsRequest) ProtoMessage() {}
+
+func (x *ListHostTapsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_host_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListHostTapsRequest.ProtoReflect.Descriptor instead.
+func (*ListHostTapsRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_host_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ListHostTapsRequest) GetNetworkId() int64 {
+	if x != nil {
+		return x.NetworkId
+	}
+	return 0
+}
+
+type ListHostTapsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Taps          []*HostTap             `protobuf:"bytes,1,rep,name=taps,proto3" json:"taps,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListHostTapsResponse) Reset() {
+	*x = ListHostTapsResponse{}
+	mi := &file_rookery_v1_host_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListHostTapsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListHostTapsResponse) ProtoMessage() {}
+
+func (x *ListHostTapsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_host_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListHostTapsResponse.ProtoReflect.Descriptor instead.
+func (*ListHostTapsResponse) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_host_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ListHostTapsResponse) GetTaps() []*HostTap {
+	if x != nil {
+		return x.Taps
+	}
+	return nil
+}
+
+type CreateHostTapRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NetworkId     int64                  `protobuf:"varint,1,opt,name=network_id,json=networkId,proto3" json:"network_id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Ipv4Address   string                 `protobuf:"bytes,3,opt,name=ipv4_address,json=ipv4Address,proto3" json:"ipv4_address,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateHostTapRequest) Reset() {
+	*x = CreateHostTapRequest{}
+	mi := &file_rookery_v1_host_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateHostTapRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateHostTapRequest) ProtoMessage() {}
+
+func (x *CreateHostTapRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_host_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateHostTapRequest.ProtoReflect.Descriptor instead.
+func (*CreateHostTapRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_host_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *CreateHostTapRequest) GetNetworkId() int64 {
+	if x != nil {
+		return x.NetworkId
+	}
+	return 0
+}
+
+func (x *CreateHostTapRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CreateHostTapRequest) GetIpv4Address() string {
+	if x != nil {
+		return x.Ipv4Address
+	}
+	return ""
+}
+
+type DeleteHostTapRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteHostTapRequest) Reset() {
+	*x = DeleteHostTapRequest{}
+	mi := &file_rookery_v1_host_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteHostTapRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteHostTapRequest) ProtoMessage() {}
+
+func (x *DeleteHostTapRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_host_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteHostTapRequest.ProtoReflect.Descriptor instead.
+func (*DeleteHostTapRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_host_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *DeleteHostTapRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
 var File_rookery_v1_host_proto protoreflect.FileDescriptor
 
 const file_rookery_v1_host_proto_rawDesc = "" +
 	"\n" +
 	"\x15rookery/v1/host.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x17validate/validate.proto\"\x8d\x03\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\x8d\x03\n" +
 	"\rHostInterface\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x0e\n" +
 	"\x02up\x18\x02 \x01(\bR\x02up\x12\x1c\n" +
@@ -363,12 +659,40 @@ const file_rookery_v1_host_proto_rawDesc = "" +
 	"\x1aAttachHostInterfaceRequest\x12\x1b\n" +
 	"\x04name\x18\x01 \x01(\tB\a\xfaB\x04r\x02\x10\x01R\x04name\"9\n" +
 	"\x1aDetachHostInterfaceRequest\x12\x1b\n" +
-	"\x04name\x18\x01 \x01(\tB\a\xfaB\x04r\x02\x10\x01R\x04name2\xa3\x03\n" +
+	"\x04name\x18\x01 \x01(\tB\a\xfaB\x04r\x02\x10\x01R\x04name\"\xa8\x02\n" +
+	"\aHostTap\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1d\n" +
+	"\n" +
+	"network_id\x18\x02 \x01(\x03R\tnetworkId\x12!\n" +
+	"\fnetwork_name\x18\x03 \x01(\tR\vnetworkName\x12\x12\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name\x12\x1e\n" +
+	"\vsw_if_index\x18\x05 \x01(\rR\tswIfIndex\x12!\n" +
+	"\fipv4_address\x18\x06 \x01(\tR\vipv4Address\x129\n" +
+	"\n" +
+	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"?\n" +
+	"\x13ListHostTapsRequest\x12(\n" +
+	"\n" +
+	"network_id\x18\x01 \x01(\x03B\t\xfaB\x06\"\x04 \x00@\x01R\tnetworkId\"?\n" +
+	"\x14ListHostTapsResponse\x12'\n" +
+	"\x04taps\x18\x01 \x03(\v2\x13.rookery.v1.HostTapR\x04taps\"\xab\x01\n" +
+	"\x14CreateHostTapRequest\x12&\n" +
+	"\n" +
+	"network_id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\tnetworkId\x12<\n" +
+	"\x04name\x18\x02 \x01(\tB(\xfaB%r#\x18\x0f2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$\xd0\x01\x01R\x04name\x12-\n" +
+	"\fipv4_address\x18\x03 \x01(\tB\n" +
+	"\xfaB\ar\x05\x18@\xd0\x01\x01R\vipv4Address\"/\n" +
+	"\x14DeleteHostTapRequest\x12\x17\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id2\xdf\x05\n" +
 	"\vHostService\x12\x8d\x01\n" +
 	"\x12ListHostInterfaces\x12%.rookery.v1.ListHostInterfacesRequest\x1a&.rookery.v1.ListHostInterfacesResponse\"(\x82\xd3\xe4\x93\x02\"b\n" +
 	"interfaces\x12\x14/api/host/interfaces\x12\x87\x01\n" +
 	"\x13AttachHostInterface\x12&.rookery.v1.AttachHostInterfaceRequest\x1a\x19.rookery.v1.HostInterface\"-\x82\xd3\xe4\x93\x02':\x01*\"\"/api/host/interfaces/{name}/attach\x12z\n" +
-	"\x13DetachHostInterface\x12&.rookery.v1.DetachHostInterfaceRequest\x1a\x16.google.protobuf.Empty\"#\x82\xd3\xe4\x93\x02\x1d*\x1b/api/host/interfaces/{name}B?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
+	"\x13DetachHostInterface\x12&.rookery.v1.DetachHostInterfaceRequest\x1a\x16.google.protobuf.Empty\"#\x82\xd3\xe4\x93\x02\x1d*\x1b/api/host/interfaces/{name}\x12o\n" +
+	"\fListHostTaps\x12\x1f.rookery.v1.ListHostTapsRequest\x1a .rookery.v1.ListHostTapsResponse\"\x1c\x82\xd3\xe4\x93\x02\x16b\x04taps\x12\x0e/api/host/taps\x12a\n" +
+	"\rCreateHostTap\x12 .rookery.v1.CreateHostTapRequest\x1a\x13.rookery.v1.HostTap\"\x19\x82\xd3\xe4\x93\x02\x13:\x01*\"\x0e/api/host/taps\x12f\n" +
+	"\rDeleteHostTap\x12 .rookery.v1.DeleteHostTapRequest\x1a\x16.google.protobuf.Empty\"\x1b\x82\xd3\xe4\x93\x02\x15*\x13/api/host/taps/{id}B?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
 
 var (
 	file_rookery_v1_host_proto_rawDescOnce sync.Once
@@ -382,28 +706,43 @@ func file_rookery_v1_host_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_host_proto_rawDescData
 }
 
-var file_rookery_v1_host_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_rookery_v1_host_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_rookery_v1_host_proto_goTypes = []any{
 	(*HostInterface)(nil),              // 0: rookery.v1.HostInterface
 	(*ListHostInterfacesRequest)(nil),  // 1: rookery.v1.ListHostInterfacesRequest
 	(*ListHostInterfacesResponse)(nil), // 2: rookery.v1.ListHostInterfacesResponse
 	(*AttachHostInterfaceRequest)(nil), // 3: rookery.v1.AttachHostInterfaceRequest
 	(*DetachHostInterfaceRequest)(nil), // 4: rookery.v1.DetachHostInterfaceRequest
-	(*emptypb.Empty)(nil),              // 5: google.protobuf.Empty
+	(*HostTap)(nil),                    // 5: rookery.v1.HostTap
+	(*ListHostTapsRequest)(nil),        // 6: rookery.v1.ListHostTapsRequest
+	(*ListHostTapsResponse)(nil),       // 7: rookery.v1.ListHostTapsResponse
+	(*CreateHostTapRequest)(nil),       // 8: rookery.v1.CreateHostTapRequest
+	(*DeleteHostTapRequest)(nil),       // 9: rookery.v1.DeleteHostTapRequest
+	(*timestamppb.Timestamp)(nil),      // 10: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),              // 11: google.protobuf.Empty
 }
 var file_rookery_v1_host_proto_depIdxs = []int32{
-	0, // 0: rookery.v1.ListHostInterfacesResponse.interfaces:type_name -> rookery.v1.HostInterface
-	1, // 1: rookery.v1.HostService.ListHostInterfaces:input_type -> rookery.v1.ListHostInterfacesRequest
-	3, // 2: rookery.v1.HostService.AttachHostInterface:input_type -> rookery.v1.AttachHostInterfaceRequest
-	4, // 3: rookery.v1.HostService.DetachHostInterface:input_type -> rookery.v1.DetachHostInterfaceRequest
-	2, // 4: rookery.v1.HostService.ListHostInterfaces:output_type -> rookery.v1.ListHostInterfacesResponse
-	0, // 5: rookery.v1.HostService.AttachHostInterface:output_type -> rookery.v1.HostInterface
-	5, // 6: rookery.v1.HostService.DetachHostInterface:output_type -> google.protobuf.Empty
-	4, // [4:7] is the sub-list for method output_type
-	1, // [1:4] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	0,  // 0: rookery.v1.ListHostInterfacesResponse.interfaces:type_name -> rookery.v1.HostInterface
+	10, // 1: rookery.v1.HostTap.created_at:type_name -> google.protobuf.Timestamp
+	10, // 2: rookery.v1.HostTap.updated_at:type_name -> google.protobuf.Timestamp
+	5,  // 3: rookery.v1.ListHostTapsResponse.taps:type_name -> rookery.v1.HostTap
+	1,  // 4: rookery.v1.HostService.ListHostInterfaces:input_type -> rookery.v1.ListHostInterfacesRequest
+	3,  // 5: rookery.v1.HostService.AttachHostInterface:input_type -> rookery.v1.AttachHostInterfaceRequest
+	4,  // 6: rookery.v1.HostService.DetachHostInterface:input_type -> rookery.v1.DetachHostInterfaceRequest
+	6,  // 7: rookery.v1.HostService.ListHostTaps:input_type -> rookery.v1.ListHostTapsRequest
+	8,  // 8: rookery.v1.HostService.CreateHostTap:input_type -> rookery.v1.CreateHostTapRequest
+	9,  // 9: rookery.v1.HostService.DeleteHostTap:input_type -> rookery.v1.DeleteHostTapRequest
+	2,  // 10: rookery.v1.HostService.ListHostInterfaces:output_type -> rookery.v1.ListHostInterfacesResponse
+	0,  // 11: rookery.v1.HostService.AttachHostInterface:output_type -> rookery.v1.HostInterface
+	11, // 12: rookery.v1.HostService.DetachHostInterface:output_type -> google.protobuf.Empty
+	7,  // 13: rookery.v1.HostService.ListHostTaps:output_type -> rookery.v1.ListHostTapsResponse
+	5,  // 14: rookery.v1.HostService.CreateHostTap:output_type -> rookery.v1.HostTap
+	11, // 15: rookery.v1.HostService.DeleteHostTap:output_type -> google.protobuf.Empty
+	10, // [10:16] is the sub-list for method output_type
+	4,  // [4:10] is the sub-list for method input_type
+	4,  // [4:4] is the sub-list for extension type_name
+	4,  // [4:4] is the sub-list for extension extendee
+	0,  // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_rookery_v1_host_proto_init() }
@@ -418,7 +757,7 @@ func file_rookery_v1_host_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_host_proto_rawDesc), len(file_rookery_v1_host_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

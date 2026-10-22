@@ -172,6 +172,7 @@ func runServe(args []string) error {
 		gateway.WithVMMutex(apiServer.RunMutex()),
 		gateway.WithInterfaceRuntime(networkRunner),
 		gateway.WithHostWriter(networkRunner),
+		gateway.WithHostTapWriter(lifecycleService),
 		gateway.WithDiagnosticsRuntime(networkRunner),
 		gateway.WithNetworkRuntime(networkRunner), gateway.WithNetworkWriter(lifecycleService),
 		gateway.WithVNFRuntime(vnfClient),

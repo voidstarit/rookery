@@ -57,6 +57,8 @@ type NetworkProvisioner interface {
 	EnsureVhostUser(ctx context.Context, name, mac string, bdID uint32) (socketPath string, swIfIndex uint32, err error)
 	DeleteVhostUser(ctx context.Context, swIfIndex uint32) error
 	CreateTap(ctx context.Context, hostName, gatewayCIDR string, bdID uint32, tableID uint32) (uint32, error)
+	EnsureHostTap(ctx context.Context, name string, bdID uint32, ipv4Address string) (uint32, error)
+	DeleteHostTapByName(ctx context.Context, name string) error
 	CreateMemif(ctx context.Context, hostName, socketPath string, ifID uint32, mac net.HardwareAddr, bdID uint32) (uint32, error)
 	EnsureMemif(ctx context.Context, hostName, socketPath string, ifID uint32, mac net.HardwareAddr, bdID uint32) (uint32, error)
 	DeleteMemif(ctx context.Context, swIfIndex uint32) error

@@ -624,6 +624,215 @@ func (v *VPPNetwork) DeleteTap(ctx context.Context, swIfIndex uint32) error {
 	return checkVPPRetval("delete VNF tap", reply.Retval)
 }
 
+// hostTapTag marks VPP tap interfaces owned by the host-tap feature.
+const hostTapTagPrefix = "rookery-host-tap:"
+
+func hostTapTag(name string) string {
+	return hostTapTagPrefix + name
+}
+
+// EnsureHostTap finds or creates a VPP tap attached to a network bridge
+// domain and configures the Linux side of the tap. It is idempotent so the
+// host connection can be restored after an API or VPP restart.
+func (v *VPPNetwork) EnsureHostTap(ctx context.Context, name string, bdID uint32, ipv4Address string) (uint32, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return 0, errors.New("host tap name is required")
+	}
+	if len(name) > 15 {
+		return 0, fmt.Errorf("host tap name %q exceeds the Linux limit of 15 characters", name)
+	}
+	if bdID == 0 {
+		return 0, errors.New("bridge domain id is required")
+	}
+
+	conn, err := v.connect()
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Disconnect()
+
+	details, err := findInterfaceDetails(ctx, conn, name)
+	if err == nil {
+		if details.Tag != hostTapTag(name) {
+			return 0, fmt.Errorf("VPP interface %s exists but is not a Rookery host tap", name)
+		}
+		if err := v.setTapUpAndAttach(ctx, conn, uint32(details.SwIfIndex), bdID); err != nil {
+			return 0, err
+		}
+		if err := configureHostTap(ctx, name, ipv4Address); err != nil {
+			return 0, err
+		}
+		return uint32(details.SwIfIndex), nil
+	}
+	if !errors.Is(err, errVPPInterfaceNotFound) {
+		return 0, err
+	}
+
+	// A VPP restart normally removes its tap devices, but a stale Linux tap
+	// can survive a crash and would make TapCreateV2 fail on the same name.
+	if _, err := net.InterfaceByName(name); err == nil {
+		if out, err := runIP(ctx, "link", "delete", "dev", name); err != nil {
+			return 0, fmt.Errorf("remove stale host tap %s: %w: %s", name, err, out)
+		}
+	}
+	return v.createHostTap(ctx, name, bdID, ipv4Address)
+}
+
+func (v *VPPNetwork) createHostTap(ctx context.Context, name string, bdID uint32, ipv4Address string) (uint32, error) {
+	conn, err := v.connect()
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Disconnect()
+
+	tapClient := tapv2.NewServiceClient(conn)
+	reply, err := tapClient.TapCreateV2(ctx, &tapv2.TapCreateV2{
+		// ^uint32(0) asks VPP to allocate the tap device index. The zero value
+		// requests instance 0 and fails once another tap exists.
+		ID:            ^uint32(0),
+		UseRandomMac:  true,
+		HostIfNameSet: true,
+		HostIfName:    name,
+		Tag:           hostTapTag(name),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("create host tap: %w", err)
+	}
+	if err := checkVPPRetval("create host tap", reply.Retval); err != nil {
+		return 0, err
+	}
+	swIfIndex := uint32(reply.SwIfIndex)
+
+	rollback := func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), vppCleanupTimeout)
+		defer cancel()
+		_, _ = tapClient.TapDeleteV2(cleanupCtx, &tapv2.TapDeleteV2{SwIfIndex: reply.SwIfIndex})
+	}
+
+	nameReply, err := interfaces.NewServiceClient(conn).SwInterfaceSetInterfaceName(ctx, &interfaces.SwInterfaceSetInterfaceName{
+		SwIfIndex: reply.SwIfIndex,
+		Name:      name,
+	})
+	if err != nil {
+		rollback()
+		return 0, fmt.Errorf("name host tap: %w", err)
+	}
+	if err := checkVPPRetval("name host tap", nameReply.Retval); err != nil {
+		rollback()
+		return 0, err
+	}
+	if err := v.setTapUpAndAttach(ctx, conn, swIfIndex, bdID); err != nil {
+		rollback()
+		return 0, err
+	}
+	if err := configureHostTap(ctx, name, ipv4Address); err != nil {
+		rollback()
+		return 0, err
+	}
+	return swIfIndex, nil
+}
+
+func (v *VPPNetwork) setTapUpAndAttach(ctx context.Context, conn *core.Connection, swIfIndex uint32, bdID uint32) error {
+	flagsReply, err := interfaces.NewServiceClient(conn).SwInterfaceSetFlags(ctx, &interfaces.SwInterfaceSetFlags{
+		SwIfIndex: interface_types.InterfaceIndex(swIfIndex),
+		Flags:     interface_types.IF_STATUS_API_FLAG_ADMIN_UP,
+	})
+	if err != nil {
+		return fmt.Errorf("set host tap up: %w", err)
+	}
+	if err := checkVPPRetval("set host tap up", flagsReply.Retval); err != nil {
+		return err
+	}
+
+	l2Reply, err := l2.NewServiceClient(conn).SwInterfaceSetL2Bridge(ctx, &l2.SwInterfaceSetL2Bridge{
+		RxSwIfIndex: interface_types.InterfaceIndex(swIfIndex),
+		BdID:        bdID,
+		PortType:    l2.L2_API_PORT_TYPE_NORMAL,
+		Enable:      true,
+	})
+	if err != nil {
+		return fmt.Errorf("attach host tap to bridge domain: %w", err)
+	}
+	if err := checkVPPRetval("attach host tap to bridge domain", l2Reply.Retval); err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteHostTapByName removes a host tap by name and tolerates a stale
+// sw_if_index after a VPP restart.
+func (v *VPPNetwork) DeleteHostTapByName(ctx context.Context, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil
+	}
+	conn, err := v.connect()
+	if err != nil {
+		return err
+	}
+	defer conn.Disconnect()
+
+	details, err := findInterfaceDetails(ctx, conn, name)
+	if errors.Is(err, errVPPInterfaceNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if details.Tag != hostTapTag(name) {
+		return nil
+	}
+	reply, err := tapv2.NewServiceClient(conn).TapDeleteV2(ctx, &tapv2.TapDeleteV2{
+		SwIfIndex: details.SwIfIndex,
+	})
+	if err != nil {
+		if isVPPNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("delete host tap %s: %w", name, err)
+	}
+	return checkVPPRetval("delete host tap", reply.Retval)
+}
+
+// configureHostTap brings the Linux side of a VPP-created tap up and, when an
+// address is configured, assigns it. The interface is created asynchronously
+// by VPP, so wait briefly for it to appear.
+func configureHostTap(ctx context.Context, name, ipv4Address string) error {
+	if err := waitForLink(ctx, name, 3*time.Second); err != nil {
+		return err
+	}
+	if address := strings.TrimSpace(ipv4Address); address != "" {
+		if out, err := runIP(ctx, "addr", "replace", address, "dev", name); err != nil {
+			return fmt.Errorf("configure host tap %s address: %w: %s", name, err, out)
+		}
+	}
+	if out, err := runIP(ctx, "link", "set", "up", "dev", name); err != nil {
+		return fmt.Errorf("bring host tap %s up: %w: %s", name, err, out)
+	}
+	return nil
+}
+
+func findInterfaceDetails(ctx context.Context, conn *core.Connection, name string) (*interfaces.SwInterfaceDetails, error) {
+	client := interfaces.NewServiceClient(conn)
+	stream, err := client.SwInterfaceDump(ctx, &interfaces.SwInterfaceDump{})
+	if err != nil {
+		return nil, fmt.Errorf("dump VPP interfaces: %w", err)
+	}
+	for {
+		details, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			return nil, errVPPInterfaceNotFound
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read VPP interface dump: %w", err)
+		}
+		if details.InterfaceName == name {
+			return details, nil
+		}
+	}
+}
+
 // EnsureMemif finds an existing memif by name, or creates it and its socket.
 // It is used for the shared per-network VNF memif, which survives API restarts
 // but is recreated after a VPP restart.

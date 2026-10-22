@@ -9,6 +9,7 @@ import type {
   ACLInterfaceCounters,
   ACLRuleCounter,
   HostInterface,
+  HostTap,
   InterfaceCounters,
   Network,
   StatusResponse,
@@ -20,6 +21,7 @@ import type {
 } from "../types";
 import { ACLDialog } from "./ACLDialog";
 import { AttachDialog } from "./AttachDialog";
+import { HostTapDialog } from "./HostTapDialog";
 import { InterfaceACLDialog } from "./InterfaceACLDialog";
 import { InterfaceDialog } from "./InterfaceDialog";
 import { InterfaceRouteTablesDialog } from "./InterfaceRouteTablesDialog";
@@ -67,13 +69,14 @@ type BackendData = {
   vnfs: VNF[];
 };
 
-type Section = "networks" | "hosts" | "interfaces" | "acl" | "routes" | "troubleshoot";
+type Section = "networks" | "hosts" | "hosttaps" | "interfaces" | "acl" | "routes" | "troubleshoot";
 
 let aclCountersInFlight = false;
 let aclCountersLastLoaded = 0;
 
 const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: "hosts", label: "Host interfaces" },
+  { id: "hosttaps", label: "Host taps" },
   { id: "networks", label: "Networks" },
   { id: "interfaces", label: "Interfaces" },
   { id: "acl", label: "ACLs" },
@@ -84,6 +87,7 @@ const SECTIONS: Array<{ id: Section; label: string }> = [
 export function NetworksTab() {
   const [networks, setNetworks] = useState<Network[]>([]);
   const [hostInterfaces, setHostInterfaces] = useState<HostInterface[]>([]);
+  const [hostTaps, setHostTaps] = useState<HostTap[]>([]);
   const [interfaces, setInterfaces] = useState<VirtualInterface[]>([]);
   const [acls, setAcls] = useState<ACL[]>([]);
   const [vms, setVms] = useState<VM[]>([]);
@@ -92,6 +96,9 @@ export function NetworksTab() {
   const [loading, setLoading] = useState(true);
   const [networkError, setNetworkError] = useState("");
   const [hostError, setHostError] = useState("");
+  const [hostTapError, setHostTapError] = useState("");
+  const [hostTapAction, setHostTapAction] = useState("");
+  const [hostTapDialogOpen, setHostTapDialogOpen] = useState(false);
   const [hostAction, setHostAction] = useState("");
   const [interfaceError, setInterfaceError] = useState("");
   const [aclError, setAclError] = useState("");
@@ -124,6 +131,9 @@ export function NetworksTab() {
 
   useEffect(() => {
     const [root, second, third] = route.segments;
+    if (second !== "hosttaps") {
+      setHostTapDialogOpen(false);
+    }
     if (root === "networks") {
       setInterfaceDialogOpen(false);
       setAttachIface(null);
@@ -267,6 +277,41 @@ export function NetworksTab() {
     }
   };
 
+  const loadHostTaps = async (showErrors = true) => {
+    try {
+      const data = await api<HostTap[]>("/api/host/taps");
+      const list = Array.isArray(data) ? data : [];
+      list.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+      setHostTaps(list);
+      if (showErrors) {
+        setHostTapError("");
+      }
+    } catch (err) {
+      if (showErrors) {
+        setHostTapError(err instanceof Error ? err.message : String(err));
+      }
+    }
+  };
+
+  const deleteHostTap = async (tap: HostTap) => {
+    if (!window.confirm(`Delete host tap ${tap.name}? The host will lose its connection to ${tap.network_name}.`)) {
+      return;
+    }
+    setHostTapAction(tap.name);
+    setHostTapError("");
+    try {
+      await api<void>(`/api/host/taps/${tap.id}`, { method: "DELETE" });
+      setHostTaps((current) => current.filter((item) => item.id !== tap.id));
+      showToast(`Deleted host tap ${tap.name}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setHostTapError(`Could not delete ${tap.name}: ${message}`);
+      showToast(`Could not delete host tap ${tap.name}: ${message}`, true);
+    } finally {
+      setHostTapAction("");
+    }
+  };
+
   const attachHostInterface = async (iface: HostInterface) => {
     if (
       !window.confirm(
@@ -397,6 +442,7 @@ export function NetworksTab() {
     await Promise.allSettled([
       loadNetworks(),
       loadHostInterfaces(),
+      loadHostTaps(),
       loadInterfaces(),
       loadACLs(),
       loadRouteTables(),
@@ -753,6 +799,12 @@ export function NetworksTab() {
         ? "Loading host interfaces…"
         : "No host interfaces found"
       : `${hostInterfaces.length} host interface${hostInterfaces.length === 1 ? "" : "s"} · ${hostInterfaces.filter((iface) => iface.in_vpp).length} in VPP`;
+  const hostTapSummary =
+    hostTaps.length === 0
+      ? loading
+        ? "Loading host taps…"
+        : "No network host taps"
+      : `${hostTaps.length} host tap${hostTaps.length === 1 ? "" : "s"} · ${new Set(hostTaps.map((tap) => tap.network_id)).size} network${new Set(hostTaps.map((tap) => tap.network_id)).size === 1 ? "" : "s"}`;
   const interfaceSummary =
     interfaces.length === 0
       ? loading
@@ -1070,6 +1122,100 @@ export function NetworksTab() {
               </div>
               <h3>No host interfaces found</h3>
               <p>Linux network interfaces will appear here when available.</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section class="panel panel-spaced" aria-labelledby="hosttaps-heading" hidden={section !== "hosttaps"}>
+        <div class="panel-head">
+          <div>
+            <h2 id="hosttaps-heading">Host taps</h2>
+            <p class="panel-subtitle">{hostTapSummary}</p>
+          </div>
+          <div class="actions">
+            <button class="button ghost" type="button" disabled={loading} onClick={() => void refreshAll()}>
+              {loading ? "Refreshing…" : "Refresh"}
+            </button>
+            <button
+              class="button primary"
+              type="button"
+              disabled={!vppReady || networks.length === 0}
+              onClick={() => setHostTapDialogOpen(true)}
+            >
+              Add host tap
+            </button>
+          </div>
+        </div>
+
+        <p class="field-hint">
+          Host taps bridge a Rookery Network into a Linux tap interface on the
+          server. Assign a host IPv4 address here (or use DHCP on the network)
+          and the host can reach VMs and other machines on that network directly.
+          Host taps are persisted and recreated after an API or VPP restart.
+        </p>
+
+        {hostTapError ? (
+          <div class="banner" role="alert">
+            {hostTapError}
+          </div>
+        ) : null}
+
+        <div class="table-wrap">
+          {hostTaps.length > 0 ? (
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Interface</th>
+                  <th scope="col">Network</th>
+                  <th scope="col">Host address</th>
+                  <th scope="col">VPP index</th>
+                  <th scope="col">Created</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hostTaps.map((tap) => (
+                  <tr key={tap.id}>
+                    <td>
+                      <span class="vm-name mono">{tap.name}</span>
+                    </td>
+                    <td>
+                      <span class="vm-name">{tap.network_name}</span>
+                      <span class="vm-description mono">#{tap.network_id}</span>
+                    </td>
+                    <td class="mono">{tap.ipv4_address || "—"}</td>
+                    <td class="mono">{tap.sw_if_index || "—"}</td>
+                    <td>{formatDate(tap.created_at)}</td>
+                    <td>
+                      <button
+                        class="button ghost"
+                        type="button"
+                        disabled={hostTapAction === tap.name || !vppReady}
+                        onClick={() => void deleteHostTap(tap)}
+                      >
+                        {hostTapAction === tap.name ? "Deleting…" : "Delete"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div class="empty">
+              <div class="empty-mark" aria-hidden="true">
+                ⇄
+              </div>
+              <h3>No host taps</h3>
+              <p>Connect a Rookery Network to the Linux host to reach its machines.</p>
+              <button
+                class="button primary"
+                type="button"
+                disabled={!vppReady || networks.length === 0}
+                onClick={() => setHostTapDialogOpen(true)}
+              >
+                Add host tap
+              </button>
             </div>
           )}
         </div>
@@ -1791,6 +1937,21 @@ export function NetworksTab() {
             setInterfaceError("");
             showToast(`Updated route tables for ${updated.name}`);
             void loadRouteTables(false);
+          }}
+        />
+      ) : null}
+
+      {hostTapDialogOpen ? (
+        <HostTapDialog
+          networks={networks}
+          onClose={() => setHostTapDialogOpen(false)}
+          onSaved={(tap) => {
+            setHostTapDialogOpen(false);
+            setHostTaps((current) =>
+              [...current, tap].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
+            );
+            setHostTapError("");
+            showToast(`Created host tap ${tap.name}`);
           }}
         />
       ) : null}

@@ -578,6 +578,26 @@ NIC). Attachments are persisted and recreated after a VPP restart. **Detach**
 removes the VPP interface and returns the NIC to the host; the host may need to
 renew DHCP. An interface used by a NAT44 VNF cannot be detached here.
 
+### Host taps
+
+**Host taps** (the next subtab under **Rookery Networks**) connect a Rookery
+Network's bridge domain to a Linux tap interface on the server, so processes on
+the host can reach VMs and other machines on that network without going through
+a VM. Create one by choosing a network and an optional Linux interface name
+(defaults to `hostnet<network id>`); the name is limited to 15 characters by
+Linux. An optional IPv4 address inside the network CIDR (for example
+`10.20.0.50/24`) is assigned to the host side of the tap; it must use the
+network's prefix length and stay outside the first five reserved addresses, the
+DHCP range, and DHCP static assignments. Leave the address empty to use DHCP or
+configure the interface manually.
+
+Host taps create a VPP tap (`hostnet…`) in the network bridge domain and bind it
+to the network's VRF. They are stored in `network_host_taps` and recreated by
+API startup reconciliation and after VPP restarts. Deleting a network also
+deletes its host taps. The API is `GET`/`POST /api/host/taps` and
+`DELETE /api/host/taps/{id}`; the create body accepts `network_id`, optional
+`name`, and optional `ipv4_address`.
+
 ### Network addressing
 
 Every Rookery Network requires an IPv4 CIDR and an IPv6 CIDR. The create dialog
@@ -858,6 +878,9 @@ native routes plus the static UI.
 | `GET`    | `/api/networks/{id}` | Get one network                 |
 | `DELETE` | `/api/networks/{id}` | Delete an empty network and its VNFs |
 | `GET`    | `/api/host/interfaces` | List physical/external NICs, link state, and VPP host-interface correlation |
+| `GET`    | `/api/host/taps` | List persisted network-to-host taps (`?network_id=<id>` optional) |
+| `POST`   | `/api/host/taps` | Create a network-to-host tap (`network_id`, optional `name`, `ipv4_address`) |
+| `DELETE` | `/api/host/taps/{id}` | Delete a network-to-host tap |
 | `GET`    | `/api/troubleshoot/vpp-graph` | Active VPP packet-processing node graph |
 | `GET`    | `/api/troubleshoot/acl-counters` | Per-interface ACL rule-match counters |
 | `POST`   | `/api/troubleshoot/trace` | Start a VPP packet trace (`node`, `count`) |

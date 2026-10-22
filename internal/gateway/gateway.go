@@ -63,6 +63,7 @@ type options struct {
 	logger             zerolog.Logger
 	vppInterfaces      VPPInterfaceSource
 	hostWriter         HostWriter
+	hostTapWriter      HostTapWriter
 	vnfRuntime         VNFRuntime
 	vnfStatusProvider  VNFStatusProvider
 	vnfWriter          VNFWriter
@@ -201,6 +202,13 @@ func WithHostWriter(writer HostWriter) Option {
 	}
 }
 
+// WithHostTapWriter enables persistent network-to-host taps.
+func WithHostTapWriter(writer HostTapWriter) Option {
+	return func(opts *options) {
+		opts.hostTapWriter = writer
+	}
+}
+
 // New builds the generated read-only gateway. By default it uses an in-process
 // bufconn listener for tests and embedding. Use WithGRPCListener to expose gRPC
 // on a real Unix or TCP socket.
@@ -231,7 +239,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	routeTables := &routeTableService{store: st, runtime: options.aclRuntime, readiness: ready}
 	vnfs := &vnfService{store: st, runtime: options.vnfRuntime, statusProvider: options.vnfStatusProvider, writer: options.vnfWriter}
 	backends := &storageBackendService{store: st, readiness: ready, disks: options.diskProvisioner, mu: options.diskMutex}
-	hostInterfaces := &hostService{source: options.vppInterfaces, store: st, writer: options.hostWriter}
+	hostInterfaces := &hostService{source: options.vppInterfaces, store: st, writer: options.hostWriter, taps: options.hostTapWriter}
 	troubleshoot := &troubleshootService{runtime: options.diagnostics, readiness: ready}
 	captures := &captureService{runtime: options.diagnostics, readiness: ready}
 	rookeryv1.RegisterSystemServiceServer(server, system)

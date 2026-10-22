@@ -24,6 +24,7 @@ var createdMethods = map[string]bool{
 	"/rookery.v1.CaptureService/StartCapture":                true,
 	"/rookery.v1.RouteTableService/CreateRouteTable":         true,
 	"/rookery.v1.RouteTableService/CreateRoute":              true,
+	"/rookery.v1.HostService/CreateHostTap":                  true,
 }
 
 var noContentMethods = map[string]bool{
@@ -40,6 +41,7 @@ var noContentMethods = map[string]bool{
 	"/rookery.v1.TroubleshootService/ClearTrace":             true,
 	"/rookery.v1.RouteTableService/DeleteRouteTable":         true,
 	"/rookery.v1.RouteTableService/DeleteRoute":              true,
+	"/rookery.v1.HostService/DeleteHostTap":                  true,
 	"/rookery.v1.VMService/ResetVM":                          true,
 	"/rookery.v1.VMService/CtrlAltDel":                       true,
 }
@@ -66,6 +68,8 @@ func setLocationHeader(method string, response proto.Message, writer http.Respon
 		writer.Header().Set("Location", fmt.Sprintf("/api/route-tables/%d", value.GetId()))
 	case *rookeryv1.Route:
 		writer.Header().Set("Location", fmt.Sprintf("/api/routes/%d", value.GetId()))
+	case *rookeryv1.HostTap:
+		writer.Header().Set("Location", fmt.Sprintf("/api/host/taps/%d", value.GetId()))
 	}
 }
 

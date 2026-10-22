@@ -389,6 +389,7 @@ type hostService struct {
 	source VPPInterfaceSource
 	store  *store.Store
 	writer HostWriter
+	taps   HostTapWriter
 }
 
 func (s *hostService) ListHostInterfaces(ctx context.Context, _ *rookeryv1.ListHostInterfacesRequest) (*rookeryv1.ListHostInterfacesResponse, error) {

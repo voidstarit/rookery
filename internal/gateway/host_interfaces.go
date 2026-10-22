@@ -25,6 +25,13 @@ type HostWriter interface {
 	DeleteHostInterface(ctx context.Context, nic string) error
 }
 
+// HostTapWriter creates and deletes persistent taps between a Rookery
+// Network and the Linux host.
+type HostTapWriter interface {
+	CreateNetworkHostTap(ctx context.Context, networkID int64, name, ipv4Address string) (store.NetworkHostTap, error)
+	DeleteNetworkHostTap(ctx context.Context, id int64) error
+}
+
 func (s *hostService) listInterfaces(ctx context.Context) (*rookeryv1.ListHostInterfacesResponse, error) {
 	interfaces, err := host.ListHostInterfaces()
 	if err != nil {
@@ -175,4 +182,96 @@ func (s *hostService) DetachHostInterface(ctx context.Context, request *rookeryv
 		}
 	}
 	return &emptypb.Empty{}, nil
+}
+
+func (s *hostService) ListHostTaps(ctx context.Context, request *rookeryv1.ListHostTapsRequest) (*rookeryv1.ListHostTapsResponse, error) {
+	var networkID *int64
+	if request.GetNetworkId() > 0 {
+		id := request.GetNetworkId()
+		if _, err := s.store.GetNetwork(ctx, id); err != nil {
+			return nil, storeReadError(err, store.ErrNetworkNotFound, "network not found")
+		}
+		networkID = &id
+	}
+	taps, err := s.store.ListNetworkHostTaps(ctx, networkID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not list host taps")
+	}
+	response := &rookeryv1.ListHostTapsResponse{Taps: make([]*rookeryv1.HostTap, 0, len(taps))}
+	for _, tap := range taps {
+		response.Taps = append(response.Taps, hostTapToProto(tap))
+	}
+	return response, nil
+}
+
+func (s *hostService) CreateHostTap(ctx context.Context, request *rookeryv1.CreateHostTapRequest) (*rookeryv1.HostTap, error) {
+	if s.taps == nil {
+		return nil, status.Error(codes.Unavailable, "host tap runtime is not configured")
+	}
+	tap, err := s.taps.CreateNetworkHostTap(ctx, request.GetNetworkId(), request.GetName(), request.GetIpv4Address())
+	if err != nil {
+		return nil, mapHostTapWriteError(err)
+	}
+	return hostTapToProto(tap), nil
+}
+
+func (s *hostService) DeleteHostTap(ctx context.Context, request *rookeryv1.DeleteHostTapRequest) (*emptypb.Empty, error) {
+	if s.taps == nil {
+		return nil, status.Error(codes.Unavailable, "host tap runtime is not configured")
+	}
+	if err := s.taps.DeleteNetworkHostTap(ctx, request.GetId()); err != nil {
+		return nil, mapHostTapWriteError(err)
+	}
+	return &emptypb.Empty{}, nil
+}
+
+func hostTapToProto(tap store.NetworkHostTap) *rookeryv1.HostTap {
+	return &rookeryv1.HostTap{
+		Id:          tap.ID,
+		NetworkId:   tap.NetworkID,
+		NetworkName: tap.NetworkName,
+		Name:        tap.Name,
+		SwIfIndex:   tap.SwIfIndex,
+		Ipv4Address: tap.IPv4Address,
+		CreatedAt:   timestamp(tap.CreatedAt),
+		UpdatedAt:   timestamp(tap.UpdatedAt),
+	}
+}
+
+type hostTapStatusError interface {
+	HostTapStatus() (int, string)
+}
+
+type hostTapNetworkStatusError interface {
+	NetworkStatus() (int, string)
+}
+
+func mapHostTapWriteError(err error) error {
+	var tapError hostTapStatusError
+	if errors.As(err, &tapError) {
+		return statusForHostTap(tapError.HostTapStatus())
+	}
+	var networkError hostTapNetworkStatusError
+	if errors.As(err, &networkError) {
+		return statusForHostTap(networkError.NetworkStatus())
+	}
+	return status.Error(codes.Internal, "host tap operation failed")
+}
+
+func statusForHostTap(httpStatus int, message string) error {
+	if message == "" {
+		message = "host tap operation failed"
+	}
+	switch httpStatus {
+	case 400:
+		return status.Error(codes.InvalidArgument, message)
+	case 404:
+		return status.Error(codes.NotFound, message)
+	case 409:
+		return status.Error(codes.Aborted, message)
+	case 503:
+		return status.Error(codes.Unavailable, message)
+	default:
+		return status.Error(codes.Internal, message)
+	}
 }

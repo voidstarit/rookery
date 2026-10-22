@@ -49,6 +49,12 @@ func (f *fakeBackend) PrepareNetworkVNFs(_ context.Context, network store.Networ
 func (f *fakeBackend) CleanupNetworkVNFs(context.Context, store.Network) error       { return nil }
 func (f *fakeBackend) DeleteNetworkRouteTables(context.Context, store.Network) error { return nil }
 
+func (f *fakeBackend) CreateNetworkHostTap(_ context.Context, network store.Network, name, address string) (store.NetworkHostTap, error) {
+	return store.NetworkHostTap{ID: 1, NetworkID: network.ID, NetworkName: network.Name, Name: name, IPv4Address: address}, nil
+}
+func (f *fakeBackend) DeleteNetworkHostTap(context.Context, store.NetworkHostTap) error { return nil }
+func (f *fakeBackend) CleanupNetworkHostTaps(context.Context, store.Network) error      { return nil }
+
 func TestVNFAndNetworkLifecycle(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "lifecycle.db"))
 	if err != nil {

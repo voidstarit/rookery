@@ -4,6 +4,7 @@ package rookery.v1;
 
 import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
 import "validate/validate.proto";
 
 option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
@@ -30,6 +31,29 @@ service HostService {
   // available to the host again.
   rpc DetachHostInterface(DetachHostInterfaceRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {delete: "/api/host/interfaces/{name}"};
+  }
+
+  // ListHostTaps lists persistent taps that connect a Rookery Network to the
+  // Linux host.
+  rpc ListHostTaps(ListHostTapsRequest) returns (ListHostTapsResponse) {
+    option (google.api.http) = {
+      get: "/api/host/taps"
+      response_body: "taps"
+    };
+  }
+
+  // CreateHostTap creates a VPP tap on a network bridge domain and persists it
+  // so it is recreated after an API or VPP restart.
+  rpc CreateHostTap(CreateHostTapRequest) returns (HostTap) {
+    option (google.api.http) = {
+      post: "/api/host/taps"
+      body: "*"
+    };
+  }
+
+  // DeleteHostTap removes a persistent network host tap.
+  rpc DeleteHostTap(DeleteHostTapRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/host/taps/{id}"};
   }
 }
 
@@ -61,4 +85,40 @@ message AttachHostInterfaceRequest {
 
 message DetachHostInterfaceRequest {
   string name = 1 [(validate.rules).string = {min_len: 1}];
+}
+
+// HostTap is a VPP tap that bridges a Rookery Network to the Linux host. The
+// host-side interface is named `name`; `ipv4_address` is optional and, when
+// set, is assigned to that interface.
+message HostTap {
+  int64 id = 1;
+  int64 network_id = 2;
+  string network_name = 3;
+  string name = 4;
+  uint32 sw_if_index = 5;
+  string ipv4_address = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message ListHostTapsRequest {
+  int64 network_id = 1 [(validate.rules).int64 = {ignore_empty: true, gt: 0}];
+}
+
+message ListHostTapsResponse {
+  repeated HostTap taps = 1;
+}
+
+message CreateHostTapRequest {
+  int64 network_id = 1 [(validate.rules).int64 = {gt: 0}];
+  string name = 2 [(validate.rules).string = {
+    ignore_empty: true
+    max_len: 15
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  string ipv4_address = 3 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
+}
+
+message DeleteHostTapRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
 }

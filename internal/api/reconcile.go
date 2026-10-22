@@ -44,6 +44,9 @@ func (s *Server) reconcileInfrastructure(ctx context.Context) error {
 	if err := s.ReconcileNetworks(ctx); err != nil {
 		errs = append(errs, err)
 	}
+	if err := s.ReconcileNetworkHostTaps(ctx); err != nil {
+		errs = append(errs, err)
+	}
 	if err := s.ReconcileVhostUsers(ctx); err != nil {
 		errs = append(errs, err)
 	}
