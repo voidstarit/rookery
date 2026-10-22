@@ -524,3 +524,52 @@ func TestCoreDHCPConfigValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestCoreDHCPExtraOptions(t *testing.T) {
+	h, err := setupCoreDHCP(
+		testDHCPGateway,
+		testDHCPMask,
+		testDHCPStart,
+		testDHCPEnd,
+		testDHCPDNS,
+		filepath.Join(t.TempDir(), "1.coredhcp.json"),
+		coreDHCPLeaseTime.String(),
+		testDHCPBroad,
+		testDHCPGateway,
+		"",
+		`[{"code":15,"format":"string","value":"lab.test"},{"code":42,"format":"ipv4","value":"10.20.0.1,10.20.0.2"}]`,
+	)
+	if err != nil {
+		t.Fatalf("setup CoreDHCP: %v", err)
+	}
+	mac := dhcpTestMAC(t, "02:00:00:00:00:90")
+	offer, stop := dhcpTestExchange(t, h, dhcpTestRequest(t, dhcpv4.MessageTypeDiscover, mac))
+	if stop || offer == nil {
+		t.Fatalf("discover returned stop=%v response=%v", stop, offer)
+	}
+	if got := offer.DomainName(); got != "lab.test" {
+		t.Fatalf("domain name = %q, want lab.test", got)
+	}
+	ntp := offer.NTPServers()
+	if len(ntp) != 2 || ntp[0].String() != "10.20.0.1" || ntp[1].String() != "10.20.0.2" {
+		t.Fatalf("NTP servers = %v", ntp)
+	}
+}
+
+func TestCoreDHCPOptionsRejectReservedCode(t *testing.T) {
+	if _, err := setupCoreDHCP(
+		testDHCPGateway,
+		testDHCPMask,
+		testDHCPStart,
+		testDHCPEnd,
+		testDHCPDNS,
+		filepath.Join(t.TempDir(), "1.coredhcp.json"),
+		coreDHCPLeaseTime.String(),
+		testDHCPBroad,
+		testDHCPGateway,
+		"",
+		`[{"code":6,"format":"ipv4","value":"1.1.1.1"}]`,
+	); err == nil {
+		t.Fatal("setup accepted a server-managed option code")
+	}
+}

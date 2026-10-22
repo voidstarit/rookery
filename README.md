@@ -1100,6 +1100,25 @@ curl -sS -X POST http://127.0.0.1:8080/api/vnfs \
                  "lease_time":"12h"}}'
 ```
 
+DHCP VNFs also accept extra options through `dhcp_options`. Each option has a
+`code`, a `format` (`string`, `ipv4`, `ipv6`, `hex`, `uint8`, `uint16`,
+`uint32`, or `domain-list`), and a `value`:
+
+```json
+{
+  "dhcp_options": [
+    {"code": 15, "format": "string", "value": "lab.test"},
+    {"code": 42, "format": "ipv4", "value": "10.20.0.1"},
+    {"code": 119, "format": "domain-list", "value": "lab.test, apps.lab.test"}
+  ]
+}
+```
+
+For DHCPv6 use the corresponding DHCPv6 codes, for example option `24` with
+`domain-list` for the domain search list. Server-managed options such as the
+subnet mask, router, DNS servers, lease timers, and DHCPv6 IA options are
+rejected; use the dedicated `dns` field for DNS servers.
+
 Add a DNS VNF with local records and upstream forwarding:
 
 ```bash

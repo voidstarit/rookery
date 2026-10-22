@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
 import type {
+  DHCPOption,
   DHCPStaticAssignment,
   DNATRule,
   DNSRecord,
@@ -36,6 +37,7 @@ type FormState = {
   nat44Pool: string;
   dnatRules: DNATRule[];
   staticAssignments: DHCPStaticAssignment[];
+  dhcpOptions: DHCPOption[];
   dnsRecords: DNSRecord[];
   dnsForward: boolean;
   dnsForwarders: string;
@@ -101,6 +103,9 @@ function defaultForm(vnf: VNF | null, networks: Network[], vppReady: boolean, in
     dnatRules: Array.isArray(config.dnat_rules) ? config.dnat_rules.map((rule) => ({ ...rule })) : [],
     staticAssignments: Array.isArray(config.static_assignments)
       ? config.static_assignments.map((assignment) => ({ ...assignment }))
+      : [],
+    dhcpOptions: Array.isArray(config.dhcp_options)
+      ? config.dhcp_options.map((option) => ({ ...option }))
       : [],
     dnsRecords: Array.isArray(config.dns_records)
       ? config.dns_records.map((record) => ({ ...record }))
@@ -372,6 +377,11 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
           range_end: form.rangeEnd.trim(),
           dns: form.dns.trim(),
           lease_time: form.leaseTime.trim() || "12h",
+          dhcp_options: form.dhcpOptions.map((option) => ({
+            code: Number(option.code),
+            format: option.format,
+            value: option.value.trim(),
+          })),
           ...(form.transport === "shared" || form.transport === "dedicated" || form.transport === "tap"
             ? { transport: form.transport }
             : {}),
@@ -459,6 +469,29 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
     setForm((current) => ({
       ...current,
       staticAssignments: current.staticAssignments.filter((_, index_) => index_ !== index),
+    }));
+  };
+
+  const addDHCPOption = () => {
+    setForm((current) => ({
+      ...current,
+      dhcpOptions: [...current.dhcpOptions, { code: 15, format: "string", value: "" }],
+    }));
+  };
+
+  const updateDHCPOption = <K extends keyof DHCPOption>(index: number, key: K, value: DHCPOption[K]) => {
+    setForm((current) => ({
+      ...current,
+      dhcpOptions: current.dhcpOptions.map((option, index_) =>
+        index_ === index ? { ...option, [key]: value } : option
+      ),
+    }));
+  };
+
+  const removeDHCPOption = (index: number) => {
+    setForm((current) => ({
+      ...current,
+      dhcpOptions: current.dhcpOptions.filter((_, index_) => index_ !== index),
     }));
   };
 
@@ -747,6 +780,100 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
               </div>
             </div>
           ) : null}
+          <div class="form-grid">
+            <div class="field field-wide">
+              <div class="panel-head acl-rules-head">
+                <div>
+                  <span class="field-label">Extra DHCP options <em>optional</em></span>
+                  <span class="field-hint">
+                    Advertise additional options such as option 15 (domain name), 42 (NTP),
+                    119 (domain search), or DHCPv6 option 24 (domain search). Use
+                    <code>string</code>, <code>ipv4</code>, <code>ipv6</code>, <code>hex</code>,
+                    <code>uint8</code>, <code>uint16</code>, <code>uint32</code>, or
+                    <code>domain-list</code>. DNS server options are set through the DNS field.
+                  </span>
+                </div>
+                <button class="button ghost" type="button" onClick={addDHCPOption}>
+                  Add option
+                </button>
+              </div>
+              <div class="acl-rule-rows">
+                {form.dhcpOptions.map((option, index) => (
+                  <div class="acl-rule" key={index}>
+                    <div class="acl-rule-head">
+                      <span class="dnat-rule-title">Option {index + 1}</span>
+                      <button
+                        class="row-action danger"
+                        type="button"
+                        onClick={() => removeDHCPOption(index)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <div class="acl-rule-fields">
+                      <label class="field">
+                        <span class="field-label">Code</span>
+                        <input
+                          type="number"
+                          required
+                          min={1}
+                          max={form.type === "dhcpv6" ? 65535 : 254}
+                          value={option.code || ""}
+                          onInput={(event) =>
+                            updateDHCPOption(index, "code", Number(event.currentTarget.value))
+                          }
+                        />
+                      </label>
+                      <label class="field">
+                        <span class="field-label">Format</span>
+                        <select
+                          value={option.format}
+                          onChange={(event) => updateDHCPOption(index, "format", event.currentTarget.value)}
+                        >
+                          <option value="string">string</option>
+                          <option value="ipv4">ipv4</option>
+                          <option value="ipv6">ipv6</option>
+                          <option value="hex">hex</option>
+                          <option value="uint8">uint8</option>
+                          <option value="uint16">uint16</option>
+                          <option value="uint32">uint32</option>
+                          <option value="domain-list">domain-list</option>
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span class="field-label">Value</span>
+                        <input
+                          type="text"
+                          required
+                          autocomplete="off"
+                          spellcheck={false}
+                          placeholder={
+                            option.format === "ipv4"
+                              ? "10.20.0.1, 10.20.0.2"
+                              : option.format === "ipv6"
+                                ? "fd00:20::1"
+                                : option.format === "domain-list"
+                                  ? "lab.test, apps.lab.test"
+                                  : option.format === "hex"
+                                    ? "01:02:ff"
+                                    : "lab.test"
+                          }
+                          value={option.value}
+                          onInput={(event) => updateDHCPOption(index, "value", event.currentTarget.value)}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ))}
+                {form.dhcpOptions.length === 0 ? (
+                  <p class="field-hint">
+                    No extra options. Example: code 15, format string, value lab.test advertises
+                    the domain name.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </div>
           </>
         ) : dns ? (
           <>

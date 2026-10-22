@@ -2527,6 +2527,93 @@ func TestDNSVNFLifecycle(t *testing.T) {
 	}
 }
 
+func TestDHCPOptionsLifecycle(t *testing.T) {
+	env := newTestAPI(t)
+	handler := env.handler
+	network := createNetworkAPI(t, handler, "lab")
+
+	recorder := do(t, handler, http.MethodPost, "/api/vnfs", map[string]any{
+		"name":       "lab-dhcp-options",
+		"network_id": network.ID,
+		"type":       store.VNFTypeDHCPv4,
+		"enabled":    false,
+		"config": map[string]any{
+			"gateway":     "10.20.0.1/24",
+			"range_start": "10.20.0.100",
+			"range_end":   "10.20.0.200",
+			"dhcp_options": []map[string]any{
+				{"code": 15, "format": "string", "value": "lab.test"},
+				{"code": 42, "format": "ipv4", "value": "10.20.0.1, 10.20.0.2"},
+				{"code": 119, "format": "domain-list", "value": "lab.test, apps.lab.test"},
+			},
+		},
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create DHCP options status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	created := decode[store.VNF](t, recorder)
+	if len(created.Config.DHCPOptions) != 3 {
+		t.Fatalf("created options = %+v", created.Config.DHCPOptions)
+	}
+	if created.Config.DHCPOptions[0] != (store.DHCPOption{Code: 15, Format: "string", Value: "lab.test"}) ||
+		created.Config.DHCPOptions[1].Value != "10.20.0.1,10.20.0.2" ||
+		created.Config.DHCPOptions[2].Value != "lab.test.,apps.lab.test." {
+		t.Fatalf("normalized options = %+v", created.Config.DHCPOptions)
+	}
+
+	invalid := []struct {
+		name    string
+		vnfType string
+		config  map[string]any
+	}{
+		{
+			name: "reserved DNS", vnfType: store.VNFTypeDHCPv4,
+			config: map[string]any{"dhcp_options": []map[string]any{{"code": 6, "format": "ipv4", "value": "1.1.1.1"}}},
+		},
+		{
+			name: "bad format", vnfType: store.VNFTypeDHCPv4,
+			config: map[string]any{"dhcp_options": []map[string]any{{"code": 15, "format": "bogus", "value": "lab.test"}}},
+		},
+		{
+			name: "bad value", vnfType: store.VNFTypeDHCPv4,
+			config: map[string]any{"dhcp_options": []map[string]any{{"code": 42, "format": "ipv4", "value": "nope"}}},
+		},
+		{
+			name: "duplicate", vnfType: store.VNFTypeDHCPv4,
+			config: map[string]any{"dhcp_options": []map[string]any{
+				{"code": 15, "format": "string", "value": "lab.test"},
+				{"code": 15, "format": "string", "value": "other.test"},
+			}},
+		},
+		{
+			name: "not DHCP", vnfType: store.VNFTypeDNS,
+			config: map[string]any{"dhcp_options": []map[string]any{{"code": 15, "format": "string", "value": "lab.test"}}},
+		},
+	}
+	for index, test := range invalid {
+		config := map[string]any{
+			"gateway":     "10.20.0.1/24",
+			"range_start": "10.20.0.100",
+			"range_end":   "10.20.0.200",
+		}
+		if test.vnfType == store.VNFTypeDNS {
+			config = map[string]any{}
+		}
+		for key, value := range test.config {
+			config[key] = value
+		}
+		recorder := do(t, handler, http.MethodPost, "/api/vnfs", map[string]any{
+			"name":       fmt.Sprintf("bad-dhcp-options-%d", index),
+			"network_id": network.ID,
+			"type":       test.vnfType,
+			"config":     config,
+		})
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("%s status = %d, body = %s", test.name, recorder.Code, recorder.Body.String())
+		}
+	}
+}
+
 func TestVNFFailures(t *testing.T) {
 	env := newTestAPI(t)
 	handler := env.handler

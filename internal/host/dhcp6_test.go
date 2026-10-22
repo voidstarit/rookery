@@ -88,6 +88,35 @@ func dhcpv6Address(t *testing.T, msg dhcpv6.DHCPv6) net.IP {
 	return addr.IPv6Addr
 }
 
+func TestCoreDHCPv6ExtraOptions(t *testing.T) {
+	h, err := setupCoreDHCPv6(
+		testDHCPv6Gateway,
+		testDHCPv6Start,
+		testDHCPv6End,
+		testDHCPv6DNS,
+		filepath.Join(t.TempDir(), "1.json"),
+		coreDHCPLeaseTime.String(),
+		testDHCPv6DUID,
+		`[{"code":24,"format":"domain-list","value":"lab.test,apps.lab.test"}]`,
+	)
+	if err != nil {
+		t.Fatalf("setup CoreDHCPv6: %v", err)
+	}
+	mac := net.HardwareAddr{0x02, 0, 0, 0, 0, 0x90}
+	sol := dhcpv6Solicit(t, mac)
+	sol.UpdateOption(dhcpv6.OptRequestedOption(dhcpv6.OptionCode(24)))
+	adv := dhcpv6Advertise(t, sol)
+	out, stop := h(sol, adv)
+	if stop || out == nil {
+		t.Fatalf("solicit returned stop=%v response=%v", stop, out)
+	}
+	adv = out.(*dhcpv6.Message)
+	option := adv.Options.GetOne(dhcpv6.OptionCode(24))
+	if option == nil || len(option.ToBytes()) == 0 {
+		t.Fatalf("advertise domain search option = %v", option)
+	}
+}
+
 func TestCoreDHCPv6AllocationAndPersistence(t *testing.T) {
 	leasePath := filepath.Join(t.TempDir(), "1.json")
 	h := newDHCPv6TestHandler(t, leasePath, testDHCPv6End)

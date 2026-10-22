@@ -306,6 +306,12 @@ func configToProto(config store.VNFConfig) *rookeryv1.VNFConfig {
 			Name: record.Name, Type: record.Type, Value: record.Value, Ttl: record.TTL,
 		})
 	}
+	dhcpOptions := make([]*rookeryv1.DHCPOption, 0, len(config.DHCPOptions))
+	for _, option := range config.DHCPOptions {
+		dhcpOptions = append(dhcpOptions, &rookeryv1.DHCPOption{
+			Code: uint32(option.Code), Format: option.Format, Value: option.Value,
+		})
+	}
 	return &rookeryv1.VNFConfig{
 		Gateway: config.Gateway, RangeStart: config.RangeStart, RangeEnd: config.RangeEnd,
 		Dns: config.DNS, LeaseTime: config.LeaseTime, BindIp: config.BindIP,
@@ -321,5 +327,6 @@ func configToProto(config store.VNFConfig) *rookeryv1.VNFConfig {
 		DnsRecords:        dnsRecords,
 		DnsForward:        config.DNSForward,
 		DnsForwarders:     append([]string(nil), config.DNSForwarders...),
+		DhcpOptions:       dhcpOptions,
 	}
 }

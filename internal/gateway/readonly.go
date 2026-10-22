@@ -325,6 +325,12 @@ func vnfToProto(vnf store.VNF) *rookeryv1.VNF {
 			Name: record.Name, Type: record.Type, Value: record.Value, Ttl: record.TTL,
 		})
 	}
+	dhcpOptions := make([]*rookeryv1.DHCPOption, 0, len(vnf.Config.DHCPOptions))
+	for _, option := range vnf.Config.DHCPOptions {
+		dhcpOptions = append(dhcpOptions, &rookeryv1.DHCPOption{
+			Code: uint32(option.Code), Format: option.Format, Value: option.Value,
+		})
+	}
 	return &rookeryv1.VNF{
 		Id: vnf.ID, Name: vnf.Name, NetworkId: vnf.NetworkID, NetworkName: vnf.NetworkName,
 		Type: vnf.Type, Enabled: vnf.Enabled,
@@ -343,6 +349,7 @@ func vnfToProto(vnf store.VNF) *rookeryv1.VNF {
 			DnsRecords:        dnsRecords,
 			DnsForward:        vnf.Config.DNSForward,
 			DnsForwarders:     append([]string(nil), vnf.Config.DNSForwarders...),
+			DhcpOptions:       dhcpOptions,
 		},
 		TapSwIfIndex: vnf.TapSwIfIndex, TapHostName: vnf.TapHostName,
 		CreatedAt: timestamp(vnf.CreatedAt), UpdatedAt: timestamp(vnf.UpdatedAt),

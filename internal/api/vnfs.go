@@ -68,6 +68,14 @@ type vnfConfigPayload struct {
 	DNSRecords    []dnsRecordPayload `json:"dns_records"`
 	DNSForward    bool               `json:"dns_forward"`
 	DNSForwarders []string           `json:"dns_forwarders"`
+
+	DHCPOptions []dhcpOptionPayload `json:"dhcp_options"`
+}
+
+type dhcpOptionPayload struct {
+	Code   uint16 `json:"code"`
+	Format string `json:"format"`
+	Value  string `json:"value"`
 }
 
 type dnsRecordPayload struct {
@@ -124,6 +132,9 @@ func (p vnfPayload) toType() (string, error) {
 }
 
 func (p vnfConfigPayload) toConfig(vnfType string) (store.VNFConfig, error) {
+	if vnfType != store.VNFTypeDHCPv4 && vnfType != store.VNFTypeDHCPv6 && len(p.DHCPOptions) > 0 {
+		return store.VNFConfig{}, errors.New("config.dhcp_options is supported for DHCP VNFs only")
+	}
 	if vnfType == store.VNFTypeBGP {
 		return normalizeBGPConfig(p)
 	}
@@ -190,6 +201,10 @@ func (p vnfConfigPayload) toConfig(vnfType string) (store.VNFConfig, error) {
 				return store.VNFConfig{}, err
 			}
 		}
+		options, err := normalizeDHCPOptionsPayload(p.DHCPOptions, vnfType == store.VNFTypeDHCPv6)
+		if err != nil {
+			return store.VNFConfig{}, err
+		}
 		return store.VNFConfig{
 			Gateway:           normalizedGateway,
 			RangeStart:        normalizedStart,
@@ -199,6 +214,7 @@ func (p vnfConfigPayload) toConfig(vnfType string) (store.VNFConfig, error) {
 			BindIP:            bindIP,
 			StaticAssignments: staticAssignments,
 			Transport:         transport,
+			DHCPOptions:       options,
 		}, nil
 	case store.VNFTypeNAT44:
 		return normalizeNAT44Config(p)
@@ -324,6 +340,14 @@ func normalizeDNATRules(payload []dnatRulePayload, subnet *net.IPNet) ([]store.D
 		})
 	}
 	return rules, nil
+}
+
+func normalizeDHCPOptionsPayload(payload []dhcpOptionPayload, ipv6 bool) ([]store.DHCPOption, error) {
+	options := make([]store.DHCPOption, 0, len(payload))
+	for _, option := range payload {
+		options = append(options, store.DHCPOption{Code: option.Code, Format: option.Format, Value: option.Value})
+	}
+	return host.NormalizeDHCPOptions(options, ipv6)
 }
 
 func normalizeDHCPv4StaticAssignments(payload []dhcpStaticAssignmentPayload, gateway net.IP, subnet *net.IPNet, bindIP string) ([]store.DHCPStaticAssignment, error) {

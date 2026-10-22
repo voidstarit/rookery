@@ -112,6 +112,11 @@ func vnfConfigPayloadFromProto(config *rookeryv1.VNFConfig) *vnfConfigPayload {
 			Value: record.GetValue(), TTL: record.GetTtl(),
 		})
 	}
+	for _, option := range config.GetDhcpOptions() {
+		payload.DHCPOptions = append(payload.DHCPOptions, dhcpOptionPayload{
+			Code: uint16(option.GetCode()), Format: option.GetFormat(), Value: option.GetValue(),
+		})
+	}
 	for _, assignment := range config.GetStaticAssignments() {
 		payload.StaticAssignments = append(payload.StaticAssignments, dhcpStaticAssignmentPayload{MAC: assignment.GetMac(), IP: assignment.GetIp()})
 	}

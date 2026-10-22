@@ -81,6 +81,15 @@ message DNSRecord {
   uint32 ttl = 4 [(validate.rules).uint32 = {lte: 86400}];
 }
 
+// DHCPOption is an extra DHCPv4/DHCPv6 option advertised by a DHCP VNF.
+// Format selects how Value is encoded: string, ipv4, ipv6, hex, uint8, uint16,
+// uint32, or domain-list. Server-managed option codes are rejected.
+message DHCPOption {
+  uint32 code = 1 [(validate.rules).uint32 = {gte: 1, lte: 65535}];
+  string format = 2 [(validate.rules).string = {ignore_empty: true, max_len: 32}];
+  string value = 3 [(validate.rules).string = {max_len: 1024}];
+}
+
 message VNFConfig {
   string gateway = 1 [(validate.rules).string = {max_len: 64}];
   string range_start = 2 [(validate.rules).string = {max_len: 64}];
@@ -124,6 +133,11 @@ message VNFConfig {
     max_items: 16
     items: {string: {ignore_empty: true, max_len: 64}}
   }];
+
+  // Extra DHCPv4/DHCPv6 options advertised by a DHCP VNF. DNS (v4 option 6,
+  // v6 option 23) and server-managed options are rejected; use config.dns for
+  // DNS servers.
+  repeated DHCPOption dhcp_options = 29 [(validate.rules).repeated = {max_items: 64}];
 }
 
 message VNF {

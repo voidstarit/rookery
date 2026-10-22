@@ -594,6 +594,14 @@ func buildDHCPv4Config(vnf store.VNF, hostIf, leasePath string, port int) (*core
 		}
 		staticArg = string(data)
 	}
+	optionsArg := ""
+	if len(vnf.Config.DHCPOptions) > 0 {
+		data, err := json.Marshal(vnf.Config.DHCPOptions)
+		if err != nil {
+			return nil, fmt.Errorf("encode DHCP options: %w", err)
+		}
+		optionsArg = string(data)
+	}
 
 	return &coredhcpconfig.Config{
 		Server4: &coredhcpconfig.ServerConfig{
@@ -615,6 +623,7 @@ func buildDHCPv4Config(vnf store.VNF, hostIf, leasePath string, port int) (*core
 					broadcast.String(),
 					dhcpServerIP(vnf.Config).String(),
 					staticArg,
+					optionsArg,
 				},
 			}},
 		},
@@ -670,6 +679,14 @@ func buildDHCPv6Config(vnf store.VNF, hostIf, leasePath string) (*coredhcpconfig
 		return nil, err
 	}
 	duidMAC := vnfDUIDMAC(vnf.ID)
+	optionsArg := ""
+	if len(vnf.Config.DHCPOptions) > 0 {
+		data, err := json.Marshal(vnf.Config.DHCPOptions)
+		if err != nil {
+			return nil, fmt.Errorf("encode DHCP options: %w", err)
+		}
+		optionsArg = string(data)
+	}
 
 	return &coredhcpconfig.Config{
 		Server6: &coredhcpconfig.ServerConfig{
@@ -688,6 +705,7 @@ func buildDHCPv6Config(vnf store.VNF, hostIf, leasePath string) (*coredhcpconfig
 					leasePath,
 					leaseTime.String(),
 					duidMAC.String(),
+					optionsArg,
 				},
 			}},
 		},

@@ -523,6 +523,12 @@ func configFromProto(c *rookeryv1.VNFConfig) store.VNFConfig {
 			Value: record.GetValue(), TTL: record.GetTtl(),
 		})
 	}
+	dhcpOptions := make([]store.DHCPOption, 0, len(c.GetDhcpOptions()))
+	for _, option := range c.GetDhcpOptions() {
+		dhcpOptions = append(dhcpOptions, store.DHCPOption{
+			Code: uint16(option.GetCode()), Format: option.GetFormat(), Value: option.GetValue(),
+		})
+	}
 	return store.VNFConfig{
 		Gateway:           c.GetGateway(),
 		RangeStart:        c.GetRangeStart(),
@@ -552,5 +558,6 @@ func configFromProto(c *rookeryv1.VNFConfig) store.VNFConfig {
 		DNSRecords:        dnsRecords,
 		DNSForward:        c.GetDnsForward(),
 		DNSForwarders:     append([]string(nil), c.GetDnsForwarders()...),
+		DHCPOptions:       dhcpOptions,
 	}
 }

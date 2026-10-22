@@ -48,6 +48,7 @@ type coreDHCPState struct {
 	dns       []net.IP
 	leaseTime time.Duration
 	leasePath string
+	options   []parsedDHCPOption
 
 	alloc  *bitmap.IPv4Allocator
 	start  uint32
@@ -68,11 +69,12 @@ type coreDHCPLease struct {
 
 // setupCoreDHCP is a CoreDHCP plugin setup function. Arguments are, in order:
 // gateway IPv4, netmask, range start, range end, comma-separated DNS servers,
-// lease file path, lease duration, broadcast address, server identifier, and an
-// optional JSON array of static MAC-to-IPv4 assignments.
+// lease file path, lease duration, broadcast address, server identifier, an
+// optional JSON array of static MAC-to-IPv4 assignments, and an optional JSON
+// array of extra DHCP options.
 func setupCoreDHCP(args ...string) (handler.Handler4, error) {
-	if len(args) != 9 && len(args) != 10 {
-		return nil, fmt.Errorf("CoreDHCP setup: want 9 or 10 arguments, got %d", len(args))
+	if len(args) != 9 && len(args) != 10 && len(args) != 11 {
+		return nil, fmt.Errorf("CoreDHCP setup: want 9, 10, or 11 arguments, got %d", len(args))
 	}
 
 	gateway := net.ParseIP(args[0]).To4()
@@ -163,6 +165,17 @@ func setupCoreDHCP(args ...string) (handler.Handler4, error) {
 		}
 	}
 
+	options, err := parseDHCPOptionsJSON("", false)
+	if err != nil {
+		return nil, err
+	}
+	if len(args) >= 11 {
+		options, err = parseDHCPOptionsJSON(args[10], false)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	state := &coreDHCPState{
 		gateway:      gateway,
 		serverID:     serverID,
@@ -171,6 +184,7 @@ func setupCoreDHCP(args ...string) (handler.Handler4, error) {
 		dns:          dns,
 		leaseTime:    leaseTime,
 		leasePath:    args[5],
+		options:      options,
 		alloc:        alloc,
 		start:        binary.BigEndian.Uint32(startIP),
 		end:          binary.BigEndian.Uint32(endIP),
@@ -330,6 +344,9 @@ func (s *coreDHCPState) applyOptions(resp *dhcpv4.DHCPv4, inform bool) {
 	resp.Options.Update(dhcpv4.OptBroadcastAddress(s.broadcast))
 	if len(s.dns) > 0 {
 		resp.Options.Update(dhcpv4.OptDNS(s.dns...))
+	}
+	for _, option := range s.options {
+		resp.Options.Update(dhcpv4.OptGeneric(dhcpv4.GenericOptionCode(option.code), option.value))
 	}
 	if !inform {
 		resp.Options.Update(dhcpv4.OptIPAddressLeaseTime(s.leaseTime))

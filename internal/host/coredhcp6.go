@@ -43,6 +43,7 @@ type coreDHCPv6State struct {
 	leaseTime time.Duration
 	leasePath string
 	duid      *dhcpv6.DUIDLL
+	options   []parsedDHCPOption
 
 	leases map[string]*coreDHCPv6Lease
 	byIP   map[string]string
@@ -57,10 +58,11 @@ type coreDHCPv6Lease struct {
 
 // setupCoreDHCPv6 is a CoreDHCP plugin setup function. Arguments are, in order:
 // gateway prefix, range start, range end, comma-separated DNS servers, lease
-// file path, lease duration, and server DUID link-layer address.
+// file path, lease duration, server DUID link-layer address, and an optional
+// JSON array of extra DHCPv6 options.
 func setupCoreDHCPv6(args ...string) (handler.Handler6, error) {
-	if len(args) != 7 {
-		return nil, fmt.Errorf("CoreDHCPv6 setup: want 7 arguments, got %d", len(args))
+	if len(args) != 7 && len(args) != 8 {
+		return nil, fmt.Errorf("CoreDHCPv6 setup: want 7 or 8 arguments, got %d", len(args))
 	}
 
 	prefix, err := netip.ParsePrefix(strings.TrimSpace(args[0]))
@@ -109,6 +111,17 @@ func setupCoreDHCPv6(args ...string) (handler.Handler6, error) {
 		return nil, fmt.Errorf("invalid DHCPv6 server DUID MAC %q", args[6])
 	}
 
+	options, err := parseDHCPOptionsJSON("", true)
+	if err != nil {
+		return nil, err
+	}
+	if len(args) >= 8 {
+		options, err = parseDHCPOptionsJSON(args[7], true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	state := &coreDHCPv6State{
 		prefix:    prefix,
 		gateway:   gateway,
@@ -121,8 +134,9 @@ func setupCoreDHCPv6(args ...string) (handler.Handler6, error) {
 			HWType:        iana.HWTypeEthernet,
 			LinkLayerAddr: duidMAC,
 		},
-		leases: make(map[string]*coreDHCPv6Lease),
-		byIP:   make(map[string]string),
+		options: options,
+		leases:  make(map[string]*coreDHCPv6Lease),
+		byIP:    make(map[string]string),
 	}
 	if err := state.loadLeases(); err != nil {
 		return nil, err
@@ -277,6 +291,14 @@ func (s *coreDHCPv6State) applyOptions(resp dhcpv6.DHCPv6, msg *dhcpv6.Message) 
 	resp.UpdateOption(dhcpv6.OptServerID(s.duid))
 	if len(s.dns) > 0 && msg.IsOptionRequested(dhcpv6.OptionDNSRecursiveNameServer) {
 		resp.UpdateOption(dhcpv6.OptDNS(s.dns...))
+	}
+	for _, option := range s.options {
+		if msg.IsOptionRequested(dhcpv6.OptionCode(option.code)) {
+			resp.UpdateOption(&dhcpv6.OptionGeneric{
+				OptionCode: dhcpv6.OptionCode(option.code),
+				OptionData: option.value,
+			})
+		}
 	}
 }
 

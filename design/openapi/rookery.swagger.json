@@ -3944,6 +3944,14 @@
           "items": {
             "type": "string"
           }
+        },
+        "dhcp_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1DHCPOption"
+          },
+          "description": "Extra DHCPv4/DHCPv6 options advertised by a DHCP VNF. DNS (v4 option 6,\nv6 option 23) and server-managed options are rejected; use config.dns for\nDNS servers."
         }
       }
     },
@@ -4614,6 +4622,22 @@
         }
       },
       "description": "DNSRecord is one local record served by a DNS VNF. Name is a fully qualified\ndomain name; wildcard names such as *.lab1.test are supported. Type is A,\nAAAA, CNAME, or TXT."
+    },
+    "v1DHCPOption": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "format": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "description": "DHCPOption is an extra DHCPv4/DHCPv6 option advertised by a DHCP VNF.\nFormat selects how Value is encoded: string, ipv4, ipv6, hex, uint8, uint16,\nuint32, or domain-list. Server-managed option codes are rejected."
     }
   }
 }

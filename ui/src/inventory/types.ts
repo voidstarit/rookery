@@ -346,6 +346,12 @@ export type DNSRecord = {
   ttl?: number;
 };
 
+export type DHCPOption = {
+  code: number;
+  format: string;
+  value: string;
+};
+
 export type VNFConfig = {
   gateway?: string;
   range_start?: string;
@@ -375,6 +381,7 @@ export type VNFConfig = {
   dns_records?: DNSRecord[];
   dns_forward?: boolean;
   dns_forwarders?: string[];
+  dhcp_options?: DHCPOption[];
 };
 
 export type DHCPStaticAssignment = {

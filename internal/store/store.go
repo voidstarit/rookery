@@ -248,6 +248,17 @@ type VNFConfig struct {
 	DNSRecords    []DNSRecord `json:"dns_records,omitempty"`
 	DNSForward    bool        `json:"dns_forward,omitempty"`
 	DNSForwarders []string    `json:"dns_forwarders,omitempty"`
+
+	// DHCPOptions are extra DHCPv4/DHCPv6 options advertised by a DHCP VNF.
+	// Code is the DHCP option code; Format controls how Value is encoded.
+	DHCPOptions []DHCPOption `json:"dhcp_options,omitempty"`
+}
+
+// DHCPOption is one extra option advertised by a DHCP VNF.
+type DHCPOption struct {
+	Code   uint16 `json:"code"`
+	Format string `json:"format"`
+	Value  string `json:"value"`
 }
 
 // DNSRecord is one authoritative record served by a DNS VNF.
