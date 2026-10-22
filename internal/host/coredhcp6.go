@@ -297,8 +297,12 @@ func (s *coreDHCPv6State) handle(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) 
 }
 
 func (s *coreDHCPv6State) applyOptions(resp dhcpv6.DHCPv6, msg *dhcpv6.Message) {
+	custom := make(map[uint16]struct{}, len(s.options))
+	for _, option := range s.options {
+		custom[option.code] = struct{}{}
+	}
 	resp.UpdateOption(dhcpv6.OptServerID(s.duid))
-	if len(s.dns) > 0 && msg.IsOptionRequested(dhcpv6.OptionDNSRecursiveNameServer) {
+	if _, overridden := custom[23]; !overridden && len(s.dns) > 0 && msg.IsOptionRequested(dhcpv6.OptionDNSRecursiveNameServer) {
 		resp.UpdateOption(dhcpv6.OptDNS(s.dns...))
 	}
 	for _, option := range s.options {

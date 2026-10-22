@@ -245,7 +245,7 @@ type DHCPOptionPreset = {
 const DHCPV4_OPTION_PRESETS: DHCPOptionPreset[] = [
   { code: 3, label: "Router", format: "ipv4", placeholder: "10.20.0.1", hint: "Overrides the gateway router option." },
   { code: 6, label: "DNS servers", format: "ipv4", placeholder: "10.20.0.2, 1.1.1.1", hint: "Overrides the DNS field." },
-  { code: 15, label: "Domain name", format: "string", placeholder: "lab.test" },
+  { code: 15, label: "Domain name", format: "string", placeholder: "lab.test", hint: "This is the domain name, not DNS server addresses. Use code 6 for DNS servers." },
   { code: 42, label: "NTP servers", format: "ipv4", placeholder: "10.20.0.1, 10.20.0.2" },
   { code: 44, label: "WINS servers", format: "ipv4", placeholder: "10.20.0.10" },
   { code: 66, label: "TFTP server name", format: "string", placeholder: "tftp.lab.test" },
@@ -518,7 +518,7 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
   const addDHCPOption = () => {
     setForm((current) => ({
       ...current,
-      dhcpOptions: [...current.dhcpOptions, { code: 15, format: "string", value: "" }],
+      dhcpOptions: [...current.dhcpOptions, { code: 0, format: "string", value: "" }],
     }));
   };
 

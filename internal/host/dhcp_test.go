@@ -537,7 +537,7 @@ func TestCoreDHCPExtraOptions(t *testing.T) {
 		testDHCPBroad,
 		testDHCPGateway,
 		"",
-		`[{"code":15,"format":"string","value":"lab.test"},{"code":42,"format":"ipv4","value":"10.20.0.1,10.20.0.2"}]`,
+		`[{"code":3,"format":"ipv4","value":"10.20.0.254"},{"code":6,"format":"ipv4","value":"10.20.0.10"},{"code":15,"format":"string","value":"lab.test"},{"code":42,"format":"ipv4","value":"10.20.0.1,10.20.0.2"}]`,
 	)
 	if err != nil {
 		t.Fatalf("setup CoreDHCP: %v", err)
@@ -549,6 +549,12 @@ func TestCoreDHCPExtraOptions(t *testing.T) {
 	}
 	if got := offer.DomainName(); got != "lab.test" {
 		t.Fatalf("domain name = %q, want lab.test", got)
+	}
+	if got := offer.Router(); len(got) != 1 || got[0].String() != "10.20.0.254" {
+		t.Fatalf("router = %v, want custom router", got)
+	}
+	if got := offer.DNS(); len(got) != 1 || got[0].String() != "10.20.0.10" {
+		t.Fatalf("DNS = %v, want custom DNS", got)
 	}
 	ntp := offer.NTPServers()
 	if len(ntp) != 2 || ntp[0].String() != "10.20.0.1" || ntp[1].String() != "10.20.0.2" {

@@ -346,12 +346,18 @@ func (s *coreDHCPState) nak(resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
 }
 
 func (s *coreDHCPState) applyOptions(resp *dhcpv4.DHCPv4, inform bool) {
+	custom := make(map[uint16]struct{}, len(s.options))
+	for _, option := range s.options {
+		custom[option.code] = struct{}{}
+	}
 	resp.ServerIPAddr = append(net.IP(nil), s.serverID...)
 	resp.Options.Update(dhcpv4.OptServerIdentifier(s.serverID))
-	resp.Options.Update(dhcpv4.OptRouter(s.gateway))
+	if _, overridden := custom[3]; !overridden {
+		resp.Options.Update(dhcpv4.OptRouter(s.gateway))
+	}
 	resp.Options.Update(dhcpv4.OptSubnetMask(s.mask))
 	resp.Options.Update(dhcpv4.OptBroadcastAddress(s.broadcast))
-	if len(s.dns) > 0 {
+	if _, overridden := custom[6]; !overridden && len(s.dns) > 0 {
 		resp.Options.Update(dhcpv4.OptDNS(s.dns...))
 	}
 	for _, option := range s.options {
