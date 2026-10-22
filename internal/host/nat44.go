@@ -21,6 +21,7 @@ import (
 	"go.fd.io/govpp/binapi/nat_types"
 	"go.fd.io/govpp/core"
 
+	"github.com/rs/zerolog/log"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -305,6 +306,42 @@ func linuxInterfaceMTU(name string) (uint32, error) {
 	return uint32(iface.MTU), nil
 }
 
+// disableHostReceiveOffloads turns off RX GRO/LRO on the Linux NIC used by
+// AF_PACKET. With GRO enabled the kernel hands VPP coalesced 64 KiB GSO
+// packets; NAT44 then has to rewrite and emit them, which causes heavy TCP
+// retransmissions on the wire. TX TSO/GSO stays enabled for upload/ACKs.
+func disableHostReceiveOffloads(ctx context.Context, nic string) {
+	path, err := exec.LookPath("ethtool")
+	if err != nil {
+		log.Warn().Str("nic", nic).Msg("ethtool not found; AF_PACKET RX GRO remains enabled")
+		return
+	}
+	for _, feature := range []string{"gro", "lro"} {
+		out, err := exec.CommandContext(ctx, path, "-K", nic, feature, "off").CombinedOutput()
+		if err != nil {
+			log.Debug().
+				Str("nic", nic).
+				Str("feature", feature).
+				Err(err).
+				Str("output", strings.TrimSpace(string(out))).
+				Msg("could not disable host NIC receive offload")
+		}
+	}
+	// Keep TX segmentation enabled; disabling TSO/GSO on the physical NIC
+	// lowers upload throughput even though it does not affect the RX problem.
+	for _, feature := range []string{"tso", "gso"} {
+		out, err := exec.CommandContext(ctx, path, "-K", nic, feature, "on").CombinedOutput()
+		if err != nil {
+			log.Debug().
+				Str("nic", nic).
+				Str("feature", feature).
+				Err(err).
+				Str("output", strings.TrimSpace(string(out))).
+				Msg("could not enable host NIC transmit offload")
+		}
+	}
+}
+
 // EnsureHostInterface takes over a Linux NIC as a VPP AF_PACKET host interface.
 func (v *VPPNetwork) EnsureHostInterface(ctx context.Context, nic string) (string, error) {
 	nic = strings.TrimSpace(nic)
@@ -351,6 +388,7 @@ func (v *VPPNetwork) EnsureHostInterface(ctx context.Context, nic string) (strin
 			if err := setInterfaceMTU(ctx, conn, uint32(existing.SwIfIndex), hostMTU); err != nil {
 				return "", fmt.Errorf("set existing VPP outside interface %s MTU: %w", vppName, err)
 			}
+			disableHostReceiveOffloads(ctx, nic)
 			return vppName, nil
 		}
 		// Older Rookery versions created AF_PACKET rings with VPP's 2048-byte
@@ -397,6 +435,7 @@ func (v *VPPNetwork) EnsureHostInterface(ctx context.Context, nic string) (strin
 	if out, err := v.runCLI(ctx, "set", "interface", "state", vppName, "up"); err != nil {
 		return "", fmt.Errorf("bring VPP outside interface %s up: %w: %s", vppName, err, out)
 	}
+	disableHostReceiveOffloads(ctx, nic)
 	return vppName, nil
 }
 
