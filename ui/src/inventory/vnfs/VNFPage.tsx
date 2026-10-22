@@ -285,10 +285,15 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
   const nat44 = form.type === "nat44";
   const bgp = form.type === "bgp";
   const dns = form.type === "dns";
-  const dnsServiceIP = ipv4HostOffset(
-    networks.find((item) => item.id === form.networkID)?.ipv4_cidr,
-    2,
-  );
+  const selectedNetwork = networks.find((item) => item.id === form.networkID);
+  const dnsServiceIP = ipv4HostOffset(selectedNetwork?.ipv4_cidr, 2);
+  const sharedVNFAddress = (() => {
+    const cidr = selectedNetwork?.ipv4_cidr?.trim();
+    const host = ipv4HostOffset(cidr, 2);
+    const bits = cidr?.split("/")[1];
+    return host && bits ? `${host}/${bits}` : "";
+  })();
+  const dedicatedVNFAddress = form.gateway || "the gateway address";
 
   useEffect(() => {
     nameRef.current?.focus();
@@ -728,12 +733,22 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                   onChange={(event) => update("transport", event.currentTarget.value as FormState["transport"])}
                 >
                   <option value="inherit">Inherit network default (shared)</option>
-                  <option value="shared">Shared network memif</option>
-                  <option value="dedicated">Dedicated memif</option>
-                  <option value="tap">Tap</option>
+                  <option value="shared">
+                    Shared network memif{sharedVNFAddress ? ` · ${sharedVNFAddress}` : ""}
+                  </option>
+                  <option value="dedicated">
+                    Dedicated memif{dedicatedVNFAddress ? ` · ${dedicatedVNFAddress}` : ""}
+                  </option>
+                  <option value="tap">Tap{dedicatedVNFAddress ? ` · ${dedicatedVNFAddress}` : ""}</option>
                 </select>
                 <span class="field-hint">
-                  Shared uses one memif per network; the stack owns .2 and the BVI owns .1.
+                  {form.transport === "shared"
+                    ? `The VNF uses the shared ${sharedVNFAddress || ".2 service"} address; the BVI owns the gateway (.1).`
+                    : form.transport === "dedicated"
+                      ? `The VNF uses ${dedicatedVNFAddress}; on a NAT network the server may move it to the .2 service address.`
+                      : form.transport === "tap"
+                        ? `The tap is assigned ${dedicatedVNFAddress}; on a NAT network the server may move it to the .2 service address.`
+                        : `Inherits the network default (${selectedNetwork?.vnf_transport || "shared"}). Shared uses ${sharedVNFAddress || ".2"}.`}
                 </span>
               </label>
             ) : null}

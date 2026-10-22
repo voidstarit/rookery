@@ -6,6 +6,7 @@ export type Network = {
   ipv4_gateway?: string;
   ipv4_cidr?: string;
   ipv6_cidr?: string;
+  vnf_transport?: string;
   created_at?: string;
   updated_at?: string;
 };
