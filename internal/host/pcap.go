@@ -122,12 +122,16 @@ func (v *VPPNetwork) VPPInterfaces(ctx context.Context) ([]VPPInterface, error) 
 		if devType == "" {
 			devType = details.Type.String()
 		}
+		mtu := details.LinkMtu
+		if len(details.Mtu) > 0 && details.Mtu[0] != 0 {
+			mtu = uint16(details.Mtu[0])
+		}
 		result = append(result, VPPInterface{
 			Name:      details.InterfaceName,
 			SwIfIndex: uint32(details.SwIfIndex),
 			Type:      devType,
 			MAC:       mac,
-			MTU:       details.LinkMtu,
+			MTU:       mtu,
 			Up:        details.Flags&interface_types.IF_STATUS_API_FLAG_ADMIN_UP != 0,
 			Tag:       details.Tag,
 		})
