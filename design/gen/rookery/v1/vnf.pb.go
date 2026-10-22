@@ -145,6 +145,77 @@ func (x *DNATRule) GetLocalPort() int32 {
 	return 0
 }
 
+// DNSRecord is one local record served by a DNS VNF. Name is a fully qualified
+// domain name; wildcard names such as *.lab1.test are supported. Type is A,
+// AAAA, CNAME, or TXT.
+type DNSRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	Value         string                 `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
+	Ttl           uint32                 `protobuf:"varint,4,opt,name=ttl,proto3" json:"ttl,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DNSRecord) Reset() {
+	*x = DNSRecord{}
+	mi := &file_rookery_v1_vnf_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DNSRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DNSRecord) ProtoMessage() {}
+
+func (x *DNSRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnf_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DNSRecord.ProtoReflect.Descriptor instead.
+func (*DNSRecord) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *DNSRecord) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *DNSRecord) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *DNSRecord) GetValue() string {
+	if x != nil {
+		return x.Value
+	}
+	return ""
+}
+
+func (x *DNSRecord) GetTtl() uint32 {
+	if x != nil {
+		return x.Ttl
+	}
+	return 0
+}
+
 type VNFConfig struct {
 	state             protoimpl.MessageState  `protogen:"open.v1"`
 	Gateway           string                  `protobuf:"bytes,1,opt,name=gateway,proto3" json:"gateway,omitempty"`
@@ -176,14 +247,21 @@ type VNFConfig struct {
 	AdvertisePrefixes []string `protobuf:"bytes,24,rep,name=advertise_prefixes,json=advertisePrefixes,proto3" json:"advertise_prefixes,omitempty"`
 	// next_hop overrides the BGP NEXT_HOP for advertised prefixes. Empty means
 	// use local_ip. Must match the local_ip address family.
-	NextHop       string `protobuf:"bytes,25,opt,name=next_hop,json=nextHop,proto3" json:"next_hop,omitempty"`
+	NextHop string `protobuf:"bytes,25,opt,name=next_hop,json=nextHop,proto3" json:"next_hop,omitempty"`
+	// DNS configuration. Records are served authoritatively; names without a
+	// local record are forwarded when dns_forward is enabled. If dns_forward is
+	// enabled and dns_forwarders is empty, the daemon uses the host resolver
+	// configuration (/etc/resolv.conf).
+	DnsRecords    []*DNSRecord `protobuf:"bytes,26,rep,name=dns_records,json=dnsRecords,proto3" json:"dns_records,omitempty"`
+	DnsForward    bool         `protobuf:"varint,27,opt,name=dns_forward,json=dnsForward,proto3" json:"dns_forward,omitempty"`
+	DnsForwarders []string     `protobuf:"bytes,28,rep,name=dns_forwarders,json=dnsForwarders,proto3" json:"dns_forwarders,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *VNFConfig) Reset() {
 	*x = VNFConfig{}
-	mi := &file_rookery_v1_vnf_proto_msgTypes[2]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -195,7 +273,7 @@ func (x *VNFConfig) String() string {
 func (*VNFConfig) ProtoMessage() {}
 
 func (x *VNFConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnf_proto_msgTypes[2]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -208,7 +286,7 @@ func (x *VNFConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VNFConfig.ProtoReflect.Descriptor instead.
 func (*VNFConfig) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{2}
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *VNFConfig) GetGateway() string {
@@ -386,6 +464,27 @@ func (x *VNFConfig) GetNextHop() string {
 	return ""
 }
 
+func (x *VNFConfig) GetDnsRecords() []*DNSRecord {
+	if x != nil {
+		return x.DnsRecords
+	}
+	return nil
+}
+
+func (x *VNFConfig) GetDnsForward() bool {
+	if x != nil {
+		return x.DnsForward
+	}
+	return false
+}
+
+func (x *VNFConfig) GetDnsForwarders() []string {
+	if x != nil {
+		return x.DnsForwarders
+	}
+	return nil
+}
+
 type VNF struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -408,7 +507,7 @@ type VNF struct {
 
 func (x *VNF) Reset() {
 	*x = VNF{}
-	mi := &file_rookery_v1_vnf_proto_msgTypes[3]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -420,7 +519,7 @@ func (x *VNF) String() string {
 func (*VNF) ProtoMessage() {}
 
 func (x *VNF) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnf_proto_msgTypes[3]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -433,7 +532,7 @@ func (x *VNF) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VNF.ProtoReflect.Descriptor instead.
 func (*VNF) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{3}
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *VNF) GetId() int64 {
@@ -547,7 +646,7 @@ type VNFLease struct {
 
 func (x *VNFLease) Reset() {
 	*x = VNFLease{}
-	mi := &file_rookery_v1_vnf_proto_msgTypes[4]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -559,7 +658,7 @@ func (x *VNFLease) String() string {
 func (*VNFLease) ProtoMessage() {}
 
 func (x *VNFLease) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnf_proto_msgTypes[4]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -572,7 +671,7 @@ func (x *VNFLease) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VNFLease.ProtoReflect.Descriptor instead.
 func (*VNFLease) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{4}
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *VNFLease) GetClientId() string {
@@ -619,7 +718,7 @@ type ListVNFsRequest struct {
 
 func (x *ListVNFsRequest) Reset() {
 	*x = ListVNFsRequest{}
-	mi := &file_rookery_v1_vnf_proto_msgTypes[5]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -631,7 +730,7 @@ func (x *ListVNFsRequest) String() string {
 func (*ListVNFsRequest) ProtoMessage() {}
 
 func (x *ListVNFsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnf_proto_msgTypes[5]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -644,7 +743,7 @@ func (x *ListVNFsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVNFsRequest.ProtoReflect.Descriptor instead.
 func (*ListVNFsRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{5}
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ListVNFsRequest) GetNetworkId() int64 {
@@ -663,7 +762,7 @@ type ListVNFsResponse struct {
 
 func (x *ListVNFsResponse) Reset() {
 	*x = ListVNFsResponse{}
-	mi := &file_rookery_v1_vnf_proto_msgTypes[6]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -675,7 +774,7 @@ func (x *ListVNFsResponse) String() string {
 func (*ListVNFsResponse) ProtoMessage() {}
 
 func (x *ListVNFsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnf_proto_msgTypes[6]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -688,7 +787,7 @@ func (x *ListVNFsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVNFsResponse.ProtoReflect.Descriptor instead.
 func (*ListVNFsResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{6}
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ListVNFsResponse) GetVnfs() []*VNF {
@@ -707,7 +806,7 @@ type GetVNFRequest struct {
 
 func (x *GetVNFRequest) Reset() {
 	*x = GetVNFRequest{}
-	mi := &file_rookery_v1_vnf_proto_msgTypes[7]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -719,7 +818,7 @@ func (x *GetVNFRequest) String() string {
 func (*GetVNFRequest) ProtoMessage() {}
 
 func (x *GetVNFRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnf_proto_msgTypes[7]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -732,7 +831,7 @@ func (x *GetVNFRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVNFRequest.ProtoReflect.Descriptor instead.
 func (*GetVNFRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{7}
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GetVNFRequest) GetId() int64 {
@@ -755,7 +854,7 @@ type CreateVNFRequest struct {
 
 func (x *CreateVNFRequest) Reset() {
 	*x = CreateVNFRequest{}
-	mi := &file_rookery_v1_vnf_proto_msgTypes[8]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -767,7 +866,7 @@ func (x *CreateVNFRequest) String() string {
 func (*CreateVNFRequest) ProtoMessage() {}
 
 func (x *CreateVNFRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnf_proto_msgTypes[8]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -780,7 +879,7 @@ func (x *CreateVNFRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateVNFRequest.ProtoReflect.Descriptor instead.
 func (*CreateVNFRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{8}
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *CreateVNFRequest) GetName() string {
@@ -830,7 +929,7 @@ type UpdateVNFRequest struct {
 
 func (x *UpdateVNFRequest) Reset() {
 	*x = UpdateVNFRequest{}
-	mi := &file_rookery_v1_vnf_proto_msgTypes[9]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -842,7 +941,7 @@ func (x *UpdateVNFRequest) String() string {
 func (*UpdateVNFRequest) ProtoMessage() {}
 
 func (x *UpdateVNFRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnf_proto_msgTypes[9]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -855,7 +954,7 @@ func (x *UpdateVNFRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateVNFRequest.ProtoReflect.Descriptor instead.
 func (*UpdateVNFRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{9}
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *UpdateVNFRequest) GetId() int64 {
@@ -895,7 +994,7 @@ type DeleteVNFRequest struct {
 
 func (x *DeleteVNFRequest) Reset() {
 	*x = DeleteVNFRequest{}
-	mi := &file_rookery_v1_vnf_proto_msgTypes[10]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -907,7 +1006,7 @@ func (x *DeleteVNFRequest) String() string {
 func (*DeleteVNFRequest) ProtoMessage() {}
 
 func (x *DeleteVNFRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnf_proto_msgTypes[10]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -920,7 +1019,7 @@ func (x *DeleteVNFRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteVNFRequest.ProtoReflect.Descriptor instead.
 func (*DeleteVNFRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{10}
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *DeleteVNFRequest) GetId() int64 {
@@ -939,7 +1038,7 @@ type RestartVNFRequest struct {
 
 func (x *RestartVNFRequest) Reset() {
 	*x = RestartVNFRequest{}
-	mi := &file_rookery_v1_vnf_proto_msgTypes[11]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -951,7 +1050,7 @@ func (x *RestartVNFRequest) String() string {
 func (*RestartVNFRequest) ProtoMessage() {}
 
 func (x *RestartVNFRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnf_proto_msgTypes[11]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -964,7 +1063,7 @@ func (x *RestartVNFRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestartVNFRequest.ProtoReflect.Descriptor instead.
 func (*RestartVNFRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{11}
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *RestartVNFRequest) GetId() int64 {
@@ -983,7 +1082,7 @@ type ListVNFLeasesRequest struct {
 
 func (x *ListVNFLeasesRequest) Reset() {
 	*x = ListVNFLeasesRequest{}
-	mi := &file_rookery_v1_vnf_proto_msgTypes[12]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -995,7 +1094,7 @@ func (x *ListVNFLeasesRequest) String() string {
 func (*ListVNFLeasesRequest) ProtoMessage() {}
 
 func (x *ListVNFLeasesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnf_proto_msgTypes[12]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1008,7 +1107,7 @@ func (x *ListVNFLeasesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVNFLeasesRequest.ProtoReflect.Descriptor instead.
 func (*ListVNFLeasesRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{12}
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ListVNFLeasesRequest) GetId() int64 {
@@ -1029,7 +1128,7 @@ type ListVNFLeasesResponse struct {
 
 func (x *ListVNFLeasesResponse) Reset() {
 	*x = ListVNFLeasesResponse{}
-	mi := &file_rookery_v1_vnf_proto_msgTypes[13]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1041,7 +1140,7 @@ func (x *ListVNFLeasesResponse) String() string {
 func (*ListVNFLeasesResponse) ProtoMessage() {}
 
 func (x *ListVNFLeasesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnf_proto_msgTypes[13]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1054,7 +1153,7 @@ func (x *ListVNFLeasesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVNFLeasesResponse.ProtoReflect.Descriptor instead.
 func (*ListVNFLeasesResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{13}
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ListVNFLeasesResponse) GetVnfId() int64 {
@@ -1087,7 +1186,7 @@ type ListVNFSessionsRequest struct {
 
 func (x *ListVNFSessionsRequest) Reset() {
 	*x = ListVNFSessionsRequest{}
-	mi := &file_rookery_v1_vnf_proto_msgTypes[14]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1099,7 +1198,7 @@ func (x *ListVNFSessionsRequest) String() string {
 func (*ListVNFSessionsRequest) ProtoMessage() {}
 
 func (x *ListVNFSessionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnf_proto_msgTypes[14]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1112,7 +1211,7 @@ func (x *ListVNFSessionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVNFSessionsRequest.ProtoReflect.Descriptor instead.
 func (*ListVNFSessionsRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{14}
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ListVNFSessionsRequest) GetId() int64 {
@@ -1133,7 +1232,7 @@ type ListVNFSessionsResponse struct {
 
 func (x *ListVNFSessionsResponse) Reset() {
 	*x = ListVNFSessionsResponse{}
-	mi := &file_rookery_v1_vnf_proto_msgTypes[15]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1145,7 +1244,7 @@ func (x *ListVNFSessionsResponse) String() string {
 func (*ListVNFSessionsResponse) ProtoMessage() {}
 
 func (x *ListVNFSessionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnf_proto_msgTypes[15]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1158,7 +1257,7 @@ func (x *ListVNFSessionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVNFSessionsResponse.ProtoReflect.Descriptor instead.
 func (*ListVNFSessionsResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{15}
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ListVNFSessionsResponse) GetVnfId() int64 {
@@ -1193,7 +1292,7 @@ type VNFBGPReceivedPrefix struct {
 
 func (x *VNFBGPReceivedPrefix) Reset() {
 	*x = VNFBGPReceivedPrefix{}
-	mi := &file_rookery_v1_vnf_proto_msgTypes[16]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1205,7 +1304,7 @@ func (x *VNFBGPReceivedPrefix) String() string {
 func (*VNFBGPReceivedPrefix) ProtoMessage() {}
 
 func (x *VNFBGPReceivedPrefix) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnf_proto_msgTypes[16]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1218,7 +1317,7 @@ func (x *VNFBGPReceivedPrefix) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VNFBGPReceivedPrefix.ProtoReflect.Descriptor instead.
 func (*VNFBGPReceivedPrefix) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{16}
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *VNFBGPReceivedPrefix) GetPrefix() string {
@@ -1260,7 +1359,7 @@ type VNFBGPStatus struct {
 
 func (x *VNFBGPStatus) Reset() {
 	*x = VNFBGPStatus{}
-	mi := &file_rookery_v1_vnf_proto_msgTypes[17]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1272,7 +1371,7 @@ func (x *VNFBGPStatus) String() string {
 func (*VNFBGPStatus) ProtoMessage() {}
 
 func (x *VNFBGPStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnf_proto_msgTypes[17]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1285,7 +1384,7 @@ func (x *VNFBGPStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VNFBGPStatus.ProtoReflect.Descriptor instead.
 func (*VNFBGPStatus) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{17}
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *VNFBGPStatus) GetVnfId() int64 {
@@ -1367,7 +1466,7 @@ type GetVNFBGPRequest struct {
 
 func (x *GetVNFBGPRequest) Reset() {
 	*x = GetVNFBGPRequest{}
-	mi := &file_rookery_v1_vnf_proto_msgTypes[18]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1379,7 +1478,7 @@ func (x *GetVNFBGPRequest) String() string {
 func (*GetVNFBGPRequest) ProtoMessage() {}
 
 func (x *GetVNFBGPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnf_proto_msgTypes[18]
+	mi := &file_rookery_v1_vnf_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1392,7 +1491,7 @@ func (x *GetVNFBGPRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVNFBGPRequest.ProtoReflect.Descriptor instead.
 func (*GetVNFBGPRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{18}
+	return file_rookery_v1_vnf_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetVNFBGPRequest) GetId() int64 {
@@ -1417,7 +1516,14 @@ const file_rookery_v1_vnf_proto_rawDesc = "" +
 	"\rexternal_port\x18\x02 \x01(\x05B\v\xfaB\b\x1a\x06\x18\xff\xff\x03(\x01R\fexternalPort\x12\"\n" +
 	"\blocal_ip\x18\x03 \x01(\tB\a\xfaB\x04r\x02x\x01R\alocalIp\x12*\n" +
 	"\n" +
-	"local_port\x18\x04 \x01(\x05B\v\xfaB\b\x1a\x06\x18\xff\xff\x03(\x01R\tlocalPort\"\xc1\b\n" +
+	"local_port\x18\x04 \x01(\x05B\v\xfaB\b\x1a\x06\x18\xff\xff\x03(\x01R\tlocalPort\"\x89\x01\n" +
+	"\tDNSRecord\x12\x1e\n" +
+	"\x04name\x18\x01 \x01(\tB\n" +
+	"\xfaB\ar\x05\x10\x01\x18\xff\x01R\x04name\x12\x1d\n" +
+	"\x04type\x18\x02 \x01(\tB\t\xfaB\x06r\x04\x10\x01\x18\x10R\x04type\x12 \n" +
+	"\x05value\x18\x03 \x01(\tB\n" +
+	"\xfaB\ar\x05\x10\x01\x18\x80\x04R\x05value\x12\x1b\n" +
+	"\x03ttl\x18\x04 \x01(\rB\t\xfaB\x06*\x04\x18\x80\xa3\x05R\x03ttl\"\xdf\t\n" +
 	"\tVNFConfig\x12!\n" +
 	"\agateway\x18\x01 \x01(\tB\a\xfaB\x04r\x02\x18@R\agateway\x12(\n" +
 	"\vrange_start\x18\x02 \x01(\tB\a\xfaB\x04r\x02\x18@R\n" +
@@ -1449,7 +1555,12 @@ const file_rookery_v1_vnf_proto_rawDesc = "" +
 	"\x0ftarget_table_id\x18\x17 \x01(\rR\rtargetTableId\x128\n" +
 	"\x12advertise_prefixes\x18\x18 \x03(\tB\t\xfaB\x06\x92\x01\x03\x10\x80\bR\x11advertisePrefixes\x12%\n" +
 	"\bnext_hop\x18\x19 \x01(\tB\n" +
-	"\xfaB\ar\x05\x18@\xd0\x01\x01R\anextHop\"\xe7\x03\n" +
+	"\xfaB\ar\x05\x18@\xd0\x01\x01R\anextHop\x12A\n" +
+	"\vdns_records\x18\x1a \x03(\v2\x15.rookery.v1.DNSRecordB\t\xfaB\x06\x92\x01\x03\x10\x80\bR\n" +
+	"dnsRecords\x12\x1f\n" +
+	"\vdns_forward\x18\x1b \x01(\bR\n" +
+	"dnsForward\x128\n" +
+	"\x0edns_forwarders\x18\x1c \x03(\tB\x11\xfaB\x0e\x92\x01\v\x10\x10\"\ar\x05\x18@\xd0\x01\x01R\rdnsForwarders\"\xe7\x03\n" +
 	"\x03VNF\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +
@@ -1484,12 +1595,12 @@ const file_rookery_v1_vnf_proto_rawDesc = "" +
 	"\x10ListVNFsResponse\x12#\n" +
 	"\x04vnfs\x18\x01 \x03(\v2\x0f.rookery.v1.VNFR\x04vnfs\"(\n" +
 	"\rGetVNFRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\x88\x02\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\x8d\x02\n" +
 	"\x10CreateVNFRequest\x12;\n" +
 	"\x04name\x18\x01 \x01(\tB'\xfaB$r\"\x10\x01\x18@2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$R\x04name\x12&\n" +
 	"\n" +
-	"network_id\x18\x02 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\tnetworkId\x125\n" +
-	"\x04type\x18\x03 \x01(\tB!\xfaB\x1er\x1cR\x06dhcpv4R\x06dhcpv6R\x05nat44R\x03bgpR\x04type\x12\x1d\n" +
+	"network_id\x18\x02 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\tnetworkId\x12:\n" +
+	"\x04type\x18\x03 \x01(\tB&\xfaB#r!R\x06dhcpv4R\x06dhcpv6R\x05nat44R\x03bgpR\x03dnsR\x04type\x12\x1d\n" +
 	"\aenabled\x18\x04 \x01(\bH\x00R\aenabled\x88\x01\x01\x12-\n" +
 	"\x06config\x18\x05 \x01(\v2\x15.rookery.v1.VNFConfigR\x06configB\n" +
 	"\n" +
@@ -1564,65 +1675,67 @@ func file_rookery_v1_vnf_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_vnf_proto_rawDescData
 }
 
-var file_rookery_v1_vnf_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_rookery_v1_vnf_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_rookery_v1_vnf_proto_goTypes = []any{
 	(*DHCPStaticAssignment)(nil),    // 0: rookery.v1.DHCPStaticAssignment
 	(*DNATRule)(nil),                // 1: rookery.v1.DNATRule
-	(*VNFConfig)(nil),               // 2: rookery.v1.VNFConfig
-	(*VNF)(nil),                     // 3: rookery.v1.VNF
-	(*VNFLease)(nil),                // 4: rookery.v1.VNFLease
-	(*ListVNFsRequest)(nil),         // 5: rookery.v1.ListVNFsRequest
-	(*ListVNFsResponse)(nil),        // 6: rookery.v1.ListVNFsResponse
-	(*GetVNFRequest)(nil),           // 7: rookery.v1.GetVNFRequest
-	(*CreateVNFRequest)(nil),        // 8: rookery.v1.CreateVNFRequest
-	(*UpdateVNFRequest)(nil),        // 9: rookery.v1.UpdateVNFRequest
-	(*DeleteVNFRequest)(nil),        // 10: rookery.v1.DeleteVNFRequest
-	(*RestartVNFRequest)(nil),       // 11: rookery.v1.RestartVNFRequest
-	(*ListVNFLeasesRequest)(nil),    // 12: rookery.v1.ListVNFLeasesRequest
-	(*ListVNFLeasesResponse)(nil),   // 13: rookery.v1.ListVNFLeasesResponse
-	(*ListVNFSessionsRequest)(nil),  // 14: rookery.v1.ListVNFSessionsRequest
-	(*ListVNFSessionsResponse)(nil), // 15: rookery.v1.ListVNFSessionsResponse
-	(*VNFBGPReceivedPrefix)(nil),    // 16: rookery.v1.VNFBGPReceivedPrefix
-	(*VNFBGPStatus)(nil),            // 17: rookery.v1.VNFBGPStatus
-	(*GetVNFBGPRequest)(nil),        // 18: rookery.v1.GetVNFBGPRequest
-	(*timestamppb.Timestamp)(nil),   // 19: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),           // 20: google.protobuf.Empty
+	(*DNSRecord)(nil),               // 2: rookery.v1.DNSRecord
+	(*VNFConfig)(nil),               // 3: rookery.v1.VNFConfig
+	(*VNF)(nil),                     // 4: rookery.v1.VNF
+	(*VNFLease)(nil),                // 5: rookery.v1.VNFLease
+	(*ListVNFsRequest)(nil),         // 6: rookery.v1.ListVNFsRequest
+	(*ListVNFsResponse)(nil),        // 7: rookery.v1.ListVNFsResponse
+	(*GetVNFRequest)(nil),           // 8: rookery.v1.GetVNFRequest
+	(*CreateVNFRequest)(nil),        // 9: rookery.v1.CreateVNFRequest
+	(*UpdateVNFRequest)(nil),        // 10: rookery.v1.UpdateVNFRequest
+	(*DeleteVNFRequest)(nil),        // 11: rookery.v1.DeleteVNFRequest
+	(*RestartVNFRequest)(nil),       // 12: rookery.v1.RestartVNFRequest
+	(*ListVNFLeasesRequest)(nil),    // 13: rookery.v1.ListVNFLeasesRequest
+	(*ListVNFLeasesResponse)(nil),   // 14: rookery.v1.ListVNFLeasesResponse
+	(*ListVNFSessionsRequest)(nil),  // 15: rookery.v1.ListVNFSessionsRequest
+	(*ListVNFSessionsResponse)(nil), // 16: rookery.v1.ListVNFSessionsResponse
+	(*VNFBGPReceivedPrefix)(nil),    // 17: rookery.v1.VNFBGPReceivedPrefix
+	(*VNFBGPStatus)(nil),            // 18: rookery.v1.VNFBGPStatus
+	(*GetVNFBGPRequest)(nil),        // 19: rookery.v1.GetVNFBGPRequest
+	(*timestamppb.Timestamp)(nil),   // 20: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),           // 21: google.protobuf.Empty
 }
 var file_rookery_v1_vnf_proto_depIdxs = []int32{
 	0,  // 0: rookery.v1.VNFConfig.static_assignments:type_name -> rookery.v1.DHCPStaticAssignment
 	1,  // 1: rookery.v1.VNFConfig.dnat_rules:type_name -> rookery.v1.DNATRule
-	2,  // 2: rookery.v1.VNF.config:type_name -> rookery.v1.VNFConfig
-	19, // 3: rookery.v1.VNF.created_at:type_name -> google.protobuf.Timestamp
-	19, // 4: rookery.v1.VNF.updated_at:type_name -> google.protobuf.Timestamp
-	19, // 5: rookery.v1.VNFLease.expires_at:type_name -> google.protobuf.Timestamp
-	3,  // 6: rookery.v1.ListVNFsResponse.vnfs:type_name -> rookery.v1.VNF
-	2,  // 7: rookery.v1.CreateVNFRequest.config:type_name -> rookery.v1.VNFConfig
-	2,  // 8: rookery.v1.UpdateVNFRequest.config:type_name -> rookery.v1.VNFConfig
-	4,  // 9: rookery.v1.ListVNFLeasesResponse.leases:type_name -> rookery.v1.VNFLease
-	16, // 10: rookery.v1.VNFBGPStatus.received:type_name -> rookery.v1.VNFBGPReceivedPrefix
-	5,  // 11: rookery.v1.VNFService.ListVNFs:input_type -> rookery.v1.ListVNFsRequest
-	7,  // 12: rookery.v1.VNFService.GetVNF:input_type -> rookery.v1.GetVNFRequest
-	8,  // 13: rookery.v1.VNFService.CreateVNF:input_type -> rookery.v1.CreateVNFRequest
-	9,  // 14: rookery.v1.VNFService.UpdateVNF:input_type -> rookery.v1.UpdateVNFRequest
-	10, // 15: rookery.v1.VNFService.DeleteVNF:input_type -> rookery.v1.DeleteVNFRequest
-	11, // 16: rookery.v1.VNFService.RestartVNF:input_type -> rookery.v1.RestartVNFRequest
-	12, // 17: rookery.v1.VNFService.ListVNFLeases:input_type -> rookery.v1.ListVNFLeasesRequest
-	14, // 18: rookery.v1.VNFService.ListVNFSessions:input_type -> rookery.v1.ListVNFSessionsRequest
-	18, // 19: rookery.v1.VNFService.GetVNFBGP:input_type -> rookery.v1.GetVNFBGPRequest
-	6,  // 20: rookery.v1.VNFService.ListVNFs:output_type -> rookery.v1.ListVNFsResponse
-	3,  // 21: rookery.v1.VNFService.GetVNF:output_type -> rookery.v1.VNF
-	3,  // 22: rookery.v1.VNFService.CreateVNF:output_type -> rookery.v1.VNF
-	3,  // 23: rookery.v1.VNFService.UpdateVNF:output_type -> rookery.v1.VNF
-	20, // 24: rookery.v1.VNFService.DeleteVNF:output_type -> google.protobuf.Empty
-	3,  // 25: rookery.v1.VNFService.RestartVNF:output_type -> rookery.v1.VNF
-	13, // 26: rookery.v1.VNFService.ListVNFLeases:output_type -> rookery.v1.ListVNFLeasesResponse
-	15, // 27: rookery.v1.VNFService.ListVNFSessions:output_type -> rookery.v1.ListVNFSessionsResponse
-	17, // 28: rookery.v1.VNFService.GetVNFBGP:output_type -> rookery.v1.VNFBGPStatus
-	20, // [20:29] is the sub-list for method output_type
-	11, // [11:20] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	2,  // 2: rookery.v1.VNFConfig.dns_records:type_name -> rookery.v1.DNSRecord
+	3,  // 3: rookery.v1.VNF.config:type_name -> rookery.v1.VNFConfig
+	20, // 4: rookery.v1.VNF.created_at:type_name -> google.protobuf.Timestamp
+	20, // 5: rookery.v1.VNF.updated_at:type_name -> google.protobuf.Timestamp
+	20, // 6: rookery.v1.VNFLease.expires_at:type_name -> google.protobuf.Timestamp
+	4,  // 7: rookery.v1.ListVNFsResponse.vnfs:type_name -> rookery.v1.VNF
+	3,  // 8: rookery.v1.CreateVNFRequest.config:type_name -> rookery.v1.VNFConfig
+	3,  // 9: rookery.v1.UpdateVNFRequest.config:type_name -> rookery.v1.VNFConfig
+	5,  // 10: rookery.v1.ListVNFLeasesResponse.leases:type_name -> rookery.v1.VNFLease
+	17, // 11: rookery.v1.VNFBGPStatus.received:type_name -> rookery.v1.VNFBGPReceivedPrefix
+	6,  // 12: rookery.v1.VNFService.ListVNFs:input_type -> rookery.v1.ListVNFsRequest
+	8,  // 13: rookery.v1.VNFService.GetVNF:input_type -> rookery.v1.GetVNFRequest
+	9,  // 14: rookery.v1.VNFService.CreateVNF:input_type -> rookery.v1.CreateVNFRequest
+	10, // 15: rookery.v1.VNFService.UpdateVNF:input_type -> rookery.v1.UpdateVNFRequest
+	11, // 16: rookery.v1.VNFService.DeleteVNF:input_type -> rookery.v1.DeleteVNFRequest
+	12, // 17: rookery.v1.VNFService.RestartVNF:input_type -> rookery.v1.RestartVNFRequest
+	13, // 18: rookery.v1.VNFService.ListVNFLeases:input_type -> rookery.v1.ListVNFLeasesRequest
+	15, // 19: rookery.v1.VNFService.ListVNFSessions:input_type -> rookery.v1.ListVNFSessionsRequest
+	19, // 20: rookery.v1.VNFService.GetVNFBGP:input_type -> rookery.v1.GetVNFBGPRequest
+	7,  // 21: rookery.v1.VNFService.ListVNFs:output_type -> rookery.v1.ListVNFsResponse
+	4,  // 22: rookery.v1.VNFService.GetVNF:output_type -> rookery.v1.VNF
+	4,  // 23: rookery.v1.VNFService.CreateVNF:output_type -> rookery.v1.VNF
+	4,  // 24: rookery.v1.VNFService.UpdateVNF:output_type -> rookery.v1.VNF
+	21, // 25: rookery.v1.VNFService.DeleteVNF:output_type -> google.protobuf.Empty
+	4,  // 26: rookery.v1.VNFService.RestartVNF:output_type -> rookery.v1.VNF
+	14, // 27: rookery.v1.VNFService.ListVNFLeases:output_type -> rookery.v1.ListVNFLeasesResponse
+	16, // 28: rookery.v1.VNFService.ListVNFSessions:output_type -> rookery.v1.ListVNFSessionsResponse
+	18, // 29: rookery.v1.VNFService.GetVNFBGP:output_type -> rookery.v1.VNFBGPStatus
+	21, // [21:30] is the sub-list for method output_type
+	12, // [12:21] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_rookery_v1_vnf_proto_init() }
@@ -1630,16 +1743,16 @@ func file_rookery_v1_vnf_proto_init() {
 	if File_rookery_v1_vnf_proto != nil {
 		return
 	}
-	file_rookery_v1_vnf_proto_msgTypes[5].OneofWrappers = []any{}
-	file_rookery_v1_vnf_proto_msgTypes[8].OneofWrappers = []any{}
+	file_rookery_v1_vnf_proto_msgTypes[6].OneofWrappers = []any{}
 	file_rookery_v1_vnf_proto_msgTypes[9].OneofWrappers = []any{}
+	file_rookery_v1_vnf_proto_msgTypes[10].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_vnf_proto_rawDesc), len(file_rookery_v1_vnf_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

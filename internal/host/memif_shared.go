@@ -47,6 +47,7 @@ type sharedNetwork struct {
 	mu    sync.Mutex
 	vnfs  map[int64]string
 	dhcp4 *sharedDHCPv4
+	dns   *sharedDNS
 
 	closeOnce sync.Once
 	closed    bool
@@ -294,6 +295,13 @@ func (n *sharedNetwork) removeVNF(vnfID int64) bool {
 		}
 		n.mu.Lock()
 	}
+	if n.dns != nil && n.dns.vnfID == vnfID {
+		component := n.dns
+		n.dns = nil
+		n.mu.Unlock()
+		component.close()
+		n.mu.Lock()
+	}
 	empty := len(n.vnfs) == 0
 	n.mu.Unlock()
 	return empty
@@ -354,6 +362,8 @@ func (n *sharedNetwork) close() {
 		n.mu.Lock()
 		component := n.dhcp4
 		n.dhcp4 = nil
+		dnsComponent := n.dns
+		n.dns = nil
 		n.mu.Unlock()
 		if component != nil {
 			component.cancel()
@@ -362,6 +372,9 @@ func (n *sharedNetwork) close() {
 			case <-component.done:
 			case <-time.After(vnfStopTimeout):
 			}
+		}
+		if dnsComponent != nil {
+			dnsComponent.close()
 		}
 		if n.memif != nil {
 			n.memif.close()

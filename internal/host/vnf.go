@@ -118,6 +118,9 @@ func (m *VNFManager) Start(ctx context.Context, vnf store.VNF, hostIf string) er
 	if vnf.Type == store.VNFTypeBGP {
 		return m.startBGPTap(ctx, vnf, hostIf)
 	}
+	if vnf.Type == store.VNFTypeDNS {
+		return errors.New("DNS VNFs must use the shared memif transport")
+	}
 
 	leasePath := m.leasePath(vnf.ID)
 	var cfg *coredhcpconfig.Config
@@ -253,8 +256,8 @@ func (m *VNFManager) StartShared(ctx context.Context, vnf store.VNF, socketPath 
 	if vnf.NetworkID < 1 {
 		return errors.New("invalid network id")
 	}
-	if vnf.Type != store.VNFTypeDHCPv4 {
-		return fmt.Errorf("shared memif transport currently supports DHCPv4, got %q", vnf.Type)
+	if vnf.Type != store.VNFTypeDHCPv4 && vnf.Type != store.VNFTypeDNS {
+		return fmt.Errorf("shared memif transport currently supports DHCPv4 and DNS, got %q", vnf.Type)
 	}
 	if strings.TrimSpace(socketPath) == "" {
 		return errors.New("shared memif socket path is required")
@@ -293,7 +296,16 @@ func (m *VNFManager) StartShared(ctx context.Context, vnf store.VNF, socketPath 
 		}
 	}
 
-	if err := network.addDHCPv4(vnf, m.leasePath(vnf.ID), m.port()); err != nil {
+	var addErr error
+	switch vnf.Type {
+	case store.VNFTypeDHCPv4:
+		addErr = network.addDHCPv4(vnf, m.leasePath(vnf.ID), m.port())
+	case store.VNFTypeDNS:
+		addErr = network.addDNS(vnf)
+	default:
+		addErr = fmt.Errorf("unsupported shared VNF type %q", vnf.Type)
+	}
+	if addErr != nil {
 		if network.removeVNF(vnf.ID) {
 			m.mu.Lock()
 			if m.shared[vnf.NetworkID] == network {
@@ -302,7 +314,7 @@ func (m *VNFManager) StartShared(ctx context.Context, vnf store.VNF, socketPath 
 			m.mu.Unlock()
 			network.close()
 		}
-		return err
+		return addErr
 	}
 
 	m.mu.Lock()

@@ -51,7 +51,7 @@ func (r *vnfResource) Metadata(_ context.Context, req resource.MetadataRequest, 
 
 func (r *vnfResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A network function (DHCPv4, DHCPv6, NAT44, or BGP) attached to a Rookery network.",
+		Description: "A network function (DHCPv4, DHCPv6, NAT44, BGP, or DNS) attached to a Rookery network.",
 		Attributes: map[string]schema.Attribute{
 			"id":   schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
 			"name": schema.StringAttribute{Required: true, Description: "VNF name."},
@@ -63,7 +63,7 @@ func (r *vnfResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 			"network_name": schema.StringAttribute{Computed: true},
 			"type": schema.StringAttribute{
 				Required:      true,
-				Description:   "dhcpv4, dhcpv6, nat44, or bgp.",
+				Description:   "dhcpv4, dhcpv6, nat44, bgp, or dns.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"enabled": schema.BoolAttribute{Optional: true, Computed: true, Description: "Whether the VNF is active."},

@@ -2368,7 +2368,7 @@ func TestVNFValidation(t *testing.T) {
 		{name: "missing network", mutate: func(m map[string]any) { delete(m, "network_id") }, status: http.StatusBadRequest},
 		{name: "unknown network", mutate: func(m map[string]any) { m["network_id"] = 999 }, status: http.StatusBadRequest},
 		{name: "missing type", mutate: func(m map[string]any) { delete(m, "type") }, status: http.StatusBadRequest},
-		{name: "bad type", mutate: func(m map[string]any) { m["type"] = "dns" }, status: http.StatusBadRequest},
+		{name: "bad type", mutate: func(m map[string]any) { m["type"] = "bogus" }, status: http.StatusBadRequest},
 		{name: "missing config", mutate: func(m map[string]any) { delete(m, "config") }, status: http.StatusBadRequest},
 		{name: "v4 bad gateway", mutate: func(m map[string]any) { m["config"].(map[string]any)["gateway"] = "not-a-cidr" }, status: http.StatusBadRequest},
 		{name: "v4 v6 gateway", mutate: func(m map[string]any) { m["config"].(map[string]any)["gateway"] = "fd00::1/64" }, status: http.StatusBadRequest},
@@ -2461,6 +2461,69 @@ func TestVNFValidation(t *testing.T) {
 	})
 	if recorder.Code != http.StatusConflict {
 		t.Fatalf("duplicate name status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestDNSVNFLifecycle(t *testing.T) {
+	env := newTestAPI(t)
+	handler := env.handler
+	network := createNetworkAPI(t, handler, "lab")
+
+	recorder := do(t, handler, http.MethodPost, "/api/vnfs", map[string]any{
+		"name":       "lab-dns",
+		"network_id": network.ID,
+		"type":       store.VNFTypeDNS,
+		"enabled":    true,
+		"config": map[string]any{
+			"dns_records": []map[string]any{
+				{"name": "vm1.lab1.test", "type": "A", "value": "10.20.0.50"},
+				{"name": "*.lab1.test", "type": "A", "value": "10.20.0.51", "ttl": 60},
+				{"name": "alias.lab1.test", "type": "CNAME", "value": "vm1.lab1.test"},
+				{"name": "vm1.lab1.test", "type": "TXT", "value": "hello"},
+			},
+			"dns_forward":    true,
+			"dns_forwarders": []string{"1.1.1.1", "8.8.8.8:53"},
+		},
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create DNS VNF status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	created := decode[store.VNF](t, recorder)
+	if created.Type != store.VNFTypeDNS || !created.Enabled ||
+		created.MemifSocket != network.VNFMemifSocket || len(created.Config.DNSRecords) != 4 ||
+		!created.Config.DNSForward || len(created.Config.DNSForwarders) != 2 {
+		t.Fatalf("created DNS VNF = %+v", created)
+	}
+	records := created.Config.DNSRecords
+	if records[0].Name != "vm1.lab1.test." || records[0].TTL != 300 ||
+		records[1].Name != "*.lab1.test." || records[1].TTL != 60 ||
+		records[2].Value != "vm1.lab1.test." ||
+		records[3].Value != "hello" {
+		t.Fatalf("normalized records = %+v", records)
+	}
+	if len(env.vnfs.started) != 1 || env.vnfs.started[0] != created.ID {
+		t.Fatalf("DNS runtime starts = %+v", env.vnfs.started)
+	}
+
+	invalid := []map[string]any{
+		{"dns_records": []map[string]any{{"name": "x.test", "type": "MX", "value": "mail.test"}}},
+		{"dns_records": []map[string]any{
+			{"name": "x.test", "type": "A", "value": "10.20.0.50"},
+			{"name": "x.test", "type": "CNAME", "value": "other.test"},
+		}},
+		{"dns_forwarders": []string{"not-an-ip"}},
+		{"dns_records": []map[string]any{{"name": "x.test", "type": "A", "value": "fd00::1"}}},
+	}
+	for index, config := range invalid {
+		recorder := do(t, handler, http.MethodPost, "/api/vnfs", map[string]any{
+			"name":       fmt.Sprintf("bad-dns-%d", index),
+			"network_id": network.ID,
+			"type":       store.VNFTypeDNS,
+			"config":     config,
+		})
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("invalid DNS config %d status = %d, body = %s", index, recorder.Code, recorder.Body.String())
+		}
 	}
 }
 

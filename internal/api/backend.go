@@ -103,6 +103,14 @@ func vnfConfigPayloadFromProto(config *rookeryv1.VNFConfig) *vnfConfigPayload {
 		Password: config.GetPassword(), Passive: config.GetPassive(), TargetTableID: config.GetTargetTableId(),
 		AdvertisePrefixes: append([]string(nil), config.GetAdvertisePrefixes()...),
 		NextHop:           config.GetNextHop(),
+		DNSForward:        config.GetDnsForward(),
+		DNSForwarders:     append([]string(nil), config.GetDnsForwarders()...),
+	}
+	for _, record := range config.GetDnsRecords() {
+		payload.DNSRecords = append(payload.DNSRecords, dnsRecordPayload{
+			Name: record.GetName(), Type: record.GetType(),
+			Value: record.GetValue(), TTL: record.GetTtl(),
+		})
 	}
 	for _, assignment := range config.GetStaticAssignments() {
 		payload.StaticAssignments = append(payload.StaticAssignments, dhcpStaticAssignmentPayload{MAC: assignment.GetMac(), IP: assignment.GetIp()})

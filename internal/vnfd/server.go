@@ -516,6 +516,13 @@ func configFromProto(c *rookeryv1.VNFConfig) store.VNFConfig {
 			LocalPort:    int(rule.GetLocalPort()),
 		})
 	}
+	dnsRecords := make([]store.DNSRecord, 0, len(c.GetDnsRecords()))
+	for _, record := range c.GetDnsRecords() {
+		dnsRecords = append(dnsRecords, store.DNSRecord{
+			Name: record.GetName(), Type: record.GetType(),
+			Value: record.GetValue(), TTL: record.GetTtl(),
+		})
+	}
 	return store.VNFConfig{
 		Gateway:           c.GetGateway(),
 		RangeStart:        c.GetRangeStart(),
@@ -542,5 +549,8 @@ func configFromProto(c *rookeryv1.VNFConfig) store.VNFConfig {
 		TargetTableID:     c.GetTargetTableId(),
 		AdvertisePrefixes: append([]string(nil), c.GetAdvertisePrefixes()...),
 		NextHop:           c.GetNextHop(),
+		DNSRecords:        dnsRecords,
+		DNSForward:        c.GetDnsForward(),
+		DNSForwarders:     append([]string(nil), c.GetDnsForwarders()...),
 	}
 }

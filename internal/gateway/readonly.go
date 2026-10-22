@@ -319,6 +319,12 @@ func vnfToProto(vnf store.VNF) *rookeryv1.VNF {
 			LocalIp: rule.LocalIP, LocalPort: int32(rule.LocalPort),
 		})
 	}
+	dnsRecords := make([]*rookeryv1.DNSRecord, 0, len(vnf.Config.DNSRecords))
+	for _, record := range vnf.Config.DNSRecords {
+		dnsRecords = append(dnsRecords, &rookeryv1.DNSRecord{
+			Name: record.Name, Type: record.Type, Value: record.Value, Ttl: record.TTL,
+		})
+	}
 	return &rookeryv1.VNF{
 		Id: vnf.ID, Name: vnf.Name, NetworkId: vnf.NetworkID, NetworkName: vnf.NetworkName,
 		Type: vnf.Type, Enabled: vnf.Enabled,
@@ -334,6 +340,9 @@ func vnfToProto(vnf store.VNF) *rookeryv1.VNF {
 			Password: vnf.Config.Password, Passive: vnf.Config.Passive, TargetTableId: vnf.Config.TargetTableID,
 			AdvertisePrefixes: append([]string(nil), vnf.Config.AdvertisePrefixes...),
 			NextHop:           vnf.Config.NextHop,
+			DnsRecords:        dnsRecords,
+			DnsForward:        vnf.Config.DNSForward,
+			DnsForwarders:     append([]string(nil), vnf.Config.DNSForwarders...),
 		},
 		TapSwIfIndex: vnf.TapSwIfIndex, TapHostName: vnf.TapHostName,
 		CreatedAt: timestamp(vnf.CreatedAt), UpdatedAt: timestamp(vnf.UpdatedAt),

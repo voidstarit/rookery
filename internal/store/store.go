@@ -189,11 +189,13 @@ const (
 	VNFTypeNAT44 = "nat44"
 	// VNFTypeBGP is an embedded IPv4 BGP speaker.
 	VNFTypeBGP = "bgp"
+	// VNFTypeDNS is a local DNS server with optional upstream forwarding.
+	VNFTypeDNS = "dns"
 )
 
 // ValidVNFType reports whether type is a supported network function.
 func ValidVNFType(vnfType string) bool {
-	return vnfType == VNFTypeDHCPv4 || vnfType == VNFTypeDHCPv6 || vnfType == VNFTypeNAT44 || vnfType == VNFTypeBGP
+	return vnfType == VNFTypeDHCPv4 || vnfType == VNFTypeDHCPv6 || vnfType == VNFTypeNAT44 || vnfType == VNFTypeBGP || vnfType == VNFTypeDNS
 }
 
 // VNFConfig is the shared configuration for DHCP network functions. IPv4 and
@@ -240,6 +242,20 @@ type VNFConfig struct {
 	// NextHop overrides the NEXT_HOP announced with advertised prefixes.
 	// Empty means LocalIP is advertised.
 	NextHop string `json:"next_hop,omitempty"`
+
+	// DNS configuration. Records are served authoritatively; names without a
+	// local record are forwarded when Forward is enabled.
+	DNSRecords    []DNSRecord `json:"dns_records,omitempty"`
+	DNSForward    bool        `json:"dns_forward,omitempty"`
+	DNSForwarders []string    `json:"dns_forwarders,omitempty"`
+}
+
+// DNSRecord is one authoritative record served by a DNS VNF.
+type DNSRecord struct {
+	Name  string `json:"name"`
+	Type  string `json:"type"`
+	Value string `json:"value"`
+	TTL   uint32 `json:"ttl,omitempty"`
 }
 
 // DHCPStaticAssignment reserves one IPv4 address for a MAC address.

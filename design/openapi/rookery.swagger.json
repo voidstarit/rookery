@@ -32,7 +32,7 @@
     },
     {
       "name": "VNFService",
-      "description": "VNFService manages DHCP and NAT44 network functions."
+      "description": "VNFService manages DHCP, NAT44, BGP, and DNS network functions."
     },
     {
       "name": "VMService",
@@ -3927,6 +3927,23 @@
         },
         "next_hop": {
           "type": "string"
+        },
+        "dns_records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1DNSRecord"
+          },
+          "description": "DNS configuration. Records are served authoritatively; names without a\nlocal record are forwarded when dns_forward is enabled. If dns_forward is\nenabled and dns_forwarders is empty, the daemon uses the host resolver\nconfiguration (/etc/resolv.conf)."
+        },
+        "dns_forward": {
+          "type": "boolean"
+        },
+        "dns_forwarders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -4578,6 +4595,25 @@
           }
         }
       }
+    },
+    "v1DNSRecord": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "ttl": {
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "description": "DNSRecord is one local record served by a DNS VNF. Name is a fully qualified\ndomain name; wildcard names such as *.lab1.test are supported. Type is A,\nAAAA, CNAME, or TXT."
     }
   }
 }

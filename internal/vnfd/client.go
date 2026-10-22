@@ -300,6 +300,12 @@ func configToProto(config store.VNFConfig) *rookeryv1.VNFConfig {
 			LocalIp: rule.LocalIP, LocalPort: int32(rule.LocalPort),
 		})
 	}
+	dnsRecords := make([]*rookeryv1.DNSRecord, 0, len(config.DNSRecords))
+	for _, record := range config.DNSRecords {
+		dnsRecords = append(dnsRecords, &rookeryv1.DNSRecord{
+			Name: record.Name, Type: record.Type, Value: record.Value, Ttl: record.TTL,
+		})
+	}
 	return &rookeryv1.VNFConfig{
 		Gateway: config.Gateway, RangeStart: config.RangeStart, RangeEnd: config.RangeEnd,
 		Dns: config.DNS, LeaseTime: config.LeaseTime, BindIp: config.BindIP,
@@ -312,5 +318,8 @@ func configToProto(config store.VNFConfig) *rookeryv1.VNFConfig {
 		Password: config.Password, Passive: config.Passive, TargetTableId: config.TargetTableID,
 		AdvertisePrefixes: append([]string(nil), config.AdvertisePrefixes...),
 		NextHop:           config.NextHop,
+		DnsRecords:        dnsRecords,
+		DnsForward:        config.DNSForward,
+		DnsForwarders:     append([]string(nil), config.DNSForwarders...),
 	}
 }

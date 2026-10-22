@@ -278,7 +278,13 @@ func (s *Server) ensureNetworkVNFResources(ctx context.Context, network store.Ne
 		strings.EqualFold(strings.TrimSpace(network.VNFTransport), vnfTransportDedicated) {
 		return network, nil
 	}
+	return s.ensureNetworkSharedMemif(ctx, network)
+}
 
+// ensureNetworkSharedMemif creates or finds the per-network shared VNF memif.
+// It is idempotent and can be used by VNF types that always need the shared
+// stack, regardless of the network's default transport.
+func (s *Server) ensureNetworkSharedMemif(ctx context.Context, network store.Network) (store.Network, error) {
 	hostName := strings.TrimSpace(network.VNFMemifHostName)
 	if hostName == "" {
 		hostName = fmt.Sprintf("net%d-vnf", network.ID)
@@ -335,6 +341,72 @@ func (s *Server) CleanupNetworkVNFs(ctx context.Context, network store.Network) 
 		return nil
 	}
 	return s.deleteMemif(ctx, network.VNFMemifSwIfIndex, network.VNFMemifHostName)
+}
+
+// activateSharedDNS starts a DNS VNF on the network's shared VNF memif. The
+// server listens on the network service address (.2) and answers local records
+// plus optional upstream queries.
+func (s *Server) activateSharedDNS(ctx context.Context, vnf store.VNF, network store.Network) (store.VNF, error) {
+	if s.vnfs == nil || s.networks == nil {
+		return vnf, fmt.Errorf("VNF runtime is not configured")
+	}
+	var err error
+	network, err = s.ensureNetworkCIDRs(ctx, network)
+	if err != nil {
+		return vnf, err
+	}
+	gateway := ""
+	if network.IPv4CIDR != "" {
+		gateway, err = netutil.HostCIDR(network.IPv4CIDR, 1)
+		if err != nil {
+			return vnf, err
+		}
+	}
+	serviceCIDR, err := netutil.HostCIDR(network.IPv4CIDR, 2)
+	if err != nil {
+		return vnf, err
+	}
+	network, err = s.ensureNetworkVNFResources(ctx, network, gateway)
+	if err != nil {
+		return vnf, err
+	}
+	network, err = s.ensureNetworkSharedMemif(ctx, network)
+	if err != nil {
+		return vnf, err
+	}
+
+	// Drop resources from a previous dedicated memif/tap generation.
+	if vnf.MemifSocket != "" && vnf.MemifSocket != network.VNFMemifSocket {
+		_ = s.deleteMemif(ctx, vnf.MemifSwIfIndex, vnfMemifDeleteName(vnf))
+	}
+	if vnf.TapSwIfIndex != 0 || vnf.TapHostName != "" {
+		_ = s.deleteTap(ctx, vnf.TapSwIfIndex, vnf.TapHostName)
+	}
+
+	if err := s.vnfs.StartShared(ctx, vnf, network.VNFMemifSocket, host.NetworkVNFMemifID(network.ID), serviceCIDR); err != nil {
+		return vnf, err
+	}
+	vnf.Enabled = true
+	vnf.MemifSocket = network.VNFMemifSocket
+	vnf.MemifSwIfIndex = network.VNFMemifSwIfIndex
+	vnf.MemifHostName = network.VNFMemifHostName
+	vnf.TapSwIfIndex = 0
+	vnf.TapHostName = ""
+	updated, err := s.store.UpdateVNF(ctx, vnf.ID, vnf)
+	if err != nil {
+		_ = s.vnfs.Stop(ctx, vnf.ID, false)
+		return vnf, err
+	}
+	s.logger.Info().
+		Str("vnf", updated.Name).
+		Str("type", updated.Type).
+		Str("network", network.Name).
+		Str("memif", network.VNFMemifSocket).
+		Str("address", serviceCIDR).
+		Int("records", len(updated.Config.DNSRecords)).
+		Bool("forward", updated.Config.DNSForward).
+		Msg("DNS VNF activated on shared memif")
+	return updated, nil
 }
 
 // activateSharedVNF starts a DHCPv4 VNF on its network's shared memif. The

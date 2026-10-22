@@ -7,8 +7,11 @@ import (
 	"math/big"
 	"net"
 	"net/netip"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/miekg/dns"
 
 	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/netutil"
@@ -61,6 +64,17 @@ type vnfConfigPayload struct {
 	TargetTableID     uint32   `json:"target_table_id"`
 	AdvertisePrefixes []string `json:"advertise_prefixes"`
 	NextHop           string   `json:"next_hop"`
+
+	DNSRecords    []dnsRecordPayload `json:"dns_records"`
+	DNSForward    bool               `json:"dns_forward"`
+	DNSForwarders []string           `json:"dns_forwarders"`
+}
+
+type dnsRecordPayload struct {
+	Name  string `json:"name"`
+	Type  string `json:"type"`
+	Value string `json:"value"`
+	TTL   uint32 `json:"ttl"`
 }
 
 type dhcpStaticAssignmentPayload struct {
@@ -112,6 +126,9 @@ func (p vnfPayload) toType() (string, error) {
 func (p vnfConfigPayload) toConfig(vnfType string) (store.VNFConfig, error) {
 	if vnfType == store.VNFTypeBGP {
 		return normalizeBGPConfig(p)
+	}
+	if vnfType == store.VNFTypeDNS {
+		return normalizeDNSConfig(p)
 	}
 	gateway := strings.TrimSpace(p.Gateway)
 	rangeStart := strings.TrimSpace(p.RangeStart)
@@ -737,6 +754,9 @@ func (s *Server) activateVNF(ctx context.Context, vnf store.VNF) (store.VNF, err
 	if err := s.cleanupLegacyNetworkVNF(ctx, network); err != nil {
 		return vnf, err
 	}
+	if vnf.Type == store.VNFTypeDNS {
+		return s.activateSharedDNS(ctx, vnf, network)
+	}
 
 	transport := s.effectiveVNFTransport(network, vnf)
 	if s.memifDHCP && vnf.Type == store.VNFTypeDHCPv4 {
@@ -873,6 +893,171 @@ func (s *Server) VNFSessions(ctx context.Context, vnf store.VNF) ([]string, erro
 		sessions = []string{}
 	}
 	return sessions, nil
+}
+
+func normalizeDNSConfig(p vnfConfigPayload) (store.VNFConfig, error) {
+	if len(p.DNSRecords) > 1024 {
+		return store.VNFConfig{}, errors.New("config.dns_records supports at most 1024 records")
+	}
+	records := make([]store.DNSRecord, 0, len(p.DNSRecords))
+	seen := make(map[string]struct{}, len(p.DNSRecords))
+	cnameNames := make(map[string]struct{})
+	otherNames := make(map[string]struct{})
+	for index, raw := range p.DNSRecords {
+		name, err := normalizeDNSRecordName(raw.Name)
+		if err != nil {
+			return store.VNFConfig{}, fmt.Errorf("config.dns_records[%d].name: %w", index, err)
+		}
+		recordType := strings.ToUpper(strings.TrimSpace(raw.Type))
+		value, err := normalizeDNSRecordValue(recordType, raw.Value)
+		if err != nil {
+			return store.VNFConfig{}, fmt.Errorf("config.dns_records[%d].value: %w", index, err)
+		}
+		ttl := raw.TTL
+		if ttl == 0 {
+			ttl = 300
+		}
+		if ttl > 86400 {
+			return store.VNFConfig{}, fmt.Errorf("config.dns_records[%d].ttl must be at most 86400", index)
+		}
+		key := name + "\x00" + recordType + "\x00" + value
+		if _, exists := seen[key]; exists {
+			return store.VNFConfig{}, fmt.Errorf("config.dns_records[%d] duplicates another record", index)
+		}
+		seen[key] = struct{}{}
+		switch {
+		case recordType == "CNAME":
+			if _, exists := otherNames[name]; exists {
+				return store.VNFConfig{}, fmt.Errorf("config.dns_records[%d]: %s already has non-CNAME records", index, name)
+			}
+			if _, exists := cnameNames[name]; exists {
+				return store.VNFConfig{}, fmt.Errorf("config.dns_records[%d]: %s already has a CNAME record", index, name)
+			}
+			cnameNames[name] = struct{}{}
+		default:
+			if _, exists := cnameNames[name]; exists {
+				return store.VNFConfig{}, fmt.Errorf("config.dns_records[%d]: %s already has a CNAME record", index, name)
+			}
+			otherNames[name] = struct{}{}
+		}
+		records = append(records, store.DNSRecord{Name: name, Type: recordType, Value: value, TTL: ttl})
+	}
+	if len(p.DNSForwarders) > 16 {
+		return store.VNFConfig{}, errors.New("config.dns_forwarders supports at most 16 servers")
+	}
+	forwarders := make([]string, 0, len(p.DNSForwarders))
+	seenForwarders := make(map[string]struct{}, len(p.DNSForwarders))
+	for index, raw := range p.DNSForwarders {
+		if strings.TrimSpace(raw) == "" {
+			continue
+		}
+		forwarder, err := normalizeDNSForwarder(raw)
+		if err != nil {
+			return store.VNFConfig{}, fmt.Errorf("config.dns_forwarders[%d]: %w", index, err)
+		}
+		if _, exists := seenForwarders[forwarder]; exists {
+			continue
+		}
+		seenForwarders[forwarder] = struct{}{}
+		forwarders = append(forwarders, forwarder)
+	}
+	return store.VNFConfig{
+		DNSRecords:    records,
+		DNSForward:    p.DNSForward,
+		DNSForwarders: forwarders,
+	}, nil
+}
+
+func normalizeDNSRecordName(value string) (string, error) {
+	name := strings.TrimSpace(value)
+	if name == "" {
+		return "", errors.New("name is required")
+	}
+	wildcard := strings.HasPrefix(name, "*.")
+	if strings.Contains(name, "*") && !wildcard {
+		return "", errors.New("only a leading *. wildcard is supported")
+	}
+	if wildcard {
+		name = strings.TrimPrefix(name, "*.")
+		if name == "" {
+			return "", errors.New("wildcard name requires a domain suffix")
+		}
+	}
+	if strings.ContainsAny(name, " \t\r\n") {
+		return "", errors.New("name must not contain whitespace")
+	}
+	canonical := dns.CanonicalName(name)
+	if canonical == "." {
+		return "", errors.New("name must not be the DNS root")
+	}
+	if _, ok := dns.IsDomainName(canonical); !ok {
+		return "", errors.New("invalid DNS name")
+	}
+	if wildcard {
+		return "*." + canonical, nil
+	}
+	return canonical, nil
+}
+
+func normalizeDNSRecordValue(recordType, value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", errors.New("value is required")
+	}
+	switch recordType {
+	case "A":
+		ip := net.ParseIP(value)
+		if ip == nil || ip.To4() == nil {
+			return "", errors.New("A records require an IPv4 address")
+		}
+		return ip.To4().String(), nil
+	case "AAAA":
+		ip := net.ParseIP(value)
+		if ip == nil || ip.To4() != nil {
+			return "", errors.New("AAAA records require an IPv6 address")
+		}
+		return ip.String(), nil
+	case "CNAME":
+		name, err := normalizeDNSRecordName(value)
+		if err != nil {
+			return "", err
+		}
+		if strings.HasPrefix(name, "*.") {
+			return "", errors.New("CNAME targets cannot be wildcards")
+		}
+		return name, nil
+	case "TXT":
+		if len(value) > 255 {
+			return "", errors.New("TXT values must be at most 255 bytes")
+		}
+		return value, nil
+	default:
+		return "", errors.New("type must be A, AAAA, CNAME, or TXT")
+	}
+}
+
+func normalizeDNSForwarder(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", errors.New("server is required")
+	}
+	host, portText, err := net.SplitHostPort(value)
+	if err != nil {
+		addr, parseErr := netip.ParseAddr(strings.Trim(value, "[]"))
+		if parseErr != nil {
+			return "", errors.New("must be an IP address or IP:port")
+		}
+		return net.JoinHostPort(addr.String(), "53"), nil
+	}
+	addr, err := netip.ParseAddr(strings.Trim(host, "[]"))
+	if err != nil {
+		return "", errors.New("host must be an IP address")
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil || port < 1 || port > 65535 {
+		return "", errors.New("port must be between 1 and 65535")
+	}
+	return net.JoinHostPort(addr.String(), strconv.Itoa(port)), nil
 }
 
 func normalizeBGPConfig(p vnfConfigPayload) (store.VNFConfig, error) {

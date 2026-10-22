@@ -330,13 +330,20 @@ export type ACL = {
   updated_at: string;
 };
 
-export type VNFType = "dhcpv4" | "dhcpv6" | "nat44" | "bgp";
+export type VNFType = "dhcpv4" | "dhcpv6" | "nat44" | "bgp" | "dns";
 
 export type DNATRule = {
   protocol: "tcp" | "udp";
   external_port: number;
   local_ip: string;
   local_port: number;
+};
+
+export type DNSRecord = {
+  name: string;
+  type: "A" | "AAAA" | "CNAME" | "TXT";
+  value: string;
+  ttl?: number;
 };
 
 export type VNFConfig = {
@@ -365,6 +372,9 @@ export type VNFConfig = {
   target_table_id?: number;
   advertise_prefixes?: string[];
   next_hop?: string;
+  dns_records?: DNSRecord[];
+  dns_forward?: boolean;
+  dns_forwarders?: string[];
 };
 
 export type DHCPStaticAssignment = {

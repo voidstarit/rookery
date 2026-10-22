@@ -309,6 +309,149 @@ var _DNATRule_Protocol_InLookup = map[string]struct{}{
 	"udp": {},
 }
 
+// Validate checks the field values on DNSRecord with the rules defined in the
+// proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *DNSRecord) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on DNSRecord with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in DNSRecordMultiError, or nil
+// if none found.
+func (m *DNSRecord) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *DNSRecord) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if l := utf8.RuneCountInString(m.GetName()); l < 1 || l > 255 {
+		err := DNSRecordValidationError{
+			field:  "Name",
+			reason: "value length must be between 1 and 255 runes, inclusive",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if l := utf8.RuneCountInString(m.GetType()); l < 1 || l > 16 {
+		err := DNSRecordValidationError{
+			field:  "Type",
+			reason: "value length must be between 1 and 16 runes, inclusive",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if l := utf8.RuneCountInString(m.GetValue()); l < 1 || l > 512 {
+		err := DNSRecordValidationError{
+			field:  "Value",
+			reason: "value length must be between 1 and 512 runes, inclusive",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if m.GetTtl() > 86400 {
+		err := DNSRecordValidationError{
+			field:  "Ttl",
+			reason: "value must be less than or equal to 86400",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return DNSRecordMultiError(errors)
+	}
+
+	return nil
+}
+
+// DNSRecordMultiError is an error wrapping multiple validation errors returned
+// by DNSRecord.ValidateAll() if the designated constraints aren't met.
+type DNSRecordMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m DNSRecordMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m DNSRecordMultiError) AllErrors() []error { return m }
+
+// DNSRecordValidationError is the validation error returned by
+// DNSRecord.Validate if the designated constraints aren't met.
+type DNSRecordValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e DNSRecordValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e DNSRecordValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e DNSRecordValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e DNSRecordValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e DNSRecordValidationError) ErrorName() string { return "DNSRecordValidationError" }
+
+// Error satisfies the builtin error interface
+func (e DNSRecordValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sDNSRecord.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = DNSRecordValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = DNSRecordValidationError{}
+
 // Validate checks the field values on VNFConfig with the rules defined in the
 // proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.
@@ -629,6 +772,84 @@ func (m *VNFConfig) validate(all bool) error {
 				return err
 			}
 			errors = append(errors, err)
+		}
+
+	}
+
+	if len(m.GetDnsRecords()) > 1024 {
+		err := VNFConfigValidationError{
+			field:  "DnsRecords",
+			reason: "value must contain no more than 1024 item(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	for idx, item := range m.GetDnsRecords() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, VNFConfigValidationError{
+						field:  fmt.Sprintf("DnsRecords[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, VNFConfigValidationError{
+						field:  fmt.Sprintf("DnsRecords[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return VNFConfigValidationError{
+					field:  fmt.Sprintf("DnsRecords[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	// no validation rules for DnsForward
+
+	if len(m.GetDnsForwarders()) > 16 {
+		err := VNFConfigValidationError{
+			field:  "DnsForwarders",
+			reason: "value must contain no more than 16 item(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	for idx, item := range m.GetDnsForwarders() {
+		_, _ = idx, item
+
+		if item != "" {
+
+			if utf8.RuneCountInString(item) > 64 {
+				err := VNFConfigValidationError{
+					field:  fmt.Sprintf("DnsForwarders[%v]", idx),
+					reason: "value length must be at most 64 runes",
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			}
+
 		}
 
 	}
@@ -1479,7 +1700,7 @@ func (m *CreateVNFRequest) validate(all bool) error {
 	if _, ok := _CreateVNFRequest_Type_InLookup[m.GetType()]; !ok {
 		err := CreateVNFRequestValidationError{
 			field:  "Type",
-			reason: "value must be in list [dhcpv4 dhcpv6 nat44 bgp]",
+			reason: "value must be in list [dhcpv4 dhcpv6 nat44 bgp dns]",
 		}
 		if !all {
 			return err
@@ -1605,6 +1826,7 @@ var _CreateVNFRequest_Type_InLookup = map[string]struct{}{
 	"dhcpv6": {},
 	"nat44":  {},
 	"bgp":    {},
+	"dns":    {},
 }
 
 // Validate checks the field values on UpdateVNFRequest with the rules defined

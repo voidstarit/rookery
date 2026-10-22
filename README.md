@@ -272,7 +272,7 @@ running VMs.
   `vppctl show plugins | grep vhost`
 - The VPP ACL plugin loaded for interface ACLs; check with
   `vppctl show plugins | grep acl`
-- No external DHCP daemon is required; DHCPv4/DHCPv6 VNFs use the embedded CoreDHCP servers
+- No external DHCP or DNS daemon is required; DHCPv4/DHCPv6 use the embedded CoreDHCP servers and DNS VNFs run the built-in resolver
 - A spare **wired** Ethernet NIC for NAT44 outside use; wireless and the host
   default-route NIC are rejected
 - `vppctl` on `PATH` with access to VPP's CLI socket for NAT44 VNFs
@@ -550,11 +550,21 @@ served locally; the upstream `ffmpeg-core.wasm` is omitted, so RTP audio playbac
 is unavailable while packet dissection works.
 
 Network functions (**VNFs**) are attached to Rookery Networks. The **VNFs** tab
-supports `dhcpv4`, `dhcpv6`, `nat44`, and `bgp` functions; the VNF record has a
-type, network, enable flag, and type-specific configuration. A network can have
-one VNF of each type. Adding or editing a VNF opens a full page at `/vnfs/new`
+supports `dhcpv4`, `dhcpv6`, `nat44`, `bgp`, and `dns` functions; the VNF record
+has a type, network, enable flag, and type-specific configuration. A network can
+have one VNF of each type. Adding or editing a VNF opens a full page at `/vnfs/new`
 or `/vnfs/{id}/edit`, so refreshing keeps the form open; lease and session
 views remain dialogs.
+
+DNS VNFs provide a small authoritative DNS server on the network's shared VNF
+memif, reachable at the network service address (`.2`, UDP/TCP 53). Define
+records with a name, type (`A`, `AAAA`, `CNAME`, `TXT`), value, and TTL; names
+are fully qualified and may use a leading wildcard such as `*.lab1.test`.
+Set **Forward names without a local record** to send other queries to the
+configured upstream servers (IP or IP:port), or disable it to answer unknown
+names with NXDOMAIN. If forwarding is enabled without upstreams, the daemon uses
+`/etc/resolv.conf`. Local records always take precedence. Point DHCP clients at
+the `.2` service address through the DHCP VNF's DNS field.
 
 BGP VNFs are embedded GoBGP speakers with one peer, using the address family of
 `local_ip` (IPv4 or IPv6 unicast). Choose a `memif` transport for a gVisor
@@ -896,7 +906,7 @@ native routes plus the static UI.
 | `DELETE` | `/api/troubleshoot/capture/files/{name}` | Delete a retained pcap file |
 | `GET`    | `/webshark/`       | Embedded WebShark pcap viewer |
 | `GET`    | `/api/vnfs`        | List VNFs (`?network_id=<id>` optional) |
-| `POST`   | `/api/vnfs`        | Create a DHCPv4, DHCPv6, or NAT44 VNF |
+| `POST`   | `/api/vnfs`        | Create a DHCPv4, DHCPv6, NAT44, BGP, or DNS VNF |
 | `GET`    | `/api/vnfs/{id}`   | Get one VNF                       |
 | `PUT`    | `/api/vnfs/{id}`   | Update name, config, or enable flag |
 | `DELETE` | `/api/vnfs/{id}`   | Stop and delete a VNF             |
@@ -1088,6 +1098,28 @@ curl -sS -X POST http://127.0.0.1:8080/api/vnfs \
                  "range_end":"fd00:20::200","dns":"2001:4860:4860::8888",
                  "lease_time":"12h"}}'
 ```
+
+Add a DNS VNF with local records and upstream forwarding:
+
+```bash
+curl -sS -X POST http://127.0.0.1:8080/api/vnfs \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"lab-dns","network_id":1,"type":"dns","enabled":true,
+       "config":{
+         "dns_records":[
+           {"name":"web.lab.test","type":"A","value":"10.20.0.50"},
+           {"name":"web.lab.test","type":"AAAA","value":"fd00:20::50"},
+           {"name":"*.apps.lab.test","type":"A","value":"10.20.0.51"},
+           {"name":"alias.lab.test","type":"CNAME","value":"web.lab.test"},
+           {"name":"info.lab.test","type":"TXT","value":"lab DNS"}
+         ],
+         "dns_forward":true,
+         "dns_forwarders":["1.1.1.1","8.8.8.8"]
+       }}'
+```
+
+The DNS server listens on the network service address `.2` (UDP/TCP 53).
+Set the DHCP VNF's `dns` field to that address if clients should use it.
 
 Create a dedicated NAT network, then add NAT44 with a static outside address
 and DHCPv4 for clients. The outside NIC must not be the host default route; the

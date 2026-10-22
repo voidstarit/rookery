@@ -1,6 +1,7 @@
 // Command vnfs runs the userspace network function daemon.
 //
-// It owns the long-running DHCP and BGP runtimes (CoreDHCP, gVisor memif
+// It owns the long-running DHCP, DNS, and BGP runtimes (CoreDHCP, the DNS
+// server, gVisor memif
 // stacks, GoBGP) and is controlled by rookery over an internal gRPC
 // channel, so API restarts do not interrupt running VNFs. VPP provisioning
 // (memif/tap interfaces, BVIs, NAT44) stays in the API; this daemon only opens

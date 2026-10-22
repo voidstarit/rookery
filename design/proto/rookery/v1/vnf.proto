@@ -9,7 +9,7 @@ import "validate/validate.proto";
 
 option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
 
-// VNFService manages DHCP and NAT44 network functions.
+// VNFService manages DHCP, NAT44, BGP, and DNS network functions.
 service VNFService {
   rpc ListVNFs(ListVNFsRequest) returns (ListVNFsResponse) {
     option (google.api.http) = {
@@ -71,6 +71,16 @@ message DNATRule {
   int32 local_port = 4 [(validate.rules).int32 = {gte: 1, lte: 65535}];
 }
 
+// DNSRecord is one local record served by a DNS VNF. Name is a fully qualified
+// domain name; wildcard names such as *.lab1.test are supported. Type is A,
+// AAAA, CNAME, or TXT.
+message DNSRecord {
+  string name = 1 [(validate.rules).string = {min_len: 1, max_len: 255}];
+  string type = 2 [(validate.rules).string = {min_len: 1, max_len: 16}];
+  string value = 3 [(validate.rules).string = {min_len: 1, max_len: 512}];
+  uint32 ttl = 4 [(validate.rules).uint32 = {lte: 86400}];
+}
+
 message VNFConfig {
   string gateway = 1 [(validate.rules).string = {max_len: 64}];
   string range_start = 2 [(validate.rules).string = {max_len: 64}];
@@ -103,6 +113,17 @@ message VNFConfig {
   // next_hop overrides the BGP NEXT_HOP for advertised prefixes. Empty means
   // use local_ip. Must match the local_ip address family.
   string next_hop = 25 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
+
+  // DNS configuration. Records are served authoritatively; names without a
+  // local record are forwarded when dns_forward is enabled. If dns_forward is
+  // enabled and dns_forwarders is empty, the daemon uses the host resolver
+  // configuration (/etc/resolv.conf).
+  repeated DNSRecord dns_records = 26 [(validate.rules).repeated = {max_items: 1024}];
+  bool dns_forward = 27;
+  repeated string dns_forwarders = 28 [(validate.rules).repeated = {
+    max_items: 16
+    items: {string: {ignore_empty: true, max_len: 64}}
+  }];
 }
 
 message VNF {
@@ -149,7 +170,7 @@ message CreateVNFRequest {
     pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
   }];
   int64 network_id = 2 [(validate.rules).int64 = {gt: 0}];
-  string type = 3 [(validate.rules).string = {in: ["dhcpv4", "dhcpv6", "nat44", "bgp"]}];
+  string type = 3 [(validate.rules).string = {in: ["dhcpv4", "dhcpv6", "nat44", "bgp", "dns"]}];
   optional bool enabled = 4;
   VNFConfig config = 5;
 }

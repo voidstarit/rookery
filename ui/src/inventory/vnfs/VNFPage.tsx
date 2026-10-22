@@ -3,6 +3,7 @@ import { api } from "../../shared/api";
 import type {
   DHCPStaticAssignment,
   DNATRule,
+  DNSRecord,
   HostInterface,
   Network,
   VNF,
@@ -35,6 +36,9 @@ type FormState = {
   nat44Pool: string;
   dnatRules: DNATRule[];
   staticAssignments: DHCPStaticAssignment[];
+  dnsRecords: DNSRecord[];
+  dnsForward: boolean;
+  dnsForwarders: string;
   transport: "inherit" | "shared" | "dedicated" | "tap" | "memif";
   localAS: string;
   routerID: string;
@@ -52,7 +56,7 @@ type FormState = {
 
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
-function firstIPv4Host(cidr: string | undefined): string {
+function ipv4HostOffset(cidr: string | undefined, offset: number): string {
   if (!cidr) {
     return "";
   }
@@ -61,8 +65,16 @@ function firstIPv4Host(cidr: string | undefined): string {
   if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255) || !bits) {
     return "";
   }
-  const value = ((((parts[0] << 24) >>> 0) + (parts[1] << 16) + (parts[2] << 8) + parts[3] + 1) >>> 0);
-  return `${(value >>> 24) & 255}.${(value >>> 16) & 255}.${(value >>> 8) & 255}.${value & 255}/${bits}`;
+  const value = ((((parts[0] << 24) >>> 0) + (parts[1] << 16) + (parts[2] << 8) + parts[3] + offset) >>> 0);
+  return `${(value >>> 24) & 255}.${(value >>> 16) & 255}.${(value >>> 8) & 255}.${value & 255}`;
+}
+
+function firstIPv4Host(cidr: string | undefined): string {
+  const host = ipv4HostOffset(cidr, 1);
+  if (!host || !cidr) {
+    return "";
+  }
+  return `${host}/${cidr.trim().split("/")[1]}`;
 }
 
 function defaultForm(vnf: VNF | null, networks: Network[], vppReady: boolean, initialNetworkID?: number): FormState {
@@ -90,6 +102,15 @@ function defaultForm(vnf: VNF | null, networks: Network[], vppReady: boolean, in
     staticAssignments: Array.isArray(config.static_assignments)
       ? config.static_assignments.map((assignment) => ({ ...assignment }))
       : [],
+    dnsRecords: Array.isArray(config.dns_records)
+      ? config.dns_records.map((record) => ({ ...record }))
+      : [],
+    dnsForward: config.dns_forward ?? false,
+    dnsForwarders: Array.isArray(config.dns_forwarders)
+      ? config.dns_forwarders.join(", ")
+      : vnf?.type === "dns"
+        ? ""
+        : "1.1.1.1, 8.8.8.8",
     transport:
       type === "bgp"
         ? config.transport === "tap"
@@ -114,6 +135,15 @@ function defaultForm(vnf: VNF | null, networks: Network[], vppReady: boolean, in
 }
 
 function applyTypeDefaults(state: FormState, type: VNFType): FormState {
+  if (type === "dns") {
+    return {
+      ...state,
+      type,
+      dnsRecords: [],
+      dnsForward: true,
+      dnsForwarders: "1.1.1.1, 8.8.8.8",
+    };
+  }
   if (type === "bgp") {
     return {
       ...state,
@@ -184,6 +214,9 @@ function outsideInterfaceHint(interfaces: HostInterface[], selected: string): st
 }
 
 function typeHint(type: VNFType): string {
+  if (type === "dns") {
+    return "Local DNS server on the network service address (.2). Serve your own A/AAAA/CNAME/TXT records and optionally forward other names upstream.";
+  }
   if (type === "bgp") {
     return "Embedded IPv4/IPv6 BGP speaker. Select memif for userspace/gVisor or tap for kernel TCP with TCP MD5 support.";
   }
@@ -208,6 +241,11 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
   const editing = vnf !== null;
   const nat44 = form.type === "nat44";
   const bgp = form.type === "bgp";
+  const dns = form.type === "dns";
+  const dnsServiceIP = ipv4HostOffset(
+    networks.find((item) => item.id === form.networkID)?.ipv4_cidr,
+    2,
+  );
 
   useEffect(() => {
     nameRef.current?.focus();
@@ -258,11 +296,11 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
     }
     setFormError("");
 
-    if (!bgp && !form.gateway.trim()) {
+    if (!bgp && !dns && !form.gateway.trim()) {
       setFormError("Gateway CIDR is required.");
       return;
     }
-    if (!bgp && !nat44 && (!form.rangeStart.trim() || !form.rangeEnd.trim())) {
+    if (!bgp && !nat44 && !dns && (!form.rangeStart.trim() || !form.rangeEnd.trim())) {
       setFormError("Range start and end are required.");
       return;
     }
@@ -299,6 +337,20 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
           passive: form.passive,
           target_table_id: Number(form.targetTableID),
           advertise_prefixes: advertised,
+        }
+      : dns
+      ? {
+          dns_records: form.dnsRecords.map((record) => ({
+            name: record.name.trim(),
+            type: record.type,
+            value: record.value.trim(),
+            ttl: Number(record.ttl) || 0,
+          })),
+          dns_forward: form.dnsForward,
+          dns_forwarders: form.dnsForwarders
+            .split(/[\n,]+/)
+            .map((value) => value.trim())
+            .filter(Boolean),
         }
       : nat44
       ? {
@@ -410,12 +462,39 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
     }));
   };
 
+  const addDNSRecord = () => {
+    setForm((current) => ({
+      ...current,
+      dnsRecords: [...current.dnsRecords, { name: "", type: "A", value: "", ttl: 300 }],
+    }));
+  };
+
+  const updateDNSRecord = <K extends keyof DNSRecord>(index: number, key: K, value: DNSRecord[K]) => {
+    setForm((current) => ({
+      ...current,
+      dnsRecords: current.dnsRecords.map((record, index_) =>
+        index_ === index ? { ...record, [key]: value } : record
+      ),
+    }));
+  };
+
+  const removeDNSRecord = (index: number) => {
+    setForm((current) => ({
+      ...current,
+      dnsRecords: current.dnsRecords.filter((_, index_) => index_ !== index),
+    }));
+  };
+
   const enabledHint = bgp
     ? vppReady
       ? form.transport === "memif"
         ? "Creates a memif and starts the embedded BGP speaker on gVisor. TCP MD5 is unavailable on this transport."
         : "Creates a VPP tap and starts the embedded BGP speaker on kernel TCP; TCP MD5 is supported."
       : "VPP is not ready. The BGP VNF can be created disabled and started later."
+    : dns
+    ? vppReady
+      ? "Starts a DNS server on the network service address (.2, UDP/TCP 53) using the shared VNF memif."
+      : "VPP is not ready. The DNS VNF can be created disabled and started later."
     : nat44
     ? !vppReady
       ? "VPP is not ready. Save disabled and start the NAT44 VNF later."
@@ -508,11 +587,12 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
               <option value="dhcpv6">DHCPv6</option>
               <option value="nat44">NAT44</option>
               <option value="bgp">BGP</option>
+              <option value="dns">DNS</option>
             </select>
             <span class="field-hint">{typeHint(form.type)}</span>
           </label>
 
-          {!bgp ? (
+          {!bgp && !dns ? (
             <label class="field">
               <span class="field-label">Gateway CIDR</span>
               <input
@@ -531,7 +611,7 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
           ) : null}
         </div>
 
-        {!nat44 && !bgp ? (
+        {!nat44 && !bgp && !dns ? (
           <>
           <div class="form-grid">
             <label class="field">
@@ -667,6 +747,133 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
               </div>
             </div>
           ) : null}
+          </>
+        ) : dns ? (
+          <>
+            <p class="field-hint">
+              Clients on this network should use <code>{dnsServiceIP || "the .2 service address"}</code> as
+              their DNS server. Set that address in the DHCP VNF's DNS field (or configure it directly on
+              clients).
+            </p>
+            <div class="form-grid">
+              <div class="field field-wide">
+                <div class="panel-head acl-rules-head">
+                  <div>
+                    <span class="field-label">DNS records</span>
+                    <span class="field-hint">
+                      Names are served authoritatively. Use a fully qualified name such as
+                      vm1.lab1.test; a leading *. wildcard is supported. Types: A, AAAA, CNAME, TXT.
+                    </span>
+                  </div>
+                  <button class="button ghost" type="button" onClick={addDNSRecord}>
+                    Add record
+                  </button>
+                </div>
+                <div class="acl-rule-rows">
+                  {form.dnsRecords.map((record, index) => (
+                    <div class="acl-rule" key={index}>
+                      <div class="acl-rule-head">
+                        <span class="dnat-rule-title">Record {index + 1}</span>
+                        <button
+                          class="row-action danger"
+                          type="button"
+                          onClick={() => removeDNSRecord(index)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <div class="acl-rule-fields">
+                        <label class="field">
+                          <span class="field-label">Name</span>
+                          <input
+                            type="text"
+                            required
+                            autocomplete="off"
+                            spellcheck={false}
+                            placeholder="vm1.lab1.test"
+                            value={record.name}
+                            onInput={(event) => updateDNSRecord(index, "name", event.currentTarget.value)}
+                          />
+                        </label>
+                        <label class="field">
+                          <span class="field-label">Type</span>
+                          <select
+                            value={record.type}
+                            onChange={(event) =>
+                              updateDNSRecord(index, "type", event.currentTarget.value as DNSRecord["type"])
+                            }
+                          >
+                            <option value="A">A</option>
+                            <option value="AAAA">AAAA</option>
+                            <option value="CNAME">CNAME</option>
+                            <option value="TXT">TXT</option>
+                          </select>
+                        </label>
+                        <label class="field">
+                          <span class="field-label">Value</span>
+                          <input
+                            type="text"
+                            required
+                            autocomplete="off"
+                            spellcheck={false}
+                            placeholder={record.type === "A" ? "10.20.0.50" : record.type === "AAAA" ? "fd00:20::50" : record.type === "CNAME" ? "vm1.lab1.test" : "text"}
+                            value={record.value}
+                            onInput={(event) => updateDNSRecord(index, "value", event.currentTarget.value)}
+                          />
+                        </label>
+                        <label class="field">
+                          <span class="field-label">TTL</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={86400}
+                            placeholder="300"
+                            value={record.ttl ?? 300}
+                            onInput={(event) =>
+                              updateDNSRecord(index, "ttl", Number(event.currentTarget.value) || 0)
+                            }
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                  {form.dnsRecords.length === 0 ? (
+                    <p class="field-hint">No local records yet. Add one, or use this VNF only as a forwarder.</p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+            <div class="form-grid">
+              <label class="field field-wide checkbox-field">
+                <span class="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={form.dnsForward}
+                    onChange={(event) => update("dnsForward", event.currentTarget.checked)}
+                  />
+                  <span>Forward names without a local record to upstream DNS servers</span>
+                </span>
+                <span class="field-hint">
+                  When disabled, unknown names receive NXDOMAIN. Local records always take precedence.
+                </span>
+              </label>
+              <label class="field field-wide">
+                <span class="field-label">Upstream DNS servers</span>
+                <input
+                  type="text"
+                  disabled={!form.dnsForward}
+                  autocomplete="off"
+                  spellcheck={false}
+                  placeholder="1.1.1.1, 8.8.8.8:53"
+                  value={form.dnsForwarders}
+                  onInput={(event) => update("dnsForwarders", event.currentTarget.value)}
+                />
+                <span class="field-hint">
+                  Comma-separated IPv4/IPv6 addresses or IP:port. Leave empty to use
+                  /etc/resolv.conf on the server.
+                </span>
+              </label>
+            </div>
           </>
         ) : bgp ? (
           <>

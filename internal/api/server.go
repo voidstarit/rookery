@@ -101,7 +101,7 @@ type NAT44Provisioner interface {
 	NAT44Sessions(ctx context.Context) ([]string, error)
 }
 
-// VNFManager runs type-specific network functions (DHCPv4/DHCPv6) per VNF.
+// VNFManager runs type-specific network functions (DHCP, DNS, NAT44, BGP) per VNF.
 type VNFManager interface {
 	Start(ctx context.Context, vnf store.VNF, hostIf string) error
 	StartMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32) error

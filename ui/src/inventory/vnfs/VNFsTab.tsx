@@ -175,7 +175,7 @@ export function VNFsTab() {
     setError("");
     showToast(`${dialog?.vnf ? "Saved" : "Added"} VNF ${saved.name}`);
     void loadVNFs(false);
-    if (saved.type === "nat44") {
+    if (saved.type === "nat44" || saved.type === "dns") {
       refreshNetworksInLegacy();
     }
   };
@@ -199,7 +199,9 @@ export function VNFsTab() {
     const confirmed = window.confirm(
       vnf.type === "nat44"
         ? `Delete VNF "${vnf.name}"?\n\nThis stops NAT44 and removes its VPP rules. The network BVI is kept until the network is deleted.`
-        : `Delete VNF "${vnf.name}"?\n\nThis stops the function, removes its tap, and deletes its leases.`
+        : vnf.type === "dns"
+          ? `Delete VNF "${vnf.name}"?\n\nThis stops the DNS server and removes its local records.`
+          : `Delete VNF "${vnf.name}"?\n\nThis stops the function, removes its tap, and deletes its leases.`
     );
     if (!confirmed) {
       return;
@@ -300,7 +302,16 @@ export function VNFsTab() {
                 {vnfs.map((vnf) => {
                   const network = networks.find((item) => item.id === vnf.network_id);
                   const typeLabel =
-                    vnf.type === "nat44" ? "NAT44" : vnf.type === "bgp" ? "BGP" : vnf.type === "dhcpv6" ? "DHCPv6" : "DHCPv4";
+                    vnf.type === "nat44"
+                      ? "NAT44"
+                      : vnf.type === "bgp"
+                        ? "BGP"
+                        : vnf.type === "dns"
+                          ? "DNS"
+                          : vnf.type === "dhcpv6"
+                            ? "DHCPv6"
+                            : "DHCPv4";
+                  const hasLeases = vnf.type === "dhcpv4" || vnf.type === "dhcpv6";
                   const dnatCount = Array.isArray(vnf.config.dnat_rules) ? vnf.config.dnat_rules.length : 0;
                   return (
                     <tr key={vnf.id}>
@@ -310,6 +321,11 @@ export function VNFsTab() {
                           <span class="vm-description">
                             outside {vnf.config.outside_interface}
                             {dnatCount ? ` · ${dnatCount} DNAT` : ""}
+                          </span>
+                        ) : vnf.type === "dns" ? (
+                          <span class="vm-description">
+                            {Array.isArray(vnf.config.dns_records) ? vnf.config.dns_records.length : 0} records
+                            {vnf.config.dns_forward ? " · forwarding" : " · authoritative"}
                           </span>
                         ) : vnf.tap_host_name ? (
                           <span class="vm-description">
@@ -329,8 +345,8 @@ export function VNFsTab() {
                           {vnf.status || "disabled"}
                         </span>
                       </td>
-                      <td class={vnf.lease_count && vnf.type !== "nat44" && vnf.type !== "bgp" ? "mono" : "mono muted"}>
-                        {vnf.type === "nat44" || vnf.type === "bgp" ? "—" : String(vnf.lease_count || 0)}
+                      <td class={hasLeases && vnf.lease_count ? "mono" : "mono muted"}>
+                        {hasLeases ? String(vnf.lease_count || 0) : "—"}
                       </td>
                       <td class="updated hide-sm">{formatDate(vnf.updated_at)}</td>
                       <td>
@@ -343,7 +359,7 @@ export function VNFsTab() {
                             >
                               Status
                             </button>
-                          ) : (
+                          ) : vnf.type === "dns" ? null : (
                             <button
                               class="row-action"
                               type="button"

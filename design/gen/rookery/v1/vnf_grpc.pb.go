@@ -35,7 +35,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// VNFService manages DHCP and NAT44 network functions.
+// VNFService manages DHCP, NAT44, BGP, and DNS network functions.
 type VNFServiceClient interface {
 	ListVNFs(ctx context.Context, in *ListVNFsRequest, opts ...grpc.CallOption) (*ListVNFsResponse, error)
 	GetVNF(ctx context.Context, in *GetVNFRequest, opts ...grpc.CallOption) (*VNF, error)
@@ -150,7 +150,7 @@ func (c *vNFServiceClient) GetVNFBGP(ctx context.Context, in *GetVNFBGPRequest, 
 // All implementations must embed UnimplementedVNFServiceServer
 // for forward compatibility.
 //
-// VNFService manages DHCP and NAT44 network functions.
+// VNFService manages DHCP, NAT44, BGP, and DNS network functions.
 type VNFServiceServer interface {
 	ListVNFs(context.Context, *ListVNFsRequest) (*ListVNFsResponse, error)
 	GetVNF(context.Context, *GetVNFRequest) (*VNF, error)
