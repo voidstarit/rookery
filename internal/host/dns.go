@@ -41,6 +41,18 @@ func (n *sharedNetwork) addDNS(vnf store.VNF) error {
 	if handler == nil {
 		return errors.New("DNS configuration is invalid")
 	}
+	handler.vnfID = vnf.ID
+	handler.networkID = n.networkID
+	for _, record := range vnf.Config.DNSRecords {
+		log.Trace().
+			Int64("vnf_id", vnf.ID).
+			Int64("network_id", n.networkID).
+			Str("name", record.Name).
+			Str("type", record.Type).
+			Str("value", record.Value).
+			Uint32("ttl", record.TTL).
+			Msg("DNS record loaded")
+	}
 
 	var wq waiter.Queue
 	endpoint, tcpipErr := n.stack.NewEndpoint(udp.ProtocolNumber, header.IPv4ProtocolNumber, &wq)
@@ -142,6 +154,8 @@ type dnsWildcardRecords struct {
 }
 
 type dnsHandler struct {
+	vnfID      int64
+	networkID  int64
 	records    map[string][]store.DNSRecord
 	wildcards  []dnsWildcardRecords
 	forward    bool
@@ -188,18 +202,29 @@ func (h *dnsHandler) ServeDNS(writer dns.ResponseWriter, request *dns.Msg) {
 	response.RecursionAvailable = h.forward
 	if len(request.Question) != 1 {
 		response.Rcode = dns.RcodeFormatError
+		h.logResponse(writer, request, response, "format-error")
 		_ = writer.WriteMsg(response)
 		return
 	}
 	question := request.Question[0]
+	log.Trace().
+		Int64("vnf_id", h.vnfID).
+		Int64("network_id", h.networkID).
+		Str("client", writer.RemoteAddr().String()).
+		Str("name", question.Name).
+		Str("type", dnsTypeName(question.Qtype)).
+		Str("class", dnsClassName(question.Qclass)).
+		Msg("DNS query received")
 	if question.Qclass != dns.ClassINET {
 		response.Rcode = dns.RcodeRefused
+		h.logResponse(writer, request, response, "refused-class")
 		_ = writer.WriteMsg(response)
 		return
 	}
 	switch question.Qtype {
 	case dns.TypeAXFR, dns.TypeIXFR:
 		response.Rcode = dns.RcodeRefused
+		h.logResponse(writer, request, response, "refused-transfer")
 		_ = writer.WriteMsg(response)
 		return
 	}
@@ -212,22 +237,41 @@ func (h *dnsHandler) ServeDNS(writer dns.ResponseWriter, request *dns.Msg) {
 	if len(records) > 0 {
 		response.Authoritative = true
 		h.answer(response, question, name, records, wildcard)
+		h.logResponse(writer, request, response, "local")
 		_ = writer.WriteMsg(response)
 		return
 	}
 	if !h.forward {
 		response.Rcode = dns.RcodeNameError
+		h.logResponse(writer, request, response, "nxdomain")
 		_ = writer.WriteMsg(response)
 		return
 	}
 	forwarded, err := h.forwardQuery(request)
 	if err != nil || forwarded == nil {
 		response.Rcode = dns.RcodeServerFailure
+		h.logResponse(writer, request, response, "servfail")
 		_ = writer.WriteMsg(response)
 		return
 	}
 	forwarded.Id = request.Id
+	h.logResponse(writer, request, forwarded, "forward")
 	_ = writer.WriteMsg(forwarded)
+}
+
+func (h *dnsHandler) logResponse(writer dns.ResponseWriter, request, response *dns.Msg, source string) {
+	event := log.Trace().
+		Int64("vnf_id", h.vnfID).
+		Int64("network_id", h.networkID).
+		Str("client", writer.RemoteAddr().String()).
+		Str("source", source).
+		Str("rcode", dns.RcodeToString[response.Rcode]).
+		Int("answers", len(response.Answer)).
+		Bool("authoritative", response.Authoritative)
+	if len(request.Question) == 1 {
+		event = event.Str("name", request.Question[0].Name).Str("type", dnsTypeName(request.Question[0].Qtype))
+	}
+	event.Str("response", response.String()).Msg("DNS response")
 }
 
 func (h *dnsHandler) lookup(name string) ([]store.DNSRecord, bool) {
@@ -270,11 +314,29 @@ func (h *dnsHandler) answer(response *dns.Msg, question dns.Question, owner stri
 
 func (h *dnsHandler) forwardQuery(request *dns.Msg) (*dns.Msg, error) {
 	var lastErr error
+	qname, qtype := "", uint16(0)
+	if len(request.Question) > 0 {
+		qname = request.Question[0].Name
+		qtype = request.Question[0].Qtype
+	}
 	for _, forwarder := range h.forwarders {
+		log.Trace().
+			Int64("vnf_id", h.vnfID).
+			Int64("network_id", h.networkID).
+			Str("name", qname).
+			Str("type", dnsTypeName(qtype)).
+			Str("forwarder", forwarder).
+			Msg("DNS forwarding query")
 		client := &dns.Client{Net: "udp", Timeout: 3 * time.Second, UDPSize: 4096}
-		response, _, err := client.Exchange(request, forwarder)
+		response, rtt, err := client.Exchange(request, forwarder)
 		if err != nil {
 			lastErr = err
+			log.Trace().
+				Int64("vnf_id", h.vnfID).
+				Int64("network_id", h.networkID).
+				Str("forwarder", forwarder).
+				Err(err).
+				Msg("DNS forwarder failed")
 			continue
 		}
 		if response == nil {
@@ -283,10 +345,26 @@ func (h *dnsHandler) forwardQuery(request *dns.Msg) (*dns.Msg, error) {
 		}
 		if response.Truncated {
 			tcpClient := &dns.Client{Net: "tcp", Timeout: 5 * time.Second}
-			if tcpResponse, _, tcpErr := tcpClient.Exchange(request, forwarder); tcpErr == nil && tcpResponse != nil {
+			if tcpResponse, tcpRTT, tcpErr := tcpClient.Exchange(request, forwarder); tcpErr == nil && tcpResponse != nil {
+				log.Trace().
+					Int64("vnf_id", h.vnfID).
+					Int64("network_id", h.networkID).
+					Str("forwarder", forwarder).
+					Dur("rtt", tcpRTT).
+					Str("rcode", dns.RcodeToString[tcpResponse.Rcode]).
+					Int("answers", len(tcpResponse.Answer)).
+					Msg("DNS forwarded response (tcp fallback)")
 				return tcpResponse, nil
 			}
 		}
+		log.Trace().
+			Int64("vnf_id", h.vnfID).
+			Int64("network_id", h.networkID).
+			Str("forwarder", forwarder).
+			Dur("rtt", rtt).
+			Str("rcode", dns.RcodeToString[response.Rcode]).
+			Int("answers", len(response.Answer)).
+			Msg("DNS forwarded response")
 		return response, nil
 	}
 	if lastErr == nil {
@@ -330,4 +408,18 @@ func recordQType(recordType string) uint16 {
 	default:
 		return dns.TypeTXT
 	}
+}
+
+func dnsTypeName(qtype uint16) string {
+	if name, ok := dns.TypeToString[qtype]; ok {
+		return name
+	}
+	return fmt.Sprintf("TYPE%d", qtype)
+}
+
+func dnsClassName(qclass uint16) string {
+	if name, ok := dns.ClassToString[qclass]; ok {
+		return name
+	}
+	return fmt.Sprintf("CLASS%d", qclass)
 }

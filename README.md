@@ -408,8 +408,9 @@ integers, strings, and durations instead of being pre-formatted. Use
 `-log-format json` when shipping logs to journald, Loki, or ELK. At
 `-log-level trace`, the VNF daemon logs every control RPC (method, duration,
 status), client connection changes, supervision decisions, DHCPv4/DHCPv6
-request/reply details, and BGP advertised/installed/withdrawn routes. DHCP lease
-allocation and release are logged at `info`; renewals at `debug`.
+request/reply details, DNS queries/records/forwarding results, and BGP
+advertised/installed/withdrawn routes. DHCP lease allocation and release are
+logged at `info`; renewals at `debug`.
 
 The UI has **Virtual machines**, **Disks**, **Installation media**,
 **Rookery Networks**, and **VNFs** tabs. The **Disks** tab manages storage

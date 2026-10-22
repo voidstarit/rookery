@@ -73,9 +73,9 @@ Standalone Ansible playbooks (no roles, no `ansible.cfg`) that manage thin-LVM V
   builders (`.Str`, `.Int64`, `.Uint32`, `.Bool`, `.Dur`, `.Err`) rather than
   pre-formatting values into strings. At trace level, `internal/vnfd` logs every
   daemon RPC (via `TraceInterceptor`), client availability changes, supervision
-  decisions, DHCPv4/v6 request/reply details, and BGP route
-  installs/withdrawals. Lease allocation and release log at info; renewals at
-  debug.
+  decisions, DHCPv4/v6 request/reply details, DNS queries/records/forwarding
+  results, and BGP route installs/withdrawals. Lease allocation and release log
+  at info; renewals at debug.
 - Every playbook except `setup-vpp.yml` sets `gather_facts: false`; do not use `ansible_facts` there without enabling fact gathering.
 - Defaults live in each playbook's `vars:` block; required values are validated at runtime, so pass e.g. `-e vg_name=vg0 -e disk_lv=...` explicitly.
 - `setup-vpp.yml` restarts VPP via handlers and calls `meta: flush_handlers` before waiting on `/run/vpp/cli.sock`; preserve that order when editing.
