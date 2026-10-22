@@ -175,6 +175,14 @@ func setupCoreDHCP(args ...string) (handler.Handler4, error) {
 			return nil, err
 		}
 	}
+	for _, option := range options {
+		log.Trace().
+			Str("leases", args[5]).
+			Uint16("code", option.code).
+			Int("bytes", len(option.value)).
+			Str("value", fmt.Sprintf("%x", option.value)).
+			Msg("DHCPv4 option configured")
+	}
 
 	state := &coreDHCPState{
 		gateway:      gateway,

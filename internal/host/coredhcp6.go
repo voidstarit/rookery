@@ -121,6 +121,14 @@ func setupCoreDHCPv6(args ...string) (handler.Handler6, error) {
 			return nil, err
 		}
 	}
+	for _, option := range options {
+		log.Trace().
+			Str("leases", args[4]).
+			Uint16("code", option.code).
+			Int("bytes", len(option.value)).
+			Str("value", fmt.Sprintf("%x", option.value)).
+			Msg("DHCPv6 option configured")
+	}
 
 	state := &coreDHCPv6State{
 		prefix:    prefix,
