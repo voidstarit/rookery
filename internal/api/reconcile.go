@@ -267,7 +267,7 @@ func (s *Server) resetRuntimeForVPPRestart(ctx context.Context) {
 	}
 }
 
-// ReconcileNetworks ensures every recorded Nerd's Network has its VPP bridge
+// ReconcileNetworks ensures every recorded Rookery Network has its VPP bridge
 // domain, creating missing domains with their original DB-assigned IDs.
 func (s *Server) ReconcileNetworks(ctx context.Context) error {
 	if s.networks == nil {

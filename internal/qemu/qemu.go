@@ -35,7 +35,7 @@ const (
 	// DefaultBinary is the QEMU system emulator used for x86 VMs.
 	DefaultBinary = "qemu-system-x86_64"
 	// DefaultRunDir stores per-VM pid files and VNC sockets.
-	DefaultRunDir  = "/run/nerds-vms"
+	DefaultRunDir  = "/run/rookery"
 	kvmDevice      = "/dev/kvm"
 	stopTimeout    = 10 * time.Second
 	monitorTimeout = 3 * time.Second

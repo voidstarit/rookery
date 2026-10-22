@@ -70,10 +70,10 @@ func TestNAT44ProtocolNumber(t *testing.T) {
 }
 
 func TestNAT44StaticMappingTags(t *testing.T) {
-	if got := nat44StaticMappingTag(12, 3); got != "nerds-vms:12:3" {
+	if got := nat44StaticMappingTag(12, 3); got != "rookery:12:3" {
 		t.Fatalf("tag = %q", got)
 	}
-	if got := nat44StaticMappingTagPrefix(12); got != "nerds-vms:12:" {
+	if got := nat44StaticMappingTagPrefix(12); got != "rookery:12:" {
 		t.Fatalf("tag prefix = %q", got)
 	}
 }

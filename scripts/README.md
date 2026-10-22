@@ -34,14 +34,14 @@ It also handles the API's `delete` operation for script-created clones.
 ```bash
 sudo ./scripts/lvm-thin-snapshot-disk.sh create \
   --vg msd-beelink-vg \
-  --thin-pool nerds-vms \
+  --thin-pool rookery \
   --template debian-template \
   --name web-01 \
   --size-gb 20
 
 sudo ./scripts/lvm-thin-snapshot-disk.sh delete \
   --vg msd-beelink-vg \
-  --thin-pool nerds-vms \
+  --thin-pool rookery \
   --name web-01
 ```
 

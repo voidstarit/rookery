@@ -31,9 +31,9 @@ func TestBuildArgsWithBootMedia(t *testing.T) {
 		SocketPath: "/run/vpp/web-01-eth0.sock",
 		MAC:        "02:00:00:00:00:01",
 	}}
-	socket := "/run/nerds-vms/" + vm.ID + ".vnc"
-	pidfile := "/run/nerds-vms/" + vm.ID + ".pid"
-	monitor := "/run/nerds-vms/" + vm.ID + ".monitor"
+	socket := "/run/rookery/" + vm.ID + ".vnc"
+	pidfile := "/run/rookery/" + vm.ID + ".pid"
+	monitor := "/run/rookery/" + vm.ID + ".monitor"
 
 	args := strings.Join(buildArgs(vm, socket, pidfile, monitor), " ")
 

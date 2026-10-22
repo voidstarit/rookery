@@ -19,7 +19,7 @@ with an embedded web UI and SQLite database.
 | ----------------- | -------- | ------------ | -------------------------------------------- |
 | `vg_name`         | yes      | -            | Existing volume group to create the pool in  |
 | `thin_pool_size`  | no       | unset        | Thin pool size (e.g. `200G`, `50%VG`)        |
-| `thin_pool_name`  | no       | `nerds-vms`  | Thin pool name                               |
+| `thin_pool_name`  | no       | `rookery`  | Thin pool name                               |
 
 ## Template playbook (`setup-template.yml`)
 
@@ -29,10 +29,10 @@ LV in the thin pool.
 | Variable          | Required | Default                                                               | Description                                  |
 | ----------------- | -------- | --------------------------------------------------------------------- | -------------------------------------------- |
 | `vg_name`         | yes      | -                                                                     | Volume group to use                          |
-| `thin_pool_name`  | no       | `nerds-vms`                                                           | Thin pool name                               |
+| `thin_pool_name`  | no       | `rookery`                                                           | Thin pool name                               |
 | `template_lv_name`| no       | `debian-template`                                                     | Name of the template LV                      |
 | `image_url`       | no       | Debian 13 nocloud (trixie) tar.xz                                     | Cloud image URL (`.raw`/`.img` or archive)   |
-| `temp_dir`        | no       | `/tmp/nerds-vms`                                                      | Directory to download/extract the image      |
+| `temp_dir`        | no       | `/tmp/rookery`                                                      | Directory to download/extract the image      |
 
 ```bash
 ansible-playbook setup-template.yml -i hosts.ini -e vg_name=vg0 -K
@@ -282,7 +282,7 @@ running VMs.
 - `iproute2` (`ip`) for assigning IPv4/IPv6 gateway addresses to VNF taps and
   flushing an outside NIC before VPP takes it over
 - QEMU with KVM support (`qemu-system-x86_64` and `/dev/kvm`)
-- Permission to create `/run/nerds-vms` (or configure another `-run-dir`) and to
+- Permission to create `/run/rookery` (or configure another `-run-dir`) and to
   start QEMU processes
 
 The socket is VPP's **binary API** socket, not the CLI socket
@@ -304,14 +304,14 @@ and answers a GoVPP `control_ping`.
 ```bash
 sudo ./bin/rookery init \
   -vg vg0 \
-  -thin-pool nerds-vms \
+  -thin-pool rookery \
   -size 100%FREE \
   -vpp-socket /run/vpp/api.sock
 ```
 
 - An existing thin pool is left untouched (it is not resized).
 - `-size` defaults to `100%FREE` and accepts normal LVM size syntax.
-- `-thin-pool vg0/nerds-vms` can be used instead of passing `-vg` separately.
+- `-thin-pool vg0/rookery` can be used instead of passing `-vg` separately.
 - `init` fails if VPP is not reachable or the socket is not a Unix socket.
 
 Run as root or as a user with permission to create logical volumes.
@@ -321,7 +321,7 @@ Run as root or as a user with permission to create logical volumes.
 ```bash
 ./bin/rookery serve \
   -vg vg0 \
-  -thin-pool nerds-vms \
+  -thin-pool rookery \
   -vpp-socket /run/vpp/api.sock
 ```
 
@@ -794,13 +794,13 @@ vhost-user netdevs for interfaces attached through Rookery Networks.
 | Flag              | Environment variable   | Default             | Used by         | Description |
 | ----------------- | ---------------------- | ------------------- | --------------- | ----------- |
 | `-addr`           | `ROOKERY_ADDR`       | `127.0.0.1:8080`    | `serve`         | HTTP listen address |
-| `-db`             | `ROOKERY_DB`         | `nerds-vms.db`      | `serve`         | SQLite database path |
+| `-db`             | `ROOKERY_DB`         | `rookery.db`      | `serve`         | SQLite database path |
 | `-rate-limit`     | `ROOKERY_RATE_LIMIT` | `3`                 | `serve`         | HTTP requests per second for each URL path; `0` disables |
 | `-vg`             | `ROOKERY_VG`         | empty               | `serve`, `init` | Bootstrap LVM volume group; optional for `serve` |
-| `-thin-pool`      | `ROOKERY_THIN_POOL`  | `nerds-vms`         | `serve`, `init` | Bootstrap thin pool name or `<vg>/<name>`; `serve` can use UI backends instead |
+| `-thin-pool`      | `ROOKERY_THIN_POOL`  | `rookery`         | `serve`, `init` | Bootstrap thin pool name or `<vg>/<name>`; `serve` can use UI backends instead |
 | `-vpp-socket`     | `ROOKERY_VPP_SOCKET` | `/run/vpp/api.sock` | `serve`, `init` | VPP binary API Unix socket |
 | `-qemu-bin`       | `ROOKERY_QEMU_BIN`   | `qemu-system-x86_64`| `serve`         | QEMU system emulator binary |
-| `-run-dir`        | `ROOKERY_RUN_DIR`    | `/run/nerds-vms`    | `serve`         | QEMU pid files and VNC Unix sockets |
+| `-run-dir`        | `ROOKERY_RUN_DIR`    | `/run/rookery`    | `serve`         | QEMU pid files and VNC Unix sockets |
 | `-memif-dir`      | `ROOKERY_MEMIF_DIR`    | `/run/rookery/memif`| `serve`         | VNF memif socket directory |
 | `-vhost-dir`      | `ROOKERY_VHOST_DIR`  | `/run/vpp`          | `serve`         | VPP vhost-user socket directory |
 | `-check-interval` | —                      | `10s`               | `serve`         | Readiness recheck interval |
@@ -973,7 +973,7 @@ LVM location:
   "name": "web-01-root",
   "size_gb": 40,
   "vg": "vg0",
-  "thin_pool": "nerds-vms",
+  "thin_pool": "rookery",
   "device": "/dev/vg0/web-01-root"
 }
 ```
@@ -1140,9 +1140,9 @@ which check failed. `GET /api/status` exposes the same information:
   "thin_pool": {
     "ready": false,
     "state": "missing",
-    "detail": "thin pool vg0/nerds-vms does not exist; ...",
+    "detail": "thin pool vg0/rookery does not exist; ...",
     "vg": "vg0",
-    "name": "nerds-vms"
+    "name": "rookery"
   },
   "vpp": {
     "ready": true,

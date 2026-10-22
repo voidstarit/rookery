@@ -41,7 +41,7 @@ func (f *fakeLVM) Run(_ context.Context, name string, args ...string) ([]byte, e
 				}
 				pool := f.volumePools[volumeName]
 				if pool == "" {
-					pool = "nerds-vms"
+					pool = "rookery"
 				}
 				fmt.Fprintf(&output, "  %s|%s|%.2f|%s\n", volumeName, attribute, size, pool)
 			}
@@ -52,7 +52,7 @@ func (f *fakeLVM) Run(_ context.Context, name string, args ...string) ([]byte, e
 			if attribute == "" {
 				attribute = "twi-aotz--"
 			}
-			output.WriteString("  nerds-vms|" + attribute + "\n")
+			output.WriteString("  rookery|" + attribute + "\n")
 		}
 		for volumeName, attribute := range f.volumes {
 			output.WriteString("  " + volumeName + "|" + attribute + "\n")
@@ -125,7 +125,7 @@ func TestEnsureThinPoolCreatesWhenMissing(t *testing.T) {
 	runner := &fakeLVM{vgExists: true}
 	lvm := &LVM{Runner: runner}
 
-	created, err := lvm.EnsureThinPool(context.Background(), "vg0", "nerds-vms", "100%FREE")
+	created, err := lvm.EnsureThinPool(context.Background(), "vg0", "rookery", "100%FREE")
 	if err != nil {
 		t.Fatalf("EnsureThinPool: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestEnsureThinPoolCreatesWhenMissing(t *testing.T) {
 	if !runner.poolExists {
 		t.Fatal("pool was not marked as created")
 	}
-	if !runner.called("lvcreate --yes --type thin-pool --name nerds-vms --extents 100%FREE vg0") {
+	if !runner.called("lvcreate --yes --type thin-pool --name rookery --extents 100%FREE vg0") {
 		t.Fatalf("unexpected calls: %v", runner.calls)
 	}
 }
@@ -144,7 +144,7 @@ func TestEnsureThinPoolUsesSizeForAbsoluteSize(t *testing.T) {
 	runner := &fakeLVM{vgExists: true}
 	lvm := &LVM{Runner: runner}
 
-	if _, err := lvm.EnsureThinPool(context.Background(), "vg0", "nerds-vms", "200G"); err != nil {
+	if _, err := lvm.EnsureThinPool(context.Background(), "vg0", "rookery", "200G"); err != nil {
 		t.Fatalf("EnsureThinPool: %v", err)
 	}
 	if !runner.called("--size 200G") {
@@ -156,7 +156,7 @@ func TestEnsureThinPoolIsIdempotent(t *testing.T) {
 	runner := &fakeLVM{vgExists: true, poolExists: true}
 	lvm := &LVM{Runner: runner}
 
-	created, err := lvm.EnsureThinPool(context.Background(), "vg0", "nerds-vms", "100%FREE")
+	created, err := lvm.EnsureThinPool(context.Background(), "vg0", "rookery", "100%FREE")
 	if err != nil {
 		t.Fatalf("EnsureThinPool: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestEnsureThinPoolRejectsExistingNonThinLV(t *testing.T) {
 	runner := &fakeLVM{vgExists: true, poolExists: true, poolAttr: "-wi-a-----"}
 	lvm := &LVM{Runner: runner}
 
-	_, err := lvm.EnsureThinPool(context.Background(), "vg0", "nerds-vms", "100%FREE")
+	_, err := lvm.EnsureThinPool(context.Background(), "vg0", "rookery", "100%FREE")
 	if err == nil || !strings.Contains(err.Error(), "not a thin pool") {
 		t.Fatalf("error = %v, want non-thin-pool error", err)
 	}
@@ -185,7 +185,7 @@ func TestEnsureThinPoolRequiresVolumeGroup(t *testing.T) {
 	runner := &fakeLVM{}
 	lvm := &LVM{Runner: runner}
 
-	_, err := lvm.EnsureThinPool(context.Background(), "vg0", "nerds-vms", "100%FREE")
+	_, err := lvm.EnsureThinPool(context.Background(), "vg0", "rookery", "100%FREE")
 	if err == nil || !strings.Contains(err.Error(), "does not exist") {
 		t.Fatalf("error = %v, want missing volume group error", err)
 	}
@@ -198,7 +198,7 @@ func TestEnsureThinPoolRecoversFromConcurrentCreate(t *testing.T) {
 	runner := &fakeLVM{vgExists: true}
 	lvm := &LVM{Runner: &raceRunner{fakeLVM: runner}}
 
-	created, err := lvm.EnsureThinPool(context.Background(), "vg0", "nerds-vms", "100%FREE")
+	created, err := lvm.EnsureThinPool(context.Background(), "vg0", "rookery", "100%FREE")
 	if err != nil {
 		t.Fatalf("EnsureThinPool: %v", err)
 	}
@@ -222,7 +222,7 @@ func (r *raceRunner) Run(ctx context.Context, name string, args ...string) ([]by
 }
 
 func TestValidateLVMName(t *testing.T) {
-	valid := []string{"vg0", "nerds-vms", "pool_1", "A.b+c"}
+	valid := []string{"vg0", "rookery", "pool_1", "A.b+c"}
 	for _, name := range valid {
 		if err := ValidateLVMName("name", name); err != nil {
 			t.Errorf("ValidateLVMName(%q) = %v", name, err)
@@ -257,7 +257,7 @@ func TestListThinVolumes(t *testing.T) {
 	}
 	lvm := &LVM{Runner: runner}
 
-	volumes, err := lvm.ListThinVolumes(context.Background(), "vg0", "nerds-vms")
+	volumes, err := lvm.ListThinVolumes(context.Background(), "vg0", "rookery")
 	if err != nil {
 		t.Fatalf("ListThinVolumes: %v", err)
 	}
@@ -279,7 +279,7 @@ func TestListThinVolumesRequiresThinPool(t *testing.T) {
 	runner := &fakeLVM{vgExists: true}
 	lvm := &LVM{Runner: runner}
 
-	_, err := lvm.ListThinVolumes(context.Background(), "vg0", "nerds-vms")
+	_, err := lvm.ListThinVolumes(context.Background(), "vg0", "rookery")
 	if err == nil || !strings.Contains(err.Error(), "does not exist") {
 		t.Fatalf("error = %v, want missing thin pool", err)
 	}
@@ -289,10 +289,10 @@ func TestCreateThinVolume(t *testing.T) {
 	runner := &fakeLVM{vgExists: true, poolExists: true}
 	lvm := &LVM{Runner: runner}
 
-	if err := lvm.CreateThinVolume(context.Background(), "vg0", "nerds-vms", "web-01-root", 20); err != nil {
+	if err := lvm.CreateThinVolume(context.Background(), "vg0", "rookery", "web-01-root", 20); err != nil {
 		t.Fatalf("CreateThinVolume: %v", err)
 	}
-	if !runner.called("lvcreate --yes --virtualsize 20G --name web-01-root --thinpool vg0/nerds-vms") {
+	if !runner.called("lvcreate --yes --virtualsize 20G --name web-01-root --thinpool vg0/rookery") {
 		t.Fatalf("unexpected calls: %v", runner.calls)
 	}
 	if attr := runner.volumes["web-01-root"]; !strings.HasPrefix(attr, "V") {
@@ -304,7 +304,7 @@ func TestCreateThinVolumeRequiresThinPool(t *testing.T) {
 	runner := &fakeLVM{vgExists: true}
 	lvm := &LVM{Runner: runner}
 
-	err := lvm.CreateThinVolume(context.Background(), "vg0", "nerds-vms", "web-01-root", 20)
+	err := lvm.CreateThinVolume(context.Background(), "vg0", "rookery", "web-01-root", 20)
 	if err == nil || !strings.Contains(err.Error(), "does not exist") {
 		t.Fatalf("error = %v, want missing thin pool", err)
 	}
@@ -321,7 +321,7 @@ func TestCreateThinVolumeRejectsExistingLV(t *testing.T) {
 	}
 	lvm := &LVM{Runner: runner}
 
-	err := lvm.CreateThinVolume(context.Background(), "vg0", "nerds-vms", "web-01-root", 20)
+	err := lvm.CreateThinVolume(context.Background(), "vg0", "rookery", "web-01-root", 20)
 	if err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Fatalf("error = %v, want existing LV error", err)
 	}

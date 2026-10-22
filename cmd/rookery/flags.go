@@ -18,7 +18,7 @@ func (h *hostFlags) register(fs *flag.FlagSet) {
 		envDefault("ROOKERY_VG", ""),
 		"LVM volume group (or pass -thin-pool <vg>/<name>)")
 	fs.StringVar(&h.thinPool, "thin-pool",
-		envDefault("ROOKERY_THIN_POOL", "nerds-vms"),
+		envDefault("ROOKERY_THIN_POOL", "rookery"),
 		"LVM thin pool name, optionally as <vg>/<name>")
 	fs.StringVar(&h.vppSocket, "vpp-socket",
 		envDefault("ROOKERY_VPP_SOCKET", "/run/vpp/api.sock"),

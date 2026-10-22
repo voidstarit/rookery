@@ -169,7 +169,7 @@ export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBacke
               required
               autocomplete="off"
               spellcheck={false}
-              placeholder="nerds-vms"
+              placeholder="rookery"
               value={thinPool}
               onInput={(event) => setThinPool(event.currentTarget.value)}
             />

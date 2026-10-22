@@ -125,7 +125,7 @@ func TestMigrationBackfillsVMDisks(t *testing.T) {
 		Name:     "legacy-root",
 		SizeGB:   20,
 		VG:       "vg0",
-		ThinPool: "nerds-vms",
+		ThinPool: "rookery",
 	})
 	if err != nil {
 		t.Fatalf("create legacy disk: %v", err)

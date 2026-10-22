@@ -153,7 +153,7 @@ type VMMedia struct {
 	SizeBytes int64  `json:"size_bytes"`
 }
 
-// Network is a VPP bridge domain presented as a Nerd's Network.
+// Network is a VPP bridge domain presented as a Rookery Network.
 type Network struct {
 	ID                int64     `json:"id"`
 	Name              string    `json:"name"`
@@ -257,7 +257,7 @@ type DNATRule struct {
 	LocalPort    int    `json:"local_port"`
 }
 
-// VNF is a network function attached to a Nerd's Network.
+// VNF is a network function attached to a Rookery Network.
 type VNF struct {
 	ID             int64     `json:"id"`
 	Name           string    `json:"name"`

@@ -29,7 +29,7 @@ func testLogger() zerolog.Logger {
 func TestNewManagerStartsChecking(t *testing.T) {
 	manager := NewManager(Config{
 		VG:        "vg0",
-		ThinPool:  "nerds-vms",
+		ThinPool:  "rookery",
 		VPPSocket: "/run/vpp/api.sock",
 	}, fakeInspector{}, testLogger(), time.Second)
 
@@ -48,7 +48,7 @@ func TestNewManagerStartsChecking(t *testing.T) {
 func TestRefreshReady(t *testing.T) {
 	manager := NewManager(Config{
 		VG:        "vg0",
-		ThinPool:  "nerds-vms",
+		ThinPool:  "rookery",
 		VPPSocket: "/run/vpp/api.sock",
 	}, fakeInspector{
 		thinPool: host.Result{Ready: true, State: host.StateReady, Detail: "found"},
@@ -59,7 +59,7 @@ func TestRefreshReady(t *testing.T) {
 	if !status.Ready {
 		t.Fatalf("status = %+v", status)
 	}
-	if !status.ThinPool.Ready || status.ThinPool.VG != "vg0" || status.ThinPool.Name != "nerds-vms" {
+	if !status.ThinPool.Ready || status.ThinPool.VG != "vg0" || status.ThinPool.Name != "rookery" {
 		t.Fatalf("thin pool = %+v", status.ThinPool)
 	}
 	if !status.VPP.Ready || status.VPP.Socket != "/run/vpp/api.sock" {
@@ -76,7 +76,7 @@ func TestRefreshReady(t *testing.T) {
 func TestRefreshNotReady(t *testing.T) {
 	manager := NewManager(Config{
 		VG:        "vg0",
-		ThinPool:  "nerds-vms",
+		ThinPool:  "rookery",
 		VPPSocket: "/run/vpp/api.sock",
 	}, fakeInspector{
 		thinPool: host.Result{Ready: true, State: host.StateReady},
@@ -98,7 +98,7 @@ func TestRefreshNotReady(t *testing.T) {
 func TestRefreshNotReadyWhenThinPoolMissing(t *testing.T) {
 	manager := NewManager(Config{
 		VG:        "vg0",
-		ThinPool:  "nerds-vms",
+		ThinPool:  "rookery",
 		VPPSocket: "/run/vpp/api.sock",
 	}, fakeInspector{
 		thinPool: host.Result{State: host.StateMissing, Detail: "no pool"},

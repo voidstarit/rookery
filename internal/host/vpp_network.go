@@ -474,7 +474,7 @@ func (v *VPPNetwork) CreateTap(ctx context.Context, hostName, gatewayCIDR string
 		UseRandomMac:  true,
 		HostIfNameSet: true,
 		HostIfName:    hostName,
-		Tag:           "nerds-vnf:" + hostName,
+		Tag:           "rookery-vnf:" + hostName,
 	}
 	conn, err := v.connect()
 	if err != nil {
@@ -588,7 +588,7 @@ func (v *VPPNetwork) DeleteTapByName(ctx context.Context, hostName string) error
 		}
 		// Only delete interfaces created by this service. A user-created
 		// vhost-user interface could otherwise share the same name.
-		if details.Tag != "" && details.Tag != "nerds-vnf:"+hostName && details.Tag != "nerds-dhcp:"+hostName {
+		if details.Tag != "" && details.Tag != "rookery-vnf:"+hostName && details.Tag != "rookery-dhcp:"+hostName {
 			return nil
 		}
 		reply, err := tapv2.NewServiceClient(conn).TapDeleteV2(ctx, &tapv2.TapDeleteV2{

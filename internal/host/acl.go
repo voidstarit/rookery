@@ -15,7 +15,7 @@ import (
 	"github.com/voidstarit/rookery/internal/store"
 )
 
-const aclTagPrefix = "nerds-acl:"
+const aclTagPrefix = "rookery-acl:"
 
 // EnsureVPPACL creates or replaces the VPP ACL for an ACL database record.
 // The returned index is suitable for assigning to interfaces.

@@ -15,19 +15,19 @@ func TestHostFlagsResolve(t *testing.T) {
 	}{
 		{
 			name:     "separate vg and pool",
-			flags:    hostFlags{vg: "vg0", thinPool: "nerds-vms", vppSocket: "/run/vpp/api.sock"},
+			flags:    hostFlags{vg: "vg0", thinPool: "rookery", vppSocket: "/run/vpp/api.sock"},
 			wantVG:   "vg0",
-			wantPool: "nerds-vms",
+			wantPool: "rookery",
 		},
 		{
 			name:     "pool includes vg",
-			flags:    hostFlags{thinPool: "vg0/nerds-vms", vppSocket: "/run/vpp/api.sock"},
+			flags:    hostFlags{thinPool: "vg0/rookery", vppSocket: "/run/vpp/api.sock"},
 			wantVG:   "vg0",
-			wantPool: "nerds-vms",
+			wantPool: "rookery",
 		},
 		{
 			name:    "conflicting vg",
-			flags:   hostFlags{vg: "other", thinPool: "vg0/nerds-vms"},
+			flags:   hostFlags{vg: "other", thinPool: "vg0/rookery"},
 			wantErr: "conflicts",
 		},
 		{
@@ -37,7 +37,7 @@ func TestHostFlagsResolve(t *testing.T) {
 		},
 		{
 			name:    "vg is a path",
-			flags:   hostFlags{vg: "vg0/path", thinPool: "nerds-vms"},
+			flags:   hostFlags{vg: "vg0/path", thinPool: "rookery"},
 			wantErr: "not a path",
 		},
 	}

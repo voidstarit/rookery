@@ -719,7 +719,7 @@ func readyReadiness() fakeReadiness {
 			ThinPool: readiness.ThinPoolStatus{
 				ComponentStatus: readiness.ComponentStatus{Ready: true, State: "ready"},
 				VG:              "vg0",
-				Name:            "nerds-vms",
+				Name:            "rookery",
 			},
 			VPP: readiness.VPPStatus{
 				ComponentStatus: readiness.ComponentStatus{Ready: true, State: "ready"},
@@ -1405,7 +1405,7 @@ func TestVMCRUD(t *testing.T) {
 	}
 
 	disk := createDiskAPI(t, handler, "web-01-root", 20)
-	if disk.VG != "vg0" || disk.ThinPool != "nerds-vms" || disk.Device != "/dev/vg0/web-01-root" {
+	if disk.VG != "vg0" || disk.ThinPool != "rookery" || disk.Device != "/dev/vg0/web-01-root" {
 		t.Fatalf("created disk = %+v", disk)
 	}
 
@@ -1764,7 +1764,7 @@ func TestDiskCRUD(t *testing.T) {
 	if created.ID < 1 || created.Name != "vm01-root" || created.SizeGB != 10 {
 		t.Fatalf("created disk = %+v", created)
 	}
-	if created.VG != "vg0" || created.ThinPool != "nerds-vms" || created.Device != "/dev/vg0/vm01-root" {
+	if created.VG != "vg0" || created.ThinPool != "rookery" || created.Device != "/dev/vg0/vm01-root" {
 		t.Fatalf("created disk location = %+v", created)
 	}
 	if want := fmt.Sprintf("/api/disks/%d", created.ID); recorder.Header().Get("Location") != want {
@@ -1773,7 +1773,7 @@ func TestDiskCRUD(t *testing.T) {
 	if len(env.provisioner.created) != 1 {
 		t.Fatalf("provisioner calls = %+v", env.provisioner.created)
 	}
-	if call := env.provisioner.created[0]; call.VG != "vg0" || call.ThinPool != "nerds-vms" || call.Name != "vm01-root" || call.SizeGB != 10 {
+	if call := env.provisioner.created[0]; call.VG != "vg0" || call.ThinPool != "rookery" || call.Name != "vm01-root" || call.SizeGB != 10 {
 		t.Fatalf("provisioner call = %+v", call)
 	}
 
@@ -4263,7 +4263,7 @@ func TestHealthAndStatus(t *testing.T) {
 	if !status.Ready {
 		t.Fatal("status is not ready")
 	}
-	if !status.ThinPool.Ready || status.ThinPool.VG != "vg0" || status.ThinPool.Name != "nerds-vms" {
+	if !status.ThinPool.Ready || status.ThinPool.VG != "vg0" || status.ThinPool.Name != "rookery" {
 		t.Fatalf("thin pool status = %+v", status.ThinPool)
 	}
 	if !status.VPP.Ready || status.VPP.Socket != "/run/vpp/api.sock" {
@@ -4278,10 +4278,10 @@ func TestCreateBlockedWhenNotReady(t *testing.T) {
 			ThinPool: readiness.ThinPoolStatus{
 				ComponentStatus: readiness.ComponentStatus{
 					State:  "missing",
-					Detail: "thin pool vg0/nerds-vms does not exist",
+					Detail: "thin pool vg0/rookery does not exist",
 				},
 				VG:   "vg0",
-				Name: "nerds-vms",
+				Name: "rookery",
 			},
 			VPP: readiness.VPPStatus{
 				ComponentStatus: readiness.ComponentStatus{
@@ -4366,7 +4366,7 @@ func TestCreateDiskDoesNotRequireVPP(t *testing.T) {
 			ThinPool: readiness.ThinPoolStatus{
 				ComponentStatus: readiness.ComponentStatus{Ready: true, State: "ready"},
 				VG:              "vg0",
-				Name:            "nerds-vms",
+				Name:            "rookery",
 			},
 			VPP: readiness.VPPStatus{
 				ComponentStatus: readiness.ComponentStatus{State: "unreachable"},

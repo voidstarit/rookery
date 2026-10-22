@@ -33,7 +33,7 @@ func createDisk(t *testing.T, st *store.Store, name string) store.Disk {
 		Name:     name,
 		SizeGB:   20,
 		VG:       "vg0",
-		ThinPool: "nerds-vms",
+		ThinPool: "rookery",
 	})
 	if err != nil {
 		t.Fatalf("create disk %q: %v", name, err)
@@ -436,13 +436,13 @@ func TestImportDisks(t *testing.T) {
 	backend, err := st.CreateStorageBackend(ctx, store.StorageBackend{
 		Name:   "import-pool",
 		Driver: "lvm-thin",
-		Config: store.StorageBackendConfig{VG: "vg0", ThinPool: "nerds-vms"},
+		Config: store.StorageBackendConfig{VG: "vg0", ThinPool: "rookery"},
 	})
 	if err != nil {
 		t.Fatalf("create backend: %v", err)
 	}
 
-	imported, err := st.ImportDisks(ctx, backend.ID, "vg0", "nerds-vms", []store.ImportDisk{
+	imported, err := st.ImportDisks(ctx, backend.ID, "vg0", "rookery", []store.ImportDisk{
 		{Name: "old-root", SizeGB: 20},
 		{Name: "old-data", SizeGB: 5},
 	})
@@ -455,11 +455,11 @@ func TestImportDisks(t *testing.T) {
 	if imported[0].Name != "old-root" || imported[0].SizeGB != 20 || imported[0].StorageBackendName != "import-pool" {
 		t.Fatalf("first imported disk = %+v", imported[0])
 	}
-	if imported[0].VG != "vg0" || imported[0].ThinPool != "nerds-vms" || imported[0].Device != "/dev/vg0/old-root" {
+	if imported[0].VG != "vg0" || imported[0].ThinPool != "rookery" || imported[0].Device != "/dev/vg0/old-root" {
 		t.Fatalf("first imported location = %+v", imported[0])
 	}
 
-	_, err = st.ImportDisks(ctx, backend.ID, "vg0", "nerds-vms", []store.ImportDisk{
+	_, err = st.ImportDisks(ctx, backend.ID, "vg0", "rookery", []store.ImportDisk{
 		{Name: "new-disk", SizeGB: 10},
 		{Name: "OLD-ROOT", SizeGB: 20},
 	})
@@ -479,7 +479,7 @@ func TestCreateDuplicateDiskName(t *testing.T) {
 		Name:     "WEB-01-ROOT",
 		SizeGB:   40,
 		VG:       "vg0",
-		ThinPool: "nerds-vms",
+		ThinPool: "rookery",
 	})
 	if !errors.Is(err, store.ErrDiskNameTaken) {
 		t.Fatalf("create duplicate disk error = %v, want ErrDiskNameTaken", err)
@@ -757,7 +757,7 @@ func TestVNFCrud(t *testing.T) {
 		TapSwIfIndex:   7,
 		TapHostName:    "vnf1",
 		MemifSwIfIndex: 9,
-		MemifSocket:    "/run/nerds-vms/memif/1.sock",
+		MemifSocket:    "/run/rookery/memif/1.sock",
 		MemifHostName:  "lab-dhcpv4",
 	})
 	if err != nil {
@@ -765,7 +765,7 @@ func TestVNFCrud(t *testing.T) {
 	}
 	if created.ID < 1 || created.NetworkName != "lab" || !created.Enabled ||
 		created.Config.Gateway != "10.20.0.1/24" || created.TapSwIfIndex != 7 ||
-		created.MemifSwIfIndex != 9 || created.MemifSocket != "/run/nerds-vms/memif/1.sock" ||
+		created.MemifSwIfIndex != 9 || created.MemifSocket != "/run/rookery/memif/1.sock" ||
 		created.MemifHostName != "lab-dhcpv4" {
 		t.Fatalf("created vnf = %+v", created)
 	}
@@ -790,14 +790,14 @@ func TestVNFCrud(t *testing.T) {
 		TapSwIfIndex:   0,
 		TapHostName:    "",
 		MemifSwIfIndex: 11,
-		MemifSocket:    "/run/nerds-vms/memif/2.sock",
+		MemifSocket:    "/run/rookery/memif/2.sock",
 		MemifHostName:  "lab-dhcpv4-renamed",
 	})
 	if err != nil {
 		t.Fatalf("update vnf: %v", err)
 	}
 	if updated.Name != "lab-dhcpv4-renamed" || updated.Enabled || updated.TapSwIfIndex != 0 ||
-		updated.MemifSwIfIndex != 11 || updated.MemifSocket != "/run/nerds-vms/memif/2.sock" ||
+		updated.MemifSwIfIndex != 11 || updated.MemifSocket != "/run/rookery/memif/2.sock" ||
 		updated.MemifHostName != "lab-dhcpv4-renamed" {
 		t.Fatalf("updated vnf = %+v", updated)
 	}

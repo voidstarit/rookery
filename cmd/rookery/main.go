@@ -58,8 +58,8 @@ The server starts even when prerequisites are missing. Check the UI or
 GET /api/status; VM creation is blocked until both prerequisites are ready.
 
 Examples:
-  sudo rookery init -vg vg0 -thin-pool nerds-vms -vpp-socket /run/vpp/api.sock
-  rookery serve -vg vg0 -thin-pool nerds-vms -vpp-socket /run/vpp/api.sock
+  sudo rookery init -vg vg0 -thin-pool rookery -vpp-socket /run/vpp/api.sock
+  rookery serve -vg vg0 -thin-pool rookery -vpp-socket /run/vpp/api.sock
   rookery serve
 
 Flags are command-specific. Use "rookery serve -h" or

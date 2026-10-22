@@ -32,8 +32,8 @@ const (
 	defaultDHCPPort  = 67
 	maxDHCPRangeSize = 65536
 	coreDHCPv6Port   = 547
-	coreDHCPv4Plugin = "nerds-coredhcp"
-	coreDHCPv6Plugin = "nerds-coredhcp6"
+	coreDHCPv4Plugin = "rookery-coredhcp"
+	coreDHCPv6Plugin = "rookery-coredhcp6"
 )
 
 // VNFManager runs one CoreDHCP server instance per network function.
@@ -73,7 +73,7 @@ type leaseFile struct {
 // NewVNFManager returns a manager storing VNF leases under runDir/vnfs.
 func NewVNFManager(runDir string) (*VNFManager, error) {
 	if strings.TrimSpace(runDir) == "" {
-		runDir = "/run/nerds-vms"
+		runDir = "/run/rookery"
 	}
 	abs, err := filepath.Abs(runDir)
 	if err != nil {

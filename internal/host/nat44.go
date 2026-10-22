@@ -407,7 +407,7 @@ func (v *VPPNetwork) ApplyNAT44(ctx context.Context, bviName, outsideName, outsi
 	} else {
 		hostname, _ := os.Hostname()
 		if hostname == "" {
-			hostname = "nerds-vms"
+			hostname = "rookery"
 		}
 		if out, err := v.runCLI(ctx, "set", "dhcp", "client", "intfc", outsideName, "hostname", hostname); err != nil && !cliAlreadyExists(out) {
 			return fmt.Errorf("start VPP DHCP client on %s: %w: %s", outsideName, err, out)
@@ -650,7 +650,7 @@ func nat44DeleteStaticMapping(ctx context.Context, client nat44StaticMappingClie
 }
 
 func nat44StaticMappingTagPrefix(vnfID int64) string {
-	return fmt.Sprintf("nerds-vms:%d:", vnfID)
+	return fmt.Sprintf("rookery:%d:", vnfID)
 }
 
 func nat44StaticMappingTag(vnfID int64, ruleIndex int) string {

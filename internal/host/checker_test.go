@@ -17,7 +17,7 @@ func testChecker(runner *fakeLVM, ping func(context.Context, string) error) *Che
 func TestInspectThinPoolNotConfigured(t *testing.T) {
 	checker := testChecker(&fakeLVM{}, func(context.Context, string) error { return nil })
 
-	result := checker.InspectThinPool(context.Background(), "", "nerds-vms")
+	result := checker.InspectThinPool(context.Background(), "", "rookery")
 	if result.Ready || result.State != StateNotConfigured {
 		t.Fatalf("result = %+v", result)
 	}
@@ -26,7 +26,7 @@ func TestInspectThinPoolNotConfigured(t *testing.T) {
 func TestInspectThinPoolMissingVG(t *testing.T) {
 	checker := testChecker(&fakeLVM{}, func(context.Context, string) error { return nil })
 
-	result := checker.InspectThinPool(context.Background(), "vg0", "nerds-vms")
+	result := checker.InspectThinPool(context.Background(), "vg0", "rookery")
 	if result.Ready || result.State != StateMissing || !strings.Contains(result.Detail, "does not exist") {
 		t.Fatalf("result = %+v", result)
 	}
@@ -35,7 +35,7 @@ func TestInspectThinPoolMissingVG(t *testing.T) {
 func TestInspectThinPoolMissingPool(t *testing.T) {
 	checker := testChecker(&fakeLVM{vgExists: true}, func(context.Context, string) error { return nil })
 
-	result := checker.InspectThinPool(context.Background(), "vg0", "nerds-vms")
+	result := checker.InspectThinPool(context.Background(), "vg0", "rookery")
 	if result.Ready || result.State != StateMissing || !strings.Contains(result.Detail, "init") {
 		t.Fatalf("result = %+v", result)
 	}
@@ -44,7 +44,7 @@ func TestInspectThinPoolMissingPool(t *testing.T) {
 func TestInspectThinPoolReady(t *testing.T) {
 	checker := testChecker(&fakeLVM{vgExists: true, poolExists: true}, func(context.Context, string) error { return nil })
 
-	result := checker.InspectThinPool(context.Background(), "vg0", "nerds-vms")
+	result := checker.InspectThinPool(context.Background(), "vg0", "rookery")
 	if !result.Ready || result.State != StateReady {
 		t.Fatalf("result = %+v", result)
 	}
@@ -53,7 +53,7 @@ func TestInspectThinPoolReady(t *testing.T) {
 func TestInspectThinPoolNonThinLV(t *testing.T) {
 	checker := testChecker(&fakeLVM{vgExists: true, poolExists: true, poolAttr: "-wi-a-----"}, func(context.Context, string) error { return nil })
 
-	result := checker.InspectThinPool(context.Background(), "vg0", "nerds-vms")
+	result := checker.InspectThinPool(context.Background(), "vg0", "rookery")
 	if result.Ready || result.State != StateError || !strings.Contains(result.Detail, "not a thin pool") {
 		t.Fatalf("result = %+v", result)
 	}

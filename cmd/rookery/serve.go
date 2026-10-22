@@ -37,7 +37,7 @@ func runServe(args []string) error {
 	addr := fs.String("addr", envDefault("ROOKERY_ADDR", "127.0.0.1:8080"), "HTTP listen address")
 	gatewayAddr := fs.String("gateway-addr", envDefault("ROOKERY_GATEWAY_ADDR", ""), "optional grpc-gateway HTTP listen address")
 	grpcAddr := fs.String("grpc-addr", envDefault("ROOKERY_GRPC_ADDR", ""), "optional gRPC listen address")
-	dbPath := fs.String("db", envDefault("ROOKERY_DB", "nerds-vms.db"), "SQLite database path")
+	dbPath := fs.String("db", envDefault("ROOKERY_DB", "rookery.db"), "SQLite database path")
 	rateLimitValue := fs.String("rate-limit", envDefault("ROOKERY_RATE_LIMIT", "3"), "global HTTP request rate limit in requests per second (0 disables)")
 	dhcpTransport := fs.String("dhcp-transport", envDefault("ROOKERY_DHCP_TRANSPORT", "memif"), "DHCP VNF transport: memif or tap")
 	vnfAddr := fs.String("vnf-addr", envDefault("ROOKERY_VNF_ADDR", "unix:///run/rookery/vnfs.sock"), "VNF daemon control address (unix:///path or tcp://host:port)")
