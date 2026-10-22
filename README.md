@@ -1115,9 +1115,11 @@ DHCP VNFs also accept extra options through `dhcp_options`. Each option has a
 ```
 
 For DHCPv6 use the corresponding DHCPv6 codes, for example option `24` with
-`domain-list` for the domain search list. Server-managed options such as the
-subnet mask, router, DNS servers, lease timers, and DHCPv6 IA options are
-rejected; use the dedicated `dns` field for DNS servers.
+`domain-list` for the domain search list. Server-managed structural options
+such as the subnet mask, lease timers, and DHCPv6 IA options are rejected.
+Router and DNS options (v4 `3`/`6`, v6 `23`) are allowed and override the
+gateway and `dns` fields because custom options are applied last. The UI
+suggests common option codes and automatically selects the matching format.
 
 Add a DNS VNF with local records and upstream forwarding:
 

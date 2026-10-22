@@ -2567,8 +2567,8 @@ func TestDHCPOptionsLifecycle(t *testing.T) {
 		config  map[string]any
 	}{
 		{
-			name: "reserved DNS", vnfType: store.VNFTypeDHCPv4,
-			config: map[string]any{"dhcp_options": []map[string]any{{"code": 6, "format": "ipv4", "value": "1.1.1.1"}}},
+			name: "reserved subnet mask", vnfType: store.VNFTypeDHCPv4,
+			config: map[string]any{"dhcp_options": []map[string]any{{"code": 1, "format": "ipv4", "value": "255.255.255.0"}}},
 		},
 		{
 			name: "bad format", vnfType: store.VNFTypeDHCPv4,

@@ -234,6 +234,44 @@ function typeHint(type: VNFType): string {
   return "IPv4 address pool served on the network-shared memif by default (VNF address .2).";
 }
 
+type DHCPOptionPreset = {
+  code: number;
+  label: string;
+  format: string;
+  placeholder: string;
+  hint?: string;
+};
+
+const DHCPV4_OPTION_PRESETS: DHCPOptionPreset[] = [
+  { code: 3, label: "Router", format: "ipv4", placeholder: "10.20.0.1", hint: "Overrides the gateway router option." },
+  { code: 6, label: "DNS servers", format: "ipv4", placeholder: "10.20.0.2, 1.1.1.1", hint: "Overrides the DNS field." },
+  { code: 15, label: "Domain name", format: "string", placeholder: "lab.test" },
+  { code: 42, label: "NTP servers", format: "ipv4", placeholder: "10.20.0.1, 10.20.0.2" },
+  { code: 44, label: "WINS servers", format: "ipv4", placeholder: "10.20.0.10" },
+  { code: 66, label: "TFTP server name", format: "string", placeholder: "tftp.lab.test" },
+  { code: 67, label: "Bootfile name", format: "string", placeholder: "pxelinux.0" },
+  { code: 119, label: "Domain search list", format: "domain-list", placeholder: "lab.test, apps.lab.test" },
+  { code: 252, label: "WPAD URL", format: "string", placeholder: "http://wpad.lab.test/wpad.dat" },
+];
+
+const DHCPV6_OPTION_PRESETS: DHCPOptionPreset[] = [
+  { code: 21, label: "SIP domain names", format: "domain-list", placeholder: "sip.lab.test" },
+  { code: 22, label: "SIP servers", format: "ipv6", placeholder: "fd00:20::10" },
+  { code: 23, label: "DNS recursive name servers", format: "ipv6", placeholder: "fd00:20::2", hint: "Overrides the DNS field." },
+  { code: 24, label: "Domain search list", format: "domain-list", placeholder: "lab.test, apps.lab.test" },
+  { code: 31, label: "SNTP servers", format: "ipv6", placeholder: "fd00:20::10" },
+  { code: 59, label: "Bootfile URL", format: "string", placeholder: "http://[fd00:20::1]/boot" },
+  { code: 60, label: "Bootfile parameters", format: "string", placeholder: "console=ttyS0" },
+];
+
+function dhcpOptionPresets(type: VNFType): DHCPOptionPreset[] {
+  return type === "dhcpv6" ? DHCPV6_OPTION_PRESETS : DHCPV4_OPTION_PRESETS;
+}
+
+function dhcpOptionPreset(type: VNFType, code: number): DHCPOptionPreset | undefined {
+  return dhcpOptionPresets(type).find((preset) => preset.code === code);
+}
+
 export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, onSaved }: VNFPageProps) {
   const [form, setForm] = useState<FormState>(() => defaultForm(vnf, networks, vppReady, initialNetworkID));
   const [hostInterfaces, setHostInterfaces] = useState<HostInterface[]>([]);
@@ -484,6 +522,16 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
       ...current,
       dhcpOptions: current.dhcpOptions.map((option, index_) =>
         index_ === index ? { ...option, [key]: value } : option
+      ),
+    }));
+  };
+
+  const updateDHCPOptionCode = (index: number, code: number) => {
+    const preset = dhcpOptionPreset(form.type, code);
+    setForm((current) => ({
+      ...current,
+      dhcpOptions: current.dhcpOptions.map((option, index_) =>
+        index_ === index ? { ...option, code, ...(preset ? { format: preset.format } : {}) } : option
       ),
     }));
   };
@@ -818,11 +866,20 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                           required
                           min={1}
                           max={form.type === "dhcpv6" ? 65535 : 254}
+                          list={`dhcp-option-codes-${form.type}`}
                           value={option.code || ""}
                           onInput={(event) =>
-                            updateDHCPOption(index, "code", Number(event.currentTarget.value))
+                            updateDHCPOptionCode(index, Number(event.currentTarget.value))
                           }
                         />
+                        {(() => {
+                          const preset = dhcpOptionPreset(form.type, option.code);
+                          return (
+                            <span class="field-hint">
+                              {preset ? `${preset.label}${preset.hint ? ` — ${preset.hint}` : ""}` : "Custom option code"}
+                            </span>
+                          );
+                        })()}
                       </label>
                       <label class="field">
                         <span class="field-label">Format</span>
@@ -848,7 +905,8 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                           autocomplete="off"
                           spellcheck={false}
                           placeholder={
-                            option.format === "ipv4"
+                            dhcpOptionPreset(form.type, option.code)?.placeholder ??
+                            (option.format === "ipv4"
                               ? "10.20.0.1, 10.20.0.2"
                               : option.format === "ipv6"
                                 ? "fd00:20::1"
@@ -856,7 +914,7 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                                   ? "lab.test, apps.lab.test"
                                   : option.format === "hex"
                                     ? "01:02:ff"
-                                    : "lab.test"
+                                    : "lab.test")
                           }
                           value={option.value}
                           onInput={(event) => updateDHCPOption(index, "value", event.currentTarget.value)}
@@ -868,10 +926,15 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                 {form.dhcpOptions.length === 0 ? (
                   <p class="field-hint">
                     No extra options. Example: code 15, format string, value lab.test advertises
-                    the domain name.
+                    the domain name. DNS and router options override the DNS field and gateway.
                   </p>
                 ) : null}
               </div>
+              <datalist id={`dhcp-option-codes-${form.type}`}>
+                {dhcpOptionPresets(form.type).map((preset) => (
+                  <option value={preset.code} label={`${preset.label} (${preset.format})`} />
+                ))}
+              </datalist>
             </div>
           </div>
           </>

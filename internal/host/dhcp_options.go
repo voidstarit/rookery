@@ -19,8 +19,6 @@ const maxDHCPOptions = 64
 
 var dhcpv4ServerOptions = map[uint16]string{
 	1:  "subnet mask",
-	3:  "router",
-	6:  "DNS servers (use config.dns)",
 	28: "broadcast address",
 	51: "lease time",
 	53: "message type",
@@ -40,7 +38,6 @@ var dhcpv6ServerOptions = map[uint16]string{
 	9:  "relay message",
 	13: "status code",
 	14: "rapid commit",
-	23: "DNS servers (use config.dns)",
 	25: "IA_PD",
 	26: "IA prefix",
 }

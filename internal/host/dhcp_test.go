@@ -568,7 +568,7 @@ func TestCoreDHCPOptionsRejectReservedCode(t *testing.T) {
 		testDHCPBroad,
 		testDHCPGateway,
 		"",
-		`[{"code":6,"format":"ipv4","value":"1.1.1.1"}]`,
+		`[{"code":1,"format":"ipv4","value":"255.255.255.0"}]`,
 	); err == nil {
 		t.Fatal("setup accepted a server-managed option code")
 	}
