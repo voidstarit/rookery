@@ -249,6 +249,8 @@ func (m *memifDHCPv4) reply(payload []byte) (*dhcpv4.DHCPv4, *net.UDPAddr) {
 		Str("request", req.MessageType().String()).
 		Str("reply", resp.MessageType().String()).
 		Str("address", resp.YourIPAddr.String()).
+		Int("option_count", len(resp.Options)).
+		Str("options", resp.Options.String()).
 		Msg("DHCPv4 reply prepared")
 
 	switch {

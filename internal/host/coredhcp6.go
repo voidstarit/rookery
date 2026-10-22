@@ -193,6 +193,7 @@ func (s *coreDHCPv6State) handle(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) 
 		Str("leases", s.leasePath).
 		Str("client_id", clientKey).
 		Str("message_type", msg.Type().String()).
+		Str("options", msg.String()).
 		Msg("DHCPv6 request")
 
 	now := time.Now()
@@ -300,6 +301,11 @@ func (s *coreDHCPv6State) applyOptions(resp dhcpv6.DHCPv6, msg *dhcpv6.Message) 
 			})
 		}
 	}
+	log.Trace().
+		Str("leases", s.leasePath).
+		Str("message_type", msg.Type().String()).
+		Str("options", resp.String()).
+		Msg("DHCPv6 reply options")
 }
 
 func requestedV6Address(ianaOpt *dhcpv6.OptIANA) (netip.Addr, bool) {

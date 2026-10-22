@@ -259,6 +259,7 @@ func (s *coreDHCPState) handle(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) 
 		Str("message_type", req.MessageType().String()).
 		Str("requested_ip", ipText(requested)).
 		Str("client_ip", req.ClientIPAddr.String()).
+		Str("options", req.Options.String()).
 		Msg("DHCPv4 request")
 	switch req.MessageType() {
 	case dhcpv4.MessageTypeDiscover, dhcpv4.MessageTypeRequest:
@@ -351,6 +352,14 @@ func (s *coreDHCPState) applyOptions(resp *dhcpv4.DHCPv4, inform bool) {
 	if !inform {
 		resp.Options.Update(dhcpv4.OptIPAddressLeaseTime(s.leaseTime))
 	}
+	log.Trace().
+		Str("leases", s.leasePath).
+		Str("client_id", resp.ClientHWAddr.String()).
+		Str("message_type", resp.MessageType().String()).
+		Str("address", resp.YourIPAddr.String()).
+		Int("option_count", len(resp.Options)).
+		Str("options", resp.Options.String()).
+		Msg("DHCPv4 reply options")
 }
 
 func (s *coreDHCPState) leaseForLocked(clientID string, now time.Time) *coreDHCPLease {

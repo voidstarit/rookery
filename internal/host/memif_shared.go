@@ -261,6 +261,8 @@ func replyDHCPv4(vnfID int64, handlers []handler.Handler4, payload []byte) (*dhc
 		Str("request", req.MessageType().String()).
 		Str("reply", resp.MessageType().String()).
 		Str("address", resp.YourIPAddr.String()).
+		Int("option_count", len(resp.Options)).
+		Str("options", resp.Options.String()).
 		Msg("shared DHCPv4 reply prepared")
 
 	switch {
