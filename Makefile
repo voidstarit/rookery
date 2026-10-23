@@ -104,4 +104,4 @@ proto-check: proto-generate proto-compile
 	@echo "protobuf manifests are up to date"
 
 clean:
-	rm -rf $(UI_DIR)/node_modules $(STATIC_DIR)/build $(BIN_DIR)
+	rm -rf $(UI_DIR)/node_modules $(STATIC_DIR)/build $(BIN_DIR) $(RELEASE_DIR)
