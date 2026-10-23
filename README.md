@@ -811,6 +811,7 @@ vhost-user netdevs for interfaces attached through Rookery Networks.
 
 | Flag              | Environment variable   | Default             | Used by         | Description |
 | ----------------- | ---------------------- | ------------------- | --------------- | ----------- |
+| `-config`         | `ROOKERY_CONFIG`       | —                   | `serve`, `init`, `vnfs` | YAML configuration file |
 | `-addr`           | `ROOKERY_ADDR`       | `127.0.0.1:8080`    | `serve`         | HTTP listen address |
 | `-db`             | `ROOKERY_DB`         | `rookery.db`      | `serve`         | SQLite database path |
 | `-rate-limit`     | `ROOKERY_RATE_LIMIT` | `3`                 | `serve`         | HTTP requests per second for each URL path; `0` disables |
@@ -835,6 +836,53 @@ The database directory is created automatically and migrations run on startup.
 Set `-addr :8080` to expose the server beyond localhost. The rate limit applies
 per URL path, and requests over it receive `429 Too Many Requests` with
 `Retry-After: 1`.
+
+### Configuration file
+
+`rookery serve`, `rookery init`, and `vnfs` accept a YAML file through
+`-config /path/to/config.yaml` or `ROOKERY_CONFIG`. A single file can hold both
+an `api:` section and a `vnf:` section; each binary reads its own section. The
+repository contains a documented `config.example.yaml`.
+
+Precedence is:
+
+```text
+command-line flags > environment variables > YAML file > built-in defaults
+```
+
+Unknown YAML fields are rejected so typos do not silently fall back to
+defaults. Durations use Go syntax (`10s`, `2m`); the API rate limit is a number
+(`0` disables it). For example:
+
+```yaml
+api:
+  vg: msd-beelink-vg
+  thin_pool: rookery
+  vpp_socket: /run/vpp/api.sock
+  addr: 127.0.0.1:8080
+  db: /var/lib/rookery/rookery.db
+  check_interval: 10s
+  rate_limit: 3
+  log_level: info
+  mtls_addr: ":8443"
+
+vnf:
+  vpp_socket: /run/vpp/api.sock
+  listen: unix:///run/rookery/vnfs.sock
+  run_dir: /run/rookery
+  vhost_dir: /run/vpp
+  log_level: info
+```
+
+Then both processes can use the same file:
+
+```sh
+sudo rookery serve -config /etc/rookery/config.yaml
+sudo vnfs -config /etc/rookery/config.yaml
+```
+
+`rookery init` also reads the `api` section, using `init_size` for its `-size`
+default.
 
 ### Protobuf API design
 

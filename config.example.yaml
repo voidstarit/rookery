@@ -1,0 +1,44 @@
+# Rookery API and VNF daemon configuration.
+#
+# Pass this file with -config /path/to/config.yaml or ROOKERY_CONFIG.
+# Command-line flags override environment variables, which override this file.
+#
+# api configures `rookery serve` and `rookery init`.
+api:
+  # LVM bootstrap (serve and init). For serve, an existing storage backend is
+  # used when these are omitted.
+  vg: ""
+  thin_pool: rookery
+  vpp_socket: /run/vpp/api.sock
+
+  # rookery serve
+  addr: 127.0.0.1:8080
+  gateway_addr: ""
+  grpc_addr: ""
+  db: rookery.db
+  rate_limit: 3
+  dhcp_transport: memif
+  vnf_addr: unix:///run/rookery/vnfs.sock
+  check_interval: 10s
+  qemu_bin: qemu-system-x86_64
+  run_dir: /run/rookery
+  memif_dir: /run/rookery/memif
+  vhost_dir: /run/vpp
+  log_level: info
+  log_format: console
+  mtls_addr: ":8443"
+  pki_dir: /var/lib/rookery/pki
+  mtls_sans: ""
+  grpc_mtls_addr: ":9443"
+
+  # rookery init
+  init_size: 100%FREE
+
+# vnf configures the `vnfs` daemon.
+vnf:
+  vpp_socket: /run/vpp/api.sock
+  listen: unix:///run/rookery/vnfs.sock
+  run_dir: /run/rookery
+  vhost_dir: /run/vpp
+  log_level: info
+  log_format: console

@@ -7,15 +7,26 @@ import (
 	"strings"
 	"time"
 
+	"github.com/voidstarit/rookery/internal/config"
 	"github.com/voidstarit/rookery/internal/host"
 )
 
 func runInit(args []string) error {
-	fs := flag.NewFlagSet("init", flag.ContinueOnError)
-	var hostCfg hostFlags
-	hostCfg.register(fs)
+	file, err := config.Load(config.Path(args))
+	if err != nil {
+		return err
+	}
+	apiCfg := config.API{}
+	if file.API != nil {
+		apiCfg = *file.API
+	}
 
-	size := fs.String("size", host.DefaultThinPoolSize, "thin pool size for creation (LVM --size or --extents syntax)")
+	fs := flag.NewFlagSet("init", flag.ContinueOnError)
+	fs.String("config", config.Path(args), "YAML configuration file (or ROOKERY_CONFIG)")
+	var hostCfg hostFlags
+	hostCfg.register(fs, apiCfg)
+
+	size := fs.String("size", config.String(apiCfg.InitSize, host.DefaultThinPoolSize), "thin pool size for creation (LVM --size or --extents syntax)")
 
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(), "Usage: rookery init [flags]\n\n"+

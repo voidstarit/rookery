@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/voidstarit/rookery/internal/api"
+	"github.com/voidstarit/rookery/internal/config"
 	"github.com/voidstarit/rookery/internal/gateway"
 	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/lifecycle"
@@ -30,28 +31,42 @@ import (
 )
 
 func runServe(args []string) error {
-	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	var hostCfg hostFlags
-	hostCfg.register(fs)
+	file, err := config.Load(config.Path(args))
+	if err != nil {
+		return err
+	}
+	apiCfg := config.API{}
+	if file.API != nil {
+		apiCfg = *file.API
+	}
+	checkIntervalDefault, err := config.Duration(apiCfg.CheckInterval, 10*time.Second)
+	if err != nil {
+		return err
+	}
 
-	addr := fs.String("addr", envDefault("ROOKERY_ADDR", "127.0.0.1:8080"), "HTTP listen address")
-	gatewayAddr := fs.String("gateway-addr", envDefault("ROOKERY_GATEWAY_ADDR", ""), "optional grpc-gateway HTTP listen address")
-	grpcAddr := fs.String("grpc-addr", envDefault("ROOKERY_GRPC_ADDR", ""), "optional gRPC listen address")
-	dbPath := fs.String("db", envDefault("ROOKERY_DB", "rookery.db"), "SQLite database path")
-	rateLimitValue := fs.String("rate-limit", envDefault("ROOKERY_RATE_LIMIT", "3"), "global HTTP request rate limit in requests per second (0 disables)")
-	dhcpTransport := fs.String("dhcp-transport", envDefault("ROOKERY_DHCP_TRANSPORT", "memif"), "DHCP VNF transport: memif or tap")
-	vnfAddr := fs.String("vnf-addr", envDefault("ROOKERY_VNF_ADDR", "unix:///run/rookery/vnfs.sock"), "VNF daemon control address (unix:///path or tcp://host:port)")
-	checkInterval := fs.Duration("check-interval", 10*time.Second, "readiness check interval")
-	qemuBin := fs.String("qemu-bin", envDefault("ROOKERY_QEMU_BIN", qemu.DefaultBinary), "QEMU system emulator binary")
-	runDir := fs.String("run-dir", envDefault("ROOKERY_RUN_DIR", qemu.DefaultRunDir), "directory for QEMU pid files and VNC sockets")
-	memifDir := fs.String("memif-dir", envDefault("ROOKERY_MEMIF_DIR", "/run/rookery/memif"), "directory for VNF memif sockets")
-	vhostDir := fs.String("vhost-dir", envDefault("ROOKERY_VHOST_DIR", host.DefaultVhostDir), "directory for VPP vhost-user sockets")
-	logLevel := fs.String("log-level", envDefault("ROOKERY_LOG_LEVEL", "info"), "log level: trace, debug, info, warn, error")
-	logFormat := fs.String("log-format", envDefault("ROOKERY_LOG_FORMAT", "console"), "log format: console or json")
-	mtlsAddr := fs.String("mtls-addr", envDefault("ROOKERY_MTLS_ADDR", ":8443"), "public mTLS API listen address (empty disables)")
-	pkiDir := fs.String("pki-dir", envDefault("ROOKERY_PKI_DIR", "/var/lib/rookery/pki"), "directory for the mTLS CA and server certificate")
-	mtlsSANs := fs.String("mtls-sans", envDefault("ROOKERY_MTLS_SANS", ""), "comma-separated extra DNS/IP SANs for the mTLS server certificate")
-	grpcMTLSAddr := fs.String("grpc-mtls-addr", envDefault("ROOKERY_GRPC_MTLS_ADDR", ":9443"), "public mTLS gRPC listen address (empty disables)")
+	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+	fs.String("config", config.Path(args), "YAML configuration file (or ROOKERY_CONFIG)")
+	var hostCfg hostFlags
+	hostCfg.register(fs, apiCfg)
+
+	addr := fs.String("addr", config.EnvString(apiCfg.Addr, "ROOKERY_ADDR", "127.0.0.1:8080"), "HTTP listen address")
+	gatewayAddr := fs.String("gateway-addr", config.EnvString(apiCfg.GatewayAddr, "ROOKERY_GATEWAY_ADDR", ""), "optional grpc-gateway HTTP listen address")
+	grpcAddr := fs.String("grpc-addr", config.EnvString(apiCfg.GRPCAddr, "ROOKERY_GRPC_ADDR", ""), "optional gRPC listen address")
+	dbPath := fs.String("db", config.EnvString(apiCfg.DB, "ROOKERY_DB", "rookery.db"), "SQLite database path")
+	rateLimitValue := fs.String("rate-limit", config.EnvFloat(apiCfg.RateLimit, "ROOKERY_RATE_LIMIT", "3"), "global HTTP request rate limit in requests per second (0 disables)")
+	dhcpTransport := fs.String("dhcp-transport", config.EnvString(apiCfg.DHCPTransport, "ROOKERY_DHCP_TRANSPORT", "memif"), "DHCP VNF transport: memif or tap")
+	vnfAddr := fs.String("vnf-addr", config.EnvString(apiCfg.VNFAddr, "ROOKERY_VNF_ADDR", "unix:///run/rookery/vnfs.sock"), "VNF daemon control address (unix:///path or tcp://host:port)")
+	checkInterval := fs.Duration("check-interval", checkIntervalDefault, "readiness check interval")
+	qemuBin := fs.String("qemu-bin", config.EnvString(apiCfg.QEMUBin, "ROOKERY_QEMU_BIN", qemu.DefaultBinary), "QEMU system emulator binary")
+	runDir := fs.String("run-dir", config.EnvString(apiCfg.RunDir, "ROOKERY_RUN_DIR", qemu.DefaultRunDir), "directory for QEMU pid files and VNC sockets")
+	memifDir := fs.String("memif-dir", config.EnvString(apiCfg.MemifDir, "ROOKERY_MEMIF_DIR", "/run/rookery/memif"), "directory for VNF memif sockets")
+	vhostDir := fs.String("vhost-dir", config.EnvString(apiCfg.VhostDir, "ROOKERY_VHOST_DIR", host.DefaultVhostDir), "directory for VPP vhost-user sockets")
+	logLevel := fs.String("log-level", config.EnvString(apiCfg.LogLevel, "ROOKERY_LOG_LEVEL", "info"), "log level: trace, debug, info, warn, error")
+	logFormat := fs.String("log-format", config.EnvString(apiCfg.LogFormat, "ROOKERY_LOG_FORMAT", "console"), "log format: console or json")
+	mtlsAddr := fs.String("mtls-addr", config.EnvString(apiCfg.MTLSAddr, "ROOKERY_MTLS_ADDR", ":8443"), "public mTLS API listen address (empty disables)")
+	pkiDir := fs.String("pki-dir", config.EnvString(apiCfg.PKIDir, "ROOKERY_PKI_DIR", "/var/lib/rookery/pki"), "directory for the mTLS CA and server certificate")
+	mtlsSANs := fs.String("mtls-sans", config.EnvString(apiCfg.MTLSSANs, "ROOKERY_MTLS_SANS", ""), "comma-separated extra DNS/IP SANs for the mTLS server certificate")
+	grpcMTLSAddr := fs.String("grpc-mtls-addr", config.EnvString(apiCfg.GRPCMTLSAddr, "ROOKERY_GRPC_MTLS_ADDR", ":9443"), "public mTLS gRPC listen address (empty disables)")
 
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(), "Usage: rookery serve [flags]\n\n"+

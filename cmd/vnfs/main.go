@@ -20,6 +20,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/voidstarit/rookery/internal/config"
 	"github.com/voidstarit/rookery/internal/logging"
 	"google.golang.org/grpc"
 
@@ -40,13 +41,23 @@ func main() {
 }
 
 func run(args []string) error {
+	file, err := config.Load(config.Path(args))
+	if err != nil {
+		return err
+	}
+	vnfCfg := config.VNF{}
+	if file.VNF != nil {
+		vnfCfg = *file.VNF
+	}
+
 	fs := flag.NewFlagSet("vnfs", flag.ContinueOnError)
-	vppSocket := fs.String("vpp-socket", envDefault("ROOKERY_VPP_SOCKET", "/run/vpp/api.sock"), "VPP binary API socket used for BGP route installs")
-	listen := fs.String("listen", envDefault("ROOKERY_VNF_LISTEN", "unix:///run/rookery/vnfs.sock"), "control listen address (unix:///path or tcp://host:port)")
-	runDir := fs.String("run-dir", envDefault("ROOKERY_RUN_DIR", qemu.DefaultRunDir), "directory for VNF lease and state files")
-	vhostDir := fs.String("vhost-dir", envDefault("ROOKERY_VHOST_DIR", host.DefaultVhostDir), "directory for VPP vhost-user sockets")
-	logLevel := fs.String("log-level", envDefault("ROOKERY_LOG_LEVEL", "info"), "log level: trace, debug, info, warn, error")
-	logFormat := fs.String("log-format", envDefault("ROOKERY_LOG_FORMAT", "console"), "log format: console or json")
+	fs.String("config", config.Path(args), "YAML configuration file (or ROOKERY_CONFIG)")
+	vppSocket := fs.String("vpp-socket", config.EnvString(vnfCfg.VPPSocket, "ROOKERY_VPP_SOCKET", "/run/vpp/api.sock"), "VPP binary API socket used for BGP route installs")
+	listen := fs.String("listen", config.EnvString(vnfCfg.Listen, "ROOKERY_VNF_LISTEN", "unix:///run/rookery/vnfs.sock"), "control listen address (unix:///path or tcp://host:port)")
+	runDir := fs.String("run-dir", config.EnvString(vnfCfg.RunDir, "ROOKERY_RUN_DIR", qemu.DefaultRunDir), "directory for VNF lease and state files")
+	vhostDir := fs.String("vhost-dir", config.EnvString(vnfCfg.VhostDir, "ROOKERY_VHOST_DIR", host.DefaultVhostDir), "directory for VPP vhost-user sockets")
+	logLevel := fs.String("log-level", config.EnvString(vnfCfg.LogLevel, "ROOKERY_LOG_LEVEL", "info"), "log level: trace, debug, info, warn, error")
+	logFormat := fs.String("log-format", config.EnvString(vnfCfg.LogFormat, "ROOKERY_LOG_FORMAT", "console"), "log format: console or json")
 
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(), "Usage: vnfs [flags]\n\n"+
@@ -130,11 +141,4 @@ func run(args []string) error {
 		logger.Warn().Err(err).Msg("stopping VNF runtimes")
 	}
 	return nil
-}
-
-func envDefault(key, fallback string) string {
-	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
-		return value
-	}
-	return fallback
 }

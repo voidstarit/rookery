@@ -3,8 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
 	"strings"
+
+	"github.com/voidstarit/rookery/internal/config"
 )
 
 type hostFlags struct {
@@ -13,15 +14,15 @@ type hostFlags struct {
 	vppSocket string
 }
 
-func (h *hostFlags) register(fs *flag.FlagSet) {
+func (h *hostFlags) register(fs *flag.FlagSet, cfg config.API) {
 	fs.StringVar(&h.vg, "vg",
-		envDefault("ROOKERY_VG", ""),
+		config.EnvString(cfg.VG, "ROOKERY_VG", ""),
 		"LVM volume group (or pass -thin-pool <vg>/<name>)")
 	fs.StringVar(&h.thinPool, "thin-pool",
-		envDefault("ROOKERY_THIN_POOL", "rookery"),
+		config.EnvString(cfg.ThinPool, "ROOKERY_THIN_POOL", "rookery"),
 		"LVM thin pool name, optionally as <vg>/<name>")
 	fs.StringVar(&h.vppSocket, "vpp-socket",
-		envDefault("ROOKERY_VPP_SOCKET", "/run/vpp/api.sock"),
+		config.EnvString(cfg.VPPSocket, "ROOKERY_VPP_SOCKET", "/run/vpp/api.sock"),
 		"VPP binary API socket (not the CLI or vhost-user socket)")
 }
 
@@ -47,11 +48,4 @@ func (h *hostFlags) resolve() (vg, thinPool, socket string, err error) {
 	}
 
 	return vg, thinPool, socket, nil
-}
-
-func envDefault(key, fallback string) string {
-	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
-		return value
-	}
-	return fallback
 }
