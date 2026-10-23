@@ -881,8 +881,9 @@ sudo rookery serve -config /etc/rookery/config.yaml
 sudo vnfs -config /etc/rookery/config.yaml
 ```
 
-`rookery init` also reads the `api` section, using `init_size` for its `-size`
-default.
+When the `vnf` section omits `vpp_socket`, `run_dir`, or `vhost_dir`, the values
+from the `api` section are used. `rookery init` also reads the `api` section,
+using `init_size` for its `-size` default.
 
 ### Protobuf API design
 

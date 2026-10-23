@@ -45,9 +45,24 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	apiCfg := config.API{}
+	if file.API != nil {
+		apiCfg = *file.API
+	}
 	vnfCfg := config.VNF{}
 	if file.VNF != nil {
 		vnfCfg = *file.VNF
+	}
+	// A single config file normally defines the shared VPP and runtime paths
+	// in the api section; inherit them when the vnf section omits them.
+	if vnfCfg.VPPSocket == nil {
+		vnfCfg.VPPSocket = apiCfg.VPPSocket
+	}
+	if vnfCfg.RunDir == nil {
+		vnfCfg.RunDir = apiCfg.RunDir
+	}
+	if vnfCfg.VhostDir == nil {
+		vnfCfg.VhostDir = apiCfg.VhostDir
 	}
 
 	fs := flag.NewFlagSet("vnfs", flag.ContinueOnError)
