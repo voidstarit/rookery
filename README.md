@@ -1384,3 +1384,28 @@ go vet ./...
 process and is skipped automatically when `/dev/kvm` or `qemu-system-x86_64`
 is unavailable. Use `go test -short ./...` to skip it explicitly.
 
+### Releases
+
+Pushing a tag such as `v0.1.0` runs `.github/workflows/release.yml`, builds the
+API server and VNF daemon for Linux x86_64/amd64, and attaches a versioned
+archive plus SHA-256 checksum to the GitHub release:
+
+```text
+rookery-v0.1.0-linux-amd64.tar.gz
+  rookery
+  vnfs
+  config.example.yaml
+  README.md
+  scripts/lvm-thin-snapshot-disk.sh
+```
+
+The workflow runs the UI build before compiling so the API binary contains the
+release UI. To build the same archive locally:
+
+```sh
+make release VERSION=v0.1.0
+```
+
+Binaries are statically linked (`CGO_ENABLED=0`), stripped, and built with
+`-trimpath`; the Terraform provider is intentionally not part of this archive.
+

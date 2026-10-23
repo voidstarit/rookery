@@ -5,6 +5,11 @@ BIN_DIR := bin
 API_BIN := $(BIN_DIR)/rookery
 VNF_BIN := $(BIN_DIR)/vnfs
 PROVIDER_BIN := $(BIN_DIR)/terraform-provider-rookery
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+RELEASE_DIR := dist
+RELEASE_NAME := rookery-$(VERSION)-linux-amd64
+RELEASE_STAGE := $(RELEASE_DIR)/$(RELEASE_NAME)
+RELEASE_ARCHIVE := $(RELEASE_DIR)/$(RELEASE_NAME).tar.gz
 
 PROTOC ?= protoc
 PROTO_ROOT := design/proto
@@ -17,7 +22,7 @@ PROTO_FILES := $(shell find $(PROTO_ROOT) -name '*.proto' -print)
 PROTO_TOOL_PATHS := $(PROTO_PLUGIN_BIN)/protoc-gen-go $(PROTO_PLUGIN_BIN)/protoc-gen-go-grpc $(PROTO_PLUGIN_BIN)/protoc-gen-grpc-gateway $(PROTO_PLUGIN_BIN)/protoc-gen-openapiv2 $(PROTO_PLUGIN_BIN)/protoc-gen-validate
 PROTO_TOOL_VERSIONS := google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12 google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2 github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.28.0 github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@v2.28.0 github.com/envoyproxy/protoc-gen-validate@v1.3.3
 
-.PHONY: all build ui-install ui-build ui-typecheck ui-watch test vet fmt clean proto-tools proto-check-tools proto-generate proto-compile proto-check
+.PHONY: all build ui-install ui-build ui-typecheck ui-watch test vet fmt clean release proto-tools proto-check-tools proto-generate proto-compile proto-check
 
 all: build
 
@@ -40,6 +45,20 @@ build: ui-build
 	go build -o $(API_BIN) ./cmd/rookery
 	go build -o $(VNF_BIN) ./cmd/vnfs
 	go build -o $(PROVIDER_BIN) ./cmd/terraform-provider-rookery
+
+# Build the x86_64 Linux API and VNF daemon archive published by the release
+# workflow. This intentionally excludes the Terraform provider.
+release: ui-build
+	rm -rf $(RELEASE_STAGE) $(RELEASE_ARCHIVE) $(RELEASE_ARCHIVE).sha256
+	mkdir -p $(RELEASE_STAGE)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o $(RELEASE_STAGE)/rookery ./cmd/rookery
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o $(RELEASE_STAGE)/vnfs ./cmd/vnfs
+	install -m 0644 README.md config.example.yaml $(RELEASE_STAGE)/
+	install -d $(RELEASE_STAGE)/scripts
+	install -m 0755 scripts/lvm-thin-snapshot-disk.sh $(RELEASE_STAGE)/scripts/
+	tar -C $(RELEASE_DIR) -czf $(RELEASE_ARCHIVE) $(RELEASE_NAME)
+	cd $(RELEASE_DIR) && sha256sum $(RELEASE_NAME).tar.gz > $(RELEASE_NAME).tar.gz.sha256
+	@printf 'created %s\n' "$(RELEASE_ARCHIVE)"
 
 test: ui-build
 	go test ./...
