@@ -4,6 +4,15 @@ on:
   push:
     tags:
       - "v*"
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build and attach to its release (for example v0.1.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -12,10 +21,16 @@ jobs:
   release:
     name: Build linux/amd64 release
     runs-on: ubuntu-latest
+    # A release created by this workflow's own GITHUB_TOKEN does not normally
+    # trigger another run, but skip it explicitly if it ever does.
+    if: github.event_name != 'release' || github.event.release.author.login != 'github-actions[bot]'
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
 
       - name: Set up Go
@@ -38,26 +53,35 @@ jobs:
         run: go vet ./...
 
       - name: Build API and VNF daemon
-        run: make release VERSION="${GITHUB_REF_NAME}"
+        run: make release VERSION="${RELEASE_TAG}"
 
       - name: Verify archive contents
         run: |
-          tar -tzf "dist/rookery-${GITHUB_REF_NAME}-linux-amd64.tar.gz"
-          test -f "dist/rookery-${GITHUB_REF_NAME}-linux-amd64.tar.gz.sha256"
+          tar -tzf "dist/rookery-${RELEASE_TAG}-linux-amd64.tar.gz"
+          test -f "dist/rookery-${RELEASE_TAG}-linux-amd64.tar.gz.sha256"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rookery-${{ env.RELEASE_TAG }}-linux-amd64
+          path: |
+            dist/rookery-${{ env.RELEASE_TAG }}-linux-amd64.tar.gz
+            dist/rookery-${{ env.RELEASE_TAG }}-linux-amd64.tar.gz.sha256
+          if-no-files-found: error
 
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release upload "${GITHUB_REF_NAME}" \
-              "dist/rookery-${GITHUB_REF_NAME}-linux-amd64.tar.gz" \
-              "dist/rookery-${GITHUB_REF_NAME}-linux-amd64.tar.gz.sha256" \
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" \
+              "dist/rookery-${RELEASE_TAG}-linux-amd64.tar.gz" \
+              "dist/rookery-${RELEASE_TAG}-linux-amd64.tar.gz.sha256" \
               --clobber
           else
-            gh release create "${GITHUB_REF_NAME}" \
-              "dist/rookery-${GITHUB_REF_NAME}-linux-amd64.tar.gz" \
-              "dist/rookery-${GITHUB_REF_NAME}-linux-amd64.tar.gz.sha256" \
-              --title "${GITHUB_REF_NAME}" \
+            gh release create "${RELEASE_TAG}" \
+              "dist/rookery-${RELEASE_TAG}-linux-amd64.tar.gz" \
+              "dist/rookery-${RELEASE_TAG}-linux-amd64.tar.gz.sha256" \
+              --title "${RELEASE_TAG}" \
               --generate-notes
           fi
