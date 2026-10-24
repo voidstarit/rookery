@@ -84,4 +84,7 @@ func TestUIIconIsServedAndReferenced(t *testing.T) {
 	if !strings.Contains(body, `href="/icon.png"`) || !strings.Contains(body, `src="/icon.png"`) {
 		t.Fatal("index page does not reference the UI icon")
 	}
+	if !strings.Contains(body, ">ROOKERY<") {
+		t.Fatal("index page does not show the ROOKERY wordmark")
+	}
 }
