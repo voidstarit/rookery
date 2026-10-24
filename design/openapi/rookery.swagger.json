@@ -1,0 +1,4643 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Rookery API",
+    "description": "Virtual-machine, storage, network, and VPP management API.",
+    "version": "1.0"
+  },
+  "tags": [
+    {
+      "name": "SystemService",
+      "description": "SystemService exposes host and readiness information."
+    },
+    {
+      "name": "DiskService",
+      "description": "DiskService manages pre-created thin-LVM disks."
+    },
+    {
+      "name": "MediaService",
+      "description": "MediaService manages read-only installation media records."
+    },
+    {
+      "name": "NetworkService",
+      "description": "NetworkService manages VPP bridge domains presented as Rookery Networks."
+    },
+    {
+      "name": "InterfaceService",
+      "description": "InterfaceService manages VPP vhost-user interfaces and their VM attachment."
+    },
+    {
+      "name": "ACLService",
+      "description": "ACLService manages ordered interface ingress/egress ACLs."
+    },
+    {
+      "name": "VNFService",
+      "description": "VNFService manages DHCP, NAT44, BGP, and DNS network functions."
+    },
+    {
+      "name": "VMService",
+      "description": "VMService manages virtual machines and their QEMU lifecycle."
+    },
+    {
+      "name": "StorageBackendService",
+      "description": "StorageBackendService manages disk provisioning backends."
+    },
+    {
+      "name": "HostService",
+      "description": "HostService exposes Linux host network information used by network functions."
+    },
+    {
+      "name": "TroubleshootService",
+      "description": "TroubleshootService exposes VPP topology and ACL diagnostics."
+    },
+    {
+      "name": "CaptureService",
+      "description": "CaptureService manages VPP pcap traces and retained capture metadata.\nThe pcap download itself remains a native streaming HTTP endpoint."
+    },
+    {
+      "name": "RouteTableService"
+    }
+  ],
+  "schemes": [
+    "http"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/api/acls": {
+      "get": {
+        "operationId": "ACLService_ListACLs",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1ACL"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "ACLService"
+        ]
+      },
+      "post": {
+        "operationId": "ACLService_CreateACL",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ACL"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateACLRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ACLService"
+        ]
+      }
+    },
+    "/api/acls/{id}": {
+      "get": {
+        "operationId": "ACLService_GetACL",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ACL"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "ACLService"
+        ]
+      },
+      "delete": {
+        "operationId": "ACLService_DeleteACL",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "ACLService"
+        ]
+      },
+      "put": {
+        "operationId": "ACLService_UpdateACL",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ACL"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ACLServiceUpdateACLBody"
+            }
+          }
+        ],
+        "tags": [
+          "ACLService"
+        ]
+      }
+    },
+    "/api/disks": {
+      "get": {
+        "operationId": "DiskService_ListDisks",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1Disk"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "DiskService"
+        ]
+      },
+      "post": {
+        "operationId": "DiskService_CreateDisk",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Disk"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateDiskRequest"
+            }
+          }
+        ],
+        "tags": [
+          "DiskService"
+        ]
+      }
+    },
+    "/api/disks/{id}": {
+      "get": {
+        "operationId": "DiskService_GetDisk",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Disk"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DiskService"
+        ]
+      },
+      "delete": {
+        "operationId": "DiskService_DeleteDisk",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DiskService"
+        ]
+      },
+      "put": {
+        "operationId": "DiskService_UpdateDisk",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Disk"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DiskServiceUpdateDiskBody"
+            }
+          }
+        ],
+        "tags": [
+          "DiskService"
+        ]
+      }
+    },
+    "/api/healthz": {
+      "get": {
+        "operationId": "SystemService_GetHealth",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1HealthResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "SystemService"
+        ]
+      }
+    },
+    "/api/host/interfaces": {
+      "get": {
+        "operationId": "HostService_ListHostInterfaces",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1HostInterface"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "HostService"
+        ]
+      }
+    },
+    "/api/interfaces": {
+      "get": {
+        "operationId": "InterfaceService_ListInterfaces",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1VirtualInterface"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "InterfaceService"
+        ]
+      },
+      "post": {
+        "operationId": "InterfaceService_CreateInterface",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VirtualInterface"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateInterfaceRequest"
+            }
+          }
+        ],
+        "tags": [
+          "InterfaceService"
+        ]
+      }
+    },
+    "/api/interfaces/{id}": {
+      "get": {
+        "operationId": "InterfaceService_GetInterface",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VirtualInterface"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "InterfaceService"
+        ]
+      },
+      "delete": {
+        "operationId": "InterfaceService_DeleteInterface",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "InterfaceService"
+        ]
+      },
+      "put": {
+        "operationId": "InterfaceService_UpdateInterface",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VirtualInterface"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/InterfaceServiceUpdateInterfaceBody"
+            }
+          }
+        ],
+        "tags": [
+          "InterfaceService"
+        ]
+      }
+    },
+    "/api/interfaces/{id}/acls": {
+      "put": {
+        "operationId": "InterfaceService_SetInterfaceACLs",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VirtualInterface"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/InterfaceServiceSetInterfaceACLsBody"
+            }
+          }
+        ],
+        "tags": [
+          "InterfaceService"
+        ]
+      }
+    },
+    "/api/media": {
+      "get": {
+        "operationId": "MediaService_ListMedia",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1Media"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "MediaService"
+        ]
+      },
+      "post": {
+        "operationId": "MediaService_CreateMedia",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Media"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateMediaRequest"
+            }
+          }
+        ],
+        "tags": [
+          "MediaService"
+        ]
+      }
+    },
+    "/api/media/{id}": {
+      "get": {
+        "operationId": "MediaService_GetMedia",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Media"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "MediaService"
+        ]
+      },
+      "delete": {
+        "operationId": "MediaService_DeleteMedia",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "MediaService"
+        ]
+      }
+    },
+    "/api/networks": {
+      "get": {
+        "operationId": "NetworkService_ListNetworks",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1Network"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetworkService"
+        ]
+      },
+      "post": {
+        "operationId": "NetworkService_CreateNetwork",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Network"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateNetworkRequest"
+            }
+          }
+        ],
+        "tags": [
+          "NetworkService"
+        ]
+      }
+    },
+    "/api/networks/{id}": {
+      "get": {
+        "operationId": "NetworkService_GetNetwork",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Network"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "NetworkService"
+        ]
+      },
+      "delete": {
+        "operationId": "NetworkService_DeleteNetwork",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "NetworkService"
+        ]
+      }
+    },
+    "/api/status": {
+      "get": {
+        "operationId": "SystemService_GetStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1StatusResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "SystemService"
+        ]
+      }
+    },
+    "/api/storage-backends": {
+      "get": {
+        "operationId": "StorageBackendService_ListStorageBackends",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1StorageBackend"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "StorageBackendService"
+        ]
+      },
+      "post": {
+        "operationId": "StorageBackendService_CreateStorageBackend",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1StorageBackend"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateStorageBackendRequest"
+            }
+          }
+        ],
+        "tags": [
+          "StorageBackendService"
+        ]
+      }
+    },
+    "/api/storage-backends/{id}": {
+      "get": {
+        "operationId": "StorageBackendService_GetStorageBackend",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1StorageBackend"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "StorageBackendService"
+        ]
+      },
+      "delete": {
+        "operationId": "StorageBackendService_DeleteStorageBackend",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "StorageBackendService"
+        ]
+      },
+      "put": {
+        "operationId": "StorageBackendService_UpdateStorageBackend",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1StorageBackend"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/StorageBackendServiceUpdateStorageBackendBody"
+            }
+          }
+        ],
+        "tags": [
+          "StorageBackendService"
+        ]
+      }
+    },
+    "/api/storage-backends/{id}/import-disks": {
+      "post": {
+        "operationId": "StorageBackendService_ImportDisks",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1Disk"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/StorageBackendServiceImportDisksBody"
+            }
+          }
+        ],
+        "tags": [
+          "StorageBackendService"
+        ]
+      }
+    },
+    "/api/storage-backends/{id}/importable-disks": {
+      "get": {
+        "operationId": "StorageBackendService_ListImportableDisks",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1ImportableDisk"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "StorageBackendService"
+        ]
+      }
+    },
+    "/api/troubleshoot/acl-counters": {
+      "get": {
+        "operationId": "TroubleshootService_ListACLInterfaceCounters",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1ACLInterfaceCounters"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TroubleshootService"
+        ]
+      }
+    },
+    "/api/troubleshoot/capture": {
+      "get": {
+        "operationId": "CaptureService_GetCaptureOverview",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PacketCaptureOverview"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "CaptureService"
+        ]
+      },
+      "post": {
+        "operationId": "CaptureService_StartCapture",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PacketCaptureStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1StartCaptureRequest"
+            }
+          }
+        ],
+        "tags": [
+          "CaptureService"
+        ]
+      }
+    },
+    "/api/troubleshoot/capture/files": {
+      "get": {
+        "operationId": "CaptureService_ListCaptureFiles",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1PacketCaptureFile"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "CaptureService"
+        ]
+      }
+    },
+    "/api/troubleshoot/capture/files/{name}": {
+      "delete": {
+        "operationId": "CaptureService_DeleteCaptureFile",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "CaptureService"
+        ]
+      }
+    },
+    "/api/troubleshoot/capture/interfaces": {
+      "get": {
+        "operationId": "CaptureService_ListCaptureInterfaces",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1VPPInterface"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "CaptureService"
+        ]
+      }
+    },
+    "/api/troubleshoot/capture/stop": {
+      "post": {
+        "operationId": "CaptureService_StopCapture",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PacketCaptureStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "CaptureService"
+        ]
+      }
+    },
+    "/api/troubleshoot/vpp-graph": {
+      "get": {
+        "operationId": "TroubleshootService_GetVPPGraph",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VPPGraph"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TroubleshootService"
+        ]
+      }
+    },
+    "/api/vms": {
+      "get": {
+        "operationId": "VMService_ListVMs",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1VM"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "VMService"
+        ]
+      },
+      "post": {
+        "operationId": "VMService_CreateVM",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VM"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateVMRequest"
+            }
+          }
+        ],
+        "tags": [
+          "VMService"
+        ]
+      }
+    },
+    "/api/vms/{id}": {
+      "get": {
+        "operationId": "VMService_GetVM",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VM"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VMService"
+        ]
+      },
+      "delete": {
+        "operationId": "VMService_DeleteVM",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VMService"
+        ]
+      },
+      "put": {
+        "operationId": "VMService_UpdateVM",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VM"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/VMServiceUpdateVMBody"
+            }
+          }
+        ],
+        "tags": [
+          "VMService"
+        ]
+      }
+    },
+    "/api/vms/{id}/ctrl-alt-del": {
+      "post": {
+        "operationId": "VMService_CtrlAltDel",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VM"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VMService"
+        ]
+      }
+    },
+    "/api/vms/{id}/metrics": {
+      "get": {
+        "operationId": "VMService_GetVMMetrics",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VMMetrics"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VMService"
+        ]
+      }
+    },
+    "/api/vms/{id}/reset": {
+      "post": {
+        "operationId": "VMService_ResetVM",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VM"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VMService"
+        ]
+      }
+    },
+    "/api/vms/{id}/start": {
+      "post": {
+        "operationId": "VMService_StartVM",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VM"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VMService"
+        ]
+      }
+    },
+    "/api/vms/{id}/stop": {
+      "post": {
+        "operationId": "VMService_StopVM",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VM"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VMService"
+        ]
+      }
+    },
+    "/api/vnfs": {
+      "get": {
+        "operationId": "VNFService_ListVNFs",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1VNF"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "network_id",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "VNFService"
+        ]
+      },
+      "post": {
+        "operationId": "VNFService_CreateVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateVNFRequest"
+            }
+          }
+        ],
+        "tags": [
+          "VNFService"
+        ]
+      }
+    },
+    "/api/vnfs/{id}": {
+      "get": {
+        "operationId": "VNFService_GetVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "VNFService"
+        ]
+      },
+      "delete": {
+        "operationId": "VNFService_DeleteVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "VNFService"
+        ]
+      },
+      "put": {
+        "operationId": "VNFService_UpdateVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/VNFServiceUpdateVNFBody"
+            }
+          }
+        ],
+        "tags": [
+          "VNFService"
+        ]
+      }
+    },
+    "/api/vnfs/{id}/leases": {
+      "get": {
+        "operationId": "VNFService_ListVNFLeases",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListVNFLeasesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "VNFService"
+        ]
+      }
+    },
+    "/api/vnfs/{id}/restart": {
+      "post": {
+        "operationId": "VNFService_RestartVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "VNFService"
+        ]
+      }
+    },
+    "/api/vnfs/{id}/sessions": {
+      "get": {
+        "operationId": "VNFService_ListVNFSessions",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListVNFSessionsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "VNFService"
+        ]
+      }
+    },
+    "/api/interfaces/{id}/route-tables": {
+      "put": {
+        "operationId": "RouteTableService_SetInterfaceRouteTables",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VirtualInterface"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/RouteTableServiceSetInterfaceRouteTablesBody"
+            }
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      }
+    },
+    "/api/route-tables": {
+      "get": {
+        "operationId": "RouteTableService_ListRouteTables",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1RouteTable"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "RouteTableService"
+        ]
+      },
+      "post": {
+        "operationId": "RouteTableService_CreateRouteTable",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RouteTable"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateRouteTableRequest"
+            }
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      }
+    },
+    "/api/route-tables/{id}": {
+      "delete": {
+        "operationId": "RouteTableService_DeleteRouteTable",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      }
+    },
+    "/api/route-tables/{route_table_id}/fib": {
+      "get": {
+        "operationId": "RouteTableService_ListFIBRoutes",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1FIBRoute"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "route_table_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "ipv6",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      }
+    },
+    "/api/route-tables/{route_table_id}/routes": {
+      "get": {
+        "operationId": "RouteTableService_ListRoutes",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1Route"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "route_table_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "ipv6",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      },
+      "post": {
+        "operationId": "RouteTableService_CreateRoute",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Route"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "route_table_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/RouteTableServiceCreateRouteBody"
+            }
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      }
+    },
+    "/api/routes/{id}": {
+      "delete": {
+        "operationId": "RouteTableService_DeleteRoute",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      }
+    },
+    "/api/troubleshoot/trace": {
+      "get": {
+        "operationId": "TroubleshootService_GetTrace",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1TraceResult"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TroubleshootService"
+        ]
+      },
+      "delete": {
+        "operationId": "TroubleshootService_ClearTrace",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TroubleshootService"
+        ]
+      },
+      "post": {
+        "operationId": "TroubleshootService_StartTrace",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1TraceResult"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1StartTraceRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TroubleshootService"
+        ]
+      }
+    },
+    "/api/troubleshoot/trace/nodes": {
+      "get": {
+        "operationId": "TroubleshootService_ListTraceNodes",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TroubleshootService"
+        ]
+      }
+    },
+    "/api/interfaces/counters": {
+      "get": {
+        "operationId": "InterfaceService_ListInterfaceCounters",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1InterfaceCounters"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "InterfaceService"
+        ]
+      },
+      "delete": {
+        "operationId": "InterfaceService_ResetInterfaceCounters",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "InterfaceService"
+        ]
+      }
+    },
+    "/api/vnfs/{id}/bgp": {
+      "get": {
+        "operationId": "VNFService_GetVNFBGP",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VNFBGPStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "VNFService"
+        ]
+      }
+    },
+    "/api/host/taps": {
+      "get": {
+        "summary": "ListHostTaps lists persistent taps that connect a Rookery Network to the\nLinux host.",
+        "operationId": "HostService_ListHostTaps",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1HostTap"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "network_id",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "HostService"
+        ]
+      },
+      "post": {
+        "summary": "CreateHostTap creates a VPP tap on a network bridge domain and persists it\nso it is recreated after an API or VPP restart.",
+        "operationId": "HostService_CreateHostTap",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1HostTap"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateHostTapRequest"
+            }
+          }
+        ],
+        "tags": [
+          "HostService"
+        ]
+      }
+    },
+    "/api/host/taps/{id}": {
+      "delete": {
+        "summary": "DeleteHostTap removes a persistent network host tap.",
+        "operationId": "HostService_DeleteHostTap",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "HostService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "ACLServiceUpdateACLBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ACLRule"
+          }
+        }
+      }
+    },
+    "DiskServiceUpdateDiskBody": {
+      "type": "object",
+      "properties": {
+        "is_template": {
+          "type": "boolean"
+        }
+      }
+    },
+    "InterfaceServiceSetInterfaceACLsBody": {
+      "type": "object",
+      "properties": {
+        "ingress_acl": {
+          "type": "string"
+        },
+        "egress_acl": {
+          "type": "string"
+        },
+        "ingress_acls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "egress_acls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "InterfaceServiceUpdateInterfaceBody": {
+      "type": "object",
+      "properties": {
+        "attached_vm_id": {
+          "type": "string"
+        }
+      }
+    },
+    "StorageBackendServiceImportDisksBody": {
+      "type": "object",
+      "properties": {
+        "names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "StorageBackendServiceUpdateStorageBackendBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "driver": {
+          "type": "string"
+        },
+        "config": {
+          "$ref": "#/definitions/v1StorageBackendConfig"
+        }
+      }
+    },
+    "VMServiceUpdateVMBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "vcpus": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "memory_mb": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "boot_media_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "console_enabled": {
+          "type": "boolean"
+        },
+        "interface_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "int64"
+          }
+        },
+        "disk_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "int64"
+          }
+        },
+        "replace_interface_ids": {
+          "type": "boolean",
+          "description": "Explicit replacement lets clients clear the interface set. Disks cannot\nbe cleared because every VM requires at least one disk."
+        },
+        "replace_disk_ids": {
+          "type": "boolean"
+        }
+      }
+    },
+    "VNFServiceUpdateVNFBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "config": {
+          "$ref": "#/definitions/v1VNFConfig"
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1ACL": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ACLRule"
+          }
+        },
+        "vpp_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1ACLDirectionCounters": {
+      "type": "object",
+      "properties": {
+        "matched": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "denied": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "permitted": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "acl_indexes": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ACLRuleCounter"
+          }
+        }
+      }
+    },
+    "v1ACLInterfaceCounters": {
+      "type": "object",
+      "properties": {
+        "interface": {
+          "type": "string"
+        },
+        "sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ingress": {
+          "$ref": "#/definitions/v1ACLDirectionCounters"
+        },
+        "egress": {
+          "$ref": "#/definitions/v1ACLDirectionCounters"
+        }
+      }
+    },
+    "v1ACLRule": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "protocol": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "destination": {
+          "type": "string"
+        },
+        "source_port_start": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "source_port_end": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "destination_port_start": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "destination_port_end": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1ACLRuleCounter": {
+      "type": "object",
+      "properties": {
+        "acl_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "rule_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "action": {
+          "type": "string"
+        },
+        "matched": {
+          "type": "string",
+          "format": "uint64"
+        }
+      }
+    },
+    "v1CreateACLRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ACLRule"
+          }
+        }
+      }
+    },
+    "v1CreateDiskRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "size_gb": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "storage_backend_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "template_disk_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "is_template": {
+          "type": "boolean"
+        }
+      }
+    },
+    "v1CreateInterfaceRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "attached_vm_id": {
+          "type": "string"
+        }
+      }
+    },
+    "v1CreateMediaRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      }
+    },
+    "v1CreateNetworkRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "v1CreateStorageBackendRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "driver": {
+          "type": "string"
+        },
+        "config": {
+          "$ref": "#/definitions/v1StorageBackendConfig"
+        }
+      }
+    },
+    "v1CreateVMRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "vcpus": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "memory_mb": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "boot_media_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "console_enabled": {
+          "type": "boolean"
+        },
+        "interface_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "int64"
+          }
+        },
+        "disk_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "int64"
+          }
+        },
+        "disk_id": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1CreateVNFRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "type": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "config": {
+          "$ref": "#/definitions/v1VNFConfig"
+        }
+      }
+    },
+    "v1DHCPStaticAssignment": {
+      "type": "object",
+      "properties": {
+        "mac": {
+          "type": "string"
+        },
+        "ip": {
+          "type": "string"
+        }
+      }
+    },
+    "v1DNATRule": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "type": "string"
+        },
+        "external_port": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "local_ip": {
+          "type": "string"
+        },
+        "local_port": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1Disk": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "size_gb": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "storage_backend_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "storage_backend_name": {
+          "type": "string"
+        },
+        "vg": {
+          "type": "string"
+        },
+        "thin_pool": {
+          "type": "string"
+        },
+        "device": {
+          "type": "string"
+        },
+        "attached_vm_id": {
+          "type": "string"
+        },
+        "attached_vm_name": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "is_template": {
+          "type": "boolean"
+        },
+        "template_disk_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "template_disk_name": {
+          "type": "string"
+        }
+      }
+    },
+    "v1HealthResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        }
+      }
+    },
+    "v1HostInterface": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "up": {
+          "type": "boolean"
+        },
+        "addresses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "default_route": {
+          "type": "boolean"
+        },
+        "physical": {
+          "type": "boolean"
+        },
+        "wireless": {
+          "type": "boolean"
+        },
+        "in_vpp": {
+          "type": "boolean"
+        },
+        "vpp_checked": {
+          "type": "boolean"
+        },
+        "vpp_sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "vpp_name": {
+          "type": "string"
+        },
+        "vpp_up": {
+          "type": "boolean"
+        },
+        "vpp_type": {
+          "type": "string"
+        }
+      }
+    },
+    "v1ImportDisksResponse": {
+      "type": "object",
+      "properties": {
+        "disks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Disk"
+          }
+        }
+      }
+    },
+    "v1ImportableDisk": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "size_gb": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "registered": {
+          "type": "boolean"
+        },
+        "disk_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "attached_vm_id": {
+          "type": "string"
+        },
+        "attached_vm_name": {
+          "type": "string"
+        },
+        "storage_backend_name": {
+          "type": "string"
+        }
+      }
+    },
+    "v1ListACLInterfaceCountersResponse": {
+      "type": "object",
+      "properties": {
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ACLInterfaceCounters"
+          }
+        }
+      }
+    },
+    "v1ListACLsResponse": {
+      "type": "object",
+      "properties": {
+        "acls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ACL"
+          }
+        }
+      }
+    },
+    "v1ListCaptureFilesResponse": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1PacketCaptureFile"
+          }
+        }
+      }
+    },
+    "v1ListCaptureInterfacesResponse": {
+      "type": "object",
+      "properties": {
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VPPInterface"
+          }
+        }
+      }
+    },
+    "v1ListDisksResponse": {
+      "type": "object",
+      "properties": {
+        "disks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Disk"
+          }
+        }
+      }
+    },
+    "v1ListHostInterfacesResponse": {
+      "type": "object",
+      "properties": {
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1HostInterface"
+          }
+        }
+      }
+    },
+    "v1ListImportableDisksResponse": {
+      "type": "object",
+      "properties": {
+        "disks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ImportableDisk"
+          }
+        }
+      }
+    },
+    "v1ListInterfacesResponse": {
+      "type": "object",
+      "properties": {
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VirtualInterface"
+          }
+        }
+      }
+    },
+    "v1ListMediaResponse": {
+      "type": "object",
+      "properties": {
+        "media": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Media"
+          }
+        }
+      }
+    },
+    "v1ListNetworksResponse": {
+      "type": "object",
+      "properties": {
+        "networks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Network"
+          }
+        }
+      }
+    },
+    "v1ListStorageBackendsResponse": {
+      "type": "object",
+      "properties": {
+        "backends": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1StorageBackend"
+          }
+        }
+      }
+    },
+    "v1ListVMsResponse": {
+      "type": "object",
+      "properties": {
+        "vms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VM"
+          }
+        }
+      }
+    },
+    "v1ListVNFLeasesResponse": {
+      "type": "object",
+      "properties": {
+        "vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "type": {
+          "type": "string"
+        },
+        "leases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VNFLease"
+          }
+        }
+      }
+    },
+    "v1ListVNFSessionsResponse": {
+      "type": "object",
+      "properties": {
+        "vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "type": {
+          "type": "string"
+        },
+        "sessions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v1ListVNFsResponse": {
+      "type": "object",
+      "properties": {
+        "vnfs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VNF"
+          }
+        }
+      }
+    },
+    "v1Media": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "size_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1Network": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "bridge_domain_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "interface_count": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "bvi_host_name": {
+          "type": "string"
+        },
+        "bvi_sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv4_gateway": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1PacketCaptureFile": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "size": {
+          "type": "string",
+          "format": "int64"
+        },
+        "modified": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1PacketCaptureOverview": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/v1PacketCaptureStatus"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1PacketCaptureFile"
+          }
+        }
+      }
+    },
+    "v1PacketCaptureStatus": {
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "interface": {
+          "type": "string"
+        },
+        "direction": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "size": {
+          "type": "string",
+          "format": "int64"
+        },
+        "max_packets": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "max_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "snap_length": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "packets": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "buffered": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "stopped_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "raw": {
+          "type": "string"
+        }
+      }
+    },
+    "v1StartCaptureRequest": {
+      "type": "object",
+      "properties": {
+        "interface": {
+          "type": "string"
+        },
+        "direction": {
+          "type": "string"
+        },
+        "max_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "snap_length": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1StatusResponse": {
+      "type": "object",
+      "properties": {
+        "ready": {
+          "type": "boolean"
+        },
+        "checked_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "thin_pool": {
+          "$ref": "#/definitions/v1ThinPoolStatus"
+        },
+        "vpp": {
+          "$ref": "#/definitions/v1VPPStatus"
+        }
+      }
+    },
+    "v1StorageBackend": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "driver": {
+          "type": "string"
+        },
+        "config": {
+          "$ref": "#/definitions/v1StorageBackendConfig"
+        },
+        "disk_count": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1StorageBackendConfig": {
+      "type": "object",
+      "properties": {
+        "vg": {
+          "type": "string"
+        },
+        "thin_pool": {
+          "type": "string"
+        },
+        "supports_templates": {
+          "type": "boolean"
+        },
+        "preparation_script": {
+          "type": "string"
+        },
+        "preparation_timeout": {
+          "type": "string"
+        },
+        "allow_template_delete_with_clones": {
+          "type": "boolean"
+        }
+      }
+    },
+    "v1ThinPoolStatus": {
+      "type": "object",
+      "properties": {
+        "ready": {
+          "type": "boolean"
+        },
+        "state": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "checked_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "vg": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "v1VM": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "vcpus": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "memory_mb": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "disk_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "disk": {
+          "$ref": "#/definitions/v1VMDisk"
+        },
+        "disk_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "int64"
+          }
+        },
+        "disks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VMDisk"
+          }
+        },
+        "boot_media_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "boot_media": {
+          "$ref": "#/definitions/v1VMMedia"
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VMInterface"
+          }
+        },
+        "console_enabled": {
+          "type": "boolean"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1VMDisk": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "size_gb": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "storage_backend_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "storage_backend_name": {
+          "type": "string"
+        },
+        "vg": {
+          "type": "string"
+        },
+        "thin_pool": {
+          "type": "string"
+        },
+        "device": {
+          "type": "string"
+        }
+      }
+    },
+    "v1VMInterface": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "network_name": {
+          "type": "string"
+        },
+        "socket_path": {
+          "type": "string"
+        },
+        "mac": {
+          "type": "string"
+        },
+        "sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ingress_acl_name": {
+          "type": "string"
+        },
+        "egress_acl_name": {
+          "type": "string"
+        }
+      }
+    },
+    "v1VMMedia": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "size_bytes": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1VMMetrics": {
+      "type": "object",
+      "properties": {
+        "running": {
+          "type": "boolean"
+        },
+        "pid": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "uptime_seconds": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "cpu_seconds_total": {
+          "type": "number",
+          "format": "double"
+        },
+        "memory_rss_bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "memory_virtual_bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "disk_read_bytes_total": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "disk_write_bytes_total": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "vm_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "vcpus": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "memory_mb": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "network_rx_bytes_total": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "network_tx_bytes_total": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "network_rx_packets_total": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "network_tx_packets_total": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "sampled_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1VNF": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "network_name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "config": {
+          "$ref": "#/definitions/v1VNFConfig"
+        },
+        "tap_sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "tap_host_name": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string"
+        },
+        "status_detail": {
+          "type": "string"
+        },
+        "lease_count": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1VNFConfig": {
+      "type": "object",
+      "properties": {
+        "gateway": {
+          "type": "string"
+        },
+        "range_start": {
+          "type": "string"
+        },
+        "range_end": {
+          "type": "string"
+        },
+        "dns": {
+          "type": "string"
+        },
+        "lease_time": {
+          "type": "string"
+        },
+        "bind_ip": {
+          "type": "string"
+        },
+        "static_assignments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1DHCPStaticAssignment"
+          }
+        },
+        "outside_interface": {
+          "type": "string"
+        },
+        "outside_address": {
+          "type": "string"
+        },
+        "outside_gateway": {
+          "type": "string"
+        },
+        "nat44_pool": {
+          "type": "string"
+        },
+        "dnat_rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1DNATRule"
+          }
+        },
+        "transport": {
+          "type": "string",
+          "description": "BGP configuration. IPv4 unicast only for now."
+        },
+        "local_as": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "peer_as": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "multihop_ttl": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "target_table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "router_id": {
+          "type": "string"
+        },
+        "peer_ip": {
+          "type": "string"
+        },
+        "local_ip": {
+          "type": "string"
+        },
+        "peer_gateway": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        },
+        "passive": {
+          "type": "boolean"
+        },
+        "advertise_prefixes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_hop": {
+          "type": "string"
+        },
+        "dns_records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1DNSRecord"
+          },
+          "description": "DNS configuration. Records are served authoritatively; names without a\nlocal record are forwarded when dns_forward is enabled. If dns_forward is\nenabled and dns_forwarders is empty, the daemon uses the host resolver\nconfiguration (/etc/resolv.conf)."
+        },
+        "dns_forward": {
+          "type": "boolean"
+        },
+        "dns_forwarders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dhcp_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1DHCPOption"
+          },
+          "description": "Extra DHCPv4/DHCPv6 options advertised by a DHCP VNF. DNS (v4 option 6,\nv6 option 23) and server-managed options are rejected; use config.dns for\nDNS servers."
+        }
+      }
+    },
+    "v1VNFLease": {
+      "type": "object",
+      "properties": {
+        "client_id": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "active": {
+          "type": "boolean"
+        }
+      }
+    },
+    "v1VPPGraph": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VPPGraphNode"
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VPPGraphEdge"
+          }
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1VPPGraphEdge": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        }
+      }
+    },
+    "v1VPPGraphNode": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "width": {
+          "type": "number",
+          "format": "double"
+        },
+        "font_size": {
+          "type": "number",
+          "format": "double"
+        },
+        "fill": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1VPPInterface": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "type": {
+          "type": "string"
+        },
+        "mac": {
+          "type": "string"
+        },
+        "mtu": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "up": {
+          "type": "boolean"
+        },
+        "tag": {
+          "type": "string"
+        }
+      }
+    },
+    "v1VPPStatus": {
+      "type": "object",
+      "properties": {
+        "ready": {
+          "type": "boolean"
+        },
+        "state": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "checked_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "socket": {
+          "type": "string"
+        }
+      }
+    },
+    "v1VirtualInterface": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "network_name": {
+          "type": "string"
+        },
+        "socket_path": {
+          "type": "string"
+        },
+        "mac": {
+          "type": "string"
+        },
+        "sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "attached_vm_id": {
+          "type": "string"
+        },
+        "attached_vm_name": {
+          "type": "string"
+        },
+        "ingress_acl_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "ingress_acl_name": {
+          "type": "string"
+        },
+        "egress_acl_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "egress_acl_name": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ingress_acls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "egress_acls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ipv4_table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv6_table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv4_table_name": {
+          "type": "string"
+        },
+        "ipv6_table_name": {
+          "type": "string"
+        }
+      }
+    },
+    "RouteTableServiceCreateRouteBody": {
+      "type": "object",
+      "properties": {
+        "ipv6": {
+          "type": "boolean"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "next_hop": {
+          "type": "string"
+        },
+        "interface_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "egress_interface": {
+          "type": "string"
+        },
+        "preference": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "RouteTableServiceSetInterfaceRouteTablesBody": {
+      "type": "object",
+      "properties": {
+        "ipv4_table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv6_table_id": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "v1CreateRouteTableRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv6": {
+          "type": "boolean"
+        }
+      }
+    },
+    "v1FIBPath": {
+      "type": "object",
+      "properties": {
+        "sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "interface_name": {
+          "type": "string"
+        },
+        "next_hop": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "preference": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "proto": {
+          "type": "string"
+        }
+      }
+    },
+    "v1FIBRoute": {
+      "type": "object",
+      "properties": {
+        "prefix": {
+          "type": "string"
+        },
+        "table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv6": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "source_name": {
+          "type": "string"
+        },
+        "dynamic": {
+          "type": "boolean"
+        },
+        "stats_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1FIBPath"
+          }
+        }
+      }
+    },
+    "v1ListFIBRoutesResponse": {
+      "type": "object",
+      "properties": {
+        "routes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1FIBRoute"
+          }
+        }
+      }
+    },
+    "v1ListRouteTablesResponse": {
+      "type": "object",
+      "properties": {
+        "route_tables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1RouteTable"
+          }
+        }
+      }
+    },
+    "v1ListRoutesResponse": {
+      "type": "object",
+      "properties": {
+        "routes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Route"
+          }
+        }
+      }
+    },
+    "v1Route": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "route_table_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv6": {
+          "type": "boolean"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "next_hop": {
+          "type": "string"
+        },
+        "interface_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "interface_name": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "egress_interface": {
+          "type": "string"
+        },
+        "preference": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "v1RouteTable": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv6": {
+          "type": "boolean"
+        },
+        "is_default": {
+          "type": "boolean"
+        },
+        "interface_count": {
+          "type": "string",
+          "format": "int64"
+        },
+        "route_count": {
+          "type": "string",
+          "format": "int64"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1ListTraceNodesResponse": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v1StartTraceRequest": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "v1TraceResult": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "raw": {
+          "type": "string"
+        },
+        "captured_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1InterfaceCounters": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "rx_packets": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "tx_packets": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "rx_bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "tx_bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "sampled_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1VNFBGPReceivedPrefix": {
+      "type": "object",
+      "properties": {
+        "prefix": {
+          "type": "string"
+        },
+        "next_hop": {
+          "type": "string"
+        },
+        "as_path": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      }
+    },
+    "v1VNFBGPStatus": {
+      "type": "object",
+      "properties": {
+        "vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "type": {
+          "type": "string"
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "established": {
+          "type": "boolean"
+        },
+        "session_state": {
+          "type": "string"
+        },
+        "peer_address": {
+          "type": "string"
+        },
+        "peer_as": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "local_as": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "advertised": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "received": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VNFBGPReceivedPrefix"
+          }
+        }
+      }
+    },
+    "v1CreateHostTapRequest": {
+      "type": "object",
+      "properties": {
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "ipv4_address": {
+          "type": "string"
+        }
+      }
+    },
+    "v1HostTap": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "network_name": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv4_address": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "HostTap is a VPP tap that bridges a Rookery Network to the Linux host. The\nhost-side interface is named `name`; `ipv4_address` is optional and, when\nset, is assigned to that interface."
+    },
+    "v1ListHostTapsResponse": {
+      "type": "object",
+      "properties": {
+        "taps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1HostTap"
+          }
+        }
+      }
+    },
+    "v1DNSRecord": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "ttl": {
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "description": "DNSRecord is one local record served by a DNS VNF. Name is a fully qualified\ndomain name; wildcard names such as *.lab1.test are supported. Type is A,\nAAAA, CNAME, or TXT."
+    },
+    "v1DHCPOption": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "format": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "description": "DHCPOption is an extra DHCPv4/DHCPv6 option advertised by a DHCP VNF.\nFormat selects how Value is encoded: string, ipv4, ipv6, hex, uint8, uint16,\nuint32, or domain-list. Server-managed option codes are rejected."
+    }
+  }
+}

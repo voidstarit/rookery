@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/protobuf/empty.proto";
+import "rookery/v1/vnf.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// VNFDaemon is the internal control channel between the API server and the
+// separate VNF daemon (cmd/vnfs). It is not exposed through the HTTP gateway.
+// The API owns all VPP provisioning (memif/tap creation) and sends the full
+// desired runtime spec; the daemon owns the userspace runtimes (CoreDHCP,
+// gVisor memif stacks, GoBGP) so API restarts do not interrupt them.
+service VNFDaemon {
+  // EnsureVNF starts a VNF runtime, or restarts it when the spec changed.
+  // It is idempotent: a running VNF with an unchanged spec is left alone.
+  rpc EnsureVNF(EnsureVNFRequest) returns (VNFState);
+  rpc RemoveVNF(RemoveVNFRequest) returns (google.protobuf.Empty);
+  // ResetRuntime stops every runtime but keeps the desired specs so the API
+  // can re-ensure them after a VPP restart.
+  rpc ResetRuntime(ResetRuntimeRequest) returns (google.protobuf.Empty);
+  rpc ListVNFStates(ListVNFStatesRequest) returns (ListVNFStatesResponse);
+  rpc GetVNFState(GetVNFStateRequest) returns (VNFState);
+  rpc ListLeases(ListLeasesRequest) returns (ListLeasesResponse);
+  rpc GetBGPStatus(GetBGPStatusRequest) returns (VNFBGPStatus);
+  // CleanupLegacyNetwork removes DHCP runtime files left by the old
+  // per-network DHCP implementation.
+  rpc CleanupLegacyNetwork(CleanupLegacyNetworkRequest) returns (google.protobuf.Empty);
+}
+
+message VNFSpec {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  string name = 2;
+  string type = 3 [(validate.rules).string = {in: ["dhcpv4", "dhcpv6", "bgp"]}];
+  int64 network_id = 4;
+  // transport tells the daemon how the VNF reaches VPP: "memif" uses the
+  // memif socket created by the API, anything else uses tap_host_name.
+  string transport = 5 [(validate.rules).string = {in: ["memif", "tap", "shared"]}];
+  VNFConfig config = 6;
+  string tap_host_name = 7;
+  string memif_socket = 8;
+  uint32 memif_sw_if_index = 9;
+  // shared_address is the IPv4 CIDR assigned to the network's shared VNF
+  // memif stack (normally .2/prefix). It is required for transport "shared".
+  string shared_address = 10;
+}
+
+message EnsureVNFRequest {
+  VNFSpec vnf = 1 [(validate.rules).message = {required: true}];
+}
+
+message RemoveVNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  bool remove_leases = 2;
+}
+
+message ResetRuntimeRequest {}
+
+message VNFState {
+  int64 id = 1;
+  bool running = 2;
+  string detail = 3;
+}
+
+message ListVNFStatesRequest {}
+
+message ListVNFStatesResponse {
+  repeated VNFState vnfs = 1;
+}
+
+message GetVNFStateRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListLeasesRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListLeasesResponse {
+  int64 vnf_id = 1;
+  string type = 2;
+  repeated VNFLease leases = 3;
+}
+
+message GetBGPStatusRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CleanupLegacyNetworkRequest {
+  int64 network_id = 1 [(validate.rules).int64 = {gt: 0}];
+}

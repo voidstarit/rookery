@@ -1,0 +1,112 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// DiskService manages pre-created thin-LVM disks.
+service DiskService {
+  rpc ListDisks(ListDisksRequest) returns (ListDisksResponse) {
+    option (google.api.http) = {
+      get: "/api/disks"
+      response_body: "disks"
+    };
+  }
+
+  rpc GetDisk(GetDiskRequest) returns (Disk) {
+    option (google.api.http) = {get: "/api/disks/{id}"};
+  }
+
+  rpc CreateDisk(CreateDiskRequest) returns (Disk) {
+    option (google.api.http) = {
+      post: "/api/disks"
+      body: "*"
+    };
+  }
+
+  rpc UpdateDisk(UpdateDiskRequest) returns (Disk) {
+    option (google.api.http) = {
+      put: "/api/disks/{id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteDisk(DeleteDiskRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/disks/{id}"};
+  }
+}
+
+message VMDisk {
+  int64 id = 1;
+  string name = 2;
+  int32 size_gb = 3;
+  optional int64 storage_backend_id = 4;
+  string storage_backend_name = 5;
+  string vg = 6;
+  string thin_pool = 7;
+  string device = 8;
+}
+
+message Disk {
+  int64 id = 1;
+  string name = 2;
+  int32 size_gb = 3;
+  optional int64 storage_backend_id = 4;
+  string storage_backend_name = 5;
+  string vg = 6;
+  string thin_pool = 7;
+  string device = 8;
+  optional string attached_vm_id = 9;
+  string attached_vm_name = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+  bool is_template = 13;
+  optional int64 template_disk_id = 14;
+  string template_disk_name = 15;
+}
+
+message ImportableDisk {
+  string name = 1;
+  int32 size_gb = 2;
+  bool registered = 3;
+  optional int64 disk_id = 4;
+  optional string attached_vm_id = 5;
+  string attached_vm_name = 6;
+  string storage_backend_name = 7;
+}
+
+message ListDisksRequest {}
+
+message ListDisksResponse {
+  repeated Disk disks = 1;
+}
+
+message GetDiskRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateDiskRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 127
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  optional int32 size_gb = 2 [(validate.rules).int32 = {gte: 1, lte: 65536}];
+  optional int64 storage_backend_id = 3 [(validate.rules).int64 = {gt: 0}];
+  optional int64 template_disk_id = 4 [(validate.rules).int64 = {gt: 0}];
+  optional bool is_template = 5;
+}
+
+message UpdateDiskRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  optional bool is_template = 2;
+}
+
+message DeleteDiskRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}

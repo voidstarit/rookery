@@ -1,0 +1,135 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+import "rookery/v1/disk.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// StorageBackendService manages disk provisioning backends.
+service StorageBackendService {
+  rpc ListStorageBackends(ListStorageBackendsRequest) returns (ListStorageBackendsResponse) {
+    option (google.api.http) = {
+      get: "/api/storage-backends"
+      response_body: "backends"
+    };
+  }
+
+  rpc GetStorageBackend(GetStorageBackendRequest) returns (StorageBackend) {
+    option (google.api.http) = {get: "/api/storage-backends/{id}"};
+  }
+
+  rpc CreateStorageBackend(CreateStorageBackendRequest) returns (StorageBackend) {
+    option (google.api.http) = {
+      post: "/api/storage-backends"
+      body: "*"
+    };
+  }
+
+  rpc UpdateStorageBackend(UpdateStorageBackendRequest) returns (StorageBackend) {
+    option (google.api.http) = {
+      put: "/api/storage-backends/{id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteStorageBackend(DeleteStorageBackendRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/storage-backends/{id}"};
+  }
+
+  rpc ListImportableDisks(ListImportableDisksRequest) returns (ListImportableDisksResponse) {
+    option (google.api.http) = {
+      get: "/api/storage-backends/{id}/importable-disks"
+      response_body: "disks"
+    };
+  }
+
+  rpc ImportDisks(ImportDisksRequest) returns (ImportDisksResponse) {
+    option (google.api.http) = {
+      post: "/api/storage-backends/{id}/import-disks"
+      body: "*"
+      response_body: "disks"
+    };
+  }
+}
+
+message StorageBackendConfig {
+  string vg = 1 [(validate.rules).string = {max_len: 128}];
+  string thin_pool = 2 [(validate.rules).string = {max_len: 128}];
+  bool supports_templates = 3;
+  string preparation_script = 4 [(validate.rules).string = {max_len: 1024}];
+  string preparation_timeout = 5 [(validate.rules).string = {max_len: 32}];
+  bool allow_template_delete_with_clones = 6;
+}
+
+message StorageBackend {
+  int64 id = 1;
+  string name = 2;
+  string title = 3;
+  string description = 4;
+  string driver = 5;
+  StorageBackendConfig config = 6;
+  int32 disk_count = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+message ListStorageBackendsRequest {}
+
+message ListStorageBackendsResponse {
+  repeated StorageBackend backends = 1;
+}
+
+message GetStorageBackendRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateStorageBackendRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  string title = 2 [(validate.rules).string = {max_len: 128}];
+  string description = 3 [(validate.rules).string = {max_len: 2000}];
+  string driver = 4 [(validate.rules).string = {ignore_empty: true, in: ["lvm-thin"]}];
+  StorageBackendConfig config = 5;
+}
+
+message UpdateStorageBackendRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  string name = 2 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  string title = 3 [(validate.rules).string = {max_len: 128}];
+  string description = 4 [(validate.rules).string = {max_len: 2000}];
+  string driver = 5 [(validate.rules).string = {ignore_empty: true, in: ["lvm-thin"]}];
+  StorageBackendConfig config = 6;
+}
+
+message DeleteStorageBackendRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListImportableDisksRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListImportableDisksResponse {
+  repeated ImportableDisk disks = 1;
+}
+
+message ImportDisksRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  repeated string names = 2 [(validate.rules).repeated = {min_items: 1, max_items: 256, items: {string: {min_len: 1, max_len: 128}}}];
+}
+
+message ImportDisksResponse {
+  repeated Disk disks = 1;
+}

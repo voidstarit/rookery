@@ -1,0 +1,1 @@
+ALTER TABLE vnfs ADD COLUMN memif_host_name TEXT NOT NULL DEFAULT '';

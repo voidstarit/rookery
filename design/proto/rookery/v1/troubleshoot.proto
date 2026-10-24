@@ -1,0 +1,121 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// TroubleshootService exposes VPP topology and ACL diagnostics.
+service TroubleshootService {
+  rpc GetVPPGraph(GetVPPGraphRequest) returns (VPPGraph) {
+    option (google.api.http) = {get: "/api/troubleshoot/vpp-graph"};
+  }
+
+  rpc ListACLInterfaceCounters(ListACLInterfaceCountersRequest) returns (ListACLInterfaceCountersResponse) {
+    option (google.api.http) = {
+      get: "/api/troubleshoot/acl-counters"
+      response_body: "interfaces"
+    };
+  }
+
+  rpc ListTraceNodes(ListTraceNodesRequest) returns (ListTraceNodesResponse) {
+    option (google.api.http) = {
+      get: "/api/troubleshoot/trace/nodes"
+      response_body: "nodes"
+    };
+  }
+
+  rpc StartTrace(StartTraceRequest) returns (TraceResult) {
+    option (google.api.http) = {
+      post: "/api/troubleshoot/trace"
+      body: "*"
+    };
+  }
+
+  rpc GetTrace(GetTraceRequest) returns (TraceResult) {
+    option (google.api.http) = {get: "/api/troubleshoot/trace"};
+  }
+
+  rpc ClearTrace(ClearTraceRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/troubleshoot/trace"};
+  }
+}
+
+message ListTraceNodesRequest {}
+
+message ListTraceNodesResponse {
+  repeated string nodes = 1;
+}
+
+message StartTraceRequest {
+  string node = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 128
+    pattern: "^[A-Za-z0-9_.:-]+$"
+  }];
+  uint32 count = 2 [(validate.rules).uint32 = {gte: 1, lte: 1000}];
+}
+
+message GetTraceRequest {}
+
+message ClearTraceRequest {}
+
+message TraceResult {
+  string node = 1;
+  uint32 count = 2;
+  string raw = 3;
+  google.protobuf.Timestamp captured_at = 4;
+}
+
+message VPPGraphNode {
+  string id = 1;
+  string label = 2;
+  double width = 3;
+  double font_size = 4;
+  int32 fill = 5;
+}
+
+message VPPGraphEdge {
+  string source = 1;
+  string target = 2;
+}
+
+message VPPGraph {
+  repeated VPPGraphNode nodes = 1;
+  repeated VPPGraphEdge edges = 2;
+  google.protobuf.Timestamp generated_at = 3;
+}
+
+message GetVPPGraphRequest {}
+
+message ACLRuleCounter {
+  uint32 acl_index = 1;
+  uint32 rule_index = 2;
+  string action = 3;
+  uint64 matched = 4;
+}
+
+message ACLDirectionCounters {
+  uint64 matched = 1;
+  uint64 denied = 2;
+  uint64 permitted = 3;
+  repeated uint32 acl_indexes = 4;
+  repeated ACLRuleCounter rules = 5;
+}
+
+message ACLInterfaceCounters {
+  string interface = 1;
+  uint32 sw_if_index = 2;
+  ACLDirectionCounters ingress = 3;
+  ACLDirectionCounters egress = 4;
+}
+
+message ListACLInterfaceCountersRequest {}
+
+message ListACLInterfaceCountersResponse {
+  repeated ACLInterfaceCounters interfaces = 1;
+}

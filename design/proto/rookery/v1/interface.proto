@@ -1,0 +1,165 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// InterfaceService manages VPP vhost-user interfaces and their VM attachment.
+service InterfaceService {
+  rpc ListInterfaces(ListInterfacesRequest) returns (ListInterfacesResponse) {
+    option (google.api.http) = {
+      get: "/api/interfaces"
+      response_body: "interfaces"
+    };
+  }
+
+  rpc GetInterface(GetInterfaceRequest) returns (VirtualInterface) {
+    option (google.api.http) = {get: "/api/interfaces/{id}"};
+  }
+
+  rpc CreateInterface(CreateInterfaceRequest) returns (VirtualInterface) {
+    option (google.api.http) = {
+      post: "/api/interfaces"
+      body: "*"
+    };
+  }
+
+  rpc UpdateInterface(UpdateInterfaceRequest) returns (VirtualInterface) {
+    option (google.api.http) = {
+      put: "/api/interfaces/{id}"
+      body: "*"
+    };
+  }
+
+  rpc SetInterfaceACLs(SetInterfaceACLsRequest) returns (VirtualInterface) {
+    option (google.api.http) = {
+      put: "/api/interfaces/{id}/acls"
+      body: "*"
+    };
+  }
+
+  rpc DeleteInterface(DeleteInterfaceRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/interfaces/{id}"};
+  }
+
+  // ListInterfaceCounters returns cumulative VPP RX/TX counters for every
+  // registered virtual interface. It must be declared after GetInterface:
+  // grpc-gateway registers handlers in declaration order and tries the newest
+  // first, so the literal /api/interfaces/counters path must be registered
+  // after the /api/interfaces/{id} pattern to win over it.
+  rpc ListInterfaceCounters(ListInterfaceCountersRequest) returns (ListInterfaceCountersResponse) {
+    option (google.api.http) = {
+      get: "/api/interfaces/counters"
+      response_body: "interfaces"
+    };
+  }
+
+  // ResetInterfaceCounters clears the RX/TX counters for all VPP interfaces
+  // (vppctl clear interfaces). Like ListInterfaceCounters it must stay after
+  // DeleteInterface so the literal path beats /api/interfaces/{id}.
+  rpc ResetInterfaceCounters(ResetInterfaceCountersRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/interfaces/counters"};
+  }
+}
+
+message VirtualInterface {
+  int64 id = 1;
+  string name = 2;
+  int64 network_id = 3;
+  string network_name = 4;
+  string socket_path = 5;
+  string mac = 6;
+  uint32 sw_if_index = 7;
+  optional string attached_vm_id = 8;
+  string attached_vm_name = 9;
+  optional int64 ingress_acl_id = 10;
+  string ingress_acl_name = 11;
+  optional int64 egress_acl_id = 12;
+  string egress_acl_name = 13;
+  google.protobuf.Timestamp created_at = 14;
+  google.protobuf.Timestamp updated_at = 15;
+  repeated string ingress_acls = 16;
+  repeated string egress_acls = 17;
+  uint32 ipv4_table_id = 18;
+  uint32 ipv6_table_id = 19;
+  string ipv4_table_name = 20;
+  string ipv6_table_name = 21;
+}
+
+message VMInterface {
+  int64 id = 1;
+  string name = 2;
+  int64 network_id = 3;
+  string network_name = 4;
+  string socket_path = 5;
+  string mac = 6;
+  uint32 sw_if_index = 7;
+  string ingress_acl_name = 8;
+  string egress_acl_name = 9;
+}
+
+message ListInterfacesRequest {}
+
+message ListInterfacesResponse {
+  repeated VirtualInterface interfaces = 1;
+}
+
+message GetInterfaceRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateInterfaceRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  int64 network_id = 2 [(validate.rules).int64 = {gt: 0}];
+  optional string attached_vm_id = 3 [(validate.rules).string = {ignore_empty: true, uuid: true}];
+}
+
+message UpdateInterfaceRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  optional string attached_vm_id = 2 [(validate.rules).string = {ignore_empty: true, uuid: true}];
+}
+
+message SetInterfaceACLsRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  string ingress_acl = 2 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
+  string egress_acl = 3 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
+  repeated string ingress_acls = 4 [(validate.rules).repeated = {
+    max_items: 32
+    items: {string: {ignore_empty: true, max_len: 64}}
+  }];
+  repeated string egress_acls = 5 [(validate.rules).repeated = {
+    max_items: 32
+    items: {string: {ignore_empty: true, max_len: 64}}
+  }];
+}
+
+message DeleteInterfaceRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message InterfaceCounters {
+  string name = 1;
+  uint32 sw_if_index = 2;
+  uint64 rx_packets = 3;
+  uint64 tx_packets = 4;
+  uint64 rx_bytes = 5;
+  uint64 tx_bytes = 6;
+  google.protobuf.Timestamp sampled_at = 7;
+}
+
+message ListInterfaceCountersRequest {}
+
+message ListInterfaceCountersResponse {
+  repeated InterfaceCounters interfaces = 1;
+}
+
+message ResetInterfaceCountersRequest {}

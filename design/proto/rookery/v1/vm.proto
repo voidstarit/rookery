@@ -1,0 +1,176 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+import "rookery/v1/disk.proto";
+import "rookery/v1/interface.proto";
+import "rookery/v1/media.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// VMService manages virtual machines and their QEMU lifecycle.
+service VMService {
+  rpc ListVMs(ListVMsRequest) returns (ListVMsResponse) {
+    option (google.api.http) = {
+      get: "/api/vms"
+      response_body: "vms"
+    };
+  }
+
+  rpc GetVM(GetVMRequest) returns (VM) {
+    option (google.api.http) = {get: "/api/vms/{id}"};
+  }
+
+  rpc CreateVM(CreateVMRequest) returns (VM) {
+    option (google.api.http) = {
+      post: "/api/vms"
+      body: "*"
+    };
+  }
+
+  rpc UpdateVM(UpdateVMRequest) returns (VM) {
+    option (google.api.http) = {
+      put: "/api/vms/{id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteVM(DeleteVMRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/vms/{id}"};
+  }
+
+  rpc StartVM(StartVMRequest) returns (VM) {
+    option (google.api.http) = {post: "/api/vms/{id}/start"};
+  }
+
+  rpc StopVM(StopVMRequest) returns (VM) {
+    option (google.api.http) = {post: "/api/vms/{id}/stop"};
+  }
+
+  rpc ResetVM(ResetVMRequest) returns (VM) {
+    option (google.api.http) = {post: "/api/vms/{id}/reset"};
+  }
+
+  rpc CtrlAltDel(CtrlAltDelRequest) returns (VM) {
+    option (google.api.http) = {post: "/api/vms/{id}/ctrl-alt-del"};
+  }
+
+  rpc GetVMMetrics(GetVMMetricsRequest) returns (VMMetrics) {
+    option (google.api.http) = {get: "/api/vms/{id}/metrics"};
+  }
+}
+
+message VM {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string status = 4;
+  int32 vcpus = 5;
+  int32 memory_mb = 6;
+  optional int64 disk_id = 7;
+  VMDisk disk = 8;
+  repeated int64 disk_ids = 9;
+  repeated VMDisk disks = 10;
+  optional int64 boot_media_id = 11;
+  VMMedia boot_media = 12;
+  repeated VMInterface interfaces = 13;
+  bool console_enabled = 14;
+  google.protobuf.Timestamp created_at = 15;
+  google.protobuf.Timestamp updated_at = 16;
+}
+
+message ListVMsRequest {}
+
+message ListVMsResponse {
+  repeated VM vms = 1;
+}
+
+message GetVMRequest {
+  string id = 1 [(validate.rules).string.uuid = true];
+}
+
+message CreateVMRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  string description = 2 [(validate.rules).string = {max_len: 2000}];
+  optional string status = 3 [(validate.rules).string = {max_len: 32}];
+  optional int32 vcpus = 4 [(validate.rules).int32 = {gte: 1, lte: 128}];
+  optional int32 memory_mb = 5 [(validate.rules).int32 = {gte: 128, lte: 1048576}];
+  optional int64 boot_media_id = 6 [(validate.rules).int64 = {gt: 0}];
+  optional bool console_enabled = 7;
+  repeated int64 interface_ids = 8;
+  repeated int64 disk_ids = 9;
+  optional int64 disk_id = 10 [(validate.rules).int64 = {gt: 0}];
+}
+
+message UpdateVMRequest {
+  string id = 1 [(validate.rules).string.uuid = true];
+  optional string name = 2 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  optional string description = 3 [(validate.rules).string = {max_len: 2000}];
+  optional string status = 4 [(validate.rules).string = {max_len: 32}];
+  optional int32 vcpus = 5 [(validate.rules).int32 = {gte: 1, lte: 128}];
+  optional int32 memory_mb = 6 [(validate.rules).int32 = {gte: 128, lte: 1048576}];
+  optional int64 boot_media_id = 7 [(validate.rules).int64 = {gt: 0}];
+  optional bool console_enabled = 8;
+  repeated int64 interface_ids = 9;
+  repeated int64 disk_ids = 10;
+  // Explicit replacement lets clients clear the interface set. Disks cannot
+  // be cleared because every VM requires at least one disk.
+  optional bool replace_interface_ids = 11;
+  optional bool replace_disk_ids = 12;
+}
+
+message DeleteVMRequest {
+  string id = 1 [(validate.rules).string.uuid = true];
+}
+
+message StartVMRequest {
+  string id = 1 [(validate.rules).string.uuid = true];
+}
+
+message StopVMRequest {
+  string id = 1 [(validate.rules).string.uuid = true];
+}
+
+message ResetVMRequest {
+  string id = 1 [(validate.rules).string.uuid = true];
+}
+
+message CtrlAltDelRequest {
+  string id = 1 [(validate.rules).string.uuid = true];
+}
+
+message GetVMMetricsRequest {
+  string id = 1 [(validate.rules).string.uuid = true];
+}
+
+message VMMetrics {
+  bool running = 1;
+  int32 pid = 2;
+  uint64 uptime_seconds = 3;
+  double cpu_seconds_total = 4;
+  uint64 memory_rss_bytes = 5;
+  uint64 memory_virtual_bytes = 6;
+  uint64 disk_read_bytes_total = 7;
+  uint64 disk_write_bytes_total = 8;
+  string vm_id = 9;
+  string name = 10;
+  int32 vcpus = 11;
+  int32 memory_mb = 12;
+  uint64 network_rx_bytes_total = 13;
+  uint64 network_tx_bytes_total = 14;
+  uint64 network_rx_packets_total = 15;
+  uint64 network_tx_packets_total = 16;
+  google.protobuf.Timestamp sampled_at = 17;
+}

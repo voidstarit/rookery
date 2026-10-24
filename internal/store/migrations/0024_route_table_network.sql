@@ -1,0 +1,1 @@
+ALTER TABLE route_tables ADD COLUMN network_id INTEGER NOT NULL DEFAULT 0;

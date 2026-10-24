@@ -1,0 +1,252 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// VNFService manages DHCP, NAT44, BGP, and DNS network functions.
+service VNFService {
+  rpc ListVNFs(ListVNFsRequest) returns (ListVNFsResponse) {
+    option (google.api.http) = {
+      get: "/api/vnfs"
+      response_body: "vnfs"
+    };
+  }
+
+  rpc GetVNF(GetVNFRequest) returns (VNF) {
+    option (google.api.http) = {get: "/api/vnfs/{id}"};
+  }
+
+  rpc CreateVNF(CreateVNFRequest) returns (VNF) {
+    option (google.api.http) = {
+      post: "/api/vnfs"
+      body: "*"
+    };
+  }
+
+  rpc UpdateVNF(UpdateVNFRequest) returns (VNF) {
+    option (google.api.http) = {
+      put: "/api/vnfs/{id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteVNF(DeleteVNFRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/vnfs/{id}"};
+  }
+
+  rpc RestartVNF(RestartVNFRequest) returns (VNF) {
+    option (google.api.http) = {post: "/api/vnfs/{id}/restart"};
+  }
+
+  rpc ListVNFLeases(ListVNFLeasesRequest) returns (ListVNFLeasesResponse) {
+    option (google.api.http) = {get: "/api/vnfs/{id}/leases"};
+  }
+
+  rpc ListVNFSessions(ListVNFSessionsRequest) returns (ListVNFSessionsResponse) {
+    option (google.api.http) = {get: "/api/vnfs/{id}/sessions"};
+  }
+
+  rpc GetVNFBGP(GetVNFBGPRequest) returns (VNFBGPStatus) {
+    option (google.api.http) = {get: "/api/vnfs/{id}/bgp"};
+  }
+}
+
+message DHCPStaticAssignment {
+  string mac = 1 [(validate.rules).string = {
+    pattern: "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$"
+  }];
+  string ip = 2 [(validate.rules).string.ipv4 = true];
+}
+
+message DNATRule {
+  string protocol = 1 [(validate.rules).string = {in: ["tcp", "udp"]}];
+  int32 external_port = 2 [(validate.rules).int32 = {gte: 1, lte: 65535}];
+  string local_ip = 3 [(validate.rules).string.ipv4 = true];
+  int32 local_port = 4 [(validate.rules).int32 = {gte: 1, lte: 65535}];
+}
+
+// DNSRecord is one local record served by a DNS VNF. Name is a fully qualified
+// domain name; wildcard names such as *.lab1.test are supported. Type is A,
+// AAAA, CNAME, or TXT.
+message DNSRecord {
+  string name = 1 [(validate.rules).string = {min_len: 1, max_len: 255}];
+  string type = 2 [(validate.rules).string = {min_len: 1, max_len: 16}];
+  string value = 3 [(validate.rules).string = {min_len: 1, max_len: 512}];
+  uint32 ttl = 4 [(validate.rules).uint32 = {lte: 86400}];
+}
+
+// DHCPOption is an extra DHCPv4/DHCPv6 option advertised by a DHCP VNF.
+// Format selects how Value is encoded: string, ipv4, ipv6, hex, uint8, uint16,
+// uint32, or domain-list. Server-managed option codes are rejected.
+message DHCPOption {
+  uint32 code = 1 [(validate.rules).uint32 = {gte: 1, lte: 65535}];
+  string format = 2 [(validate.rules).string = {ignore_empty: true, max_len: 32}];
+  string value = 3 [(validate.rules).string = {max_len: 1024}];
+}
+
+message VNFConfig {
+  string gateway = 1 [(validate.rules).string = {max_len: 64}];
+  string range_start = 2 [(validate.rules).string = {max_len: 64}];
+  string range_end = 3 [(validate.rules).string = {max_len: 64}];
+  string dns = 4 [(validate.rules).string = {max_len: 256}];
+  string lease_time = 5 [(validate.rules).string = {max_len: 32}];
+  string bind_ip = 6 [(validate.rules).string = {max_len: 64}];
+  repeated DHCPStaticAssignment static_assignments = 7 [(validate.rules).repeated = {max_items: 256}];
+  string outside_interface = 8 [(validate.rules).string = {max_len: 64}];
+  string outside_address = 9 [(validate.rules).string = {max_len: 64}];
+  string outside_gateway = 10 [(validate.rules).string = {max_len: 64}];
+  string nat44_pool = 11 [(validate.rules).string = {max_len: 128}];
+  repeated DNATRule dnat_rules = 12 [(validate.rules).repeated = {max_items: 256}];
+
+  // Transport override for DHCPv4: shared, dedicated, or tap. memif is a
+  // legacy alias for dedicated memif. Empty selects the network default.
+  // BGP supports tap and memif (dedicated) transport.
+  string transport = 13 [(validate.rules).string = {in: ["", "memif", "tap", "shared", "dedicated"]}];
+  uint32 local_as = 14;
+  string router_id = 15 [(validate.rules).string = {max_len: 64}];
+  uint32 peer_as = 16;
+  string peer_ip = 17 [(validate.rules).string = {max_len: 64}];
+  string local_ip = 18 [(validate.rules).string = {max_len: 64}];
+  string peer_gateway = 19 [(validate.rules).string = {max_len: 64}];
+  uint32 multihop_ttl = 20;
+  string password = 21 [(validate.rules).string = {max_len: 128}];
+  bool passive = 22;
+  uint32 target_table_id = 23;
+  repeated string advertise_prefixes = 24 [(validate.rules).repeated = {max_items: 1024}];
+  // next_hop overrides the BGP NEXT_HOP for advertised prefixes. Empty means
+  // use local_ip. Must match the local_ip address family.
+  string next_hop = 25 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
+
+  // DNS configuration. Records are served authoritatively; names without a
+  // local record are forwarded when dns_forward is enabled. If dns_forward is
+  // enabled and dns_forwarders is empty, the daemon uses the host resolver
+  // configuration (/etc/resolv.conf).
+  repeated DNSRecord dns_records = 26 [(validate.rules).repeated = {max_items: 1024}];
+  bool dns_forward = 27;
+  repeated string dns_forwarders = 28 [(validate.rules).repeated = {
+    max_items: 16
+    items: {string: {ignore_empty: true, max_len: 64}}
+  }];
+
+  // Extra DHCPv4/DHCPv6 options advertised by a DHCP VNF. DNS (v4 option 6,
+  // v6 option 23) and server-managed options are rejected; use config.dns for
+  // DNS servers.
+  repeated DHCPOption dhcp_options = 29 [(validate.rules).repeated = {max_items: 64}];
+}
+
+message VNF {
+  int64 id = 1;
+  string name = 2;
+  int64 network_id = 3;
+  string network_name = 4;
+  string type = 5;
+  bool enabled = 6;
+  VNFConfig config = 7;
+  uint32 tap_sw_if_index = 8;
+  string tap_host_name = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+  string status = 12;
+  string status_detail = 13;
+  int32 lease_count = 14;
+}
+
+message VNFLease {
+  string client_id = 1;
+  string address = 2;
+  string hostname = 3;
+  google.protobuf.Timestamp expires_at = 4;
+  bool active = 5;
+}
+
+message ListVNFsRequest {
+  optional int64 network_id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListVNFsResponse {
+  repeated VNF vnfs = 1;
+}
+
+message GetVNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateVNFRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  int64 network_id = 2 [(validate.rules).int64 = {gt: 0}];
+  string type = 3 [(validate.rules).string = {in: ["dhcpv4", "dhcpv6", "nat44", "bgp", "dns"]}];
+  optional bool enabled = 4;
+  VNFConfig config = 5;
+}
+
+message UpdateVNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  optional string name = 2 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  optional bool enabled = 3;
+  optional VNFConfig config = 4;
+}
+
+message DeleteVNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message RestartVNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListVNFLeasesRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListVNFLeasesResponse {
+  int64 vnf_id = 1;
+  string type = 2;
+  repeated VNFLease leases = 3;
+}
+
+message ListVNFSessionsRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListVNFSessionsResponse {
+  int64 vnf_id = 1;
+  string type = 2;
+  repeated string sessions = 3;
+}
+
+message VNFBGPReceivedPrefix {
+  string prefix = 1;
+  string next_hop = 2;
+  repeated uint32 as_path = 3;
+}
+
+message VNFBGPStatus {
+  int64 vnf_id = 1;
+  string type = 2;
+  bool running = 3;
+  bool established = 4;
+  string session_state = 5;
+  string peer_address = 6;
+  uint32 peer_as = 7;
+  uint32 local_as = 8;
+  repeated string advertised = 9;
+  repeated VNFBGPReceivedPrefix received = 10;
+}
+
+message GetVNFBGPRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}

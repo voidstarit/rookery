@@ -1,0 +1,43 @@
+name: Bug report
+description: Report a reproducible bug
+title: "[bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include passwords, private keys, client certificates, or other secrets.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Include commands, configuration, and a minimal example if possible.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Rookery version
+      description: Release tag or commit SHA
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Distribution, kernel, QEMU, VPP, LVM, and Terraform versions as relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant logs with secrets redacted
+      render: text

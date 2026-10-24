@@ -1,0 +1,415 @@
+:root {
+  color-scheme: dark;
+  --bg: #060a0f;
+  --bar: #0c151e;
+  --border: #1f2d3b;
+  --text: #e7eef6;
+  --muted: #8fa1b3;
+  --faint: #647689;
+  --accent: #5eead4;
+  --danger: #fb7185;
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  background: var(--bg);
+}
+
+#console-root {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+}
+
+.console-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bar);
+}
+
+.console-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-mark {
+  display: block;
+  flex: none;
+  width: 1.8rem;
+  height: 1.8rem;
+  object-fit: cover;
+  border: 1px solid rgba(94, 234, 212, 0.35);
+  border-radius: 8px;
+  background: #0a1119;
+}
+
+.console-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.console-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.28rem 0.6rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.console-status::before {
+  width: 0.4rem;
+  height: 0.4rem;
+  content: "";
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.console-status[data-state="ready"] {
+  color: #a7f3d0;
+  border-color: rgba(52, 211, 153, 0.3);
+}
+
+.console-status[data-state="ready"]::before {
+  background: #34d399;
+}
+
+.console-status[data-state="error"] {
+  color: #fecdd3;
+  border-color: rgba(251, 113, 133, 0.35);
+}
+
+.console-status[data-state="error"]::before {
+  background: var(--danger);
+}
+
+.console-button {
+  padding: 0.38rem 0.65rem;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.console-button:hover:not(:disabled) {
+  color: var(--text);
+  border-color: #314356;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.console-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.console-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.console-screen {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.console-screen canvas {
+  display: block;
+  outline: none;
+}
+
+.virtual-keyboard {
+  flex: none;
+  max-height: 42vh;
+  padding: 0.6rem 0.75rem;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+  background: var(--bar);
+}
+
+.vk-hint {
+  max-width: 100%;
+  margin: 0 auto 0.5rem;
+  color: var(--faint);
+  font-size: 0.68rem;
+  text-align: center;
+}
+
+.vk-row {
+  display: flex;
+  gap: 0.3rem;
+  width: max-content;
+  margin: 0 auto 0.3rem;
+}
+
+.vk-row:last-child {
+  margin-bottom: 0;
+}
+
+.vk-key {
+  min-width: 2.1rem;
+  padding: 0.42rem 0.48rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #0a1119;
+  cursor: pointer;
+  user-select: none;
+}
+
+.vk-key:hover:not(:disabled) {
+  color: var(--text);
+  border-color: #314356;
+  background: #101923;
+}
+
+.vk-key:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.vk-key.active {
+  color: var(--accent-ink);
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.vk-key:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.vk-wide {
+  min-width: 3.4rem;
+}
+
+.vk-xwide {
+  min-width: 7rem;
+}
+
+.vk-space {
+  min-width: 10rem;
+}
+
+.console-error {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  left: 1rem;
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 0.7rem 0.9rem;
+  color: #fecdd3;
+  font-size: 0.82rem;
+  text-align: center;
+  border: 1px solid rgba(251, 113, 133, 0.35);
+  border-radius: 10px;
+  background: #1a0f14;
+}
+
+.clipboard-dialog {
+  width: min(34rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  padding: 0;
+  overflow: auto;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bar);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+}
+
+.clipboard-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.68);
+}
+
+.clipboard-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 1.1rem;
+}
+
+.clipboard-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.clipboard-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  letter-spacing: -0.02em;
+}
+
+.clipboard-eyebrow {
+  margin: 0 0 0.25rem;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.clipboard-close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  padding: 0;
+  color: var(--muted);
+  font-size: 1.2rem;
+  line-height: 1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.clipboard-close:hover {
+  color: var(--text);
+  border-color: #314356;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.clipboard-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.clipboard-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.clipboard-hint code {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+}
+
+.clipboard-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.clipboard-field textarea {
+  width: 100%;
+  min-height: 10rem;
+  padding: 0.7rem 0.8rem;
+  resize: vertical;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  outline: none;
+  background: #060d14;
+}
+
+.clipboard-field textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(94, 234, 212, 0.12);
+}
+
+.clipboard-error {
+  margin: 0;
+  color: #fecdd3;
+  font-size: 0.78rem;
+}
+
+.clipboard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  padding-top: 0.15rem;
+}
+
+.clipboard-send {
+  color: #04211d;
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.clipboard-send:hover:not(:disabled) {
+  color: #02110f;
+  border-color: #8ff7e7;
+  background: #8ff7e7;
+}
+
+@media (max-width: 640px) {
+  .console-bar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+
+  .console-actions {
+    justify-content: flex-start;
+  }
+}
