@@ -60,11 +60,11 @@ step only if a consumer requires it.
 - Proto package: `rookery.v1`
 - Go package: `github.com/voidstarit/rookery/design/gen/rookery/v1`
 - HTTP routes preserve the existing `/api/...` paths via `google.api.http`.
-- The future gateway must enable `UseProtoNames: true` for snake_case JSON.
+- The gateway enables `UseProtoNames: true` for snake_case JSON.
 - List RPCs use `response_body` so gateway responses remain arrays.
 - Timestamps use `google.protobuf.Timestamp`.
 - Nullable IDs use proto3 `optional`.
-- Error handling is not generated: the gateway will map gRPC errors back to the
+- Error handling is not generated: the gateway maps gRPC errors back to the
   existing `{"error":"..."}` response shape.
 - WebSocket VNC, WebShark SSE/static assets, and pcap downloads stay on native
   HTTP handlers because grpc-gateway does not proxy those protocols.
@@ -82,11 +82,12 @@ small domain validator until they are moved into proto-level CEL rules.
 
 ## Native exceptions
 
-The following remain outside the unary gRPC/gateway surface initially:
+The following remain outside the unary gRPC/gateway surface:
 
 - `GET /ws/vms/{id}/vnc` — WebSocket
 - `/webshark/*` — vendored WebShark UI and SSE
-- `GET /api/troubleshoot/capture/files/{name}` — streamed pcap download
+- `GET /api/troubleshoot/capture/files/*` — streamed pcap download
+- `/api/pki/*` — CA download and client-certificate issue/list/revoke
 - static UI assets
 
 ## Migration status
@@ -103,7 +104,7 @@ a custom marshaler, keeps list responses as arrays, and returns `201` for
 creates and `204` for deletes.
 
 The main `serve` listener routes `/api` through the gateway. `api.Server.NativeHandler`
-serves only native VNC WebSocket, WebShark, pcap-download, and static UI paths. VM lifecycle and disk provisioning share the API server's mutexes so native and
+serves only native VNC WebSocket, WebShark, pcap-download, PKI, and static UI paths. VM lifecycle and disk provisioning share the API server's mutexes so native and
 gateway operations remain serialized. VNF writes and network deletion are implemented in
 `internal/lifecycle`, backed by the VPP/NAT/DHCP runtime in `internal/api`. `-gateway-addr` adds an
 optional second gateway HTTP listener and `-grpc-addr` exposes direct gRPC.

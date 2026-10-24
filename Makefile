@@ -54,7 +54,9 @@ release: ui-build
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o $(RELEASE_STAGE)/rookery ./cmd/rookery
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o $(RELEASE_STAGE)/vnfs ./cmd/vnfs
 	install -m 0644 README.md config.example.yaml $(RELEASE_STAGE)/
-	install -d $(RELEASE_STAGE)/scripts
+	install -d $(RELEASE_STAGE)/docs $(RELEASE_STAGE)/scripts
+	install -m 0644 docs/*.md $(RELEASE_STAGE)/docs/
+	install -m 0644 scripts/README.md $(RELEASE_STAGE)/scripts/
 	install -m 0755 scripts/lvm-thin-snapshot-disk.sh $(RELEASE_STAGE)/scripts/
 	tar -C $(RELEASE_DIR) -czf $(RELEASE_ARCHIVE) $(RELEASE_NAME)
 	cd $(RELEASE_DIR) && sha256sum $(RELEASE_NAME).tar.gz > $(RELEASE_NAME).tar.gz.sha256
