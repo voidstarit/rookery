@@ -574,7 +574,7 @@ export function ConsoleApp() {
     <>
       <header class="console-bar">
         <div class="console-title">
-          <span class="brand-mark" aria-hidden="true">◈</span>
+          <img class="brand-mark" src="/icon.png" alt="" />
           <span id="console-title">{vmName}</span>
         </div>
         <div class="console-actions">

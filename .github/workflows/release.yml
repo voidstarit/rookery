@@ -64,6 +64,7 @@ jobs:
           test -x "dist/rookery-${RELEASE_TAG}-linux-amd64/vnfs"
           test -x "dist/rookery-${RELEASE_TAG}-linux-amd64/${PROVIDER_ASSET}"
           test -f "dist/rookery-${RELEASE_TAG}-linux-amd64/docs/imgs/vms.png"
+          test -f "dist/rookery-${RELEASE_TAG}-linux-amd64/docs/imgs/icon.png"
           test -f "dist/rookery-${RELEASE_TAG}-linux-amd64/${PROVIDER_ASSET}.sha256"
           (cd "dist/rookery-${RELEASE_TAG}-linux-amd64" && sha256sum -c "${PROVIDER_ASSET}.sha256")
           (cd dist && sha256sum -c "rookery-${RELEASE_TAG}-linux-amd64.tar.gz.sha256")

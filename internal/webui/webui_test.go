@@ -56,3 +56,32 @@ func TestStaticAssetsStillServed(t *testing.T) {
 		t.Fatal("asset route did not serve the embedded bundle")
 	}
 }
+
+func TestUIIconIsServedAndReferenced(t *testing.T) {
+	handler := Handler()
+
+	request := httptest.NewRequest(http.MethodGet, "/icon.png", nil)
+	request.Header.Set("Accept", "image/*")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("icon status = %d, want 200", recorder.Code)
+	}
+	if !strings.Contains(recorder.Header().Get("Content-Type"), "image/png") {
+		t.Fatalf("icon content type = %q, want image/png", recorder.Header().Get("Content-Type"))
+	}
+	if recorder.Body.Len() == 0 {
+		t.Fatal("icon response was empty")
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/", nil)
+	request.Header.Set("Accept", "text/html")
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	body := recorder.Body.String()
+	if !strings.Contains(body, `href="/icon.png"`) || !strings.Contains(body, `src="/icon.png"`) {
+		t.Fatal("index page does not reference the UI icon")
+	}
+}

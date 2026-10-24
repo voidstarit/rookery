@@ -4753,7 +4753,7 @@ func TestHealthAndEmbeddedUI(t *testing.T) {
 		t.Fatal("Content-Security-Policy header is missing")
 	}
 
-	for _, asset := range []string{"/build/app.js", "/style.css", "/favicon.svg", "/console.html", "/build/console.js", "/console.css", "/novnc/core/rfb.js", "/novnc/LICENSE.txt"} {
+	for _, asset := range []string{"/build/app.js", "/style.css", "/icon.png", "/console.html", "/build/console.js", "/console.css", "/novnc/core/rfb.js", "/novnc/LICENSE.txt"} {
 		recorder = do(t, handler, http.MethodGet, asset, nil)
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("%s status = %d", asset, recorder.Code)

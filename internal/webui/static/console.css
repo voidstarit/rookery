@@ -66,16 +66,14 @@ body {
 }
 
 .brand-mark {
-  display: grid;
+  display: block;
   flex: none;
-  place-items: center;
   width: 1.8rem;
   height: 1.8rem;
-  color: var(--accent);
-  font-size: 1rem;
+  object-fit: cover;
   border: 1px solid rgba(94, 234, 212, 0.35);
   border-radius: 8px;
-  background: rgba(94, 234, 212, 0.07);
+  background: #0a1119;
 }
 
 .console-actions {
