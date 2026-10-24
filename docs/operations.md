@@ -9,8 +9,10 @@ public API.
 
 Prebuilt static binaries for Linux x86_64/amd64 are published on the
 [releases page](https://github.com/voidstarit/rookery/releases). The release
-archive contains `rookery`, `vnfs`, `config.example.yaml`, the `docs/`
-documentation set, and the LVM snapshot helper script.
+archive contains `rookery`, `vnfs`, `terraform-provider-rookery`,
+`config.example.yaml`, the `docs/` documentation set, and the LVM snapshot
+helper script. The Terraform provider is also published as a standalone
+release asset.
 
 For a source build, see [Development](development.md).
 

@@ -50,8 +50,9 @@ is unavailable. Use `go test -short ./...` to skip it explicitly.
 ## Releases
 
 Pushing a tag such as `v0.1.0` runs `.github/workflows/release.yml`, builds the
-API server and VNF daemon for Linux x86_64/amd64, and attaches a versioned
-archive plus SHA-256 checksum to the GitHub release. Publishing an existing
+API server, VNF daemon, and Terraform provider for Linux x86_64/amd64, and
+attaches a versioned archive, the standalone provider, and SHA-256 checksums
+to the GitHub release. Publishing an existing
 release also triggers the workflow, and it can be run manually from the Actions
 tab with an existing tag (for example `v0.1.0`).
 
@@ -59,6 +60,8 @@ tab with an existing tag (for example `v0.1.0`).
 rookery-v0.1.0-linux-amd64.tar.gz
   rookery
   vnfs
+  terraform-provider-rookery
+  terraform-provider-rookery.sha256
   config.example.yaml
   README.md
   docs/
@@ -75,10 +78,12 @@ make release VERSION=v0.1.0
 
 If a release already exists but only shows GitHub's generated source archives,
 open **Actions → Release → Run workflow**, enter the existing tag, and run it.
-That uploads the binary archive to the existing release.
+That uploads the binary archive and the standalone Terraform provider to the
+existing release.
 
 Binaries are statically linked (`CGO_ENABLED=0`), stripped, and built with
-`-trimpath`; the Terraform provider is intentionally not part of this archive.
+`-trimpath`. The Terraform provider is built with its version set from the
+release tag and is also uploaded as a standalone release asset.
 
 
 ## Protobuf generation

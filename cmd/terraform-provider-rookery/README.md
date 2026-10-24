@@ -15,7 +15,10 @@ development override:
 go build -o bin/terraform-provider-rookery ./cmd/terraform-provider-rookery
 ```
 
-`make build` also builds it into `bin/terraform-provider-rookery`.
+`make build` also builds it into `bin/terraform-provider-rookery`. The
+Linux release archive contains a prebuilt `terraform-provider-rookery` with its
+version set from the release tag; the same binary is published as a standalone
+release asset.
 
 For local development, use Terraform's `dev_overrides` instead of installing
 the provider from a registry. The override points at the **directory**

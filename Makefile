@@ -6,6 +6,7 @@ API_BIN := $(BIN_DIR)/rookery
 VNF_BIN := $(BIN_DIR)/vnfs
 PROVIDER_BIN := $(BIN_DIR)/terraform-provider-rookery
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+PROVIDER_VERSION := $(patsubst v%,%,$(VERSION))
 RELEASE_DIR := dist
 RELEASE_NAME := rookery-$(VERSION)-linux-amd64
 RELEASE_STAGE := $(RELEASE_DIR)/$(RELEASE_NAME)
@@ -46,13 +47,15 @@ build: ui-build
 	go build -o $(VNF_BIN) ./cmd/vnfs
 	go build -o $(PROVIDER_BIN) ./cmd/terraform-provider-rookery
 
-# Build the x86_64 Linux API and VNF daemon archive published by the release
-# workflow. This intentionally excludes the Terraform provider.
+# Build the x86_64 Linux API, VNF daemon, and Terraform provider archive
+# published by the release workflow.
 release: ui-build
 	rm -rf $(RELEASE_STAGE) $(RELEASE_ARCHIVE) $(RELEASE_ARCHIVE).sha256
 	mkdir -p $(RELEASE_STAGE)
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o $(RELEASE_STAGE)/rookery ./cmd/rookery
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o $(RELEASE_STAGE)/vnfs ./cmd/vnfs
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$(PROVIDER_VERSION)" -o $(RELEASE_STAGE)/terraform-provider-rookery ./cmd/terraform-provider-rookery
+	cd $(RELEASE_STAGE) && sha256sum terraform-provider-rookery > terraform-provider-rookery.sha256
 	install -m 0644 README.md config.example.yaml $(RELEASE_STAGE)/
 	install -d $(RELEASE_STAGE)/docs $(RELEASE_STAGE)/scripts
 	install -m 0644 docs/*.md $(RELEASE_STAGE)/docs/

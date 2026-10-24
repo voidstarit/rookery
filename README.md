@@ -61,7 +61,8 @@ Build only:
 - Node.js 24 and npm for rebuilding the web UI
 
 No external DHCP or DNS server is required. The release archive contains
-static `rookery` and `vnfs` binaries and does not require Go or Node.
+static `rookery`, `vnfs`, and `terraform-provider-rookery` binaries and does not
+require Go or Node.
 
 The API intentionally has **no authentication** on its local HTTP listener,
 including the VNC proxy. Keep it on localhost or behind an access-controlled
@@ -134,9 +135,10 @@ Create storage backends, disks, media, VMs, networks, interfaces, ACLs, route
 tables, and VNFs from the UI. The API also exposes generated REST and gRPC
 services; public remote access is available through the mTLS listeners.
 
-For Terraform, download a client certificate from **Client certificates** in
-the UI and configure the provider shown in
-[docs/api.md#terraform-provider](docs/api.md#terraform-provider).
+The release also publishes `terraform-provider-rookery` standalone and inside
+the archive. For Terraform, put that binary in a directory, download a client
+certificate from **Client certificates** in the UI, and configure the provider
+as shown in [docs/api.md#terraform-provider](docs/api.md#terraform-provider).
 
 ## Documentation
 

@@ -52,13 +52,19 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Build API and VNF daemon
+      - name: Build API, VNF daemon, and Terraform provider
         run: make release VERSION="${RELEASE_TAG}"
 
       - name: Verify archive contents
         run: |
           tar -tzf "dist/rookery-${RELEASE_TAG}-linux-amd64.tar.gz"
           test -f "dist/rookery-${RELEASE_TAG}-linux-amd64.tar.gz.sha256"
+          test -x "dist/rookery-${RELEASE_TAG}-linux-amd64/rookery"
+          test -x "dist/rookery-${RELEASE_TAG}-linux-amd64/vnfs"
+          test -x "dist/rookery-${RELEASE_TAG}-linux-amd64/terraform-provider-rookery"
+          test -f "dist/rookery-${RELEASE_TAG}-linux-amd64/terraform-provider-rookery.sha256"
+          (cd "dist/rookery-${RELEASE_TAG}-linux-amd64" && sha256sum -c terraform-provider-rookery.sha256)
+          (cd dist && sha256sum -c "rookery-${RELEASE_TAG}-linux-amd64.tar.gz.sha256")
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
@@ -67,6 +73,8 @@ jobs:
           path: |
             dist/rookery-${{ env.RELEASE_TAG }}-linux-amd64.tar.gz
             dist/rookery-${{ env.RELEASE_TAG }}-linux-amd64.tar.gz.sha256
+            dist/rookery-${{ env.RELEASE_TAG }}-linux-amd64/terraform-provider-rookery
+            dist/rookery-${{ env.RELEASE_TAG }}-linux-amd64/terraform-provider-rookery.sha256
           if-no-files-found: error
 
       - name: Publish GitHub release
@@ -77,11 +85,15 @@ jobs:
             gh release upload "${RELEASE_TAG}" \
               "dist/rookery-${RELEASE_TAG}-linux-amd64.tar.gz" \
               "dist/rookery-${RELEASE_TAG}-linux-amd64.tar.gz.sha256" \
+              "dist/rookery-${RELEASE_TAG}-linux-amd64/terraform-provider-rookery" \
+              "dist/rookery-${RELEASE_TAG}-linux-amd64/terraform-provider-rookery.sha256" \
               --clobber
           else
             gh release create "${RELEASE_TAG}" \
               "dist/rookery-${RELEASE_TAG}-linux-amd64.tar.gz" \
               "dist/rookery-${RELEASE_TAG}-linux-amd64.tar.gz.sha256" \
+              "dist/rookery-${RELEASE_TAG}-linux-amd64/terraform-provider-rookery" \
+              "dist/rookery-${RELEASE_TAG}-linux-amd64/terraform-provider-rookery.sha256" \
               --title "${RELEASE_TAG}" \
               --generate-notes
           fi

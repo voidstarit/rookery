@@ -66,9 +66,12 @@ provider "rookery" {
 }
 ```
 
-See `cmd/terraform-provider-rookery/README.md` in the source tree for the
-resource and data source list, local `dev_overrides` setup, import formats, and
-examples.
+The `linux-amd64` release archive contains a prebuilt
+`terraform-provider-rookery` binary, and the same binary is published as a
+standalone release asset with its own SHA-256 file. Put it in a directory and
+point Terraform `dev_overrides` at that directory. See
+`cmd/terraform-provider-rookery/README.md` in the source tree for the resource
+and data source list, local `dev_overrides` setup, import formats, and examples.
 
 
 ## Protobuf API design
