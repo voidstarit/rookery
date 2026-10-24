@@ -5,7 +5,7 @@ starting work so the approach can be discussed.
 
 ## Development
 
-Requirements are Go 1.24 or newer, Node.js 24, and npm.
+Requirements are Go 1.26 or newer, Node.js 24, and npm.
 
 ```sh
 make test        # UI build + go test ./...

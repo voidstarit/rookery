@@ -47,7 +47,7 @@ running VMs.
 
 ## Host prerequisites
 
-- Go 1.24 or newer (build only)
+- Go 1.26 or newer (build only)
 - LVM2 tools (`vgs`, `lvs`, `lvcreate`) and an existing volume group
 - FD.io VPP with its binary API enabled (`socksvr`), normally `/run/vpp/api.sock`
 - The VPP vhost-user plugin (`vpp-plugin-core`) installed and loaded; check with

@@ -881,7 +881,7 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                           required
                           min={1}
                           max={form.type === "dhcpv6" ? 65535 : 254}
-                          list={`dhcp-option-codes-${form.type}`}
+                          {...{ list: `dhcp-option-codes-${form.type}` }}
                           value={option.code || ""}
                           onInput={(event) =>
                             updateDHCPOptionCode(index, Number(event.currentTarget.value))
