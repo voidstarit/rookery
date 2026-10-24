@@ -22,7 +22,7 @@ require (
 	modernc.org/sqlite v1.45.0
 )
 
-require github.com/miekg/dns v1.1.72
+require github.com/miekg/dns v1.1.73
 
 require (
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
@@ -46,10 +46,7 @@ require (
 	github.com/vishvananda/netns v0.0.5 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
-	golang.org/x/mod v0.42.0 // indirect
-	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/time v0.7.0 // indirect
-	golang.org/x/tools v0.52.0 // indirect
 )
 
 require (
