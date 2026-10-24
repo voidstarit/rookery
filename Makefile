@@ -7,6 +7,7 @@ VNF_BIN := $(BIN_DIR)/vnfs
 PROVIDER_BIN := $(BIN_DIR)/terraform-provider-rookery
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 PROVIDER_VERSION := $(patsubst v%,%,$(VERSION))
+PROVIDER_RELEASE_NAME := terraform-provider-rookery_$(PROVIDER_VERSION)_linux_amd64
 RELEASE_DIR := dist
 RELEASE_NAME := rookery-$(VERSION)-linux-amd64
 RELEASE_STAGE := $(RELEASE_DIR)/$(RELEASE_NAME)
@@ -54,8 +55,8 @@ release: ui-build
 	mkdir -p $(RELEASE_STAGE)
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o $(RELEASE_STAGE)/rookery ./cmd/rookery
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o $(RELEASE_STAGE)/vnfs ./cmd/vnfs
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$(PROVIDER_VERSION)" -o $(RELEASE_STAGE)/terraform-provider-rookery ./cmd/terraform-provider-rookery
-	cd $(RELEASE_STAGE) && sha256sum terraform-provider-rookery > terraform-provider-rookery.sha256
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$(PROVIDER_VERSION)" -o "$(RELEASE_STAGE)/$(PROVIDER_RELEASE_NAME)" ./cmd/terraform-provider-rookery
+	cd $(RELEASE_STAGE) && sha256sum "$(PROVIDER_RELEASE_NAME)" > "$(PROVIDER_RELEASE_NAME).sha256"
 	install -m 0644 README.md config.example.yaml $(RELEASE_STAGE)/
 	install -d $(RELEASE_STAGE)/docs $(RELEASE_STAGE)/scripts
 	install -m 0644 docs/*.md $(RELEASE_STAGE)/docs/

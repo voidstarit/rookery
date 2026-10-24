@@ -60,8 +60,8 @@ tab with an existing tag (for example `v0.1.0`).
 rookery-v0.1.0-linux-amd64.tar.gz
   rookery
   vnfs
-  terraform-provider-rookery
-  terraform-provider-rookery.sha256
+  terraform-provider-rookery_0.1.0_linux_amd64
+  terraform-provider-rookery_0.1.0_linux_amd64.sha256
   config.example.yaml
   README.md
   docs/
