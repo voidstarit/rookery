@@ -85,7 +85,7 @@ Host:
 
 Build only:
 
-- Go 1.24 or newer
+- Go 1.26 or newer
 - Node.js 24 and npm for rebuilding the web UI
 
 No external DHCP or DNS server is required. The release archive contains
