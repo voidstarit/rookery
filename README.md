@@ -12,6 +12,20 @@ void *it = hardware;
 rookery(it);  // VOID STAR IT
 ```
 
+## Why Rookery?
+
+If you’re a solo developer or a small startup, you probably have a physical
+server with spare capacity. It might already run GitHub Actions runners, tests,
+or short-lived environments, and it could host a few VMs too.
+
+Setting up a full virtualization platform for that is often more work than the
+VMs themselves. Rookery is meant to make it practical: a small, self-contained
+manager for VMs, thin-LVM storage, and VPP networking that sits next to
+everything else on the host without bringing in a heavyweight stack.
+
+I built it because I wanted that tool for my own server. I hope it’s useful to
+you too.
+
 [![Rookery virtual machine inventory](docs/imgs/vms.png)](docs/imgs/vms.png)
 
 *The VM inventory shows live QEMU status, attached disks, boot media, console
