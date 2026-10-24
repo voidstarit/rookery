@@ -57,7 +57,6 @@ running VMs.
 - A spare **wired** Ethernet NIC for NAT44 outside use; wireless and the host
   default-route NIC are rejected
 - `vppctl` on `PATH` with access to VPP's CLI socket for NAT44 VNFs
-  (`setup-vpp.yml` installs it with VPP)
 - `ethtool` for disabling RX GRO/LRO on AF_PACKET host NICs; Rookery logs a
   warning and continues without it, but NAT44 download performance can suffer
 - Root or `CAP_NET_ADMIN` + `CAP_NET_BIND_SERVICE` + `CAP_NET_RAW` for VNF tap setup,
@@ -69,7 +68,7 @@ running VMs.
   start QEMU processes
 
 The socket is VPP's **binary API** socket, not the CLI socket
-(`/run/vpp/cli.sock`) or a QEMU vhost-user socket. `setup-vpp.yml` configures
+(`/run/vpp/cli.sock`) or a QEMU vhost-user socket. The default is
 `/run/vpp/api.sock`.
 
 Build standalone binaries:

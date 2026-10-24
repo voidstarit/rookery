@@ -1,19 +1,8 @@
 # AGENTS.md
 
-Standalone Ansible playbooks (no roles, no `ansible.cfg`) that manage thin-LVM VM disks and FD.io VPP networking on a Debian host, plus a Go VM inventory API with an embedded web UI. Run each `*.yml` directly with `ansible-playbook`; `templates/` contains only the VPP startup config.
-
-## Running safely
-- Playbooks use `become: true` and mutate real remote LVM/network state. `hosts.ini` targets `baltic.void-star.co`; pass `-K` for the sudo password and prefer `--limit` or a test inventory over hitting the default host accidentally.
-- Requires Ansible plus `community.general` (`ansible-galaxy collection install community.general`).
-- No Ansible lint or test suite. Verify playbook edits with `ansible-playbook --syntax-check -i hosts.ini <playbook>` (all six currently pass). Check mode is unreliable because most work is done via `command`/`shell`.
-
-## Playbooks
-- `setup-thin-pool.yml` — creates the thin pool (default `rookery`) inside an existing VG.
-- `setup-template.yml` — downloads the Debian 13 cloud image and `dd`s it into a template LV. Auto-extends the thin pool if needed, but fails when pool metadata is >90% full or the VG lacks free space.
-- `create-instance-disk.yml` — creates a thin snapshot of the base LV. LVM ignores `-L` when snapshotting a thin origin, so `disk_size` is applied with a separate `lvextend`; it must be >= the base LV size and accepts IEC units via `numfmt`.
-- `configure-instance-user.yml` — offline image edit. Do not simplify its shell block: it uses `losetup --partscan` (the `partx` ioctl fails on device-mapper), handles GPT and LVM-in-image layouts, and imports clashing embedded VGs as `<disk_lv>-rootvg` with `vgimportclone`. Cleanup (unmount, `vgchange -an`, loop detach) lives in `always`.
-- `delete-instance-disk.yml` — `lvol state=absent force=true`; immediate and destructive.
-- `setup-vpp.yml` — installs/configures VPP. FD.io only publishes `bookworm` packages, and `trusted=yes` is intentional on trixie (apt's sqv rejects the SHA1 repo key). `vpp_host_tap` only creates the tap and prints manual NAT commands. `vpp_nat44` consumes a dedicated NIC via AF_PACKET: flush its IPs first and never point it at the management link.
+Rookery is a self-hosted VM and network manager for Linux. The repository contains the Go
+API with an embedded web UI, the `vnfs` DHCP/DNS/BGP daemon, QEMU/KVM lifecycle
+management, LVM thin storage, and FD.io VPP networking.
 
 ## Go API
 - `design/` is the protobuf source of truth for the API. It uses direct `protoc` via the root Makefile, not `buf`. Third-party protos are vendored under `design/third_party`; generated Go/gRPC/gateway/validation code and OpenAPI are committed under `design/gen` and `design/openapi`. Use `make proto-tools`, `make proto-generate`, `make proto-compile`, and `make proto-check`. Request validation uses `protoc-gen-validate`; the gateway under `internal/gateway` exposes all generated services for system, VMs, disks, media, networks, interfaces, ACLs, VNFs, storage backends, host interfaces, troubleshoot, and capture through an in-process gRPC server and grpc-gateway. VM/disk/media/network/interface/ACL/storage writes, VM lifecycle actions and metrics, interface ACL assignment, storage disk import, VNF status/lease/session views, troubleshoot/capture, and VNF writes are implemented. VNF writes and network deletion are implemented in `internal/lifecycle`, backed by the VPP/NAT/DHCP runtime exposed by `internal/api`; the old JSON handlers have been removed. The gateway emits 64-bit JSON fields as numbers and maps create/delete responses to `201`/`204`. Network deletion uses a native lifecycle method that stops VNFs, removes any BVI and bridge domain, then deletes the record. VM lifecycle and disk provisioning share the server's mutexes so gateway and native handlers cannot race. The main `serve` HTTP listener routes `/api` through the grpc-gateway and mounts `api.Server.NativeHandler` only for VNC WebSocket, WebShark, pcap downloads, and static UI. `api.New` now builds only this native handler. `serve -gateway-addr` adds an optional second gateway HTTP listener and `serve -grpc-addr` exposes direct gRPC. Keep WebSocket VNC, WebShark SSE/static assets, and streamed pcap downloads on native HTTP handlers because gateway does not proxy those protocols.
@@ -77,8 +66,4 @@ Standalone Ansible playbooks (no roles, no `ansible.cfg`) that manage thin-LVM V
   decisions, DHCPv4/v6 request/reply details, DNS queries/records/forwarding
   results, and BGP route installs/withdrawals. Lease allocation and release log
   at info; renewals at debug.
-- Every playbook except `setup-vpp.yml` sets `gather_facts: false`; do not use `ansible_facts` there without enabling fact gathering.
-- Defaults live in each playbook's `vars:` block; required values are validated at runtime, so pass e.g. `-e vg_name=vg0 -e disk_lv=...` explicitly.
-- `setup-vpp.yml` restarts VPP via handlers and calls `meta: flush_handlers` before waiting on `/run/vpp/cli.sock`; preserve that order when editing.
-- `README.md` is the high-level project/install/run entry point. Detailed host, networking, API, operations, Ansible, and development material lives under `docs/` with `docs/README.md` as the index; C4/Mermaid architecture diagrams are in `docs/architecture.md`. Keep details out of the main README and update the relevant docs page and index when behavior changes.
-- `create-instance-disk.yml` examples use `base_lv=debian-template`, matching the default created by `setup-template.yml`.
+- `README.md` is the high-level project/install/run entry point. Detailed host, networking, API, operations, and development material lives under `docs/` with `docs/README.md` as the index; C4/Mermaid architecture diagrams are in `docs/architecture.md`. Keep details out of the main README and update the relevant docs page and index when behavior changes.

@@ -1,5 +1,4 @@
-# Ansible output and local runtime files
-*.retry
+# Local runtime files
 *.db
 *.db-shm
 *.db-wal

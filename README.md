@@ -146,12 +146,8 @@ the UI and configure the provider shown in
 | [Operations](docs/operations.md) | Prerequisites, install, initialize, run, logging, configuration, flags, VM lifecycle |
 | [Networking](docs/networking.md) | VPP networks, interfaces, ACLs, route tables, host taps, VNFs, NAT44 |
 | [API and access](docs/api.md) | mTLS, Terraform, protobuf design, HTTP endpoint reference |
-| [Host setup with Ansible](docs/ansible.md) | Thin pool, templates, instance disks, guest users, VPP setup |
 | [Development](docs/development.md) | Build, test, UI, protobuf generation, releases |
 | [API design](docs/api-design.md) | Deep protobuf generation and validation notes |
-
-The Ansible playbooks in the repository root are optional; they are not
-required when the host is already prepared.
 
 ## Development
 

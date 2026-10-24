@@ -34,10 +34,9 @@ arguments can reattach after VPP recreates the sockets; VMs started by an older
 server without reconnect still need a stop/start. Vhost-user interfaces
 require the VPP `vpp-plugin-core` plugin; if `vppctl show plugins` does not list
 `vhost_plugin`, install the package and restart VPP. API-created networks are
-isolated L2 bridge domains by default. NAT44 can be
-added as a VNF on a dedicated network; the API then creates a BVI
-(`bvi<network-id>`) and takes over the selected outside NIC. The standalone
-`setup-vpp.yml` NAT44 setup is independent; do not point both at the same
+isolated L2 bridge domains by default. NAT44 can be added as a VNF on a
+dedicated network; the API then creates a BVI (`bvi<network-id>`) and takes
+over the selected outside NIC. Do not point another NAT44 setup at the same
 outside NIC.
 
 ## ACLs
