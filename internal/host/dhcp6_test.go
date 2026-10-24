@@ -150,9 +150,12 @@ func TestCoreDHCPv6AllocationAndPersistence(t *testing.T) {
 		t.Fatalf("requested address = %s, want %s", got, testDHCPv6Start)
 	}
 
-	// A fresh handler must load the persisted lease for the same client.
+	// A fresh handler must load the persisted lease for the same client. Reuse
+	// the original DUID: DHCPv6 DUID-LLT includes a timestamp, so creating a
+	// new solicit after a second boundary would look like a different client.
 	second := newDHCPv6TestHandler(t, leasePath, testDHCPv6End)
 	sol2 := dhcpv6Solicit(t, mac)
+	sol2.UpdateOption(dhcpv6.OptClientID(sol.Options.ClientID()))
 	adv2 := dhcpv6Advertise(t, sol2)
 	out, _ = second(sol2, adv2)
 	if got := dhcpv6Address(t, out).String(); got != testDHCPv6Start {
