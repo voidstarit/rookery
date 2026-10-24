@@ -58,8 +58,9 @@ release: ui-build
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$(PROVIDER_VERSION)" -o "$(RELEASE_STAGE)/$(PROVIDER_RELEASE_NAME)" ./cmd/terraform-provider-rookery
 	cd $(RELEASE_STAGE) && sha256sum "$(PROVIDER_RELEASE_NAME)" > "$(PROVIDER_RELEASE_NAME).sha256"
 	install -m 0644 README.md config.example.yaml $(RELEASE_STAGE)/
-	install -d $(RELEASE_STAGE)/docs $(RELEASE_STAGE)/scripts
+	install -d $(RELEASE_STAGE)/docs/imgs $(RELEASE_STAGE)/scripts
 	install -m 0644 docs/*.md $(RELEASE_STAGE)/docs/
+	install -m 0644 docs/imgs/*.png $(RELEASE_STAGE)/docs/imgs/
 	install -m 0644 scripts/README.md $(RELEASE_STAGE)/scripts/
 	install -m 0755 scripts/lvm-thin-snapshot-disk.sh $(RELEASE_STAGE)/scripts/
 	tar -C $(RELEASE_DIR) -czf $(RELEASE_ARCHIVE) $(RELEASE_NAME)

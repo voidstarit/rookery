@@ -7,6 +7,11 @@ DHCP/DNS/BGP network functions behind one API and embedded web UI.
 It is designed for a single host: create disk images once, attach them to VMs,
 and connect VMs through isolated VPP bridge domains with optional NAT44 access.
 
+[![Rookery virtual machine inventory](docs/imgs/vms.png)](docs/imgs/vms.png)
+
+*The VM inventory shows live QEMU status, attached disks, boot media, console
+access, and per-VM monitoring.*
+
 ## Capabilities
 
 - Thin-LVM disks, template clones, and existing-volume import
@@ -17,6 +22,29 @@ and connect VMs through isolated VPP bridge domains with optional NAT44 access.
 - Embedded Preact/TypeScript inventory UI
 - REST and gRPC APIs, public mTLS listeners, and a Terraform provider
 - Single static binary per process for Linux x86_64/amd64
+
+## Screenshots
+
+### Storage
+
+| Thin-LVM disks | Installation media |
+| :---: | :---: |
+| [![Rookery disk inventory](docs/imgs/disks.png)](docs/imgs/disks.png) | [![Rookery installation media](docs/imgs/installation-media.png)](docs/imgs/installation-media.png) |
+| **Thin-LVM disks** — backends, templates, clones, and attachment state. | **Installation media** — register host ISOs as read-only boot media. |
+
+### Networking and VNFs
+
+| Rookery Networks | Network functions |
+| :---: | :---: |
+| [![Rookery network inventory](docs/imgs/networks.png)](docs/imgs/networks.png) | [![Rookery VNF inventory](docs/imgs/vnfs.png)](docs/imgs/vnfs.png) |
+| **Networks** — VPP bridge domains, interfaces, ACLs, VRFs, and route tables. | **VNFs** — DHCPv4/DHCPv6, NAT44, DNS, and BGP with leases and sessions. |
+
+### VPP troubleshooting
+
+[![Rookery VPP packet-processing graph](docs/imgs/network-troubleshoot.png)](docs/imgs/network-troubleshoot.png)
+
+*Inspect the live VPP packet-processing graph, focus on an interface or feature,
+and drill into trace, ACL counters, and packet captures.*
 
 ## Architecture at a glance
 
