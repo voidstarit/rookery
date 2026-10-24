@@ -9,7 +9,7 @@
     "watch": "node scripts/build.mjs --watch"
   },
   "dependencies": {
-    "preact": "^10.27.2"
+    "preact": "^11.0.1"
   },
   "devDependencies": {
     "esbuild": "^0.25.10",
