@@ -71,7 +71,7 @@ C4Component
 
   Container_Boundary(api, "rookery API") {
     Component(gateway, "grpc-gateway", "Go", "Generated HTTP/gRPC services and validation")
-    Component(native, "Native HTTP", "Go", "VNC WebSocket, WebShark, pcap downloads, static UI")
+    Component(native, "Native HTTP", "Go", "VNC WebSocket, pcap downloads, PKI, static UI")
     Component(lifecycle, "Lifecycle service", "Go", "VNF/network/VM orchestration shared by gateway and native paths")
     Component(server, "API server", "Go", "Mutexes, readiness, reconciliation, metrics, consoles")
     Component(store, "Store", "Go", "SQLite migrations and inventory")
@@ -264,7 +264,7 @@ failing startup.
 - The local HTTP listener has no authentication; bind it to localhost or protect
   it with an authenticating proxy.
 - Public API access uses the mTLS HTTP (`:8443`) and gRPC (`:9443`) listeners.
-  Only gateway API routes are exposed there; native VNC/WebShark/pcap/static
+  Only gateway API routes are exposed there; native VNC/pcap/PKI/static
   routes are not.
 - VNC console access is controlled per VM by `console_enabled`; this is not a
   substitute for API authentication.

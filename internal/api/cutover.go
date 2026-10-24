@@ -15,7 +15,7 @@ func CutoverHandler(gateway, legacy http.Handler) http.Handler {
 		switch {
 		case strings.HasPrefix(path, "/api/troubleshoot/capture/files/"), strings.HasPrefix(path, "/api/pki/"):
 			legacy.ServeHTTP(w, r)
-		case strings.HasPrefix(path, "/ws/"), strings.HasPrefix(path, "/webshark"):
+		case strings.HasPrefix(path, "/ws/"):
 			legacy.ServeHTTP(w, r)
 		case strings.HasPrefix(path, "/api/"), path == "/api":
 			gateway.ServeHTTP(w, r)
@@ -31,7 +31,7 @@ func (s *Server) LogRequests(next http.Handler) http.Handler {
 }
 
 // NativeHandler exposes only the protocol-native routes that remain on the
-// API server: VNC, WebShark, pcap downloads, and static UI assets.
+// API server: VNC, pcap downloads, PKI, and static UI assets.
 func (s *Server) NativeHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ws/vms/{id}/vnc", s.handleVNCProxy)
@@ -41,12 +41,6 @@ func (s *Server) NativeHandler() http.Handler {
 	mux.HandleFunc("DELETE /api/pki/clients/{id}", s.handlePKIRevokeClient)
 	mux.HandleFunc("GET /api/troubleshoot/capture/files/{name}", s.handleDownloadPacketCapture)
 	mux.HandleFunc("DELETE /api/troubleshoot/capture/files/{name}", s.handleDeletePacketCapture)
-	mux.HandleFunc("GET /webshark/json", s.handleWebSharkJSON)
-	mux.HandleFunc("GET /webshark/captures/{name}", s.handleWebSharkCapture)
-	mux.HandleFunc("GET /webshark/watch", s.handleWebSharkWatch)
-	mux.HandleFunc("GET /webshark", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/webshark/", http.StatusFound)
-	})
 	mux.Handle("/", webui.Handler())
 
 	var handler http.Handler = mux

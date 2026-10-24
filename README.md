@@ -198,13 +198,21 @@ checksum.
 See [docs/development.md](docs/development.md) for UI routing/events, tests,
 protobuf generation, and release details.
 
+## License
+
+Rookery is licensed under the [Apache License 2.0](LICENSE).
+
+Third-party components are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Contributions are covered by [CONTRIBUTING.md](CONTRIBUTING.md). Please report
+security issues through the private process in [SECURITY.md](SECURITY.md).
+
 ## Security
 
 - The local HTTP listener is unauthenticated; bind it to localhost or protect
   it with an authenticating proxy.
 - The public mTLS HTTP/gRPC listeners require a client certificate signed by
-  the Rookery CA. Native VNC, WebShark, pcap, PKI, and static routes are only
-  on the local listener.
+  the Rookery CA. Native VNC, pcap, PKI, and static routes are only on the local
+  listener.
 - Per-VM `console_enabled` controls the VNC WebSocket, but it is not a
   substitute for API authentication.
 - Back up the PKI directory. Losing the CA invalidates every issued client

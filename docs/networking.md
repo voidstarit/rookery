@@ -121,12 +121,9 @@ The same **Troubleshoot** section includes **Packet capture**. Choose a VPP
 interface (or `Any interface`), direction, maximum capture size, and snapshot
 length. The API converts the size and snapshot length into VPP's packet-ring
 limit, starts `pcap trace`, and stops it on demand. Captures are written by VPP
-under `/tmp` as `rookery-*.pcap` and can be downloaded, opened in the embedded
-WebShark viewer, or deleted. The active capture file cannot be deleted until the
-capture is stopped. WebShark v3.0.0 is vendored under
-`internal/webui/static/webshark` (GPL-2.0), with Roboto and Material Icons fonts
-served locally; the upstream `ffmpeg-core.wasm` is omitted, so RTP audio playback
-is unavailable while packet dissection works.
+under `/tmp` as `rookery-*.pcap` and can be downloaded or deleted. Open the
+downloaded capture in Wireshark or another packet analyzer. The active capture
+file cannot be deleted until the capture is stopped.
 
 Network functions (**VNFs**) are attached to Rookery Networks. The **VNFs** tab
 supports `dhcpv4`, `dhcpv6`, `nat44`, `bgp`, and `dns` functions; the VNF record

@@ -4703,19 +4703,6 @@ func TestPacketCaptureAPI(t *testing.T) {
 		t.Fatalf("download disposition = %q", disposition)
 	}
 
-	recorder = do(t, env.handler, http.MethodGet, "/webshark/json?method=files", nil)
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("webshark files status = %d, body = %s", recorder.Code, recorder.Body.String())
-	}
-	if !strings.Contains(recorder.Body.String(), "rookery-test.pcap") {
-		t.Fatalf("webshark files body = %s", recorder.Body.String())
-	}
-
-	recorder = do(t, env.handler, http.MethodGet, "/webshark/captures/rookery-test.pcap", nil)
-	if recorder.Code != http.StatusOK || recorder.Body.String() != "pcap" {
-		t.Fatalf("webshark capture status = %d, body = %q", recorder.Code, recorder.Body.String())
-	}
-
 	env.networks.captureStatus = host.PacketCaptureStatus{Active: true, File: "rookery-test.pcap"}
 	recorder = do(t, env.handler, http.MethodDelete, "/api/troubleshoot/capture/files/rookery-test.pcap", nil)
 	if recorder.Code != http.StatusConflict {

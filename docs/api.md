@@ -101,8 +101,7 @@ creates/deletes use `201`/`204`. VNF writes call the native lifecycle service in
 `internal/lifecycle` so activation/NAT behavior is shared without an HTTP round
 trip. The main `serve` listener routes `/api` through the gateway;
 `-gateway-addr` adds an optional second gateway listener and `-grpc-addr`
-exposes direct gRPC with health checks and server reflection. WebSocket VNC,
-WebShark SSE/static assets, and streamed pcap downloads are served by
+exposes direct gRPC with health checks and server reflection. WebSocket VNC and streamed pcap downloads are served by
 `api.Server.NativeHandler`, which contains only those native routes plus the
 static UI.
 
@@ -152,7 +151,6 @@ static UI.
 | `GET`    | `/api/troubleshoot/capture/files` | List retained pcap files |
 | `GET`    | `/api/troubleshoot/capture/files/{name}` | Download a pcap file |
 | `DELETE` | `/api/troubleshoot/capture/files/{name}` | Delete a retained pcap file |
-| `GET`    | `/webshark/`       | Embedded WebShark pcap viewer |
 | `GET`    | `/api/pki/ca`      | Download the client CA certificate |
 | `GET`    | `/api/pki/clients` | List issued and revoked client certificates |
 | `POST`   | `/api/pki/clients` | Issue a client certificate (`name`, optional `days`) |
@@ -199,9 +197,9 @@ static UI.
 | `POST`   | `/api/vms/{id}/reset` | Force a VM reset; power-cycles legacy VMs without a monitor |
 | `GET`    | `/ws/vms/{id}/vnc`    | WebSocket proxy to the VM's VNC Unix socket |
 
-The `/api/pki/*`, `/api/troubleshoot/capture/files/*`, `/webshark/*`, and VNC
-WebSocket routes are native-only. They are available on the local listener and
-are deliberately not exposed on the public mTLS gateway listeners.
+The `/api/pki/*`, `/api/troubleshoot/capture/files/*`, and VNC WebSocket routes
+are native-only. They are available on the local listener and are deliberately
+not exposed on the public mTLS gateway listeners.
 
 Create a root disk and, optionally, additional data disks:
 

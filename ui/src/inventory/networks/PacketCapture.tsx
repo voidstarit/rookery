@@ -68,10 +68,6 @@ function captureDownloadURL(name: string): string {
   return `/api/troubleshoot/capture/files/${encodeURIComponent(name)}`;
 }
 
-function webSharkURL(name: string): string {
-  return `/webshark/?capture=${encodeURIComponent(name)}&embed=1`;
-}
-
 export function PacketCapturePanel() {
   const [interfaces, setInterfaces] = useState<VPPInterface[]>([]);
   const [status, setStatus] = useState<PacketCaptureStatus | null>(null);
@@ -82,7 +78,6 @@ export function PacketCapturePanel() {
   const [stopping, setStopping] = useState(false);
   const [deleting, setDeleting] = useState("");
   const [error, setError] = useState("");
-  const [selected, setSelected] = useState("");
 
   const estimatedPackets = Math.min(
     1_000_000,
@@ -97,9 +92,6 @@ export function PacketCapturePanel() {
     const next = await api<PacketCaptureFile[]>("/api/troubleshoot/capture/files");
     const list = Array.isArray(next) ? next : [];
     setFiles(list);
-    if (selected && !list.some((file) => file.name === selected)) {
-      setSelected("");
-    }
   };
 
   const refresh = async () => {
@@ -160,11 +152,6 @@ export function PacketCapturePanel() {
         setStatus(overview.status ?? null);
         setFiles(files);
         setError("");
-        if (!overview.status?.active) {
-          setSelected((current) =>
-            current && files.some((file) => file.name === current) ? current : ""
-          );
-        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : String(err));
@@ -175,7 +162,6 @@ export function PacketCapturePanel() {
       cancelled = true;
       window.clearInterval(timer);
     };
-    // loadFiles only uses state setters and the current selected value.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
@@ -196,7 +182,6 @@ export function PacketCapturePanel() {
         }),
       });
       setStatus(next);
-      setSelected("");
       showToast("Packet capture started");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -222,9 +207,6 @@ export function PacketCapturePanel() {
       setStatus((current) =>
         current && current.file === file.name ? { ...current, file: "" } : current
       );
-      if (selected === file.name) {
-        setSelected("");
-      }
       showToast("Packet capture deleted");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -247,9 +229,6 @@ export function PacketCapturePanel() {
         await loadFiles();
       } catch {
         // The stop result still identifies the file even if listing fails.
-      }
-      if (next.file) {
-        setSelected(next.file);
       }
       showToast("Packet capture stopped");
     } catch (err) {
@@ -453,7 +432,7 @@ export function PacketCapturePanel() {
               </thead>
               <tbody>
                 {files.map((file) => (
-                  <tr key={file.name} class={selected === file.name ? "capture-selected" : ""}>
+                  <tr key={file.name}>
                     <td>
                       <code>{file.name}</code>
                     </td>
@@ -461,9 +440,6 @@ export function PacketCapturePanel() {
                     <td>{formatDate(file.modified)}</td>
                     <td>
                       <div class="capture-file-actions">
-                        <button class="button ghost" type="button" onClick={() => setSelected(file.name)}>
-                          View
-                        </button>
                         <a class="button ghost" href={captureDownloadURL(file.name)} download>
                           Download
                         </a>
@@ -486,33 +462,6 @@ export function PacketCapturePanel() {
         )}
       </div>
 
-      {selected ? (
-        <div class="capture-viewer">
-          <div class="capture-viewer-head">
-            <span>
-              WebShark · <code>{selected}</code>
-            </span>
-            <div class="capture-file-actions">
-              <a class="button ghost" href={webSharkURL(selected)} target="_blank" rel="noreferrer">
-                New tab
-              </a>
-              <a class="button ghost" href={captureDownloadURL(selected)} download>
-                Download
-              </a>
-              <button class="button ghost" type="button" onClick={() => setSelected("")}>
-                Close
-              </button>
-            </div>
-          </div>
-          <iframe
-            key={selected}
-            class="capture-viewer-frame"
-            src={webSharkURL(selected)}
-            title={`WebShark packet capture ${selected}`}
-            allow="fullscreen"
-          />
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -65,7 +65,7 @@ release: ui-build
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o $(RELEASE_STAGE)/vnfs ./cmd/vnfs
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$(PROVIDER_VERSION)" -o "$(RELEASE_STAGE)/$(PROVIDER_RELEASE_NAME)" ./cmd/terraform-provider-rookery
 	cd $(RELEASE_STAGE) && sha256sum "$(PROVIDER_RELEASE_NAME)" > "$(PROVIDER_RELEASE_NAME).sha256"
-	install -m 0644 README.md config.example.yaml $(RELEASE_STAGE)/
+	install -m 0644 README.md config.example.yaml LICENSE NOTICE THIRD_PARTY_NOTICES.md $(RELEASE_STAGE)/
 	install -d $(RELEASE_STAGE)/docs/imgs $(RELEASE_STAGE)/scripts
 	install -m 0644 docs/*.md $(RELEASE_STAGE)/docs/
 	install -m 0644 $(RELEASE_DOC_IMAGES) $(RELEASE_STAGE)/docs/imgs/

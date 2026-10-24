@@ -1812,7 +1812,7 @@ export function NetworksTab() {
         <div class="panel-head">
           <div>
             <h2 id="capture-heading">Packet capture</h2>
-            <p class="panel-subtitle">Capture VPP traffic and inspect it in WebShark</p>
+            <p class="panel-subtitle">Capture VPP traffic and download pcap files</p>
           </div>
         </div>
         <PacketCapturePanel />

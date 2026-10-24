@@ -21,7 +21,6 @@ func TestCutoverHandlerRoutes(t *testing.T) {
 		{"/api/troubleshoot/capture/files", http.StatusTeapot},
 		{"/api/troubleshoot/capture/files/rookery-test.pcap", http.StatusNoContent},
 		{"/ws/vms/abc/vnc", http.StatusNoContent},
-		{"/webshark/json", http.StatusNoContent},
 		{"/console.html", http.StatusNoContent},
 		{"/", http.StatusNoContent},
 	}
@@ -43,7 +42,6 @@ func TestNativeHandlerRoutes(t *testing.T) {
 		want int
 	}{
 		{"/", http.StatusOK},
-		{"/webshark", http.StatusFound},
 		{"/api/troubleshoot/capture/files/rookery-test.pcap", http.StatusServiceUnavailable},
 	}
 	for _, test := range cases {

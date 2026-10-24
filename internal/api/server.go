@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"runtime/debug"
-	"strings"
 	"sync"
 	"time"
 
@@ -203,22 +202,11 @@ func SecurityHeaders(next http.Handler) http.Handler {
 
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		webshark := strings.HasPrefix(r.URL.Path, "/webshark")
-		if webshark {
-			w.Header().Set("Content-Security-Policy",
-				"default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; "+
-					"img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; "+
-					"script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' 'unsafe-eval'; "+
-					"worker-src 'self' blob:; child-src 'self' blob:; frame-src 'self'; "+
-					"media-src 'self' blob:; font-src 'self' data:; connect-src 'self' ws: wss:")
-			w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-		} else {
-			w.Header().Set("Content-Security-Policy",
-				"default-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; "+
-					"img-src 'self' data:; style-src 'self'; script-src 'self'; "+
-					"connect-src 'self' ws: wss:; frame-src 'self'")
-			w.Header().Set("X-Frame-Options", "DENY")
-		}
+		w.Header().Set("Content-Security-Policy",
+			"default-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; "+
+				"img-src 'self' data:; style-src 'self'; script-src 'self'; "+
+				"connect-src 'self' ws: wss:; frame-src 'none'")
+		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		next.ServeHTTP(w, r)
