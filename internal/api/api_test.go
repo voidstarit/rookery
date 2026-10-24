@@ -765,6 +765,10 @@ func newTestAPIWithReadiness(t *testing.T, ready api.Readiness) *testAPI {
 	natManager := &fakeNAT44{}
 	logger := zerolog.Nop()
 	apiServer := api.New(st, ready, provisioner, controller, networkProvisioner, vnfManager, natManager, logger)
+	// Network creation prepares a shared VNF memif socket. Keep that path in
+	// the test sandbox instead of the production /run/rookery directory, which
+	// is not writable on GitHub Actions runners.
+	apiServer.ConfigureMemifDHCP(false, t.TempDir())
 	lifecycleService := lifecycle.New(st, apiServer, apiServer.ResourceMutex())
 	gw, err := gateway.New(st, ready,
 		gateway.WithDiskProvisioner(provisioner),
