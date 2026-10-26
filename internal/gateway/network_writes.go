@@ -88,6 +88,51 @@ func (s *networkService) CreateNetwork(ctx context.Context, request *rookeryv1.C
 	return networkToProto(created), nil
 }
 
+// UpdateNetwork changes a network's IPv4/IPv6 CIDRs. VPP address-bearing
+// features that derive their addresses from the prefix must be removed first.
+func (s *networkService) UpdateNetwork(ctx context.Context, request *rookeryv1.UpdateNetworkRequest) (*rookeryv1.Network, error) {
+	ipv4CIDR, ipv6CIDR, err := netutil.NormalizeNetworkCIDRs(request.GetIpv4Cidr(), request.GetIpv6Cidr())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	network, err := s.store.GetNetwork(ctx, request.GetId())
+	if err != nil {
+		return nil, storeReadError(err, store.ErrNetworkNotFound, "network not found")
+	}
+	if network.BVIHostName != "" || network.IPv4Gateway != "" {
+		return nil, status.Error(codes.Aborted, "remove the network BVI before changing network CIDRs")
+	}
+	if network.DHCPEnabled || network.DHCPTapHostName != "" || network.DHCPTapSwIfIndex != 0 {
+		return nil, status.Error(codes.Aborted, "remove legacy DHCP configuration before changing network CIDRs")
+	}
+	vnfs, err := s.store.ListVNFsByNetwork(ctx, network.ID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not list network VNFs")
+	}
+	if len(vnfs) > 0 {
+		return nil, status.Error(codes.Aborted, "remove network VNFs before changing network CIDRs")
+	}
+	taps, err := s.store.ListNetworkHostTapsByNetwork(ctx, network.ID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not list network host taps")
+	}
+	if len(taps) > 0 {
+		return nil, status.Error(codes.Aborted, "remove network host taps before changing network CIDRs")
+	}
+	updated, err := s.store.SetNetworkCIDRs(ctx, network.ID, ipv4CIDR, ipv6CIDR)
+	if err != nil {
+		if errors.Is(err, store.ErrNetworkNotFound) {
+			return nil, status.Error(codes.NotFound, "network not found")
+		}
+		return nil, status.Error(codes.Internal, "could not update network CIDRs")
+	}
+	return networkToProto(updated), nil
+}
+
 func (s *networkService) DeleteNetwork(ctx context.Context, request *rookeryv1.DeleteNetworkRequest) (*emptypb.Empty, error) {
 	if s.writer != nil {
 		if err := s.writer.DeleteNetwork(ctx, request.GetId()); err != nil {

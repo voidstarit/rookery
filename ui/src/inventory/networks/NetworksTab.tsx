@@ -117,6 +117,7 @@ export function NetworksTab() {
   const [interfaceError, setInterfaceError] = useState("");
   const [aclError, setAclError] = useState("");
   const [networkDialogOpen, setNetworkDialogOpen] = useState(false);
+  const [editingNetwork, setEditingNetwork] = useState<Network | null>(null);
   const [interfaceDialogOpen, setInterfaceDialogOpen] = useState(false);
   const [attachIface, setAttachIface] = useState<VirtualInterface | null>(null);
   const [addressInterface, setAddressInterface] = useState<{
@@ -174,11 +175,22 @@ export function NetworksTab() {
       setRouteTableRoutes(null);
       setInterfaceRouteTablesIface(null);
       if (second === "new") {
+        setEditingNetwork(null);
         setNetworkDialogOpen(true);
         setSection("networks");
         return;
       }
+      if (second && third === "edit") {
+        const network = networks.find((item) => String(item.id) === second);
+        if (network) {
+          setEditingNetwork(network);
+          setNetworkDialogOpen(true);
+          setSection("networks");
+          return;
+        }
+      }
       setNetworkDialogOpen(false);
+      setEditingNetwork(null);
       if (second && SECTIONS.some((item) => item.id === second)) {
         setSection(second as Section);
       } else {
@@ -187,6 +199,7 @@ export function NetworksTab() {
       return;
     }
     setNetworkDialogOpen(false);
+    setEditingNetwork(null);
     if (root === "interfaces") {
       setSection("interfaces");
       setRouteTableDialogOpen(false);
@@ -266,7 +279,7 @@ export function NetworksTab() {
     setRouteTableDialogOpen(false);
     setRouteTableRoutes(null);
     setInterfaceRouteTablesIface(null);
-  }, [route.path, route.search, interfaces, acls, routeTables]);
+  }, [route.path, route.search, interfaces, acls, networks, routeTables]);
 
   const setData = (partial: Partial<BackendData>) => {
     if (partial.networks) {
@@ -1007,6 +1020,9 @@ export function NetworksTab() {
                     <tr key={network.id}>
                       <td>
                         <span class="vm-name">{network.name}</span>
+                        <span class="vm-description mono">
+                          {network.ipv4_cidr || "no IPv4 CIDR"} · {network.ipv6_cidr || "no IPv6 CIDR"}
+                        </span>
                         {network.bvi_host_name ? (
                           <span class="vm-description">
                             {network.bvi_host_name}
@@ -1024,6 +1040,13 @@ export function NetworksTab() {
                       <td class="updated hide-sm">{formatDate(network.updated_at)}</td>
                       <td>
                         <div class="actions">
+                          <button
+                            class="row-action"
+                            type="button"
+                            onClick={() => navigate(`/networks/${network.id}/edit`)}
+                          >
+                            Edit CIDRs
+                          </button>
                           <button class="row-action" type="button" onClick={() => addVNF(network)}>
                             Add VNF
                           </button>
@@ -2153,16 +2176,27 @@ export function NetworksTab() {
 
       {networkDialogOpen ? (
         <NetworkDialog
+          network={editingNetwork}
           onClose={() => {
             setNetworkDialogOpen(false);
+            setEditingNetwork(null);
             navigate("/networks", true);
           }}
           onSaved={(network) => {
+            const wasEditing = Boolean(editingNetwork);
             setNetworkDialogOpen(false);
+            setEditingNetwork(null);
             navigate("/networks", true);
-            setData({ networks: [...networks, network].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })) });
+            const nextNetworks = wasEditing
+              ? networks.map((item) => (item.id === network.id ? network : item))
+              : [...networks, network];
+            setData({
+              networks: nextNetworks.sort((a, b) =>
+                a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+              ),
+            });
             setNetworkError("");
-            showToast(`Created network ${network.name}`);
+            showToast(wasEditing ? `Updated network ${network.name}` : `Created network ${network.name}`);
           }}
         />
       ) : null}

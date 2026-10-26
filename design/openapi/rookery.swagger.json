@@ -1187,6 +1187,43 @@
         "tags": [
           "NetworkService"
         ]
+      },
+      "put": {
+        "operationId": "NetworkService_UpdateNetwork",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Network"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/NetworkServiceUpdateNetworkBody"
+            }
+          }
+        ],
+        "tags": [
+          "NetworkService"
+        ]
       }
     },
     "/api/route-tables": {
@@ -2937,6 +2974,17 @@
         "ipv6_table_id": {
           "type": "integer",
           "format": "int64"
+        }
+      }
+    },
+    "NetworkServiceUpdateNetworkBody": {
+      "type": "object",
+      "properties": {
+        "ipv4_cidr": {
+          "type": "string"
+        },
+        "ipv6_cidr": {
+          "type": "string"
         }
       }
     },

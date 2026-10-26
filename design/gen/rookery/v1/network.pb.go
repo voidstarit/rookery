@@ -341,6 +341,66 @@ func (x *CreateNetworkRequest) GetIpv6Cidr() string {
 	return ""
 }
 
+type UpdateNetworkRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Ipv4Cidr      string                 `protobuf:"bytes,2,opt,name=ipv4_cidr,json=ipv4Cidr,proto3" json:"ipv4_cidr,omitempty"`
+	Ipv6Cidr      string                 `protobuf:"bytes,3,opt,name=ipv6_cidr,json=ipv6Cidr,proto3" json:"ipv6_cidr,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateNetworkRequest) Reset() {
+	*x = UpdateNetworkRequest{}
+	mi := &file_rookery_v1_network_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateNetworkRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateNetworkRequest) ProtoMessage() {}
+
+func (x *UpdateNetworkRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_network_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateNetworkRequest.ProtoReflect.Descriptor instead.
+func (*UpdateNetworkRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_network_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *UpdateNetworkRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *UpdateNetworkRequest) GetIpv4Cidr() string {
+	if x != nil {
+		return x.Ipv4Cidr
+	}
+	return ""
+}
+
+func (x *UpdateNetworkRequest) GetIpv6Cidr() string {
+	if x != nil {
+		return x.Ipv6Cidr
+	}
+	return ""
+}
+
 type DeleteNetworkRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -350,7 +410,7 @@ type DeleteNetworkRequest struct {
 
 func (x *DeleteNetworkRequest) Reset() {
 	*x = DeleteNetworkRequest{}
-	mi := &file_rookery_v1_network_proto_msgTypes[5]
+	mi := &file_rookery_v1_network_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -362,7 +422,7 @@ func (x *DeleteNetworkRequest) String() string {
 func (*DeleteNetworkRequest) ProtoMessage() {}
 
 func (x *DeleteNetworkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_network_proto_msgTypes[5]
+	mi := &file_rookery_v1_network_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -375,7 +435,7 @@ func (x *DeleteNetworkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteNetworkRequest.ProtoReflect.Descriptor instead.
 func (*DeleteNetworkRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_network_proto_rawDescGZIP(), []int{5}
+	return file_rookery_v1_network_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *DeleteNetworkRequest) GetId() int64 {
@@ -404,7 +464,7 @@ type NetworkPipe struct {
 
 func (x *NetworkPipe) Reset() {
 	*x = NetworkPipe{}
-	mi := &file_rookery_v1_network_proto_msgTypes[6]
+	mi := &file_rookery_v1_network_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -416,7 +476,7 @@ func (x *NetworkPipe) String() string {
 func (*NetworkPipe) ProtoMessage() {}
 
 func (x *NetworkPipe) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_network_proto_msgTypes[6]
+	mi := &file_rookery_v1_network_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -429,7 +489,7 @@ func (x *NetworkPipe) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NetworkPipe.ProtoReflect.Descriptor instead.
 func (*NetworkPipe) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_network_proto_rawDescGZIP(), []int{6}
+	return file_rookery_v1_network_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *NetworkPipe) GetId() int64 {
@@ -517,7 +577,7 @@ type ListNetworkPipesRequest struct {
 
 func (x *ListNetworkPipesRequest) Reset() {
 	*x = ListNetworkPipesRequest{}
-	mi := &file_rookery_v1_network_proto_msgTypes[7]
+	mi := &file_rookery_v1_network_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -529,7 +589,7 @@ func (x *ListNetworkPipesRequest) String() string {
 func (*ListNetworkPipesRequest) ProtoMessage() {}
 
 func (x *ListNetworkPipesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_network_proto_msgTypes[7]
+	mi := &file_rookery_v1_network_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -542,7 +602,7 @@ func (x *ListNetworkPipesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNetworkPipesRequest.ProtoReflect.Descriptor instead.
 func (*ListNetworkPipesRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_network_proto_rawDescGZIP(), []int{7}
+	return file_rookery_v1_network_proto_rawDescGZIP(), []int{8}
 }
 
 type ListNetworkPipesResponse struct {
@@ -554,7 +614,7 @@ type ListNetworkPipesResponse struct {
 
 func (x *ListNetworkPipesResponse) Reset() {
 	*x = ListNetworkPipesResponse{}
-	mi := &file_rookery_v1_network_proto_msgTypes[8]
+	mi := &file_rookery_v1_network_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -566,7 +626,7 @@ func (x *ListNetworkPipesResponse) String() string {
 func (*ListNetworkPipesResponse) ProtoMessage() {}
 
 func (x *ListNetworkPipesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_network_proto_msgTypes[8]
+	mi := &file_rookery_v1_network_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -579,7 +639,7 @@ func (x *ListNetworkPipesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNetworkPipesResponse.ProtoReflect.Descriptor instead.
 func (*ListNetworkPipesResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_network_proto_rawDescGZIP(), []int{8}
+	return file_rookery_v1_network_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListNetworkPipesResponse) GetPipes() []*NetworkPipe {
@@ -599,7 +659,7 @@ type CreateNetworkPipeRequest struct {
 
 func (x *CreateNetworkPipeRequest) Reset() {
 	*x = CreateNetworkPipeRequest{}
-	mi := &file_rookery_v1_network_proto_msgTypes[9]
+	mi := &file_rookery_v1_network_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -611,7 +671,7 @@ func (x *CreateNetworkPipeRequest) String() string {
 func (*CreateNetworkPipeRequest) ProtoMessage() {}
 
 func (x *CreateNetworkPipeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_network_proto_msgTypes[9]
+	mi := &file_rookery_v1_network_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -624,7 +684,7 @@ func (x *CreateNetworkPipeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateNetworkPipeRequest.ProtoReflect.Descriptor instead.
 func (*CreateNetworkPipeRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_network_proto_rawDescGZIP(), []int{9}
+	return file_rookery_v1_network_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *CreateNetworkPipeRequest) GetNetworkAId() int64 {
@@ -650,7 +710,7 @@ type DeleteNetworkPipeRequest struct {
 
 func (x *DeleteNetworkPipeRequest) Reset() {
 	*x = DeleteNetworkPipeRequest{}
-	mi := &file_rookery_v1_network_proto_msgTypes[10]
+	mi := &file_rookery_v1_network_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -662,7 +722,7 @@ func (x *DeleteNetworkPipeRequest) String() string {
 func (*DeleteNetworkPipeRequest) ProtoMessage() {}
 
 func (x *DeleteNetworkPipeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_network_proto_msgTypes[10]
+	mi := &file_rookery_v1_network_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -675,7 +735,7 @@ func (x *DeleteNetworkPipeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteNetworkPipeRequest.ProtoReflect.Descriptor instead.
 func (*DeleteNetworkPipeRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_network_proto_rawDescGZIP(), []int{10}
+	return file_rookery_v1_network_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *DeleteNetworkPipeRequest) GetId() int64 {
@@ -715,6 +775,10 @@ const file_rookery_v1_network_proto_rawDesc = "" +
 	"\x14CreateNetworkRequest\x12;\n" +
 	"\x04name\x18\x01 \x01(\tB'\xfaB$r\"\x10\x01\x18@2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$R\x04name\x12$\n" +
 	"\tipv4_cidr\x18\x02 \x01(\tB\a\xfaB\x04r\x02\x10\x01R\bipv4Cidr\x12$\n" +
+	"\tipv6_cidr\x18\x03 \x01(\tB\a\xfaB\x04r\x02\x10\x01R\bipv6Cidr\"{\n" +
+	"\x14UpdateNetworkRequest\x12\x17\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x12$\n" +
+	"\tipv4_cidr\x18\x02 \x01(\tB\a\xfaB\x04r\x02\x10\x01R\bipv4Cidr\x12$\n" +
 	"\tipv6_cidr\x18\x03 \x01(\tB\a\xfaB\x04r\x02\x10\x01R\bipv6Cidr\"/\n" +
 	"\x14DeleteNetworkRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\xd4\x03\n" +
@@ -744,12 +808,13 @@ const file_rookery_v1_network_proto_rawDesc = "" +
 	"\fnetwork_b_id\x18\x02 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\n" +
 	"networkBId\"3\n" +
 	"\x18DeleteNetworkPipeRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id2\x95\x06\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id2\xfc\x06\n" +
 	"\x0eNetworkService\x12r\n" +
 	"\fListNetworks\x12\x1f.rookery.v1.ListNetworksRequest\x1a .rookery.v1.ListNetworksResponse\"\x1f\x82\xd3\xe4\x93\x02\x19b\bnetworks\x12\r/api/networks\x12\\\n" +
 	"\n" +
 	"GetNetwork\x12\x1d.rookery.v1.GetNetworkRequest\x1a\x13.rookery.v1.Network\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/api/networks/{id}\x12`\n" +
 	"\rCreateNetwork\x12 .rookery.v1.CreateNetworkRequest\x1a\x13.rookery.v1.Network\"\x18\x82\xd3\xe4\x93\x02\x12:\x01*\"\r/api/networks\x12e\n" +
+	"\rUpdateNetwork\x12 .rookery.v1.UpdateNetworkRequest\x1a\x13.rookery.v1.Network\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\x1a\x12/api/networks/{id}\x12e\n" +
 	"\rDeleteNetwork\x12 .rookery.v1.DeleteNetworkRequest\x1a\x16.google.protobuf.Empty\"\x1a\x82\xd3\xe4\x93\x02\x14*\x12/api/networks/{id}\x12\x80\x01\n" +
 	"\x10ListNetworkPipes\x12#.rookery.v1.ListNetworkPipesRequest\x1a$.rookery.v1.ListNetworkPipesResponse\"!\x82\xd3\xe4\x93\x02\x1bb\x05pipes\x12\x12/api/network-pipes\x12q\n" +
 	"\x11CreateNetworkPipe\x12$.rookery.v1.CreateNetworkPipeRequest\x1a\x17.rookery.v1.NetworkPipe\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/api/network-pipes\x12r\n" +
@@ -767,45 +832,48 @@ func file_rookery_v1_network_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_network_proto_rawDescData
 }
 
-var file_rookery_v1_network_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_rookery_v1_network_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_rookery_v1_network_proto_goTypes = []any{
 	(*Network)(nil),                  // 0: rookery.v1.Network
 	(*ListNetworksRequest)(nil),      // 1: rookery.v1.ListNetworksRequest
 	(*ListNetworksResponse)(nil),     // 2: rookery.v1.ListNetworksResponse
 	(*GetNetworkRequest)(nil),        // 3: rookery.v1.GetNetworkRequest
 	(*CreateNetworkRequest)(nil),     // 4: rookery.v1.CreateNetworkRequest
-	(*DeleteNetworkRequest)(nil),     // 5: rookery.v1.DeleteNetworkRequest
-	(*NetworkPipe)(nil),              // 6: rookery.v1.NetworkPipe
-	(*ListNetworkPipesRequest)(nil),  // 7: rookery.v1.ListNetworkPipesRequest
-	(*ListNetworkPipesResponse)(nil), // 8: rookery.v1.ListNetworkPipesResponse
-	(*CreateNetworkPipeRequest)(nil), // 9: rookery.v1.CreateNetworkPipeRequest
-	(*DeleteNetworkPipeRequest)(nil), // 10: rookery.v1.DeleteNetworkPipeRequest
-	(*timestamppb.Timestamp)(nil),    // 11: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),            // 12: google.protobuf.Empty
+	(*UpdateNetworkRequest)(nil),     // 5: rookery.v1.UpdateNetworkRequest
+	(*DeleteNetworkRequest)(nil),     // 6: rookery.v1.DeleteNetworkRequest
+	(*NetworkPipe)(nil),              // 7: rookery.v1.NetworkPipe
+	(*ListNetworkPipesRequest)(nil),  // 8: rookery.v1.ListNetworkPipesRequest
+	(*ListNetworkPipesResponse)(nil), // 9: rookery.v1.ListNetworkPipesResponse
+	(*CreateNetworkPipeRequest)(nil), // 10: rookery.v1.CreateNetworkPipeRequest
+	(*DeleteNetworkPipeRequest)(nil), // 11: rookery.v1.DeleteNetworkPipeRequest
+	(*timestamppb.Timestamp)(nil),    // 12: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),            // 13: google.protobuf.Empty
 }
 var file_rookery_v1_network_proto_depIdxs = []int32{
-	11, // 0: rookery.v1.Network.created_at:type_name -> google.protobuf.Timestamp
-	11, // 1: rookery.v1.Network.updated_at:type_name -> google.protobuf.Timestamp
+	12, // 0: rookery.v1.Network.created_at:type_name -> google.protobuf.Timestamp
+	12, // 1: rookery.v1.Network.updated_at:type_name -> google.protobuf.Timestamp
 	0,  // 2: rookery.v1.ListNetworksResponse.networks:type_name -> rookery.v1.Network
-	11, // 3: rookery.v1.NetworkPipe.created_at:type_name -> google.protobuf.Timestamp
-	11, // 4: rookery.v1.NetworkPipe.updated_at:type_name -> google.protobuf.Timestamp
-	6,  // 5: rookery.v1.ListNetworkPipesResponse.pipes:type_name -> rookery.v1.NetworkPipe
+	12, // 3: rookery.v1.NetworkPipe.created_at:type_name -> google.protobuf.Timestamp
+	12, // 4: rookery.v1.NetworkPipe.updated_at:type_name -> google.protobuf.Timestamp
+	7,  // 5: rookery.v1.ListNetworkPipesResponse.pipes:type_name -> rookery.v1.NetworkPipe
 	1,  // 6: rookery.v1.NetworkService.ListNetworks:input_type -> rookery.v1.ListNetworksRequest
 	3,  // 7: rookery.v1.NetworkService.GetNetwork:input_type -> rookery.v1.GetNetworkRequest
 	4,  // 8: rookery.v1.NetworkService.CreateNetwork:input_type -> rookery.v1.CreateNetworkRequest
-	5,  // 9: rookery.v1.NetworkService.DeleteNetwork:input_type -> rookery.v1.DeleteNetworkRequest
-	7,  // 10: rookery.v1.NetworkService.ListNetworkPipes:input_type -> rookery.v1.ListNetworkPipesRequest
-	9,  // 11: rookery.v1.NetworkService.CreateNetworkPipe:input_type -> rookery.v1.CreateNetworkPipeRequest
-	10, // 12: rookery.v1.NetworkService.DeleteNetworkPipe:input_type -> rookery.v1.DeleteNetworkPipeRequest
-	2,  // 13: rookery.v1.NetworkService.ListNetworks:output_type -> rookery.v1.ListNetworksResponse
-	0,  // 14: rookery.v1.NetworkService.GetNetwork:output_type -> rookery.v1.Network
-	0,  // 15: rookery.v1.NetworkService.CreateNetwork:output_type -> rookery.v1.Network
-	12, // 16: rookery.v1.NetworkService.DeleteNetwork:output_type -> google.protobuf.Empty
-	8,  // 17: rookery.v1.NetworkService.ListNetworkPipes:output_type -> rookery.v1.ListNetworkPipesResponse
-	6,  // 18: rookery.v1.NetworkService.CreateNetworkPipe:output_type -> rookery.v1.NetworkPipe
-	12, // 19: rookery.v1.NetworkService.DeleteNetworkPipe:output_type -> google.protobuf.Empty
-	13, // [13:20] is the sub-list for method output_type
-	6,  // [6:13] is the sub-list for method input_type
+	5,  // 9: rookery.v1.NetworkService.UpdateNetwork:input_type -> rookery.v1.UpdateNetworkRequest
+	6,  // 10: rookery.v1.NetworkService.DeleteNetwork:input_type -> rookery.v1.DeleteNetworkRequest
+	8,  // 11: rookery.v1.NetworkService.ListNetworkPipes:input_type -> rookery.v1.ListNetworkPipesRequest
+	10, // 12: rookery.v1.NetworkService.CreateNetworkPipe:input_type -> rookery.v1.CreateNetworkPipeRequest
+	11, // 13: rookery.v1.NetworkService.DeleteNetworkPipe:input_type -> rookery.v1.DeleteNetworkPipeRequest
+	2,  // 14: rookery.v1.NetworkService.ListNetworks:output_type -> rookery.v1.ListNetworksResponse
+	0,  // 15: rookery.v1.NetworkService.GetNetwork:output_type -> rookery.v1.Network
+	0,  // 16: rookery.v1.NetworkService.CreateNetwork:output_type -> rookery.v1.Network
+	0,  // 17: rookery.v1.NetworkService.UpdateNetwork:output_type -> rookery.v1.Network
+	13, // 18: rookery.v1.NetworkService.DeleteNetwork:output_type -> google.protobuf.Empty
+	9,  // 19: rookery.v1.NetworkService.ListNetworkPipes:output_type -> rookery.v1.ListNetworkPipesResponse
+	7,  // 20: rookery.v1.NetworkService.CreateNetworkPipe:output_type -> rookery.v1.NetworkPipe
+	13, // 21: rookery.v1.NetworkService.DeleteNetworkPipe:output_type -> google.protobuf.Empty
+	14, // [14:22] is the sub-list for method output_type
+	6,  // [6:14] is the sub-list for method input_type
 	6,  // [6:6] is the sub-list for extension type_name
 	6,  // [6:6] is the sub-list for extension extendee
 	0,  // [0:6] is the sub-list for field type_name
@@ -822,7 +890,7 @@ func file_rookery_v1_network_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_network_proto_rawDesc), len(file_rookery_v1_network_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

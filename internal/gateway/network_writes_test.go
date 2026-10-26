@@ -246,3 +246,86 @@ func TestNetworkPipeRoutes(t *testing.T) {
 		t.Fatalf("deleted pipes = %+v", runtime.pipeDeleted)
 	}
 }
+
+func TestNetworkUpdateCIDRs(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "network-update.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	network, err := st.CreateNetwork(ctx, store.Network{
+		Name: "lab", BridgeDomainID: 620, IPv4CIDR: "10.20.0.0/24", IPv6CIDR: "fd00:20::/64",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gw, err := gateway.New(st, fakeReadiness{status: readiness.Status{
+		Ready: true, VPP: readiness.VPPStatus{ComponentStatus: readiness.ComponentStatus{Ready: true}},
+	}}, gateway.WithNetworkRuntime(&fakeNetworkRuntime{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	server := httptest.NewServer(gw.Handler)
+	t.Cleanup(server.Close)
+
+	request, err := http.NewRequest(http.MethodPut, server.URL+"/api/networks/"+jsonID(network.ID),
+		strings.NewReader(`{"ipv4_cidr":"10.30.0.0/24","ipv6_cidr":"fd00:30::/64"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("update network status = %d, body = %s", response.StatusCode, readBody(t, response))
+	}
+	var updated map[string]any
+	decodeBody(t, response, &updated)
+	if updated["ipv4_cidr"] != "10.30.0.0/24" || updated["ipv6_cidr"] != "fd00:30::/64" {
+		t.Fatalf("updated network = %+v", updated)
+	}
+	stored, err := st.GetNetwork(ctx, network.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.IPv4CIDR != "10.30.0.0/24" || stored.IPv6CIDR != "fd00:30::/64" {
+		t.Fatalf("stored network = %+v", stored)
+	}
+
+	request, err = http.NewRequest(http.MethodPut, server.URL+"/api/networks/"+jsonID(network.ID),
+		strings.NewReader(`{"ipv4_cidr":"not-a-cidr","ipv6_cidr":"fd00:30::/64"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err = http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid CIDR status = %d, body = %s", response.StatusCode, readBody(t, response))
+	}
+	_ = response.Body.Close()
+
+	if _, err := st.CreateVNF(ctx, store.VNF{Name: "lab-dns", NetworkID: network.ID, Type: store.VNFTypeDNS}); err != nil {
+		t.Fatal(err)
+	}
+	request, err = http.NewRequest(http.MethodPut, server.URL+"/api/networks/"+jsonID(network.ID),
+		strings.NewReader(`{"ipv4_cidr":"10.40.0.0/24","ipv6_cidr":"fd00:40::/64"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err = http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusConflict {
+		t.Fatalf("update network with VNF status = %d, body = %s", response.StatusCode, readBody(t, response))
+	}
+	_ = response.Body.Close()
+}

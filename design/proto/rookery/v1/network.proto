@@ -29,6 +29,13 @@ service NetworkService {
     };
   }
 
+  rpc UpdateNetwork(UpdateNetworkRequest) returns (Network) {
+    option (google.api.http) = {
+      put: "/api/networks/{id}"
+      body: "*"
+    };
+  }
+
   rpc DeleteNetwork(DeleteNetworkRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {delete: "/api/networks/{id}"};
   }
@@ -83,6 +90,12 @@ message CreateNetworkRequest {
     max_len: 64
     pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
   }];
+  string ipv4_cidr = 2 [(validate.rules).string = {min_len: 1}];
+  string ipv6_cidr = 3 [(validate.rules).string = {min_len: 1}];
+}
+
+message UpdateNetworkRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
   string ipv4_cidr = 2 [(validate.rules).string = {min_len: 1}];
   string ipv6_cidr = 3 [(validate.rules).string = {min_len: 1}];
 }

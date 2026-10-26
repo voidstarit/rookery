@@ -81,8 +81,10 @@ provider "rookery" {
 VM power actions (`start`, `stop`, `reset`, `ctrl-alt-del`) are deliberately
 not part of `rookery_vm`; use the Rookery UI or API for runtime operations.
 Changing `disk_ids` or `interface_ids` requires the VM to be stopped.
-`rookery_media`, `rookery_network`, and `rookery_route_table` are immutable and
-replaced when changed. `rookery_route` is also immutable.
+`rookery_media` and `rookery_route_table` are immutable and replaced when
+changed. `rookery_network` names remain immutable, but its `ipv4_cidr` and
+`ipv6_cidr` can be updated while the network has no VNFs, host taps, or BVI.
+`rookery_route` is also immutable.
 
 `rookery_route` exposes the VPP path options `route_count`, `next_hop_table`,
 `weight`, `udp_encap`, `ipv4_lookup_table`, `ipv6_lookup_table`,

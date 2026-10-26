@@ -710,6 +710,141 @@ var _ interface {
 
 var _CreateNetworkRequest_Name_Pattern = regexp.MustCompile("^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
+// Validate checks the field values on UpdateNetworkRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *UpdateNetworkRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on UpdateNetworkRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// UpdateNetworkRequestMultiError, or nil if none found.
+func (m *UpdateNetworkRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *UpdateNetworkRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetId() <= 0 {
+		err := UpdateNetworkRequestValidationError{
+			field:  "Id",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetIpv4Cidr()) < 1 {
+		err := UpdateNetworkRequestValidationError{
+			field:  "Ipv4Cidr",
+			reason: "value length must be at least 1 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetIpv6Cidr()) < 1 {
+		err := UpdateNetworkRequestValidationError{
+			field:  "Ipv6Cidr",
+			reason: "value length must be at least 1 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return UpdateNetworkRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// UpdateNetworkRequestMultiError is an error wrapping multiple validation
+// errors returned by UpdateNetworkRequest.ValidateAll() if the designated
+// constraints aren't met.
+type UpdateNetworkRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m UpdateNetworkRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m UpdateNetworkRequestMultiError) AllErrors() []error { return m }
+
+// UpdateNetworkRequestValidationError is the validation error returned by
+// UpdateNetworkRequest.Validate if the designated constraints aren't met.
+type UpdateNetworkRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e UpdateNetworkRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e UpdateNetworkRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e UpdateNetworkRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e UpdateNetworkRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e UpdateNetworkRequestValidationError) ErrorName() string {
+	return "UpdateNetworkRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e UpdateNetworkRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sUpdateNetworkRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = UpdateNetworkRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = UpdateNetworkRequestValidationError{}
+
 // Validate checks the field values on DeleteNetworkRequest with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.

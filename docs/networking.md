@@ -298,6 +298,12 @@ must be the network BVI address (`.1`). The IPv6 CIDR currently defines the
 allowed IPv6 range and reservations; IPv6 BVI/memif address assignment follows
 with shared DHCPv6.
 
+Use **Edit CIDRs** on a network row to change its prefixes. To avoid leaving
+VPP, DHCP, or NAT state inconsistent, Rookery blocks the change while the
+network has any VNFs, host taps, legacy DHCP configuration, or a BVI/gateway.
+Remove those first. L2 interface, VM, and bridge-domain-pipe attachments do not
+depend on the network CIDR and do not block the update.
+
 ## VNF networking
 
 DHCPv4 VNFs use one shared memif per network by default. Creating a network

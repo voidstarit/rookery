@@ -135,6 +135,7 @@ static UI.
 | `GET`    | `/api/networks`    | List Rookery Networks (VPP bridge domains) |
 | `POST`   | `/api/networks`    | Create a VPP bridge domain with IPv4/IPv6 CIDRs |
 | `GET`    | `/api/networks/{id}` | Get one network                 |
+| `PUT`    | `/api/networks/{id}` | Update a network's IPv4/IPv6 CIDRs |
 | `GET`    | `/api/network-pipes` | List bridge-domain pipes |
 | `POST`   | `/api/network-pipes` | Create a VPP pipe between two bridge domains (`network_a_id`, `network_b_id`) |
 | `DELETE` | `/api/network-pipes/{id}` | Delete a bridge-domain pipe |
@@ -143,6 +144,9 @@ static UI.
 | `PUT`    | `/api/vpp/interfaces/{name}/addresses` | Replace the managed IPv4/IPv6 addresses on a VPP interface |
 | `GET`    | `/api/vpp/interfaces/{name}/route-tables` | Get IPv4/IPv6 FIB bindings for a host interface or host tap |
 | `PUT`    | `/api/vpp/interfaces/{name}/route-tables` | Set IPv4/IPv6 FIB bindings for a host interface or host tap |
+
+Network CIDRs can be changed with `PUT /api/networks/{id}` while the network has
+no VNFs, host taps, legacy DHCP configuration, or BVI/gateway.
 
 The VPP interface address PUT body accepts `addresses` (CIDR strings) and
 `dhcp_client_enabled` (IPv4 DHCP client). The GET/PUT response also includes
