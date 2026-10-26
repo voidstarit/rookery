@@ -62,8 +62,16 @@ fi
 
 case "$username" in
   root) home="$mountpoint/root" ;;
-  *)    home="$mountpoint/home/$username" ;;
+  *[!A-Za-z0-9_-]*)
+    echo "invalid username: $username" >&2
+    exit 1
+    ;;
+  *) home="$mountpoint/home/$username" ;;
 esac
+
+if [ "$username" != root ] && ! grep -q "^${username}:" "$mountpoint/etc/passwd"; then
+  chroot "$mountpoint" /usr/sbin/useradd -m -s /bin/bash "$username"
+fi
 
 if [ -d "$home" ]; then
   mkdir -p "$home/.ssh"
