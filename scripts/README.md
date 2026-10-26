@@ -105,9 +105,14 @@ resource "rookery_disk" "web" {
 ```
 
 The example mounts the clone, sets the hostname and timezone, creates the
-requested user if needed, and appends SSH authorized keys. It assumes a simple
-single-filesystem image; for partitioned images, adapt the mount logic (for
-example with `guestfish` or `virt-customize`).
+requested user if needed, and appends SSH authorized keys. It handles both a
+filesystem directly on the device and partitioned images. The root partition
+is selected by a `root`/`rootfs`/`linux-root` filesystem or partition label, or
+by probing each partition for `/etc/os-release` or `/etc/passwd`. LVM logical
+volumes are commonly created with partition scanning disabled, so the script
+reads the partition table with `partx`, then exposes the partitions with
+`kpartx` when available or with `dmsetup` linear mappings otherwise. Those
+temporary mappings are removed after unmounting.
 
 Every stage is logged to stderr and Rookery captures the combined script output
 in its logs. The complete `ROOKERY_PROVISION_JSON` payload is logged at the
@@ -120,7 +125,10 @@ If the clone's `provisioning` object is omitted or empty, Rookery skips the
 provisioning script entirely. The script also exits successfully without
 mounting when it is invoked manually with an empty `properties` object.
 
-Requirements: `bash`, `jq`, `mount`, `umount`, and the target image must contain
+Requirements: `bash`, `jq`, `mount`, `umount`, `lsblk`, and `blkid`; `partx`
+is additionally required for partitioned images. For partitioned LVM logical
+volumes, `kpartx` or `dmsetup` is required to create temporary partition
+mappings; `dmsetup` is included with `lvm2`. The target image must contain
 `useradd`/`chown` for non-root users. The script runs as the API user with the
 same privileges as other Rookery startup/disk scripts; only use trusted
 commands.
