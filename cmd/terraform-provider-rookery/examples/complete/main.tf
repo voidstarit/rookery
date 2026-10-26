@@ -84,6 +84,8 @@ resource "rookery_route" "app" {
   ipv6           = false
   prefix         = "10.20.0.0/16"
   next_hop       = "10.20.0.1"
+  description    = "Application subnet"
+  preference     = 10
 }
 
 resource "rookery_vnf" "dhcp" {

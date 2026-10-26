@@ -180,6 +180,17 @@ type Network struct {
 	UpdatedAt         time.Time `json:"updated_at"`
 }
 
+// StartupScript is the singleton server-level script run after API startup.
+type StartupScript struct {
+	Enabled   bool       `json:"enabled"`
+	Script    string     `json:"script,omitempty"`
+	Status    string     `json:"status"`
+	ExitCode  int        `json:"exit_code"`
+	Output    string     `json:"output,omitempty"`
+	RanAt     *time.Time `json:"ran_at,omitempty"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
 const (
 	// VNFTypeDHCPv4 is a DHCPv4 server function.
 	VNFTypeDHCPv4 = "dhcpv4"
@@ -471,8 +482,94 @@ func Open(dbPath string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if err := ensureStartupScriptSchema(ctx, db); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := ensureVPPInterfaceAddressesSchema(ctx, db); err != nil {
+		db.Close()
+		return nil, err
+	}
 
 	return &Store{db: db}, nil
+}
+
+// ensureVPPInterfaceAddressesSchema repairs development databases that recorded
+// a higher schema version before the address table was added.
+func ensureVPPInterfaceAddressesSchema(ctx context.Context, db *sql.DB) error {
+	var exists int
+	if err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM sqlite_master
+		WHERE type = 'table' AND name = 'vpp_interface_addresses'`).Scan(&exists); err != nil {
+		return fmt.Errorf("inspect vpp_interface_addresses schema: %w", err)
+	}
+	if exists != 0 {
+		_, err := db.ExecContext(ctx, `
+			CREATE TABLE IF NOT EXISTS vpp_interface_dhcp_clients (
+			  interface_name TEXT PRIMARY KEY,
+			  enabled INTEGER NOT NULL DEFAULT 0,
+			  updated_at INTEGER NOT NULL
+			)`)
+		if err != nil {
+			return fmt.Errorf("create vpp_interface_dhcp_clients table: %w", err)
+		}
+		return nil
+	}
+	body, err := migrations.ReadFile("migrations/0028_vpp_interface_addresses.sql")
+	if err != nil {
+		return fmt.Errorf("read vpp_interface_addresses migration: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, string(body)); err != nil {
+		return fmt.Errorf("create vpp_interface_addresses table: %w", err)
+	}
+	return nil
+}
+
+// ensureStartupScriptSchema recreates the startup-script singleton if a
+// development database is missing the table or has the pre-split schema. This
+// is intentionally limited to this server setting; normal schema changes stay
+// in the numbered migrations.
+func ensureStartupScriptSchema(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, `SELECT name FROM pragma_table_info('startup_script')`)
+	if err != nil {
+		return fmt.Errorf("inspect startup_script schema: %w", err)
+	}
+	columns := make(map[string]bool)
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return fmt.Errorf("inspect startup_script column: %w", err)
+		}
+		columns[name] = true
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close startup_script schema rows: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("inspect startup_script schema: %w", err)
+	}
+
+	required := []string{
+		"id", "enabled", "script", "status", "exit_code", "output", "ran_at", "updated_at",
+		"vpp_enabled", "vpp_script", "vpp_status", "vpp_exit_code", "vpp_output", "vpp_ran_at", "vpp_updated_at",
+	}
+	for _, name := range required {
+		if !columns[name] {
+			body, err := migrations.ReadFile("migrations/0027_startup_script.sql")
+			if err != nil {
+				return fmt.Errorf("read startup_script migration: %w", err)
+			}
+			if _, err := db.ExecContext(ctx, `DROP TABLE IF EXISTS startup_script`); err != nil {
+				return fmt.Errorf("replace startup_script table: %w", err)
+			}
+			if _, err := db.ExecContext(ctx, string(body)); err != nil {
+				return fmt.Errorf("create startup_script table: %w", err)
+			}
+			return nil
+		}
+	}
+	return nil
 }
 
 // Close closes the underlying database.
@@ -1075,6 +1172,129 @@ func (s *Store) CreateNetwork(ctx context.Context, network Network) (Network, er
 	return s.GetNetwork(ctx, id)
 }
 
+// GetStartupScript returns the singleton Rookery startup script.
+func (s *Store) GetStartupScript(ctx context.Context) (StartupScript, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT enabled, script, status, exit_code, output, ran_at, updated_at
+		FROM startup_script WHERE id = 1`)
+	var (
+		script    StartupScript
+		enabled   int64
+		ranAt     sql.NullInt64
+		updatedAt int64
+	)
+	if err := row.Scan(&enabled, &script.Script, &script.Status, &script.ExitCode,
+		&script.Output, &ranAt, &updatedAt); err != nil {
+		return StartupScript{}, fmt.Errorf("get startup script: %w", err)
+	}
+	script.Enabled = enabled != 0
+	if ranAt.Valid {
+		value := time.UnixMilli(ranAt.Int64).UTC()
+		script.RanAt = &value
+	}
+	script.UpdatedAt = time.UnixMilli(updatedAt).UTC()
+	return script, nil
+}
+
+// SetStartupScript stores the startup script configuration. Saving a new
+// configuration resets the previous execution result; an enabled script is
+// pending until the next API startup.
+func (s *Store) SetStartupScript(ctx context.Context, enabled bool, script string) (StartupScript, error) {
+	status := "disabled"
+	if enabled {
+		status = "pending"
+	}
+	enabledValue := 0
+	if enabled {
+		enabledValue = 1
+	}
+	if _, err := s.db.ExecContext(ctx, `
+		UPDATE startup_script
+		SET enabled = ?, script = ?, status = ?, exit_code = -1, output = '',
+		    ran_at = NULL, updated_at = ?
+		WHERE id = 1`,
+		enabledValue, script, status, time.Now().UTC().UnixMilli(),
+	); err != nil {
+		return StartupScript{}, fmt.Errorf("update startup script: %w", err)
+	}
+	return s.GetStartupScript(ctx)
+}
+
+// SetStartupScriptResult stores the outcome of a startup script run.
+func (s *Store) SetStartupScriptResult(ctx context.Context, status string, exitCode int, output string, ranAt time.Time) (StartupScript, error) {
+	if _, err := s.db.ExecContext(ctx, `
+		UPDATE startup_script
+		SET status = ?, exit_code = ?, output = ?, ran_at = ?, updated_at = ?
+		WHERE id = 1`,
+		status, exitCode, output, ranAt.UTC().UnixMilli(), time.Now().UTC().UnixMilli(),
+	); err != nil {
+		return StartupScript{}, fmt.Errorf("update startup script result: %w", err)
+	}
+	return s.GetStartupScript(ctx)
+}
+
+// GetVPPStartupScript returns the VPP startup script and its last execution
+// result.
+func (s *Store) GetVPPStartupScript(ctx context.Context) (StartupScript, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT vpp_enabled, vpp_script, vpp_status, vpp_exit_code, vpp_output,
+		       vpp_ran_at, vpp_updated_at
+		FROM startup_script WHERE id = 1`)
+	var (
+		script    StartupScript
+		enabled   int64
+		ranAt     sql.NullInt64
+		updatedAt int64
+	)
+	if err := row.Scan(&enabled, &script.Script, &script.Status, &script.ExitCode,
+		&script.Output, &ranAt, &updatedAt); err != nil {
+		return StartupScript{}, fmt.Errorf("get VPP startup script: %w", err)
+	}
+	script.Enabled = enabled != 0
+	if ranAt.Valid {
+		value := time.UnixMilli(ranAt.Int64).UTC()
+		script.RanAt = &value
+	}
+	script.UpdatedAt = time.UnixMilli(updatedAt).UTC()
+	return script, nil
+}
+
+// SetVPPStartupScript stores the VPP reconnect script configuration.
+func (s *Store) SetVPPStartupScript(ctx context.Context, enabled bool, script string) (StartupScript, error) {
+	status := "disabled"
+	if enabled {
+		status = "pending"
+	}
+	enabledValue := 0
+	if enabled {
+		enabledValue = 1
+	}
+	if _, err := s.db.ExecContext(ctx, `
+		UPDATE startup_script
+		SET vpp_enabled = ?, vpp_script = ?, vpp_status = ?, vpp_exit_code = -1,
+		    vpp_output = '', vpp_ran_at = NULL, vpp_updated_at = ?
+		WHERE id = 1`,
+		enabledValue, script, status, time.Now().UTC().UnixMilli(),
+	); err != nil {
+		return StartupScript{}, fmt.Errorf("update VPP startup script: %w", err)
+	}
+	return s.GetVPPStartupScript(ctx)
+}
+
+// SetVPPStartupScriptResult stores the outcome of a VPP startup script run.
+func (s *Store) SetVPPStartupScriptResult(ctx context.Context, status string, exitCode int, output string, ranAt time.Time) (StartupScript, error) {
+	if _, err := s.db.ExecContext(ctx, `
+		UPDATE startup_script
+		SET vpp_status = ?, vpp_exit_code = ?, vpp_output = ?, vpp_ran_at = ?,
+		    vpp_updated_at = ?
+		WHERE id = 1`,
+		status, exitCode, output, ranAt.UTC().UnixMilli(), time.Now().UTC().UnixMilli(),
+	); err != nil {
+		return StartupScript{}, fmt.Errorf("update VPP startup script result: %w", err)
+	}
+	return s.GetVPPStartupScript(ctx)
+}
+
 // ListNetworks returns all networks ordered by name.
 func (s *Store) ListNetworks(ctx context.Context) ([]Network, error) {
 	rows, err := s.db.QueryContext(ctx, networkSelect+`
@@ -1388,6 +1608,16 @@ func (s *Store) DeleteNetwork(ctx context.Context, id int64) error {
 		return ErrNetworkInUse
 	case !errors.Is(err, sql.ErrNoRows):
 		return fmt.Errorf("check network usage: %w", err)
+	}
+	var pipeID int64
+	err = s.db.QueryRowContext(ctx,
+		`SELECT id FROM network_pipes WHERE network_a_id = ? OR network_b_id = ? LIMIT 1`, id, id,
+	).Scan(&pipeID)
+	switch {
+	case err == nil:
+		return ErrNetworkInUse
+	case !errors.Is(err, sql.ErrNoRows):
+		return fmt.Errorf("check network pipe usage: %w", err)
 	}
 
 	res, err := s.db.ExecContext(ctx, `DELETE FROM networks WHERE id = ?`, id)

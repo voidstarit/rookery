@@ -146,6 +146,7 @@ type interfaceService struct {
 	store       *store.Store
 	runtime     ACLRuntime
 	attachments InterfaceRuntime
+	addresses   InterfaceAddressRuntime
 	vms         VMController
 	counters    InterfaceCounterSource
 	readiness   Readiness
@@ -160,7 +161,7 @@ func (s *interfaceService) ListInterfaces(ctx context.Context, _ *rookeryv1.List
 	}
 	response := &rookeryv1.ListInterfacesResponse{Interfaces: make([]*rookeryv1.VirtualInterface, 0, len(interfaces))}
 	for _, iface := range interfaces {
-		response.Interfaces = append(response.Interfaces, interfaceToProto(iface))
+		response.Interfaces = append(response.Interfaces, s.interfaceToProto(ctx, iface))
 	}
 	return response, nil
 }
@@ -209,7 +210,17 @@ func (s *interfaceService) GetInterface(ctx context.Context, request *rookeryv1.
 	if err != nil {
 		return nil, storeReadError(err, store.ErrInterfaceNotFound, "interface not found")
 	}
-	return interfaceToProto(iface), nil
+	return s.interfaceToProto(ctx, iface), nil
+}
+
+func (s *interfaceService) interfaceToProto(ctx context.Context, iface store.VirtualInterface) *rookeryv1.VirtualInterface {
+	result := interfaceToProto(iface)
+	if s.addresses != nil && (s.readiness == nil || s.readiness.Status().VPP.Ready) {
+		if addresses, err := s.addresses.InterfaceAddresses(ctx, iface.Name); err == nil {
+			result.VppAddresses = addresses
+		}
+	}
+	return result
 }
 
 func interfaceToProto(iface store.VirtualInterface) *rookeryv1.VirtualInterface {
@@ -402,10 +413,12 @@ func storageBackendToProto(backend store.StorageBackend) *rookeryv1.StorageBacke
 
 type hostService struct {
 	rookeryv1.UnimplementedHostServiceServer
-	source VPPInterfaceSource
-	store  *store.Store
-	writer HostWriter
-	taps   HostTapWriter
+	source    VPPInterfaceSource
+	store     *store.Store
+	writer    HostWriter
+	taps      HostTapWriter
+	addresses InterfaceAddressRuntime
+	readiness Readiness
 }
 
 func (s *hostService) ListHostInterfaces(ctx context.Context, _ *rookeryv1.ListHostInterfacesRequest) (*rookeryv1.ListHostInterfacesResponse, error) {

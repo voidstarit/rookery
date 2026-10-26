@@ -33,6 +33,12 @@ func (s *Server) RunInfrastructureReconciler(ctx context.Context) {
 		}
 	}
 
+	// Rookery and VPP startup scripts run once the FD.io VPP API is reachable.
+	// They run independently of the infrastructure reconciliation worker, which
+	// can take longer or retry. The VPP script also runs on every reconnect.
+	go s.runRookeryStartupScriptOnce()
+	go s.runVPPStartupScript()
+
 	// The initial reconciliation runs in the same background worker as later
 	// VPP-restart rebuilds so the watcher can detect another VPP restart while
 	// the initial pass is still in progress.
@@ -42,6 +48,9 @@ func (s *Server) RunInfrastructureReconciler(ctx context.Context) {
 func (s *Server) reconcileInfrastructure(ctx context.Context) error {
 	var errs []error
 	if err := s.ReconcileNetworks(ctx); err != nil {
+		errs = append(errs, err)
+	}
+	if err := s.ReconcileNetworkPipes(ctx); err != nil {
 		errs = append(errs, err)
 	}
 	if err := s.ReconcileNetworkHostTaps(ctx); err != nil {
@@ -66,6 +75,12 @@ func (s *Server) reconcileInfrastructure(ctx context.Context) error {
 		errs = append(errs, err)
 	}
 	if err := s.reconcileVNFBindings(ctx); err != nil {
+		errs = append(errs, err)
+	}
+	if err := s.ReconcileVPPInterfaceAddresses(ctx); err != nil {
+		errs = append(errs, err)
+	}
+	if err := s.ReconcileVPPInterfaceRouteTables(ctx); err != nil {
 		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
@@ -173,6 +188,7 @@ func (s *Server) watchVPP(ctx context.Context, initiallyDirty bool) {
 			}
 		}
 
+		reconnected := false
 		pingCtx, cancel := context.WithTimeout(ctx, vppWatchInterval)
 		pingErr := s.networks.Ping(pingCtx)
 		identity, identityErr := s.networks.Identity()
@@ -194,6 +210,7 @@ func (s *Server) watchVPP(ctx context.Context, initiallyDirty bool) {
 			s.logger.Info().Msg("VPP API is reachable again")
 			healthy = true
 			pendingReconcile = true
+			reconnected = true
 		}
 		if identityErr == nil && identity != "" {
 			if lastIdentity != "" && identity != lastIdentity {
@@ -203,12 +220,16 @@ func (s *Server) watchVPP(ctx context.Context, initiallyDirty bool) {
 					Msg("VPP restart detected; rebuilding VPP resources")
 				pendingReconcile = true
 				pendingReset = true
+				reconnected = true
 				// Do not cancel the in-flight worker here. Starting a second
 				// worker while the first can still receive VPP API responses
 				// causes duplicate BVI creation (VPP aborts on duplicate
 				// 'bviN-tx' interface nodes).
 			}
 			lastIdentity = identity
+		}
+		if reconnected {
+			go s.runVPPStartupScript()
 		}
 
 		if !pendingReconcile || !healthy || reconcileDone != nil {

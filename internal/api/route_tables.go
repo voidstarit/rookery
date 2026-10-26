@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"github.com/voidstarit/rookery/internal/host"
+	"github.com/voidstarit/rookery/internal/store"
 )
 
 // ReconcileRouteTables recreates custom IP FIB/VRF tables and reapplies each
@@ -29,9 +32,7 @@ func (s *Server) ReconcileRouteTables(ctx context.Context) error {
 	if err != nil {
 		return errors.Join(append(errs, err)...)
 	}
-	interfaceIndex := make(map[int64]uint32, len(interfaces))
 	for _, iface := range interfaces {
-		interfaceIndex[iface.ID] = iface.SwIfIndex
 		if iface.SwIfIndex == 0 {
 			continue
 		}
@@ -47,14 +48,27 @@ func (s *Server) ReconcileRouteTables(ctx context.Context) error {
 		return errors.Join(append(errs, err)...)
 	}
 	for _, route := range routes {
-		swIfIndex := uint32(0)
-		if route.InterfaceID != nil {
-			swIfIndex = interfaceIndex[*route.InterfaceID]
-		}
 		_ = s.networks.DeleteRoute(ctx, route.TableID, route.IPv6, route.Prefix)
-		if err := s.networks.AddRoute(ctx, route.TableID, route.IPv6, route.Prefix, route.NextHop, route.EgressInterface, swIfIndex, route.Preference); err != nil {
+		if err := s.networks.AddRouteSpec(ctx, routeSpecFromStore(route)); err != nil {
 			errs = append(errs, fmt.Errorf("route %s in table %d: %w", route.Prefix, route.TableID, err))
 		}
 	}
 	return errors.Join(errs...)
+}
+
+func routeSpecFromStore(route store.Route) host.RouteSpec {
+	egress := route.EgressInterface
+	if egress == "" {
+		egress = route.InterfaceName
+	}
+	return host.RouteSpec{
+		TableID: route.TableID, IPv6: route.IPv6, Prefix: route.Prefix,
+		NextHop: route.NextHop, EgressInterface: egress, Preference: route.Preference,
+		Count: route.Count, NextHopTable: route.NextHopTable, Weight: route.Weight,
+		UDPEncap: route.UDPEncap, IPv4LookupTable: route.IPv4LookupTable,
+		IPv6LookupTable: route.IPv6LookupTable, MPLSLookupTable: route.MPLSLookupTable,
+		ResolveViaHost: route.ResolveViaHost, ResolveViaConnected: route.ResolveViaConnected,
+		RxIPv4Interface: route.RxIPv4Interface, RxIPv6Interface: route.RxIPv6Interface,
+		OutLabels: route.OutLabels, Drop: route.Drop,
+	}
 }

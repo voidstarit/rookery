@@ -73,7 +73,7 @@ provider "rookery" {
 | `rookery_interface` | vhost-user interface, optional VM, ACLs, route tables (`ipv4_table_id`/`ipv6_table_id` are VPP table ids; use `rookery_route_table.app.table_id`) |
 | `rookery_acl` | Ordered permit/deny rule set |
 | `rookery_route_table` | Custom VRF table (IDs 100000+ are reserved) |
-| `rookery_route` | Static route in a route table |
+| `rookery_route` | Static route in a route table, including VPP path options |
 | `rookery_vnf` | DHCPv4/DHCPv6/NAT44/BGP network function |
 | `rookery_vm` | VM definition, disks, interfaces, boot media |
 | `rookery_host_interface` | Take a physical NIC into VPP |
@@ -83,6 +83,22 @@ not part of `rookery_vm`; use the Rookery UI or API for runtime operations.
 Changing `disk_ids` or `interface_ids` requires the VM to be stopped.
 `rookery_media`, `rookery_network`, and `rookery_route_table` are immutable and
 replaced when changed. `rookery_route` is also immutable.
+
+`rookery_route` exposes the VPP path options `route_count`, `next_hop_table`,
+`weight`, `udp_encap`, `ipv4_lookup_table`, `ipv6_lookup_table`,
+`mpls_lookup_table`, `resolve_via_host`, `resolve_via_connected`,
+`rx_ipv4_interface`, `rx_ipv6_interface`, `out_labels`, `drop`, and
+`description`. Numeric options are nullable: omit one to leave it out of the
+VPP command, or set it to `0` explicitly when zero is meaningful, for example:
+
+```hcl
+resource "rookery_route" "lookup" {
+  route_table_id    = 0
+  ipv6              = false
+  prefix            = "10.10.1.0/24"
+  ipv4_lookup_table = 100002
+}
+```
 
 `rookery_vnf.config_json` uses protobuf JSON. Write proto field names (for
 example `range_start`, `outside_interface`, `advertise_prefixes`) and use

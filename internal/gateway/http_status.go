@@ -16,6 +16,7 @@ var createdMethods = map[string]bool{
 	"/rookery.v1.DiskService/CreateDisk":                     true,
 	"/rookery.v1.MediaService/CreateMedia":                   true,
 	"/rookery.v1.NetworkService/CreateNetwork":               true,
+	"/rookery.v1.NetworkService/CreateNetworkPipe":           true,
 	"/rookery.v1.InterfaceService/CreateInterface":           true,
 	"/rookery.v1.ACLService/CreateACL":                       true,
 	"/rookery.v1.VNFService/CreateVNF":                       true,
@@ -32,6 +33,7 @@ var noContentMethods = map[string]bool{
 	"/rookery.v1.DiskService/DeleteDisk":                     true,
 	"/rookery.v1.MediaService/DeleteMedia":                   true,
 	"/rookery.v1.NetworkService/DeleteNetwork":               true,
+	"/rookery.v1.NetworkService/DeleteNetworkPipe":           true,
 	"/rookery.v1.InterfaceService/DeleteInterface":           true,
 	"/rookery.v1.InterfaceService/ResetInterfaceCounters":    true,
 	"/rookery.v1.ACLService/DeleteACL":                       true,
@@ -56,6 +58,8 @@ func setLocationHeader(method string, response proto.Message, writer http.Respon
 		writer.Header().Set("Location", fmt.Sprintf("/api/media/%d", value.GetId()))
 	case *rookeryv1.Network:
 		writer.Header().Set("Location", fmt.Sprintf("/api/networks/%d", value.GetId()))
+	case *rookeryv1.NetworkPipe:
+		writer.Header().Set("Location", fmt.Sprintf("/api/network-pipes/%d", value.GetId()))
 	case *rookeryv1.VirtualInterface:
 		writer.Header().Set("Location", fmt.Sprintf("/api/interfaces/%d", value.GetId()))
 	case *rookeryv1.ACL:

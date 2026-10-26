@@ -39,6 +39,81 @@ dedicated network; the API then creates a BVI (`bvi<network-id>`) and takes
 over the selected outside NIC. Do not point another NAT44 setup at the same
 outside NIC.
 
+## Startup scripts
+
+Rookery has two server-level startup scripts, both configured under
+**Settings** and reported in the sidebar **Readiness** section after each run.
+Both run as the API user with `/bin/sh -c`, have a five-minute timeout, and
+retain the first 64 KiB of combined stdout/stderr with a truncation marker.
+Only configure trusted commands.
+
+### Rookery startup script
+
+The Rookery startup script runs once per API process after Rookery starts. It
+is **empty and disabled by default**. It is intended for host-level setup that
+should happen only once when the API starts. It does not rerun when VPP
+restarts.
+
+### VPP startup script
+
+The VPP startup script runs every time Rookery establishes a VPP connection,
+including after the connection drops and is re-established or VPP restarts. It
+is **enabled by default** with:
+
+```sh
+# Assign NAT44 workers
+vppctl set nat workers 0
+```
+
+Both scripts receive `ROOKERY_STARTUP_SCRIPT=1` and, when configured,
+`ROOKERY_VPP_SOCKET` in their environment. Saving a script resets its status to
+`pending` and it runs on the next applicable trigger. The Settings page shows
+the last exit code and output; the Readiness section shows the latest status in
+green for exit code `0` and red for any nonzero exit code (or a timeout).
+
+## VPP interface addresses
+
+Rookery-owned VPP interfaces can carry IPv4 and IPv6 addresses. Use the
+**Addresses** action on a virtual vhost-user interface, a host tap, or a host
+interface that is currently in VPP. Addresses are entered one CIDR per line,
+for example `10.20.0.10/24` and `fd00:20::10/64`. The addresses are applied to
+VPP immediately and stored in `vpp_interface_addresses`; startup/VPP-restart
+reconciliation reapplies them after the interfaces are recreated. Leaving the
+list empty removes only the Rookery-managed addresses for that interface.
+
+The same dialog has an **Enable DHCP client (IPv4)** toggle. VPP requests a
+DHCP lease for that specific interface. The setting is persisted and the DHCP
+client is re-enabled when the interface is recreated after an API or VPP
+restart. It can be combined with static addresses. The dialog shows both the
+host-side Linux addresses and the current live VPP-side addresses, along with
+the DHCP client status, with a **Refresh status** action after enabling the
+client. Host interface and host tap rows also show both sides.
+
+Addresses managed by other Rookery features (for example network BVI or NAT44
+dynamic addresses) are not included in this list and are not removed by this
+action.
+
+## Bridge-domain pipes
+
+A bridge-domain pipe joins two Rookery Networks at L2 without routing between
+them. Use **BD pipes** under **Rookery Networks** to choose two networks. Rookery
+creates a VPP pipe pair, places one end in each bridge domain, and records the
+pipe so it can be recreated after an API or VPP restart. VPP names the endpoints
+`pipe<instance>.0` and `pipe<instance>.1`; both ends use the normal 1500-byte
+MTU and are brought up by Rookery. Traffic entering one bridge domain is passed
+to the other, so keep bridge-domain addressing and broadcast domains in mind
+when connecting them.
+
+A pair of networks can have only one pipe. Use **A addresses** or **B addresses**
+on a pipe row to assign IPv4/IPv6 addresses to the corresponding
+`pipe<instance>.0`/`.1` endpoint. They use the same management and
+reconciliation as other Rookery-owned VPP interfaces and are removed when the
+pipe is deleted. Because pipe endpoints are bridge-domain ports, addresses on
+them are primarily for management or point-to-point use; normal VM/network
+traffic is switched at L2. The pipe list is available at
+`GET /api/network-pipes` even when VPP is unavailable, while create and delete
+require VPP readiness.
+
 ## ACLs
 
 The **Rookery Networks** tab also manages named ACLs. An ACL has a unique name,
@@ -70,10 +145,24 @@ blocked while an interface or static route references it. VPP table definitions,
 interface bindings, and static routes are recreated during startup reconciliation
 after a VPP restart.
 
-Use **Routes** on a table row to list, add, and delete static entries. Each route
-has a prefix, an optional next hop, an optional egress, and a preference metric.
-The egress can be a Rookery interface or any VPP interface by name, including a
-network BVI; the UI offers both. When an egress is set and the next hop is
+Vhost-user interfaces use the **Route tables** action on their interface row;
+their bindings live in `virtual_interfaces`. Host interfaces currently in VPP
+and host taps expose the same action. Their bindings are stored in
+`vpp_interface_route_tables` and reapplied after an API or VPP restart. A
+non-default table moves that interface out of the bridge-domain/network VRF,
+so use it only when the host interface or tap needs to participate in a
+specific VRF.
+
+Use **Routes** on a table row to list, add, and delete static entries. The form
+supports the VPP `ip route` options: count, destination prefix, table,
+next-hop address/interface, next-hop table, weight, preference, UDP encap,
+IPv4/IPv6/MPLS lookup tables, resolve-via-host/connected, rx-ip4/rx-ip6,
+out-labels, and drop. A route has a prefix, an optional next hop, an optional
+egress, and a preference metric.
+The egress can be a Rookery interface or any VPP interface by name. The UI
+lists Rookery vhost interfaces, network BVIs, host interfaces currently in VPP,
+and host taps; the **Other VPP interface** field accepts any remaining VPP name
+such as `host-eno4`. When an egress is set and the next hop is
 omitted, Rookery installs an attached/glean route, which is useful for importing
 a bridge-domain subnet into a VRF without requiring ARP for a gateway. An
 interface-only route is required when the gateway address belongs to the BVI
@@ -81,6 +170,10 @@ itself, because a `via <bvi-address> dev bviX` route can never resolve. When a
 next hop is present, it must resolve inside the route's own table: bind the
 owning interface into that table or add an interface-only route for the next
 hop. The route editor works for the default VRF `0` as well as custom tables.
+
+Numeric route options are optional: leaving one blank omits it from the VPP
+command, while entering `0` emits an explicit zero value (for example
+`ip4-lookup-in-table 0`).
 
 The route editor is a full page at
 `/route-tables/{id}?ipv6=<bool>` (the legacy

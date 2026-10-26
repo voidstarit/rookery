@@ -12,6 +12,7 @@ import type {
   HostTap,
   InterfaceCounters,
   Network,
+  NetworkPipe,
   StatusResponse,
   VirtualInterface,
   VM,
@@ -26,13 +27,21 @@ import { InterfaceACLDialog } from "./InterfaceACLDialog";
 import { InterfaceDialog } from "./InterfaceDialog";
 import { InterfaceRouteTablesDialog } from "./InterfaceRouteTablesDialog";
 import { NetworkDialog } from "./NetworkDialog";
+import { NetworkPipeDialog } from "./NetworkPipeDialog";
 import { PacketCapturePanel } from "./PacketCapture";
 import { PacketTracePanel } from "./PacketTracePanel";
+import { RouteFormPage } from "./RouteFormPage";
 import { RouteTableCreatePage } from "./RouteTableCreatePage";
 import { RouteTablePage } from "./RouteTablePage";
+import { VPPAddressesDialog } from "./VPPAddressesDialog";
+import { VPPInterfaceRouteTablesDialog } from "./VPPInterfaceRouteTablesDialog";
 import { VPPGraphView } from "./VPPGraph";
 import { aclAssignments, formatACLRuleText } from "./acl";
 import { navigate, useRoute } from "../router";
+
+function pipeEndpointName(pipe: NetworkPipe, endpoint: 0 | 1): string {
+  return `pipe${pipe.instance}.${endpoint}`;
+}
 
 function formatDate(value: string | undefined): string {
   if (!value) {
@@ -69,7 +78,7 @@ type BackendData = {
   vnfs: VNF[];
 };
 
-type Section = "networks" | "hosts" | "hosttaps" | "interfaces" | "acl" | "routes" | "troubleshoot";
+type Section = "networks" | "pipes" | "hosts" | "hosttaps" | "interfaces" | "acl" | "routes" | "troubleshoot";
 
 let aclCountersInFlight = false;
 let aclCountersLastLoaded = 0;
@@ -78,6 +87,7 @@ const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: "hosts", label: "Host interfaces" },
   { id: "hosttaps", label: "Host taps" },
   { id: "networks", label: "Networks" },
+  { id: "pipes", label: "BD pipes" },
   { id: "interfaces", label: "Interfaces" },
   { id: "acl", label: "ACLs" },
   { id: "routes", label: "Route tables" },
@@ -86,6 +96,7 @@ const SECTIONS: Array<{ id: Section; label: string }> = [
 
 export function NetworksTab() {
   const [networks, setNetworks] = useState<Network[]>([]);
+  const [networkPipes, setNetworkPipes] = useState<NetworkPipe[]>([]);
   const [hostInterfaces, setHostInterfaces] = useState<HostInterface[]>([]);
   const [hostTaps, setHostTaps] = useState<HostTap[]>([]);
   const [interfaces, setInterfaces] = useState<VirtualInterface[]>([]);
@@ -95,6 +106,9 @@ export function NetworksTab() {
   const [vppReady, setVppReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [networkError, setNetworkError] = useState("");
+  const [pipeError, setPipeError] = useState("");
+  const [pipeAction, setPipeAction] = useState("");
+  const [pipeDialogOpen, setPipeDialogOpen] = useState(false);
   const [hostError, setHostError] = useState("");
   const [hostTapError, setHostTapError] = useState("");
   const [hostTapAction, setHostTapAction] = useState("");
@@ -105,12 +119,22 @@ export function NetworksTab() {
   const [networkDialogOpen, setNetworkDialogOpen] = useState(false);
   const [interfaceDialogOpen, setInterfaceDialogOpen] = useState(false);
   const [attachIface, setAttachIface] = useState<VirtualInterface | null>(null);
+  const [addressInterface, setAddressInterface] = useState<{
+    name: string;
+    label: string;
+    hostAddresses?: string[];
+  } | null>(null);
+  const [routeTableTarget, setRouteTableTarget] = useState<{
+    name: string;
+    label: string;
+  } | null>(null);
   const [aclDialog, setAclDialog] = useState<{ acl: ACL | null } | null>(null);
   const [interfaceACLIface, setInterfaceACLIface] = useState<VirtualInterface | null>(null);
   const [routeTables, setRouteTables] = useState<RouteTable[]>([]);
   const [routeTableError, setRouteTableError] = useState("");
   const [routeTableCreateOpen, setRouteTableDialogOpen] = useState(false);
   const [routeTableRoutes, setRouteTableRoutes] = useState<RouteTable | null>(null);
+  const [routeForm, setRouteForm] = useState<{ table: RouteTable; routeID?: number } | null>(null);
   const [interfaceRouteTablesIface, setInterfaceRouteTablesIface] = useState<VirtualInterface | null>(null);
   const [expandedACLInterface, setExpandedACLInterface] = useState<number | null>(null);
   const [section, setSection] = useState<Section>("hosts");
@@ -134,9 +158,16 @@ export function NetworksTab() {
     if (second !== "hosttaps") {
       setHostTapDialogOpen(false);
     }
+    if (second !== "pipes") {
+      setPipeDialogOpen(false);
+    }
+    if (second !== "hosts" && second !== "hosttaps") {
+      setRouteTableTarget(null);
+    }
     if (root === "networks") {
       setInterfaceDialogOpen(false);
       setAttachIface(null);
+      setAddressInterface(null);
       setAclDialog(null);
       setInterfaceACLIface(null);
       setRouteTableDialogOpen(false);
@@ -163,12 +194,14 @@ export function NetworksTab() {
       if (second === "new") {
         setInterfaceDialogOpen(true);
         setAttachIface(null);
+        setAddressInterface(null);
         setInterfaceACLIface(null);
         setInterfaceRouteTablesIface(null);
         return;
       }
       const iface = interfaces.find((item) => String(item.id) === second);
       setInterfaceDialogOpen(false);
+      setAddressInterface(null);
       setAttachIface(iface && third === "attach" ? iface : null);
       setInterfaceACLIface(iface && third === "acls" ? iface : null);
       setInterfaceRouteTablesIface(iface && third === "route-tables" ? iface : null);
@@ -178,6 +211,7 @@ export function NetworksTab() {
       setSection("acl");
       setInterfaceDialogOpen(false);
       setAttachIface(null);
+      setAddressInterface(null);
       setInterfaceACLIface(null);
       setInterfaceRouteTablesIface(null);
       setRouteTableDialogOpen(false);
@@ -194,6 +228,7 @@ export function NetworksTab() {
       setSection("routes");
       setInterfaceDialogOpen(false);
       setAttachIface(null);
+      setAddressInterface(null);
       setAclDialog(null);
       setInterfaceACLIface(null);
       setInterfaceRouteTablesIface(null);
@@ -207,13 +242,25 @@ export function NetworksTab() {
         const family = route.query.get("ipv6") === "true";
         const table = routeTables.find((item) => String(item.id) === second && item.ipv6 === family);
         setRouteTableRoutes(table ?? null);
+        if (!table) {
+          setRouteForm(null);
+        } else if (route.segments[3] === "new") {
+          setRouteForm({ table });
+        } else if (route.segments[3] && route.segments[4] === "edit") {
+          setRouteForm({ table, routeID: Number(route.segments[3]) });
+        } else {
+          setRouteForm(null);
+        }
       } else {
         setRouteTableRoutes(null);
+        setRouteForm(null);
       }
       return;
     }
     setInterfaceDialogOpen(false);
+    setRouteForm(null);
     setAttachIface(null);
+    setAddressInterface(null);
     setAclDialog(null);
     setInterfaceACLIface(null);
     setRouteTableDialogOpen(false);
@@ -257,6 +304,22 @@ export function NetworksTab() {
     } catch (err) {
       if (showErrors) {
         setNetworkError(err instanceof Error ? err.message : String(err));
+      }
+    }
+  };
+
+  const loadNetworkPipes = async (showErrors = true) => {
+    try {
+      const data = await api<NetworkPipe[]>("/api/network-pipes");
+      const list = Array.isArray(data) ? data : [];
+      list.sort((a, b) => a.id - b.id);
+      setNetworkPipes(list);
+      if (showErrors) {
+        setPipeError("");
+      }
+    } catch (err) {
+      if (showErrors) {
+        setPipeError(err instanceof Error ? err.message : String(err));
       }
     }
   };
@@ -441,6 +504,7 @@ export function NetworksTab() {
     setLoading(true);
     await Promise.allSettled([
       loadNetworks(),
+      loadNetworkPipes(),
       loadHostInterfaces(),
       loadHostTaps(),
       loadInterfaces(),
@@ -691,6 +755,23 @@ export function NetworksTab() {
       setNetworkError(
         `Could not delete ${network.name}: ${err instanceof Error ? err.message : String(err)}`
       );
+    }
+  };
+
+  const deleteNetworkPipe = async (pipe: NetworkPipe) => {
+    if (!window.confirm(`Delete pipe between ${pipe.network_a_name} and ${pipe.network_b_name}?`)) {
+      return;
+    }
+    setPipeAction(String(pipe.id));
+    setPipeError("");
+    try {
+      await api(`/api/network-pipes/${pipe.id}`, { method: "DELETE" });
+      setNetworkPipes((current) => current.filter((item) => item.id !== pipe.id));
+      showToast(`Deleted pipe ${pipe.network_a_name} ↔ ${pipe.network_b_name}`);
+    } catch (err) {
+      setPipeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPipeAction("");
     }
   };
 
@@ -988,6 +1069,126 @@ export function NetworksTab() {
         </div>
       </section>
 
+      <section class="panel" aria-labelledby="pipes-heading" hidden={section !== "pipes"}>
+        <div class="panel-head">
+          <div>
+            <h2 id="pipes-heading">Bridge-domain pipes</h2>
+            <p class="panel-subtitle">
+              Connect two Rookery Networks with a VPP pipe pair.
+            </p>
+          </div>
+          <div class="actions">
+            <button class="button ghost" type="button" disabled={loading} onClick={() => void refreshAll()}>
+              {loading ? "Refreshing…" : "Refresh"}
+            </button>
+            <button
+              class="button primary"
+              type="button"
+              disabled={!vppReady || networks.length < 2}
+              title={networks.length < 2 ? "Create at least two networks first" : vppReady ? "" : "VPP must be ready"}
+              onClick={() => setPipeDialogOpen(true)}
+            >
+              <span class="button-plus" aria-hidden="true">+</span>
+              Add pipe
+            </button>
+          </div>
+        </div>
+
+        <p class="field-hint">
+          A pipe creates two VPP interfaces joined back-to-back. One end is placed in each
+          bridge domain, providing an L2 bridge between the selected networks.
+        </p>
+        {networks.length < 2 ? (
+          <p class="field-hint">Create at least two networks before adding a pipe.</p>
+        ) : null}
+
+        {pipeError ? <div class="banner" role="alert">{pipeError}</div> : null}
+
+        <div class="table-wrap">
+          {networkPipes.length > 0 ? (
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Network A</th>
+                  <th scope="col">Network B</th>
+                  <th scope="col">VPP instance</th>
+                  <th scope="col">Endpoints</th>
+                  <th scope="col" class="hide-sm">Created</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {networkPipes.map((pipe) => (
+                  <tr key={pipe.id}>
+                    <td><span class="vm-name">{pipe.network_a_name}</span></td>
+                    <td><span class="vm-name">{pipe.network_b_name}</span></td>
+                    <td class="mono">pipe{pipe.instance}</td>
+                    <td class="mono">
+                      <span>{pipeEndpointName(pipe, 0)} ({pipe.endpoint_a_sw_if_index || "—"})</span>
+                      <span> ↔ </span>
+                      <span>{pipeEndpointName(pipe, 1)} ({pipe.endpoint_b_sw_if_index || "—"})</span>
+                    </td>
+                    <td class="updated hide-sm">{formatDate(pipe.created_at)}</td>
+                    <td>
+                      <div class="actions">
+                        <button
+                          class="button ghost"
+                          type="button"
+                          disabled={!vppReady || !pipe.endpoint_a_sw_if_index}
+                          onClick={() =>
+                            setAddressInterface({
+                              name: pipeEndpointName(pipe, 0),
+                              label: `pipe endpoint A · ${pipe.network_a_name}`,
+                            })
+                          }
+                        >
+                          A addresses
+                        </button>
+                        <button
+                          class="button ghost"
+                          type="button"
+                          disabled={!vppReady || !pipe.endpoint_b_sw_if_index}
+                          onClick={() =>
+                            setAddressInterface({
+                              name: pipeEndpointName(pipe, 1),
+                              label: `pipe endpoint B · ${pipe.network_b_name}`,
+                            })
+                          }
+                        >
+                          B addresses
+                        </button>
+                        <button
+                          class="row-action danger"
+                          type="button"
+                          disabled={pipeAction === String(pipe.id) || !vppReady}
+                          onClick={() => void deleteNetworkPipe(pipe)}
+                        >
+                          {pipeAction === String(pipe.id) ? "Deleting…" : "Delete"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div class="empty">
+              <div class="empty-mark" aria-hidden="true">↔</div>
+              <h3>No bridge-domain pipes</h3>
+              <p>Connect two Rookery Networks to pass L2 traffic between their bridge domains.</p>
+              <button
+                class="button primary"
+                type="button"
+                disabled={!vppReady || networks.length < 2}
+                onClick={() => setPipeDialogOpen(true)}
+              >
+                Add pipe
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+
       <section class="panel panel-spaced" aria-labelledby="hosts-heading" hidden={section !== "hosts"}>
         <div class="panel-head">
           <div>
@@ -1020,7 +1221,7 @@ export function NetworksTab() {
               <thead>
                 <tr>
                   <th scope="col">Interface</th>
-                  <th scope="col">Addresses</th>
+                  <th scope="col">Host / VPP addresses</th>
                   <th scope="col">Link</th>
                   <th scope="col">VPP</th>
                   <th scope="col">Default route</th>
@@ -1035,9 +1236,22 @@ export function NetworksTab() {
                       <span class="vm-name mono">{iface.name}</span>
                     </td>
                     <td class="mono">
-                      {iface.addresses && iface.addresses.length > 0
-                        ? iface.addresses.join(", ")
-                        : "—"}
+                      <div class="address-stack">
+                        <span>
+                          <span class="address-side">Host</span>
+                          {iface.addresses && iface.addresses.length > 0
+                            ? iface.addresses.join(", ")
+                            : "—"}
+                        </span>
+                        {iface.in_vpp ? (
+                          <span>
+                            <span class="address-side">VPP</span>
+                            {iface.vpp_addresses && iface.vpp_addresses.length > 0
+                              ? iface.vpp_addresses.join(", ")
+                              : "—"}
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td>
                       <span class="status-badge" data-status={iface.up ? "running" : "disabled"}>
@@ -1076,40 +1290,75 @@ export function NetworksTab() {
                           : "virtual"}
                     </td>
                     <td>
-                      {iface.in_vpp ? (
-                        <button
-                          class="button ghost"
-                          type="button"
-                          disabled={hostAction === iface.name || !vppReady}
-                          onClick={() => void detachHostInterface(iface)}
-                        >
-                          {hostAction === iface.name ? "Detaching…" : "Detach"}
-                        </button>
-                      ) : (
-                        <button
-                          class="button ghost"
-                          type="button"
-                          disabled={
-                            hostAction === iface.name ||
-                            !vppReady ||
-                            !iface.physical ||
-                            iface.wireless ||
-                            iface.default_route
-                          }
-                          title={
-                            iface.default_route
-                              ? "The host default-route interface cannot be attached"
-                              : iface.wireless
-                                ? "Wireless interfaces cannot be attached"
-                                : !iface.physical
-                                  ? "Only physical interfaces can be attached"
-                                  : "Take this NIC into VPP"
-                          }
-                          onClick={() => void attachHostInterface(iface)}
-                        >
-                          {hostAction === iface.name ? "Attaching…" : "Attach to VPP"}
-                        </button>
-                      )}
+                      <div class="actions">
+                        {iface.in_vpp ? (
+                          <>
+                            {iface.managed ? (
+                              <>
+                                <button
+                                  class="button ghost"
+                                  type="button"
+                                  disabled={!vppReady}
+                                  onClick={() =>
+                                    setAddressInterface({
+                                      name: iface.vpp_name || `host-${iface.name}`,
+                                      label: "host interface",
+                                      hostAddresses: iface.addresses || [],
+                                    })
+                                  }
+                                >
+                                  Addresses
+                                </button>
+                                <button
+                                  class="button ghost"
+                                  type="button"
+                                  disabled={!vppReady}
+                                  onClick={() =>
+                                    setRouteTableTarget({
+                                      name: iface.vpp_name || `host-${iface.name}`,
+                                      label: "Host interface",
+                                    })
+                                  }
+                                >
+                                  Route tables
+                                </button>
+                              </>
+                            ) : null}
+                            <button
+                              class="button ghost"
+                              type="button"
+                              disabled={hostAction === iface.name || !vppReady}
+                              onClick={() => void detachHostInterface(iface)}
+                            >
+                              {hostAction === iface.name ? "Detaching…" : "Detach"}
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            class="button ghost"
+                            type="button"
+                            disabled={
+                              hostAction === iface.name ||
+                              !vppReady ||
+                              !iface.physical ||
+                              iface.wireless ||
+                              iface.default_route
+                            }
+                            title={
+                              iface.default_route
+                                ? "The host default-route interface cannot be attached"
+                                : iface.wireless
+                                  ? "Wireless interfaces cannot be attached"
+                                  : !iface.physical
+                                    ? "Only physical interfaces can be attached"
+                                    : "Take this NIC into VPP"
+                            }
+                            onClick={() => void attachHostInterface(iface)}
+                          >
+                            {hostAction === iface.name ? "Attaching…" : "Attach to VPP"}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1168,7 +1417,7 @@ export function NetworksTab() {
                 <tr>
                   <th scope="col">Interface</th>
                   <th scope="col">Network</th>
-                  <th scope="col">Host address</th>
+                  <th scope="col">Host / VPP address</th>
                   <th scope="col">VPP index</th>
                   <th scope="col">Created</th>
                   <th scope="col">Actions</th>
@@ -1184,18 +1433,55 @@ export function NetworksTab() {
                       <span class="vm-name">{tap.network_name}</span>
                       <span class="vm-description mono">#{tap.network_id}</span>
                     </td>
-                    <td class="mono">{tap.ipv4_address || "—"}</td>
+                    <td class="mono">
+                      <div class="address-stack">
+                        <span>
+                          <span class="address-side">Host</span>
+                          {tap.ipv4_address || "—"}
+                        </span>
+                        <span>
+                          <span class="address-side">VPP</span>
+                          {tap.vpp_addresses && tap.vpp_addresses.length > 0
+                            ? tap.vpp_addresses.join(", ")
+                            : "—"}
+                        </span>
+                      </div>
+                    </td>
                     <td class="mono">{tap.sw_if_index || "—"}</td>
                     <td>{formatDate(tap.created_at)}</td>
                     <td>
-                      <button
-                        class="button ghost"
-                        type="button"
-                        disabled={hostTapAction === tap.name || !vppReady}
-                        onClick={() => void deleteHostTap(tap)}
-                      >
-                        {hostTapAction === tap.name ? "Deleting…" : "Delete"}
-                      </button>
+                      <div class="actions">
+                        <button
+                          class="button ghost"
+                          type="button"
+                          disabled={!vppReady}
+                          onClick={() =>
+                            setAddressInterface({
+                              name: tap.name,
+                              label: "host tap",
+                              hostAddresses: tap.ipv4_address ? [tap.ipv4_address] : [],
+                            })
+                          }
+                        >
+                          Addresses
+                        </button>
+                        <button
+                          class="button ghost"
+                          type="button"
+                          disabled={!vppReady || !tap.sw_if_index}
+                          onClick={() => setRouteTableTarget({ name: tap.name, label: "Host tap" })}
+                        >
+                          Route tables
+                        </button>
+                        <button
+                          class="button ghost"
+                          type="button"
+                          disabled={hostTapAction === tap.name || !vppReady}
+                          onClick={() => void deleteHostTap(tap)}
+                        >
+                          {hostTapAction === tap.name ? "Deleting…" : "Delete"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1290,6 +1576,7 @@ export function NetworksTab() {
                   <th scope="col">Name</th>
                   <th scope="col">Network</th>
                   <th scope="col">MAC</th>
+                  <th scope="col">VPP addresses</th>
                   <th scope="col">Attached VM</th>
                   <th scope="col">TX/RX</th>
                   <th scope="col">Speed</th>
@@ -1349,6 +1636,11 @@ export function NetworksTab() {
                       </td>
                       <td class="mono">{iface.network_name || "—"}</td>
                       <td class="mono">{iface.mac || "—"}</td>
+                      <td class="mono">
+                        {iface.vpp_addresses && iface.vpp_addresses.length > 0
+                          ? iface.vpp_addresses.join(", ")
+                          : "—"}
+                      </td>
                       <td class={attached ? "mono" : "mono muted"}>
                         {owner ? owner.name : iface.attached_vm_name || "unattached"}
                       </td>
@@ -1403,6 +1695,15 @@ export function NetworksTab() {
                       <td class="updated hide-sm">{formatDate(iface.updated_at)}</td>
                       <td>
                         <div class="actions">
+                          <button
+                            class="row-action"
+                            type="button"
+                            disabled={!vppReady}
+                            title={vppReady ? "" : "VPP must be ready to set interface addresses."}
+                            onClick={() => setAddressInterface({ name: iface.name, label: "vhost-user" })}
+                          >
+                            Addresses
+                          </button>
                           <button class="row-action" type="button" onClick={() => navigate(`/interfaces/${iface.id}/attach`)}>
                             Attach
                           </button>
@@ -1455,7 +1756,7 @@ export function NetworksTab() {
                     </tr>
                     {aclExpanded && aclParts.length > 0 ? (
                       <tr class="acl-details-row">
-                        <td colSpan={9}>
+                        <td colSpan={10}>
                           <div class="interface-acl-details">
                             <div class="interface-acl-details-head">
                               <strong>ACL details for {iface.name}</strong>
@@ -1634,15 +1935,34 @@ export function NetworksTab() {
       </section>
 
       <section class="panel panel-spaced" aria-label="Route tables" hidden={section !== "routes"}>
-        {routeTableRoutes ? (
-          <RouteTablePage
-            key={`route-page-${routeTableRoutes.ipv6 ? "v6" : "v4"}-${routeTableRoutes.id}`}
-            table={routeTableRoutes}
+        {routeForm ? (
+          <RouteFormPage
+            key={`route-form-${routeForm.table.id}-${routeForm.routeID ?? "new"}`}
+            table={routeForm.table}
+            routeID={routeForm.routeID}
             interfaces={interfaces}
             bviInterfaces={networks
               .filter((network) => Boolean(network.bvi_host_name))
               .map((network) => network.bvi_host_name || "")
               .filter(Boolean)}
+            hostInterfaces={hostInterfaces}
+            hostTaps={hostTaps}
+            onBack={() => {
+              setRouteForm(null);
+              navigate(`/route-tables/${routeForm.table.id}?ipv6=${routeForm.table.ipv6}`, true);
+            }}
+            onSaved={() => {
+              const table = routeForm.table;
+              setRouteForm(null);
+              navigate(`/route-tables/${table.id}?ipv6=${table.ipv6}`, true);
+              showToast(routeForm.routeID ? `Saved route ${table.name}` : `Added route to ${table.name}`);
+              void loadRouteTables(false);
+            }}
+          />
+        ) : routeTableRoutes ? (
+          <RouteTablePage
+            key={`route-page-${routeTableRoutes.ipv6 ? "v6" : "v4"}-${routeTableRoutes.id}`}
+            table={routeTableRoutes}
             onBack={() => {
               setRouteTableRoutes(null);
               navigate("/networks/routes", true);
@@ -1818,6 +2138,19 @@ export function NetworksTab() {
         <PacketCapturePanel />
       </section>
 
+      {pipeDialogOpen ? (
+        <NetworkPipeDialog
+          networks={networks}
+          onClose={() => setPipeDialogOpen(false)}
+          onSaved={(pipe) => {
+            setPipeDialogOpen(false);
+            setNetworkPipes((current) => [...current, pipe].sort((a, b) => a.id - b.id));
+            setPipeError("");
+            showToast(`Created pipe ${pipe.network_a_name} ↔ ${pipe.network_b_name}`);
+          }}
+        />
+      ) : null}
+
       {networkDialogOpen ? (
         <NetworkDialog
           onClose={() => {
@@ -1849,6 +2182,30 @@ export function NetworksTab() {
             setInterfaceError("");
             showToast(`Created interface ${iface.name}`);
             void loadVMs();
+          }}
+        />
+      ) : null}
+
+      {addressInterface ? (
+        <VPPAddressesDialog
+          key={`addresses-${addressInterface.name}`}
+          name={addressInterface.name}
+          label={addressInterface.label}
+          hostAddresses={addressInterface.hostAddresses}
+          onClose={() => setAddressInterface(null)}
+        />
+      ) : null}
+
+      {routeTableTarget ? (
+        <VPPInterfaceRouteTablesDialog
+          key={`route-tables-${routeTableTarget.name}`}
+          name={routeTableTarget.name}
+          label={routeTableTarget.label}
+          tables={routeTables}
+          onClose={() => setRouteTableTarget(null)}
+          onSaved={(saved) => {
+            setRouteTableTarget(null);
+            showToast(`Saved route tables for ${saved.name}`);
           }}
         />
       ) : null}

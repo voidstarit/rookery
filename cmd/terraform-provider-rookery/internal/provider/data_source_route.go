@@ -5,6 +5,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 )
@@ -29,16 +30,30 @@ func (d *routeDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a route by id or prefix. route_table_id and ipv6 are required as lookup context; use 0 for the default table.",
 		Attributes: map[string]dschema.Attribute{
-			"id":               dschema.Int64Attribute{Optional: true, Computed: true},
-			"route_table_id":   dschema.Int64Attribute{Optional: true, Computed: true},
-			"ipv6":             dschema.BoolAttribute{Optional: true, Computed: true},
-			"prefix":           dschema.StringAttribute{Optional: true, Computed: true},
-			"table_id":         dschema.Int64Attribute{Computed: true},
-			"next_hop":         dschema.StringAttribute{Computed: true},
-			"interface_id":     dschema.Int64Attribute{Computed: true},
-			"interface_name":   dschema.StringAttribute{Computed: true},
-			"egress_interface": dschema.StringAttribute{Computed: true},
-			"preference":       dschema.Int64Attribute{Computed: true},
+			"id":                    dschema.Int64Attribute{Optional: true, Computed: true},
+			"route_table_id":        dschema.Int64Attribute{Optional: true, Computed: true},
+			"ipv6":                  dschema.BoolAttribute{Optional: true, Computed: true},
+			"prefix":                dschema.StringAttribute{Optional: true, Computed: true},
+			"table_id":              dschema.Int64Attribute{Computed: true},
+			"next_hop":              dschema.StringAttribute{Computed: true},
+			"interface_id":          dschema.Int64Attribute{Computed: true},
+			"interface_name":        dschema.StringAttribute{Computed: true},
+			"egress_interface":      dschema.StringAttribute{Computed: true},
+			"description":           dschema.StringAttribute{Computed: true},
+			"preference":            dschema.Int64Attribute{Computed: true},
+			"route_count":           dschema.Int64Attribute{Computed: true},
+			"next_hop_table":        dschema.Int64Attribute{Computed: true},
+			"weight":                dschema.Int64Attribute{Computed: true},
+			"udp_encap":             dschema.Int64Attribute{Computed: true},
+			"ipv4_lookup_table":     dschema.Int64Attribute{Computed: true},
+			"ipv6_lookup_table":     dschema.Int64Attribute{Computed: true},
+			"mpls_lookup_table":     dschema.Int64Attribute{Computed: true},
+			"resolve_via_host":      dschema.BoolAttribute{Computed: true},
+			"resolve_via_connected": dschema.BoolAttribute{Computed: true},
+			"rx_ipv4_interface":     dschema.StringAttribute{Computed: true},
+			"rx_ipv6_interface":     dschema.StringAttribute{Computed: true},
+			"out_labels":            dschema.ListAttribute{Computed: true, ElementType: types.Int64Type},
+			"drop":                  dschema.BoolAttribute{Computed: true},
 		},
 	}
 }
@@ -91,6 +106,6 @@ func (d *routeDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		resp.Diagnostics.AddError("Read route", "route not found")
 		return
 	}
-	setRouteState(&config, found)
+	resp.Diagnostics.Append(setRouteState(ctx, &config, found)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }

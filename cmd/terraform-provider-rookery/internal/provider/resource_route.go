@@ -6,11 +6,13 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -32,16 +34,30 @@ func NewRouteResource() resource.Resource {
 }
 
 type routeModel struct {
-	ID              types.Int64  `tfsdk:"id"`
-	RouteTableID    types.Int64  `tfsdk:"route_table_id"`
-	TableID         types.Int64  `tfsdk:"table_id"`
-	IPv6            types.Bool   `tfsdk:"ipv6"`
-	Prefix          types.String `tfsdk:"prefix"`
-	NextHop         types.String `tfsdk:"next_hop"`
-	InterfaceID     types.Int64  `tfsdk:"interface_id"`
-	InterfaceName   types.String `tfsdk:"interface_name"`
-	EgressInterface types.String `tfsdk:"egress_interface"`
-	Preference      types.Int64  `tfsdk:"preference"`
+	ID                  types.Int64  `tfsdk:"id"`
+	RouteTableID        types.Int64  `tfsdk:"route_table_id"`
+	TableID             types.Int64  `tfsdk:"table_id"`
+	IPv6                types.Bool   `tfsdk:"ipv6"`
+	Prefix              types.String `tfsdk:"prefix"`
+	NextHop             types.String `tfsdk:"next_hop"`
+	InterfaceID         types.Int64  `tfsdk:"interface_id"`
+	InterfaceName       types.String `tfsdk:"interface_name"`
+	EgressInterface     types.String `tfsdk:"egress_interface"`
+	Description         types.String `tfsdk:"description"`
+	Preference          types.Int64  `tfsdk:"preference"`
+	RouteCount          types.Int64  `tfsdk:"route_count"`
+	NextHopTable        types.Int64  `tfsdk:"next_hop_table"`
+	Weight              types.Int64  `tfsdk:"weight"`
+	UDPEncap            types.Int64  `tfsdk:"udp_encap"`
+	IPv4LookupTable     types.Int64  `tfsdk:"ipv4_lookup_table"`
+	IPv6LookupTable     types.Int64  `tfsdk:"ipv6_lookup_table"`
+	MPLSLookupTable     types.Int64  `tfsdk:"mpls_lookup_table"`
+	ResolveViaHost      types.Bool   `tfsdk:"resolve_via_host"`
+	ResolveViaConnected types.Bool   `tfsdk:"resolve_via_connected"`
+	RxIPv4Interface     types.String `tfsdk:"rx_ipv4_interface"`
+	RxIPv6Interface     types.String `tfsdk:"rx_ipv6_interface"`
+	OutLabels           types.List   `tfsdk:"out_labels"`
+	Drop                types.Bool   `tfsdk:"drop"`
 }
 
 func (r *routeResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -88,9 +104,23 @@ func (r *routeResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			"preference": schema.Int64Attribute{
 				Optional:      true,
 				Computed:      true,
-				Description:   "Path preference metric.",
+				Description:   "Path preference metric. Omit to leave it out; 0 is an explicit value.",
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()},
 			},
+			"description":           schema.StringAttribute{Optional: true, Computed: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
+			"route_count":           schema.Int64Attribute{Optional: true, Computed: true, Description: "Route count. Omit to leave it out; 0 is not valid.", PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()}},
+			"next_hop_table":        schema.Int64Attribute{Optional: true, Computed: true, Description: "Next-hop table. Omit to leave it out; 0 is an explicit value.", PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()}},
+			"weight":                schema.Int64Attribute{Optional: true, Computed: true, Description: "Path weight. Omit to leave it out; 0 is an explicit value.", PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()}},
+			"udp_encap":             schema.Int64Attribute{Optional: true, Computed: true, Description: "UDP encapsulation id. Omit to leave it out; 0 is an explicit value.", PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()}},
+			"ipv4_lookup_table":     schema.Int64Attribute{Optional: true, Computed: true, Description: "IPv4 lookup table. Omit to leave it out; 0 is an explicit value.", PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()}},
+			"ipv6_lookup_table":     schema.Int64Attribute{Optional: true, Computed: true, Description: "IPv6 lookup table. Omit to leave it out; 0 is an explicit value.", PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()}},
+			"mpls_lookup_table":     schema.Int64Attribute{Optional: true, Computed: true, Description: "MPLS lookup table. Omit to leave it out; 0 is an explicit value.", PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()}},
+			"resolve_via_host":      schema.BoolAttribute{Optional: true, Computed: true, PlanModifiers: []planmodifier.Bool{boolplanmodifier.RequiresReplace()}},
+			"resolve_via_connected": schema.BoolAttribute{Optional: true, Computed: true, PlanModifiers: []planmodifier.Bool{boolplanmodifier.RequiresReplace()}},
+			"rx_ipv4_interface":     schema.StringAttribute{Optional: true, Computed: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
+			"rx_ipv6_interface":     schema.StringAttribute{Optional: true, Computed: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
+			"out_labels":            schema.ListAttribute{Optional: true, Computed: true, ElementType: types.Int64Type, PlanModifiers: []planmodifier.List{listplanmodifier.RequiresReplace()}},
+			"drop":                  schema.BoolAttribute{Optional: true, Computed: true, PlanModifiers: []planmodifier.Bool{boolplanmodifier.RequiresReplace()}},
 		},
 	}
 }
@@ -108,20 +138,39 @@ func (r *routeResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	callCtx, cancel := context.WithTimeout(ctx, client.Timeout())
 	defer cancel()
+	labels, labelDiags := routeOutLabelsFromList(ctx, plan.OutLabels)
+	resp.Diagnostics.Append(labelDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	route, err := client.RouteTables.CreateRoute(callCtx, &rookeryv1.CreateRouteRequest{
-		RouteTableId:    plan.RouteTableID.ValueInt64(),
-		Ipv6:            plan.IPv6.ValueBool(),
-		Prefix:          plan.Prefix.ValueString(),
-		NextHop:         plan.NextHop.ValueString(),
-		InterfaceId:     int64Pointer(plan.InterfaceID),
-		EgressInterface: plan.EgressInterface.ValueString(),
-		Preference:      uint32(plan.Preference.ValueInt64()),
+		RouteTableId:        plan.RouteTableID.ValueInt64(),
+		Ipv6:                plan.IPv6.ValueBool(),
+		Prefix:              plan.Prefix.ValueString(),
+		NextHop:             plan.NextHop.ValueString(),
+		InterfaceId:         int64Pointer(plan.InterfaceID),
+		EgressInterface:     plan.EgressInterface.ValueString(),
+		Description:         plan.Description.ValueString(),
+		Preference:          uint32Pointer(plan.Preference),
+		Count:               uint32Pointer(plan.RouteCount),
+		NextHopTable:        uint32Pointer(plan.NextHopTable),
+		Weight:              uint32Pointer(plan.Weight),
+		UdpEncap:            uint32Pointer(plan.UDPEncap),
+		Ipv4LookupTable:     uint32Pointer(plan.IPv4LookupTable),
+		Ipv6LookupTable:     uint32Pointer(plan.IPv6LookupTable),
+		MplsLookupTable:     uint32Pointer(plan.MPLSLookupTable),
+		ResolveViaHost:      plan.ResolveViaHost.ValueBool(),
+		ResolveViaConnected: plan.ResolveViaConnected.ValueBool(),
+		RxIpv4Interface:     plan.RxIPv4Interface.ValueString(),
+		RxIpv6Interface:     plan.RxIPv6Interface.ValueString(),
+		OutLabels:           labels,
+		Drop:                plan.Drop.ValueBool(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Create route", err.Error())
 		return
 	}
-	setRouteState(&plan, route)
+	resp.Diagnostics.Append(setRouteState(ctx, &plan, route)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -152,7 +201,7 @@ func (r *routeResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	}
 	for _, route := range response.GetRoutes() {
 		if route.GetId() == state.ID.ValueInt64() {
-			setRouteState(&state, route)
+			resp.Diagnostics.Append(setRouteState(ctx, &state, route)...)
 			resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 			return
 		}
@@ -209,7 +258,8 @@ func (r *routeResource) ImportState(ctx context.Context, req resource.ImportStat
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("ipv6"), types.BoolValue(ipv6))...)
 }
 
-func setRouteState(state *routeModel, route *rookeryv1.Route) {
+func setRouteState(ctx context.Context, state *routeModel, route *rookeryv1.Route) diag.Diagnostics {
+	var diags diag.Diagnostics
 	state.ID = types.Int64Value(route.GetId())
 	state.RouteTableID = types.Int64Value(route.GetRouteTableId())
 	state.TableID = types.Int64Value(int64(route.GetTableId()))
@@ -219,5 +269,43 @@ func setRouteState(state *routeModel, route *rookeryv1.Route) {
 	state.InterfaceID = optionalInt64Value(route.InterfaceId)
 	state.InterfaceName = optionalStringValue(route.GetInterfaceName())
 	state.EgressInterface = optionalStringValue(route.GetEgressInterface())
-	state.Preference = types.Int64Value(int64(route.GetPreference()))
+	state.Description = optionalStringValue(route.GetDescription())
+	state.Preference = optionalUint32Value(route.Preference)
+	state.RouteCount = optionalUint32Value(route.Count)
+	state.NextHopTable = optionalUint32Value(route.NextHopTable)
+	state.Weight = optionalUint32Value(route.Weight)
+	state.UDPEncap = optionalUint32Value(route.UdpEncap)
+	state.IPv4LookupTable = optionalUint32Value(route.Ipv4LookupTable)
+	state.IPv6LookupTable = optionalUint32Value(route.Ipv6LookupTable)
+	state.MPLSLookupTable = optionalUint32Value(route.MplsLookupTable)
+	state.ResolveViaHost = types.BoolValue(route.GetResolveViaHost())
+	state.ResolveViaConnected = types.BoolValue(route.GetResolveViaConnected())
+	state.RxIPv4Interface = optionalStringValue(route.GetRxIpv4Interface())
+	state.RxIPv6Interface = optionalStringValue(route.GetRxIpv6Interface())
+	values := make([]int64, 0, len(route.GetOutLabels()))
+	for _, label := range route.GetOutLabels() {
+		values = append(values, int64(label))
+	}
+	list, listDiags := int64List(ctx, values)
+	state.OutLabels = list
+	diags.Append(listDiags...)
+	state.Drop = types.BoolValue(route.GetDrop())
+	return diags
+}
+
+func routeOutLabelsFromList(ctx context.Context, list types.List) ([]uint32, diag.Diagnostics) {
+	if list.IsNull() || list.IsUnknown() {
+		return nil, nil
+	}
+	var values []int64
+	diags := list.ElementsAs(ctx, &values, false)
+	labels := make([]uint32, 0, len(values))
+	for _, value := range values {
+		if value < 0 || value > int64(^uint32(0)) {
+			diags.AddError("Invalid out_labels value", fmt.Sprintf("%d is outside the uint32 range", value))
+			continue
+		}
+		labels = append(labels, uint32(value))
+	}
+	return labels, diags
 }

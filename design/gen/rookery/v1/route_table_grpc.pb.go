@@ -26,6 +26,7 @@ const (
 	RouteTableService_SetInterfaceRouteTables_FullMethodName = "/rookery.v1.RouteTableService/SetInterfaceRouteTables"
 	RouteTableService_ListRoutes_FullMethodName              = "/rookery.v1.RouteTableService/ListRoutes"
 	RouteTableService_CreateRoute_FullMethodName             = "/rookery.v1.RouteTableService/CreateRoute"
+	RouteTableService_UpdateRoute_FullMethodName             = "/rookery.v1.RouteTableService/UpdateRoute"
 	RouteTableService_DeleteRoute_FullMethodName             = "/rookery.v1.RouteTableService/DeleteRoute"
 	RouteTableService_ListFIBRoutes_FullMethodName           = "/rookery.v1.RouteTableService/ListFIBRoutes"
 )
@@ -42,6 +43,7 @@ type RouteTableServiceClient interface {
 	SetInterfaceRouteTables(ctx context.Context, in *SetInterfaceRouteTablesRequest, opts ...grpc.CallOption) (*VirtualInterface, error)
 	ListRoutes(ctx context.Context, in *ListRoutesRequest, opts ...grpc.CallOption) (*ListRoutesResponse, error)
 	CreateRoute(ctx context.Context, in *CreateRouteRequest, opts ...grpc.CallOption) (*Route, error)
+	UpdateRoute(ctx context.Context, in *UpdateRouteRequest, opts ...grpc.CallOption) (*Route, error)
 	DeleteRoute(ctx context.Context, in *DeleteRouteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	ListFIBRoutes(ctx context.Context, in *ListFIBRoutesRequest, opts ...grpc.CallOption) (*ListFIBRoutesResponse, error)
 }
@@ -114,6 +116,16 @@ func (c *routeTableServiceClient) CreateRoute(ctx context.Context, in *CreateRou
 	return out, nil
 }
 
+func (c *routeTableServiceClient) UpdateRoute(ctx context.Context, in *UpdateRouteRequest, opts ...grpc.CallOption) (*Route, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Route)
+	err := c.cc.Invoke(ctx, RouteTableService_UpdateRoute_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *routeTableServiceClient) DeleteRoute(ctx context.Context, in *DeleteRouteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(emptypb.Empty)
@@ -146,6 +158,7 @@ type RouteTableServiceServer interface {
 	SetInterfaceRouteTables(context.Context, *SetInterfaceRouteTablesRequest) (*VirtualInterface, error)
 	ListRoutes(context.Context, *ListRoutesRequest) (*ListRoutesResponse, error)
 	CreateRoute(context.Context, *CreateRouteRequest) (*Route, error)
+	UpdateRoute(context.Context, *UpdateRouteRequest) (*Route, error)
 	DeleteRoute(context.Context, *DeleteRouteRequest) (*emptypb.Empty, error)
 	ListFIBRoutes(context.Context, *ListFIBRoutesRequest) (*ListFIBRoutesResponse, error)
 	mustEmbedUnimplementedRouteTableServiceServer()
@@ -175,6 +188,9 @@ func (UnimplementedRouteTableServiceServer) ListRoutes(context.Context, *ListRou
 }
 func (UnimplementedRouteTableServiceServer) CreateRoute(context.Context, *CreateRouteRequest) (*Route, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateRoute not implemented")
+}
+func (UnimplementedRouteTableServiceServer) UpdateRoute(context.Context, *UpdateRouteRequest) (*Route, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateRoute not implemented")
 }
 func (UnimplementedRouteTableServiceServer) DeleteRoute(context.Context, *DeleteRouteRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteRoute not implemented")
@@ -311,6 +327,24 @@ func _RouteTableService_CreateRoute_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RouteTableService_UpdateRoute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateRouteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RouteTableServiceServer).UpdateRoute(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RouteTableService_UpdateRoute_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RouteTableServiceServer).UpdateRoute(ctx, req.(*UpdateRouteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _RouteTableService_DeleteRoute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteRouteRequest)
 	if err := dec(in); err != nil {
@@ -377,6 +411,10 @@ var RouteTableService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateRoute",
 			Handler:    _RouteTableService_CreateRoute_Handler,
+		},
+		{
+			MethodName: "UpdateRoute",
+			Handler:    _RouteTableService_UpdateRoute_Handler,
 		},
 		{
 			MethodName: "DeleteRoute",

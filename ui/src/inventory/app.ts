@@ -2,7 +2,7 @@ import type { StatusResponse } from "./types";
 import { api } from "../shared/api";
 import { currentRoute, navigate, ROUTE_EVENT } from "./router";
 
-const TAB_ORDER = ["vms", "disks", "media", "networks", "vnfs"] as const;
+const TAB_ORDER = ["vms", "disks", "media", "networks", "vnfs", "settings"] as const;
 type TabName = (typeof TAB_ORDER)[number];
 
 type TabMeta = {
@@ -37,6 +37,11 @@ const tabMeta: Record<TabName, TabMeta> = {
     title: "VNFs",
     lede: "Attach DHCPv4 and DHCPv6 functions to Rookery Networks, enable them, and inspect their leases.",
   },
+  settings: {
+    eyebrow: "Rookery server",
+    title: "Settings",
+    lede: "Configure server-wide Rookery behavior and lifecycle hooks.",
+  },
 };
 
 function required<T extends HTMLElement>(id: string): T {
@@ -62,6 +67,18 @@ export function startInventory(): void {
   const vppState = required<HTMLElement>("vpp-state");
   const vppTarget = required<HTMLElement>("vpp-target");
   const vppDetail = required<HTMLElement>("vpp-detail");
+  const rookeryStartupScript = {
+    card: required<HTMLElement>("rookery-startup-script-card"),
+    state: required<HTMLElement>("rookery-startup-script-state"),
+    target: required<HTMLElement>("rookery-startup-script-target"),
+    detail: required<HTMLElement>("rookery-startup-script-detail"),
+  };
+  const vppStartupScript = {
+    card: required<HTMLElement>("vpp-startup-script-card"),
+    state: required<HTMLElement>("vpp-startup-script-state"),
+    target: required<HTMLElement>("vpp-startup-script-target"),
+    detail: required<HTMLElement>("vpp-startup-script-detail"),
+  };
 
   const tabElements: Record<TabName, HTMLButtonElement> = {
     vms: required<HTMLButtonElement>("tab-vms"),
@@ -69,6 +86,7 @@ export function startInventory(): void {
     media: required<HTMLButtonElement>("tab-media"),
     networks: required<HTMLButtonElement>("tab-networks"),
     vnfs: required<HTMLButtonElement>("tab-vnfs"),
+    settings: required<HTMLButtonElement>("tab-settings"),
   };
   const panelElements: Record<TabName, HTMLElement> = {
     vms: required("vms-panel"),
@@ -76,6 +94,7 @@ export function startInventory(): void {
     media: required("media-panel"),
     networks: required("networks-panel"),
     vnfs: required("vnfs-panel"),
+    settings: required("settings-panel"),
   };
   const createButtons: Partial<Record<TabName, HTMLButtonElement>> = {
     vms: required<HTMLButtonElement>("new-vm"),
@@ -125,6 +144,81 @@ export function startInventory(): void {
     detailEl.textContent = detail;
   };
 
+  const formatReadinessTime = (value: string | undefined): string => {
+    if (!value) {
+      return "";
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+    return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  };
+
+  type StartupScriptStatus = NonNullable<StatusResponse["rookery_startup_script"]>;
+  type StartupCard = {
+    card: HTMLElement;
+    state: HTMLElement;
+    target: HTMLElement;
+    detail: HTMLElement;
+  };
+
+  const renderStartupScript = (elements: StartupCard, script: StartupScriptStatus | undefined, kind: "rookery" | "vpp") => {
+    let state = "unreachable";
+    let label = "unavailable";
+    let target = "status unavailable";
+    let detail = "Could not read the startup script status.";
+
+    if (script) {
+      const status = script.status || (script.enabled ? "pending" : "disabled");
+      const ranAt = formatReadinessTime(script.ran_at);
+      switch (status) {
+        case "success":
+          state = "ready";
+          label = "success";
+          target = ranAt ? `last run ${ranAt}` : "last run succeeded";
+          detail = `exit code ${script.exit_code ?? 0}`;
+          break;
+        case "failed":
+          state = "error";
+          label = "failed";
+          target = ranAt ? `last run ${ranAt}` : "last run failed";
+          detail = `exit code ${script.exit_code ?? "—"} · open Settings for output`;
+          break;
+        case "running":
+          state = "checking";
+          label = "running";
+          target = "running now";
+          detail = ranAt ? `started ${ranAt}` : "Waiting for completion…";
+          break;
+        case "pending":
+          state = "missing";
+          label = "pending";
+          target = "not run yet";
+          detail = kind === "vpp" ? "Runs on the next VPP connection" : "Runs on the next API start";
+          break;
+        case "disabled":
+          state = "not_configured";
+          label = "disabled";
+          target = "disabled";
+          detail = "Enable it in Settings";
+          break;
+        case "unavailable":
+          state = "unreachable";
+          label = "unavailable";
+          target = "status unavailable";
+          detail = "Could not read the startup script status.";
+          break;
+      }
+    }
+
+    elements.card.dataset.state = state;
+    elements.state.textContent = label;
+    elements.target.textContent = target;
+    elements.target.title = target;
+    elements.detail.textContent = detail;
+  };
+
   const renderReadiness = (status: StatusResponse) => {
     const ready = Boolean(status.ready);
     const thinPool = status.thin_pool;
@@ -145,6 +239,8 @@ export function startInventory(): void {
       vpp,
       vpp?.socket || "not configured"
     );
+    renderStartupScript(rookeryStartupScript, status.rookery_startup_script, "rookery");
+    renderStartupScript(vppStartupScript, status.vpp_startup_script, "vpp");
 
     if (ready) {
       readinessSummary.dataset.state = "ready";
@@ -189,6 +285,8 @@ export function startInventory(): void {
       { state: "unreachable", detail: "Cannot reach the API." },
       "status unavailable"
     );
+    renderStartupScript(rookeryStartupScript, undefined, "rookery");
+    renderStartupScript(vppStartupScript, undefined, "vpp");
     readinessSummary.dataset.state = "unreachable";
     readinessSummary.textContent = "status unavailable";
     window.dispatchEvent(

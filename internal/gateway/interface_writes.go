@@ -170,6 +170,7 @@ func (s *interfaceService) DeleteInterface(ctx context.Context, request *rookery
 			return nil, status.Error(codes.Internal, "could not delete interface")
 		}
 	}
+	_ = s.store.DeleteVPPInterfaceAddresses(ctx, iface.Name)
 	return &emptypb.Empty{}, nil
 }
 

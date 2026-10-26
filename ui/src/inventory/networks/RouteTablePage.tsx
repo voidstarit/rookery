@@ -1,27 +1,53 @@
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../../shared/api";
-import type { FIBRoute, Route, RouteTable, VirtualInterface } from "../types";
+import { navigate } from "../router";
+import type { FIBRoute, Route, RouteTable } from "../types";
 
 type RouteTablePageProps = {
   table: RouteTable;
-  interfaces: VirtualInterface[];
-  bviInterfaces: string[];
   onBack: () => void;
   onChanged: () => void;
 };
 
-export function RouteTablePage({ table, interfaces, bviInterfaces, onBack, onChanged }: RouteTablePageProps) {
+function routeOptions(route: Route): string {
+  const parts: string[] = [];
+  if ((route.count || 0) > 1) parts.push(`count ${route.count}`);
+  if (route.next_hop_table) parts.push(`next-hop-table ${route.next_hop_table}`);
+  if (route.weight) parts.push(`weight ${route.weight}`);
+  if (route.udp_encap) parts.push(`udp-encap ${route.udp_encap}`);
+  if (route.ipv4_lookup_table) parts.push(`ip4-lookup ${route.ipv4_lookup_table}`);
+  if (route.ipv6_lookup_table) parts.push(`ip6-lookup ${route.ipv6_lookup_table}`);
+  if (route.mpls_lookup_table) parts.push(`mpls-lookup ${route.mpls_lookup_table}`);
+  if (route.resolve_via_host) parts.push("resolve-via-host");
+  if (route.resolve_via_connected) parts.push("resolve-via-connected");
+  if (route.rx_ipv4_interface) parts.push(`rx-ip4 ${route.rx_ipv4_interface}`);
+  if (route.rx_ipv6_interface) parts.push(`rx-ip6 ${route.rx_ipv6_interface}`);
+  if (route.out_labels && route.out_labels.length > 0) parts.push(`out-labels ${route.out_labels.join(" ")}`);
+  if (route.drop) parts.push("drop");
+  return parts.join(" · ");
+}
+
+export function RouteTablePage({ table, onBack, onChanged }: RouteTablePageProps) {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [fibRoutes, setFibRoutes] = useState<FIBRoute[]>([]);
   const [loading, setLoading] = useState(true);
   const [fibLoading, setFibLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [fibError, setFibError] = useState("");
-  const [prefix, setPrefix] = useState(table.ipv6 ? "2001:db8::/64" : "10.0.0.0/24");
-  const [nextHop, setNextHop] = useState(table.ipv6 ? "2001:db8::1" : "10.0.0.1");
-  const [egress, setEgress] = useState("");
-  const [preference, setPreference] = useState("");
+  const formPath = `/route-tables/${table.id}/routes/new?ipv6=${table.ipv6}`;
+
+  const loadRoutes = async () => {
+    setLoading(true);
+    try {
+      const data = await api<Route[]>(`/api/route-tables/${table.id}/routes?ipv6=${table.ipv6}`);
+      setRoutes(Array.isArray(data) ? data : []);
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadFIB = async () => {
     setFibLoading(true);
@@ -37,28 +63,7 @@ export function RouteTablePage({ table, interfaces, bviInterfaces, onBack, onCha
   };
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    api<Route[]>(`/api/route-tables/${table.id}/routes?ipv6=${table.ipv6}`)
-      .then((data) => {
-        if (!cancelled) {
-          setRoutes(Array.isArray(data) ? data : []);
-          setError("");
-        }
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
+    void loadRoutes();
   }, [table.id, table.ipv6]);
 
   useEffect(() => {
@@ -69,48 +74,8 @@ export function RouteTablePage({ table, interfaces, bviInterfaces, onBack, onCha
     document.title = `Routes · ${table.name} · rookery`;
   }, [table.name]);
 
-  const addRoute = async (event: Event) => {
-    event.preventDefault();
-    if (saving) {
-      return;
-    }
-    if (!prefix.trim()) {
-      setError("Enter a destination prefix.");
-      return;
-    }
-    if (!nextHop.trim() && !egress) {
-      setError("Enter a next hop or select an egress interface for an attached route.");
-      return;
-    }
-    setError("");
-    setSaving(true);
-    try {
-      const egressName = egress.startsWith("bvi:") ? egress.slice(4) : "";
-      const ifaceID = egress && !egressName ? Number(egress) : 0;
-      await api<Route>(`/api/route-tables/${table.id}/routes`, {
-        method: "POST",
-        body: JSON.stringify({
-          ipv6: table.ipv6,
-          prefix: prefix.trim(),
-          next_hop: nextHop.trim(),
-          ...(ifaceID ? { interface_id: ifaceID } : {}),
-          ...(egressName ? { egress_interface: egressName } : {}),
-          preference: Math.max(0, Math.trunc(Number(preference) || 0)),
-        }),
-      });
-      const refreshed = await api<Route[]>(`/api/route-tables/${table.id}/routes?ipv6=${table.ipv6}`);
-      setRoutes(Array.isArray(refreshed) ? refreshed : []);
-      await loadFIB();
-      onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const deleteRoute = async (route: Route) => {
-    if (!window.confirm(`Delete route ${route.prefix} via ${route.next_hop}?`)) {
+    if (!window.confirm(`Delete route ${route.prefix}${route.next_hop ? ` via ${route.next_hop}` : ""}?`)) {
       return;
     }
     setError("");
@@ -142,6 +107,10 @@ export function RouteTablePage({ table, interfaces, bviInterfaces, onBack, onCha
             Static routes are managed by Rookery. Dynamic routes are read directly from the live VPP FIB.
           </p>
         </div>
+        <button class="button primary" type="button" onClick={() => navigate(formPath)}>
+          <span class="button-plus" aria-hidden="true">+</span>
+          Add route
+        </button>
       </header>
 
       <section class="route-page-section" aria-labelledby="static-routes-title">
@@ -152,72 +121,7 @@ export function RouteTablePage({ table, interfaces, bviInterfaces, onBack, onCha
           </div>
         </div>
 
-        <form class="route-add-form" novalidate onSubmit={(event) => void addRoute(event)}>
-          <label class="field">
-            <span class="field-label">Prefix</span>
-            <input
-              type="text"
-              required
-              placeholder={table.ipv6 ? "2001:db8::/64" : "10.0.0.0/24"}
-              value={prefix}
-              onInput={(event) => setPrefix(event.currentTarget.value)}
-            />
-          </label>
-          <label class="field">
-            <span class="field-label">Next hop</span>
-            <input
-              type="text"
-              placeholder={egress ? "optional for attached route" : table.ipv6 ? "2001:db8::1" : "10.0.0.1"}
-              value={nextHop}
-              onInput={(event) => setNextHop(event.currentTarget.value)}
-            />
-          </label>
-          <label class="field">
-            <span class="field-label">Egress interface</span>
-            <select value={egress} onChange={(event) => setEgress(event.currentTarget.value)}>
-              <option value="">Resolve via table</option>
-              {interfaces.map((iface) => (
-                <option value={String(iface.id)} key={iface.id}>
-                  {iface.name}
-                </option>
-              ))}
-              {bviInterfaces.length > 0 ? (
-                <optgroup label="Network gateways (BVI)">
-                  {bviInterfaces.map((name) => (
-                    <option value={`bvi:${name}`} key={name}>
-                      {name}
-                    </option>
-                  ))}
-                </optgroup>
-              ) : null}
-            </select>
-          </label>
-          <label class="field">
-            <span class="field-label">Metric / preference</span>
-            <input
-              type="number"
-              min="0"
-              max="255"
-              step="1"
-              placeholder="0"
-              value={preference}
-              onInput={(event) => setPreference(event.currentTarget.value)}
-            />
-          </label>
-          <button
-            class="button primary"
-            type="submit"
-            disabled={saving}
-          >
-            {saving ? "Adding…" : "Add route"}
-          </button>
-        </form>
-
-        {error ? (
-          <p class="form-error" role="alert">
-            {error}
-          </p>
-        ) : null}
+        {error ? <p class="form-error" role="alert">{error}</p> : null}
 
         <div class="table-wrap route-table-wrap">
           {loading ? (
@@ -229,32 +133,49 @@ export function RouteTablePage({ table, interfaces, bviInterfaces, onBack, onCha
                   <th scope="col">Prefix</th>
                   <th scope="col">Next hop</th>
                   <th scope="col">Interface</th>
+                  <th scope="col">Options</th>
                   <th scope="col">Preference</th>
-                  <th scope="col">
-                    <span class="sr-only">Actions</span>
-                  </th>
+                  <th scope="col"><span class="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
                 {routes.map((route) => (
                   <tr key={route.id}>
-                    <td class="mono">{route.prefix}</td>
-                    <td class="mono">{route.next_hop || "attached"}</td>
-                    <td class="mono">
-                      {route.egress_interface || route.interface_name || "resolved by table"}
+                    <td>
+                      <span class="vm-name mono">{route.prefix}</span>
+                      {route.description ? <span class="vm-description">{route.description}</span> : null}
                     </td>
+                    <td class="mono">{route.drop ? "drop" : route.next_hop || "attached"}</td>
+                    <td class="mono">{route.egress_interface || route.interface_name || "resolved by table"}</td>
+                    <td class="mono">{routeOptions(route) || "—"}</td>
                     <td class="mono">{route.preference || 0}</td>
                     <td>
-                      <button class="row-action danger" type="button" onClick={() => void deleteRoute(route)}>
-                        Delete
-                      </button>
+                      <div class="actions">
+                        <button
+                          class="row-action"
+                          type="button"
+                          onClick={() => navigate(`/route-tables/${table.id}/routes/${route.id}/edit?ipv6=${table.ipv6}`)}
+                        >
+                          Edit
+                        </button>
+                        <button class="row-action danger" type="button" onClick={() => void deleteRoute(route)}>
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           ) : (
-            <p class="empty-state">No static routes in this table yet.</p>
+            <div class="empty">
+              <div class="empty-mark" aria-hidden="true">↗</div>
+              <h3>No static routes</h3>
+              <p>Add a route to this VRF.</p>
+              <button class="button primary" type="button" onClick={() => navigate(formPath)}>
+                Add route
+              </button>
+            </div>
           )}
         </div>
       </section>
@@ -273,9 +194,7 @@ export function RouteTablePage({ table, interfaces, bviInterfaces, onBack, onCha
         </div>
 
         {fibError ? (
-          <p class="form-error" role="alert">
-            {fibError}
-          </p>
+          <p class="form-error" role="alert">{fibError}</p>
         ) : fibLoading ? (
           <p class="empty-state">Loading VPP FIB…</p>
         ) : dynamicRoutes.length > 0 ? (
@@ -292,9 +211,7 @@ export function RouteTablePage({ table, interfaces, bviInterfaces, onBack, onCha
                 {dynamicRoutes.map((route) => (
                   <tr key={`${route.ipv6 ? "v6" : "v4"}-${route.prefix}`}>
                     <td class="mono">{route.prefix}</td>
-                    <td>
-                      <span class="fib-source">{route.source_name}</span>
-                    </td>
+                    <td><span class="fib-source">{route.source_name}</span></td>
                     <td>
                       {(route.paths ?? []).length > 0 ? (
                         (route.paths ?? []).map((path, index) => (

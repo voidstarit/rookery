@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
+	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/netutil"
 	"github.com/voidstarit/rookery/internal/store"
 )
@@ -30,6 +31,8 @@ type Backend interface {
 	DeleteBVI(ctx context.Context, name string) error
 	CreateBridgeDomain(ctx context.Context, name string, reserved []uint32) (uint32, error)
 	DeleteBridgeDomain(ctx context.Context, bdID uint32) error
+	CreateNetworkPipe(ctx context.Context, bdA, bdB uint32) (host.PipeRuntime, error)
+	DeleteNetworkPipe(ctx context.Context, instance, parentSwIfIndex uint32) error
 	PrepareNetworkVNFs(ctx context.Context, network store.Network) (store.Network, error)
 	CleanupNetworkVNFs(ctx context.Context, network store.Network) error
 	DeleteNetworkRouteTables(ctx context.Context, network store.Network) error
@@ -434,6 +437,11 @@ func (s *Service) DeleteNetwork(ctx context.Context, id int64) error {
 	if network.InterfaceCount > 0 {
 		return &NetworkError{Status: http.StatusConflict, Message: "network still has virtual interfaces"}
 	}
+	if count, err := s.store.CountNetworkPipesForNetwork(ctx, id); err != nil {
+		return &NetworkError{Status: http.StatusInternalServerError, Err: err}
+	} else if count > 0 {
+		return &NetworkError{Status: http.StatusConflict, Message: "network still has bridge-domain pipes"}
+	}
 	if blocked, message := s.backend.VPPBlocked(); blocked {
 		return &NetworkError{Status: http.StatusServiceUnavailable, Message: message}
 	}
@@ -482,6 +490,78 @@ func (s *Service) DeleteNetwork(ctx context.Context, id int64) error {
 	default:
 		return nil
 	}
+}
+
+// CreateNetworkPipe creates a pipe between two bridge domains and records it.
+func (s *Service) CreateNetworkPipe(ctx context.Context, networkAID, networkBID int64) (store.NetworkPipe, error) {
+	if networkAID == networkBID {
+		return store.NetworkPipe{}, &NetworkError{Status: http.StatusBadRequest, Message: "a pipe requires two different networks"}
+	}
+	s.resourceMu.Lock()
+	defer s.resourceMu.Unlock()
+	networkA, err := s.store.GetNetwork(ctx, networkAID)
+	if err != nil {
+		if errors.Is(err, store.ErrNetworkNotFound) {
+			return store.NetworkPipe{}, &NetworkError{Status: http.StatusNotFound, Message: "network not found"}
+		}
+		return store.NetworkPipe{}, &NetworkError{Status: http.StatusInternalServerError, Err: err}
+	}
+	networkB, err := s.store.GetNetwork(ctx, networkBID)
+	if err != nil {
+		if errors.Is(err, store.ErrNetworkNotFound) {
+			return store.NetworkPipe{}, &NetworkError{Status: http.StatusNotFound, Message: "network not found"}
+		}
+		return store.NetworkPipe{}, &NetworkError{Status: http.StatusInternalServerError, Err: err}
+	}
+	if networkA.ID > networkB.ID {
+		networkA, networkB = networkB, networkA
+	}
+	if blocked, message := s.backend.VPPBlocked(); blocked {
+		return store.NetworkPipe{}, &NetworkError{Status: http.StatusServiceUnavailable, Message: message}
+	}
+	runtime, err := s.backend.CreateNetworkPipe(ctx, networkA.BridgeDomainID, networkB.BridgeDomainID)
+	if err != nil {
+		return store.NetworkPipe{}, &NetworkError{Status: http.StatusInternalServerError, Err: fmt.Errorf("create VPP pipe: %w", err)}
+	}
+	created, err := s.store.CreateNetworkPipe(ctx, store.NetworkPipe{
+		NetworkAID: networkA.ID, NetworkBID: networkB.ID, Instance: runtime.Instance,
+		ParentSwIfIndex: runtime.ParentSwIfIndex, EndpointASwIfIndex: runtime.EndpointASwIfIndex,
+		EndpointBSwIfIndex: runtime.EndpointBSwIfIndex,
+	})
+	if err != nil {
+		_ = s.backend.DeleteNetworkPipe(context.Background(), runtime.Instance, runtime.ParentSwIfIndex)
+		if errors.Is(err, store.ErrNetworkPipeExists) {
+			return store.NetworkPipe{}, &NetworkError{Status: http.StatusConflict, Message: "a pipe between those networks already exists"}
+		}
+		return store.NetworkPipe{}, &NetworkError{Status: http.StatusInternalServerError, Err: err}
+	}
+	return created, nil
+}
+
+// DeleteNetworkPipe removes a pipe and its VPP runtime.
+func (s *Service) DeleteNetworkPipe(ctx context.Context, id int64) error {
+	s.resourceMu.Lock()
+	defer s.resourceMu.Unlock()
+	pipe, err := s.store.GetNetworkPipe(ctx, id)
+	if err != nil {
+		if errors.Is(err, store.ErrNetworkPipeNotFound) {
+			return &NetworkError{Status: http.StatusNotFound, Message: "network pipe not found"}
+		}
+		return &NetworkError{Status: http.StatusInternalServerError, Err: err}
+	}
+	if blocked, message := s.backend.VPPBlocked(); blocked {
+		return &NetworkError{Status: http.StatusServiceUnavailable, Message: message}
+	}
+	if err := s.backend.DeleteNetworkPipe(ctx, pipe.Instance, pipe.ParentSwIfIndex); err != nil {
+		return &NetworkError{Status: http.StatusInternalServerError, Err: fmt.Errorf("delete VPP pipe: %w", err)}
+	}
+	if err := s.store.DeleteNetworkPipe(ctx, pipe.ID); err != nil {
+		if errors.Is(err, store.ErrNetworkPipeNotFound) {
+			return &NetworkError{Status: http.StatusNotFound, Message: "network pipe not found"}
+		}
+		return &NetworkError{Status: http.StatusInternalServerError, Err: err}
+	}
+	return nil
 }
 
 // CreateNetworkHostTap creates a persistent host tap on a Rookery Network.

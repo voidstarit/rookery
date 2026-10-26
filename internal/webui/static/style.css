@@ -2934,3 +2934,122 @@ body.route-page-mode #networks-panel .panel-spaced {
   line-height: 1.35;
   resize: vertical;
 }
+
+.startup-script-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.startup-script-editor {
+  min-height: 12rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.startup-script-output {
+  margin-top: 1rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--field);
+}
+
+.startup-script-output summary {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.startup-script-output pre {
+  max-height: 18rem;
+  margin: 0.7rem 0 0;
+  overflow: auto;
+  color: var(--text);
+  font-size: 0.74rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.vpp-address-live {
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--field);
+}
+
+.vpp-address-live-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.vpp-live-addresses {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.address-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  white-space: normal;
+}
+
+.address-side {
+  display: inline-block;
+  min-width: 2.1rem;
+  margin-right: 0.35rem;
+  color: var(--faint);
+  font-family: var(--font-sans);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.route-advanced {
+  grid-column: 1 / -1;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.012);
+}
+
+.route-advanced-title {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.route-advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.route-advanced-grid .field-wide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  .route-advanced-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .route-advanced-grid .field-wide {
+    grid-column: auto;
+  }
+}

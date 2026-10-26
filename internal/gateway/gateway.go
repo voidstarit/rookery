@@ -57,6 +57,7 @@ type options struct {
 	diskMutex          *sync.Mutex
 	vmMutex            *sync.Mutex
 	interfaceRuntime   InterfaceRuntime
+	interfaceAddresses InterfaceAddressRuntime
 	diagnostics        DiagnosticsRuntime
 	networkRuntime     NetworkRuntime
 	networkWriter      NetworkWriter
@@ -135,6 +136,14 @@ func WithVMMutex(mutex *sync.Mutex) Option {
 func WithInterfaceRuntime(runtime InterfaceRuntime) Option {
 	return func(opts *options) {
 		opts.interfaceRuntime = runtime
+	}
+}
+
+// WithInterfaceAddressRuntime enables IPv4/IPv6 address management on
+// Rookery-owned VPP interfaces.
+func WithInterfaceAddressRuntime(runtime InterfaceAddressRuntime) Option {
+	return func(opts *options) {
+		opts.interfaceAddresses = runtime
 	}
 }
 
@@ -234,12 +243,12 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	disks := &diskService{store: st, runtime: options.diskProvisioner, readiness: ready, mu: options.diskMutex, logger: options.logger}
 	media := &mediaService{store: st}
 	networks := &networkService{store: st, runtime: options.networkRuntime, readiness: ready, writer: options.networkWriter, mu: options.diskMutex}
-	interfaces := &interfaceService{store: st, runtime: options.aclRuntime, attachments: options.interfaceRuntime, vms: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, runMu: options.vmMutex}
+	interfaces := &interfaceService{store: st, runtime: options.aclRuntime, attachments: options.interfaceRuntime, addresses: options.interfaceAddresses, vms: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, runMu: options.vmMutex}
 	acls := &aclService{store: st, runtime: options.aclRuntime, readiness: ready}
 	routeTables := &routeTableService{store: st, runtime: options.aclRuntime, readiness: ready}
 	vnfs := &vnfService{store: st, runtime: options.vnfRuntime, statusProvider: options.vnfStatusProvider, writer: options.vnfWriter}
 	backends := &storageBackendService{store: st, readiness: ready, disks: options.diskProvisioner, mu: options.diskMutex}
-	hostInterfaces := &hostService{source: options.vppInterfaces, store: st, writer: options.hostWriter, taps: options.hostTapWriter}
+	hostInterfaces := &hostService{source: options.vppInterfaces, store: st, writer: options.hostWriter, taps: options.hostTapWriter, addresses: options.interfaceAddresses, readiness: ready}
 	troubleshoot := &troubleshootService{runtime: options.diagnostics, readiness: ready}
 	captures := &captureService{runtime: options.diagnostics, readiness: ready}
 	rookeryv1.RegisterSystemServiceServer(server, system)
@@ -418,7 +427,7 @@ func (s *systemService) GetHealth(ctx context.Context, _ *rookeryv1.GetHealthReq
 	return &rookeryv1.HealthResponse{Status: "ok"}, nil
 }
 
-func (s *systemService) GetStatus(_ context.Context, _ *rookeryv1.GetStatusRequest) (*rookeryv1.StatusResponse, error) {
+func (s *systemService) GetStatus(ctx context.Context, _ *rookeryv1.GetStatusRequest) (*rookeryv1.StatusResponse, error) {
 	current := s.readiness.Status()
 	response := &rookeryv1.StatusResponse{Ready: current.Ready}
 	if current.CheckedAt != nil {
@@ -426,6 +435,16 @@ func (s *systemService) GetStatus(_ context.Context, _ *rookeryv1.GetStatusReque
 	}
 	response.ThinPool = thinPoolStatus(current.ThinPool)
 	response.Vpp = vppStatus(current.VPP)
+	if script, err := s.store.GetStartupScript(ctx); err != nil {
+		response.RookeryStartupScript = &rookeryv1.StartupScriptStatus{Status: "unavailable"}
+	} else {
+		response.RookeryStartupScript = startupScriptStatus(script)
+	}
+	if script, err := s.store.GetVPPStartupScript(ctx); err != nil {
+		response.VppStartupScript = &rookeryv1.StartupScriptStatus{Status: "unavailable"}
+	} else {
+		response.VppStartupScript = startupScriptStatus(script)
+	}
 	return response, nil
 }
 

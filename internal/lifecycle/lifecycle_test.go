@@ -2,11 +2,14 @@ package lifecycle
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"path/filepath"
 	"sync"
 	"testing"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
+	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -42,6 +45,10 @@ func (f *fakeBackend) CreateBridgeDomain(_ context.Context, _ string, _ []uint32
 	return 123, nil
 }
 func (f *fakeBackend) DeleteBridgeDomain(context.Context, uint32) error { return nil }
+func (f *fakeBackend) CreateNetworkPipe(_ context.Context, bdA, bdB uint32) (host.PipeRuntime, error) {
+	return host.PipeRuntime{Instance: 1, ParentSwIfIndex: 80, EndpointASwIfIndex: bdA, EndpointBSwIfIndex: bdB}, nil
+}
+func (f *fakeBackend) DeleteNetworkPipe(context.Context, uint32, uint32) error { return nil }
 func (f *fakeBackend) PrepareNetworkVNFs(_ context.Context, network store.Network) (store.Network, error) {
 	return network, nil
 }
@@ -93,5 +100,57 @@ func TestVNFAndNetworkLifecycle(t *testing.T) {
 	}
 	if err := service.DeleteNetwork(context.Background(), created.ID); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestNetworkPipeLifecycle(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "lifecycle-pipes.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	networkA, err := st.CreateNetwork(ctx, store.Network{Name: "lab-a", BridgeDomainID: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	networkB, err := st.CreateNetwork(ctx, store.Network{Name: "lab-b", BridgeDomainID: 11})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := New(st, &fakeBackend{}, &sync.Mutex{})
+
+	pipe, err := service.CreateNetworkPipe(ctx, networkB.ID, networkA.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pipe.NetworkAID != networkA.ID || pipe.NetworkBID != networkB.ID || pipe.Instance != 1 || pipe.ParentSwIfIndex != 80 {
+		t.Fatalf("pipe = %+v", pipe)
+	}
+	if _, err := service.CreateNetworkPipe(ctx, networkA.ID, networkB.ID); err == nil {
+		t.Fatal("expected duplicate pipe error")
+	} else {
+		var networkErr *NetworkError
+		if !errors.As(err, &networkErr) || networkErr.Status != http.StatusConflict {
+			t.Fatalf("duplicate pipe error = %v", err)
+		}
+	}
+	if err := service.DeleteNetwork(ctx, networkA.ID); err == nil {
+		t.Fatal("expected network deletion to be blocked by pipe")
+	} else {
+		var networkErr *NetworkError
+		if !errors.As(err, &networkErr) || networkErr.Status != http.StatusConflict {
+			t.Fatalf("delete network error = %v", err)
+		}
+	}
+	if err := service.DeleteNetworkPipe(ctx, pipe.ID); err != nil {
+		t.Fatal(err)
+	}
+	pipes, err := st.ListNetworkPipes(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pipes) != 0 {
+		t.Fatalf("pipes after delete = %+v", pipes)
 	}
 }

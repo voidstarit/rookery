@@ -11,6 +11,38 @@ export type Network = {
   updated_at?: string;
 };
 
+export type StartupScript = {
+  enabled?: boolean;
+  script?: string;
+  status?: "disabled" | "pending" | "running" | "success" | "failed" | string;
+  exit_code?: number;
+  output?: string;
+  ran_at?: string;
+  updated_at?: string;
+};
+
+export type VPPInterfaceRouteTables = {
+  name: string;
+  ipv4_table_id: number;
+  ipv6_table_id: number;
+  ipv4_table_name: string;
+  ipv6_table_name: string;
+};
+
+export type NetworkPipe = {
+  id: number;
+  network_a_id: number;
+  network_a_name: string;
+  network_b_id: number;
+  network_b_name: string;
+  instance: number;
+  parent_sw_if_index: number;
+  endpoint_a_sw_if_index: number;
+  endpoint_b_sw_if_index: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type Media = {
   id: number;
   name: string;
@@ -158,6 +190,7 @@ export type VirtualInterface = {
   ipv6_table_id?: number;
   ipv4_table_name?: string;
   ipv6_table_name?: string;
+  vpp_addresses?: string[];
   created_at: string;
   updated_at: string;
 };
@@ -192,11 +225,25 @@ export type Route = {
   table_id: number;
   ipv6: boolean;
   prefix: string;
+  description?: string;
   next_hop: string;
   interface_id?: number;
   interface_name?: string;
   egress_interface?: string;
   preference?: number;
+  count?: number;
+  next_hop_table?: number;
+  weight?: number;
+  udp_encap?: number;
+  ipv4_lookup_table?: number;
+  ipv6_lookup_table?: number;
+  mpls_lookup_table?: number;
+  resolve_via_host?: boolean;
+  resolve_via_connected?: boolean;
+  rx_ipv4_interface?: string;
+  rx_ipv6_interface?: string;
+  out_labels?: number[];
+  drop?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -421,6 +468,7 @@ export type HostInterface = {
   vpp_up?: boolean;
   vpp_type?: string;
   managed?: boolean;
+  vpp_addresses?: string[];
 };
 
 export type HostTap = {
@@ -430,6 +478,7 @@ export type HostTap = {
   name: string;
   sw_if_index: number;
   ipv4_address?: string;
+  vpp_addresses?: string[];
   created_at?: string;
   updated_at?: string;
 };
@@ -475,5 +524,17 @@ export type StatusResponse = {
     state?: string;
     detail?: string;
     socket?: string;
+  };
+  rookery_startup_script?: {
+    enabled?: boolean;
+    status?: string;
+    exit_code?: number;
+    ran_at?: string;
+  };
+  vpp_startup_script?: {
+    enabled?: boolean;
+    status?: string;
+    exit_code?: number;
+    ran_at?: string;
   };
 };

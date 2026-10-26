@@ -160,6 +160,7 @@ func runServe(args []string) error {
 	diskRunner := host.NewLVM()
 	apiServer := api.New(st, manager, diskRunner, qemuRunner, networkRunner, vnfClient, networkRunner, logger)
 	apiServer.ConfigureMemifDHCP(transport == "memif", *memifDir)
+	apiServer.SetVPPSocket(vppSocket)
 	var pkiManager *pki.Manager
 	if strings.TrimSpace(*mtlsAddr) != "" || strings.TrimSpace(*grpcMTLSAddr) != "" {
 		extraSANs := make([]string, 0)
@@ -186,6 +187,7 @@ func runServe(args []string) error {
 		gateway.WithDiskMutex(apiServer.ResourceMutex()),
 		gateway.WithVMMutex(apiServer.RunMutex()),
 		gateway.WithInterfaceRuntime(networkRunner),
+		gateway.WithInterfaceAddressRuntime(networkRunner),
 		gateway.WithHostWriter(networkRunner),
 		gateway.WithHostTapWriter(lifecycleService),
 		gateway.WithDiagnosticsRuntime(networkRunner),

@@ -44,6 +44,10 @@ func (f *fakeACLRuntime) SetInterfaceRouteTable(_ context.Context, _ uint32, _ b
 func (f *fakeACLRuntime) AddRoute(_ context.Context, _ uint32, _ bool, _, _, _ string, _ uint32, _ uint32) error {
 	return nil
 }
+
+func (f *fakeACLRuntime) AddRouteSpec(_ context.Context, _ host.RouteSpec) error {
+	return nil
+}
 func (f *fakeACLRuntime) DeleteRoute(_ context.Context, _ uint32, _ bool, _ string) error {
 	return nil
 }

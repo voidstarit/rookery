@@ -65,6 +65,34 @@ service InterfaceService {
   rpc ResetInterfaceCounters(ResetInterfaceCountersRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {delete: "/api/interfaces/counters"};
   }
+
+  // GetVPPInterfaceAddresses returns Rookery-managed IPv4/IPv6 addresses for a
+  // VPP interface owned by Rookery (vhost-user, host tap, host interface, or
+  // VNF tap).
+  rpc GetVPPInterfaceAddresses(GetVPPInterfaceAddressesRequest) returns (VPPInterfaceAddresses) {
+    option (google.api.http) = {get: "/api/vpp/interfaces/{name}/addresses"};
+  }
+
+  rpc UpdateVPPInterfaceAddresses(UpdateVPPInterfaceAddressesRequest) returns (VPPInterfaceAddresses) {
+    option (google.api.http) = {
+      put: "/api/vpp/interfaces/{name}/addresses"
+      body: "*"
+    };
+  }
+
+  // GetVPPInterfaceRouteTables returns the IPv4/IPv6 FIB binding for a Rookery
+  // host interface or host tap. Vhost-user interfaces use the dedicated
+  // /api/interfaces/{id}/route-tables endpoint.
+  rpc GetVPPInterfaceRouteTables(GetVPPInterfaceRouteTablesRequest) returns (VPPInterfaceRouteTables) {
+    option (google.api.http) = {get: "/api/vpp/interfaces/{name}/route-tables"};
+  }
+
+  rpc UpdateVPPInterfaceRouteTables(UpdateVPPInterfaceRouteTablesRequest) returns (VPPInterfaceRouteTables) {
+    option (google.api.http) = {
+      put: "/api/vpp/interfaces/{name}/route-tables"
+      body: "*"
+    };
+  }
 }
 
 message VirtualInterface {
@@ -89,6 +117,7 @@ message VirtualInterface {
   uint32 ipv6_table_id = 19;
   string ipv4_table_name = 20;
   string ipv6_table_name = 21;
+  repeated string vpp_addresses = 22;
 }
 
 message VMInterface {
@@ -163,3 +192,44 @@ message ListInterfaceCountersResponse {
 }
 
 message ResetInterfaceCountersRequest {}
+
+message VPPInterfaceAddresses {
+  string name = 1;
+  repeated string addresses = 2;
+  bool dhcp_client_enabled = 3;
+  repeated string live_addresses = 4;
+  bool dhcp_client_configured = 5;
+  string dhcp_client_status = 6;
+  string status_detail = 7;
+}
+
+message GetVPPInterfaceAddressesRequest {
+  string name = 1 [(validate.rules).string = {min_len: 1, max_len: 128}];
+}
+
+message UpdateVPPInterfaceAddressesRequest {
+  string name = 1 [(validate.rules).string = {min_len: 1, max_len: 128}];
+  repeated string addresses = 2 [(validate.rules).repeated = {
+    max_items: 32
+    items: {string: {max_len: 64}}
+  }];
+  bool dhcp_client_enabled = 3;
+}
+
+message VPPInterfaceRouteTables {
+  string name = 1;
+  uint32 ipv4_table_id = 2;
+  uint32 ipv6_table_id = 3;
+  string ipv4_table_name = 4;
+  string ipv6_table_name = 5;
+}
+
+message GetVPPInterfaceRouteTablesRequest {
+  string name = 1 [(validate.rules).string = {min_len: 1, max_len: 128}];
+}
+
+message UpdateVPPInterfaceRouteTablesRequest {
+  string name = 1 [(validate.rules).string = {min_len: 1, max_len: 128}];
+  uint32 ipv4_table_id = 2;
+  uint32 ipv6_table_id = 3;
+}

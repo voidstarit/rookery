@@ -51,6 +51,13 @@ service RouteTableService {
     };
   }
 
+  rpc UpdateRoute(UpdateRouteRequest) returns (Route) {
+    option (google.api.http) = {
+      put: "/api/routes/{id}"
+      body: "*"
+    };
+  }
+
   rpc DeleteRoute(DeleteRouteRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {delete: "/api/routes/{id}"};
   }
@@ -103,9 +110,23 @@ message Route {
   optional int64 interface_id = 7;
   string interface_name = 8;
   string egress_interface = 11;
-  uint32 preference = 12;
+  optional uint32 preference = 12;
   google.protobuf.Timestamp created_at = 9;
   google.protobuf.Timestamp updated_at = 10;
+  optional uint32 count = 13;
+  optional uint32 next_hop_table = 14;
+  optional uint32 weight = 15;
+  optional uint32 udp_encap = 16;
+  optional uint32 ipv4_lookup_table = 17;
+  optional uint32 ipv6_lookup_table = 18;
+  optional uint32 mpls_lookup_table = 19;
+  bool resolve_via_host = 20;
+  bool resolve_via_connected = 21;
+  string rx_ipv4_interface = 22;
+  string rx_ipv6_interface = 23;
+  repeated uint32 out_labels = 24;
+  bool drop = 25;
+  string description = 26;
 }
 
 message ListRoutesRequest {
@@ -124,7 +145,44 @@ message CreateRouteRequest {
   string next_hop = 4 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
   optional int64 interface_id = 5 [(validate.rules).int64 = {gt: 0}];
   string egress_interface = 6 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
-  uint32 preference = 7;
+  optional uint32 preference = 7;
+  optional uint32 count = 8 [(validate.rules).uint32 = {lte: 100000}];
+  optional uint32 next_hop_table = 9;
+  optional uint32 weight = 10 [(validate.rules).uint32 = {lte: 255}];
+  optional uint32 udp_encap = 11;
+  optional uint32 ipv4_lookup_table = 12;
+  optional uint32 ipv6_lookup_table = 13;
+  optional uint32 mpls_lookup_table = 14;
+  bool resolve_via_host = 15;
+  bool resolve_via_connected = 16;
+  string rx_ipv4_interface = 17 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
+  string rx_ipv6_interface = 18 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
+  repeated uint32 out_labels = 19 [(validate.rules).repeated = {max_items: 16}];
+  bool drop = 20;
+  string description = 21 [(validate.rules).string = {max_len: 1000}];
+}
+
+message UpdateRouteRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  string prefix = 2 [(validate.rules).string = {min_len: 1, max_len: 64}];
+  string next_hop = 3 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
+  optional int64 interface_id = 4 [(validate.rules).int64 = {gt: 0}];
+  string egress_interface = 5 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
+  optional uint32 preference = 6;
+  optional uint32 count = 7 [(validate.rules).uint32 = {lte: 100000}];
+  optional uint32 next_hop_table = 8;
+  optional uint32 weight = 9 [(validate.rules).uint32 = {lte: 255}];
+  optional uint32 udp_encap = 10;
+  optional uint32 ipv4_lookup_table = 11;
+  optional uint32 ipv6_lookup_table = 12;
+  optional uint32 mpls_lookup_table = 13;
+  bool resolve_via_host = 14;
+  bool resolve_via_connected = 15;
+  string rx_ipv4_interface = 16 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
+  string rx_ipv6_interface = 17 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
+  repeated uint32 out_labels = 18 [(validate.rules).repeated = {max_items: 16}];
+  bool drop = 19;
+  string description = 20 [(validate.rules).string = {max_len: 1000}];
 }
 
 message DeleteRouteRequest {

@@ -112,6 +112,10 @@ static UI.
 | -------- | ------------------ | --------------------------------- |
 | `GET`    | `/api/healthz`     | Liveness and database check       |
 | `GET`    | `/api/status`      | Thin pool and VPP readiness       |
+| `GET`    | `/api/startup-script` | Get the Rookery startup script and its last execution result |
+| `PUT`    | `/api/startup-script` | Configure the Rookery startup script (`enabled`, `script`) |
+| `GET`    | `/api/vpp-startup-script` | Get the VPP connection startup script and its last execution result |
+| `PUT`    | `/api/vpp-startup-script` | Configure the VPP startup script (`enabled`, `script`) |
 | `GET`    | `/api/storage-backends` | List registered storage backends |
 | `POST`   | `/api/storage-backends` | Register an LVM thin-pool backend |
 | `GET`    | `/api/storage-backends/{id}` | Get one storage backend |
@@ -131,7 +135,28 @@ static UI.
 | `GET`    | `/api/networks`    | List Rookery Networks (VPP bridge domains) |
 | `POST`   | `/api/networks`    | Create a VPP bridge domain with IPv4/IPv6 CIDRs |
 | `GET`    | `/api/networks/{id}` | Get one network                 |
+| `GET`    | `/api/network-pipes` | List bridge-domain pipes |
+| `POST`   | `/api/network-pipes` | Create a VPP pipe between two bridge domains (`network_a_id`, `network_b_id`) |
+| `DELETE` | `/api/network-pipes/{id}` | Delete a bridge-domain pipe |
 | `DELETE` | `/api/networks/{id}` | Delete a network, stopping its VNFs and removing its BVI/bridge domain |
+| `GET`    | `/api/vpp/interfaces/{name}/addresses` | List Rookery-managed addresses on a VPP interface |
+| `PUT`    | `/api/vpp/interfaces/{name}/addresses` | Replace the managed IPv4/IPv6 addresses on a VPP interface |
+| `GET`    | `/api/vpp/interfaces/{name}/route-tables` | Get IPv4/IPv6 FIB bindings for a host interface or host tap |
+| `PUT`    | `/api/vpp/interfaces/{name}/route-tables` | Set IPv4/IPv6 FIB bindings for a host interface or host tap |
+
+The VPP interface address PUT body accepts `addresses` (CIDR strings) and
+`dhcp_client_enabled` (IPv4 DHCP client). The GET/PUT response also includes
+`live_addresses`, `dhcp_client_configured`, `dhcp_client_status`, and
+`status_detail` from the live VPP interface.
+The VPP interface address GET/PUT also accepts the two endpoints of a
+bridge-domain pipe (`pipe<instance>.0` and `.1`); their managed addresses are
+removed when the pipe is deleted. The interface route-table GET/PUT applies to
+host interfaces and host taps.
+The request/response uses `ipv4_table_id`/`ipv6_table_id`; `0` selects the
+default VRF. With no explicit binding, a host tap reports its network VRF;
+saving the form creates an explicit override, including default (`0`).
+Vhost-user interfaces continue to use
+`PUT /api/interfaces/{id}/route-tables`.
 | `GET`    | `/api/host/interfaces` | List physical/external NICs, link state, and VPP host-interface correlation |
 | `POST`   | `/api/host/interfaces/{name}/attach` | Take over a wired NIC into VPP and persist the attachment |
 | `DELETE` | `/api/host/interfaces/{name}` | Detach a persisted host NIC from VPP |
@@ -174,6 +199,14 @@ static UI.
 | `DELETE` | `/api/route-tables/{id}` | Delete an unassigned route table |
 | `GET`    | `/api/route-tables/{id}/routes?ipv6=<bool>` | List static routes in a table |
 | `POST`   | `/api/route-tables/{id}/routes` | Add a static route |
+| `PUT`    | `/api/routes/{id}` | Edit a static route |
+
+Route creation accepts the VPP route path options (`count`, `next_hop_table`,
+`weight`, `udp_encap`, lookup tables, resolve flags, rx interfaces,
+`out_labels`, and `drop`) in addition to prefix, next hop, egress, and
+preference. Numeric options are optional: omit one to leave it out of the VPP
+command, or send an explicit `0` when zero is meaningful (for example
+`ipv4_lookup_table: 0` produces `ip4-lookup-in-table 0`).
 | `DELETE` | `/api/routes/{id}` | Delete a static route |
 | `GET`    | `/api/route-tables/{id}/fib?ipv6=<bool>` | Inspect live VPP FIB entries, including dynamic routes |
 | `GET`    | `/api/interfaces`  | List vhost-user interfaces        |

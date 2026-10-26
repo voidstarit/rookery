@@ -244,7 +244,10 @@ func (s *Store) RouteTableInterfaceCount(ctx context.Context, tableID uint32, ip
 		column = "ipv6_table_id"
 	}
 	var count int64
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM virtual_interfaces WHERE `+column+` = ?`, tableID).Scan(&count); err != nil {
+	if err := s.db.QueryRowContext(ctx, `
+		SELECT (SELECT COUNT(*) FROM virtual_interfaces WHERE `+column+` = ?)
+		     + (SELECT COUNT(*) FROM vpp_interface_route_tables WHERE `+column+` = ?)`,
+		tableID, tableID).Scan(&count); err != nil {
 		return 0, fmt.Errorf("count route table interfaces: %w", err)
 	}
 	return count, nil

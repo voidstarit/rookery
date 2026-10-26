@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
+	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -86,6 +87,20 @@ func (s *Server) DeleteBridgeDomain(ctx context.Context, bdID uint32) error {
 		return errors.New("VPP network runtime is not configured")
 	}
 	return s.networks.DeleteBridgeDomain(ctx, bdID)
+}
+
+func (s *Server) CreateNetworkPipe(ctx context.Context, bdA, bdB uint32) (host.PipeRuntime, error) {
+	if s.networks == nil {
+		return host.PipeRuntime{}, errors.New("VPP network runtime is not configured")
+	}
+	return s.networks.CreatePipe(ctx, bdA, bdB)
+}
+
+func (s *Server) DeleteNetworkPipe(ctx context.Context, instance, parentSwIfIndex uint32) error {
+	if s.networks == nil {
+		return errors.New("VPP network runtime is not configured")
+	}
+	return s.networks.DeletePipe(ctx, instance, parentSwIfIndex)
 }
 
 func vnfConfigPayloadFromProto(config *rookeryv1.VNFConfig) *vnfConfigPayload {
