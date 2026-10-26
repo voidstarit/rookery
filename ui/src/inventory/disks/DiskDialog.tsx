@@ -199,7 +199,8 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
                 </option>
               </select>
               <span class="field-hint">
-                Template clones run the backend preparation script; empty disks use the thin pool directly.
+                Template clones run the backend preparation script and the template's
+                provisioning script when one is configured; empty disks use the thin pool directly.
               </span>
             </label>
           ) : null}
@@ -221,7 +222,7 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
                 <option value="">Select a template…</option>
                 {templates.map((disk) => (
                   <option value={String(disk.id)} key={disk.id}>
-                    {disk.name} · {disk.size_gb} GB
+                    {disk.name} · {disk.size_gb} GB{disk.provisioning_script ? " · provisioning" : ""}
                   </option>
                 ))}
               </select>
@@ -264,6 +265,13 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
                 />
               </label>
             </>
+          ) : null}
+          {supportsTemplates && source === "template" && template && !template.provisioning_script ? (
+            <p class="field-hint field-wide">
+              This template has no provisioning script, so there are no key-values to pass.
+              Close this dialog and use <strong>Provisioning</strong> on the template row to
+              configure one first.
+            </p>
           ) : null}
           {supportsTemplates && source === "template" && template?.provisioning_script ? (
             <label class="field field-wide">
