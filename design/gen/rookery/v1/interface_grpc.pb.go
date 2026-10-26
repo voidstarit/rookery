@@ -32,6 +32,7 @@ const (
 	InterfaceService_UpdateVPPInterfaceAddresses_FullMethodName   = "/rookery.v1.InterfaceService/UpdateVPPInterfaceAddresses"
 	InterfaceService_GetVPPInterfaceRouteTables_FullMethodName    = "/rookery.v1.InterfaceService/GetVPPInterfaceRouteTables"
 	InterfaceService_UpdateVPPInterfaceRouteTables_FullMethodName = "/rookery.v1.InterfaceService/UpdateVPPInterfaceRouteTables"
+	InterfaceService_DeleteVPPInterfaceRouteTables_FullMethodName = "/rookery.v1.InterfaceService/DeleteVPPInterfaceRouteTables"
 )
 
 // InterfaceServiceClient is the client API for InterfaceService service.
@@ -62,10 +63,14 @@ type InterfaceServiceClient interface {
 	GetVPPInterfaceAddresses(ctx context.Context, in *GetVPPInterfaceAddressesRequest, opts ...grpc.CallOption) (*VPPInterfaceAddresses, error)
 	UpdateVPPInterfaceAddresses(ctx context.Context, in *UpdateVPPInterfaceAddressesRequest, opts ...grpc.CallOption) (*VPPInterfaceAddresses, error)
 	// GetVPPInterfaceRouteTables returns the IPv4/IPv6 FIB binding for a Rookery
-	// host interface or host tap. Vhost-user interfaces use the dedicated
-	// /api/interfaces/{id}/route-tables endpoint.
+	// host interface, host tap, or bridge-domain pipe endpoint. Vhost-user
+	// interfaces use the dedicated /api/interfaces/{id}/route-tables endpoint.
 	GetVPPInterfaceRouteTables(ctx context.Context, in *GetVPPInterfaceRouteTablesRequest, opts ...grpc.CallOption) (*VPPInterfaceRouteTables, error)
 	UpdateVPPInterfaceRouteTables(ctx context.Context, in *UpdateVPPInterfaceRouteTablesRequest, opts ...grpc.CallOption) (*VPPInterfaceRouteTables, error)
+	// DeleteVPPInterfaceRouteTables removes an explicit route-table override so
+	// the interface returns to its automatic default (the network VRF for host
+	// taps, or the default table for host interfaces).
+	DeleteVPPInterfaceRouteTables(ctx context.Context, in *DeleteVPPInterfaceRouteTablesRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type interfaceServiceClient struct {
@@ -196,6 +201,16 @@ func (c *interfaceServiceClient) UpdateVPPInterfaceRouteTables(ctx context.Conte
 	return out, nil
 }
 
+func (c *interfaceServiceClient) DeleteVPPInterfaceRouteTables(ctx context.Context, in *DeleteVPPInterfaceRouteTablesRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, InterfaceService_DeleteVPPInterfaceRouteTables_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // InterfaceServiceServer is the server API for InterfaceService service.
 // All implementations must embed UnimplementedInterfaceServiceServer
 // for forward compatibility.
@@ -224,10 +239,14 @@ type InterfaceServiceServer interface {
 	GetVPPInterfaceAddresses(context.Context, *GetVPPInterfaceAddressesRequest) (*VPPInterfaceAddresses, error)
 	UpdateVPPInterfaceAddresses(context.Context, *UpdateVPPInterfaceAddressesRequest) (*VPPInterfaceAddresses, error)
 	// GetVPPInterfaceRouteTables returns the IPv4/IPv6 FIB binding for a Rookery
-	// host interface or host tap. Vhost-user interfaces use the dedicated
-	// /api/interfaces/{id}/route-tables endpoint.
+	// host interface, host tap, or bridge-domain pipe endpoint. Vhost-user
+	// interfaces use the dedicated /api/interfaces/{id}/route-tables endpoint.
 	GetVPPInterfaceRouteTables(context.Context, *GetVPPInterfaceRouteTablesRequest) (*VPPInterfaceRouteTables, error)
 	UpdateVPPInterfaceRouteTables(context.Context, *UpdateVPPInterfaceRouteTablesRequest) (*VPPInterfaceRouteTables, error)
+	// DeleteVPPInterfaceRouteTables removes an explicit route-table override so
+	// the interface returns to its automatic default (the network VRF for host
+	// taps, or the default table for host interfaces).
+	DeleteVPPInterfaceRouteTables(context.Context, *DeleteVPPInterfaceRouteTablesRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedInterfaceServiceServer()
 }
 
@@ -273,6 +292,9 @@ func (UnimplementedInterfaceServiceServer) GetVPPInterfaceRouteTables(context.Co
 }
 func (UnimplementedInterfaceServiceServer) UpdateVPPInterfaceRouteTables(context.Context, *UpdateVPPInterfaceRouteTablesRequest) (*VPPInterfaceRouteTables, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateVPPInterfaceRouteTables not implemented")
+}
+func (UnimplementedInterfaceServiceServer) DeleteVPPInterfaceRouteTables(context.Context, *DeleteVPPInterfaceRouteTablesRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteVPPInterfaceRouteTables not implemented")
 }
 func (UnimplementedInterfaceServiceServer) mustEmbedUnimplementedInterfaceServiceServer() {}
 func (UnimplementedInterfaceServiceServer) testEmbeddedByValue()                          {}
@@ -511,6 +533,24 @@ func _InterfaceService_UpdateVPPInterfaceRouteTables_Handler(srv interface{}, ct
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InterfaceService_DeleteVPPInterfaceRouteTables_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteVPPInterfaceRouteTablesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InterfaceServiceServer).DeleteVPPInterfaceRouteTables(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InterfaceService_DeleteVPPInterfaceRouteTables_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InterfaceServiceServer).DeleteVPPInterfaceRouteTables(ctx, req.(*DeleteVPPInterfaceRouteTablesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // InterfaceService_ServiceDesc is the grpc.ServiceDesc for InterfaceService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -565,6 +605,10 @@ var InterfaceService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateVPPInterfaceRouteTables",
 			Handler:    _InterfaceService_UpdateVPPInterfaceRouteTables_Handler,
+		},
+		{
+			MethodName: "DeleteVPPInterfaceRouteTables",
+			Handler:    _InterfaceService_DeleteVPPInterfaceRouteTables_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

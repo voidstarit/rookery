@@ -129,6 +129,29 @@ func TestVPPInterfaceRouteTables(t *testing.T) {
 		t.Fatalf("stored tables = %+v", body)
 	}
 
+	request, err = http.NewRequest(http.MethodDelete, server.URL+"/api/vpp/interfaces/tap-lab/route-tables", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err = http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("delete tables = %d, body = %s", response.StatusCode, readBody(t, response))
+	}
+	_ = response.Body.Close()
+	if len(runtime.tables) != 4 || runtime.tables[2] != "30/false/600" || runtime.tables[3] != "30/true/600" {
+		t.Fatalf("runtime table calls after delete = %+v", runtime.tables)
+	}
+	response, body = get("/api/vpp/interfaces/tap-lab/route-tables")
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("get tables after delete = %d", response.StatusCode)
+	}
+	if body["ipv4_table_id"].(float64) != 600 || body["ipv6_table_id"].(float64) != 600 {
+		t.Fatalf("tables after delete = %+v", body)
+	}
+
 	response, body = get("/api/vpp/interfaces/vhost-lab/route-tables")
 	if response.StatusCode != http.StatusBadRequest {
 		t.Fatalf("vhost tables = %d, body = %+v", response.StatusCode, body)

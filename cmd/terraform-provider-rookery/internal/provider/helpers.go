@@ -77,6 +77,19 @@ func stringList(ctx context.Context, values []string) (types.List, diag.Diagnost
 	return types.ListValueFrom(ctx, types.StringType, values)
 }
 
+func stringSet(ctx context.Context, values []string) (types.Set, diag.Diagnostics) {
+	return types.SetValueFrom(ctx, types.StringType, values)
+}
+
+func stringSetValues(ctx context.Context, value types.Set) ([]string, diag.Diagnostics) {
+	if value.IsNull() || value.IsUnknown() {
+		return nil, nil
+	}
+	var values []string
+	diags := value.ElementsAs(ctx, &values, false)
+	return values, diags
+}
+
 func parseID(value string, what string) (int64, error) {
 	id, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
 	if err != nil || id <= 0 {

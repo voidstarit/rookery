@@ -81,8 +81,8 @@ service InterfaceService {
   }
 
   // GetVPPInterfaceRouteTables returns the IPv4/IPv6 FIB binding for a Rookery
-  // host interface or host tap. Vhost-user interfaces use the dedicated
-  // /api/interfaces/{id}/route-tables endpoint.
+  // host interface, host tap, or bridge-domain pipe endpoint. Vhost-user
+  // interfaces use the dedicated /api/interfaces/{id}/route-tables endpoint.
   rpc GetVPPInterfaceRouteTables(GetVPPInterfaceRouteTablesRequest) returns (VPPInterfaceRouteTables) {
     option (google.api.http) = {get: "/api/vpp/interfaces/{name}/route-tables"};
   }
@@ -92,6 +92,13 @@ service InterfaceService {
       put: "/api/vpp/interfaces/{name}/route-tables"
       body: "*"
     };
+  }
+
+  // DeleteVPPInterfaceRouteTables removes an explicit route-table override so
+  // the interface returns to its automatic default (the network VRF for host
+  // taps, or the default table for host interfaces).
+  rpc DeleteVPPInterfaceRouteTables(DeleteVPPInterfaceRouteTablesRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/vpp/interfaces/{name}/route-tables"};
   }
 }
 
@@ -232,4 +239,8 @@ message UpdateVPPInterfaceRouteTablesRequest {
   string name = 1 [(validate.rules).string = {min_len: 1, max_len: 128}];
   uint32 ipv4_table_id = 2;
   uint32 ipv6_table_id = 3;
+}
+
+message DeleteVPPInterfaceRouteTablesRequest {
+  string name = 1 [(validate.rules).string = {min_len: 1, max_len: 128}];
 }

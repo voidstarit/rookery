@@ -50,9 +50,11 @@ localhost or sit behind an access-controlled proxy.
 ## Terraform provider
 
 `cmd/terraform-provider-rookery/` implements a Terraform provider that creates
-Rookery resources over the public mTLS gRPC listener. It
-covers storage backends, disks, media, networks, interfaces, ACLs, route tables
-and routes, VNFs, VMs, and host-interface takeover. Matching data sources look
+Rookery resources over the public mTLS gRPC listener. It covers storage
+backends, disks, media, networks and network pipes, vhost and host interfaces,
+host taps, managed VPP addresses and interface route-table bindings, ACLs,
+route tables and routes, VNFs, VMs, startup scripts, and host-interface
+takeover. Matching data sources look
 up existing resources, and `rookery_status` exposes current readiness. Configure
 it with the CA, client certificate, and private key downloaded from the
 **Client certificates** dialog:
@@ -143,7 +145,8 @@ static UI.
 | `GET`    | `/api/vpp/interfaces/{name}/addresses` | List Rookery-managed addresses on a VPP interface |
 | `PUT`    | `/api/vpp/interfaces/{name}/addresses` | Replace the managed IPv4/IPv6 addresses on a VPP interface |
 | `GET`    | `/api/vpp/interfaces/{name}/route-tables` | Get IPv4/IPv6 FIB bindings for a host interface or host tap |
-| `PUT`    | `/api/vpp/interfaces/{name}/route-tables` | Set IPv4/IPv6 FIB bindings for a host interface or host tap |
+| `PUT`    | `/api/vpp/interfaces/{name}/route-tables` | Set IPv4/IPv6 FIB bindings for a host interface, host tap, or pipe endpoint |
+| `DELETE` | `/api/vpp/interfaces/{name}/route-tables` | Remove the explicit binding and restore the automatic default |
 
 Network CIDRs can be changed with `PUT /api/networks/{id}` while the network has
 no VNFs, host taps, legacy DHCP configuration, or BVI/gateway.
@@ -159,7 +162,9 @@ host interfaces and host taps.
 The request/response uses `ipv4_table_id`/`ipv6_table_id`; `0` selects the
 default VRF. With no explicit binding, a host tap reports its network VRF;
 saving the form creates an explicit override, including default (`0`).
-Vhost-user interfaces continue to use
+`DELETE /api/vpp/interfaces/{name}/route-tables` removes that explicit override:
+the interface returns to its network VRF (host taps) or the default table
+(host interfaces). Vhost-user interfaces continue to use
 `PUT /api/interfaces/{id}/route-tables`.
 | `GET`    | `/api/host/interfaces` | List physical/external NICs, link state, and VPP host-interface correlation |
 | `POST`   | `/api/host/interfaces/{name}/attach` | Take over a wired NIC into VPP and persist the attachment |

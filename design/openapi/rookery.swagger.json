@@ -2820,13 +2820,43 @@
     },
     "/api/vpp/interfaces/{name}/route-tables": {
       "get": {
-        "summary": "GetVPPInterfaceRouteTables returns the IPv4/IPv6 FIB binding for a Rookery\nhost interface or host tap. Vhost-user interfaces use the dedicated\n/api/interfaces/{id}/route-tables endpoint.",
+        "summary": "GetVPPInterfaceRouteTables returns the IPv4/IPv6 FIB binding for a Rookery\nhost interface, host tap, or bridge-domain pipe endpoint. Vhost-user\ninterfaces use the dedicated /api/interfaces/{id}/route-tables endpoint.",
         "operationId": "InterfaceService_GetVPPInterfaceRouteTables",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/v1VPPInterfaceRouteTables"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "InterfaceService"
+        ]
+      },
+      "delete": {
+        "summary": "DeleteVPPInterfaceRouteTables removes an explicit route-table override so\nthe interface returns to its automatic default (the network VRF for host\ntaps, or the default table for host interfaces).",
+        "operationId": "InterfaceService_DeleteVPPInterfaceRouteTables",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
             }
           },
           "default": {

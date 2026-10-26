@@ -1285,6 +1285,50 @@ func (x *UpdateVPPInterfaceRouteTablesRequest) GetIpv6TableId() uint32 {
 	return 0
 }
 
+type DeleteVPPInterfaceRouteTablesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteVPPInterfaceRouteTablesRequest) Reset() {
+	*x = DeleteVPPInterfaceRouteTablesRequest{}
+	mi := &file_rookery_v1_interface_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteVPPInterfaceRouteTablesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteVPPInterfaceRouteTablesRequest) ProtoMessage() {}
+
+func (x *DeleteVPPInterfaceRouteTablesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_interface_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteVPPInterfaceRouteTablesRequest.ProtoReflect.Descriptor instead.
+func (*DeleteVPPInterfaceRouteTablesRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_interface_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *DeleteVPPInterfaceRouteTablesRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
 var File_rookery_v1_interface_proto protoreflect.FileDescriptor
 
 const file_rookery_v1_interface_proto_rawDesc = "" +
@@ -1411,7 +1455,10 @@ const file_rookery_v1_interface_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tB\n" +
 	"\xfaB\ar\x05\x10\x01\x18\x80\x01R\x04name\x12\"\n" +
 	"\ripv4_table_id\x18\x02 \x01(\rR\vipv4TableId\x12\"\n" +
-	"\ripv6_table_id\x18\x03 \x01(\rR\vipv6TableId2\xfa\f\n" +
+	"\ripv6_table_id\x18\x03 \x01(\rR\vipv6TableId\"F\n" +
+	"$DeleteVPPInterfaceRouteTablesRequest\x12\x1e\n" +
+	"\x04name\x18\x01 \x01(\tB\n" +
+	"\xfaB\ar\x05\x10\x01\x18\x80\x01R\x04name2\x97\x0e\n" +
 	"\x10InterfaceService\x12|\n" +
 	"\x0eListInterfaces\x12!.rookery.v1.ListInterfacesRequest\x1a\".rookery.v1.ListInterfacesResponse\"#\x82\xd3\xe4\x93\x02\x1db\n" +
 	"interfaces\x12\x0f/api/interfaces\x12k\n" +
@@ -1426,7 +1473,8 @@ const file_rookery_v1_interface_proto_rawDesc = "" +
 	"\x18GetVPPInterfaceAddresses\x12+.rookery.v1.GetVPPInterfaceAddressesRequest\x1a!.rookery.v1.VPPInterfaceAddresses\",\x82\xd3\xe4\x93\x02&\x12$/api/vpp/interfaces/{name}/addresses\x12\xa1\x01\n" +
 	"\x1bUpdateVPPInterfaceAddresses\x12..rookery.v1.UpdateVPPInterfaceAddressesRequest\x1a!.rookery.v1.VPPInterfaceAddresses\"/\x82\xd3\xe4\x93\x02):\x01*\x1a$/api/vpp/interfaces/{name}/addresses\x12\xa1\x01\n" +
 	"\x1aGetVPPInterfaceRouteTables\x12-.rookery.v1.GetVPPInterfaceRouteTablesRequest\x1a#.rookery.v1.VPPInterfaceRouteTables\"/\x82\xd3\xe4\x93\x02)\x12'/api/vpp/interfaces/{name}/route-tables\x12\xaa\x01\n" +
-	"\x1dUpdateVPPInterfaceRouteTables\x120.rookery.v1.UpdateVPPInterfaceRouteTablesRequest\x1a#.rookery.v1.VPPInterfaceRouteTables\"2\x82\xd3\xe4\x93\x02,:\x01*\x1a'/api/vpp/interfaces/{name}/route-tablesB?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
+	"\x1dUpdateVPPInterfaceRouteTables\x120.rookery.v1.UpdateVPPInterfaceRouteTablesRequest\x1a#.rookery.v1.VPPInterfaceRouteTables\"2\x82\xd3\xe4\x93\x02,:\x01*\x1a'/api/vpp/interfaces/{name}/route-tables\x12\x9a\x01\n" +
+	"\x1dDeleteVPPInterfaceRouteTables\x120.rookery.v1.DeleteVPPInterfaceRouteTablesRequest\x1a\x16.google.protobuf.Empty\"/\x82\xd3\xe4\x93\x02)*'/api/vpp/interfaces/{name}/route-tablesB?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
 
 var (
 	file_rookery_v1_interface_proto_rawDescOnce sync.Once
@@ -1440,7 +1488,7 @@ func file_rookery_v1_interface_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_interface_proto_rawDescData
 }
 
-var file_rookery_v1_interface_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_rookery_v1_interface_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_rookery_v1_interface_proto_goTypes = []any{
 	(*VirtualInterface)(nil),                     // 0: rookery.v1.VirtualInterface
 	(*VMInterface)(nil),                          // 1: rookery.v1.VMInterface
@@ -1461,14 +1509,15 @@ var file_rookery_v1_interface_proto_goTypes = []any{
 	(*VPPInterfaceRouteTables)(nil),              // 16: rookery.v1.VPPInterfaceRouteTables
 	(*GetVPPInterfaceRouteTablesRequest)(nil),    // 17: rookery.v1.GetVPPInterfaceRouteTablesRequest
 	(*UpdateVPPInterfaceRouteTablesRequest)(nil), // 18: rookery.v1.UpdateVPPInterfaceRouteTablesRequest
-	(*timestamppb.Timestamp)(nil),                // 19: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),                        // 20: google.protobuf.Empty
+	(*DeleteVPPInterfaceRouteTablesRequest)(nil), // 19: rookery.v1.DeleteVPPInterfaceRouteTablesRequest
+	(*timestamppb.Timestamp)(nil),                // 20: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),                        // 21: google.protobuf.Empty
 }
 var file_rookery_v1_interface_proto_depIdxs = []int32{
-	19, // 0: rookery.v1.VirtualInterface.created_at:type_name -> google.protobuf.Timestamp
-	19, // 1: rookery.v1.VirtualInterface.updated_at:type_name -> google.protobuf.Timestamp
+	20, // 0: rookery.v1.VirtualInterface.created_at:type_name -> google.protobuf.Timestamp
+	20, // 1: rookery.v1.VirtualInterface.updated_at:type_name -> google.protobuf.Timestamp
 	0,  // 2: rookery.v1.ListInterfacesResponse.interfaces:type_name -> rookery.v1.VirtualInterface
-	19, // 3: rookery.v1.InterfaceCounters.sampled_at:type_name -> google.protobuf.Timestamp
+	20, // 3: rookery.v1.InterfaceCounters.sampled_at:type_name -> google.protobuf.Timestamp
 	9,  // 4: rookery.v1.ListInterfaceCountersResponse.interfaces:type_name -> rookery.v1.InterfaceCounters
 	2,  // 5: rookery.v1.InterfaceService.ListInterfaces:input_type -> rookery.v1.ListInterfacesRequest
 	4,  // 6: rookery.v1.InterfaceService.GetInterface:input_type -> rookery.v1.GetInterfaceRequest
@@ -1482,20 +1531,22 @@ var file_rookery_v1_interface_proto_depIdxs = []int32{
 	15, // 14: rookery.v1.InterfaceService.UpdateVPPInterfaceAddresses:input_type -> rookery.v1.UpdateVPPInterfaceAddressesRequest
 	17, // 15: rookery.v1.InterfaceService.GetVPPInterfaceRouteTables:input_type -> rookery.v1.GetVPPInterfaceRouteTablesRequest
 	18, // 16: rookery.v1.InterfaceService.UpdateVPPInterfaceRouteTables:input_type -> rookery.v1.UpdateVPPInterfaceRouteTablesRequest
-	3,  // 17: rookery.v1.InterfaceService.ListInterfaces:output_type -> rookery.v1.ListInterfacesResponse
-	0,  // 18: rookery.v1.InterfaceService.GetInterface:output_type -> rookery.v1.VirtualInterface
-	0,  // 19: rookery.v1.InterfaceService.CreateInterface:output_type -> rookery.v1.VirtualInterface
-	0,  // 20: rookery.v1.InterfaceService.UpdateInterface:output_type -> rookery.v1.VirtualInterface
-	0,  // 21: rookery.v1.InterfaceService.SetInterfaceACLs:output_type -> rookery.v1.VirtualInterface
-	20, // 22: rookery.v1.InterfaceService.DeleteInterface:output_type -> google.protobuf.Empty
-	11, // 23: rookery.v1.InterfaceService.ListInterfaceCounters:output_type -> rookery.v1.ListInterfaceCountersResponse
-	20, // 24: rookery.v1.InterfaceService.ResetInterfaceCounters:output_type -> google.protobuf.Empty
-	13, // 25: rookery.v1.InterfaceService.GetVPPInterfaceAddresses:output_type -> rookery.v1.VPPInterfaceAddresses
-	13, // 26: rookery.v1.InterfaceService.UpdateVPPInterfaceAddresses:output_type -> rookery.v1.VPPInterfaceAddresses
-	16, // 27: rookery.v1.InterfaceService.GetVPPInterfaceRouteTables:output_type -> rookery.v1.VPPInterfaceRouteTables
-	16, // 28: rookery.v1.InterfaceService.UpdateVPPInterfaceRouteTables:output_type -> rookery.v1.VPPInterfaceRouteTables
-	17, // [17:29] is the sub-list for method output_type
-	5,  // [5:17] is the sub-list for method input_type
+	19, // 17: rookery.v1.InterfaceService.DeleteVPPInterfaceRouteTables:input_type -> rookery.v1.DeleteVPPInterfaceRouteTablesRequest
+	3,  // 18: rookery.v1.InterfaceService.ListInterfaces:output_type -> rookery.v1.ListInterfacesResponse
+	0,  // 19: rookery.v1.InterfaceService.GetInterface:output_type -> rookery.v1.VirtualInterface
+	0,  // 20: rookery.v1.InterfaceService.CreateInterface:output_type -> rookery.v1.VirtualInterface
+	0,  // 21: rookery.v1.InterfaceService.UpdateInterface:output_type -> rookery.v1.VirtualInterface
+	0,  // 22: rookery.v1.InterfaceService.SetInterfaceACLs:output_type -> rookery.v1.VirtualInterface
+	21, // 23: rookery.v1.InterfaceService.DeleteInterface:output_type -> google.protobuf.Empty
+	11, // 24: rookery.v1.InterfaceService.ListInterfaceCounters:output_type -> rookery.v1.ListInterfaceCountersResponse
+	21, // 25: rookery.v1.InterfaceService.ResetInterfaceCounters:output_type -> google.protobuf.Empty
+	13, // 26: rookery.v1.InterfaceService.GetVPPInterfaceAddresses:output_type -> rookery.v1.VPPInterfaceAddresses
+	13, // 27: rookery.v1.InterfaceService.UpdateVPPInterfaceAddresses:output_type -> rookery.v1.VPPInterfaceAddresses
+	16, // 28: rookery.v1.InterfaceService.GetVPPInterfaceRouteTables:output_type -> rookery.v1.VPPInterfaceRouteTables
+	16, // 29: rookery.v1.InterfaceService.UpdateVPPInterfaceRouteTables:output_type -> rookery.v1.VPPInterfaceRouteTables
+	21, // 30: rookery.v1.InterfaceService.DeleteVPPInterfaceRouteTables:output_type -> google.protobuf.Empty
+	18, // [18:31] is the sub-list for method output_type
+	5,  // [5:18] is the sub-list for method input_type
 	5,  // [5:5] is the sub-list for extension type_name
 	5,  // [5:5] is the sub-list for extension extendee
 	0,  // [0:5] is the sub-list for field type_name
@@ -1515,7 +1566,7 @@ func file_rookery_v1_interface_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_interface_proto_rawDesc), len(file_rookery_v1_interface_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

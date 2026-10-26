@@ -46,6 +46,7 @@ type interfaceModel struct {
 	IPv6TableID    types.Int64  `tfsdk:"ipv6_table_id"`
 	IPv4TableName  types.String `tfsdk:"ipv4_table_name"`
 	IPv6TableName  types.String `tfsdk:"ipv6_table_name"`
+	VPPAddresses   types.List   `tfsdk:"vpp_addresses"`
 }
 
 func (r *interfaceResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -91,6 +92,7 @@ func (r *interfaceResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			"ipv6_table_id":   schema.Int64Attribute{Optional: true, Computed: true, Description: "IPv6 route table id bound to this interface."},
 			"ipv4_table_name": schema.StringAttribute{Computed: true},
 			"ipv6_table_name": schema.StringAttribute{Computed: true},
+			"vpp_addresses":   schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "Live VPP-side addresses on the interface."},
 		},
 	}
 }
@@ -284,6 +286,9 @@ func setInterfaceState(ctx context.Context, state *interfaceModel, iface *rooker
 	state.IPv6TableID = types.Int64Value(int64(iface.GetIpv6TableId()))
 	state.IPv4TableName = optionalStringValue(iface.GetIpv4TableName())
 	state.IPv6TableName = optionalStringValue(iface.GetIpv6TableName())
+	addresses, addressDiags := stringList(ctx, iface.GetVppAddresses())
+	diags.Append(addressDiags...)
+	state.VPPAddresses = addresses
 	return diags
 }
 

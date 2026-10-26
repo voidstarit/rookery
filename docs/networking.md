@@ -153,7 +153,9 @@ expose the same action. Their bindings are stored in
 `vpp_interface_route_tables` and reapplied after an API or VPP restart. A
 non-default table moves that interface out of the bridge-domain/network VRF,
 so use it only when the host interface or tap needs to participate in a
-specific VRF.
+specific VRF. Clearing the override through
+`DELETE /api/vpp/interfaces/{name}/route-tables` restores the automatic
+network-VRF binding.
 
 Use **Routes** on a table row to list, add, and delete static entries. The form
 supports the VPP `ip route` options: count, destination prefix, table,

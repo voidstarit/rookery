@@ -8,14 +8,15 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
 // GetVPPInterfaceRouteTables returns the configured IPv4/IPv6 FIB binding for
-// a host interface or host tap. Vhost-user interfaces use the dedicated
-// virtual-interface route-table API.
+// a host interface, host tap, or pipe endpoint. Vhost-user interfaces use the
+// dedicated virtual-interface route-table API.
 func (s *interfaceService) GetVPPInterfaceRouteTables(ctx context.Context, request *rookeryv1.GetVPPInterfaceRouteTablesRequest) (*rookeryv1.VPPInterfaceRouteTables, error) {
 	name := strings.TrimSpace(request.GetName())
 	if err := s.validateGenericRouteTableTarget(ctx, name); err != nil {
@@ -29,7 +30,7 @@ func (s *interfaceService) GetVPPInterfaceRouteTables(ctx context.Context, reque
 }
 
 // UpdateVPPInterfaceRouteTables applies and persists IPv4/IPv6 FIB bindings for
-// a host interface or host tap.
+// a host interface, host tap, or pipe endpoint.
 func (s *interfaceService) UpdateVPPInterfaceRouteTables(ctx context.Context, request *rookeryv1.UpdateVPPInterfaceRouteTablesRequest) (*rookeryv1.VPPInterfaceRouteTables, error) {
 	name := strings.TrimSpace(request.GetName())
 	if s.addresses == nil {
@@ -100,6 +101,70 @@ func (s *interfaceService) UpdateVPPInterfaceRouteTables(ctx context.Context, re
 		return nil, status.Error(codes.Internal, "could not save interface route tables")
 	}
 	return vppInterfaceRouteTablesToProto(updated), nil
+}
+
+// DeleteVPPInterfaceRouteTables removes an explicit binding and restores the
+// interface's automatic default. Host taps fall back to their network VRF;
+// host interfaces fall back to the default table.
+func (s *interfaceService) DeleteVPPInterfaceRouteTables(ctx context.Context, request *rookeryv1.DeleteVPPInterfaceRouteTablesRequest) (*emptypb.Empty, error) {
+	name := strings.TrimSpace(request.GetName())
+	if s.addresses == nil {
+		return nil, status.Error(codes.Unavailable, "VPP interface runtime is not configured")
+	}
+	if s.readiness != nil && !s.readiness.Status().VPP.Ready {
+		return nil, status.Error(codes.Unavailable, "VPP is not ready")
+	}
+	if err := s.validateGenericRouteTableTarget(ctx, name); err != nil {
+		return nil, err
+	}
+	interfaces, err := s.addresses.VPPInterfaces(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, "could not query VPP interfaces")
+	}
+	var swIfIndex uint32
+	found := false
+	for _, iface := range interfaces {
+		if iface.Name == name {
+			swIfIndex = iface.SwIfIndex
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, status.Error(codes.FailedPrecondition, "VPP interface does not exist")
+	}
+
+	if s.resourceMu != nil {
+		s.resourceMu.Lock()
+		defer s.resourceMu.Unlock()
+	}
+	previous, err := s.effectiveVPPInterfaceRouteTables(ctx, name)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not load interface route tables")
+	}
+	if err := s.store.DeleteVPPInterfaceRouteTables(ctx, name); err != nil {
+		return nil, status.Error(codes.Internal, "could not remove interface route tables")
+	}
+	next, err := s.effectiveVPPInterfaceRouteTables(ctx, name)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not load automatic interface route tables")
+	}
+	restore := func() {
+		if previous.Configured {
+			_, _ = s.store.SetVPPInterfaceRouteTables(context.Background(), name, previous.IPv4TableID, previous.IPv6TableID)
+		}
+		_ = s.addresses.SetInterfaceRouteTable(context.Background(), swIfIndex, false, previous.IPv4TableID)
+		_ = s.addresses.SetInterfaceRouteTable(context.Background(), swIfIndex, true, previous.IPv6TableID)
+	}
+	if err := s.addresses.SetInterfaceRouteTable(ctx, swIfIndex, false, next.IPv4TableID); err != nil {
+		restore()
+		return nil, status.Error(codes.Internal, "could not apply the automatic IPv4 route table: "+err.Error())
+	}
+	if err := s.addresses.SetInterfaceRouteTable(ctx, swIfIndex, true, next.IPv6TableID); err != nil {
+		restore()
+		return nil, status.Error(codes.Internal, "could not apply the automatic IPv6 route table: "+err.Error())
+	}
+	return &emptypb.Empty{}, nil
 }
 
 // effectiveVPPInterfaceRouteTables returns the explicit binding when one is

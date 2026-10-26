@@ -36,8 +36,33 @@ data "rookery_network" "app" {
   name = "app"
 }
 
+data "rookery_network" "edge" {
+  name = "edge"
+}
+
+data "rookery_network_pipe" "app_edge" {
+  network_a_id = data.rookery_network.app.id
+  network_b_id = data.rookery_network.edge.id
+}
+
 data "rookery_interface" "app" {
   name = "app-vm0"
+}
+
+data "rookery_host_tap" "app" {
+  name = "hosttap0"
+}
+
+data "rookery_vpp_interface_addresses" "app" {
+  name = "app-vm0"
+}
+
+data "rookery_vpp_interface_route_tables" "app_tap" {
+  name = "hosttap0"
+}
+
+data "rookery_startup_script" "vpp" {
+  kind = "vpp"
 }
 
 data "rookery_acl" "app" {
