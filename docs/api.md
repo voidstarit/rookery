@@ -566,10 +566,11 @@ fails or times out, clone creation is rolled back and the preparation script's
 `delete` operation runs. `PUT /api/disks/{id}` can set or clear a template's
 `provisioning_script`/`provisioning_timeout`.
 
-See [`examples/template-provision.sh`](examples/template-provision.sh) for a
-simple script that mounts the clone and changes the hostname, timezone, and
-SSH authorized keys. Scripts run with the API user's privileges and should
-only contain trusted commands.
+See [`scripts/template-provision.sh`](../scripts/template-provision.sh) for a
+simple script that mounts the clone, changes the hostname, timezone, and SSH
+authorized keys, logs each stage, and always attempts to unmount the clone.
+Scripts run with the API user's privileges and should only contain trusted
+commands. See [`scripts/README.md`](../scripts/README.md) for setup details.
 
 Media fields: `name` (required, unique, max 127 chars) and `path` (required,
 absolute path to an existing regular file). `size_bytes` is read from the file

@@ -58,3 +58,62 @@ snapshots with the activation-skip flag by default. Expanding `--size-gb`
 extends the LV's virtual size; it does not resize a filesystem inside the
 snapshot. A clone shares the template's filesystem UUIDs, so reset filesystem
 or machine IDs if multiple clones will run together.
+
+## `template-provision.sh`
+
+Example `provisioning_script` for a Rookery template disk. After a clone is
+created by the backend `preparation_script`, Rookery runs this script with
+`ROOKERY_PROVISION_JSON` set to a JSON object:
+
+```json
+{
+  "operation": "provision",
+  "request_id": "...",
+  "disk": { "name": "web-01", "device": "/dev/vg0/web-01", "...": "..." },
+  "template": { "name": "debian-template", "...": "..." },
+  "backend": { "name": "pool", "...": "..." },
+  "properties": {
+    "hostname": "web-01",
+    "timezone": "UTC",
+    "username": "deploy",
+    "ssh_authorized_keys": ["ssh-ed25519 AAAA... user@example"]
+  }
+}
+```
+
+Set the template's `provisioning_script` to this file's absolute path and
+optionally set `provisioning_timeout` (default `5m`). In the Terraform provider:
+
+```hcl
+resource "rookery_disk" "template" {
+  name                 = "debian-template"
+  is_template          = true
+  provisioning_script  = "/opt/rookery/scripts/template-provision.sh"
+  provisioning_timeout = "5m"
+}
+
+resource "rookery_disk" "web" {
+  name             = "web-01"
+  template_disk_id = rookery_disk.template.id
+  provisioning_json = jsonencode({
+    hostname            = "web-01"
+    timezone            = "UTC"
+    username            = "deploy"
+    ssh_authorized_keys = ["ssh-ed25519 AAAA... user@example"]
+  })
+}
+```
+
+The example mounts the clone, sets the hostname and timezone, creates the
+requested user if needed, and appends SSH authorized keys. It assumes a simple
+single-filesystem image; for partitioned images, adapt the mount logic (for
+example with `guestfish` or `virt-customize`).
+
+Every stage is logged to stderr and Rookery captures the combined script output
+in its logs. The script always attempts to unmount the clone on exit, including
+on errors and interrupts, and retries with a lazy unmount if necessary.
+
+Requirements: `bash`, `jq`, `mount`, `umount`, and the target image must contain
+`useradd`/`chown` for non-root users. The script runs as the API user with the
+same privileges as other Rookery startup/disk scripts; only use trusted
+commands.
