@@ -561,9 +561,10 @@ Template disks also accept `provisioning_script` and `provisioning_timeout`
 runs this script as the API user with `ROOKERY_PROVISION_JSON` containing
 `operation` (`provision`), `request_id`, `disk`, `template`, `backend`, and the
 caller's arbitrary `properties` object. `POST /api/disks` accepts
-`provisioning` as a JSON object when `template_disk_id` is set. If provisioning
-fails or times out, clone creation is rolled back and the preparation script's
-`delete` operation runs. `PUT /api/disks/{id}` can set or clear a template's
+`provisioning` as a JSON object when `template_disk_id` is set. Provisioning is
+skipped when that object is omitted or empty. If provisioning fails or times
+out, clone creation is rolled back and the preparation script's `delete`
+operation runs. `PUT /api/disks/{id}` can set or clear a template's
 `provisioning_script`/`provisioning_timeout`.
 
 See [`scripts/template-provision.sh`](../scripts/template-provision.sh) for a

@@ -45,6 +45,16 @@ command -v umount >/dev/null 2>&1 || die "umount is required"
 
 printf '%s' "$json" | jq -e 'type == "object"' >/dev/null 2>&1 ||
   die "ROOKERY_PROVISION_JSON is not a JSON object"
+printf '%s' "$json" | jq -e '(.properties // {}) | type == "object"' >/dev/null 2>&1 ||
+  die "properties must be a JSON object"
+
+request_id=$(printf '%s' "$json" | jq -r '.request_id // empty')
+property_count=$(printf '%s' "$json" | jq -r '.properties // {} | length')
+log "starting provisioning request=${request_id:-unknown} property_count=$property_count"
+if [ "$property_count" -eq 0 ]; then
+  log "no provisioning properties supplied; nothing to change"
+  exit 0
+fi
 
 disk=$(printf '%s' "$json" | jq -r '.disk.device // empty') ||
   die "could not read disk.device from ROOKERY_PROVISION_JSON"
@@ -60,7 +70,7 @@ username=$(printf '%s' "$json" | jq -r '.properties.username // "root"') ||
 [ -b "$disk" ] || die "disk device does not exist or is not a block device: $disk"
 [[ "$username" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || die "invalid username: $username"
 
-log "starting provisioning for $disk (hostname=${hostname:-unchanged}, timezone=${timezone:-unchanged}, user=$username)"
+log "provisioning $disk (hostname=${hostname:-unchanged}, timezone=${timezone:-unchanged}, user=$username)"
 
 mountpoint=""
 mounted=0

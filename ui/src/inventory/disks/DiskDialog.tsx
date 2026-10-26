@@ -285,6 +285,7 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
               <span class="field-hint">
                 Passed to the template provisioning script through
                 <code>ROOKERY_PROVISION_JSON</code> under <code>properties</code>.
+                Leave <code>{}</code> empty to skip provisioning.
               </span>
             </label>
           ) : null}

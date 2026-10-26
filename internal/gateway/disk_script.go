@@ -63,6 +63,13 @@ func (s *diskService) runTemplateProvisioningScript(ctx context.Context, backend
 	if template == nil {
 		return nil
 	}
+	if len(properties) == 0 {
+		s.logger.Info().
+			Str("disk", disk.Name).
+			Str("template", template.Name).
+			Msg("template provisioning skipped: no properties supplied")
+		return nil
+	}
 	script := strings.TrimSpace(template.ProvisioningScript)
 	if script == "" {
 		if len(properties) > 0 {
@@ -93,6 +100,13 @@ func (s *diskService) runTemplateProvisioningScript(ctx context.Context, backend
 	if err != nil {
 		return fmt.Errorf("encode provisioning payload: %w", err)
 	}
+	s.logger.Info().
+		Str("script", script).
+		Str("request_id", info.RequestID).
+		Str("disk", disk.Name).
+		Str("template", template.Name).
+		Int("properties", len(properties)).
+		Msg("template provisioning script starting")
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	command := exec.CommandContext(runCtx, script)
@@ -105,8 +119,11 @@ func (s *diskService) runTemplateProvisioningScript(ctx context.Context, backend
 	if err != nil {
 		s.logger.Error().
 			Str("script", script).
+			Str("request_id", info.RequestID).
 			Str("operation", "provision").
 			Str("disk", disk.Name).
+			Str("template", template.Name).
+			Int("properties", len(properties)).
 			Err(err).
 			Str("output", text).
 			Msg("template provisioning script failed")
@@ -117,8 +134,11 @@ func (s *diskService) runTemplateProvisioningScript(ctx context.Context, backend
 	}
 	s.logger.Info().
 		Str("script", script).
+		Str("request_id", info.RequestID).
 		Str("operation", "provision").
 		Str("disk", disk.Name).
+		Str("template", template.Name).
+		Int("properties", len(properties)).
 		Str("output", text).
 		Msg("template provisioning script completed")
 	return nil

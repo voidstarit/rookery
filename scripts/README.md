@@ -113,6 +113,10 @@ Every stage is logged to stderr and Rookery captures the combined script output
 in its logs. The script always attempts to unmount the clone on exit, including
 on errors and interrupts, and retries with a lazy unmount if necessary.
 
+If the clone's `provisioning` object is omitted or empty, Rookery skips the
+provisioning script entirely. The script also exits successfully without
+mounting when it is invoked manually with an empty `properties` object.
+
 Requirements: `bash`, `jq`, `mount`, `umount`, and the target image must contain
 `useradd`/`chown` for non-root users. The script runs as the API user with the
 same privileges as other Rookery startup/disk scripts; only use trusted
