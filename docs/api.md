@@ -124,9 +124,9 @@ static UI.
 | `GET`    | `/api/storage-backends/{id}/importable-disks` | List existing thin volumes and registration state |
 | `POST`   | `/api/storage-backends/{id}/import-disks` | Register existing thin volumes as disks |
 | `GET`    | `/api/disks`       | List all disks                    |
-| `POST`   | `/api/disks`       | Create a thin-LVM disk or template clone |
+| `POST`   | `/api/disks`       | Create a thin-LVM disk, template, or provisioned template clone |
 | `GET`    | `/api/disks/{id}`  | Get one disk                      |
-| `PUT`    | `/api/disks/{id}`  | Mark or unmark a disk as a template |
+| `PUT`    | `/api/disks/{id}`  | Update template status or template provisioning settings |
 | `DELETE` | `/api/disks/{id}`  | Delete an unattached disk         |
 | `GET`    | `/api/media`       | List installation media           |
 | `POST`   | `/api/media`       | Register an existing ISO file     |
@@ -555,6 +555,21 @@ the clone; it also refuses to remove an unrelated pre-existing LV during
 create-failure cleanup. Set the backend's `preparation_script` to the script's
 absolute path. See [`scripts/README.md`](../scripts/README.md) for requirements and standalone CLI
 usage.
+
+Template disks also accept `provisioning_script` and `provisioning_timeout`
+(default `5m`). After the backend preparation script creates a clone, Rookery
+runs this script as the API user with `ROOKERY_PROVISION_JSON` containing
+`operation` (`provision`), `request_id`, `disk`, `template`, `backend`, and the
+caller's arbitrary `properties` object. `POST /api/disks` accepts
+`provisioning` as a JSON object when `template_disk_id` is set. If provisioning
+fails or times out, clone creation is rolled back and the preparation script's
+`delete` operation runs. `PUT /api/disks/{id}` can set or clear a template's
+`provisioning_script`/`provisioning_timeout`.
+
+See [`examples/template-provision.sh`](examples/template-provision.sh) for a
+simple script that mounts the clone and changes the hostname, timezone, and
+SSH authorized keys. Scripts run with the API user's privileges and should
+only contain trusted commands.
 
 Media fields: `name` (required, unique, max 127 chars) and `path` (required,
 absolute path to an existing regular file). `size_bytes` is read from the file

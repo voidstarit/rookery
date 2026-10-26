@@ -94,7 +94,7 @@ func TestMigrationConvertsNetworkDHCPToVNF(t *testing.T) {
 	if _, err := db.Exec(`DROP INDEX IF EXISTS idx_disks_template_disk_id`); err != nil {
 		t.Fatalf("drop disk template index: %v", err)
 	}
-	for _, column := range []string{"is_template", "template_disk_id", "prepared_by_script"} {
+	for _, column := range []string{"is_template", "template_disk_id", "prepared_by_script", "provisioning_script", "provisioning_timeout"} {
 		if _, err := db.Exec(`ALTER TABLE disks DROP COLUMN ` + column); err != nil {
 			t.Fatalf("drop disks.%s: %v", column, err)
 		}
@@ -198,7 +198,7 @@ func TestMigrationBackfillsVMDisks(t *testing.T) {
 	if _, err := db.Exec(`DROP INDEX IF EXISTS idx_disks_template_disk_id`); err != nil {
 		t.Fatalf("drop disk template index: %v", err)
 	}
-	for _, column := range []string{"is_template", "template_disk_id", "prepared_by_script"} {
+	for _, column := range []string{"is_template", "template_disk_id", "prepared_by_script", "provisioning_script", "provisioning_timeout"} {
 		if _, err := db.Exec(`ALTER TABLE disks DROP COLUMN ` + column); err != nil {
 			t.Fatalf("drop disks.%s: %v", column, err)
 		}
@@ -328,8 +328,8 @@ func TestMigrationPreservesLegacyVMsWithoutDisks(t *testing.T) {
 	if err := st.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 36 {
-		t.Fatalf("schema version = %d, want 36", version)
+	if version != 37 {
+		t.Fatalf("schema version = %d, want 37", version)
 	}
 }
 
@@ -350,7 +350,7 @@ func TestEnsureStartupScriptSchemaAfterTableDrop(t *testing.T) {
 	if _, err := db.Exec(`DROP TABLE startup_script`); err != nil {
 		t.Fatalf("drop startup_script table: %v", err)
 	}
-	if _, err := db.Exec(`PRAGMA user_version = 36`); err != nil {
+	if _, err := db.Exec(`PRAGMA user_version = 37`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
 	if err := db.Close(); err != nil {
@@ -420,6 +420,11 @@ func TestEnsureVPPInterfaceAddressesSchemaAfterTableDrop(t *testing.T) {
 	}
 	if _, err := db.Exec(`DROP TABLE IF EXISTS vpp_interface_dhcp_clients`); err != nil {
 		t.Fatalf("drop vpp_interface_dhcp_clients table: %v", err)
+	}
+	for _, column := range []string{"provisioning_script", "provisioning_timeout"} {
+		if _, err := db.Exec(`ALTER TABLE disks DROP COLUMN ` + column); err != nil {
+			t.Fatalf("drop disks.%s: %v", column, err)
+		}
 	}
 	if _, err := db.Exec(`PRAGMA user_version = 30`); err != nil {
 		t.Fatalf("set schema version: %v", err)

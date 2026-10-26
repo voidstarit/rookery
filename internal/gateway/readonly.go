@@ -64,6 +64,7 @@ func diskToProto(disk store.Disk) *rookeryv1.Disk {
 		StorageBackendId: disk.StorageBackendID, StorageBackendName: disk.StorageBackendName,
 		Vg: disk.VG, ThinPool: disk.ThinPool, Device: disk.Device,
 		IsTemplate: disk.IsTemplate, TemplateDiskId: disk.TemplateDiskID, TemplateDiskName: disk.TemplateDiskName,
+		ProvisioningScript: disk.ProvisioningScript, ProvisioningTimeout: disk.ProvisioningTimeout,
 		AttachedVmId: disk.AttachedVMID, AttachedVmName: disk.AttachedVMName,
 		CreatedAt: timestamp(disk.CreatedAt), UpdatedAt: timestamp(disk.UpdatedAt),
 	}

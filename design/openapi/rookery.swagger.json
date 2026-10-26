@@ -2913,6 +2913,12 @@
       "properties": {
         "is_template": {
           "type": "boolean"
+        },
+        "provisioning_script": {
+          "type": "string"
+        },
+        "provisioning_timeout": {
+          "type": "string"
         }
       }
     },
@@ -3252,6 +3258,14 @@
       },
       "additionalProperties": {}
     },
+    "protobufNullValue": {
+      "type": "string",
+      "enum": [
+        "NULL_VALUE"
+      ],
+      "default": "NULL_VALUE",
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\n The JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+    },
     "rpcStatus": {
       "type": "object",
       "properties": {
@@ -3454,6 +3468,15 @@
         },
         "is_template": {
           "type": "boolean"
+        },
+        "provisioning_script": {
+          "type": "string"
+        },
+        "provisioning_timeout": {
+          "type": "string"
+        },
+        "provisioning": {
+          "type": "object"
         }
       }
     },
@@ -3745,6 +3768,12 @@
           "format": "int64"
         },
         "template_disk_name": {
+          "type": "string"
+        },
+        "provisioning_script": {
+          "type": "string"
+        },
+        "provisioning_timeout": {
           "type": "string"
         }
       }

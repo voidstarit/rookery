@@ -156,6 +156,8 @@ export type Disk = {
   is_template?: boolean;
   template_disk_id?: number;
   template_disk_name?: string;
+  provisioning_script?: string;
+  provisioning_timeout?: string;
   created_at: string;
   updated_at: string;
 };

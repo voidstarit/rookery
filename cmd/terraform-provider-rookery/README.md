@@ -67,7 +67,7 @@ provider "rookery" {
 | Resource | Notes |
 | --- | --- |
 | `rookery_storage_backend` | LVM thin-pool backend |
-| `rookery_disk` | Thin volume or template clone |
+| `rookery_disk` | Thin volume, template, or provisioned template clone |
 | `rookery_media` | Read-only ISO/image path |
 | `rookery_network` | VPP bridge domain + isolated VRF |
 | `rookery_interface` | vhost-user interface, optional VM, ACLs, route tables (`ipv4_table_id`/`ipv6_table_id` are VPP table ids; use `rookery_route_table.app.table_id`) |
@@ -85,6 +85,11 @@ Changing `disk_ids` or `interface_ids` requires the VM to be stopped.
 changed. `rookery_network` names remain immutable, but its `ipv4_cidr` and
 `ipv6_cidr` can be updated while the network has no VNFs, host taps, or BVI.
 `rookery_route` is also immutable.
+
+`rookery_disk` templates can set `provisioning_script` and
+`provisioning_timeout`. Clones created with `template_disk_id` can pass
+`provisioning_json = jsonencode({...})`; the object is sent to the template
+script through `ROOKERY_PROVISION_JSON` under `properties`.
 
 `rookery_route` exposes the VPP path options `route_count`, `next_hop_table`,
 `weight`, `udp_encap`, `ipv4_lookup_table`, `ipv6_lookup_table`,

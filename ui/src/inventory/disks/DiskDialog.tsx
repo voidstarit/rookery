@@ -19,6 +19,9 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
   const [source, setSource] = useState<"empty" | "template">("empty");
   const [templateID, setTemplateID] = useState("");
   const [markAsTemplate, setMarkAsTemplate] = useState(false);
+  const [provisioningScript, setProvisioningScript] = useState("");
+  const [provisioningTimeout, setProvisioningTimeout] = useState("5m");
+  const [provisioningJSON, setProvisioningJSON] = useState("{}");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDialogElement | null>(null);
@@ -56,6 +59,19 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
     if (saving || !formRef.current?.reportValidity()) {
       return;
     }
+    let provisioning: unknown;
+    if (source === "template" && template?.provisioning_script) {
+      try {
+        provisioning = JSON.parse(provisioningJSON || "{}");
+      } catch {
+        setError("Provisioning properties must be valid JSON.");
+        return;
+      }
+      if (provisioning === null || Array.isArray(provisioning) || typeof provisioning !== "object") {
+        setError("Provisioning properties must be a JSON object.");
+        return;
+      }
+    }
     setError("");
     setSaving(true);
     try {
@@ -66,7 +82,20 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
           size_gb: Number(sizeGB),
           storage_backend_id: Number(backendID),
           ...(source === "template" && template ? { template_disk_id: template.id } : {}),
-          ...(source === "empty" && supportsTemplates ? { is_template: markAsTemplate } : {}),
+          ...(source === "template" && template?.provisioning_script && provisioning !== undefined
+            ? { provisioning }
+            : {}),
+          ...(source === "empty" && supportsTemplates
+            ? {
+                is_template: markAsTemplate,
+                ...(markAsTemplate
+                  ? {
+                      provisioning_script: provisioningScript.trim(),
+                      provisioning_timeout: provisioningTimeout.trim(),
+                    }
+                  : {}),
+              }
+            : {}),
         }),
       });
       onSaved(disk);
@@ -207,6 +236,47 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
                   onChange={(event) => setMarkAsTemplate(event.currentTarget.checked)}
                 />
                 <span>Mark this new disk as a template</span>
+              </span>
+            </label>
+          ) : null}
+          {supportsTemplates && source === "empty" && markAsTemplate ? (
+            <>
+              <label class="field field-wide">
+                <span class="field-label">VM provisioning script</span>
+                <input
+                  type="text"
+                  placeholder="/usr/local/sbin/rookery-provision-template"
+                  value={provisioningScript}
+                  onInput={(event) => setProvisioningScript(event.currentTarget.value)}
+                />
+                <span class="field-hint">
+                  Optional absolute-path script run after a clone is created. It receives
+                  <code>ROOKERY_PROVISION_JSON</code>.
+                </span>
+              </label>
+              <label class="field">
+                <span class="field-label">Provisioning timeout</span>
+                <input
+                  type="text"
+                  placeholder="5m"
+                  value={provisioningTimeout}
+                  onInput={(event) => setProvisioningTimeout(event.currentTarget.value)}
+                />
+              </label>
+            </>
+          ) : null}
+          {supportsTemplates && source === "template" && template?.provisioning_script ? (
+            <label class="field field-wide">
+              <span class="field-label">Provisioning properties (JSON object)</span>
+              <textarea
+                rows={6}
+                spellcheck={false}
+                value={provisioningJSON}
+                onInput={(event) => setProvisioningJSON(event.currentTarget.value)}
+              />
+              <span class="field-hint">
+                Passed to the template provisioning script through
+                <code>ROOKERY_PROVISION_JSON</code> under <code>properties</code>.
               </span>
             </label>
           ) : null}

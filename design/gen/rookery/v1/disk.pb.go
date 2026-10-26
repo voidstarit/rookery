@@ -12,6 +12,7 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
+	structpb "google.golang.org/protobuf/types/known/structpb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
@@ -126,24 +127,26 @@ func (x *VMDisk) GetDevice() string {
 }
 
 type Disk struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	Id                 int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name               string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	SizeGb             int32                  `protobuf:"varint,3,opt,name=size_gb,json=sizeGb,proto3" json:"size_gb,omitempty"`
-	StorageBackendId   *int64                 `protobuf:"varint,4,opt,name=storage_backend_id,json=storageBackendId,proto3,oneof" json:"storage_backend_id,omitempty"`
-	StorageBackendName string                 `protobuf:"bytes,5,opt,name=storage_backend_name,json=storageBackendName,proto3" json:"storage_backend_name,omitempty"`
-	Vg                 string                 `protobuf:"bytes,6,opt,name=vg,proto3" json:"vg,omitempty"`
-	ThinPool           string                 `protobuf:"bytes,7,opt,name=thin_pool,json=thinPool,proto3" json:"thin_pool,omitempty"`
-	Device             string                 `protobuf:"bytes,8,opt,name=device,proto3" json:"device,omitempty"`
-	AttachedVmId       *string                `protobuf:"bytes,9,opt,name=attached_vm_id,json=attachedVmId,proto3,oneof" json:"attached_vm_id,omitempty"`
-	AttachedVmName     string                 `protobuf:"bytes,10,opt,name=attached_vm_name,json=attachedVmName,proto3" json:"attached_vm_name,omitempty"`
-	CreatedAt          *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt          *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	IsTemplate         bool                   `protobuf:"varint,13,opt,name=is_template,json=isTemplate,proto3" json:"is_template,omitempty"`
-	TemplateDiskId     *int64                 `protobuf:"varint,14,opt,name=template_disk_id,json=templateDiskId,proto3,oneof" json:"template_disk_id,omitempty"`
-	TemplateDiskName   string                 `protobuf:"bytes,15,opt,name=template_disk_name,json=templateDiskName,proto3" json:"template_disk_name,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Id                  int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name                string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	SizeGb              int32                  `protobuf:"varint,3,opt,name=size_gb,json=sizeGb,proto3" json:"size_gb,omitempty"`
+	StorageBackendId    *int64                 `protobuf:"varint,4,opt,name=storage_backend_id,json=storageBackendId,proto3,oneof" json:"storage_backend_id,omitempty"`
+	StorageBackendName  string                 `protobuf:"bytes,5,opt,name=storage_backend_name,json=storageBackendName,proto3" json:"storage_backend_name,omitempty"`
+	Vg                  string                 `protobuf:"bytes,6,opt,name=vg,proto3" json:"vg,omitempty"`
+	ThinPool            string                 `protobuf:"bytes,7,opt,name=thin_pool,json=thinPool,proto3" json:"thin_pool,omitempty"`
+	Device              string                 `protobuf:"bytes,8,opt,name=device,proto3" json:"device,omitempty"`
+	AttachedVmId        *string                `protobuf:"bytes,9,opt,name=attached_vm_id,json=attachedVmId,proto3,oneof" json:"attached_vm_id,omitempty"`
+	AttachedVmName      string                 `protobuf:"bytes,10,opt,name=attached_vm_name,json=attachedVmName,proto3" json:"attached_vm_name,omitempty"`
+	CreatedAt           *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt           *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	IsTemplate          bool                   `protobuf:"varint,13,opt,name=is_template,json=isTemplate,proto3" json:"is_template,omitempty"`
+	TemplateDiskId      *int64                 `protobuf:"varint,14,opt,name=template_disk_id,json=templateDiskId,proto3,oneof" json:"template_disk_id,omitempty"`
+	TemplateDiskName    string                 `protobuf:"bytes,15,opt,name=template_disk_name,json=templateDiskName,proto3" json:"template_disk_name,omitempty"`
+	ProvisioningScript  string                 `protobuf:"bytes,16,opt,name=provisioning_script,json=provisioningScript,proto3" json:"provisioning_script,omitempty"`
+	ProvisioningTimeout string                 `protobuf:"bytes,17,opt,name=provisioning_timeout,json=provisioningTimeout,proto3" json:"provisioning_timeout,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *Disk) Reset() {
@@ -277,6 +280,20 @@ func (x *Disk) GetTemplateDiskId() int64 {
 func (x *Disk) GetTemplateDiskName() string {
 	if x != nil {
 		return x.TemplateDiskName
+	}
+	return ""
+}
+
+func (x *Disk) GetProvisioningScript() string {
+	if x != nil {
+		return x.ProvisioningScript
+	}
+	return ""
+}
+
+func (x *Disk) GetProvisioningTimeout() string {
+	if x != nil {
+		return x.ProvisioningTimeout
 	}
 	return ""
 }
@@ -498,14 +515,17 @@ func (x *GetDiskRequest) GetId() int64 {
 }
 
 type CreateDiskRequest struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	Name             string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	SizeGb           *int32                 `protobuf:"varint,2,opt,name=size_gb,json=sizeGb,proto3,oneof" json:"size_gb,omitempty"`
-	StorageBackendId *int64                 `protobuf:"varint,3,opt,name=storage_backend_id,json=storageBackendId,proto3,oneof" json:"storage_backend_id,omitempty"`
-	TemplateDiskId   *int64                 `protobuf:"varint,4,opt,name=template_disk_id,json=templateDiskId,proto3,oneof" json:"template_disk_id,omitempty"`
-	IsTemplate       *bool                  `protobuf:"varint,5,opt,name=is_template,json=isTemplate,proto3,oneof" json:"is_template,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Name                string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	SizeGb              *int32                 `protobuf:"varint,2,opt,name=size_gb,json=sizeGb,proto3,oneof" json:"size_gb,omitempty"`
+	StorageBackendId    *int64                 `protobuf:"varint,3,opt,name=storage_backend_id,json=storageBackendId,proto3,oneof" json:"storage_backend_id,omitempty"`
+	TemplateDiskId      *int64                 `protobuf:"varint,4,opt,name=template_disk_id,json=templateDiskId,proto3,oneof" json:"template_disk_id,omitempty"`
+	IsTemplate          *bool                  `protobuf:"varint,5,opt,name=is_template,json=isTemplate,proto3,oneof" json:"is_template,omitempty"`
+	ProvisioningScript  string                 `protobuf:"bytes,6,opt,name=provisioning_script,json=provisioningScript,proto3" json:"provisioning_script,omitempty"`
+	ProvisioningTimeout string                 `protobuf:"bytes,7,opt,name=provisioning_timeout,json=provisioningTimeout,proto3" json:"provisioning_timeout,omitempty"`
+	Provisioning        *structpb.Struct       `protobuf:"bytes,8,opt,name=provisioning,proto3" json:"provisioning,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *CreateDiskRequest) Reset() {
@@ -573,12 +593,35 @@ func (x *CreateDiskRequest) GetIsTemplate() bool {
 	return false
 }
 
+func (x *CreateDiskRequest) GetProvisioningScript() string {
+	if x != nil {
+		return x.ProvisioningScript
+	}
+	return ""
+}
+
+func (x *CreateDiskRequest) GetProvisioningTimeout() string {
+	if x != nil {
+		return x.ProvisioningTimeout
+	}
+	return ""
+}
+
+func (x *CreateDiskRequest) GetProvisioning() *structpb.Struct {
+	if x != nil {
+		return x.Provisioning
+	}
+	return nil
+}
+
 type UpdateDiskRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	IsTemplate    *bool                  `protobuf:"varint,2,opt,name=is_template,json=isTemplate,proto3,oneof" json:"is_template,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Id                  int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	IsTemplate          *bool                  `protobuf:"varint,2,opt,name=is_template,json=isTemplate,proto3,oneof" json:"is_template,omitempty"`
+	ProvisioningScript  *string                `protobuf:"bytes,3,opt,name=provisioning_script,json=provisioningScript,proto3,oneof" json:"provisioning_script,omitempty"`
+	ProvisioningTimeout *string                `protobuf:"bytes,4,opt,name=provisioning_timeout,json=provisioningTimeout,proto3,oneof" json:"provisioning_timeout,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *UpdateDiskRequest) Reset() {
@@ -623,6 +666,20 @@ func (x *UpdateDiskRequest) GetIsTemplate() bool {
 		return *x.IsTemplate
 	}
 	return false
+}
+
+func (x *UpdateDiskRequest) GetProvisioningScript() string {
+	if x != nil && x.ProvisioningScript != nil {
+		return *x.ProvisioningScript
+	}
+	return ""
+}
+
+func (x *UpdateDiskRequest) GetProvisioningTimeout() string {
+	if x != nil && x.ProvisioningTimeout != nil {
+		return *x.ProvisioningTimeout
+	}
+	return ""
 }
 
 type DeleteDiskRequest struct {
@@ -674,7 +731,7 @@ var File_rookery_v1_disk_proto protoreflect.FileDescriptor
 const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\n" +
 	"\x15rookery/v1/disk.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\x86\x02\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\x86\x02\n" +
 	"\x06VMDisk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
@@ -684,7 +741,7 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\x02vg\x18\x06 \x01(\tR\x02vg\x12\x1b\n" +
 	"\tthin_pool\x18\a \x01(\tR\bthinPool\x12\x16\n" +
 	"\x06device\x18\b \x01(\tR\x06deviceB\x15\n" +
-	"\x13_storage_backend_id\"\xf5\x04\n" +
+	"\x13_storage_backend_id\"\xd9\x05\n" +
 	"\x04Disk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
@@ -704,7 +761,9 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\vis_template\x18\r \x01(\bR\n" +
 	"isTemplate\x12-\n" +
 	"\x10template_disk_id\x18\x0e \x01(\x03H\x02R\x0etemplateDiskId\x88\x01\x01\x12,\n" +
-	"\x12template_disk_name\x18\x0f \x01(\tR\x10templateDiskNameB\x15\n" +
+	"\x12template_disk_name\x18\x0f \x01(\tR\x10templateDiskName\x12/\n" +
+	"\x13provisioning_script\x18\x10 \x01(\tR\x12provisioningScript\x121\n" +
+	"\x14provisioning_timeout\x18\x11 \x01(\tR\x13provisioningTimeoutB\x15\n" +
 	"\x13_storage_backend_idB\x11\n" +
 	"\x0f_attached_vm_idB\x13\n" +
 	"\x11_template_disk_id\"\xa1\x02\n" +
@@ -725,24 +784,32 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\x11ListDisksResponse\x12&\n" +
 	"\x05disks\x18\x01 \x03(\v2\x10.rookery.v1.DiskR\x05disks\")\n" +
 	"\x0eGetDiskRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\xdd\x02\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\x97\x04\n" +
 	"\x11CreateDiskRequest\x12;\n" +
 	"\x04name\x18\x01 \x01(\tB'\xfaB$r\"\x10\x01\x18\x7f2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$R\x04name\x12)\n" +
 	"\asize_gb\x18\x02 \x01(\x05B\v\xfaB\b\x1a\x06\x18\x80\x80\x04(\x01H\x00R\x06sizeGb\x88\x01\x01\x12:\n" +
 	"\x12storage_backend_id\x18\x03 \x01(\x03B\a\xfaB\x04\"\x02 \x00H\x01R\x10storageBackendId\x88\x01\x01\x126\n" +
 	"\x10template_disk_id\x18\x04 \x01(\x03B\a\xfaB\x04\"\x02 \x00H\x02R\x0etemplateDiskId\x88\x01\x01\x12$\n" +
 	"\vis_template\x18\x05 \x01(\bH\x03R\n" +
-	"isTemplate\x88\x01\x01B\n" +
+	"isTemplate\x88\x01\x01\x12<\n" +
+	"\x13provisioning_script\x18\x06 \x01(\tB\v\xfaB\br\x06\x18\x80 \xd0\x01\x01R\x12provisioningScript\x12=\n" +
+	"\x14provisioning_timeout\x18\a \x01(\tB\n" +
+	"\xfaB\ar\x05\x18 \xd0\x01\x01R\x13provisioningTimeout\x12;\n" +
+	"\fprovisioning\x18\b \x01(\v2\x17.google.protobuf.StructR\fprovisioningB\n" +
 	"\n" +
 	"\b_size_gbB\x15\n" +
 	"\x13_storage_backend_idB\x13\n" +
 	"\x11_template_disk_idB\x0e\n" +
-	"\f_is_template\"b\n" +
+	"\f_is_template\"\x94\x02\n" +
 	"\x11UpdateDiskRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x12$\n" +
 	"\vis_template\x18\x02 \x01(\bH\x00R\n" +
-	"isTemplate\x88\x01\x01B\x0e\n" +
-	"\f_is_template\",\n" +
+	"isTemplate\x88\x01\x01\x12>\n" +
+	"\x13provisioning_script\x18\x03 \x01(\tB\b\xfaB\x05r\x03\x18\x80 H\x01R\x12provisioningScript\x88\x01\x01\x12?\n" +
+	"\x14provisioning_timeout\x18\x04 \x01(\tB\a\xfaB\x04r\x02\x18 H\x02R\x13provisioningTimeout\x88\x01\x01B\x0e\n" +
+	"\f_is_templateB\x16\n" +
+	"\x14_provisioning_scriptB\x17\n" +
+	"\x15_provisioning_timeout\",\n" +
 	"\x11DeleteDiskRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id2\xd3\x03\n" +
 	"\vDiskService\x12c\n" +
@@ -781,27 +848,29 @@ var file_rookery_v1_disk_proto_goTypes = []any{
 	(*UpdateDiskRequest)(nil),     // 7: rookery.v1.UpdateDiskRequest
 	(*DeleteDiskRequest)(nil),     // 8: rookery.v1.DeleteDiskRequest
 	(*timestamppb.Timestamp)(nil), // 9: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),         // 10: google.protobuf.Empty
+	(*structpb.Struct)(nil),       // 10: google.protobuf.Struct
+	(*emptypb.Empty)(nil),         // 11: google.protobuf.Empty
 }
 var file_rookery_v1_disk_proto_depIdxs = []int32{
 	9,  // 0: rookery.v1.Disk.created_at:type_name -> google.protobuf.Timestamp
 	9,  // 1: rookery.v1.Disk.updated_at:type_name -> google.protobuf.Timestamp
 	1,  // 2: rookery.v1.ListDisksResponse.disks:type_name -> rookery.v1.Disk
-	3,  // 3: rookery.v1.DiskService.ListDisks:input_type -> rookery.v1.ListDisksRequest
-	5,  // 4: rookery.v1.DiskService.GetDisk:input_type -> rookery.v1.GetDiskRequest
-	6,  // 5: rookery.v1.DiskService.CreateDisk:input_type -> rookery.v1.CreateDiskRequest
-	7,  // 6: rookery.v1.DiskService.UpdateDisk:input_type -> rookery.v1.UpdateDiskRequest
-	8,  // 7: rookery.v1.DiskService.DeleteDisk:input_type -> rookery.v1.DeleteDiskRequest
-	4,  // 8: rookery.v1.DiskService.ListDisks:output_type -> rookery.v1.ListDisksResponse
-	1,  // 9: rookery.v1.DiskService.GetDisk:output_type -> rookery.v1.Disk
-	1,  // 10: rookery.v1.DiskService.CreateDisk:output_type -> rookery.v1.Disk
-	1,  // 11: rookery.v1.DiskService.UpdateDisk:output_type -> rookery.v1.Disk
-	10, // 12: rookery.v1.DiskService.DeleteDisk:output_type -> google.protobuf.Empty
-	8,  // [8:13] is the sub-list for method output_type
-	3,  // [3:8] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	10, // 3: rookery.v1.CreateDiskRequest.provisioning:type_name -> google.protobuf.Struct
+	3,  // 4: rookery.v1.DiskService.ListDisks:input_type -> rookery.v1.ListDisksRequest
+	5,  // 5: rookery.v1.DiskService.GetDisk:input_type -> rookery.v1.GetDiskRequest
+	6,  // 6: rookery.v1.DiskService.CreateDisk:input_type -> rookery.v1.CreateDiskRequest
+	7,  // 7: rookery.v1.DiskService.UpdateDisk:input_type -> rookery.v1.UpdateDiskRequest
+	8,  // 8: rookery.v1.DiskService.DeleteDisk:input_type -> rookery.v1.DeleteDiskRequest
+	4,  // 9: rookery.v1.DiskService.ListDisks:output_type -> rookery.v1.ListDisksResponse
+	1,  // 10: rookery.v1.DiskService.GetDisk:output_type -> rookery.v1.Disk
+	1,  // 11: rookery.v1.DiskService.CreateDisk:output_type -> rookery.v1.Disk
+	1,  // 12: rookery.v1.DiskService.UpdateDisk:output_type -> rookery.v1.Disk
+	11, // 13: rookery.v1.DiskService.DeleteDisk:output_type -> google.protobuf.Empty
+	9,  // [9:14] is the sub-list for method output_type
+	4,  // [4:9] is the sub-list for method input_type
+	4,  // [4:4] is the sub-list for extension type_name
+	4,  // [4:4] is the sub-list for extension extendee
+	0,  // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_rookery_v1_disk_proto_init() }

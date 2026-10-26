@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -48,6 +50,26 @@ func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateD
 	if isTemplate && templateID != nil {
 		return nil, status.Error(codes.InvalidArgument, "a template disk cannot also be a template clone")
 	}
+	provisioningScript := strings.TrimSpace(request.GetProvisioningScript())
+	provisioningTimeout := strings.TrimSpace(request.GetProvisioningTimeout())
+	var provisioningProperties map[string]any
+	if request.Provisioning != nil {
+		provisioningProperties = request.Provisioning.AsMap()
+	}
+	if templateID == nil && !isTemplate && (provisioningScript != "" || provisioningTimeout != "" || request.Provisioning != nil) {
+		return nil, status.Error(codes.InvalidArgument, "provisioning settings require a template disk or template clone")
+	}
+	if templateID != nil && (provisioningScript != "" || provisioningTimeout != "") {
+		return nil, status.Error(codes.InvalidArgument, "provisioning script settings belong to the template, not the clone")
+	}
+	if isTemplate && request.Provisioning != nil {
+		return nil, status.Error(codes.InvalidArgument, "provisioning properties are only accepted when cloning a template")
+	}
+	if isTemplate {
+		if err := validateDiskProvisioning(provisioningScript, provisioningTimeout); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+	}
 	if isTemplate && !backend.Config.SupportsTemplates {
 		return nil, status.Error(codes.FailedPrecondition, "selected storage backend does not support templates")
 	}
@@ -83,6 +105,9 @@ func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateD
 			return nil, status.Errorf(codes.InvalidArgument, "size_gb must be at least the template size (%d GB)", value.SizeGB)
 		}
 		template = &value
+		if len(provisioningProperties) > 0 && strings.TrimSpace(template.ProvisioningScript) == "" {
+			return nil, status.Error(codes.InvalidArgument, "selected template has no provisioning_script")
+		}
 	}
 	if sizeGB == 0 {
 		sizeGB = defaultGatewayDiskGB
@@ -106,10 +131,19 @@ func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateD
 		Name: name, SizeGB: sizeGB,
 		StorageBackendID: &backend.ID, StorageBackendName: backend.Name,
 		VG: backend.Config.VG, ThinPool: backend.Config.ThinPool,
-		IsTemplate: isTemplate, TemplateDiskID: templateID, PreparedByScript: template != nil,
+		Device:              "/dev/" + backend.Config.VG + "/" + name,
+		IsTemplate:          isTemplate,
+		TemplateDiskID:      templateID,
+		ProvisioningScript:  provisioningScript,
+		ProvisioningTimeout: provisioningTimeout,
+		PreparedByScript:    template != nil,
 	}
 	if template != nil {
 		if err := s.runDiskPreparationScript(ctx, "create", backend, disk, template); err != nil {
+			_ = s.runDiskPreparationScript(context.Background(), "delete", backend, disk, template)
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+		if err := s.runTemplateProvisioningScript(ctx, backend, disk, template, provisioningProperties); err != nil {
 			_ = s.runDiskPreparationScript(context.Background(), "delete", backend, disk, template)
 			return nil, status.Error(codes.Internal, err.Error())
 		}
@@ -146,10 +180,29 @@ func (s *diskService) UpdateDisk(ctx context.Context, request *rookeryv1.UpdateD
 	if err != nil {
 		return nil, storeReadError(err, store.ErrDiskNotFound, "disk not found")
 	}
-	if request.IsTemplate == nil {
+	hasProvisioning := request.ProvisioningScript != nil || request.ProvisioningTimeout != nil
+	if request.IsTemplate == nil && !hasProvisioning {
 		return diskToProto(disk), nil
 	}
-	if request.GetIsTemplate() {
+	targetTemplate := disk.IsTemplate
+	if request.IsTemplate != nil {
+		targetTemplate = request.GetIsTemplate()
+	}
+	if hasProvisioning && !targetTemplate {
+		return nil, status.Error(codes.InvalidArgument, "provisioning settings require a template disk")
+	}
+	script := disk.ProvisioningScript
+	timeout := disk.ProvisioningTimeout
+	if request.ProvisioningScript != nil {
+		script = strings.TrimSpace(request.GetProvisioningScript())
+	}
+	if request.ProvisioningTimeout != nil {
+		timeout = strings.TrimSpace(request.GetProvisioningTimeout())
+	}
+	if err := validateDiskProvisioning(script, timeout); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	if targetTemplate {
 		backend, err := s.resolveStorageBackend(ctx, disk.StorageBackendID)
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -158,18 +211,44 @@ func (s *diskService) UpdateDisk(ctx context.Context, request *rookeryv1.UpdateD
 			return nil, status.Error(codes.FailedPrecondition, "selected storage backend does not support templates")
 		}
 	}
-	updated, err := s.store.SetDiskTemplate(ctx, disk.ID, request.GetIsTemplate())
-	if err != nil {
-		switch {
-		case errors.Is(err, store.ErrDiskNotFound):
-			return nil, status.Error(codes.NotFound, "disk not found")
-		case errors.Is(err, store.ErrDiskInUse):
-			return nil, status.Error(codes.Aborted, "disk is attached to a VM")
-		default:
-			return nil, status.Error(codes.Internal, "could not update disk")
+	updated := disk
+	if request.IsTemplate != nil {
+		updated, err = s.store.SetDiskTemplate(ctx, disk.ID, request.GetIsTemplate())
+		if err != nil {
+			return nil, diskUpdateError(err)
+		}
+	}
+	if hasProvisioning {
+		updated, err = s.store.SetDiskProvisioning(ctx, disk.ID, script, timeout)
+		if err != nil {
+			return nil, diskUpdateError(err)
 		}
 	}
 	return diskToProto(updated), nil
+}
+
+func validateDiskProvisioning(script, timeout string) error {
+	if script != "" && !filepath.IsAbs(script) {
+		return errors.New("provisioning_script must be an absolute path")
+	}
+	if timeout != "" {
+		parsed, err := time.ParseDuration(timeout)
+		if err != nil || parsed <= 0 {
+			return fmt.Errorf("invalid provisioning_timeout %q", timeout)
+		}
+	}
+	return nil
+}
+
+func diskUpdateError(err error) error {
+	switch {
+	case errors.Is(err, store.ErrDiskNotFound):
+		return status.Error(codes.NotFound, "disk not found")
+	case errors.Is(err, store.ErrDiskInUse):
+		return status.Error(codes.Aborted, "disk is attached to a VM")
+	default:
+		return status.Error(codes.Internal, "could not update disk")
+	}
 }
 
 func (s *diskService) DeleteDisk(ctx context.Context, request *rookeryv1.DeleteDiskRequest) (*emptypb.Empty, error) {

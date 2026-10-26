@@ -250,6 +250,10 @@ func (m *Disk) validate(all bool) error {
 
 	// no validation rules for TemplateDiskName
 
+	// no validation rules for ProvisioningScript
+
+	// no validation rules for ProvisioningTimeout
+
 	if m.StorageBackendId != nil {
 		// no validation rules for StorageBackendId
 	}
@@ -848,6 +852,65 @@ func (m *CreateDiskRequest) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
+	if m.GetProvisioningScript() != "" {
+
+		if utf8.RuneCountInString(m.GetProvisioningScript()) > 4096 {
+			err := CreateDiskRequestValidationError{
+				field:  "ProvisioningScript",
+				reason: "value length must be at most 4096 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.GetProvisioningTimeout() != "" {
+
+		if utf8.RuneCountInString(m.GetProvisioningTimeout()) > 32 {
+			err := CreateDiskRequestValidationError{
+				field:  "ProvisioningTimeout",
+				reason: "value length must be at most 32 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if all {
+		switch v := interface{}(m.GetProvisioning()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, CreateDiskRequestValidationError{
+					field:  "Provisioning",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, CreateDiskRequestValidationError{
+					field:  "Provisioning",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetProvisioning()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return CreateDiskRequestValidationError{
+				field:  "Provisioning",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
 	if m.SizeGb != nil {
 
 		if val := m.GetSizeGb(); val < 1 || val > 65536 {
@@ -1014,6 +1077,36 @@ func (m *UpdateDiskRequest) validate(all bool) error {
 
 	if m.IsTemplate != nil {
 		// no validation rules for IsTemplate
+	}
+
+	if m.ProvisioningScript != nil {
+
+		if utf8.RuneCountInString(m.GetProvisioningScript()) > 4096 {
+			err := UpdateDiskRequestValidationError{
+				field:  "ProvisioningScript",
+				reason: "value length must be at most 4096 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.ProvisioningTimeout != nil {
+
+		if utf8.RuneCountInString(m.GetProvisioningTimeout()) > 32 {
+			err := UpdateDiskRequestValidationError{
+				field:  "ProvisioningTimeout",
+				reason: "value length must be at most 32 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
 	}
 
 	if len(errors) > 0 {

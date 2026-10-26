@@ -392,22 +392,24 @@ type VMInterface struct {
 
 // Disk is a pre-created thin-LVM disk that can be attached to a VM.
 type Disk struct {
-	ID                 int64     `json:"id"`
-	Name               string    `json:"name"`
-	SizeGB             int       `json:"size_gb"`
-	StorageBackendID   *int64    `json:"storage_backend_id,omitempty"`
-	StorageBackendName string    `json:"storage_backend_name,omitempty"`
-	VG                 string    `json:"vg"`
-	ThinPool           string    `json:"thin_pool"`
-	Device             string    `json:"device"`
-	IsTemplate         bool      `json:"is_template"`
-	TemplateDiskID     *int64    `json:"template_disk_id,omitempty"`
-	TemplateDiskName   string    `json:"template_disk_name,omitempty"`
-	PreparedByScript   bool      `json:"-"`
-	AttachedVMID       *string   `json:"attached_vm_id,omitempty"`
-	AttachedVMName     string    `json:"attached_vm_name,omitempty"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	ID                  int64     `json:"id"`
+	Name                string    `json:"name"`
+	SizeGB              int       `json:"size_gb"`
+	StorageBackendID    *int64    `json:"storage_backend_id,omitempty"`
+	StorageBackendName  string    `json:"storage_backend_name,omitempty"`
+	VG                  string    `json:"vg"`
+	ThinPool            string    `json:"thin_pool"`
+	Device              string    `json:"device"`
+	IsTemplate          bool      `json:"is_template"`
+	TemplateDiskID      *int64    `json:"template_disk_id,omitempty"`
+	TemplateDiskName    string    `json:"template_disk_name,omitempty"`
+	ProvisioningScript  string    `json:"provisioning_script,omitempty"`
+	ProvisioningTimeout string    `json:"provisioning_timeout,omitempty"`
+	PreparedByScript    bool      `json:"-"`
+	AttachedVMID        *string   `json:"attached_vm_id,omitempty"`
+	AttachedVMName      string    `json:"attached_vm_name,omitempty"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
 }
 
 // ImportDisk describes an existing volume that should be added to inventory.
@@ -844,12 +846,17 @@ func (s *Store) DeleteVM(ctx context.Context, id string) error {
 
 // CreateDisk inserts a disk record and returns the stored record.
 func (s *Store) CreateDisk(ctx context.Context, disk Disk) (Disk, error) {
+	if !disk.IsTemplate && (disk.ProvisioningScript != "" || disk.ProvisioningTimeout != "") {
+		return Disk{}, errors.New("provisioning settings require a template disk")
+	}
 	now := time.Now().UTC().UnixMilli()
 
 	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO disks (name, size_gb, vg, thin_pool, storage_backend_id, is_template, template_disk_id, prepared_by_script, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		disk.Name, disk.SizeGB, disk.VG, disk.ThinPool, disk.StorageBackendID, disk.IsTemplate, disk.TemplateDiskID, disk.PreparedByScript, now, now,
+		INSERT INTO disks (name, size_gb, vg, thin_pool, storage_backend_id, is_template, template_disk_id,
+			provisioning_script, provisioning_timeout, prepared_by_script, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		disk.Name, disk.SizeGB, disk.VG, disk.ThinPool, disk.StorageBackendID, disk.IsTemplate, disk.TemplateDiskID,
+		disk.ProvisioningScript, disk.ProvisioningTimeout, disk.PreparedByScript, now, now,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -982,6 +989,27 @@ func (s *Store) SetDiskTemplate(ctx context.Context, id int64, isTemplate bool) 
 	now := time.Now().UTC().UnixMilli()
 	if _, err := s.db.ExecContext(ctx, `UPDATE disks SET is_template = ?, updated_at = ? WHERE id = ?`, isTemplate, now, id); err != nil {
 		return Disk{}, fmt.Errorf("update disk template flag: %w", err)
+	}
+	return s.GetDisk(ctx, id)
+}
+
+// SetDiskProvisioning stores the provisioning script and timeout for a template disk.
+func (s *Store) SetDiskProvisioning(ctx context.Context, id int64, script, timeout string) (Disk, error) {
+	disk, err := s.GetDisk(ctx, id)
+	if err != nil {
+		return Disk{}, err
+	}
+	if disk.AttachedVMID != nil {
+		return Disk{}, ErrDiskInUse
+	}
+	if !disk.IsTemplate {
+		return Disk{}, errors.New("provisioning settings require a template disk")
+	}
+	now := time.Now().UTC().UnixMilli()
+	if _, err := s.db.ExecContext(ctx, `
+		UPDATE disks SET provisioning_script = ?, provisioning_timeout = ?, updated_at = ? WHERE id = ?`,
+		script, timeout, now, id); err != nil {
+		return Disk{}, fmt.Errorf("update disk provisioning settings: %w", err)
 	}
 	return s.GetDisk(ctx, id)
 }
@@ -2217,7 +2245,8 @@ const vmSelect = `
 const diskSelect = `
 	SELECT d.id, d.name, d.size_gb, d.vg, d.thin_pool,
 	       d.storage_backend_id, sb.name, d.is_template, d.template_disk_id,
-	       d.prepared_by_script, td.name, v.id, v.name, d.created_at, d.updated_at
+	       d.provisioning_script, d.provisioning_timeout, d.prepared_by_script,
+	       td.name, v.id, v.name, d.created_at, d.updated_at
 	FROM disks AS d
 	LEFT JOIN storage_backends AS sb ON sb.id = d.storage_backend_id
 	LEFT JOIN disks AS td ON td.id = d.template_disk_id
@@ -2299,17 +2328,19 @@ func scanVM(s scanner) (VM, error) {
 
 func scanDisk(s scanner) (Disk, error) {
 	var (
-		disk             Disk
-		backendID        sql.NullInt64
-		backend          sql.NullString
-		isTemplate       int64
-		templateID       sql.NullInt64
-		preparedByScript int64
-		templateName     sql.NullString
-		vmID             sql.NullString
-		vmName           sql.NullString
-		createdAt        int64
-		updatedAt        int64
+		disk                Disk
+		backendID           sql.NullInt64
+		backend             sql.NullString
+		isTemplate          int64
+		templateID          sql.NullInt64
+		provisioningScript  string
+		provisioningTimeout string
+		preparedByScript    int64
+		templateName        sql.NullString
+		vmID                sql.NullString
+		vmName              sql.NullString
+		createdAt           int64
+		updatedAt           int64
 	)
 	if err := s.Scan(
 		&disk.ID,
@@ -2321,6 +2352,8 @@ func scanDisk(s scanner) (Disk, error) {
 		&backend,
 		&isTemplate,
 		&templateID,
+		&provisioningScript,
+		&provisioningTimeout,
 		&preparedByScript,
 		&templateName,
 		&vmID,
@@ -2333,6 +2366,8 @@ func scanDisk(s scanner) (Disk, error) {
 
 	disk.Device = devicePath(disk.VG, disk.Name)
 	disk.IsTemplate = isTemplate != 0
+	disk.ProvisioningScript = provisioningScript
+	disk.ProvisioningTimeout = provisioningTimeout
 	disk.PreparedByScript = preparedByScript != 0
 	if templateID.Valid {
 		id := templateID.Int64

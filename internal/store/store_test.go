@@ -1007,3 +1007,25 @@ func TestInterfaceDefaultsToNetworkRouteTable(t *testing.T) {
 		t.Fatalf("interface route tables = %d/%d, want 100002/100002", iface.IPv4TableID, iface.IPv6TableID)
 	}
 }
+
+func TestDiskProvisioningSettings(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	disk, err := st.CreateDisk(ctx, store.Disk{
+		Name: "template", SizeGB: 5, VG: "vg0", ThinPool: "pool", IsTemplate: true,
+		ProvisioningScript: "/usr/local/bin/provision", ProvisioningTimeout: "5m",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if disk.ProvisioningScript != "/usr/local/bin/provision" || disk.ProvisioningTimeout != "5m" {
+		t.Fatalf("disk provisioning = %+v", disk)
+	}
+	updated, err := st.SetDiskProvisioning(ctx, disk.ID, "/usr/local/bin/provision2", "1m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ProvisioningScript != "/usr/local/bin/provision2" || updated.ProvisioningTimeout != "1m" {
+		t.Fatalf("updated disk provisioning = %+v", updated)
+	}
+}
