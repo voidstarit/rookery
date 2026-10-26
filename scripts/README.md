@@ -110,8 +110,11 @@ single-filesystem image; for partitioned images, adapt the mount logic (for
 example with `guestfish` or `virt-customize`).
 
 Every stage is logged to stderr and Rookery captures the combined script output
-in its logs. The script always attempts to unmount the clone on exit, including
-on errors and interrupts, and retries with a lazy unmount if necessary.
+in its logs. The complete `ROOKERY_PROVISION_JSON` payload is logged at the
+start of a run, including custom properties. Avoid putting secrets in
+provisioning properties if the API logs are visible to a wider audience. The
+script always attempts to unmount the clone on exit, including on errors and
+interrupts, and retries with a lazy unmount if necessary.
 
 If the clone's `provisioning` object is omitted or empty, Rookery skips the
 provisioning script entirely. The script also exits successfully without

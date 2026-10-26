@@ -48,6 +48,10 @@ printf '%s' "$json" | jq -e 'type == "object"' >/dev/null 2>&1 ||
 printf '%s' "$json" | jq -e '(.properties // {}) | type == "object"' >/dev/null 2>&1 ||
   die "properties must be a JSON object"
 
+# Log the complete payload received from Rookery. This includes custom
+# properties, so avoid passing secrets unless they are safe to appear in logs.
+log "received ROOKERY_PROVISION_JSON=$(printf '%s' "$json" | jq -cS .)"
+
 request_id=$(printf '%s' "$json" | jq -r '.request_id // empty')
 property_count=$(printf '%s' "$json" | jq -r '.properties // {} | length')
 log "starting provisioning request=${request_id:-unknown} property_count=$property_count"
