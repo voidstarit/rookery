@@ -33,11 +33,11 @@ type Route struct {
 	EgressInterface     string    `json:"egress_interface,omitempty"`
 	Preference          *uint32   `json:"preference,omitempty"`
 	Count               *uint32   `json:"count,omitempty"`
-	NextHopTable        *uint32   `json:"next_hop_table,omitempty"`
+	NextHopTable        *string   `json:"next_hop_table,omitempty"`
 	Weight              *uint32   `json:"weight,omitempty"`
 	UDPEncap            *uint32   `json:"udp_encap,omitempty"`
-	IPv4LookupTable     *uint32   `json:"ipv4_lookup_table,omitempty"`
-	IPv6LookupTable     *uint32   `json:"ipv6_lookup_table,omitempty"`
+	IPv4LookupTable     *string   `json:"ipv4_lookup_table,omitempty"`
+	IPv6LookupTable     *string   `json:"ipv6_lookup_table,omitempty"`
 	MPLSLookupTable     *uint32   `json:"mpls_lookup_table,omitempty"`
 	ResolveViaHost      bool      `json:"resolve_via_host,omitempty"`
 	ResolveViaConnected bool      `json:"resolve_via_connected,omitempty"`
@@ -53,14 +53,13 @@ const routeSelect = `
 	SELECT r.id, r.table_id, r.is_ipv6, r.prefix, r.description, r.next_hop,
 	       r.interface_id, COALESCE(i.name, ''),
 	       r.egress_interface, r.preference,
-	       r.route_count, r.next_hop_table, r.weight, r.udp_encap,
-	       r.ipv4_lookup_table, r.ipv6_lookup_table, r.mpls_lookup_table,
+	       r.route_count, r.next_hop_table_name, r.weight, r.udp_encap,
+	       r.ipv4_lookup_table_name, r.ipv6_lookup_table_name, r.mpls_lookup_table,
 	       r.resolve_via_host, r.resolve_via_connected,
 	       r.rx_ipv4_interface, r.rx_ipv6_interface, r.out_labels, r.is_drop,
 	       r.created_at, r.updated_at,
-	       r.preference_set, r.route_count_set, r.next_hop_table_set,
-	       r.weight_set, r.udp_encap_set, r.ipv4_lookup_table_set,
-	       r.ipv6_lookup_table_set, r.mpls_lookup_table_set
+	       r.preference_set, r.route_count_set, r.weight_set, r.udp_encap_set,
+	       r.mpls_lookup_table_set
 	FROM routes AS r
 	LEFT JOIN virtual_interfaces AS i ON i.id = r.interface_id`
 
@@ -131,26 +130,24 @@ func (s *Store) CreateRoute(ctx context.Context, route Route) (Route, error) {
 	res, err := s.db.ExecContext(ctx, `
 		INSERT INTO routes (
 			table_id, is_ipv6, prefix, description, next_hop, interface_id, egress_interface,
-			preference, route_count, next_hop_table, weight, udp_encap,
-			ipv4_lookup_table, ipv6_lookup_table, mpls_lookup_table,
+			preference, route_count, next_hop_table_name, weight, udp_encap,
+			ipv4_lookup_table_name, ipv6_lookup_table_name, mpls_lookup_table,
 			resolve_via_host, resolve_via_connected,
 			rx_ipv4_interface, rx_ipv6_interface, out_labels, is_drop,
-			preference_set, route_count_set, next_hop_table_set, weight_set, udp_encap_set,
-			ipv4_lookup_table_set, ipv6_lookup_table_set, mpls_lookup_table_set,
+			preference_set, route_count_set, weight_set, udp_encap_set, mpls_lookup_table_set,
 			created_at, updated_at
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		route.TableID, route.IPv6, route.Prefix, route.Description, route.NextHop, route.InterfaceID,
 		route.EgressInterface, optionalUint32Value(route.Preference), optionalUint32Value(route.Count),
-		optionalUint32Value(route.NextHopTable), optionalUint32Value(route.Weight),
-		optionalUint32Value(route.UDPEncap), optionalUint32Value(route.IPv4LookupTable),
-		optionalUint32Value(route.IPv6LookupTable), optionalUint32Value(route.MPLSLookupTable),
+		optionalStringValue(route.NextHopTable), optionalUint32Value(route.Weight),
+		optionalUint32Value(route.UDPEncap), optionalStringValue(route.IPv4LookupTable),
+		optionalStringValue(route.IPv6LookupTable), optionalUint32Value(route.MPLSLookupTable),
 		route.ResolveViaHost, route.ResolveViaConnected,
 		route.RxIPv4Interface, route.RxIPv6Interface, formatLabels(route.OutLabels),
 		route.Drop, optionalUint32Set(route.Preference), optionalUint32Set(route.Count),
-		optionalUint32Set(route.NextHopTable), optionalUint32Set(route.Weight),
-		optionalUint32Set(route.UDPEncap), optionalUint32Set(route.IPv4LookupTable),
-		optionalUint32Set(route.IPv6LookupTable), optionalUint32Set(route.MPLSLookupTable),
+		optionalUint32Set(route.Weight), optionalUint32Set(route.UDPEncap),
+		optionalUint32Set(route.MPLSLookupTable),
 		now, now,
 	)
 	if err != nil {
@@ -183,26 +180,26 @@ func (s *Store) UpdateRoute(ctx context.Context, id int64, route Route) (Route, 
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE routes SET
 			prefix = ?, description = ?, next_hop = ?, interface_id = ?, egress_interface = ?,
-			preference = ?, route_count = ?, next_hop_table = ?, weight = ?, udp_encap = ?,
-			ipv4_lookup_table = ?, ipv6_lookup_table = ?, mpls_lookup_table = ?,
+			preference = ?, route_count = ?, next_hop_table_name = ?, weight = ?, udp_encap = ?,
+			ipv4_lookup_table_name = ?, ipv6_lookup_table_name = ?, mpls_lookup_table = ?,
 			resolve_via_host = ?, resolve_via_connected = ?,
 			rx_ipv4_interface = ?, rx_ipv6_interface = ?, out_labels = ?, is_drop = ?,
-			preference_set = ?, route_count_set = ?, next_hop_table_set = ?, weight_set = ?,
-			udp_encap_set = ?, ipv4_lookup_table_set = ?, ipv6_lookup_table_set = ?,
+			preference_set = ?, route_count_set = ?, weight_set = ?, udp_encap_set = ?,
 			mpls_lookup_table_set = ?,
+			next_hop_table = 0, ipv4_lookup_table = 0, ipv6_lookup_table = 0,
+			next_hop_table_set = 0, ipv4_lookup_table_set = 0, ipv6_lookup_table_set = 0,
 			updated_at = ?
 		WHERE id = ?`,
 		route.Prefix, route.Description, route.NextHop, route.InterfaceID, route.EgressInterface,
 		optionalUint32Value(route.Preference), optionalUint32Value(route.Count),
-		optionalUint32Value(route.NextHopTable), optionalUint32Value(route.Weight),
-		optionalUint32Value(route.UDPEncap), optionalUint32Value(route.IPv4LookupTable),
-		optionalUint32Value(route.IPv6LookupTable), optionalUint32Value(route.MPLSLookupTable),
+		optionalStringValue(route.NextHopTable), optionalUint32Value(route.Weight),
+		optionalUint32Value(route.UDPEncap), optionalStringValue(route.IPv4LookupTable),
+		optionalStringValue(route.IPv6LookupTable), optionalUint32Value(route.MPLSLookupTable),
 		route.ResolveViaHost, route.ResolveViaConnected,
 		route.RxIPv4Interface, route.RxIPv6Interface, formatLabels(route.OutLabels), route.Drop,
 		optionalUint32Set(route.Preference), optionalUint32Set(route.Count),
-		optionalUint32Set(route.NextHopTable), optionalUint32Set(route.Weight),
-		optionalUint32Set(route.UDPEncap), optionalUint32Set(route.IPv4LookupTable),
-		optionalUint32Set(route.IPv6LookupTable), optionalUint32Set(route.MPLSLookupTable),
+		optionalUint32Set(route.Weight), optionalUint32Set(route.UDPEncap),
+		optionalUint32Set(route.MPLSLookupTable),
 		time.Now().UTC().UnixMilli(), id,
 	)
 	if err != nil {
@@ -256,6 +253,28 @@ func (s *Store) validateRoute(ctx context.Context, route Route) (Route, error) {
 	}
 	if route.Weight != nil && *route.Weight > 255 {
 		return Route{}, errors.New("weight must be at most 255")
+	}
+	for _, lookup := range []struct {
+		name  *string
+		ipv6  bool
+		label string
+	}{
+		{route.NextHopTable, route.IPv6, "next-hop table"},
+		{route.IPv4LookupTable, false, "IPv4 lookup table"},
+		{route.IPv6LookupTable, true, "IPv6 lookup table"},
+	} {
+		if lookup.name == nil {
+			continue
+		}
+		name := strings.TrimSpace(*lookup.name)
+		if name == "" {
+			*lookup.name = ""
+			continue
+		}
+		*lookup.name = name
+		if _, err := s.ResolveRouteTableName(ctx, name, lookup.ipv6); err != nil {
+			return Route{}, fmt.Errorf("%s %q: %w", lookup.label, name, err)
+		}
 	}
 	if route.TableID != 0 {
 		if _, err := s.GetRouteTableByID(ctx, route.TableID, route.IPv6); err != nil {
@@ -311,6 +330,13 @@ func optionalUint32Value(value *uint32) uint32 {
 	return *value
 }
 
+func optionalStringValue(value *string) any {
+	if value == nil {
+		return nil
+	}
+	return strings.TrimSpace(*value)
+}
+
 func optionalUint32Set(value *uint32) int {
 	if value == nil {
 		return 0
@@ -325,11 +351,11 @@ func scanRoute(s scanner) (Route, error) {
 		ifaceID          sql.NullInt64
 		preference       int64
 		count            int64
-		nextHopTable     int64
+		nextHopTable     sql.NullString
 		weight           int64
 		udpEncap         int64
-		ipv4Lookup       int64
-		ipv6Lookup       int64
+		ipv4Lookup       sql.NullString
+		ipv6Lookup       sql.NullString
 		mplsLookup       int64
 		resolveHost      int64
 		resolveConnected int64
@@ -341,11 +367,8 @@ func scanRoute(s scanner) (Route, error) {
 		updatedAt        int64
 		preferenceSet    int64
 		countSet         int64
-		nextHopTableSet  int64
 		weightSet        int64
 		udpEncapSet      int64
-		ipv4LookupSet    int64
-		ipv6LookupSet    int64
 		mplsLookupSet    int64
 	)
 	if err := s.Scan(
@@ -355,8 +378,7 @@ func scanRoute(s scanner) (Route, error) {
 		&ipv4Lookup, &ipv6Lookup, &mplsLookup,
 		&resolveHost, &resolveConnected, &rxIPv4, &rxIPv6, &outLabels, &drop,
 		&createdAt, &updatedAt,
-		&preferenceSet, &countSet, &nextHopTableSet, &weightSet,
-		&udpEncapSet, &ipv4LookupSet, &ipv6LookupSet, &mplsLookupSet,
+		&preferenceSet, &countSet, &weightSet, &udpEncapSet, &mplsLookupSet,
 	); err != nil {
 		return Route{}, err
 	}
@@ -373,8 +395,8 @@ func scanRoute(s scanner) (Route, error) {
 		value := uint32(count)
 		route.Count = &value
 	}
-	if nextHopTableSet != 0 {
-		value := uint32(nextHopTable)
+	if nextHopTable.Valid {
+		value := nextHopTable.String
 		route.NextHopTable = &value
 	}
 	if weightSet != 0 {
@@ -385,12 +407,12 @@ func scanRoute(s scanner) (Route, error) {
 		value := uint32(udpEncap)
 		route.UDPEncap = &value
 	}
-	if ipv4LookupSet != 0 {
-		value := uint32(ipv4Lookup)
+	if ipv4Lookup.Valid {
+		value := ipv4Lookup.String
 		route.IPv4LookupTable = &value
 	}
-	if ipv6LookupSet != 0 {
-		value := uint32(ipv6Lookup)
+	if ipv6Lookup.Valid {
+		value := ipv6Lookup.String
 		route.IPv6LookupTable = &value
 	}
 	if mplsLookupSet != 0 {

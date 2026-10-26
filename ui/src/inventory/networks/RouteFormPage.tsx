@@ -9,6 +9,7 @@ type RouteFormPageProps = {
   bviInterfaces: string[];
   hostInterfaces: HostInterface[];
   hostTaps: HostTap[];
+  tables: RouteTable[];
   onBack: () => void;
   onSaved: () => void;
 };
@@ -20,6 +21,7 @@ export function RouteFormPage({
   bviInterfaces,
   hostInterfaces,
   hostTaps,
+  tables,
   onBack,
   onSaved,
 }: RouteFormPageProps) {
@@ -146,12 +148,12 @@ export function RouteFormPage({
     };
     const preferenceValue = optionalNumber(preference);
     const countValue = optionalNumber(count);
-    const nextHopTableValue = optionalNumber(nextHopTable);
     const weightValue = optionalNumber(weight);
     const udpEncapValue = optionalNumber(udpEncap);
-    const ipv4LookupValue = optionalNumber(ipv4LookupTable);
-    const ipv6LookupValue = optionalNumber(ipv6LookupTable);
     const mplsLookupValue = optionalNumber(mplsLookupTable);
+    const nextHopTableValue = nextHopTable.trim();
+    const ipv4LookupValue = ipv4LookupTable.trim();
+    const ipv6LookupValue = ipv6LookupTable.trim();
     const body = {
       ipv6: table.ipv6,
       prefix: prefix.trim(),
@@ -161,11 +163,11 @@ export function RouteFormPage({
       ...(egressName ? { egress_interface: egressName } : {}),
       ...(preferenceValue !== undefined ? { preference: preferenceValue } : {}),
       ...(countValue !== undefined ? { count: countValue } : {}),
-      ...(nextHopTableValue !== undefined ? { next_hop_table: nextHopTableValue } : {}),
+      ...(nextHopTableValue ? { next_hop_table: nextHopTableValue } : {}),
       ...(weightValue !== undefined ? { weight: weightValue } : {}),
       ...(udpEncapValue !== undefined ? { udp_encap: udpEncapValue } : {}),
-      ...(ipv4LookupValue !== undefined ? { ipv4_lookup_table: ipv4LookupValue } : {}),
-      ...(ipv6LookupValue !== undefined ? { ipv6_lookup_table: ipv6LookupValue } : {}),
+      ...(ipv4LookupValue ? { ipv4_lookup_table: ipv4LookupValue } : {}),
+      ...(ipv6LookupValue ? { ipv6_lookup_table: ipv6LookupValue } : {}),
       ...(mplsLookupValue !== undefined ? { mpls_lookup_table: mplsLookupValue } : {}),
       resolve_via_host: resolveViaHost,
       resolve_via_connected: resolveViaConnected,
@@ -196,6 +198,9 @@ export function RouteFormPage({
       setSaving(false);
     }
   };
+
+  const tableOptions = (ipv6: boolean) =>
+    tables.filter((item) => item.ipv6 === ipv6 && item.table_id !== 0);
 
   return (
     <div class="route-page">
@@ -269,9 +274,9 @@ export function RouteFormPage({
         <section class="route-advanced" aria-labelledby="route-advanced-title">
           <h4 class="route-advanced-title" id="route-advanced-title">Advanced VPP route options</h4>
           <p class="field-hint">
-            Leave a numeric option blank to omit it from the VPP command. Enter
-            <code>0</code> explicitly when zero is meaningful, for example
-            <code>ip4-lookup-in-table 0</code>.
+            Leave an option blank to omit it from the VPP command. Next-hop and
+            IP lookup tables use route-table names; choose <code>default</code>
+            for table <code>0</code>. MPLS lookup uses a numeric table ID.
           </p>
           <div class="route-advanced-grid">
             <label class="field">
@@ -280,7 +285,13 @@ export function RouteFormPage({
             </label>
             <label class="field">
               <span class="field-label">Next-hop table</span>
-              <input type="number" min="0" value={nextHopTable} onInput={(event) => setNextHopTable(event.currentTarget.value)} />
+              <select value={nextHopTable} onChange={(event) => setNextHopTable(event.currentTarget.value)}>
+                <option value="">Omit</option>
+                <option value="default">default (0)</option>
+                {tableOptions(table.ipv6).map((item) => (
+                  <option value={item.name} key={`nh-${item.id}`}>{item.name} ({item.table_id})</option>
+                ))}
+              </select>
             </label>
             <label class="field">
               <span class="field-label">Weight</span>
@@ -292,14 +303,26 @@ export function RouteFormPage({
             </label>
             <label class="field">
               <span class="field-label">IPv4 lookup table</span>
-              <input type="number" min="0" value={ipv4LookupTable} onInput={(event) => setIpv4LookupTable(event.currentTarget.value)} />
+              <select value={ipv4LookupTable} onChange={(event) => setIpv4LookupTable(event.currentTarget.value)}>
+                <option value="">Omit</option>
+                <option value="default">default (0)</option>
+                {tableOptions(false).map((item) => (
+                  <option value={item.name} key={`v4-${item.id}`}>{item.name} ({item.table_id})</option>
+                ))}
+              </select>
             </label>
             <label class="field">
               <span class="field-label">IPv6 lookup table</span>
-              <input type="number" min="0" value={ipv6LookupTable} onInput={(event) => setIpv6LookupTable(event.currentTarget.value)} />
+              <select value={ipv6LookupTable} onChange={(event) => setIpv6LookupTable(event.currentTarget.value)}>
+                <option value="">Omit</option>
+                <option value="default">default (0)</option>
+                {tableOptions(true).map((item) => (
+                  <option value={item.name} key={`v6-${item.id}`}>{item.name} ({item.table_id})</option>
+                ))}
+              </select>
             </label>
             <label class="field">
-              <span class="field-label">MPLS lookup table</span>
+              <span class="field-label">MPLS lookup table ID</span>
               <input type="number" min="0" value={mplsLookupTable} onInput={(event) => setMplsLookupTable(event.currentTarget.value)} />
             </label>
             <label class="field">

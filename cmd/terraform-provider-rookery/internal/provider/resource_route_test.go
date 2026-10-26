@@ -10,16 +10,17 @@ import (
 )
 
 func TestSetRouteStatePreservesExplicitZeroOptions(t *testing.T) {
+	defaultTable := "default"
 	zero := uint32(0)
 	route := &rookeryv1.Route{
-		Ipv4LookupTable: &zero,
+		Ipv4LookupTable: defaultTable,
 		Preference:      &zero,
 	}
 	var state routeModel
 	if diags := setRouteState(context.Background(), &state, route); diags.HasError() {
 		t.Fatalf("set route state: %v", diags)
 	}
-	if state.IPv4LookupTable.IsNull() || state.IPv4LookupTable.ValueInt64() != 0 {
+	if state.IPv4LookupTable.IsNull() || state.IPv4LookupTable.ValueString() != "default" {
 		t.Fatalf("IPv4 lookup table = %+v", state.IPv4LookupTable)
 	}
 	if state.Preference.IsNull() || state.Preference.ValueInt64() != 0 {

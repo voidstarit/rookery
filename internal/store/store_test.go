@@ -984,3 +984,26 @@ func TestTemplateDiskCannotAttachToVM(t *testing.T) {
 		t.Fatalf("create vm with template error = %v, want ErrDiskIsTemplate", err)
 	}
 }
+
+func TestInterfaceDefaultsToNetworkRouteTable(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	network, err := st.CreateNetwork(ctx, store.Network{
+		Name: "route-default", BridgeDomainID: 902, IPv4CIDR: "10.20.0.0/24", IPv6CIDR: "fd00:20::/64",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SetNetworkRouteTable(ctx, network.ID, 100002); err != nil {
+		t.Fatal(err)
+	}
+	iface, err := st.CreateInterface(ctx, store.VirtualInterface{
+		Name: "route-default-eth0", NetworkID: network.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if iface.IPv4TableID != 100002 || iface.IPv6TableID != 100002 {
+		t.Fatalf("interface route tables = %d/%d, want 100002/100002", iface.IPv4TableID, iface.IPv6TableID)
+	}
+}

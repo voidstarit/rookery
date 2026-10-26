@@ -49,26 +49,54 @@ func (s *Server) ReconcileRouteTables(ctx context.Context) error {
 	}
 	for _, route := range routes {
 		_ = s.networks.DeleteRoute(ctx, route.TableID, route.IPv6, route.Prefix)
-		if err := s.networks.AddRouteSpec(ctx, routeSpecFromStore(route)); err != nil {
+		spec, err := s.routeSpecFromStore(ctx, route)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("route %s in table %d: %w", route.Prefix, route.TableID, err))
+			continue
+		}
+		if err := s.networks.AddRouteSpec(ctx, spec); err != nil {
 			errs = append(errs, fmt.Errorf("route %s in table %d: %w", route.Prefix, route.TableID, err))
 		}
 	}
 	return errors.Join(errs...)
 }
 
-func routeSpecFromStore(route store.Route) host.RouteSpec {
+func (s *Server) routeSpecFromStore(ctx context.Context, route store.Route) (host.RouteSpec, error) {
 	egress := route.EgressInterface
 	if egress == "" {
 		egress = route.InterfaceName
 	}
+	nextHopTable, err := s.resolveRouteTableName(ctx, route.NextHopTable, route.IPv6, "next-hop table")
+	if err != nil {
+		return host.RouteSpec{}, err
+	}
+	ipv4Lookup, err := s.resolveRouteTableName(ctx, route.IPv4LookupTable, false, "IPv4 lookup table")
+	if err != nil {
+		return host.RouteSpec{}, err
+	}
+	ipv6Lookup, err := s.resolveRouteTableName(ctx, route.IPv6LookupTable, true, "IPv6 lookup table")
+	if err != nil {
+		return host.RouteSpec{}, err
+	}
 	return host.RouteSpec{
 		TableID: route.TableID, IPv6: route.IPv6, Prefix: route.Prefix,
 		NextHop: route.NextHop, EgressInterface: egress, Preference: route.Preference,
-		Count: route.Count, NextHopTable: route.NextHopTable, Weight: route.Weight,
-		UDPEncap: route.UDPEncap, IPv4LookupTable: route.IPv4LookupTable,
-		IPv6LookupTable: route.IPv6LookupTable, MPLSLookupTable: route.MPLSLookupTable,
+		Count: route.Count, NextHopTable: nextHopTable, Weight: route.Weight,
+		UDPEncap: route.UDPEncap, IPv4LookupTable: ipv4Lookup,
+		IPv6LookupTable: ipv6Lookup, MPLSLookupTable: route.MPLSLookupTable,
 		ResolveViaHost: route.ResolveViaHost, ResolveViaConnected: route.ResolveViaConnected,
 		RxIPv4Interface: route.RxIPv4Interface, RxIPv6Interface: route.RxIPv6Interface,
 		OutLabels: route.OutLabels, Drop: route.Drop,
+	}, nil
+}
+
+func (s *Server) resolveRouteTableName(ctx context.Context, name *string, ipv6 bool, label string) (*uint32, error) {
+	if name == nil {
+		return nil, nil
 	}
+	id, err := s.store.ResolveRouteTableName(ctx, *name, ipv6)
+	if err != nil {
+		return nil, fmt.Errorf("%s %q: %w", label, *name, err)
+	}
+	return &id, nil
 }

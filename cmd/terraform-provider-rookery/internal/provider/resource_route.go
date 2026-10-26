@@ -46,11 +46,11 @@ type routeModel struct {
 	Description         types.String `tfsdk:"description"`
 	Preference          types.Int64  `tfsdk:"preference"`
 	RouteCount          types.Int64  `tfsdk:"route_count"`
-	NextHopTable        types.Int64  `tfsdk:"next_hop_table"`
+	NextHopTable        types.String `tfsdk:"next_hop_table"`
 	Weight              types.Int64  `tfsdk:"weight"`
 	UDPEncap            types.Int64  `tfsdk:"udp_encap"`
-	IPv4LookupTable     types.Int64  `tfsdk:"ipv4_lookup_table"`
-	IPv6LookupTable     types.Int64  `tfsdk:"ipv6_lookup_table"`
+	IPv4LookupTable     types.String `tfsdk:"ipv4_lookup_table"`
+	IPv6LookupTable     types.String `tfsdk:"ipv6_lookup_table"`
 	MPLSLookupTable     types.Int64  `tfsdk:"mpls_lookup_table"`
 	ResolveViaHost      types.Bool   `tfsdk:"resolve_via_host"`
 	ResolveViaConnected types.Bool   `tfsdk:"resolve_via_connected"`
@@ -109,11 +109,11 @@ func (r *routeResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			},
 			"description":           schema.StringAttribute{Optional: true, Computed: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"route_count":           schema.Int64Attribute{Optional: true, Computed: true, Description: "Route count. Omit to leave it out; 0 is not valid.", PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()}},
-			"next_hop_table":        schema.Int64Attribute{Optional: true, Computed: true, Description: "Next-hop table. Omit to leave it out; 0 is an explicit value.", PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()}},
+			"next_hop_table":        schema.StringAttribute{Optional: true, Computed: true, Description: "Next-hop route-table name; use default for table 0.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"weight":                schema.Int64Attribute{Optional: true, Computed: true, Description: "Path weight. Omit to leave it out; 0 is an explicit value.", PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()}},
 			"udp_encap":             schema.Int64Attribute{Optional: true, Computed: true, Description: "UDP encapsulation id. Omit to leave it out; 0 is an explicit value.", PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()}},
-			"ipv4_lookup_table":     schema.Int64Attribute{Optional: true, Computed: true, Description: "IPv4 lookup table. Omit to leave it out; 0 is an explicit value.", PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()}},
-			"ipv6_lookup_table":     schema.Int64Attribute{Optional: true, Computed: true, Description: "IPv6 lookup table. Omit to leave it out; 0 is an explicit value.", PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()}},
+			"ipv4_lookup_table":     schema.StringAttribute{Optional: true, Computed: true, Description: "IPv4 lookup route-table name; use default for table 0.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
+			"ipv6_lookup_table":     schema.StringAttribute{Optional: true, Computed: true, Description: "IPv6 lookup route-table name; use default for table 0.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"mpls_lookup_table":     schema.Int64Attribute{Optional: true, Computed: true, Description: "MPLS lookup table. Omit to leave it out; 0 is an explicit value.", PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()}},
 			"resolve_via_host":      schema.BoolAttribute{Optional: true, Computed: true, PlanModifiers: []planmodifier.Bool{boolplanmodifier.RequiresReplace()}},
 			"resolve_via_connected": schema.BoolAttribute{Optional: true, Computed: true, PlanModifiers: []planmodifier.Bool{boolplanmodifier.RequiresReplace()}},
@@ -153,11 +153,11 @@ func (r *routeResource) Create(ctx context.Context, req resource.CreateRequest, 
 		Description:         plan.Description.ValueString(),
 		Preference:          uint32Pointer(plan.Preference),
 		Count:               uint32Pointer(plan.RouteCount),
-		NextHopTable:        uint32Pointer(plan.NextHopTable),
+		NextHopTable:        plan.NextHopTable.ValueString(),
 		Weight:              uint32Pointer(plan.Weight),
 		UdpEncap:            uint32Pointer(plan.UDPEncap),
-		Ipv4LookupTable:     uint32Pointer(plan.IPv4LookupTable),
-		Ipv6LookupTable:     uint32Pointer(plan.IPv6LookupTable),
+		Ipv4LookupTable:     plan.IPv4LookupTable.ValueString(),
+		Ipv6LookupTable:     plan.IPv6LookupTable.ValueString(),
 		MplsLookupTable:     uint32Pointer(plan.MPLSLookupTable),
 		ResolveViaHost:      plan.ResolveViaHost.ValueBool(),
 		ResolveViaConnected: plan.ResolveViaConnected.ValueBool(),
@@ -272,11 +272,11 @@ func setRouteState(ctx context.Context, state *routeModel, route *rookeryv1.Rout
 	state.Description = optionalStringValue(route.GetDescription())
 	state.Preference = optionalUint32Value(route.Preference)
 	state.RouteCount = optionalUint32Value(route.Count)
-	state.NextHopTable = optionalUint32Value(route.NextHopTable)
+	state.NextHopTable = optionalStringValue(route.GetNextHopTable())
 	state.Weight = optionalUint32Value(route.Weight)
 	state.UDPEncap = optionalUint32Value(route.UdpEncap)
-	state.IPv4LookupTable = optionalUint32Value(route.Ipv4LookupTable)
-	state.IPv6LookupTable = optionalUint32Value(route.Ipv6LookupTable)
+	state.IPv4LookupTable = optionalStringValue(route.GetIpv4LookupTable())
+	state.IPv6LookupTable = optionalStringValue(route.GetIpv6LookupTable())
 	state.MPLSLookupTable = optionalUint32Value(route.MplsLookupTable)
 	state.ResolveViaHost = types.BoolValue(route.GetResolveViaHost())
 	state.ResolveViaConnected = types.BoolValue(route.GetResolveViaConnected())

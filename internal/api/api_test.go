@@ -2859,19 +2859,20 @@ func TestVNFCleansLegacyNetworkDHCP(t *testing.T) {
 	}
 }
 
-func TestRouteExplicitZeroLookupTable(t *testing.T) {
+func TestRouteDefaultLookupTableName(t *testing.T) {
+	ctx := context.Background()
 	env := newTestAPI(t)
 	recorder := do(t, env.handler, http.MethodPost, "/api/route-tables/0/routes", map[string]any{
 		"ipv6":              false,
 		"prefix":            "10.10.1.0/24",
-		"ipv4_lookup_table": 0,
+		"ipv4_lookup_table": "default",
 	})
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("create route status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 	route := decode[store.Route](t, recorder)
-	if route.IPv4LookupTable == nil || *route.IPv4LookupTable != 0 {
-		t.Fatalf("explicit zero lookup table = %+v", route.IPv4LookupTable)
+	if route.IPv4LookupTable == nil || *route.IPv4LookupTable != "default" {
+		t.Fatalf("default lookup table = %+v", route.IPv4LookupTable)
 	}
 	if route.Preference != nil || route.Count != nil || route.NextHopTable != nil || route.Weight != nil || route.UDPEncap != nil {
 		t.Fatalf("unexpected optional route fields = %+v", route)
@@ -2887,6 +2888,30 @@ func TestRouteExplicitZeroLookupTable(t *testing.T) {
 	updated := decode[store.Route](t, recorder)
 	if updated.IPv4LookupTable != nil {
 		t.Fatalf("lookup table was not cleared: %+v", updated.IPv4LookupTable)
+	}
+
+	if _, err := env.store.CreateRouteTable(ctx, store.RouteTable{Name: "lookup-v4", TableID: 600}); err != nil {
+		t.Fatal(err)
+	}
+	recorder = do(t, env.handler, http.MethodPost, "/api/route-tables/0/routes", map[string]any{
+		"ipv6":              false,
+		"prefix":            "10.11.0.0/24",
+		"ipv4_lookup_table": "lookup-v4",
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create named lookup route status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	named := decode[store.Route](t, recorder)
+	if named.IPv4LookupTable == nil || *named.IPv4LookupTable != "lookup-v4" {
+		t.Fatalf("named lookup table = %+v", named.IPv4LookupTable)
+	}
+	recorder = do(t, env.handler, http.MethodPost, "/api/route-tables/0/routes", map[string]any{
+		"ipv6":              false,
+		"prefix":            "10.12.0.0/24",
+		"ipv4_lookup_table": "missing-table",
+	})
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("missing lookup table status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 }
 

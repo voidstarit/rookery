@@ -3016,8 +3016,7 @@
           "format": "int64"
         },
         "next_hop_table": {
-          "type": "integer",
-          "format": "int64"
+          "type": "string"
         },
         "weight": {
           "type": "integer",
@@ -3028,12 +3027,10 @@
           "format": "int64"
         },
         "ipv4_lookup_table": {
-          "type": "integer",
-          "format": "int64"
+          "type": "string"
         },
         "ipv6_lookup_table": {
-          "type": "integer",
-          "format": "int64"
+          "type": "string"
         },
         "mpls_lookup_table": {
           "type": "integer",
@@ -3104,8 +3101,7 @@
           "format": "int64"
         },
         "next_hop_table": {
-          "type": "integer",
-          "format": "int64"
+          "type": "string"
         },
         "weight": {
           "type": "integer",
@@ -3116,12 +3112,10 @@
           "format": "int64"
         },
         "ipv4_lookup_table": {
-          "type": "integer",
-          "format": "int64"
+          "type": "string"
         },
         "ipv6_lookup_table": {
-          "type": "integer",
-          "format": "int64"
+          "type": "string"
         },
         "mpls_lookup_table": {
           "type": "integer",
@@ -4527,8 +4521,7 @@
           "format": "int64"
         },
         "next_hop_table": {
-          "type": "integer",
-          "format": "int64"
+          "type": "string"
         },
         "weight": {
           "type": "integer",
@@ -4539,12 +4532,10 @@
           "format": "int64"
         },
         "ipv4_lookup_table": {
-          "type": "integer",
-          "format": "int64"
+          "type": "string"
         },
         "ipv6_lookup_table": {
-          "type": "integer",
-          "format": "int64"
+          "type": "string"
         },
         "mpls_lookup_table": {
           "type": "integer",

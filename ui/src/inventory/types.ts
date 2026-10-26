@@ -232,11 +232,11 @@ export type Route = {
   egress_interface?: string;
   preference?: number;
   count?: number;
-  next_hop_table?: number;
+  next_hop_table?: string;
   weight?: number;
   udp_encap?: number;
-  ipv4_lookup_table?: number;
-  ipv6_lookup_table?: number;
+  ipv4_lookup_table?: string;
+  ipv6_lookup_table?: string;
   mpls_lookup_table?: number;
   resolve_via_host?: boolean;
   resolve_via_connected?: boolean;

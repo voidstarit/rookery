@@ -208,9 +208,10 @@ Vhost-user interfaces continue to use
 Route creation accepts the VPP route path options (`count`, `next_hop_table`,
 `weight`, `udp_encap`, lookup tables, resolve flags, rx interfaces,
 `out_labels`, and `drop`) in addition to prefix, next hop, egress, and
-preference. Numeric options are optional: omit one to leave it out of the VPP
-command, or send an explicit `0` when zero is meaningful (for example
-`ipv4_lookup_table: 0` produces `ip4-lookup-in-table 0`).
+preference. `next_hop_table`, `ipv4_lookup_table`, and `ipv6_lookup_table`
+accept Rookery route-table names; `default` selects table `0`. MPLS lookup
+remains numeric. Numeric options are optional: omit one to leave it out of the
+VPP command.
 | `DELETE` | `/api/routes/{id}` | Delete a static route |
 | `GET`    | `/api/route-tables/{id}/fib?ipv6=<bool>` | Inspect live VPP FIB entries, including dynamic routes |
 | `GET`    | `/api/interfaces`  | List vhost-user interfaces        |

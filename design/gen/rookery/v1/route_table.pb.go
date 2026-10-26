@@ -328,11 +328,11 @@ type Route struct {
 	CreatedAt           *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt           *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	Count               *uint32                `protobuf:"varint,13,opt,name=count,proto3,oneof" json:"count,omitempty"`
-	NextHopTable        *uint32                `protobuf:"varint,14,opt,name=next_hop_table,json=nextHopTable,proto3,oneof" json:"next_hop_table,omitempty"`
+	NextHopTable        string                 `protobuf:"bytes,14,opt,name=next_hop_table,json=nextHopTable,proto3" json:"next_hop_table,omitempty"`
 	Weight              *uint32                `protobuf:"varint,15,opt,name=weight,proto3,oneof" json:"weight,omitempty"`
 	UdpEncap            *uint32                `protobuf:"varint,16,opt,name=udp_encap,json=udpEncap,proto3,oneof" json:"udp_encap,omitempty"`
-	Ipv4LookupTable     *uint32                `protobuf:"varint,17,opt,name=ipv4_lookup_table,json=ipv4LookupTable,proto3,oneof" json:"ipv4_lookup_table,omitempty"`
-	Ipv6LookupTable     *uint32                `protobuf:"varint,18,opt,name=ipv6_lookup_table,json=ipv6LookupTable,proto3,oneof" json:"ipv6_lookup_table,omitempty"`
+	Ipv4LookupTable     string                 `protobuf:"bytes,17,opt,name=ipv4_lookup_table,json=ipv4LookupTable,proto3" json:"ipv4_lookup_table,omitempty"`
+	Ipv6LookupTable     string                 `protobuf:"bytes,18,opt,name=ipv6_lookup_table,json=ipv6LookupTable,proto3" json:"ipv6_lookup_table,omitempty"`
 	MplsLookupTable     *uint32                `protobuf:"varint,19,opt,name=mpls_lookup_table,json=mplsLookupTable,proto3,oneof" json:"mpls_lookup_table,omitempty"`
 	ResolveViaHost      bool                   `protobuf:"varint,20,opt,name=resolve_via_host,json=resolveViaHost,proto3" json:"resolve_via_host,omitempty"`
 	ResolveViaConnected bool                   `protobuf:"varint,21,opt,name=resolve_via_connected,json=resolveViaConnected,proto3" json:"resolve_via_connected,omitempty"`
@@ -466,11 +466,11 @@ func (x *Route) GetCount() uint32 {
 	return 0
 }
 
-func (x *Route) GetNextHopTable() uint32 {
-	if x != nil && x.NextHopTable != nil {
-		return *x.NextHopTable
+func (x *Route) GetNextHopTable() string {
+	if x != nil {
+		return x.NextHopTable
 	}
-	return 0
+	return ""
 }
 
 func (x *Route) GetWeight() uint32 {
@@ -487,18 +487,18 @@ func (x *Route) GetUdpEncap() uint32 {
 	return 0
 }
 
-func (x *Route) GetIpv4LookupTable() uint32 {
-	if x != nil && x.Ipv4LookupTable != nil {
-		return *x.Ipv4LookupTable
+func (x *Route) GetIpv4LookupTable() string {
+	if x != nil {
+		return x.Ipv4LookupTable
 	}
-	return 0
+	return ""
 }
 
-func (x *Route) GetIpv6LookupTable() uint32 {
-	if x != nil && x.Ipv6LookupTable != nil {
-		return *x.Ipv6LookupTable
+func (x *Route) GetIpv6LookupTable() string {
+	if x != nil {
+		return x.Ipv6LookupTable
 	}
-	return 0
+	return ""
 }
 
 func (x *Route) GetMplsLookupTable() uint32 {
@@ -663,11 +663,11 @@ type CreateRouteRequest struct {
 	EgressInterface     string                 `protobuf:"bytes,6,opt,name=egress_interface,json=egressInterface,proto3" json:"egress_interface,omitempty"`
 	Preference          *uint32                `protobuf:"varint,7,opt,name=preference,proto3,oneof" json:"preference,omitempty"`
 	Count               *uint32                `protobuf:"varint,8,opt,name=count,proto3,oneof" json:"count,omitempty"`
-	NextHopTable        *uint32                `protobuf:"varint,9,opt,name=next_hop_table,json=nextHopTable,proto3,oneof" json:"next_hop_table,omitempty"`
+	NextHopTable        string                 `protobuf:"bytes,9,opt,name=next_hop_table,json=nextHopTable,proto3" json:"next_hop_table,omitempty"`
 	Weight              *uint32                `protobuf:"varint,10,opt,name=weight,proto3,oneof" json:"weight,omitempty"`
 	UdpEncap            *uint32                `protobuf:"varint,11,opt,name=udp_encap,json=udpEncap,proto3,oneof" json:"udp_encap,omitempty"`
-	Ipv4LookupTable     *uint32                `protobuf:"varint,12,opt,name=ipv4_lookup_table,json=ipv4LookupTable,proto3,oneof" json:"ipv4_lookup_table,omitempty"`
-	Ipv6LookupTable     *uint32                `protobuf:"varint,13,opt,name=ipv6_lookup_table,json=ipv6LookupTable,proto3,oneof" json:"ipv6_lookup_table,omitempty"`
+	Ipv4LookupTable     string                 `protobuf:"bytes,12,opt,name=ipv4_lookup_table,json=ipv4LookupTable,proto3" json:"ipv4_lookup_table,omitempty"`
+	Ipv6LookupTable     string                 `protobuf:"bytes,13,opt,name=ipv6_lookup_table,json=ipv6LookupTable,proto3" json:"ipv6_lookup_table,omitempty"`
 	MplsLookupTable     *uint32                `protobuf:"varint,14,opt,name=mpls_lookup_table,json=mplsLookupTable,proto3,oneof" json:"mpls_lookup_table,omitempty"`
 	ResolveViaHost      bool                   `protobuf:"varint,15,opt,name=resolve_via_host,json=resolveViaHost,proto3" json:"resolve_via_host,omitempty"`
 	ResolveViaConnected bool                   `protobuf:"varint,16,opt,name=resolve_via_connected,json=resolveViaConnected,proto3" json:"resolve_via_connected,omitempty"`
@@ -766,11 +766,11 @@ func (x *CreateRouteRequest) GetCount() uint32 {
 	return 0
 }
 
-func (x *CreateRouteRequest) GetNextHopTable() uint32 {
-	if x != nil && x.NextHopTable != nil {
-		return *x.NextHopTable
+func (x *CreateRouteRequest) GetNextHopTable() string {
+	if x != nil {
+		return x.NextHopTable
 	}
-	return 0
+	return ""
 }
 
 func (x *CreateRouteRequest) GetWeight() uint32 {
@@ -787,18 +787,18 @@ func (x *CreateRouteRequest) GetUdpEncap() uint32 {
 	return 0
 }
 
-func (x *CreateRouteRequest) GetIpv4LookupTable() uint32 {
-	if x != nil && x.Ipv4LookupTable != nil {
-		return *x.Ipv4LookupTable
+func (x *CreateRouteRequest) GetIpv4LookupTable() string {
+	if x != nil {
+		return x.Ipv4LookupTable
 	}
-	return 0
+	return ""
 }
 
-func (x *CreateRouteRequest) GetIpv6LookupTable() uint32 {
-	if x != nil && x.Ipv6LookupTable != nil {
-		return *x.Ipv6LookupTable
+func (x *CreateRouteRequest) GetIpv6LookupTable() string {
+	if x != nil {
+		return x.Ipv6LookupTable
 	}
-	return 0
+	return ""
 }
 
 func (x *CreateRouteRequest) GetMplsLookupTable() uint32 {
@@ -866,11 +866,11 @@ type UpdateRouteRequest struct {
 	EgressInterface     string                 `protobuf:"bytes,5,opt,name=egress_interface,json=egressInterface,proto3" json:"egress_interface,omitempty"`
 	Preference          *uint32                `protobuf:"varint,6,opt,name=preference,proto3,oneof" json:"preference,omitempty"`
 	Count               *uint32                `protobuf:"varint,7,opt,name=count,proto3,oneof" json:"count,omitempty"`
-	NextHopTable        *uint32                `protobuf:"varint,8,opt,name=next_hop_table,json=nextHopTable,proto3,oneof" json:"next_hop_table,omitempty"`
+	NextHopTable        string                 `protobuf:"bytes,8,opt,name=next_hop_table,json=nextHopTable,proto3" json:"next_hop_table,omitempty"`
 	Weight              *uint32                `protobuf:"varint,9,opt,name=weight,proto3,oneof" json:"weight,omitempty"`
 	UdpEncap            *uint32                `protobuf:"varint,10,opt,name=udp_encap,json=udpEncap,proto3,oneof" json:"udp_encap,omitempty"`
-	Ipv4LookupTable     *uint32                `protobuf:"varint,11,opt,name=ipv4_lookup_table,json=ipv4LookupTable,proto3,oneof" json:"ipv4_lookup_table,omitempty"`
-	Ipv6LookupTable     *uint32                `protobuf:"varint,12,opt,name=ipv6_lookup_table,json=ipv6LookupTable,proto3,oneof" json:"ipv6_lookup_table,omitempty"`
+	Ipv4LookupTable     string                 `protobuf:"bytes,11,opt,name=ipv4_lookup_table,json=ipv4LookupTable,proto3" json:"ipv4_lookup_table,omitempty"`
+	Ipv6LookupTable     string                 `protobuf:"bytes,12,opt,name=ipv6_lookup_table,json=ipv6LookupTable,proto3" json:"ipv6_lookup_table,omitempty"`
 	MplsLookupTable     *uint32                `protobuf:"varint,13,opt,name=mpls_lookup_table,json=mplsLookupTable,proto3,oneof" json:"mpls_lookup_table,omitempty"`
 	ResolveViaHost      bool                   `protobuf:"varint,14,opt,name=resolve_via_host,json=resolveViaHost,proto3" json:"resolve_via_host,omitempty"`
 	ResolveViaConnected bool                   `protobuf:"varint,15,opt,name=resolve_via_connected,json=resolveViaConnected,proto3" json:"resolve_via_connected,omitempty"`
@@ -962,11 +962,11 @@ func (x *UpdateRouteRequest) GetCount() uint32 {
 	return 0
 }
 
-func (x *UpdateRouteRequest) GetNextHopTable() uint32 {
-	if x != nil && x.NextHopTable != nil {
-		return *x.NextHopTable
+func (x *UpdateRouteRequest) GetNextHopTable() string {
+	if x != nil {
+		return x.NextHopTable
 	}
-	return 0
+	return ""
 }
 
 func (x *UpdateRouteRequest) GetWeight() uint32 {
@@ -983,18 +983,18 @@ func (x *UpdateRouteRequest) GetUdpEncap() uint32 {
 	return 0
 }
 
-func (x *UpdateRouteRequest) GetIpv4LookupTable() uint32 {
-	if x != nil && x.Ipv4LookupTable != nil {
-		return *x.Ipv4LookupTable
+func (x *UpdateRouteRequest) GetIpv4LookupTable() string {
+	if x != nil {
+		return x.Ipv4LookupTable
 	}
-	return 0
+	return ""
 }
 
-func (x *UpdateRouteRequest) GetIpv6LookupTable() uint32 {
-	if x != nil && x.Ipv6LookupTable != nil {
-		return *x.Ipv6LookupTable
+func (x *UpdateRouteRequest) GetIpv6LookupTable() string {
+	if x != nil {
+		return x.Ipv6LookupTable
 	}
-	return 0
+	return ""
 }
 
 func (x *UpdateRouteRequest) GetMplsLookupTable() uint32 {
@@ -1496,7 +1496,7 @@ const file_rookery_v1_route_table_proto_rawDesc = "" +
 	"\x0eroute_table_id\x18\x01 \x01(\x03R\frouteTableId\x12\x12\n" +
 	"\x04ipv6\x18\x02 \x01(\bR\x04ipv6\"E\n" +
 	"\x15ListFIBRoutesResponse\x12,\n" +
-	"\x06routes\x18\x01 \x03(\v2\x14.rookery.v1.FIBRouteR\x06routes\"\xef\b\n" +
+	"\x06routes\x18\x01 \x03(\v2\x14.rookery.v1.FIBRouteR\x06routes\"\xa1\b\n" +
 	"\x05Route\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12$\n" +
 	"\x0eroute_table_id\x18\x02 \x01(\x03R\frouteTableId\x12\x19\n" +
@@ -1515,13 +1515,13 @@ const file_rookery_v1_route_table_proto_rawDesc = "" +
 	"\n" +
 	"updated_at\x18\n" +
 	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x19\n" +
-	"\x05count\x18\r \x01(\rH\x02R\x05count\x88\x01\x01\x12)\n" +
-	"\x0enext_hop_table\x18\x0e \x01(\rH\x03R\fnextHopTable\x88\x01\x01\x12\x1b\n" +
-	"\x06weight\x18\x0f \x01(\rH\x04R\x06weight\x88\x01\x01\x12 \n" +
-	"\tudp_encap\x18\x10 \x01(\rH\x05R\budpEncap\x88\x01\x01\x12/\n" +
-	"\x11ipv4_lookup_table\x18\x11 \x01(\rH\x06R\x0fipv4LookupTable\x88\x01\x01\x12/\n" +
-	"\x11ipv6_lookup_table\x18\x12 \x01(\rH\aR\x0fipv6LookupTable\x88\x01\x01\x12/\n" +
-	"\x11mpls_lookup_table\x18\x13 \x01(\rH\bR\x0fmplsLookupTable\x88\x01\x01\x12(\n" +
+	"\x05count\x18\r \x01(\rH\x02R\x05count\x88\x01\x01\x12$\n" +
+	"\x0enext_hop_table\x18\x0e \x01(\tR\fnextHopTable\x12\x1b\n" +
+	"\x06weight\x18\x0f \x01(\rH\x03R\x06weight\x88\x01\x01\x12 \n" +
+	"\tudp_encap\x18\x10 \x01(\rH\x04R\budpEncap\x88\x01\x01\x12*\n" +
+	"\x11ipv4_lookup_table\x18\x11 \x01(\tR\x0fipv4LookupTable\x12*\n" +
+	"\x11ipv6_lookup_table\x18\x12 \x01(\tR\x0fipv6LookupTable\x12/\n" +
+	"\x11mpls_lookup_table\x18\x13 \x01(\rH\x05R\x0fmplsLookupTable\x88\x01\x01\x12(\n" +
 	"\x10resolve_via_host\x18\x14 \x01(\bR\x0eresolveViaHost\x122\n" +
 	"\x15resolve_via_connected\x18\x15 \x01(\bR\x13resolveViaConnected\x12*\n" +
 	"\x11rx_ipv4_interface\x18\x16 \x01(\tR\x0frxIpv4Interface\x12*\n" +
@@ -1532,19 +1532,16 @@ const file_rookery_v1_route_table_proto_rawDesc = "" +
 	"\vdescription\x18\x1a \x01(\tR\vdescriptionB\x0f\n" +
 	"\r_interface_idB\r\n" +
 	"\v_preferenceB\b\n" +
-	"\x06_countB\x11\n" +
-	"\x0f_next_hop_tableB\t\n" +
+	"\x06_countB\t\n" +
 	"\a_weightB\f\n" +
 	"\n" +
 	"_udp_encapB\x14\n" +
-	"\x12_ipv4_lookup_tableB\x14\n" +
-	"\x12_ipv6_lookup_tableB\x14\n" +
 	"\x12_mpls_lookup_table\"M\n" +
 	"\x11ListRoutesRequest\x12$\n" +
 	"\x0eroute_table_id\x18\x01 \x01(\x03R\frouteTableId\x12\x12\n" +
 	"\x04ipv6\x18\x02 \x01(\bR\x04ipv6\"?\n" +
 	"\x12ListRoutesResponse\x12)\n" +
-	"\x06routes\x18\x01 \x03(\v2\x11.rookery.v1.RouteR\x06routes\"\xa1\b\n" +
+	"\x06routes\x18\x01 \x03(\v2\x11.rookery.v1.RouteR\x06routes\"\xf7\a\n" +
 	"\x12CreateRouteRequest\x12$\n" +
 	"\x0eroute_table_id\x18\x01 \x01(\x03R\frouteTableId\x12\x12\n" +
 	"\x04ipv6\x18\x02 \x01(\bR\x04ipv6\x12!\n" +
@@ -1557,14 +1554,17 @@ const file_rookery_v1_route_table_proto_rawDesc = "" +
 	"\n" +
 	"preference\x18\a \x01(\rH\x01R\n" +
 	"preference\x88\x01\x01\x12$\n" +
-	"\x05count\x18\b \x01(\rB\t\xfaB\x06*\x04\x18\xa0\x8d\x06H\x02R\x05count\x88\x01\x01\x12)\n" +
-	"\x0enext_hop_table\x18\t \x01(\rH\x03R\fnextHopTable\x88\x01\x01\x12%\n" +
+	"\x05count\x18\b \x01(\rB\t\xfaB\x06*\x04\x18\xa0\x8d\x06H\x02R\x05count\x88\x01\x01\x120\n" +
+	"\x0enext_hop_table\x18\t \x01(\tB\n" +
+	"\xfaB\ar\x05\x18?\xd0\x01\x01R\fnextHopTable\x12%\n" +
 	"\x06weight\x18\n" +
-	" \x01(\rB\b\xfaB\x05*\x03\x18\xff\x01H\x04R\x06weight\x88\x01\x01\x12 \n" +
-	"\tudp_encap\x18\v \x01(\rH\x05R\budpEncap\x88\x01\x01\x12/\n" +
-	"\x11ipv4_lookup_table\x18\f \x01(\rH\x06R\x0fipv4LookupTable\x88\x01\x01\x12/\n" +
-	"\x11ipv6_lookup_table\x18\r \x01(\rH\aR\x0fipv6LookupTable\x88\x01\x01\x12/\n" +
-	"\x11mpls_lookup_table\x18\x0e \x01(\rH\bR\x0fmplsLookupTable\x88\x01\x01\x12(\n" +
+	" \x01(\rB\b\xfaB\x05*\x03\x18\xff\x01H\x03R\x06weight\x88\x01\x01\x12 \n" +
+	"\tudp_encap\x18\v \x01(\rH\x04R\budpEncap\x88\x01\x01\x126\n" +
+	"\x11ipv4_lookup_table\x18\f \x01(\tB\n" +
+	"\xfaB\ar\x05\x18?\xd0\x01\x01R\x0fipv4LookupTable\x126\n" +
+	"\x11ipv6_lookup_table\x18\r \x01(\tB\n" +
+	"\xfaB\ar\x05\x18?\xd0\x01\x01R\x0fipv6LookupTable\x12/\n" +
+	"\x11mpls_lookup_table\x18\x0e \x01(\rH\x05R\x0fmplsLookupTable\x88\x01\x01\x12(\n" +
 	"\x10resolve_via_host\x18\x0f \x01(\bR\x0eresolveViaHost\x122\n" +
 	"\x15resolve_via_connected\x18\x10 \x01(\bR\x13resolveViaConnected\x126\n" +
 	"\x11rx_ipv4_interface\x18\x11 \x01(\tB\n" +
@@ -1577,14 +1577,11 @@ const file_rookery_v1_route_table_proto_rawDesc = "" +
 	"\vdescription\x18\x15 \x01(\tB\b\xfaB\x05r\x03\x18\xe8\aR\vdescriptionB\x0f\n" +
 	"\r_interface_idB\r\n" +
 	"\v_preferenceB\b\n" +
-	"\x06_countB\x11\n" +
-	"\x0f_next_hop_tableB\t\n" +
+	"\x06_countB\t\n" +
 	"\a_weightB\f\n" +
 	"\n" +
 	"_udp_encapB\x14\n" +
-	"\x12_ipv4_lookup_tableB\x14\n" +
-	"\x12_ipv6_lookup_tableB\x14\n" +
-	"\x12_mpls_lookup_table\"\x80\b\n" +
+	"\x12_mpls_lookup_table\"\xd6\a\n" +
 	"\x12UpdateRouteRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x12!\n" +
 	"\x06prefix\x18\x02 \x01(\tB\t\xfaB\x06r\x04\x10\x01\x18@R\x06prefix\x12%\n" +
@@ -1596,14 +1593,17 @@ const file_rookery_v1_route_table_proto_rawDesc = "" +
 	"\n" +
 	"preference\x18\x06 \x01(\rH\x01R\n" +
 	"preference\x88\x01\x01\x12$\n" +
-	"\x05count\x18\a \x01(\rB\t\xfaB\x06*\x04\x18\xa0\x8d\x06H\x02R\x05count\x88\x01\x01\x12)\n" +
-	"\x0enext_hop_table\x18\b \x01(\rH\x03R\fnextHopTable\x88\x01\x01\x12%\n" +
-	"\x06weight\x18\t \x01(\rB\b\xfaB\x05*\x03\x18\xff\x01H\x04R\x06weight\x88\x01\x01\x12 \n" +
+	"\x05count\x18\a \x01(\rB\t\xfaB\x06*\x04\x18\xa0\x8d\x06H\x02R\x05count\x88\x01\x01\x120\n" +
+	"\x0enext_hop_table\x18\b \x01(\tB\n" +
+	"\xfaB\ar\x05\x18?\xd0\x01\x01R\fnextHopTable\x12%\n" +
+	"\x06weight\x18\t \x01(\rB\b\xfaB\x05*\x03\x18\xff\x01H\x03R\x06weight\x88\x01\x01\x12 \n" +
 	"\tudp_encap\x18\n" +
-	" \x01(\rH\x05R\budpEncap\x88\x01\x01\x12/\n" +
-	"\x11ipv4_lookup_table\x18\v \x01(\rH\x06R\x0fipv4LookupTable\x88\x01\x01\x12/\n" +
-	"\x11ipv6_lookup_table\x18\f \x01(\rH\aR\x0fipv6LookupTable\x88\x01\x01\x12/\n" +
-	"\x11mpls_lookup_table\x18\r \x01(\rH\bR\x0fmplsLookupTable\x88\x01\x01\x12(\n" +
+	" \x01(\rH\x04R\budpEncap\x88\x01\x01\x126\n" +
+	"\x11ipv4_lookup_table\x18\v \x01(\tB\n" +
+	"\xfaB\ar\x05\x18?\xd0\x01\x01R\x0fipv4LookupTable\x126\n" +
+	"\x11ipv6_lookup_table\x18\f \x01(\tB\n" +
+	"\xfaB\ar\x05\x18?\xd0\x01\x01R\x0fipv6LookupTable\x12/\n" +
+	"\x11mpls_lookup_table\x18\r \x01(\rH\x05R\x0fmplsLookupTable\x88\x01\x01\x12(\n" +
 	"\x10resolve_via_host\x18\x0e \x01(\bR\x0eresolveViaHost\x122\n" +
 	"\x15resolve_via_connected\x18\x0f \x01(\bR\x13resolveViaConnected\x126\n" +
 	"\x11rx_ipv4_interface\x18\x10 \x01(\tB\n" +
@@ -1616,13 +1616,10 @@ const file_rookery_v1_route_table_proto_rawDesc = "" +
 	"\vdescription\x18\x14 \x01(\tB\b\xfaB\x05r\x03\x18\xe8\aR\vdescriptionB\x0f\n" +
 	"\r_interface_idB\r\n" +
 	"\v_preferenceB\b\n" +
-	"\x06_countB\x11\n" +
-	"\x0f_next_hop_tableB\t\n" +
+	"\x06_countB\t\n" +
 	"\a_weightB\f\n" +
 	"\n" +
 	"_udp_encapB\x14\n" +
-	"\x12_ipv4_lookup_tableB\x14\n" +
-	"\x12_ipv6_lookup_tableB\x14\n" +
 	"\x12_mpls_lookup_table\"-\n" +
 	"\x12DeleteRouteRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\xf7\x02\n" +

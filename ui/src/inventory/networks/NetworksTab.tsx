@@ -1970,6 +1970,7 @@ export function NetworksTab() {
               .filter(Boolean)}
             hostInterfaces={hostInterfaces}
             hostTaps={hostTaps}
+            tables={routeTables}
             onBack={() => {
               setRouteForm(null);
               navigate(`/route-tables/${routeForm.table.id}?ipv6=${routeForm.table.ipv6}`, true);

@@ -631,6 +631,12 @@ func (m *Route) validate(all bool) error {
 		}
 	}
 
+	// no validation rules for NextHopTable
+
+	// no validation rules for Ipv4LookupTable
+
+	// no validation rules for Ipv6LookupTable
+
 	// no validation rules for ResolveViaHost
 
 	// no validation rules for ResolveViaConnected
@@ -655,24 +661,12 @@ func (m *Route) validate(all bool) error {
 		// no validation rules for Count
 	}
 
-	if m.NextHopTable != nil {
-		// no validation rules for NextHopTable
-	}
-
 	if m.Weight != nil {
 		// no validation rules for Weight
 	}
 
 	if m.UdpEncap != nil {
 		// no validation rules for UdpEncap
-	}
-
-	if m.Ipv4LookupTable != nil {
-		// no validation rules for Ipv4LookupTable
-	}
-
-	if m.Ipv6LookupTable != nil {
-		// no validation rules for Ipv6LookupTable
 	}
 
 	if m.MplsLookupTable != nil {
@@ -1065,6 +1059,51 @@ func (m *CreateRouteRequest) validate(all bool) error {
 
 	}
 
+	if m.GetNextHopTable() != "" {
+
+		if utf8.RuneCountInString(m.GetNextHopTable()) > 63 {
+			err := CreateRouteRequestValidationError{
+				field:  "NextHopTable",
+				reason: "value length must be at most 63 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.GetIpv4LookupTable() != "" {
+
+		if utf8.RuneCountInString(m.GetIpv4LookupTable()) > 63 {
+			err := CreateRouteRequestValidationError{
+				field:  "Ipv4LookupTable",
+				reason: "value length must be at most 63 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.GetIpv6LookupTable() != "" {
+
+		if utf8.RuneCountInString(m.GetIpv6LookupTable()) > 63 {
+			err := CreateRouteRequestValidationError{
+				field:  "Ipv6LookupTable",
+				reason: "value length must be at most 63 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
 	// no validation rules for ResolveViaHost
 
 	// no validation rules for ResolveViaConnected
@@ -1157,10 +1196,6 @@ func (m *CreateRouteRequest) validate(all bool) error {
 
 	}
 
-	if m.NextHopTable != nil {
-		// no validation rules for NextHopTable
-	}
-
 	if m.Weight != nil {
 
 		if m.GetWeight() > 255 {
@@ -1178,14 +1213,6 @@ func (m *CreateRouteRequest) validate(all bool) error {
 
 	if m.UdpEncap != nil {
 		// no validation rules for UdpEncap
-	}
-
-	if m.Ipv4LookupTable != nil {
-		// no validation rules for Ipv4LookupTable
-	}
-
-	if m.Ipv6LookupTable != nil {
-		// no validation rules for Ipv6LookupTable
 	}
 
 	if m.MplsLookupTable != nil {
@@ -1346,6 +1373,51 @@ func (m *UpdateRouteRequest) validate(all bool) error {
 
 	}
 
+	if m.GetNextHopTable() != "" {
+
+		if utf8.RuneCountInString(m.GetNextHopTable()) > 63 {
+			err := UpdateRouteRequestValidationError{
+				field:  "NextHopTable",
+				reason: "value length must be at most 63 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.GetIpv4LookupTable() != "" {
+
+		if utf8.RuneCountInString(m.GetIpv4LookupTable()) > 63 {
+			err := UpdateRouteRequestValidationError{
+				field:  "Ipv4LookupTable",
+				reason: "value length must be at most 63 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.GetIpv6LookupTable() != "" {
+
+		if utf8.RuneCountInString(m.GetIpv6LookupTable()) > 63 {
+			err := UpdateRouteRequestValidationError{
+				field:  "Ipv6LookupTable",
+				reason: "value length must be at most 63 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
 	// no validation rules for ResolveViaHost
 
 	// no validation rules for ResolveViaConnected
@@ -1438,10 +1510,6 @@ func (m *UpdateRouteRequest) validate(all bool) error {
 
 	}
 
-	if m.NextHopTable != nil {
-		// no validation rules for NextHopTable
-	}
-
 	if m.Weight != nil {
 
 		if m.GetWeight() > 255 {
@@ -1459,14 +1527,6 @@ func (m *UpdateRouteRequest) validate(all bool) error {
 
 	if m.UdpEncap != nil {
 		// no validation rules for UdpEncap
-	}
-
-	if m.Ipv4LookupTable != nil {
-		// no validation rules for Ipv4LookupTable
-	}
-
-	if m.Ipv6LookupTable != nil {
-		// no validation rules for Ipv6LookupTable
 	}
 
 	if m.MplsLookupTable != nil {

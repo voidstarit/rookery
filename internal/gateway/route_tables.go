@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"google.golang.org/grpc/codes"
@@ -235,9 +236,10 @@ func (s *routeTableService) CreateRoute(ctx context.Context, request *rookeryv1.
 		TableID: table.TableID, IPv6: table.IPv6, Prefix: request.GetPrefix(),
 		Description: request.GetDescription(), NextHop: request.GetNextHop(), InterfaceID: interfaceID,
 		EgressInterface: egress, Preference: request.Preference,
-		Count: request.Count, NextHopTable: request.NextHopTable,
+		Count: request.Count, NextHopTable: trimmedStringPointer(request.NextHopTable),
 		Weight: request.Weight, UDPEncap: request.UdpEncap,
-		IPv4LookupTable: request.Ipv4LookupTable, IPv6LookupTable: request.Ipv6LookupTable,
+		IPv4LookupTable: trimmedStringPointer(request.Ipv4LookupTable),
+		IPv6LookupTable: trimmedStringPointer(request.Ipv6LookupTable),
 		MPLSLookupTable: request.MplsLookupTable,
 		ResolveViaHost:  request.GetResolveViaHost(), ResolveViaConnected: request.GetResolveViaConnected(),
 		RxIPv4Interface: request.GetRxIpv4Interface(), RxIPv6Interface: request.GetRxIpv6Interface(),
@@ -246,7 +248,12 @@ func (s *routeTableService) CreateRoute(ctx context.Context, request *rookeryv1.
 	if err != nil {
 		return nil, routeStoreError(err)
 	}
-	if err := s.runtime.AddRouteSpec(ctx, routeSpecFromStore(created)); err != nil {
+	spec, err := s.routeSpec(ctx, created)
+	if err != nil {
+		_ = s.store.DeleteRoute(ctx, created.ID)
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	if err := s.runtime.AddRouteSpec(ctx, spec); err != nil {
 		_ = s.store.DeleteRoute(ctx, created.ID)
 		return nil, status.Error(codes.InvalidArgument, "could not install route: "+err.Error())
 	}
@@ -281,22 +288,30 @@ func (s *routeTableService) UpdateRoute(ctx context.Context, request *rookeryv1.
 		Prefix: request.GetPrefix(), Description: request.GetDescription(), NextHop: request.GetNextHop(),
 		InterfaceID: interfaceID, InterfaceName: interfaceName, EgressInterface: egress,
 		Preference: request.Preference,
-		Count:      request.Count, NextHopTable: request.NextHopTable, Weight: request.Weight,
-		UDPEncap: request.UdpEncap, IPv4LookupTable: request.Ipv4LookupTable,
-		IPv6LookupTable: request.Ipv6LookupTable, MPLSLookupTable: request.MplsLookupTable,
+		Count:      request.Count, NextHopTable: trimmedStringPointer(request.NextHopTable), Weight: request.Weight,
+		UDPEncap: request.UdpEncap, IPv4LookupTable: trimmedStringPointer(request.Ipv4LookupTable),
+		IPv6LookupTable: trimmedStringPointer(request.Ipv6LookupTable), MPLSLookupTable: request.MplsLookupTable,
 		ResolveViaHost: request.GetResolveViaHost(), ResolveViaConnected: request.GetResolveViaConnected(),
 		RxIPv4Interface: request.GetRxIpv4Interface(), RxIPv6Interface: request.GetRxIpv6Interface(),
 		OutLabels: request.GetOutLabels(), Drop: request.GetDrop(),
 	}
+	existingSpec, err := s.routeSpec(ctx, existing)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	updatedSpec, err := s.routeSpec(ctx, updated)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
 	_ = s.runtime.DeleteRoute(ctx, existing.TableID, existing.IPv6, existing.Prefix)
-	if err := s.runtime.AddRouteSpec(ctx, routeSpecFromStore(updated)); err != nil {
-		_ = s.runtime.AddRouteSpec(ctx, routeSpecFromStore(existing))
+	if err := s.runtime.AddRouteSpec(ctx, updatedSpec); err != nil {
+		_ = s.runtime.AddRouteSpec(ctx, existingSpec)
 		return nil, status.Error(codes.InvalidArgument, "could not install route: "+err.Error())
 	}
 	saved, err := s.store.UpdateRoute(ctx, existing.ID, updated)
 	if err != nil {
 		_ = s.runtime.DeleteRoute(ctx, updated.TableID, updated.IPv6, updated.Prefix)
-		_ = s.runtime.AddRouteSpec(ctx, routeSpecFromStore(existing))
+		_ = s.runtime.AddRouteSpec(ctx, existingSpec)
 		return nil, routeStoreError(err)
 	}
 	var tableRecordID int64
@@ -362,9 +377,9 @@ func routeToProto(route store.Route, routeTableID int64) *rookeryv1.Route {
 		Id: route.ID, RouteTableId: routeTableID, TableId: route.TableID, Ipv6: route.IPv6,
 		Prefix: route.Prefix, Description: route.Description, NextHop: route.NextHop, InterfaceId: route.InterfaceID,
 		InterfaceName: route.InterfaceName, EgressInterface: route.EgressInterface,
-		Preference: route.Preference, Count: route.Count, NextHopTable: route.NextHopTable,
+		Preference: route.Preference, Count: route.Count, NextHopTable: stringValue(route.NextHopTable),
 		Weight: route.Weight, UdpEncap: route.UDPEncap,
-		Ipv4LookupTable: route.IPv4LookupTable, Ipv6LookupTable: route.IPv6LookupTable,
+		Ipv4LookupTable: stringValue(route.IPv4LookupTable), Ipv6LookupTable: stringValue(route.IPv6LookupTable),
 		MplsLookupTable: route.MPLSLookupTable,
 		ResolveViaHost:  route.ResolveViaHost, ResolveViaConnected: route.ResolveViaConnected,
 		RxIpv4Interface: route.RxIPv4Interface, RxIpv6Interface: route.RxIPv6Interface,
@@ -388,19 +403,57 @@ func routeStoreError(err error) error {
 	}
 }
 
-func routeSpecFromStore(route store.Route) host.RouteSpec {
+func (s *routeTableService) routeSpec(ctx context.Context, route store.Route) (host.RouteSpec, error) {
 	egress := route.EgressInterface
 	if egress == "" {
 		egress = route.InterfaceName
 	}
+	nextHopTable, err := s.resolveRouteTableName(ctx, route.NextHopTable, route.IPv6, "next-hop table")
+	if err != nil {
+		return host.RouteSpec{}, err
+	}
+	ipv4Lookup, err := s.resolveRouteTableName(ctx, route.IPv4LookupTable, false, "IPv4 lookup table")
+	if err != nil {
+		return host.RouteSpec{}, err
+	}
+	ipv6Lookup, err := s.resolveRouteTableName(ctx, route.IPv6LookupTable, true, "IPv6 lookup table")
+	if err != nil {
+		return host.RouteSpec{}, err
+	}
 	return host.RouteSpec{
 		TableID: route.TableID, IPv6: route.IPv6, Prefix: route.Prefix,
 		NextHop: route.NextHop, EgressInterface: egress, Preference: route.Preference,
-		Count: route.Count, NextHopTable: route.NextHopTable, Weight: route.Weight,
-		UDPEncap: route.UDPEncap, IPv4LookupTable: route.IPv4LookupTable,
-		IPv6LookupTable: route.IPv6LookupTable, MPLSLookupTable: route.MPLSLookupTable,
+		Count: route.Count, NextHopTable: nextHopTable, Weight: route.Weight,
+		UDPEncap: route.UDPEncap, IPv4LookupTable: ipv4Lookup,
+		IPv6LookupTable: ipv6Lookup, MPLSLookupTable: route.MPLSLookupTable,
 		ResolveViaHost: route.ResolveViaHost, ResolveViaConnected: route.ResolveViaConnected,
 		RxIPv4Interface: route.RxIPv4Interface, RxIPv6Interface: route.RxIPv6Interface,
 		OutLabels: route.OutLabels, Drop: route.Drop,
+	}, nil
+}
+
+func (s *routeTableService) resolveRouteTableName(ctx context.Context, name *string, ipv6 bool, label string) (*uint32, error) {
+	if name == nil {
+		return nil, nil
 	}
+	id, err := s.store.ResolveRouteTableName(ctx, *name, ipv6)
+	if err != nil {
+		return nil, fmt.Errorf("%s %q: %w", label, *name, err)
+	}
+	return &id, nil
+}
+
+func trimmedStringPointer(value string) *string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }

@@ -56,6 +56,7 @@ func TestMigrationConvertsNetworkDHCPToVNF(t *testing.T) {
 		"description", "preference_set", "route_count_set", "next_hop_table_set",
 		"weight_set", "udp_encap_set", "ipv4_lookup_table_set",
 		"ipv6_lookup_table_set", "mpls_lookup_table_set",
+		"next_hop_table_name", "ipv4_lookup_table_name", "ipv6_lookup_table_name",
 	} {
 		if _, err := db.Exec(`ALTER TABLE routes DROP COLUMN ` + column); err != nil {
 			t.Fatalf("drop routes.%s: %v", column, err)
@@ -327,8 +328,8 @@ func TestMigrationPreservesLegacyVMsWithoutDisks(t *testing.T) {
 	if err := st.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 35 {
-		t.Fatalf("schema version = %d, want 35", version)
+	if version != 36 {
+		t.Fatalf("schema version = %d, want 36", version)
 	}
 }
 
@@ -349,7 +350,7 @@ func TestEnsureStartupScriptSchemaAfterTableDrop(t *testing.T) {
 	if _, err := db.Exec(`DROP TABLE startup_script`); err != nil {
 		t.Fatalf("drop startup_script table: %v", err)
 	}
-	if _, err := db.Exec(`PRAGMA user_version = 35`); err != nil {
+	if _, err := db.Exec(`PRAGMA user_version = 36`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
 	if err := db.Close(); err != nil {
@@ -411,6 +412,7 @@ func TestEnsureVPPInterfaceAddressesSchemaAfterTableDrop(t *testing.T) {
 		"description", "preference_set", "route_count_set", "next_hop_table_set",
 		"weight_set", "udp_encap_set", "ipv4_lookup_table_set",
 		"ipv6_lookup_table_set", "mpls_lookup_table_set",
+		"next_hop_table_name", "ipv4_lookup_table_name", "ipv6_lookup_table_name",
 	} {
 		if _, err := db.Exec(`ALTER TABLE routes DROP COLUMN ` + column); err != nil {
 			t.Fatalf("drop routes.%s: %v", column, err)

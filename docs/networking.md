@@ -146,8 +146,10 @@ interface bindings, and static routes are recreated during startup reconciliatio
 after a VPP restart.
 
 Vhost-user interfaces use the **Route tables** action on their interface row;
-their bindings live in `virtual_interfaces`. Host interfaces currently in VPP
-and host taps expose the same action. Their bindings are stored in
+their bindings live in `virtual_interfaces` and default to the owning network's
+VRF tables when the interface is created. Existing interface assignments can
+still be changed explicitly. Host interfaces currently in VPP and host taps
+expose the same action. Their bindings are stored in
 `vpp_interface_route_tables` and reapplied after an API or VPP restart. A
 non-default table moves that interface out of the bridge-domain/network VRF,
 so use it only when the host interface or tap needs to participate in a
@@ -171,9 +173,15 @@ next hop is present, it must resolve inside the route's own table: bind the
 owning interface into that table or add an interface-only route for the next
 hop. The route editor works for the default VRF `0` as well as custom tables.
 
-Numeric route options are optional: leaving one blank omits it from the VPP
-command, while entering `0` emits an explicit zero value (for example
-`ip4-lookup-in-table 0`).
+Route-table options use Rookery route-table names rather than VPP IDs:
+**Next-hop table**, **IPv4 lookup table**, and **IPv6 lookup table** present
+selectors populated from the route tables. Choose `default` for VPP table `0`.
+This keeps configurations stable if VPP table IDs are reallocated. The MPLS
+lookup option remains a numeric table ID because Rookery does not currently
+model named MPLS tables.
+
+Other numeric route options are optional: leaving one blank omits it from the
+VPP command; explicit zero remains meaningful where supported.
 
 The route editor is a full page at
 `/route-tables/{id}?ipv6=<bool>` (the legacy

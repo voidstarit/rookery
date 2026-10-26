@@ -1639,8 +1639,13 @@ func (s *Store) DeleteNetwork(ctx context.Context, id int64) error {
 
 // CreateInterface inserts a vhost-user interface record.
 func (s *Store) CreateInterface(ctx context.Context, iface VirtualInterface) (VirtualInterface, error) {
-	if _, err := s.GetNetwork(ctx, iface.NetworkID); err != nil {
+	network, err := s.GetNetwork(ctx, iface.NetworkID)
+	if err != nil {
 		return VirtualInterface{}, err
+	}
+	if iface.IPv4TableID == 0 && iface.IPv6TableID == 0 && network.RouteTableID != 0 {
+		iface.IPv4TableID = network.RouteTableID
+		iface.IPv6TableID = network.RouteTableID
 	}
 	if iface.AttachedVMID != nil {
 		if _, err := s.GetVM(ctx, *iface.AttachedVMID); err != nil {
@@ -1651,9 +1656,11 @@ func (s *Store) CreateInterface(ctx context.Context, iface VirtualInterface) (Vi
 	now := time.Now().UTC().UnixMilli()
 	res, err := s.db.ExecContext(ctx, `
 		INSERT INTO virtual_interfaces
-			(name, network_id, socket_path, mac, sw_if_index, attached_vm_id, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		iface.Name, iface.NetworkID, iface.SocketPath, iface.MAC, iface.SwIfIndex, iface.AttachedVMID, now, now,
+			(name, network_id, socket_path, mac, sw_if_index, attached_vm_id,
+			 ipv4_table_id, ipv6_table_id, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		iface.Name, iface.NetworkID, iface.SocketPath, iface.MAC, iface.SwIfIndex, iface.AttachedVMID,
+		iface.IPv4TableID, iface.IPv6TableID, now, now,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {

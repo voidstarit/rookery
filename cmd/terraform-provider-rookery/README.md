@@ -90,15 +90,17 @@ changed. `rookery_network` names remain immutable, but its `ipv4_cidr` and
 `weight`, `udp_encap`, `ipv4_lookup_table`, `ipv6_lookup_table`,
 `mpls_lookup_table`, `resolve_via_host`, `resolve_via_connected`,
 `rx_ipv4_interface`, `rx_ipv6_interface`, `out_labels`, `drop`, and
-`description`. Numeric options are nullable: omit one to leave it out of the
-VPP command, or set it to `0` explicitly when zero is meaningful, for example:
+`description`. `next_hop_table` and the IPv4/IPv6 lookup tables take the
+Rookery route-table name; use `default` for table `0`. Numeric options are
+nullable: omit one to leave it out of the VPP command, or set it to `0`
+explicitly when zero is meaningful, for example:
 
 ```hcl
 resource "rookery_route" "lookup" {
   route_table_id    = 0
   ipv6              = false
   prefix            = "10.10.1.0/24"
-  ipv4_lookup_table = 100002
+  ipv4_lookup_table = "app-vrf"
 }
 ```
 

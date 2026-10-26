@@ -15,9 +15,9 @@ function routeOptions(route: Route): string {
   if (route.next_hop_table) parts.push(`next-hop-table ${route.next_hop_table}`);
   if (route.weight) parts.push(`weight ${route.weight}`);
   if (route.udp_encap) parts.push(`udp-encap ${route.udp_encap}`);
-  if (route.ipv4_lookup_table) parts.push(`ip4-lookup ${route.ipv4_lookup_table}`);
-  if (route.ipv6_lookup_table) parts.push(`ip6-lookup ${route.ipv6_lookup_table}`);
-  if (route.mpls_lookup_table) parts.push(`mpls-lookup ${route.mpls_lookup_table}`);
+  if (route.ipv4_lookup_table) parts.push(`ip4-lookup-in-table ${route.ipv4_lookup_table}`);
+  if (route.ipv6_lookup_table) parts.push(`ip6-lookup-in-table ${route.ipv6_lookup_table}`);
+  if (route.mpls_lookup_table) parts.push(`mpls-lookup-in-table ${route.mpls_lookup_table}`);
   if (route.resolve_via_host) parts.push("resolve-via-host");
   if (route.resolve_via_connected) parts.push("resolve-via-connected");
   if (route.rx_ipv4_interface) parts.push(`rx-ip4 ${route.rx_ipv4_interface}`);
