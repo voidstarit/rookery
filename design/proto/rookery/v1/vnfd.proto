@@ -25,6 +25,7 @@ service VNFDaemon {
   rpc GetVNFState(GetVNFStateRequest) returns (VNFState);
   rpc ListLeases(ListLeasesRequest) returns (ListLeasesResponse);
   rpc GetBGPStatus(GetBGPStatusRequest) returns (VNFBGPStatus);
+  rpc ListDNSRecords(ListDNSRecordsRequest) returns (ListDNSRecordsResponse);
   // CleanupLegacyNetwork removes DHCP runtime files left by the old
   // per-network DHCP implementation.
   rpc CleanupLegacyNetwork(CleanupLegacyNetworkRequest) returns (google.protobuf.Empty);
@@ -90,6 +91,15 @@ message ListLeasesResponse {
 
 message GetBGPStatusRequest {
   int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListDNSRecordsRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListDNSRecordsResponse {
+  int64 vnf_id = 1;
+  repeated VNFDNSRecord records = 2;
 }
 
 message CleanupLegacyNetworkRequest {

@@ -502,6 +502,22 @@ export type VNFBGPReceivedPrefix = {
   as_path?: number[];
 };
 
+export type VNFDNSRecord = {
+  name: string;
+  type: string;
+  value: string;
+  ttl?: number;
+  source: string;
+  source_vnf_id?: number;
+};
+
+export type VNFDNSRecordsResponse = {
+  vnf_id: number;
+  type: string;
+  records: VNFDNSRecord[];
+  dynamic_error?: string;
+};
+
 export type VNFBGPStatus = {
   vnf_id: number;
   type: string;

@@ -147,6 +147,24 @@ func (c *Client) Leases(ctx context.Context, vnfID int64) ([]store.VNFLease, err
 	return leases, nil
 }
 
+// DNSRecords returns the dynamic DNS records registered for a DNS VNF.
+func (c *Client) DNSRecords(ctx context.Context, vnfID int64) ([]host.DNSRecordView, error) {
+	callCtx, cancel := context.WithTimeout(ctx, statusTimeout)
+	defer cancel()
+	response, err := c.client.ListDNSRecords(callCtx, &rookeryv1.ListDNSRecordsRequest{Id: vnfID})
+	if err != nil {
+		return nil, grpcError("read DNS records", err)
+	}
+	records := make([]host.DNSRecordView, 0, len(response.GetRecords()))
+	for _, record := range response.GetRecords() {
+		records = append(records, host.DNSRecordView{
+			Name: record.GetName(), Type: record.GetType(), Value: record.GetValue(), TTL: record.GetTtl(),
+			Source: record.GetSource(), SourceVNFID: record.GetSourceVnfId(),
+		})
+	}
+	return records, nil
+}
+
 // BGPStatus returns the daemon's live GoBGP snapshot for a BGP VNF.
 func (c *Client) BGPStatus(ctx context.Context, vnfID int64) (host.BGPStatus, error) {
 	c.logger.Trace().Int64("vnf_id", vnfID).Msg("reading BGP status")

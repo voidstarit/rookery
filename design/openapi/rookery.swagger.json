@@ -2606,6 +2606,38 @@
         ]
       }
     },
+    "/api/vnfs/{id}/dns-records": {
+      "get": {
+        "summary": "ListVNFDNSRecords returns the static DNS records and the dynamic records\ncurrently registered by DHCP leases.",
+        "operationId": "VNFService_ListVNFDNSRecords",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListVNFDNSRecordsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "VNFService"
+        ]
+      }
+    },
     "/api/vnfs/{id}/leases": {
       "get": {
         "operationId": "VNFService_ListVNFLeases",
@@ -4275,6 +4307,28 @@
         }
       }
     },
+    "v1ListVNFDNSRecordsResponse": {
+      "type": "object",
+      "properties": {
+        "vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "type": {
+          "type": "string"
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VNFDNSRecord"
+          }
+        },
+        "dynamic_error": {
+          "type": "string"
+        }
+      }
+    },
     "v1ListVNFLeasesResponse": {
       "type": "object",
       "properties": {
@@ -5372,6 +5426,32 @@
         },
         "dns_ttl": {
           "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "v1VNFDNSRecord": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "ttl": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "source": {
+          "type": "string",
+          "description": "source is \"static\" for configured records or \"dhcp\" for lease-derived records."
+        },
+        "source_vnf_id": {
+          "type": "string",
           "format": "int64"
         }
       }

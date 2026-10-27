@@ -456,6 +456,18 @@ func (m *VNFManager) BGPStatus(ctx context.Context, vnfID int64) (BGPStatus, err
 	}
 }
 
+// DNSRecords returns the dynamic DNS records currently registered for a DNS
+// VNF. Static records live in the VNF configuration and are not included.
+func (m *VNFManager) DNSRecords(vnfID int64) []DNSRecordView {
+	m.dnsMu.Lock()
+	handler := m.dnsRuntimes[vnfID]
+	m.dnsMu.Unlock()
+	if handler == nil {
+		return []DNSRecordView{}
+	}
+	return handler.DynamicRecords()
+}
+
 // Leases returns the persisted leases for a VNF and marks whether they are active.
 func (m *VNFManager) Leases(_ context.Context, vnfID int64) ([]store.VNFLease, error) {
 	path := m.leasePath(vnfID)

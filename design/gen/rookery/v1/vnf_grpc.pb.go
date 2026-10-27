@@ -20,15 +20,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	VNFService_ListVNFs_FullMethodName        = "/rookery.v1.VNFService/ListVNFs"
-	VNFService_GetVNF_FullMethodName          = "/rookery.v1.VNFService/GetVNF"
-	VNFService_CreateVNF_FullMethodName       = "/rookery.v1.VNFService/CreateVNF"
-	VNFService_UpdateVNF_FullMethodName       = "/rookery.v1.VNFService/UpdateVNF"
-	VNFService_DeleteVNF_FullMethodName       = "/rookery.v1.VNFService/DeleteVNF"
-	VNFService_RestartVNF_FullMethodName      = "/rookery.v1.VNFService/RestartVNF"
-	VNFService_ListVNFLeases_FullMethodName   = "/rookery.v1.VNFService/ListVNFLeases"
-	VNFService_ListVNFSessions_FullMethodName = "/rookery.v1.VNFService/ListVNFSessions"
-	VNFService_GetVNFBGP_FullMethodName       = "/rookery.v1.VNFService/GetVNFBGP"
+	VNFService_ListVNFs_FullMethodName          = "/rookery.v1.VNFService/ListVNFs"
+	VNFService_GetVNF_FullMethodName            = "/rookery.v1.VNFService/GetVNF"
+	VNFService_CreateVNF_FullMethodName         = "/rookery.v1.VNFService/CreateVNF"
+	VNFService_UpdateVNF_FullMethodName         = "/rookery.v1.VNFService/UpdateVNF"
+	VNFService_DeleteVNF_FullMethodName         = "/rookery.v1.VNFService/DeleteVNF"
+	VNFService_RestartVNF_FullMethodName        = "/rookery.v1.VNFService/RestartVNF"
+	VNFService_ListVNFLeases_FullMethodName     = "/rookery.v1.VNFService/ListVNFLeases"
+	VNFService_ListVNFSessions_FullMethodName   = "/rookery.v1.VNFService/ListVNFSessions"
+	VNFService_GetVNFBGP_FullMethodName         = "/rookery.v1.VNFService/GetVNFBGP"
+	VNFService_ListVNFDNSRecords_FullMethodName = "/rookery.v1.VNFService/ListVNFDNSRecords"
 )
 
 // VNFServiceClient is the client API for VNFService service.
@@ -46,6 +47,9 @@ type VNFServiceClient interface {
 	ListVNFLeases(ctx context.Context, in *ListVNFLeasesRequest, opts ...grpc.CallOption) (*ListVNFLeasesResponse, error)
 	ListVNFSessions(ctx context.Context, in *ListVNFSessionsRequest, opts ...grpc.CallOption) (*ListVNFSessionsResponse, error)
 	GetVNFBGP(ctx context.Context, in *GetVNFBGPRequest, opts ...grpc.CallOption) (*VNFBGPStatus, error)
+	// ListVNFDNSRecords returns the static DNS records and the dynamic records
+	// currently registered by DHCP leases.
+	ListVNFDNSRecords(ctx context.Context, in *ListVNFDNSRecordsRequest, opts ...grpc.CallOption) (*ListVNFDNSRecordsResponse, error)
 }
 
 type vNFServiceClient struct {
@@ -146,6 +150,16 @@ func (c *vNFServiceClient) GetVNFBGP(ctx context.Context, in *GetVNFBGPRequest, 
 	return out, nil
 }
 
+func (c *vNFServiceClient) ListVNFDNSRecords(ctx context.Context, in *ListVNFDNSRecordsRequest, opts ...grpc.CallOption) (*ListVNFDNSRecordsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListVNFDNSRecordsResponse)
+	err := c.cc.Invoke(ctx, VNFService_ListVNFDNSRecords_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VNFServiceServer is the server API for VNFService service.
 // All implementations must embed UnimplementedVNFServiceServer
 // for forward compatibility.
@@ -161,6 +175,9 @@ type VNFServiceServer interface {
 	ListVNFLeases(context.Context, *ListVNFLeasesRequest) (*ListVNFLeasesResponse, error)
 	ListVNFSessions(context.Context, *ListVNFSessionsRequest) (*ListVNFSessionsResponse, error)
 	GetVNFBGP(context.Context, *GetVNFBGPRequest) (*VNFBGPStatus, error)
+	// ListVNFDNSRecords returns the static DNS records and the dynamic records
+	// currently registered by DHCP leases.
+	ListVNFDNSRecords(context.Context, *ListVNFDNSRecordsRequest) (*ListVNFDNSRecordsResponse, error)
 	mustEmbedUnimplementedVNFServiceServer()
 }
 
@@ -197,6 +214,9 @@ func (UnimplementedVNFServiceServer) ListVNFSessions(context.Context, *ListVNFSe
 }
 func (UnimplementedVNFServiceServer) GetVNFBGP(context.Context, *GetVNFBGPRequest) (*VNFBGPStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetVNFBGP not implemented")
+}
+func (UnimplementedVNFServiceServer) ListVNFDNSRecords(context.Context, *ListVNFDNSRecordsRequest) (*ListVNFDNSRecordsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListVNFDNSRecords not implemented")
 }
 func (UnimplementedVNFServiceServer) mustEmbedUnimplementedVNFServiceServer() {}
 func (UnimplementedVNFServiceServer) testEmbeddedByValue()                    {}
@@ -381,6 +401,24 @@ func _VNFService_GetVNFBGP_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VNFService_ListVNFDNSRecords_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListVNFDNSRecordsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VNFServiceServer).ListVNFDNSRecords(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VNFService_ListVNFDNSRecords_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VNFServiceServer).ListVNFDNSRecords(ctx, req.(*ListVNFDNSRecordsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VNFService_ServiceDesc is the grpc.ServiceDesc for VNFService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -423,6 +461,10 @@ var VNFService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetVNFBGP",
 			Handler:    _VNFService_GetVNFBGP_Handler,
+		},
+		{
+			MethodName: "ListVNFDNSRecords",
+			Handler:    _VNFService_ListVNFDNSRecords_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/netip"
+	"sort"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -24,6 +25,7 @@ type VNFStatusProvider interface {
 	VNFStatus(ctx context.Context, vnf store.VNF) (status, detail string, leaseCount int)
 	VNFSessions(ctx context.Context, vnf store.VNF) ([]string, error)
 	VNFBGP(ctx context.Context, vnf store.VNF) (host.BGPStatus, error)
+	VNFDNSRecords(ctx context.Context, vnf store.VNF) ([]host.DNSRecordView, error)
 }
 
 func (s *vnfService) vnfView(ctx context.Context, vnf store.VNF) *rookeryv1.VNF {
@@ -121,6 +123,49 @@ func (s *vnfService) GetVNFBGP(ctx context.Context, request *rookeryv1.GetVNFBGP
 		})
 	}
 	return result, nil
+}
+
+// ListVNFDNSRecords returns configured and lease-derived DNS records for a DNS
+// VNF. Static records remain available when the daemon is unreachable; the
+// dynamic runtime error is reported separately.
+func (s *vnfService) ListVNFDNSRecords(ctx context.Context, request *rookeryv1.ListVNFDNSRecordsRequest) (*rookeryv1.ListVNFDNSRecordsResponse, error) {
+	vnf, err := s.store.GetVNF(ctx, request.GetId())
+	if err != nil {
+		return nil, storeReadError(err, store.ErrVNFNotFound, "vnf not found")
+	}
+	if vnf.Type != store.VNFTypeDNS {
+		return nil, status.Error(codes.InvalidArgument, "DNS records are available for DNS VNFs only")
+	}
+	response := &rookeryv1.ListVNFDNSRecordsResponse{VnfId: vnf.ID, Type: vnf.Type, Records: []*rookeryv1.VNFDNSRecord{}}
+	for _, record := range vnf.Config.DNSRecords {
+		response.Records = append(response.Records, &rookeryv1.VNFDNSRecord{
+			Name: record.Name, Type: record.Type, Value: record.Value, Ttl: record.TTL, Source: "static",
+		})
+	}
+	if s.statusProvider != nil {
+		dynamic, err := s.statusProvider.VNFDNSRecords(ctx, vnf)
+		if err != nil {
+			response.DynamicError = err.Error()
+		} else {
+			for _, record := range dynamic {
+				response.Records = append(response.Records, &rookeryv1.VNFDNSRecord{
+					Name: record.Name, Type: record.Type, Value: record.Value, Ttl: record.TTL,
+					Source: "dhcp", SourceVnfId: record.SourceVNFID,
+				})
+			}
+		}
+	}
+	sort.Slice(response.Records, func(i, j int) bool {
+		left, right := response.Records[i], response.Records[j]
+		if left.GetName() != right.GetName() {
+			return left.GetName() < right.GetName()
+		}
+		if left.GetType() != right.GetType() {
+			return left.GetType() < right.GetType()
+		}
+		return left.GetValue() < right.GetValue()
+	})
+	return response, nil
 }
 
 func leaseBelongsToVNF(vnf store.VNF, address string) bool {

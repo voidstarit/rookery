@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -208,6 +209,16 @@ type dnsDynamicRecord struct {
 	record store.DNSRecord
 }
 
+// DNSRecordView is one dynamic record together with the DHCP VNF that owns it.
+type DNSRecordView struct {
+	Name        string
+	Type        string
+	Value       string
+	TTL         uint32
+	Source      string
+	SourceVNFID int64
+}
+
 type dnsHandler struct {
 	mu         sync.RWMutex
 	vnfID      int64
@@ -352,6 +363,32 @@ func (h *dnsHandler) lookup(name string) ([]store.DNSRecord, bool) {
 		return wildcard.records, true
 	}
 	return nil, false
+}
+
+// DynamicRecords returns a sorted snapshot of lease-derived records.
+func (h *dnsHandler) DynamicRecords() []DNSRecordView {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	records := make([]DNSRecordView, 0)
+	for _, entries := range h.dynamic {
+		for _, entry := range entries {
+			sourceID, _ := strconv.ParseInt(strings.TrimPrefix(entry.source, "dhcp-"), 10, 64)
+			records = append(records, DNSRecordView{
+				Name: entry.record.Name, Type: entry.record.Type, Value: entry.record.Value,
+				TTL: entry.record.TTL, Source: entry.source, SourceVNFID: sourceID,
+			})
+		}
+	}
+	sort.Slice(records, func(i, j int) bool {
+		if records[i].Name == records[j].Name {
+			if records[i].Type == records[j].Type {
+				return records[i].Value < records[j].Value
+			}
+			return records[i].Type < records[j].Type
+		}
+		return records[i].Name < records[j].Name
+	})
+	return records
 }
 
 // StaticNameTaken reports whether name already has a configured local record.

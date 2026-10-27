@@ -255,7 +255,9 @@ the client sends no usable name or the name conflicts. A/AAAA and PTR records
 are updated while the lease changes and removed on DHCPRELEASE or expiry. The
 integration uses the lease files, so it is rebuilt after either runtime
 restarts. The selected DNS VNF must be on the same network, and deleting it is
-blocked while a DHCP VNF references it.
+blocked while a DHCP VNF references it. The DNS row in the VNFs tab has a
+**Records** action that lists configured records and live DHCP-derived records
+in one table, including each dynamic record's source DHCP VNF.
 
 BGP VNFs are embedded GoBGP speakers with one peer, using the address family of
 `local_ip` (IPv4 or IPv6 unicast). Choose a `memif` transport for a gVisor

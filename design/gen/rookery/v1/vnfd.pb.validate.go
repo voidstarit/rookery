@@ -1398,6 +1398,257 @@ var _ interface {
 	ErrorName() string
 } = GetBGPStatusRequestValidationError{}
 
+// Validate checks the field values on ListDNSRecordsRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ListDNSRecordsRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ListDNSRecordsRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ListDNSRecordsRequestMultiError, or nil if none found.
+func (m *ListDNSRecordsRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ListDNSRecordsRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetId() <= 0 {
+		err := ListDNSRecordsRequestValidationError{
+			field:  "Id",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return ListDNSRecordsRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// ListDNSRecordsRequestMultiError is an error wrapping multiple validation
+// errors returned by ListDNSRecordsRequest.ValidateAll() if the designated
+// constraints aren't met.
+type ListDNSRecordsRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ListDNSRecordsRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ListDNSRecordsRequestMultiError) AllErrors() []error { return m }
+
+// ListDNSRecordsRequestValidationError is the validation error returned by
+// ListDNSRecordsRequest.Validate if the designated constraints aren't met.
+type ListDNSRecordsRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ListDNSRecordsRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ListDNSRecordsRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ListDNSRecordsRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ListDNSRecordsRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ListDNSRecordsRequestValidationError) ErrorName() string {
+	return "ListDNSRecordsRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ListDNSRecordsRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListDNSRecordsRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ListDNSRecordsRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ListDNSRecordsRequestValidationError{}
+
+// Validate checks the field values on ListDNSRecordsResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ListDNSRecordsResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ListDNSRecordsResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ListDNSRecordsResponseMultiError, or nil if none found.
+func (m *ListDNSRecordsResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ListDNSRecordsResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for VnfId
+
+	for idx, item := range m.GetRecords() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ListDNSRecordsResponseValidationError{
+						field:  fmt.Sprintf("Records[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ListDNSRecordsResponseValidationError{
+						field:  fmt.Sprintf("Records[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ListDNSRecordsResponseValidationError{
+					field:  fmt.Sprintf("Records[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return ListDNSRecordsResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// ListDNSRecordsResponseMultiError is an error wrapping multiple validation
+// errors returned by ListDNSRecordsResponse.ValidateAll() if the designated
+// constraints aren't met.
+type ListDNSRecordsResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ListDNSRecordsResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ListDNSRecordsResponseMultiError) AllErrors() []error { return m }
+
+// ListDNSRecordsResponseValidationError is the validation error returned by
+// ListDNSRecordsResponse.Validate if the designated constraints aren't met.
+type ListDNSRecordsResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ListDNSRecordsResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ListDNSRecordsResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ListDNSRecordsResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ListDNSRecordsResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ListDNSRecordsResponseValidationError) ErrorName() string {
+	return "ListDNSRecordsResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ListDNSRecordsResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListDNSRecordsResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ListDNSRecordsResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ListDNSRecordsResponseValidationError{}
+
 // Validate checks the field values on CleanupLegacyNetworkRequest with the
 // rules defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.

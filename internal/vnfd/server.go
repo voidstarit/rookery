@@ -39,6 +39,7 @@ type Manager interface {
 	Running(vnfID int64) bool
 	Healthy(vnfID int64) bool
 	Leases(ctx context.Context, vnfID int64) ([]store.VNFLease, error)
+	DNSRecords(vnfID int64) []host.DNSRecordView
 	BGPStatus(ctx context.Context, vnfID int64) (host.BGPStatus, error)
 	CleanupLegacyNetwork(networkID int64)
 	ResetRuntime(ctx context.Context) error
@@ -291,6 +292,22 @@ func (s *Server) ResetRuntime(ctx context.Context, _ *rookeryv1.ResetRuntimeRequ
 	s.mu.Unlock()
 	s.logger.Trace().Time("supervision_resumes", pausedUntil).Msg("VNF runtimes reset")
 	return &emptypb.Empty{}, nil
+}
+
+// ListDNSRecords returns the dynamic records currently registered by DHCP
+// leases for a DNS VNF. Static records are stored by the API.
+func (s *Server) ListDNSRecords(_ context.Context, request *rookeryv1.ListDNSRecordsRequest) (*rookeryv1.ListDNSRecordsResponse, error) {
+	if request.GetId() <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "vnf id is required")
+	}
+	response := &rookeryv1.ListDNSRecordsResponse{VnfId: request.GetId()}
+	for _, record := range s.manager.DNSRecords(request.GetId()) {
+		response.Records = append(response.Records, &rookeryv1.VNFDNSRecord{
+			Name: record.Name, Type: record.Type, Value: record.Value, Ttl: record.TTL,
+			Source: record.Source, SourceVnfId: record.SourceVNFID,
+		})
+	}
+	return response, nil
 }
 
 // CleanupLegacyNetwork removes files left by the legacy per-network DHCP.

@@ -70,6 +70,8 @@ func (f *fakeManager) Leases(_ context.Context, vnfID int64) ([]store.VNFLease, 
 	return f.leases[vnfID], nil
 }
 
+func (f *fakeManager) DNSRecords(int64) []host.DNSRecordView { return nil }
+
 func (f *fakeManager) BGPStatus(_ context.Context, vnfID int64) (host.BGPStatus, error) {
 	return f.bgp[vnfID], nil
 }

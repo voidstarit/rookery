@@ -904,6 +904,17 @@ func (s *Server) VNFStatus(ctx context.Context, vnf store.VNF) (status, detail s
 	return view.Status, view.StatusDetail, view.LeaseCount
 }
 
+// VNFDNSRecords returns the dynamic DNS records registered for a DNS VNF.
+func (s *Server) VNFDNSRecords(ctx context.Context, vnf store.VNF) ([]host.DNSRecordView, error) {
+	if vnf.Type != store.VNFTypeDNS {
+		return nil, errors.New("DNS records are available for DNS VNFs only")
+	}
+	if s.vnfs == nil {
+		return []host.DNSRecordView{}, nil
+	}
+	return s.vnfs.DNSRecords(ctx, vnf.ID)
+}
+
 // VNFBGP returns the BGP session and RIB snapshot for a BGP VNF.
 func (s *Server) VNFBGP(ctx context.Context, vnf store.VNF) (host.BGPStatus, error) {
 	if s.vnfs == nil {

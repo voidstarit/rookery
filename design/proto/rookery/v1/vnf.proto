@@ -55,6 +55,12 @@ service VNFService {
   rpc GetVNFBGP(GetVNFBGPRequest) returns (VNFBGPStatus) {
     option (google.api.http) = {get: "/api/vnfs/{id}/bgp"};
   }
+
+  // ListVNFDNSRecords returns the static DNS records and the dynamic records
+  // currently registered by DHCP leases.
+  rpc ListVNFDNSRecords(ListVNFDNSRecordsRequest) returns (ListVNFDNSRecordsResponse) {
+    option (google.api.http) = {get: "/api/vnfs/{id}/dns-records"};
+  }
 }
 
 message DHCPStaticAssignment {
@@ -257,4 +263,25 @@ message VNFBGPStatus {
 
 message GetVNFBGPRequest {
   int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message VNFDNSRecord {
+  string name = 1;
+  string type = 2;
+  string value = 3;
+  uint32 ttl = 4;
+  // source is "static" for configured records or "dhcp" for lease-derived records.
+  string source = 5;
+  int64 source_vnf_id = 6;
+}
+
+message ListVNFDNSRecordsRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListVNFDNSRecordsResponse {
+  int64 vnf_id = 1;
+  string type = 2;
+  repeated VNFDNSRecord records = 3;
+  string dynamic_error = 4;
 }

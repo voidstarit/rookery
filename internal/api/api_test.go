@@ -566,6 +566,10 @@ func (f *fakeVNFManager) Leases(_ context.Context, vnfID int64) ([]store.VNFLeas
 	return f.leases[vnfID], nil
 }
 
+func (f *fakeVNFManager) DNSRecords(context.Context, int64) ([]host.DNSRecordView, error) {
+	return nil, nil
+}
+
 func (f *fakeVNFManager) BGPStatus(_ context.Context, vnfID int64) (host.BGPStatus, error) {
 	return f.bgpStatus[vnfID], nil
 }

@@ -198,6 +198,7 @@ the interface returns to its network VRF (host taps) or the default table
 | `GET`    | `/api/vnfs/{id}/leases` | Inspect current and expired DHCP leases |
 | `GET`    | `/api/vnfs/{id}/sessions` | Inspect VPP NAT44 translations |
 | `GET`    | `/api/vnfs/{id}/bgp` | Live GoBGP session and received/advertised prefix status |
+| `GET`    | `/api/vnfs/{id}/dns-records` | Static DNS records plus dynamic records registered by DHCP leases |
 | `GET`    | `/api/acls`        | List ACL definitions              |
 | `POST`   | `/api/acls`        | Create an ACL                     |
 | `GET`    | `/api/acls/{id}`   | Get one ACL and its full rules    |

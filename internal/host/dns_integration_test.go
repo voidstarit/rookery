@@ -76,6 +76,20 @@ func TestDNSIntegrationFromDHCPLeases(t *testing.T) {
 		t.Fatalf("IPv4 PTR = %+v", response.Answer)
 	}
 
+	records := manager.DNSRecords(99)
+	if len(records) != 4 {
+		t.Fatalf("dynamic records = %+v", records)
+	}
+	foundV4 := false
+	for _, record := range records {
+		if record.SourceVNFID == 1 && record.Source == "dhcp-1" {
+			foundV4 = true
+		}
+	}
+	if !foundV4 {
+		t.Fatalf("dynamic records missing v4 source = %+v", records)
+	}
+
 	// Releasing the v4 lease removes its forward and reverse records.
 	writeLeaseRecords(t, manager.leasePath(v4.ID), nil)
 	manager.syncDNSRecords()

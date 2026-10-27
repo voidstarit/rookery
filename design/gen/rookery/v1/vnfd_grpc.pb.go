@@ -27,6 +27,7 @@ const (
 	VNFDaemon_GetVNFState_FullMethodName          = "/rookery.v1.VNFDaemon/GetVNFState"
 	VNFDaemon_ListLeases_FullMethodName           = "/rookery.v1.VNFDaemon/ListLeases"
 	VNFDaemon_GetBGPStatus_FullMethodName         = "/rookery.v1.VNFDaemon/GetBGPStatus"
+	VNFDaemon_ListDNSRecords_FullMethodName       = "/rookery.v1.VNFDaemon/ListDNSRecords"
 	VNFDaemon_CleanupLegacyNetwork_FullMethodName = "/rookery.v1.VNFDaemon/CleanupLegacyNetwork"
 )
 
@@ -51,6 +52,7 @@ type VNFDaemonClient interface {
 	GetVNFState(ctx context.Context, in *GetVNFStateRequest, opts ...grpc.CallOption) (*VNFState, error)
 	ListLeases(ctx context.Context, in *ListLeasesRequest, opts ...grpc.CallOption) (*ListLeasesResponse, error)
 	GetBGPStatus(ctx context.Context, in *GetBGPStatusRequest, opts ...grpc.CallOption) (*VNFBGPStatus, error)
+	ListDNSRecords(ctx context.Context, in *ListDNSRecordsRequest, opts ...grpc.CallOption) (*ListDNSRecordsResponse, error)
 	// CleanupLegacyNetwork removes DHCP runtime files left by the old
 	// per-network DHCP implementation.
 	CleanupLegacyNetwork(ctx context.Context, in *CleanupLegacyNetworkRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
@@ -134,6 +136,16 @@ func (c *vNFDaemonClient) GetBGPStatus(ctx context.Context, in *GetBGPStatusRequ
 	return out, nil
 }
 
+func (c *vNFDaemonClient) ListDNSRecords(ctx context.Context, in *ListDNSRecordsRequest, opts ...grpc.CallOption) (*ListDNSRecordsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListDNSRecordsResponse)
+	err := c.cc.Invoke(ctx, VNFDaemon_ListDNSRecords_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vNFDaemonClient) CleanupLegacyNetwork(ctx context.Context, in *CleanupLegacyNetworkRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(emptypb.Empty)
@@ -165,6 +177,7 @@ type VNFDaemonServer interface {
 	GetVNFState(context.Context, *GetVNFStateRequest) (*VNFState, error)
 	ListLeases(context.Context, *ListLeasesRequest) (*ListLeasesResponse, error)
 	GetBGPStatus(context.Context, *GetBGPStatusRequest) (*VNFBGPStatus, error)
+	ListDNSRecords(context.Context, *ListDNSRecordsRequest) (*ListDNSRecordsResponse, error)
 	// CleanupLegacyNetwork removes DHCP runtime files left by the old
 	// per-network DHCP implementation.
 	CleanupLegacyNetwork(context.Context, *CleanupLegacyNetworkRequest) (*emptypb.Empty, error)
@@ -198,6 +211,9 @@ func (UnimplementedVNFDaemonServer) ListLeases(context.Context, *ListLeasesReque
 }
 func (UnimplementedVNFDaemonServer) GetBGPStatus(context.Context, *GetBGPStatusRequest) (*VNFBGPStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetBGPStatus not implemented")
+}
+func (UnimplementedVNFDaemonServer) ListDNSRecords(context.Context, *ListDNSRecordsRequest) (*ListDNSRecordsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListDNSRecords not implemented")
 }
 func (UnimplementedVNFDaemonServer) CleanupLegacyNetwork(context.Context, *CleanupLegacyNetworkRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method CleanupLegacyNetwork not implemented")
@@ -349,6 +365,24 @@ func _VNFDaemon_GetBGPStatus_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VNFDaemon_ListDNSRecords_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDNSRecordsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VNFDaemonServer).ListDNSRecords(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VNFDaemon_ListDNSRecords_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VNFDaemonServer).ListDNSRecords(ctx, req.(*ListDNSRecordsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VNFDaemon_CleanupLegacyNetwork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CleanupLegacyNetworkRequest)
 	if err := dec(in); err != nil {
@@ -401,6 +435,10 @@ var VNFDaemon_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetBGPStatus",
 			Handler:    _VNFDaemon_GetBGPStatus_Handler,
+		},
+		{
+			MethodName: "ListDNSRecords",
+			Handler:    _VNFDaemon_ListDNSRecords_Handler,
 		},
 		{
 			MethodName: "CleanupLegacyNetwork",
