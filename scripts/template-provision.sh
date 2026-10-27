@@ -16,7 +16,8 @@
 #     "hostname": "web-01",
 #     "timezone": "UTC",
 #     "username": "deploy",
-#     "ssh_authorized_keys": ["ssh-ed25519 AAAA... user@example"]
+#     "ssh_authorized_keys": ["ssh-ed25519 AAAA... user@example"],
+#     "resize_disk": true
 #   }
 # }
 #
@@ -25,7 +26,9 @@
 # by probing partitions for /etc/os-release or /etc/passwd. LVM logical volumes
 # are often created with partition scanning disabled; in that case the script
 # reads the table with partx and exposes the partitions temporarily through
-# kpartx or dmsetup. It only modifies an existing user's home directory; adjust
+# kpartx or dmsetup. When properties.resize_disk is true it grows the root
+# filesystem to the size of its root block device. It does not rewrite the
+# partition table. It only modifies an existing user's home directory; adjust
 # the user creation/chroot commands for your images.
 #
 # The script logs each stage and always attempts to unmount the clone on exit,
@@ -211,6 +214,46 @@ detect_root_device() {
   return 1
 }
 
+resize_root_filesystem() {
+  local fs_type disk_bytes root_bytes
+  fs_type=$("$blkid_cmd" -s TYPE -o value "$root_device" 2>/dev/null || true)
+  [ -n "$fs_type" ] || die "could not determine the root filesystem type on $root_device"
+
+  if [ -n "$blockdev_cmd" ]; then
+    disk_bytes=$("$blockdev_cmd" --getsize64 "$disk" 2>/dev/null || true)
+    root_bytes=$("$blockdev_cmd" --getsize64 "$root_device" 2>/dev/null || true)
+    if [ -n "$disk_bytes" ] && [ -n "$root_bytes" ] && (( root_bytes < disk_bytes )); then
+      log "WARNING: root block device $root_device is smaller than $disk; resize_disk does not rewrite the partition table"
+      log "WARNING: the filesystem can only grow within its current partition"
+    fi
+  fi
+
+  log "resize_disk: growing $fs_type filesystem on $root_device"
+  case "$fs_type" in
+    ext2|ext3|ext4)
+      [ -n "$resize2fs_cmd" ] || die "resize2fs is required for resize_disk with $fs_type"
+      "$resize2fs_cmd" "$root_device"
+      ;;
+    xfs)
+      [ -n "$xfs_growfs_cmd" ] || die "xfs_growfs is required for resize_disk with xfs"
+      "$xfs_growfs_cmd" "$mountpoint"
+      ;;
+    btrfs)
+      [ -n "$btrfs_cmd" ] || die "btrfs is required for resize_disk with btrfs"
+      "$btrfs_cmd" filesystem resize max "$mountpoint"
+      ;;
+    *)
+      die "resize_disk is not supported for filesystem type $fs_type"
+      ;;
+  esac
+  log "resize_disk: complete"
+  if command -v df >/dev/null 2>&1; then
+    df -h "$mountpoint" 2>/dev/null | tail -n 1 | while IFS= read -r line; do
+      log "resize_disk: $line"
+    done
+  fi
+}
+
 json=${ROOKERY_PROVISION_JSON:?ROOKERY_PROVISION_JSON is required}
 command -v jq >/dev/null 2>&1 || die "jq is required"
 command -v mount >/dev/null 2>&1 || die "mount is required"
@@ -220,6 +263,10 @@ blkid_cmd=$(find_command blkid) || die "blkid is required"
 partx_cmd=$(find_command partx || true)
 kpartx_cmd=$(find_command kpartx || true)
 dmsetup_cmd=$(find_command dmsetup || true)
+resize2fs_cmd=$(find_command resize2fs || true)
+xfs_growfs_cmd=$(find_command xfs_growfs || true)
+btrfs_cmd=$(find_command btrfs || true)
+blockdev_cmd=$(find_command blockdev || true)
 
 printf '%s' "$json" | jq -e 'type == "object"' >/dev/null 2>&1 ||
   die "ROOKERY_PROVISION_JSON is not a JSON object"
@@ -232,9 +279,16 @@ log "received ROOKERY_PROVISION_JSON=$(printf '%s' "$json" | jq -cS .)"
 
 request_id=$(printf '%s' "$json" | jq -r '.request_id // empty')
 property_count=$(printf '%s' "$json" | jq -r '.properties // {} | length')
-log "starting provisioning request=${request_id:-unknown} property_count=$property_count"
-if [ "$property_count" -eq 0 ]; then
-  log "no provisioning properties supplied; nothing to change"
+printf '%s' "$json" | jq -e '(.properties.resize_disk // false) | type == "boolean"' >/dev/null 2>&1 ||
+  die "properties.resize_disk must be a boolean"
+resize_disk=$(printf '%s' "$json" | jq -r 'if .properties.resize_disk == null then false else .properties.resize_disk end')
+case "$resize_disk" in
+  true|false) ;;
+  *) die "properties.resize_disk must be a boolean" ;;
+esac
+log "starting provisioning request=${request_id:-unknown} property_count=$property_count resize_disk=$resize_disk"
+if [ "$property_count" -eq 0 ] || { [ "$property_count" -eq 1 ] && [ "$resize_disk" = false ]; }; then
+  log "no provisioning changes requested; nothing to do"
   exit 0
 fi
 
@@ -315,6 +369,10 @@ detect_root_device "$disk" ||
 log "mounting root filesystem $root_device at $mountpoint"
 mount "$root_device" "$mountpoint" || die "could not mount root filesystem $root_device"
 mounted=1
+
+if [ "$resize_disk" = true ]; then
+  resize_root_filesystem
+fi
 
 if [ -n "$hostname" ]; then
   log "setting hostname to $hostname"

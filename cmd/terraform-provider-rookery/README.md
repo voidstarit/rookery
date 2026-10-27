@@ -98,7 +98,10 @@ script through `ROOKERY_PROVISION_JSON` under `properties`. An omitted or empty
 `provisioning_json` skips provisioning entirely. The reference script
 `scripts/template-provision.sh` handles both whole-disk filesystems and
 partitioned LVM clones, logs the received payload and each stage, and always
-attempts to unmount the clone.
+attempts to unmount the clone. Set `resize_disk = true` in the provisioning
+object to grow the root filesystem to its root block device size; this does not
+rewrite the partition table, so a root partition followed by swap cannot grow
+automatically.
 
 `rookery_network_pipe` exposes computed `endpoint_a_name` and
 `endpoint_b_name` values (`pipe<instance>.0` and `.1`) for use with

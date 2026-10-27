@@ -95,9 +95,10 @@ resource "rookery_disk" "web" {
   storage_backend_id = rookery_storage_backend.pool.id
   template_disk_id   = rookery_disk.template.id
   provisioning_json = jsonencode({
-    hostname = "web-01"
-    timezone = "UTC"
-    username = "deploy"
+    hostname    = "web-01"
+    timezone    = "UTC"
+    username    = "deploy"
+    resize_disk = true
   })
 }
 
