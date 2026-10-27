@@ -381,7 +381,9 @@ supported). The API starts even when the daemon is absent — enabled VNFs show
 `degraded` until it is reachable, and desired runtimes are re-ensured when the
 daemon becomes reachable. The API queries runtime state on demand (VNF views
 and start/stop/restart decisions) instead of polling; the daemon restores its
-persisted desired specs on its own restart.
+persisted desired specs on its own restart. API startup also re-sends current
+specs to already-running VNFs once, so upgrading from an older daemon refreshes
+stale desired specs without manually recreating the VNFs.
 
 DHCPv4 uses CoreDHCP's DHCPv4 server with a per-VNF bitmap allocator. DHCPv6
 uses CoreDHCP's DHCPv6 server with stateful IA_NA allocation from the configured

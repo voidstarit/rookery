@@ -282,8 +282,13 @@ func (m *VNFManager) StartShared(ctx context.Context, vnf store.VNF, socketPath 
 	m.mu.Lock()
 	network := m.shared[vnf.NetworkID]
 	m.mu.Unlock()
-	if network != nil && (network.address != address || network.ipv6Address != ipv6Address) {
-		return fmt.Errorf("shared VNF memif for network %d already uses %s/%s", vnf.NetworkID, network.address, network.ipv6Address)
+	if network != nil {
+		if network.address != address {
+			return fmt.Errorf("shared VNF memif for network %d already uses %s", vnf.NetworkID, network.address)
+		}
+		if err := network.ensureIPv6Address(ipv6Address); err != nil {
+			return err
+		}
 	}
 	if network == nil {
 		created, err := startSharedNetwork(ctx, sharedNetworkConfig{

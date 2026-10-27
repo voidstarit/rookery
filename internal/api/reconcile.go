@@ -477,16 +477,26 @@ func (s *Server) ReconcileVNFs(ctx context.Context) error {
 		return fmt.Errorf("list VNFs for reconciliation: %w", err)
 	}
 
+	s.vnfSpecsMu.Lock()
+	ensureRunning := !s.vnfSpecsSynced
+	s.vnfSpecsMu.Unlock()
+
 	var errs []error
 	for _, vnf := range vnfs {
-		if !vnf.Enabled || vnf.Type == store.VNFTypeNAT44 || s.vnfs.Running(ctx, vnf.ID) {
+		if !vnf.Enabled || vnf.Type == store.VNFTypeNAT44 {
 			continue
 		}
-		if err := s.reconcileVNF(ctx, vnf); err != nil {
+		if err := s.reconcileVNF(ctx, vnf, ensureRunning); err != nil {
 			errs = append(errs, fmt.Errorf("VNF %s: %w", vnf.Name, err))
 		}
 	}
-	return errors.Join(errs...)
+	result := errors.Join(errs...)
+	if result == nil && ensureRunning {
+		s.vnfSpecsMu.Lock()
+		s.vnfSpecsSynced = true
+		s.vnfSpecsMu.Unlock()
+	}
+	return result
 }
 
 // reconcileVNFBindings moves already-running VNF interfaces into their
@@ -527,7 +537,7 @@ func (s *Server) reconcileVNFBindings(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF) error {
+func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF, ensureRunning bool) error {
 	s.resourceMu.Lock()
 	defer s.resourceMu.Unlock()
 
@@ -541,8 +551,14 @@ func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF) error {
 		return fmt.Errorf("reload VNF: %w", err)
 	}
 	vnf = current
-	if !vnf.Enabled || s.vnfs.Running(ctx, vnf.ID) {
+	if !vnf.Enabled {
 		return nil
+	}
+	if s.vnfs.Running(ctx, vnf.ID) {
+		if !ensureRunning {
+			return nil
+		}
+		return s.ensureRunningVNFSpec(ctx, vnf)
 	}
 	if s.memifDHCP && vnf.Type == store.VNFTypeDHCPv4 {
 		network, err := s.store.GetNetwork(ctx, vnf.NetworkID)

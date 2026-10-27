@@ -91,3 +91,35 @@ func TestSharedDNSWithoutIPv6AddressOnlyCreatesIPv4Listeners(t *testing.T) {
 	s.Close()
 	s.Wait()
 }
+
+func TestSharedNetworkAddsIPv6AddressAfterStartup(t *testing.T) {
+	s := stack.New(stack.Options{
+		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol, ipv6.NewProtocol, arp.NewProtocol},
+		TransportProtocols: []stack.TransportProtocolFactory{udp.NewProtocol, tcp.NewProtocol},
+	})
+	link := channel.New(64, 1500, "")
+	if err := s.CreateNIC(1, ethernet.New(link)); err != nil {
+		t.Fatal(err)
+	}
+	v4, _, _ := net.ParseCIDR("10.20.0.2/24")
+	if err := s.AddProtocolAddress(1, tcpip.ProtocolAddress{
+		Protocol:          header.IPv4ProtocolNumber,
+		AddressWithPrefix: tcpip.AddressWithPrefix{Address: tcpip.AddrFromSlice(v4.To4()), PrefixLen: 24},
+	}, stack.AddressProperties{}); err != nil {
+		t.Fatal(err)
+	}
+	s.SetRouteTable([]tcpip.Route{{Destination: header.IPv4EmptySubnet, NIC: 1}})
+	n := &sharedNetwork{networkID: 1, address: "10.20.0.2/24", stack: s, vnfs: make(map[int64]string)}
+	if err := n.ensureIPv6Address("fd00:20::2/64"); err != nil {
+		t.Fatalf("add IPv6 address: %v", err)
+	}
+	if err := n.addDNS(store.VNF{ID: 1, Type: store.VNFTypeDNS}); err != nil {
+		t.Fatalf("add DNS: %v", err)
+	}
+	if n.dns == nil || n.dns.udpServer6 == nil || n.dns.tcpServer6 == nil {
+		t.Fatal("IPv6 DNS listeners were not created after upgrade")
+	}
+	n.dns.close()
+	s.Close()
+	s.Wait()
+}

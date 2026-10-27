@@ -132,6 +132,14 @@ its persisted desired VNFs after a restart. The API owns SQLite and all VPP
 provisioning (memifs, taps, BVIs, NAT44) and controls the daemon over the
 internal gRPC socket configured by `api.vnf_addr` / `vnf.listen`.
 
+When upgrading both binaries, restart `vnfs` first and then restart
+`rookery serve`. On startup the API re-sends the current database configuration
+to already-running VNFs once; the daemon compares the spec hash and only
+restarts a runtime when the configuration changed. This repairs desired specs
+written by an older daemon, including DHCP DNS integration and the shared stack
+IPv6 address. If `vnfs` is restarted independently after an upgrade, restart
+the API or restart the affected VNFs to re-send their configuration.
+
 ## Logging
 
 Both binaries log through `zerolog`. `-log-level` (`trace`, `debug`, `info`,

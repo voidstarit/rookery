@@ -416,6 +416,43 @@ func (n *sharedNetwork) close() {
 	})
 }
 
+// ensureIPv6Address adds the network's IPv6 service address to an existing
+// shared stack. Older daemons created stacks without an IPv6 address; an API
+// upgrade can add it without discarding the running DHCP/DNS VNFs.
+func (n *sharedNetwork) ensureIPv6Address(cidr string) error {
+	cidr = strings.TrimSpace(cidr)
+	if cidr == "" {
+		return nil
+	}
+	parsed, parsedNet, err := net.ParseCIDR(cidr)
+	if err != nil || parsed.To4() != nil {
+		return fmt.Errorf("parse shared IPv6 VNF address %q: %w", cidr, err)
+	}
+	prefix, _ := parsedNet.Mask.Size()
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.ipv6Address == cidr {
+		return nil
+	}
+	if n.ipv6Address != "" {
+		return fmt.Errorf("shared VNF memif for network %d already uses IPv6 %s", n.networkID, n.ipv6Address)
+	}
+	if err := n.stack.AddProtocolAddress(1, tcpip.ProtocolAddress{
+		Protocol:          header.IPv6ProtocolNumber,
+		AddressWithPrefix: tcpip.AddressWithPrefix{Address: tcpip.AddrFromSlice(parsed.To16()), PrefixLen: prefix},
+	}, stack.AddressProperties{}); err != nil {
+		return fmt.Errorf("assign shared IPv6 netstack address %s: %v", cidr, err)
+	}
+	n.stack.SetRouteTable([]tcpip.Route{
+		{Destination: header.IPv4EmptySubnet, NIC: 1},
+		{Destination: header.IPv6EmptySubnet, NIC: 1},
+	})
+	n.ipv6Address = cidr
+	log.Info().Int64("network_id", n.networkID).Str("ipv6_address", cidr).Msg("added IPv6 service address to shared VNF stack")
+	return nil
+}
+
 func (n *sharedNetwork) dnsHandler() *dnsHandler {
 	n.mu.Lock()
 	defer n.mu.Unlock()
