@@ -26,10 +26,13 @@
 # by probing partitions for /etc/os-release or /etc/passwd. LVM logical volumes
 # are often created with partition scanning disabled; in that case the script
 # reads the table with partx and exposes the partitions temporarily through
-# kpartx or dmsetup. When properties.resize_disk is true it grows the root
-# filesystem to the size of its root block device. It does not rewrite the
-# partition table. It only modifies an existing user's home directory; adjust
-# the user creation/chroot commands for your images.
+# kpartx or dmsetup. When properties.resize_disk is true it extends the root
+# partition when the layout is safe (DOS with root first and a trailing
+# extended/swap partition, or a single root partition), recreates the swap
+# signature with its original UUID/label, and grows the root filesystem. Other
+# layouts are left unchanged and only the filesystem is resized. It only
+# modifies an existing user's home directory; adjust the user creation/chroot
+# commands for your images.
 #
 # The script logs each stage and always attempts to unmount the clone on exit,
 # including on failure or interruption. Rookery captures the combined output.
@@ -63,6 +66,29 @@ find_command() {
 
 list_partitions() {
   lsblk -rpno NAME,TYPE "$1" 2>/dev/null | awk '$2 == "part" { print $1 }'
+}
+
+partition_number() {
+  local part=$1 number
+  number=$(lsblk -no PARTN "$part" 2>/dev/null | head -n1 | tr -d '[:space:]')
+  if [ -z "$number" ]; then
+    number=$(printf '%s' "$part" | sed -n 's/.*p\([0-9][0-9]*\)$/\1/p')
+  fi
+  if [ -z "$number" ]; then
+    number=$(printf '%s' "$part" | sed -n 's/.*[^0-9]\([0-9][0-9]*\)$/\1/p')
+  fi
+  printf '%s\n' "$number"
+}
+
+find_partition_path_by_number() {
+  local wanted=$1 part
+  for part in "${mapped_partitions[@]}"; do
+    if [ "$(partition_number "$part")" = "$wanted" ]; then
+      printf '%s\n' "$part"
+      return 0
+    fi
+  done
+  return 1
 }
 
 # LVM exposes logical volumes as device-mapper devices, and those devices
@@ -166,6 +192,7 @@ detect_root_device() {
   fs_type=$("$blkid_cmd" -s TYPE -o value "$device" 2>/dev/null || true)
   if [ -n "$fs_type" ]; then
     root_device=$device
+    root_partition_nr=0
     return 0
   fi
 
@@ -182,6 +209,7 @@ detect_root_device() {
   if (( ${#partitions[@]} == 0 )); then
     return 1
   fi
+  mapped_partitions=("${partitions[@]}")
   log "found ${#partitions[@]} partition(s) on $device"
 
   local part label partlabel
@@ -189,10 +217,18 @@ detect_root_device() {
     label=$("$blkid_cmd" -s LABEL -o value "$part" 2>/dev/null || true)
     partlabel=$("$blkid_cmd" -s PARTLABEL -o value "$part" 2>/dev/null || true)
     case "$(printf '%s' "$label" | tr '[:upper:]' '[:lower:]')" in
-      root|rootfs|linux-root|linux_root|linux\ root) root_device=$part; return 0 ;;
+      root|rootfs|linux-root|linux_root|linux\ root)
+        root_device=$part
+        root_partition_nr=$(partition_number "$part")
+        return 0
+        ;;
     esac
     case "$(printf '%s' "$partlabel" | tr '[:upper:]' '[:lower:]')" in
-      root|rootfs|linux-root|linux_root|linux\ root) root_device=$part; return 0 ;;
+      root|rootfs|linux-root|linux_root|linux\ root)
+        root_device=$part
+        root_partition_nr=$(partition_number "$part")
+        return 0
+        ;;
     esac
   done
 
@@ -205,6 +241,7 @@ detect_root_device() {
         umount "$probe" 2>/dev/null || log "WARNING: could not unmount probe for $part"
         rmdir "$probe" 2>/dev/null || true
         root_device=$part
+        root_partition_nr=$(partition_number "$part")
         return 0
       fi
       umount "$probe" 2>/dev/null || log "WARNING: could not unmount probe for $part"
@@ -212,6 +249,182 @@ detect_root_device() {
   done
   rmdir "$probe" 2>/dev/null || true
   return 1
+}
+
+release_partition_mappings() {
+  case "$mapping_mode" in
+    kpartx)
+      log "removing temporary partition mappings from $disk"
+      "$kpartx_cmd" -d "$disk" >/dev/null 2>&1 ||
+        log "WARNING: could not remove temporary partition mappings from $disk"
+      ;;
+    dmsetup)
+      log "removing temporary partition mappings from $disk"
+      local i
+      for ((i=${#dm_maps[@]}-1; i>=0; i--)); do
+        "$dmsetup_cmd" remove "${dm_maps[i]}" >/dev/null 2>&1 ||
+          log "WARNING: could not remove temporary mapping ${dm_maps[i]}"
+      done
+      ;;
+    partx)
+      log "removing temporary partition mappings from $disk"
+      "$partx_cmd" -d "$disk" >/dev/null 2>&1 ||
+        log "WARNING: could not remove temporary partition mappings from $disk"
+      ;;
+  esac
+  mapping_mode=""
+  mapped_partitions=()
+  dm_maps=()
+}
+
+# Extend the root partition when the disk has free space. This handles the
+# common DOS layout with root first and a trailing extended partition containing
+# swap: the swap partition is moved to the end of the disk (its contents are
+# recreated with the same UUID/label), and root grows into the freed space.
+# Other layouts are left alone and only the filesystem is resized.
+extend_root_partition() {
+  local partition_table_type
+  [ "$root_partition_nr" -gt 0 ] || return 0
+  [ -n "$partx_cmd" ] || return 0
+  [ -n "$sfdisk_cmd" ] || { log "WARNING: sfdisk is not installed; cannot extend the root partition"; return 0; }
+  [ -n "$blockdev_cmd" ] || return 0
+
+  partition_table_type=$("$blkid_cmd" -p -s PTTYPE -o value "$disk" 2>/dev/null || true)
+  if [ "$partition_table_type" != "dos" ]; then
+    log "WARNING: resize_disk can only extend the root partition automatically for DOS partition tables (found: ${partition_table_type:-unknown})"
+    return 0
+  fi
+
+  local -a table=()
+  mapfile -t table < <("$partx_cmd" -s -g -o NR,START,SECTORS,TYPE,FLAGS "$disk" 2>/dev/null || true)
+  if (( ${#table[@]} == 0 )); then
+    log "WARNING: could not read the partition table; leaving the partition layout unchanged"
+    return 0
+  fi
+
+  local nr start sectors type flags count=0
+  local root_start="" root_sectors="" root_type="" root_flags=""
+  local ext_nr="" ext_start="" ext_sectors="" ext_type=""
+  local swap_nr="" swap_start="" swap_sectors="" swap_type=""
+  local line
+  for line in "${table[@]}"; do
+    read -r nr start sectors type flags <<< "$line"
+    [ -n "${nr:-}" ] || continue
+    count=$((count + 1))
+    if [ "$nr" = "$root_partition_nr" ]; then
+      root_start=$start
+      root_sectors=$sectors
+      root_type=$type
+      root_flags=$flags
+      continue
+    fi
+    case "${type,,}" in
+      0x5|0xf|5|f)
+        ext_nr=$nr; ext_start=$start; ext_sectors=$sectors; ext_type=$type
+        ;;
+      0x82|82)
+        swap_nr=$nr; swap_start=$start; swap_sectors=$sectors; swap_type=$type
+        ;;
+    esac
+  done
+
+  if [ -z "$root_start" ] || [ -z "$root_type" ]; then
+    log "WARNING: root partition is not represented in the partition table; leaving it unchanged"
+    return 0
+  fi
+  local disk_end
+  disk_end=$("$blockdev_cmd" --getsz "$disk" 2>/dev/null || true)
+  [ -n "$disk_end" ] || return 0
+
+  local label_id table_file new_root_size new_ext_start new_ext_size new_swap_start
+  label_id=$("$sfdisk_cmd" -d "$disk" 2>/dev/null | awk -F': ' '/^label-id:/ { print $2; exit }')
+
+  if (( count == 1 )); then
+    new_root_size=$((disk_end - root_start))
+    if (( new_root_size <= root_sectors + 2048 )); then
+      log "resize_disk: no meaningful free space after the root partition"
+      return 0
+    fi
+    table_file=$(mktemp)
+    {
+      printf 'label: dos\n'
+      [ -n "$label_id" ] && printf 'label-id: %s\n' "$label_id"
+      printf 'unit: sectors\nsector-size: 512\n\n'
+      printf 'start=%s, size=%s, type=%s' "$root_start" "$new_root_size" "${root_type#0x}"
+      [[ "$root_flags" =~ (0x80|boot) ]] && printf ', bootable'
+      printf '\n'
+    } > "$table_file"
+    log "resize_disk: extending root partition $root_partition_nr by $((new_root_size - root_sectors)) sectors"
+  elif (( count == 3 )) && [ "$root_partition_nr" = 1 ] && [ -n "$ext_nr" ] && [ -n "$swap_nr" ] && [ -n "$swap_sectors" ]; then
+    if (( ext_start < root_start + root_sectors || swap_start < ext_start || swap_start + swap_sectors > ext_start + ext_sectors )); then
+      log "WARNING: root/extended/swap layout is not contiguous; leaving the partition layout unchanged"
+      return 0
+    fi
+    new_swap_start=$(( (disk_end - swap_sectors) / 2048 * 2048 ))
+    new_ext_start=$((new_swap_start - 2048))
+    new_root_size=$((new_ext_start - root_start))
+    new_ext_size=$((disk_end - new_ext_start))
+    if (( new_ext_start <= root_start + root_sectors + 2048 )); then
+      log "resize_disk: no meaningful free space to move the swap partition and grow root"
+      return 0
+    fi
+    local swap_path swap_uuid swap_label
+    swap_path=$(find_partition_path_by_number "$swap_nr" || true)
+    if [ -z "$swap_path" ]; then
+      log "WARNING: could not find swap partition $swap_nr; leaving the partition layout unchanged"
+      return 0
+    fi
+    if [ -z "$mkswap_cmd" ]; then
+      log "WARNING: mkswap is not installed; cannot move the swap partition"
+      return 0
+    fi
+    swap_uuid=$("$blkid_cmd" -s UUID -o value "$swap_path" 2>/dev/null || true)
+    swap_label=$("$blkid_cmd" -s LABEL -o value "$swap_path" 2>/dev/null || true)
+    table_file=$(mktemp)
+    {
+      printf 'label: dos\n'
+      [ -n "$label_id" ] && printf 'label-id: %s\n' "$label_id"
+      printf 'unit: sectors\nsector-size: 512\n\n'
+      printf 'start=%s, size=%s, type=%s' "$root_start" "$new_root_size" "${root_type#0x}"
+      [[ "$root_flags" =~ (0x80|boot) ]] && printf ', bootable'
+      printf '\n'
+      printf 'start=%s, size=%s, type=%s\n' "$new_ext_start" "$new_ext_size" "${ext_type#0x}"
+      printf 'start=%s, size=%s, type=%s\n' "$new_swap_start" "$swap_sectors" "${swap_type#0x}"
+    } > "$table_file"
+    log "resize_disk: moving swap partition $swap_nr to sector $new_swap_start and extending root partition $root_partition_nr"
+  else
+    log "WARNING: resize_disk does not recognize this partition layout; leaving the partition table unchanged"
+    return 0
+  fi
+
+  if ! "$sfdisk_cmd" --force --no-reread "$disk" < "$table_file"; then
+    rm -f "$table_file"
+    die "could not write the resized partition table to $disk"
+  fi
+  rm -f "$table_file"
+
+  release_partition_mappings
+  "$partx_cmd" -u "$disk" >/dev/null 2>&1 || true
+  "$blockdev_cmd" --rereadpt "$disk" >/dev/null 2>&1 || true
+
+  root_device=""
+  root_partition_nr=0
+  detect_root_device "$disk" ||
+    die "could not find the root filesystem after extending the partition table"
+  root_partition_extended=1
+
+  if [ -n "$swap_nr" ]; then
+    swap_path=$(find_partition_path_by_number "$swap_nr" || true)
+    if [ -z "$swap_path" ]; then
+      die "could not find the moved swap partition after extending the partition table"
+    fi
+    local -a mkswap_args=()
+    [ -n "$swap_uuid" ] && mkswap_args+=("-U" "$swap_uuid")
+    [ -n "$swap_label" ] && mkswap_args+=("-L" "$swap_label")
+    "$mkswap_cmd" "${mkswap_args[@]}" "$swap_path" >/dev/null ||
+      die "could not recreate the moved swap partition"
+    log "resize_disk: recreated swap partition $swap_nr"
+  fi
 }
 
 resize_root_filesystem() {
@@ -222,7 +435,7 @@ resize_root_filesystem() {
   if [ -n "$blockdev_cmd" ]; then
     disk_bytes=$("$blockdev_cmd" --getsize64 "$disk" 2>/dev/null || true)
     root_bytes=$("$blockdev_cmd" --getsize64 "$root_device" 2>/dev/null || true)
-    if [ -n "$disk_bytes" ] && [ -n "$root_bytes" ] && (( root_bytes < disk_bytes )); then
+    if [ -n "$disk_bytes" ] && [ -n "$root_bytes" ] && (( root_bytes < disk_bytes )) && (( root_partition_extended == 0 )); then
       log "WARNING: root block device $root_device is smaller than $disk; resize_disk does not rewrite the partition table"
       log "WARNING: the filesystem can only grow within its current partition"
     fi
@@ -267,6 +480,8 @@ resize2fs_cmd=$(find_command resize2fs || true)
 xfs_growfs_cmd=$(find_command xfs_growfs || true)
 btrfs_cmd=$(find_command btrfs || true)
 blockdev_cmd=$(find_command blockdev || true)
+sfdisk_cmd=$(find_command sfdisk || true)
+mkswap_cmd=$(find_command mkswap || true)
 
 printf '%s' "$json" | jq -e 'type == "object"' >/dev/null 2>&1 ||
   die "ROOKERY_PROVISION_JSON is not a JSON object"
@@ -313,6 +528,8 @@ mounted=0
 mapping_mode=""
 mapped_partitions=()
 dm_maps=()
+root_partition_nr=0
+root_partition_extended=0
 cleanup() {
   local status=$?
   if [ -n "$mountpoint" ]; then
@@ -327,30 +544,9 @@ cleanup() {
     fi
     rmdir "$mountpoint" 2>/dev/null || true
   fi
-  case "$mapping_mode" in
-    kpartx)
-      log "removing temporary partition mappings from $disk"
-      "$kpartx_cmd" -d "$disk" >/dev/null 2>&1 ||
-        log "WARNING: could not remove temporary partition mappings from $disk"
-      mapping_mode=""
-      ;;
-    dmsetup)
-      log "removing temporary partition mappings from $disk"
-      local i
-      for ((i=${#dm_maps[@]}-1; i>=0; i--)); do
-        "$dmsetup_cmd" remove "${dm_maps[i]}" >/dev/null 2>&1 ||
-          log "WARNING: could not remove temporary mapping ${dm_maps[i]}"
-      done
-      dm_maps=()
-      mapping_mode=""
-      ;;
-    partx)
-      log "removing temporary partition mappings from $disk"
-      "$partx_cmd" -d "$disk" >/dev/null 2>&1 ||
-        log "WARNING: could not remove temporary partition mappings from $disk"
-      mapping_mode=""
-      ;;
-  esac
+  if [ -n "$mapping_mode" ]; then
+    release_partition_mappings
+  fi
   if (( status != 0 )); then
     log "provisioning failed with exit status $status"
   else
@@ -366,6 +562,9 @@ mountpoint=$(mktemp -d) || die "could not create temporary mount point"
 root_device=""
 detect_root_device "$disk" ||
   die "could not identify a root filesystem on $disk; inspect the partition layout with lsblk, partx, and blkid"
+if [ "$resize_disk" = true ]; then
+  extend_root_partition
+fi
 log "mounting root filesystem $root_device at $mountpoint"
 mount "$root_device" "$mountpoint" || die "could not mount root filesystem $root_device"
 mounted=1

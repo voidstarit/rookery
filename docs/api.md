@@ -567,9 +567,11 @@ runs this script as the API user with `ROOKERY_PROVISION_JSON` containing
 `operation` (`provision`), `request_id`, `disk`, `template`, `backend`, and the
 caller's arbitrary `properties` object. `POST /api/disks` accepts
 `provisioning` as a JSON object when `template_disk_id` is set. The reference
-script supports `properties.resize_disk = true` to grow the root filesystem to
-its root block device size; it does not rewrite the partition table. Provisioning
-is skipped when that object is omitted or empty. If provisioning fails or times
+script supports `properties.resize_disk = true` to extend a supported root
+partition (including a DOS root-plus-swap layout, with the swap recreated using
+its original UUID/label) and grow the filesystem. Other layouts are resized
+only within their current partition. Provisioning is skipped when that object
+is omitted or empty. If provisioning fails or times
 out, clone creation is rolled back and the preparation script's `delete`
 operation runs. `PUT /api/disks/{id}` can set or clear a template's
 `provisioning_script`/`provisioning_timeout`.

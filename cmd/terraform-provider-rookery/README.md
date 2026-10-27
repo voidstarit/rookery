@@ -99,9 +99,10 @@ script through `ROOKERY_PROVISION_JSON` under `properties`. An omitted or empty
 `scripts/template-provision.sh` handles both whole-disk filesystems and
 partitioned LVM clones, logs the received payload and each stage, and always
 attempts to unmount the clone. Set `resize_disk = true` in the provisioning
-object to grow the root filesystem to its root block device size; this does not
-rewrite the partition table, so a root partition followed by swap cannot grow
-automatically.
+object to extend the root partition and grow the filesystem. The reference
+script supports a DOS table with root followed by an extended/swap partition
+(the swap is moved and recreated with the same UUID/label) and a single-root
+partition. Other layouts are resized only within their current partition.
 
 `rookery_network_pipe` exposes computed `endpoint_a_name` and
 `endpoint_b_name` values (`pipe<instance>.0` and `.1`) for use with
