@@ -16,6 +16,7 @@ import (
 	"github.com/coredhcp/coredhcp/plugins"
 	"github.com/coredhcp/coredhcp/plugins/allocators/bitmap"
 	"github.com/insomniacslk/dhcp/dhcpv4"
+	"github.com/insomniacslk/dhcp/rfc1035label"
 	"github.com/rs/zerolog/log"
 
 	"github.com/voidstarit/rookery/internal/store"
@@ -216,6 +217,25 @@ func setupCoreDHCP(args ...string) (handler.Handler4, error) {
 	return state.handle, nil
 }
 
+// dhcpv4DNSName returns the client's FQDN (option 81) when possible, then
+// falls back to the hostname option (option 12).
+func dhcpv4DNSName(req *dhcpv4.DHCPv4) string {
+	if raw := req.Options.Get(dhcpv4.OptionFQDN); len(raw) >= 3 {
+		flags := raw[0]
+		name := raw[3:]
+		if flags&0x04 != 0 {
+			if labels, err := rfc1035label.FromBytes(name); err == nil {
+				if joined := strings.Join(labels.Labels, "."); joined != "" {
+					return joined
+				}
+			}
+		} else if value := strings.TrimRight(string(name), "\x00. "); value != "" {
+			return value
+		}
+	}
+	return strings.TrimSpace(req.HostName())
+}
+
 func parseCoreDHCPDNS(value string) ([]net.IP, error) {
 	if strings.TrimSpace(value) == "" {
 		return nil, nil
@@ -256,6 +276,7 @@ func (s *coreDHCPState) handle(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) 
 	s.purgeExpiredLocked(now)
 
 	clientID := req.ClientHWAddr.String()
+	hostname := dhcpv4DNSName(req)
 	requested := req.RequestedIPAddress()
 	if requested != nil && requested.IsUnspecified() {
 		requested = nil
@@ -263,7 +284,7 @@ func (s *coreDHCPState) handle(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) 
 	log.Trace().
 		Str("leases", s.leasePath).
 		Str("client_id", clientID).
-		Str("hostname", req.HostName()).
+		Str("hostname", hostname).
 		Str("message_type", req.MessageType().String()).
 		Str("requested_ip", ipText(requested)).
 		Str("client_ip", req.ClientIPAddr.String()).
@@ -303,7 +324,7 @@ func (s *coreDHCPState) handle(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) 
 
 		if record == nil {
 			var err error
-			record, err = s.allocateLocked(clientID, hint, req.HostName(), now)
+			record, err = s.allocateLocked(clientID, hint, hostname, now)
 			if err != nil {
 				if req.MessageType() == dhcpv4.MessageTypeRequest {
 					return s.nak(resp)
@@ -311,7 +332,7 @@ func (s *coreDHCPState) handle(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) 
 				return nil, true
 			}
 		} else {
-			s.renewLocked(record, req.HostName(), now)
+			s.renewLocked(record, hostname, now)
 		}
 
 		resp.YourIPAddr = record.Address

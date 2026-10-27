@@ -366,6 +366,10 @@ func (s *Server) activateSharedDNS(ctx context.Context, vnf store.VNF, network s
 	if err != nil {
 		return vnf, err
 	}
+	serviceIPv6CIDR, err := netutil.HostCIDR(network.IPv6CIDR, 2)
+	if err != nil {
+		return vnf, err
+	}
 	network, err = s.ensureNetworkVNFResources(ctx, network, gateway)
 	if err != nil {
 		return vnf, err
@@ -383,7 +387,7 @@ func (s *Server) activateSharedDNS(ctx context.Context, vnf store.VNF, network s
 		_ = s.deleteTap(ctx, vnf.TapSwIfIndex, vnf.TapHostName)
 	}
 
-	if err := s.vnfs.StartShared(ctx, vnf, network.VNFMemifSocket, host.NetworkVNFMemifID(network.ID), serviceCIDR); err != nil {
+	if err := s.vnfs.StartShared(ctx, vnf, network.VNFMemifSocket, host.NetworkVNFMemifID(network.ID), serviceCIDR, serviceIPv6CIDR); err != nil {
 		return vnf, err
 	}
 	vnf.Enabled = true
@@ -429,6 +433,10 @@ func (s *Server) activateSharedVNF(ctx context.Context, vnf store.VNF, network s
 	if err != nil {
 		return vnf, err
 	}
+	serviceIPv6CIDR, err := netutil.HostCIDR(network.IPv6CIDR, 2)
+	if err != nil {
+		return vnf, err
+	}
 	if err := s.validateVNFNetwork(vnf, network); err != nil {
 		return vnf, err
 	}
@@ -449,7 +457,7 @@ func (s *Server) activateSharedVNF(ctx context.Context, vnf store.VNF, network s
 	vnf.Config.BindIP = serviceCIDR
 	// The daemon needs the memif interface ID for the handshake, not the VPP
 	// sw_if_index stored on the network for cleanup/counters.
-	if err := s.vnfs.StartShared(ctx, vnf, network.VNFMemifSocket, host.NetworkVNFMemifID(network.ID), serviceCIDR); err != nil {
+	if err := s.vnfs.StartShared(ctx, vnf, network.VNFMemifSocket, host.NetworkVNFMemifID(network.ID), serviceCIDR, serviceIPv6CIDR); err != nil {
 		return vnf, err
 	}
 

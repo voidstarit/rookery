@@ -48,7 +48,7 @@ func (f *fakeManager) StartMemif(_ context.Context, vnf store.VNF, socketPath st
 	return nil
 }
 
-func (f *fakeManager) StartShared(_ context.Context, vnf store.VNF, socketPath string, _ uint32, address string) error {
+func (f *fakeManager) StartShared(_ context.Context, vnf store.VNF, socketPath string, _ uint32, address, ipv6Address string) error {
 	if f.startErr != nil {
 		return f.startErr
 	}

@@ -120,6 +120,9 @@ func vnfConfigPayloadFromProto(config *rookeryv1.VNFConfig) *vnfConfigPayload {
 		NextHop:           config.GetNextHop(),
 		DNSForward:        config.GetDnsForward(),
 		DNSForwarders:     append([]string(nil), config.GetDnsForwarders()...),
+		DNSVNFID:          config.GetDnsVnfId(),
+		DNSDomain:         config.GetDnsDomain(),
+		DNSTTL:            config.GetDnsTtl(),
 	}
 	for _, record := range config.GetDnsRecords() {
 		payload.DNSRecords = append(payload.DNSRecords, dnsRecordPayload{

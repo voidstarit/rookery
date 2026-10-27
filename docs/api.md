@@ -384,8 +384,9 @@ curl -sS -X POST http://127.0.0.1:8080/api/vnfs \
   -H 'Content-Type: application/json' \
   -d '{"name":"lab-dhcpv4","network_id":1,"type":"dhcpv4","enabled":true,
        "config":{"gateway":"10.20.0.1/24","range_start":"10.20.0.100",
-                 "range_end":"10.20.0.200","dns":"1.1.1.1",
-                 "lease_time":"12h"}}'
+                 "range_end":"10.20.0.200","dns":"10.20.0.2",
+                 "lease_time":"12h","dns_vnf_id":1,
+                 "dns_domain":"lab.test","dns_ttl":300}}'
 ```
 
 Add a DHCPv6 VNF with an IPv6 gateway and range:
@@ -395,8 +396,9 @@ curl -sS -X POST http://127.0.0.1:8080/api/vnfs \
   -H 'Content-Type: application/json' \
   -d '{"name":"lab-dhcpv6","network_id":1,"type":"dhcpv6","enabled":true,
        "config":{"gateway":"fd00:20::1/64","range_start":"fd00:20::100",
-                 "range_end":"fd00:20::200","dns":"2001:4860:4860::8888",
-                 "lease_time":"12h"}}'
+                 "range_end":"fd00:20::200","dns":"fd00:20::2",
+                 "lease_time":"12h","dns_vnf_id":1,
+                 "dns_domain":"lab.test","dns_ttl":300}}'
 ```
 
 DHCP VNFs also accept extra options through `dhcp_options`. Each option has a
@@ -439,8 +441,13 @@ curl -sS -X POST http://127.0.0.1:8080/api/vnfs \
        }}'
 ```
 
-The DNS server listens on the network service address `.2` (UDP/TCP 53).
-Set the DHCP VNF's `dns` field to that address if clients should use it.
+The DNS server listens on the network service address `.2` over IPv4 and IPv6
+(UDP/TCP 53). DHCPv4 and DHCPv6 VNFs can select this DNS VNF with
+`config.dns_vnf_id` (same network only), `config.dns_domain`, and
+`config.dns_ttl`; the daemon creates A/AAAA and PTR records for active leases,
+preferring the client FQDN and falling back to a MAC/DUID-derived name. Records
+are removed on DHCPRELEASE and expiry. Set the DHCP VNF's `dns` field to the
+matching `.2` service address if clients should use it.
 
 Create a dedicated NAT network, then add NAT44 with a static outside address
 and DHCPv4 for clients. The outside NIC must not be the host default route; the

@@ -227,6 +227,7 @@ export function VNFsTab() {
         key={dialog.vnf ? `edit-${dialog.vnf.id}` : `new-${dialog.networkID ?? "default"}`}
         vnf={dialog.vnf}
         networks={networks}
+        vnfs={vnfs}
         vppReady={vppReady}
         initialNetworkID={dialog.networkID}
         onClose={() => {

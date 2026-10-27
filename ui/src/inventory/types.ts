@@ -391,7 +391,7 @@ export type DNATRule = {
 
 export type DNSRecord = {
   name: string;
-  type: "A" | "AAAA" | "CNAME" | "TXT";
+  type: "A" | "AAAA" | "CNAME" | "TXT" | "PTR";
   value: string;
   ttl?: number;
 };
@@ -431,6 +431,9 @@ export type VNFConfig = {
   dns_records?: DNSRecord[];
   dns_forward?: boolean;
   dns_forwarders?: string[];
+  dns_vnf_id?: number;
+  dns_domain?: string;
+  dns_ttl?: number;
   dhcp_options?: DHCPOption[];
 };
 

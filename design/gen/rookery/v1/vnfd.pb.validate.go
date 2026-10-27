@@ -130,6 +130,8 @@ func (m *VNFSpec) validate(all bool) error {
 
 	// no validation rules for SharedAddress
 
+	// no validation rules for SharedIpv6Address
+
 	if len(errors) > 0 {
 		return VNFSpecMultiError(errors)
 	}

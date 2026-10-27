@@ -147,7 +147,7 @@ func (x *DNATRule) GetLocalPort() int32 {
 
 // DNSRecord is one local record served by a DNS VNF. Name is a fully qualified
 // domain name; wildcard names such as *.lab1.test are supported. Type is A,
-// AAAA, CNAME, or TXT.
+// AAAA, CNAME, TXT, or PTR.
 type DNSRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -321,7 +321,14 @@ type VNFConfig struct {
 	// Extra DHCPv4/DHCPv6 options advertised by a DHCP VNF. DNS (v4 option 6,
 	// v6 option 23) and server-managed options are rejected; use config.dns for
 	// DNS servers.
-	DhcpOptions   []*DHCPOption `protobuf:"bytes,29,rep,name=dhcp_options,json=dhcpOptions,proto3" json:"dhcp_options,omitempty"`
+	DhcpOptions []*DHCPOption `protobuf:"bytes,29,rep,name=dhcp_options,json=dhcpOptions,proto3" json:"dhcp_options,omitempty"`
+	// DHCP DNS integration. Select a DNS VNF on the same network; the daemon
+	// creates dynamic A/AAAA and PTR records for active DHCP leases. DNSDomain
+	// is the suffix used when a client does not provide an FQDN; DNSTTL is the
+	// dynamic record TTL in seconds (0 means the default 300).
+	DnsVnfId      int64  `protobuf:"varint,30,opt,name=dns_vnf_id,json=dnsVnfId,proto3" json:"dns_vnf_id,omitempty"`
+	DnsDomain     string `protobuf:"bytes,31,opt,name=dns_domain,json=dnsDomain,proto3" json:"dns_domain,omitempty"`
+	DnsTtl        uint32 `protobuf:"varint,32,opt,name=dns_ttl,json=dnsTtl,proto3" json:"dns_ttl,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -557,6 +564,27 @@ func (x *VNFConfig) GetDhcpOptions() []*DHCPOption {
 		return x.DhcpOptions
 	}
 	return nil
+}
+
+func (x *VNFConfig) GetDnsVnfId() int64 {
+	if x != nil {
+		return x.DnsVnfId
+	}
+	return 0
+}
+
+func (x *VNFConfig) GetDnsDomain() string {
+	if x != nil {
+		return x.DnsDomain
+	}
+	return ""
+}
+
+func (x *VNFConfig) GetDnsTtl() uint32 {
+	if x != nil {
+		return x.DnsTtl
+	}
+	return 0
 }
 
 type VNF struct {
@@ -1603,8 +1631,7 @@ const file_rookery_v1_vnf_proto_rawDesc = "" +
 	"\x04code\x18\x01 \x01(\rB\v\xfaB\b*\x06\x18\xff\xff\x03(\x01R\x04code\x12\"\n" +
 	"\x06format\x18\x02 \x01(\tB\n" +
 	"\xfaB\ar\x05\x18 \xd0\x01\x01R\x06format\x12\x1e\n" +
-	"\x05value\x18\x03 \x01(\tB\b\xfaB\x05r\x03\x18\x80\bR\x05value\"\xa4\n" +
-	"\n" +
+	"\x05value\x18\x03 \x01(\tB\b\xfaB\x05r\x03\x18\x80\bR\x05value\"\x92\v\n" +
 	"\tVNFConfig\x12!\n" +
 	"\agateway\x18\x01 \x01(\tB\a\xfaB\x04r\x02\x18@R\agateway\x12(\n" +
 	"\vrange_start\x18\x02 \x01(\tB\a\xfaB\x04r\x02\x18@R\n" +
@@ -1642,7 +1669,12 @@ const file_rookery_v1_vnf_proto_rawDesc = "" +
 	"\vdns_forward\x18\x1b \x01(\bR\n" +
 	"dnsForward\x128\n" +
 	"\x0edns_forwarders\x18\x1c \x03(\tB\x11\xfaB\x0e\x92\x01\v\x10\x10\"\ar\x05\x18@\xd0\x01\x01R\rdnsForwarders\x12C\n" +
-	"\fdhcp_options\x18\x1d \x03(\v2\x16.rookery.v1.DHCPOptionB\b\xfaB\x05\x92\x01\x02\x10@R\vdhcpOptions\"\xe7\x03\n" +
+	"\fdhcp_options\x18\x1d \x03(\v2\x16.rookery.v1.DHCPOptionB\b\xfaB\x05\x92\x01\x02\x10@R\vdhcpOptions\x12\x1c\n" +
+	"\n" +
+	"dns_vnf_id\x18\x1e \x01(\x03R\bdnsVnfId\x12*\n" +
+	"\n" +
+	"dns_domain\x18\x1f \x01(\tB\v\xfaB\br\x06\x18\xfd\x01\xd0\x01\x01R\tdnsDomain\x12\"\n" +
+	"\adns_ttl\x18  \x01(\rB\t\xfaB\x06*\x04\x18\x80\xa3\x05R\x06dnsTtl\"\xe7\x03\n" +
 	"\x03VNF\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +

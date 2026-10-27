@@ -260,6 +260,14 @@ type VNFConfig struct {
 	DNSForward    bool        `json:"dns_forward,omitempty"`
 	DNSForwarders []string    `json:"dns_forwarders,omitempty"`
 
+	// DHCP DNS integration. A DHCPv4/DHCPv6 VNF can register dynamic A/AAAA
+	// and PTR records for its leases in another DNS VNF on the same network.
+	// DNSDomain is the suffix used when the client does not send a FQDN;
+	// DNSTTL defaults to 300 seconds.
+	DNSVNFID  int64  `json:"dns_vnf_id,omitempty"`
+	DNSDomain string `json:"dns_domain,omitempty"`
+	DNSTTL    uint32 `json:"dns_ttl,omitempty"`
+
 	// DHCPOptions are extra DHCPv4/DHCPv6 options advertised by a DHCP VNF.
 	// Code is the DHCP option code; Format controls how Value is encoded.
 	DHCPOptions []DHCPOption `json:"dhcp_options,omitempty"`

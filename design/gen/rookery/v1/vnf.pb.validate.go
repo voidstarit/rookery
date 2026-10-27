@@ -1035,6 +1035,34 @@ func (m *VNFConfig) validate(all bool) error {
 
 	}
 
+	// no validation rules for DnsVnfId
+
+	if m.GetDnsDomain() != "" {
+
+		if utf8.RuneCountInString(m.GetDnsDomain()) > 253 {
+			err := VNFConfigValidationError{
+				field:  "DnsDomain",
+				reason: "value length must be at most 253 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.GetDnsTtl() > 86400 {
+		err := VNFConfigValidationError{
+			field:  "DnsTtl",
+			reason: "value must be less than or equal to 86400",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
 	if len(errors) > 0 {
 		return VNFConfigMultiError(errors)
 	}

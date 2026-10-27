@@ -58,20 +58,20 @@ func (c *Client) Close() {
 
 // Start starts a tap-backed runtime through the daemon.
 func (c *Client) Start(ctx context.Context, vnf store.VNF, hostIf string) error {
-	return c.ensure(ctx, vnf, "tap", hostIf, "", 0, "")
+	return c.ensure(ctx, vnf, "tap", hostIf, "", 0, "", "")
 }
 
 // StartMemif starts a dedicated memif-backed runtime through the daemon.
 func (c *Client) StartMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32) error {
-	return c.ensure(ctx, vnf, "memif", "", socketPath, ifID, "")
+	return c.ensure(ctx, vnf, "memif", "", socketPath, ifID, "", "")
 }
 
 // StartShared starts a runtime on its network's shared memif.
-func (c *Client) StartShared(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32, address string) error {
-	return c.ensure(ctx, vnf, "shared", "", socketPath, ifID, address)
+func (c *Client) StartShared(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32, address, ipv6Address string) error {
+	return c.ensure(ctx, vnf, "shared", "", socketPath, ifID, address, ipv6Address)
 }
 
-func (c *Client) ensure(ctx context.Context, vnf store.VNF, transport, tapHost string, socket string, ifID uint32, sharedAddress string) error {
+func (c *Client) ensure(ctx context.Context, vnf store.VNF, transport, tapHost string, socket string, ifID uint32, sharedAddress, sharedIPv6Address string) error {
 	c.logger.Trace().
 		Int64("vnf_id", vnf.ID).
 		Str("type", vnf.Type).
@@ -84,7 +84,7 @@ func (c *Client) ensure(ctx context.Context, vnf store.VNF, transport, tapHost s
 	callCtx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 	response, err := c.client.EnsureVNF(callCtx, &rookeryv1.EnsureVNFRequest{
-		Vnf: specFor(vnf, transport, tapHost, socket, ifID, sharedAddress),
+		Vnf: specFor(vnf, transport, tapHost, socket, ifID, sharedAddress, sharedIPv6Address),
 	})
 	if err != nil {
 		c.logger.Trace().Int64("vnf_id", vnf.ID).Str("transport", transport).Err(err).Msg("ensure VNF runtime failed")
@@ -272,18 +272,19 @@ func Listen(addr string) (net.Listener, error) {
 }
 
 // specFor builds the control spec from an API-side VNF record.
-func specFor(vnf store.VNF, transport, tapHost string, socket string, ifID uint32, sharedAddress string) *rookeryv1.VNFSpec {
+func specFor(vnf store.VNF, transport, tapHost string, socket string, ifID uint32, sharedAddress, sharedIPv6Address string) *rookeryv1.VNFSpec {
 	return &rookeryv1.VNFSpec{
-		Id:             vnf.ID,
-		Name:           vnf.Name,
-		Type:           vnf.Type,
-		NetworkId:      vnf.NetworkID,
-		Transport:      transport,
-		Config:         configToProto(vnf.Config),
-		TapHostName:    tapHost,
-		MemifSocket:    socket,
-		MemifSwIfIndex: ifID,
-		SharedAddress:  sharedAddress,
+		Id:                vnf.ID,
+		Name:              vnf.Name,
+		Type:              vnf.Type,
+		NetworkId:         vnf.NetworkID,
+		Transport:         transport,
+		Config:            configToProto(vnf.Config),
+		TapHostName:       tapHost,
+		MemifSocket:       socket,
+		MemifSwIfIndex:    ifID,
+		SharedAddress:     sharedAddress,
+		SharedIpv6Address: sharedIPv6Address,
 	}
 }
 
@@ -327,6 +328,9 @@ func configToProto(config store.VNFConfig) *rookeryv1.VNFConfig {
 		DnsRecords:        dnsRecords,
 		DnsForward:        config.DNSForward,
 		DnsForwarders:     append([]string(nil), config.DNSForwarders...),
+		DnsVnfId:          config.DNSVNFID,
+		DnsDomain:         config.DNSDomain,
+		DnsTtl:            config.DNSTTL,
 		DhcpOptions:       dhcpOptions,
 	}
 }

@@ -39,8 +39,12 @@ type VNFSpec struct {
 	// shared_address is the IPv4 CIDR assigned to the network's shared VNF
 	// memif stack (normally .2/prefix). It is required for transport "shared".
 	SharedAddress string `protobuf:"bytes,10,opt,name=shared_address,json=sharedAddress,proto3" json:"shared_address,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// shared_ipv6_address is the IPv6 CIDR assigned to the network's shared VNF
+	// memif stack (normally prefix + 2). DNS listens on UDP/TCP 53 over both
+	// families when it is present.
+	SharedIpv6Address string `protobuf:"bytes,11,opt,name=shared_ipv6_address,json=sharedIpv6Address,proto3" json:"shared_ipv6_address,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *VNFSpec) Reset() {
@@ -139,6 +143,13 @@ func (x *VNFSpec) GetMemifSwIfIndex() uint32 {
 func (x *VNFSpec) GetSharedAddress() string {
 	if x != nil {
 		return x.SharedAddress
+	}
+	return ""
+}
+
+func (x *VNFSpec) GetSharedIpv6Address() string {
+	if x != nil {
+		return x.SharedIpv6Address
 	}
 	return ""
 }
@@ -656,7 +667,7 @@ var File_rookery_v1_vnfd_proto protoreflect.FileDescriptor
 const file_rookery_v1_vnfd_proto_rawDesc = "" +
 	"\n" +
 	"\x15rookery/v1/vnfd.proto\x12\n" +
-	"rookery.v1\x1a\x1bgoogle/protobuf/empty.proto\x1a\x14rookery/v1/vnf.proto\x1a\x17validate/validate.proto\"\x86\x03\n" +
+	"rookery.v1\x1a\x1bgoogle/protobuf/empty.proto\x1a\x14rookery/v1/vnf.proto\x1a\x17validate/validate.proto\"\xb6\x03\n" +
 	"\aVNFSpec\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12.\n" +
@@ -669,7 +680,8 @@ const file_rookery_v1_vnfd_proto_rawDesc = "" +
 	"\fmemif_socket\x18\b \x01(\tR\vmemifSocket\x12)\n" +
 	"\x11memif_sw_if_index\x18\t \x01(\rR\x0ememifSwIfIndex\x12%\n" +
 	"\x0eshared_address\x18\n" +
-	" \x01(\tR\rsharedAddress\"C\n" +
+	" \x01(\tR\rsharedAddress\x12.\n" +
+	"\x13shared_ipv6_address\x18\v \x01(\tR\x11sharedIpv6Address\"C\n" +
 	"\x10EnsureVNFRequest\x12/\n" +
 	"\x03vnf\x18\x01 \x01(\v2\x13.rookery.v1.VNFSpecB\b\xfaB\x05\x8a\x01\x02\x10\x01R\x03vnf\"P\n" +
 	"\x10RemoveVNFRequest\x12\x17\n" +

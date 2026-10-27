@@ -526,7 +526,7 @@ func (f *fakeVNFManager) StartMemif(_ context.Context, vnf store.VNF, socketPath
 	return nil
 }
 
-func (f *fakeVNFManager) StartShared(_ context.Context, vnf store.VNF, socketPath string, ifID uint32, address string) error {
+func (f *fakeVNFManager) StartShared(_ context.Context, vnf store.VNF, socketPath string, ifID uint32, address, ipv6Address string) error {
 	if f.startErr != nil {
 		return f.startErr
 	}

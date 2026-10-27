@@ -34,7 +34,7 @@ import (
 type Manager interface {
 	Start(ctx context.Context, vnf store.VNF, hostIf string) error
 	StartMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32) error
-	StartShared(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32, address string) error
+	StartShared(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32, address, ipv6Address string) error
 	Stop(ctx context.Context, vnfID int64, removeLeases bool) error
 	Running(vnfID int64) bool
 	Healthy(vnfID int64) bool
@@ -222,7 +222,7 @@ func (s *Server) EnsureVNF(ctx context.Context, request *rookeryv1.EnsureVNFRequ
 		} else if strings.TrimSpace(spec.GetSharedAddress()) == "" {
 			err = errors.New("shared memif address is required")
 		} else {
-			err = s.manager.StartShared(ctx, vnf, spec.GetMemifSocket(), spec.GetMemifSwIfIndex(), spec.GetSharedAddress())
+			err = s.manager.StartShared(ctx, vnf, spec.GetMemifSocket(), spec.GetMemifSwIfIndex(), spec.GetSharedAddress(), spec.GetSharedIpv6Address())
 		}
 	case "memif":
 		if strings.TrimSpace(spec.GetMemifSocket()) == "" {
@@ -558,6 +558,9 @@ func configFromProto(c *rookeryv1.VNFConfig) store.VNFConfig {
 		DNSRecords:        dnsRecords,
 		DNSForward:        c.GetDnsForward(),
 		DNSForwarders:     append([]string(nil), c.GetDnsForwarders()...),
+		DNSVNFID:          c.GetDnsVnfId(),
+		DNSDomain:         c.GetDnsDomain(),
+		DNSTTL:            c.GetDnsTtl(),
 		DHCPOptions:       dhcpOptions,
 	}
 }

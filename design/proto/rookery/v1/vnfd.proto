@@ -45,6 +45,10 @@ message VNFSpec {
   // shared_address is the IPv4 CIDR assigned to the network's shared VNF
   // memif stack (normally .2/prefix). It is required for transport "shared".
   string shared_address = 10;
+  // shared_ipv6_address is the IPv6 CIDR assigned to the network's shared VNF
+  // memif stack (normally prefix + 2). DNS listens on UDP/TCP 53 over both
+  // families when it is present.
+  string shared_ipv6_address = 11;
 }
 
 message EnsureVNFRequest {

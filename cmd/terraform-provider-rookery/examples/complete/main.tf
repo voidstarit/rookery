@@ -155,6 +155,24 @@ resource "rookery_startup_script" "vpp" {
   script  = "vppctl set nat workers 0"
 }
 
+resource "rookery_vnf" "dns" {
+  name       = "app-dns"
+  network_id = rookery_network.app.id
+  type       = "dns"
+  enabled    = true
+  config_json = jsonencode({
+    dns_records = [
+      {
+        name  = "router.lab.test"
+        type  = "A"
+        value = "10.20.0.1"
+        ttl   = 300
+      }
+    ]
+    dns_forward = true
+  })
+}
+
 resource "rookery_vnf" "dhcp" {
   name       = "app-dhcp"
   network_id = rookery_network.app.id
@@ -164,5 +182,9 @@ resource "rookery_vnf" "dhcp" {
     gateway     = "10.20.0.1"
     range_start = "10.20.0.100"
     range_end   = "10.20.0.200"
+    dns         = "10.20.0.2"
+    dns_vnf_id  = rookery_vnf.dns.id
+    dns_domain  = "lab.test"
+    dns_ttl     = 300
   })
 }

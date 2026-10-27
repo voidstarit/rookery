@@ -46,6 +46,13 @@ type VNFManager struct {
 	servers     map[int64]*managedVNF
 	shared      map[int64]*sharedNetwork
 	routeWriter BGPRouteWriter
+
+	dnsMu           sync.Mutex
+	dnsRuntimes     map[int64]*dnsHandler
+	dhcpConfigs     map[int64]store.VNF
+	dnsSyncStop     chan struct{}
+	dnsSyncStart    sync.Once
+	dnsSyncStopOnce sync.Once
 }
 
 type managedVNF struct {
@@ -88,11 +95,14 @@ func NewVNFManager(runDir string) (*VNFManager, error) {
 	ensureCoreDHCPv6Plugin()
 
 	return &VNFManager{
-		Dir:       dir,
-		LegacyDir: filepath.Join(abs, "dhcp"),
-		Port:      defaultDHCPPort,
-		servers:   make(map[int64]*managedVNF),
-		shared:    make(map[int64]*sharedNetwork),
+		Dir:         dir,
+		LegacyDir:   filepath.Join(abs, "dhcp"),
+		Port:        defaultDHCPPort,
+		servers:     make(map[int64]*managedVNF),
+		shared:      make(map[int64]*sharedNetwork),
+		dnsRuntimes: make(map[int64]*dnsHandler),
+		dhcpConfigs: make(map[int64]store.VNF),
+		dnsSyncStop: make(chan struct{}),
 	}, nil
 }
 
@@ -186,6 +196,7 @@ func (m *VNFManager) Start(ctx context.Context, vnf store.VNF, hostIf string) er
 	}
 	m.servers[vnf.ID] = managed
 	m.mu.Unlock()
+	m.registerDHCPConfig(vnf)
 	return nil
 }
 
@@ -242,6 +253,7 @@ func (m *VNFManager) StartMemif(ctx context.Context, vnf store.VNF, socketPath s
 	}
 	m.servers[vnf.ID] = &managedVNF{vnfType: vnf.Type, memif: server, done: make(chan struct{})}
 	m.mu.Unlock()
+	m.registerDHCPConfig(vnf)
 	return nil
 }
 
@@ -249,7 +261,7 @@ func (m *VNFManager) StartMemif(ctx context.Context, vnf store.VNF, socketPath s
 // created per network and all userspace VNFs on that network register listeners
 // on it; the memif itself is owned by the API (VPP master) and must already
 // exist at socketPath.
-func (m *VNFManager) StartShared(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32, address string) error {
+func (m *VNFManager) StartShared(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32, address, ipv6Address string) error {
 	if vnf.ID < 1 {
 		return errors.New("invalid VNF id")
 	}
@@ -270,8 +282,8 @@ func (m *VNFManager) StartShared(ctx context.Context, vnf store.VNF, socketPath 
 	m.mu.Lock()
 	network := m.shared[vnf.NetworkID]
 	m.mu.Unlock()
-	if network != nil && network.address != address {
-		return fmt.Errorf("shared VNF memif for network %d already uses %s", vnf.NetworkID, network.address)
+	if network != nil && (network.address != address || network.ipv6Address != ipv6Address) {
+		return fmt.Errorf("shared VNF memif for network %d already uses %s/%s", vnf.NetworkID, network.address, network.ipv6Address)
 	}
 	if network == nil {
 		created, err := startSharedNetwork(ctx, sharedNetworkConfig{
@@ -279,6 +291,7 @@ func (m *VNFManager) StartShared(ctx context.Context, vnf store.VNF, socketPath 
 			SocketPath:  socketPath,
 			InterfaceID: ifID,
 			Address:     address,
+			IPv6Address: ipv6Address,
 			MAC:         NetworkVNFStackMAC(vnf.NetworkID),
 		})
 		if err != nil {
@@ -325,6 +338,11 @@ func (m *VNFManager) StartShared(ctx context.Context, vnf store.VNF, socketPath 
 		done:      make(chan struct{}),
 	}
 	m.mu.Unlock()
+	if vnf.Type == store.VNFTypeDNS {
+		m.registerDNSRuntime(vnf.ID, network.dnsHandler())
+	} else {
+		m.registerDHCPConfig(vnf)
+	}
 	log.Info().
 		Int64("vnf_id", vnf.ID).
 		Int64("network_id", vnf.NetworkID).
@@ -378,6 +396,7 @@ func (m *VNFManager) stop(ctx context.Context, vnfID int64, removeLeases bool) e
 			delete(m.servers, vnfID)
 		}
 		m.mu.Unlock()
+		m.unregisterVNF(vnfID, managed.vnfType)
 	}
 
 	if removeLeases {
@@ -485,11 +504,17 @@ func (m *VNFManager) CleanupLegacyNetwork(networkID int64) {
 // ResetRuntime stops every DHCP server but keeps lease files. It is used when
 // VPP restarts and the tap interfaces backing those servers disappear.
 func (m *VNFManager) ResetRuntime(_ context.Context) error {
-	return m.Close()
+	return m.stopAll()
 }
 
 // Close stops all VNF servers but keeps lease files.
 func (m *VNFManager) Close() error {
+	err := m.stopAll()
+	m.stopDNSSync()
+	return err
+}
+
+func (m *VNFManager) stopAll() error {
 	m.mu.Lock()
 	ids := make([]int64, 0, len(m.servers))
 	for id := range m.servers {

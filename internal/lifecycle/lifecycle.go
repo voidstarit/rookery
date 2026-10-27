@@ -119,6 +119,29 @@ func internalError(err error) error {
 	return &VNFError{Status: http.StatusInternalServerError, Err: err}
 }
 
+func (s *Service) validateDHCPDNSIntegration(ctx context.Context, networkID int64, vnfType string, config store.VNFConfig) error {
+	if config.DNSVNFID == 0 {
+		return nil
+	}
+	if vnfType != store.VNFTypeDHCPv4 && vnfType != store.VNFTypeDHCPv6 {
+		return errors.New("dns_vnf_id is supported for DHCP VNFs only")
+	}
+	target, err := s.store.GetVNF(ctx, config.DNSVNFID)
+	if err != nil {
+		if errors.Is(err, store.ErrVNFNotFound) {
+			return errors.New("selected DNS VNF not found")
+		}
+		return err
+	}
+	if target.Type != store.VNFTypeDNS {
+		return errors.New("selected VNF is not a DNS VNF")
+	}
+	if target.NetworkID != networkID {
+		return errors.New("selected DNS VNF must belong to the same network")
+	}
+	return nil
+}
+
 func (s *Service) CreateVNF(ctx context.Context, request *rookeryv1.CreateVNFRequest) (store.VNF, error) {
 	name := strings.TrimSpace(request.GetName())
 	switch {
@@ -148,6 +171,9 @@ func (s *Service) CreateVNF(ctx context.Context, request *rookeryv1.CreateVNFReq
 			return store.VNF{}, inputError("network not found")
 		}
 		return store.VNF{}, internalError(err)
+	}
+	if err := s.validateDHCPDNSIntegration(ctx, network.ID, vnfType, config); err != nil {
+		return store.VNF{}, inputError(err.Error())
 	}
 	existing, err := s.store.ListVNFsByNetwork(ctx, network.ID)
 	if err != nil {
@@ -223,6 +249,9 @@ func (s *Service) UpdateVNF(ctx context.Context, request *rookeryv1.UpdateVNFReq
 			return store.VNF{}, inputError(err.Error())
 		}
 	}
+	if err := s.validateDHCPDNSIntegration(ctx, existing.NetworkID, existing.Type, config); err != nil {
+		return store.VNF{}, inputError(err.Error())
+	}
 	enabled := existing.Enabled
 	if request.Enabled != nil {
 		enabled = request.GetEnabled()
@@ -291,6 +320,17 @@ func (s *Service) DeleteVNF(ctx context.Context, request *rookeryv1.DeleteVNFReq
 			return &VNFError{Status: http.StatusNotFound, Message: "vnf not found"}
 		}
 		return internalError(err)
+	}
+	if vnf.Type == store.VNFTypeDNS {
+		vnfs, err := s.store.ListVNFs(ctx, nil)
+		if err != nil {
+			return internalError(err)
+		}
+		for _, item := range vnfs {
+			if item.Config.DNSVNFID == vnf.ID {
+				return &VNFError{Status: http.StatusConflict, Message: fmt.Sprintf("DNS VNF %s is used by DHCP VNF %s", vnf.Name, item.Name)}
+			}
+		}
 	}
 	var stopErr error
 	if vnf.Type == store.VNFTypeNAT44 {

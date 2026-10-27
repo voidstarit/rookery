@@ -158,6 +158,12 @@ names. For DHCPv4, `transport` can be omitted (use the network default),
 `"shared"`, `"dedicated"`, or `"tap"`; `"memif"` is the legacy alias for a
 dedicated memif.
 
+DHCPv4 and DHCPv6 VNFs can integrate with a DNS VNF on the same network by
+setting `dns_vnf_id`, `dns_domain` (the suffix for generated names), and
+optionally `dns_ttl` (default `300`). The DNS VNF maintains A/AAAA and PTR
+records for active leases. Set the DHCP `dns` field to the DNS VNF's `.2`
+service address (IPv4 for DHCPv4, IPv6 for DHCPv6) so clients use it.
+
 ## Data sources
 
 Each resource has a matching data source:

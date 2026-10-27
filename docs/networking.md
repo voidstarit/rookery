@@ -236,14 +236,26 @@ or `/vnfs/{id}/edit`, so refreshing keeps the form open; lease and session
 views remain dialogs.
 
 DNS VNFs provide a small authoritative DNS server on the network's shared VNF
-memif, reachable at the network service address (`.2`, UDP/TCP 53). Define
-records with a name, type (`A`, `AAAA`, `CNAME`, `TXT`), value, and TTL; names
-are fully qualified and may use a leading wildcard such as `*.lab1.test`.
-Set **Forward names without a local record** to send other queries to the
-configured upstream servers (IP or IP:port), or disable it to answer unknown
-names with NXDOMAIN. If forwarding is enabled without upstreams, the daemon uses
-`/etc/resolv.conf`. Local records always take precedence. Point DHCP clients at
-the `.2` service address through the DHCP VNF's DNS field.
+memif, reachable at the network service address (`.2`, UDP/TCP 53 over both
+IPv4 and IPv6). Define records with a name, type (`A`, `AAAA`, `CNAME`, `TXT`,
+`PTR`), value, and TTL; names are fully qualified and may use a leading wildcard
+such as `*.lab1.test`. Set **Forward names without a local record** to send
+other queries to the configured upstream servers (IP or IP:port), or disable it
+to answer unknown names with NXDOMAIN. If forwarding is enabled without
+upstreams, the daemon uses `/etc/resolv.conf`. Local records always take
+precedence. Point DHCP clients at the `.2` service address through the DHCP
+VNF's DNS field.
+
+A DHCPv4 or DHCPv6 VNF can register its active leases in a DNS VNF on the same
+network. Set `dns_vnf_id` to the DNS VNF id, `dns_domain` to the suffix used for
+names (for example `lab1.test`), and optionally `dns_ttl` (default 300 seconds).
+The daemon prefers the client's DHCP FQDN option, falls back to the DHCP
+hostname plus the domain suffix, and uses a MAC/DUID-derived `host-...` name if
+the client sends no usable name or the name conflicts. A/AAAA and PTR records
+are updated while the lease changes and removed on DHCPRELEASE or expiry. The
+integration uses the lease files, so it is rebuilt after either runtime
+restarts. The selected DNS VNF must be on the same network, and deleting it is
+blocked while a DHCP VNF references it.
 
 BGP VNFs are embedded GoBGP speakers with one peer, using the address family of
 `local_ip` (IPv4 or IPv6 unicast). Choose a `memif` transport for a gVisor

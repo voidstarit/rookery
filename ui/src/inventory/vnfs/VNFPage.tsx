@@ -15,6 +15,7 @@ import type {
 type VNFPageProps = {
   vnf: VNF | null;
   networks: Network[];
+  vnfs: VNF[];
   vppReady: boolean;
   initialNetworkID?: number;
   onClose: () => void;
@@ -41,6 +42,9 @@ type FormState = {
   dnsRecords: DNSRecord[];
   dnsForward: boolean;
   dnsForwarders: string;
+  dnsVNFID: number;
+  dnsDomain: string;
+  dnsTTL: string;
   transport: "inherit" | "shared" | "dedicated" | "tap" | "memif";
   localAS: string;
   routerID: string;
@@ -69,6 +73,42 @@ function ipv4HostOffset(cidr: string | undefined, offset: number): string {
   }
   const value = ((((parts[0] << 24) >>> 0) + (parts[1] << 16) + (parts[2] << 8) + parts[3] + offset) >>> 0);
   return `${(value >>> 24) & 255}.${(value >>> 16) & 255}.${(value >>> 8) & 255}.${value & 255}`;
+}
+
+function ipv6HostOffset(cidr: string | undefined, offset: number): string {
+  if (!cidr) {
+    return "";
+  }
+  const [addr, bits] = cidr.trim().split("/");
+  if (!addr || !bits) {
+    return "";
+  }
+  const halves = addr.split("::");
+  if (halves.length > 2) {
+    return "";
+  }
+  const parse = (value: string) => (value ? value.split(":") : []);
+  const left = parse(halves[0]);
+  const right = parse(halves[1] ?? "");
+  const missing = 8 - left.length - right.length;
+  if (missing < 0) {
+    return "";
+  }
+  const groups = [...left, ...Array.from({ length: missing }, () => "0"), ...right];
+  if (groups.some((group) => !/^[0-9a-fA-F]{1,4}$/.test(group))) {
+    return "";
+  }
+  let value = 0n;
+  for (const group of groups) {
+    value = (value << 16n) + BigInt(parseInt(group, 16));
+  }
+  value += BigInt(offset);
+  const output: string[] = [];
+  for (let index = 0; index < 8; index += 1) {
+    output.unshift((value & 0xffffn).toString(16));
+    value >>= 16n;
+  }
+  return output.join(":");
 }
 
 function firstIPv4Host(cidr: string | undefined): string {
@@ -116,6 +156,9 @@ function defaultForm(vnf: VNF | null, networks: Network[], vppReady: boolean, in
       : vnf?.type === "dns"
         ? ""
         : "1.1.1.1, 8.8.8.8",
+    dnsVNFID: config.dns_vnf_id ?? 0,
+    dnsDomain: config.dns_domain ?? "",
+    dnsTTL: String(config.dns_ttl ?? 300),
     transport:
       type === "bgp"
         ? config.transport === "tap"
@@ -178,6 +221,9 @@ function applyTypeDefaults(state: FormState, type: VNFType): FormState {
       rangeStart: "fd00:20::100",
       rangeEnd: "fd00:20::200",
       leaseTime: "12h",
+      dnsVNFID: 0,
+      dnsDomain: "",
+      dnsTTL: "300",
     };
   }
   if (type === "nat44") {
@@ -199,6 +245,9 @@ function applyTypeDefaults(state: FormState, type: VNFType): FormState {
     rangeStart: "10.20.0.100",
     rangeEnd: "10.20.0.200",
     leaseTime: "12h",
+    dnsVNFID: 0,
+    dnsDomain: "",
+    dnsTTL: "300",
   };
 }
 
@@ -220,7 +269,7 @@ function outsideInterfaceHint(interfaces: HostInterface[], selected: string): st
 
 function typeHint(type: VNFType): string {
   if (type === "dns") {
-    return "Local DNS server on the network service address (.2). Serve your own A/AAAA/CNAME/TXT records and optionally forward other names upstream.";
+    return "Local DNS server on the network service address (.2) over IPv4 and IPv6. Serve A/AAAA/CNAME/TXT/PTR records and optionally forward other names upstream.";
   }
   if (type === "bgp") {
     return "Embedded IPv4/IPv6 BGP speaker. Select memif for userspace/gVisor or tap for kernel TCP with TCP MD5 support.";
@@ -272,7 +321,7 @@ function dhcpOptionPreset(type: VNFType, code: number): DHCPOptionPreset | undef
   return dhcpOptionPresets(type).find((preset) => preset.code === code);
 }
 
-export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, onSaved }: VNFPageProps) {
+export function VNFPage({ vnf, networks, vnfs, vppReady, initialNetworkID, onClose, onSaved }: VNFPageProps) {
   const [form, setForm] = useState<FormState>(() => defaultForm(vnf, networks, vppReady, initialNetworkID));
   const [hostInterfaces, setHostInterfaces] = useState<HostInterface[]>([]);
   const [hostInterfacesLoading, setHostInterfacesLoading] = useState(false);
@@ -287,6 +336,8 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
   const dns = form.type === "dns";
   const selectedNetwork = networks.find((item) => item.id === form.networkID);
   const dnsServiceIP = ipv4HostOffset(selectedNetwork?.ipv4_cidr, 2);
+  const dnsServiceIPv6 = ipv6HostOffset(selectedNetwork?.ipv6_cidr, 2);
+  const dnsVNFs = vnfs.filter((candidate) => candidate.type === "dns" && candidate.network_id === form.networkID);
   const sharedVNFAddress = (() => {
     const cidr = selectedNetwork?.ipv4_cidr?.trim();
     const host = ipv4HostOffset(cidr, 2);
@@ -434,6 +485,13 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                   mac: assignment.mac.trim(),
                   ip: assignment.ip.trim(),
                 })),
+              }
+            : {}),
+          ...(form.dnsVNFID > 0
+            ? {
+                dns_vnf_id: form.dnsVNFID,
+                dns_domain: form.dnsDomain.trim(),
+                dns_ttl: Number(form.dnsTTL) || 300,
               }
             : {}),
         };
@@ -634,6 +692,14 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                 setForm((current) => ({
                   ...current,
                   networkID,
+                  dnsVNFID: vnfs.some(
+                    (candidate) =>
+                      candidate.id === current.dnsVNFID &&
+                      candidate.type === "dns" &&
+                      candidate.network_id === networkID,
+                  )
+                    ? current.dnsVNFID
+                    : 0,
                   gateway:
                     current.type === "dhcpv6"
                       ? current.gateway
@@ -777,6 +843,62 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                 onInput={(event) => update("leaseTime", event.currentTarget.value)}
               />
             </label>
+          </div>
+          <div class="form-grid">
+            <label class="field field-wide">
+              <span class="field-label">DHCP DNS integration <em>optional</em></span>
+              <select
+                value={String(form.dnsVNFID)}
+                onChange={(event) => {
+                  const dnsVNFID = Number(event.currentTarget.value);
+                  const serviceAddress = form.type === "dhcpv6" ? dnsServiceIPv6 : dnsServiceIP;
+                  setForm((current) => ({
+                    ...current,
+                    dnsVNFID,
+                    ...(dnsVNFID > 0 && serviceAddress ? { dns: serviceAddress } : {}),
+                  }));
+                }}
+              >
+                <option value="0">No DNS integration</option>
+                {dnsVNFs.map((candidate) => (
+                  <option value={String(candidate.id)} key={candidate.id}>
+                    {candidate.name}
+                  </option>
+                ))}
+              </select>
+              <span class="field-hint">
+                {dnsVNFs.length === 0
+                  ? "Create a DNS VNF on this network first to register DHCP leases."
+                  : "Active leases get A/AAAA and PTR records in the selected DNS VNF. The DNS server field is set to its service address (.2)."}
+              </span>
+            </label>
+            {form.dnsVNFID > 0 ? (
+              <>
+                <label class="field">
+                  <span class="field-label">DNS domain</span>
+                  <input
+                    type="text"
+                    required
+                    autocomplete="off"
+                    spellcheck={false}
+                    placeholder="lab1.test"
+                    value={form.dnsDomain}
+                    onInput={(event) => update("dnsDomain", event.currentTarget.value)}
+                  />
+                  <span class="field-hint">Used when the client does not send a FQDN.</span>
+                </label>
+                <label class="field">
+                  <span class="field-label">DNS TTL (seconds)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={86400}
+                    value={form.dnsTTL}
+                    onInput={(event) => update("dnsTTL", event.currentTarget.value)}
+                  />
+                </label>
+              </>
+            ) : null}
           </div>
           {form.type === "dhcpv4" ? (
             <div class="form-grid">
@@ -956,9 +1078,9 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
         ) : dns ? (
           <>
             <p class="field-hint">
-              Clients on this network should use <code>{dnsServiceIP || "the .2 service address"}</code> as
-              their DNS server. Set that address in the DHCP VNF's DNS field (or configure it directly on
-              clients).
+              DHCPv4 clients can use <code>{dnsServiceIP || "the IPv4 .2 service address"}</code>;
+              DHCPv6 clients can use <code>{dnsServiceIPv6 || "the IPv6 .2 service address"}</code>.
+              Set that address in the DHCP VNF's DNS field (or configure it directly on clients).
             </p>
             <div class="form-grid">
               <div class="field field-wide">
@@ -967,7 +1089,7 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                     <span class="field-label">DNS records</span>
                     <span class="field-hint">
                       Names are served authoritatively. Use a fully qualified name such as
-                      vm1.lab1.test; a leading *. wildcard is supported. Types: A, AAAA, CNAME, TXT.
+                      vm1.lab1.test; a leading *. wildcard is supported. Types: A, AAAA, CNAME, TXT, PTR.
                     </span>
                   </div>
                   <button class="button ghost" type="button" onClick={addDNSRecord}>
@@ -1012,6 +1134,7 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                             <option value="AAAA">AAAA</option>
                             <option value="CNAME">CNAME</option>
                             <option value="TXT">TXT</option>
+                            <option value="PTR">PTR</option>
                           </select>
                         </label>
                         <label class="field">
@@ -1021,7 +1144,7 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
                             required
                             autocomplete="off"
                             spellcheck={false}
-                            placeholder={record.type === "A" ? "10.20.0.50" : record.type === "AAAA" ? "fd00:20::50" : record.type === "CNAME" ? "vm1.lab1.test" : "text"}
+                            placeholder={record.type === "A" ? "10.20.0.50" : record.type === "AAAA" ? "fd00:20::50" : record.type === "CNAME" || record.type === "PTR" ? "vm1.lab1.test" : "text"}
                             value={record.value}
                             onInput={(event) => updateDNSRecord(index, "value", event.currentTarget.value)}
                           />

@@ -197,9 +197,11 @@ func (s *coreDHCPv6State) handle(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) 
 		return nil, true
 	}
 	clientKey := clientID.String()
+	hostname := dhcpv6DNSName(msg)
 	log.Trace().
 		Str("leases", s.leasePath).
 		Str("client_id", clientKey).
+		Str("hostname", hostname).
 		Str("message_type", msg.Type().String()).
 		Str("options", msg.String()).
 		Msg("DHCPv6 request")
@@ -221,7 +223,7 @@ func (s *coreDHCPv6State) handle(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) 
 		requested, hasRequested := requestedV6Address(ianaReq)
 		if record == nil {
 			var allocErr error
-			record, allocErr = s.allocateLocked(clientKey, requested, hasRequested, now)
+			record, allocErr = s.allocateLocked(clientKey, requested, hasRequested, hostname, now)
 			if allocErr != nil {
 				resp.UpdateOption(&dhcpv6.OptIANA{
 					IaId: ianaReq.IaId,
@@ -249,7 +251,7 @@ func (s *coreDHCPv6State) handle(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) 
 				s.applyOptions(resp, msg)
 				return resp, false
 			}
-			s.renewLocked(record, now)
+			s.renewLocked(record, hostname, now)
 		}
 
 		resp.UpdateOption(&dhcpv6.OptIANA{
@@ -320,6 +322,13 @@ func (s *coreDHCPv6State) applyOptions(resp dhcpv6.DHCPv6, msg *dhcpv6.Message) 
 		Msg("DHCPv6 reply options")
 }
 
+func dhcpv6DNSName(msg *dhcpv6.Message) string {
+	if fqdn := msg.Options.FQDN(); fqdn != nil && fqdn.DomainName != nil {
+		return strings.TrimSpace(strings.Join(fqdn.DomainName.Labels, "."))
+	}
+	return ""
+}
+
 func requestedV6Address(ianaOpt *dhcpv6.OptIANA) (netip.Addr, bool) {
 	if ianaOpt == nil {
 		return netip.Addr{}, false
@@ -347,8 +356,11 @@ func (s *coreDHCPv6State) leaseForLocked(clientID string, now time.Time) *coreDH
 	return record
 }
 
-func (s *coreDHCPv6State) renewLocked(record *coreDHCPv6Lease, now time.Time) {
+func (s *coreDHCPv6State) renewLocked(record *coreDHCPv6Lease, hostname string, now time.Time) {
 	record.Expires = now.Add(s.leaseTime)
+	if hostname != "" {
+		record.Hostname = hostname
+	}
 	log.Debug().
 		Str("leases", s.leasePath).
 		Str("client_id", record.ClientID).
@@ -358,7 +370,7 @@ func (s *coreDHCPv6State) renewLocked(record *coreDHCPv6Lease, now time.Time) {
 	s.saveLocked()
 }
 
-func (s *coreDHCPv6State) allocateLocked(clientID string, requested netip.Addr, hasRequested bool, now time.Time) (*coreDHCPv6Lease, error) {
+func (s *coreDHCPv6State) allocateLocked(clientID string, requested netip.Addr, hasRequested bool, hostname string, now time.Time) (*coreDHCPv6Lease, error) {
 	chosen := netip.Addr{}
 	if hasRequested && s.inRange(requested) {
 		if _, used := s.byIP[requested.String()]; !used {
@@ -386,6 +398,7 @@ func (s *coreDHCPv6State) allocateLocked(clientID string, requested netip.Addr, 
 		ClientID: clientID,
 		Address:  chosen,
 		Expires:  now.Add(s.leaseTime),
+		Hostname: hostname,
 	}
 	s.leases[clientID] = record
 	s.byIP[chosen.String()] = clientID

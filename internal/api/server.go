@@ -112,7 +112,7 @@ type NAT44Provisioner interface {
 type VNFManager interface {
 	Start(ctx context.Context, vnf store.VNF, hostIf string) error
 	StartMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32) error
-	StartShared(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32, address string) error
+	StartShared(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32, address, ipv6Address string) error
 	Stop(ctx context.Context, vnfID int64, removeLeases bool) error
 	Running(ctx context.Context, vnfID int64) bool
 	Leases(ctx context.Context, vnfID int64) ([]store.VNFLease, error)

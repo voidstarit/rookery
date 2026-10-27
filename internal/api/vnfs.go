@@ -69,6 +69,10 @@ type vnfConfigPayload struct {
 	DNSForward    bool               `json:"dns_forward"`
 	DNSForwarders []string           `json:"dns_forwarders"`
 
+	DNSVNFID  int64  `json:"dns_vnf_id"`
+	DNSDomain string `json:"dns_domain"`
+	DNSTTL    uint32 `json:"dns_ttl"`
+
 	DHCPOptions []dhcpOptionPayload `json:"dhcp_options"`
 }
 
@@ -134,6 +138,10 @@ func (p vnfPayload) toType() (string, error) {
 func (p vnfConfigPayload) toConfig(vnfType string) (store.VNFConfig, error) {
 	if vnfType != store.VNFTypeDHCPv4 && vnfType != store.VNFTypeDHCPv6 && len(p.DHCPOptions) > 0 {
 		return store.VNFConfig{}, errors.New("config.dhcp_options is supported for DHCP VNFs only")
+	}
+	if vnfType != store.VNFTypeDHCPv4 && vnfType != store.VNFTypeDHCPv6 &&
+		(p.DNSVNFID != 0 || strings.TrimSpace(p.DNSDomain) != "" || p.DNSTTL != 0) {
+		return store.VNFConfig{}, errors.New("config.dns_vnf_id, dns_domain, and dns_ttl are supported for DHCP VNFs only")
 	}
 	if vnfType == store.VNFTypeBGP {
 		return normalizeBGPConfig(p)
@@ -205,6 +213,10 @@ func (p vnfConfigPayload) toConfig(vnfType string) (store.VNFConfig, error) {
 		if err != nil {
 			return store.VNFConfig{}, err
 		}
+		dnsDomain, dnsTTL, err := normalizeDNSIntegration(p.DNSVNFID, p.DNSDomain, p.DNSTTL)
+		if err != nil {
+			return store.VNFConfig{}, err
+		}
 		return store.VNFConfig{
 			Gateway:           normalizedGateway,
 			RangeStart:        normalizedStart,
@@ -215,6 +227,9 @@ func (p vnfConfigPayload) toConfig(vnfType string) (store.VNFConfig, error) {
 			StaticAssignments: staticAssignments,
 			Transport:         transport,
 			DHCPOptions:       options,
+			DNSVNFID:          p.DNSVNFID,
+			DNSDomain:         dnsDomain,
+			DNSTTL:            dnsTTL,
 		}, nil
 	case store.VNFTypeNAT44:
 		return normalizeNAT44Config(p)
@@ -919,6 +934,51 @@ func (s *Server) VNFSessions(ctx context.Context, vnf store.VNF) ([]string, erro
 	return sessions, nil
 }
 
+func normalizeDNSIntegration(vnfID int64, domain string, ttl uint32) (string, uint32, error) {
+	domain = strings.TrimSpace(domain)
+	if vnfID < 0 {
+		return "", 0, errors.New("config.dns_vnf_id must be positive")
+	}
+	if vnfID == 0 {
+		if domain != "" || ttl != 0 {
+			return "", 0, errors.New("config.dns_vnf_id is required when dns_domain or dns_ttl is set")
+		}
+		return "", 0, nil
+	}
+	normalized, err := normalizeDNSDomain(domain)
+	if err != nil {
+		return "", 0, err
+	}
+	if normalized == "" {
+		return "", 0, errors.New("config.dns_domain is required when dns_vnf_id is set")
+	}
+	if ttl == 0 {
+		ttl = 300
+	}
+	if ttl > 86400 {
+		return "", 0, errors.New("config.dns_ttl must be at most 86400")
+	}
+	return normalized, ttl, nil
+}
+
+func normalizeDNSDomain(value string) (string, error) {
+	value = strings.TrimSpace(strings.TrimSuffix(value, "."))
+	if value == "" {
+		return "", nil
+	}
+	if strings.ContainsAny(value, " \t\r\n*") {
+		return "", errors.New("config.dns_domain must be a domain name without wildcards or whitespace")
+	}
+	canonical := dns.CanonicalName(value)
+	if canonical == "." {
+		return "", errors.New("config.dns_domain must not be the DNS root")
+	}
+	if _, ok := dns.IsDomainName(canonical); !ok {
+		return "", errors.New("config.dns_domain is not a valid domain name")
+	}
+	return strings.TrimSuffix(canonical, "."), nil
+}
+
 func normalizeDNSConfig(p vnfConfigPayload) (store.VNFConfig, error) {
 	if len(p.DNSRecords) > 1024 {
 		return store.VNFConfig{}, errors.New("config.dns_records supports at most 1024 records")
@@ -1055,8 +1115,17 @@ func normalizeDNSRecordValue(recordType, value string) (string, error) {
 			return "", errors.New("TXT values must be at most 255 bytes")
 		}
 		return value, nil
+	case "PTR":
+		name, err := normalizeDNSRecordName(value)
+		if err != nil {
+			return "", err
+		}
+		if strings.HasPrefix(name, "*.") {
+			return "", errors.New("PTR targets cannot be wildcards")
+		}
+		return name, nil
 	default:
-		return "", errors.New("type must be A, AAAA, CNAME, or TXT")
+		return "", errors.New("type must be A, AAAA, CNAME, TXT, or PTR")
 	}
 }
 
