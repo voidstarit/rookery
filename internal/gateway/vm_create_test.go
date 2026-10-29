@@ -2,6 +2,7 @@ package gateway_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -63,6 +64,20 @@ func TestVMCreateAndUpdate(t *testing.T) {
 	if vm["name"] != "vm-1" || vm["vcpus"].(float64) != 2 || vm["memory_mb"].(float64) != 1024 {
 		t.Fatalf("vm = %+v", vm)
 	}
+	if vm["status"] != store.StatusRunning {
+		t.Fatalf("created status = %v, want %s", vm["status"], store.StatusRunning)
+	}
+
+	// Changing disks or interfaces requires a stopped VM, and stopping one is
+	// always explicit.
+	stop, err := http.Post(server.URL+"/api/vms/"+id+"/stop", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stop.StatusCode != http.StatusOK {
+		t.Fatalf("stop VM status = %d, body = %s", stop.StatusCode, readBody(t, stop))
+	}
+	_ = stop.Body.Close()
 
 	request, err := http.NewRequest(http.MethodPut, server.URL+"/api/vms/"+id, strings.NewReader(`{"name":"vm-1b","description":"updated","vcpus":4}`))
 	if err != nil {
@@ -156,4 +171,59 @@ func TestVMCreateAndUpdate(t *testing.T) {
 		t.Fatalf("replace disks status = %d, body = %s", replaced.StatusCode, readBody(t, replaced))
 	}
 	_ = replaced.Body.Close()
+}
+
+func TestVMCreateStartFailureRollsBack(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "vm-create-fail.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	backend, err := st.CreateStorageBackend(ctx, store.StorageBackend{
+		Name: "default", Driver: "lvm-thin", Config: store.StorageBackendConfig{VG: "vg0", ThinPool: "pool"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	disk, err := st.CreateDisk(ctx, store.Disk{
+		Name: "disk-1", SizeGB: 10, VG: "vg0", ThinPool: "pool", StorageBackendID: &backend.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := &fakeVMController{startErr: errors.New("KVM is not available")}
+	gw, err := gateway.New(st, fakeReadiness{status: readiness.Status{Ready: true}}, gateway.WithVMController(runtime))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	server := httptest.NewServer(gw.Handler)
+	t.Cleanup(server.Close)
+
+	response, err := http.Post(server.URL+"/api/vms", "application/json", strings.NewReader(`{"name":"vm-1","disk_ids":[`+itoa(disk.ID)+`]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("create status = %d, body = %s, want 500", response.StatusCode, readBody(t, response))
+	}
+	if body := readBody(t, response); !strings.Contains(body, "could not start VM") {
+		t.Fatalf("body = %s, want start failure", body)
+	}
+
+	vms, err := st.ListVMs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vms) != 0 {
+		t.Fatalf("vms after failed create = %+v, want none", vms)
+	}
+	released, err := st.GetDisk(ctx, disk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if released.AttachedVMID != nil {
+		t.Fatalf("disk still attached to %v after failed create", released.AttachedVMID)
+	}
 }

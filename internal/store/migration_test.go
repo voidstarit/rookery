@@ -104,6 +104,9 @@ func TestMigrationConvertsNetworkDHCPToVNF(t *testing.T) {
 			t.Fatalf("drop virtual_interfaces.%s: %v", column, err)
 		}
 	}
+	if _, err := db.Exec(`ALTER TABLE vms DROP COLUMN desired_state`); err != nil {
+		t.Fatalf("drop vms.desired_state: %v", err)
+	}
 	if _, err := db.Exec(`
 		INSERT INTO networks
 			(name, bridge_domain_id, dhcp_enabled, dhcp_gateway,
@@ -231,6 +234,9 @@ func TestMigrationBackfillsVMDisks(t *testing.T) {
 	if _, err := db.Exec(`DROP TABLE IF EXISTS vpp_interface_dhcp_clients`); err != nil {
 		t.Fatalf("drop vpp_interface_dhcp_clients table: %v", err)
 	}
+	if _, err := db.Exec(`ALTER TABLE vms DROP COLUMN desired_state`); err != nil {
+		t.Fatalf("drop vms.desired_state: %v", err)
+	}
 	if _, err := db.Exec(`PRAGMA user_version = 11`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
@@ -328,7 +334,7 @@ func TestMigrationPreservesLegacyVMsWithoutDisks(t *testing.T) {
 	if err := st.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 37 {
+	if version != 38 {
 		t.Fatalf("schema version = %d, want 37", version)
 	}
 }
@@ -349,6 +355,9 @@ func TestEnsureStartupScriptSchemaAfterTableDrop(t *testing.T) {
 	}
 	if _, err := db.Exec(`DROP TABLE startup_script`); err != nil {
 		t.Fatalf("drop startup_script table: %v", err)
+	}
+	if _, err := db.Exec(`ALTER TABLE vms DROP COLUMN desired_state`); err != nil {
+		t.Fatalf("drop vms.desired_state: %v", err)
 	}
 	if _, err := db.Exec(`PRAGMA user_version = 37`); err != nil {
 		t.Fatalf("set schema version: %v", err)
@@ -426,6 +435,9 @@ func TestEnsureVPPInterfaceAddressesSchemaAfterTableDrop(t *testing.T) {
 			t.Fatalf("drop disks.%s: %v", column, err)
 		}
 	}
+	if _, err := db.Exec(`ALTER TABLE vms DROP COLUMN desired_state`); err != nil {
+		t.Fatalf("drop vms.desired_state: %v", err)
+	}
 	if _, err := db.Exec(`PRAGMA user_version = 30`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
@@ -447,5 +459,69 @@ func TestEnsureVPPInterfaceAddressesSchemaAfterTableDrop(t *testing.T) {
 	}
 	if len(addresses) != 1 || addresses[0] != "10.20.0.10/24" {
 		t.Fatalf("addresses = %v", addresses)
+	}
+}
+
+func TestMigrationBackfillsVMPowerState(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "legacy-power.db")
+
+	st, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("create current database: %v", err)
+	}
+	runningDisk, err := st.CreateDisk(ctx, Disk{Name: "legacy-running", SizeGB: 20, VG: "vg0", ThinPool: "rookery"})
+	if err != nil {
+		t.Fatalf("create running disk: %v", err)
+	}
+	stoppedDisk, err := st.CreateDisk(ctx, Disk{Name: "legacy-stopped", SizeGB: 20, VG: "vg0", ThinPool: "rookery"})
+	if err != nil {
+		t.Fatalf("create stopped disk: %v", err)
+	}
+	running, err := st.CreateVM(ctx, VM{Name: "was-running", Status: StatusRunning, VCPUs: 1, MemoryMB: 512, DiskID: &runningDisk.ID})
+	if err != nil {
+		t.Fatalf("create running vm: %v", err)
+	}
+	stopped, err := st.CreateVM(ctx, VM{Name: "was-stopped", Status: StatusStopped, VCPUs: 1, MemoryMB: 512, DiskID: &stoppedDisk.ID})
+	if err != nil {
+		t.Fatalf("create stopped vm: %v", err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatalf("close current database: %v", err)
+	}
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open legacy database: %v", err)
+	}
+	if _, err := db.Exec(`ALTER TABLE vms DROP COLUMN desired_state`); err != nil {
+		t.Fatalf("drop vms.desired_state: %v", err)
+	}
+	if _, err := db.Exec(`PRAGMA user_version = 37`); err != nil {
+		t.Fatalf("set schema version: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close legacy database: %v", err)
+	}
+
+	st, err = Open(dbPath)
+	if err != nil {
+		t.Fatalf("open migrated database: %v", err)
+	}
+	defer st.Close()
+
+	gotRunning, err := st.GetVM(ctx, running.ID)
+	if err != nil {
+		t.Fatalf("get migrated running vm: %v", err)
+	}
+	if gotRunning.DesiredState != DesiredRunning {
+		t.Fatalf("running vm desired state = %q, want running", gotRunning.DesiredState)
+	}
+	gotStopped, err := st.GetVM(ctx, stopped.ID)
+	if err != nil {
+		t.Fatalf("get migrated stopped vm: %v", err)
+	}
+	if gotStopped.DesiredState != DesiredStopped {
+		t.Fatalf("stopped vm desired state = %q, want stopped", gotStopped.DesiredState)
 	}
 }

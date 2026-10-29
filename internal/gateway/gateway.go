@@ -239,7 +239,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	}
 	server := grpc.NewServer(grpc.ChainUnaryInterceptor(errorLogInterceptor(options.logger), validationInterceptor))
 	system := &systemService{store: st, readiness: ready}
-	vms := &vmService{store: st, runtime: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, mu: options.vmMutex}
+	vms := &vmService{store: st, runtime: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, mu: options.vmMutex, logger: options.logger}
 	disks := &diskService{store: st, runtime: options.diskProvisioner, readiness: ready, mu: options.diskMutex, logger: options.logger}
 	media := &mediaService{store: st}
 	networks := &networkService{store: st, runtime: options.networkRuntime, readiness: ready, writer: options.networkWriter, mu: options.diskMutex}
@@ -477,6 +477,7 @@ type vmService struct {
 	readiness  Readiness
 	resourceMu *sync.Mutex
 	mu         *sync.Mutex
+	logger     zerolog.Logger
 }
 
 func (s *vmService) ListVMs(ctx context.Context, _ *rookeryv1.ListVMsRequest) (*rookeryv1.ListVMsResponse, error) {

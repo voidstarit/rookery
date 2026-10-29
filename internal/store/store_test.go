@@ -125,6 +125,9 @@ func TestVMCrud(t *testing.T) {
 	if created.ConsoleEnabled {
 		t.Fatal("new VM has console access enabled by default")
 	}
+	if created.DesiredState != store.DesiredStopped {
+		t.Fatalf("desired state = %q, want stopped", created.DesiredState)
+	}
 
 	got, err := st.GetVM(ctx, created.ID)
 	if err != nil {
@@ -135,6 +138,17 @@ func TestVMCrud(t *testing.T) {
 	}
 	if got.Disk == nil || got.Disk.ID != created.Disk.ID {
 		t.Fatalf("get vm disk = %+v", got.Disk)
+	}
+
+	started, err := st.SetVMDesiredState(ctx, created.ID, store.DesiredRunning)
+	if err != nil {
+		t.Fatalf("set desired state: %v", err)
+	}
+	if started.DesiredState != store.DesiredRunning {
+		t.Fatalf("desired state = %q, want running", started.DesiredState)
+	}
+	if _, err := st.SetVMDesiredState(ctx, created.ID, "paused"); err == nil {
+		t.Fatal("invalid desired state was accepted")
 	}
 
 	updated, err := st.UpdateVM(ctx, store.VM{

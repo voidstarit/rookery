@@ -113,12 +113,26 @@ func Statuses() []string {
 	}
 }
 
+const (
+	// DesiredRunning means the VM should be running, including after an API or
+	// host restart.
+	DesiredRunning = "running"
+	// DesiredStopped means the VM was stopped explicitly and stays down.
+	DesiredStopped = "stopped"
+)
+
+// ValidDesiredState reports whether s is a desired power state.
+func ValidDesiredState(s string) bool {
+	return s == DesiredRunning || s == DesiredStopped
+}
+
 // VM is a virtual machine record.
 type VM struct {
 	ID             string        `json:"id"`
 	Name           string        `json:"name"`
 	Description    string        `json:"description"`
 	Status         string        `json:"status"`
+	DesiredState   string        `json:"desired_state"`
 	VCPUs          int           `json:"vcpus"`
 	MemoryMB       int           `json:"memory_mb"`
 	DiskID         *int64        `json:"disk_id,omitempty"`
@@ -615,6 +629,9 @@ func (s *Store) CreateVM(ctx context.Context, vm VM) (VM, error) {
 	}
 	vm.DiskID = &diskIDs[0]
 	vm.DiskIDs = diskIDs
+	if vm.DesiredState == "" {
+		vm.DesiredState = DesiredStopped
+	}
 
 	now := time.Now().UTC().UnixMilli()
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -623,9 +640,9 @@ func (s *Store) CreateVM(ctx context.Context, vm VM) (VM, error) {
 	}
 	defer tx.Rollback()
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO vms (id, name, description, status, vcpus, memory_mb, disk_id, boot_media_id, console_enabled, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		vm.ID, vm.Name, vm.Description, vm.Status, vm.VCPUs, vm.MemoryMB, diskIDs[0], vm.BootMediaID, vm.ConsoleEnabled, now, now,
+		INSERT INTO vms (id, name, description, status, desired_state, vcpus, memory_mb, disk_id, boot_media_id, console_enabled, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		vm.ID, vm.Name, vm.Description, vm.Status, vm.DesiredState, vm.VCPUs, vm.MemoryMB, diskIDs[0], vm.BootMediaID, vm.ConsoleEnabled, now, now,
 	); err != nil {
 		if constraintErr := classifyVMCreateError(err, vm.Name); constraintErr != nil {
 			return VM{}, constraintErr
@@ -808,6 +825,34 @@ func (s *Store) SetVMStatus(ctx context.Context, id, status string) (VM, error) 
 	)
 	if err != nil {
 		return VM{}, fmt.Errorf("update vm status: %w", err)
+	}
+
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return VM{}, fmt.Errorf("read updated rows: %w", err)
+	}
+	if affected == 0 {
+		return VM{}, ErrNotFound
+	}
+
+	return s.GetVM(ctx, id)
+}
+
+// SetVMDesiredState records the power state the VM should have after an API or
+// host restart. Starting a VM sets DesiredRunning; stopping it sets
+// DesiredStopped so reconciliation leaves it down.
+func (s *Store) SetVMDesiredState(ctx context.Context, id, state string) (VM, error) {
+	if !ValidDesiredState(state) {
+		return VM{}, fmt.Errorf("invalid desired state %q", state)
+	}
+	now := time.Now().UTC().UnixMilli()
+
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE vms SET desired_state = ?, updated_at = ? WHERE id = ?`,
+		state, now, id,
+	)
+	if err != nil {
+		return VM{}, fmt.Errorf("update vm desired state: %w", err)
 	}
 
 	affected, err := res.RowsAffected()
@@ -2242,7 +2287,7 @@ type scanner interface {
 }
 
 const vmSelect = `
-	SELECT v.id, v.name, v.description, v.status, v.vcpus, v.memory_mb,
+	SELECT v.id, v.name, v.description, v.status, v.desired_state, v.vcpus, v.memory_mb,
 	       v.disk_id, d.name, d.size_gb, d.vg, d.thin_pool,
 	       v.boot_media_id, m.name, m.path, m.size_bytes,
 	       v.console_enabled, v.created_at, v.updated_at
@@ -2282,6 +2327,7 @@ func scanVM(s scanner) (VM, error) {
 		&vm.Name,
 		&vm.Description,
 		&vm.Status,
+		&vm.DesiredState,
 		&vm.VCPUs,
 		&vm.MemoryMB,
 		&diskID,

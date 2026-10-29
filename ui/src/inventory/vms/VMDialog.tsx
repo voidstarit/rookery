@@ -46,7 +46,7 @@ export function VMDialog({
   const editing = vm !== null;
   const [name, setName] = useState(vm?.name ?? "");
   const [description, setDescription] = useState(vm?.description ?? "");
-  const [status, setStatus] = useState(vm?.status ?? "stopped");
+  const status = vm?.status ?? "stopped";
   const [vcpus, setVCPUs] = useState(String(vm?.vcpus ?? 1));
   const [memoryMB, setMemoryMB] = useState(String(vm?.memory_mb ?? 512));
   const [consoleEnabled, setConsoleEnabled] = useState(Boolean(vm?.console_enabled));
@@ -180,7 +180,6 @@ export function VMDialog({
     const payload: Record<string, unknown> = {
       name: name.trim(),
       description: description.trim(),
-      status,
       vcpus: Number(vcpus),
       memory_mb: Number(memoryMB),
       console_enabled: consoleEnabled,
@@ -267,16 +266,13 @@ export function VMDialog({
           </label>
 
           <label class="field">
-            <span class="field-label">Status</span>
-            <select disabled value={status} onChange={(event) => setStatus(event.currentTarget.value)}>
-              <option value="stopped">Stopped</option>
-              <option value="starting">Starting</option>
-              <option value="running">Running</option>
-              <option value="stopping">Stopping</option>
-              <option value="paused">Paused</option>
-              <option value="error">Error</option>
-            </select>
-            <span class="field-hint">Managed by Start/Stop on the inventory table.</span>
+            <span class="field-label">Power</span>
+            <input type="text" value={editing ? status : "Starts automatically"} disabled />
+            <span class="field-hint">
+              {editing
+                ? "Managed by Start/Stop on the inventory table."
+                : "New VMs start right away; use Stop on the inventory table to shut one down."}
+            </span>
           </label>
 
           <label class="field">

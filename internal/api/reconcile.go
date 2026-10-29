@@ -83,7 +83,54 @@ func (s *Server) reconcileInfrastructure(ctx context.Context) error {
 	if err := s.ReconcileVPPInterfaceRouteTables(ctx); err != nil {
 		errs = append(errs, err)
 	}
+	s.autostartVMs(ctx)
 	return errors.Join(errs...)
+}
+
+// autostartVMs applies the persisted desired power state after an API restart
+// or a host reboot. VMs the user started come back even when QEMU died with
+// the host; VMs the user stopped stay down. It runs after the VPP resources are
+// reconciled so attached vhost-user sockets exist before QEMU launches.
+func (s *Server) autostartVMs(ctx context.Context) {
+	if s.vms == nil {
+		return
+	}
+	s.runMu.Lock()
+	defer s.runMu.Unlock()
+	vms, err := s.store.ListVMs(ctx)
+	if err != nil {
+		s.logger.Warn().Err(err).Msg("could not list VMs for auto-start")
+		return
+	}
+	for _, vm := range vms {
+		if vm.DesiredState != store.DesiredRunning {
+			continue
+		}
+		if s.vms.Running(vm.ID) {
+			if vm.Status != store.StatusRunning {
+				if _, err := s.store.SetVMStatus(ctx, vm.ID, store.StatusRunning); err != nil {
+					s.logger.Warn().Err(err).Str("vm_id", vm.ID).Msg("could not repair auto-start VM status")
+				}
+			}
+			continue
+		}
+		if len(vm.Disks) == 0 && vm.Disk == nil {
+			s.logger.Warn().Str("vm_id", vm.ID).Str("vm", vm.Name).Msg("cannot auto-start VM without a disk")
+			continue
+		}
+		if err := s.vms.Start(ctx, vm); err != nil {
+			s.logger.Error().Err(err).Str("vm_id", vm.ID).Str("vm", vm.Name).Msg("could not auto-start VM")
+			if _, statusErr := s.store.SetVMStatus(ctx, vm.ID, store.StatusError); statusErr != nil {
+				s.logger.Warn().Err(statusErr).Str("vm_id", vm.ID).Msg("could not mark VM as failed")
+			}
+			continue
+		}
+		if _, err := s.store.SetVMStatus(ctx, vm.ID, store.StatusRunning); err != nil {
+			s.logger.Warn().Err(err).Str("vm_id", vm.ID).Msg("could not update auto-started VM status")
+			continue
+		}
+		s.logger.Info().Str("vm_id", vm.ID).Str("vm", vm.Name).Msg("VM auto-started from desired state")
+	}
 }
 
 // reconcileVMStatuses aligns stored VM status with live QEMU processes. It

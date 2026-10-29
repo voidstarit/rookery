@@ -62,6 +62,9 @@ func (s *vmService) StartVM(ctx context.Context, request *rookeryv1.StartVMReque
 		if _, err := s.store.SetVMStatus(ctx, vm.ID, store.StatusRunning); err != nil {
 			return nil, status.Error(codes.Internal, "could not update VM status")
 		}
+		if _, err := s.store.SetVMDesiredState(ctx, vm.ID, store.DesiredRunning); err != nil {
+			return nil, status.Error(codes.Internal, "could not update VM desired state")
+		}
 		return nil, status.Error(codes.AlreadyExists, "vm is already running")
 	}
 	if err := s.runtime.Start(ctx, vm); err != nil {
@@ -71,6 +74,10 @@ func (s *vmService) StartVM(ctx context.Context, request *rookeryv1.StartVMReque
 	updated, err := s.store.SetVMStatus(ctx, vm.ID, store.StatusRunning)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not update VM status")
+	}
+	updated, err = s.store.SetVMDesiredState(ctx, vm.ID, store.DesiredRunning)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not update VM desired state")
 	}
 	return vmToProto(updated), nil
 }
@@ -95,6 +102,10 @@ func (s *vmService) StopVM(ctx context.Context, request *rookeryv1.StopVMRequest
 	updated, err := s.store.SetVMStatus(ctx, request.GetId(), store.StatusStopped)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not update VM status")
+	}
+	updated, err = s.store.SetVMDesiredState(ctx, request.GetId(), store.DesiredStopped)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not update VM desired state")
 	}
 	return vmToProto(updated), nil
 }

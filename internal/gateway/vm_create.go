@@ -79,7 +79,52 @@ func (s *vmService) CreateVM(ctx context.Context, request *rookeryv1.CreateVMReq
 			return nil, status.Error(codes.Internal, "could not reload VM")
 		}
 	}
+	created, err = s.startCreatedVM(ctx, created)
+	if err != nil {
+		return nil, err
+	}
 	return vmToProto(created), nil
+}
+
+// startCreatedVM starts a freshly created VM. Rookery creates VMs running;
+// stopping one is always an explicit action. A VM that cannot start is removed
+// again, along with any partial QEMU process, so callers never see a
+// half-created VM and the disks are released for a retry. Gateways built
+// without a VM controller keep the record as created (stopped).
+func (s *vmService) startCreatedVM(ctx context.Context, vm store.VM) (store.VM, error) {
+	if s.runtime == nil {
+		return vm, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.runtime.Start(ctx, vm); err != nil {
+		s.rollbackCreatedVM(vm.ID)
+		return store.VM{}, status.Error(codes.Internal, "could not start VM: "+err.Error())
+	}
+	started, err := s.store.SetVMStatus(ctx, vm.ID, store.StatusRunning)
+	if err != nil {
+		s.rollbackCreatedVM(vm.ID)
+		return store.VM{}, status.Error(codes.Internal, "could not update VM status")
+	}
+	started, err = s.store.SetVMDesiredState(ctx, vm.ID, store.DesiredRunning)
+	if err != nil {
+		s.rollbackCreatedVM(vm.ID)
+		return store.VM{}, status.Error(codes.Internal, "could not update VM desired state")
+	}
+	return started, nil
+}
+
+// rollbackCreatedVM stops a partially started QEMU process and removes the VM
+// record after a failed create. Cleanup uses a fresh context so a cancelled
+// request cannot leave the record behind.
+func (s *vmService) rollbackCreatedVM(vmID string) {
+	cleanupCtx := context.Background()
+	if err := s.runtime.Stop(cleanupCtx, vmID); err != nil {
+		s.logger.Warn().Err(err).Str("vm_id", vmID).Msg("could not stop VM after failed create")
+	}
+	if err := s.store.DeleteVM(cleanupCtx, vmID); err != nil && !errors.Is(err, store.ErrNotFound) {
+		s.logger.Warn().Err(err).Str("vm_id", vmID).Msg("could not delete VM after failed create")
+	}
 }
 
 func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMRequest) (*rookeryv1.VM, error) {

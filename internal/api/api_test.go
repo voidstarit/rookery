@@ -982,6 +982,19 @@ func createAPI(t *testing.T, handler http.Handler, name string) store.VM {
 	return decode[store.VM](t, recorder)
 }
 
+// createStoppedAPI creates a VM (which starts automatically) and stops it for
+// tests that need a stopped VM to change disks or interfaces.
+func createStoppedAPI(t *testing.T, handler http.Handler, name string) store.VM {
+	t.Helper()
+
+	vm := createAPI(t, handler, name)
+	recorder := do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/stop", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("stop %q status = %d, body = %s", name, recorder.Code, recorder.Body.String())
+	}
+	return decode[store.VM](t, recorder)
+}
+
 func TestRouteTableAssignment(t *testing.T) {
 	env := newTestAPI(t)
 	network := createNetworkAPI(t, env.handler, "routes-net")
@@ -1488,7 +1501,7 @@ func TestVMCRUD(t *testing.T) {
 	if _, err := uuid.Parse(created.ID); err != nil {
 		t.Fatalf("created id = %q, want UUID: %v", created.ID, err)
 	}
-	if created.Status != store.StatusStopped || created.VCPUs != 1 || created.MemoryMB != 512 {
+	if created.Status != store.StatusRunning || created.VCPUs != 1 || created.MemoryMB != 512 {
 		t.Fatalf("created defaults = %+v", created)
 	}
 	if created.ConsoleEnabled {
@@ -1595,6 +1608,15 @@ func TestVMMultipleDisks(t *testing.T) {
 	if created.DiskID == nil || *created.DiskID != first.ID {
 		t.Fatalf("created primary disk = %v, want %d", created.DiskID, first.ID)
 	}
+	if created.Status != store.StatusRunning {
+		t.Fatalf("created status = %q, want running", created.Status)
+	}
+
+	// Disk changes require a stopped VM; stopping is always explicit.
+	recorder = do(t, handler, http.MethodPost, "/api/vms/"+created.ID+"/stop", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("stop multi status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
 
 	recorder = do(t, handler, http.MethodPut, "/api/vms/"+created.ID, map[string]any{
 		"name":      "multi",
@@ -1627,6 +1649,11 @@ func TestVMMultipleDisks(t *testing.T) {
 		t.Fatalf("create other status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 	other := decode[store.VM](t, recorder)
+
+	recorder = do(t, handler, http.MethodPost, "/api/vms/"+other.ID+"/stop", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("stop other status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
 
 	recorder = do(t, handler, http.MethodPut, "/api/vms/"+other.ID, map[string]any{
 		"name":      "other",
@@ -2012,7 +2039,7 @@ func TestDiskProvisionerFailures(t *testing.T) {
 func TestVMStartStop(t *testing.T) {
 	env := newTestAPI(t)
 	handler := env.handler
-	vm := createAPI(t, handler, "vm01")
+	vm := createStoppedAPI(t, handler, "vm01")
 
 	recorder := do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/start", nil)
 	if recorder.Code != http.StatusOK {
@@ -2022,8 +2049,11 @@ func TestVMStartStop(t *testing.T) {
 	if started.Status != store.StatusRunning {
 		t.Fatalf("start status = %q, want running", started.Status)
 	}
-	if !env.vms.Running(vm.ID) || len(env.vms.started) != 1 {
+	if !env.vms.Running(vm.ID) || len(env.vms.started) != 2 || env.vms.started[1] != vm.ID {
 		t.Fatalf("controller start state = running %v, calls %v", env.vms.Running(vm.ID), env.vms.started)
+	}
+	if got, err := env.store.GetVM(context.Background(), vm.ID); err != nil || got.DesiredState != store.DesiredRunning {
+		t.Fatalf("desired state after start = %q, err = %v", got.DesiredState, err)
 	}
 
 	recorder = do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/start", nil)
@@ -2039,7 +2069,7 @@ func TestVMStartStop(t *testing.T) {
 	if stopped.Status != store.StatusStopped {
 		t.Fatalf("stop status = %q, want stopped", stopped.Status)
 	}
-	if env.vms.Running(vm.ID) || len(env.vms.stopped) != 1 {
+	if env.vms.Running(vm.ID) || len(env.vms.stopped) != 2 || env.vms.stopped[1] != vm.ID {
 		t.Fatalf("controller stop state = running %v, calls %v", env.vms.Running(vm.ID), env.vms.stopped)
 	}
 
@@ -2052,7 +2082,7 @@ func TestVMStartStop(t *testing.T) {
 func TestVMStartFailureMarksError(t *testing.T) {
 	env := newTestAPI(t)
 	handler := env.handler
-	vm := createAPI(t, handler, "vm01")
+	vm := createStoppedAPI(t, handler, "vm01")
 
 	env.vms.startErr = errors.New("KVM is not available")
 	recorder := do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/start", nil)
@@ -2072,7 +2102,7 @@ func TestVMStartFailureMarksError(t *testing.T) {
 func TestVMStopFailureKeepsRunning(t *testing.T) {
 	env := newTestAPI(t)
 	handler := env.handler
-	vm := createAPI(t, handler, "vm01")
+	vm := createStoppedAPI(t, handler, "vm01")
 
 	recorder := do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/start", nil)
 	if recorder.Code != http.StatusOK {
@@ -2094,7 +2124,7 @@ func TestVMStopFailureKeepsRunning(t *testing.T) {
 func TestDeleteRunningVMStopsQEMU(t *testing.T) {
 	env := newTestAPI(t)
 	handler := env.handler
-	vm := createAPI(t, handler, "vm01")
+	vm := createStoppedAPI(t, handler, "vm01")
 
 	recorder := do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/start", nil)
 	if recorder.Code != http.StatusOK {
@@ -2108,15 +2138,15 @@ func TestDeleteRunningVMStopsQEMU(t *testing.T) {
 	if env.vms.Running(vm.ID) {
 		t.Fatal("QEMU still running after VM delete")
 	}
-	if len(env.vms.stopped) != 1 || env.vms.stopped[0] != vm.ID {
-		t.Fatalf("stop calls = %v, want one for %s", env.vms.stopped, vm.ID)
+	if len(env.vms.stopped) != 2 || env.vms.stopped[1] != vm.ID {
+		t.Fatalf("stop calls = %v, want the delete stop for %s", env.vms.stopped, vm.ID)
 	}
 }
 
 func TestVMResetAndCtrlAltDel(t *testing.T) {
 	env := newTestAPI(t)
 	handler := env.handler
-	vm := createAPI(t, handler, "vm01")
+	vm := createStoppedAPI(t, handler, "vm01")
 
 	for _, action := range []string{"reset", "ctrl-alt-del"} {
 		recorder := do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/"+action, nil)
@@ -2161,7 +2191,7 @@ func TestVMResetAndCtrlAltDel(t *testing.T) {
 func TestVMResetFallsBackWhenMonitorMissing(t *testing.T) {
 	env := newTestAPI(t)
 	handler := env.handler
-	vm := createAPI(t, handler, "vm01")
+	vm := createStoppedAPI(t, handler, "vm01")
 
 	recorder := do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/start", nil)
 	if recorder.Code != http.StatusOK {
@@ -2173,10 +2203,10 @@ func TestVMResetFallsBackWhenMonitorMissing(t *testing.T) {
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("reset fallback status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
-	if len(env.vms.stopped) != 1 || env.vms.stopped[0] != vm.ID {
+	if len(env.vms.stopped) != 2 || env.vms.stopped[1] != vm.ID {
 		t.Fatalf("stop calls = %v", env.vms.stopped)
 	}
-	if len(env.vms.started) != 2 || env.vms.started[1] != vm.ID {
+	if len(env.vms.started) != 3 || env.vms.started[2] != vm.ID {
 		t.Fatalf("start calls = %v, want a restart", env.vms.started)
 	}
 	if !env.vms.Running(vm.ID) {
@@ -2195,7 +2225,7 @@ func TestVMResetFallsBackWhenMonitorMissing(t *testing.T) {
 func TestVMCtrlAltDelReportsMissingMonitor(t *testing.T) {
 	env := newTestAPI(t)
 	handler := env.handler
-	vm := createAPI(t, handler, "vm01")
+	vm := createStoppedAPI(t, handler, "vm01")
 
 	recorder := do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/start", nil)
 	if recorder.Code != http.StatusOK {
@@ -3243,6 +3273,74 @@ func TestRunInfrastructureReconcilerStartsEnabledVNFs(t *testing.T) {
 	}
 }
 
+func TestRunInfrastructureReconcilerAutostartsVMs(t *testing.T) {
+	env := newTestAPI(t)
+	handler := env.handler
+	ctx := context.Background()
+
+	autostart := createAPI(t, handler, "auto-start")
+	manual := createAPI(t, handler, "stays-stopped")
+
+	recorder := do(t, handler, http.MethodPost, "/api/vms/"+manual.ID+"/stop", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("stop VM status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	created, err := env.store.GetVM(ctx, autostart.ID)
+	if err != nil {
+		t.Fatalf("get auto-start VM: %v", err)
+	}
+	if created.DesiredState != store.DesiredRunning {
+		t.Fatalf("desired state after start = %q, want running", created.DesiredState)
+	}
+	stopped, err := env.store.GetVM(ctx, manual.ID)
+	if err != nil {
+		t.Fatalf("get stopped VM: %v", err)
+	}
+	if stopped.DesiredState != store.DesiredStopped {
+		t.Fatalf("desired state after stop = %q, want stopped", stopped.DesiredState)
+	}
+
+	// Simulate a host reboot: every QEMU process is gone, but the records keep
+	// their desired state.
+	delete(env.vms.running, autostart.ID)
+	delete(env.vms.running, manual.ID)
+
+	runCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		env.server.RunInfrastructureReconciler(runCtx)
+		close(done)
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		got, err := env.store.GetVM(ctx, autostart.ID)
+		if err == nil && got.Status == store.StatusRunning && env.vms.Running(autostart.ID) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("infrastructure reconciler did not stop")
+	}
+
+	if !env.vms.Running(autostart.ID) {
+		t.Fatal("VM with desired state running was not auto-started")
+	}
+	if env.vms.Running(manual.ID) {
+		t.Fatal("explicitly stopped VM was auto-started")
+	}
+	restarted, err := env.store.GetVM(ctx, autostart.ID)
+	if err != nil {
+		t.Fatalf("get auto-started VM: %v", err)
+	}
+	if restarted.Status != store.StatusRunning {
+		t.Fatalf("auto-started VM status = %q, want running", restarted.Status)
+	}
+}
+
 func TestReconcileRecreatesUnusableTap(t *testing.T) {
 	env := newTestAPI(t)
 	handler := env.handler
@@ -3822,6 +3920,15 @@ func TestEditVMInterfaces(t *testing.T) {
 	if len(vm.Interfaces) != 1 || vm.Interfaces[0].ID != first.ID {
 		t.Fatalf("created vm interfaces = %+v", vm.Interfaces)
 	}
+	if vm.Status != store.StatusRunning {
+		t.Fatalf("created vm status = %q, want running", vm.Status)
+	}
+
+	// Interface changes require a stopped VM; stopping is always explicit.
+	recorder = do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/stop", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("stop vm status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
 
 	// Omitting interface_ids leaves attachments unchanged.
 	recorder = do(t, handler, http.MethodPut, "/api/vms/"+vm.ID, map[string]any{"name": vm.Name})
@@ -3989,7 +4096,7 @@ func TestNetworkInterfaceCRUD(t *testing.T) {
 		t.Fatalf("interfaces = %+v", interfaces)
 	}
 
-	vm := createAPI(t, handler, "vm01")
+	vm := createStoppedAPI(t, handler, "vm01")
 	recorder = do(t, handler, http.MethodPut, fmt.Sprintf("/api/interfaces/%d", iface.ID), map[string]any{
 		"attached_vm_id": vm.ID,
 	})
@@ -4166,7 +4273,7 @@ func TestNetworkInterfaceVPPFailures(t *testing.T) {
 func TestVNCProxy(t *testing.T) {
 	env := newTestAPI(t)
 	handler := env.handler
-	vm := createAPI(t, handler, "vm01")
+	vm := createStoppedAPI(t, handler, "vm01")
 
 	recorder := do(t, handler, http.MethodGet, "/ws/vms/"+vm.ID+"/vnc", nil)
 	if recorder.Code != http.StatusForbidden {

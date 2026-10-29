@@ -85,6 +85,11 @@ provider "rookery" {
 
 VM power actions (`start`, `stop`, `reset`, `ctrl-alt-del`) are deliberately
 not part of `rookery_vm`; use the Rookery UI or API for runtime operations.
+Creating a VM starts it, so a freshly applied `rookery_vm` reports
+`status = "running"`; stop it explicitly when you need it down.
+Rookery also persists the desired power state, so VMs that were running come
+back after an API restart or host reboot, while explicitly stopped VMs stay
+down.
 Changing `disk_ids` or `interface_ids` requires the VM to be stopped.
 `rookery_media` and `rookery_route_table` are immutable and replaced when
 changed. `rookery_network` names remain immutable, but its `ipv4_cidr` and
@@ -153,10 +158,12 @@ resource "rookery_route" "lookup" {
 
 `rookery_vnf.config_json` uses protobuf JSON. Write proto field names (for
 example `range_start`, `outside_interface`, `advertise_prefixes`) and use
-`jsonencode({...})`. The provider reads configuration back with proto field
-names. For DHCPv4, `transport` can be omitted (use the network default),
-`"shared"`, `"dedicated"`, or `"tap"`; `"memif"` is the legacy alias for a
-dedicated memif.
+`jsonencode({...})`. The provider stores the configured JSON as-is, and the
+server normalizes some fields (the `bind_ip` and `gateway` it derives for a
+DHCPv4 VNF on a NAT network, the default `lease_time`). Use the `rookery_vnf`
+data source when you need the server's canonical configuration. For DHCPv4,
+`transport` can be omitted (use the network default), `"shared"`,
+`"dedicated"`, or `"tap"`; `"memif"` is the legacy alias for a dedicated memif.
 
 DHCPv4 and DHCPv6 VNFs can integrate with a DNS VNF on the same network by
 setting `dns_vnf_id`, `dns_domain` (the suffix for generated names), and

@@ -18,11 +18,15 @@ import (
 )
 
 type fakeVMController struct {
-	running bool
-	metrics qemu.Metrics
+	running  bool
+	metrics  qemu.Metrics
+	startErr error
 }
 
 func (f *fakeVMController) Start(_ context.Context, _ store.VM) error {
+	if f.startErr != nil {
+		return f.startErr
+	}
 	f.running = true
 	return nil
 }

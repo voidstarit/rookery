@@ -230,7 +230,7 @@ VPP command.
 | `PUT`    | `/api/interfaces/{id}/route-tables` | Bind IPv4/IPv6 FIB tables |
 | `DELETE` | `/api/interfaces/{id}` | Delete an unattached interface |
 | `GET`    | `/api/vms`         | List all VMs                       |
-| `POST`   | `/api/vms`         | Create a VM with an existing disk |
+| `POST`   | `/api/vms`         | Create a VM with an existing disk and start it |
 | `GET`    | `/api/vms/{id}`    | Get one VM                         |
 | `GET`    | `/api/vms/{id}/metrics` | QEMU process CPU/memory/I/O and VPP vhost RX/TX telemetry |
 | `PUT`    | `/api/vms/{id}`    | Update VM settings                 |
@@ -318,13 +318,18 @@ curl -sS -X POST http://127.0.0.1:8080/api/vms \
 
 The first disk ID is the boot disk. Omit `boot_media_id` to boot from the disks
 instead. The created VM has a UUID
-`id`; use that UUID in all VM paths and in the console URL.
+`id`; use that UUID in all VM paths and in the console URL. Rookery starts the
+VM as part of creation, so the response reports `status: "running"`. If QEMU
+cannot start (for example when KVM is unavailable), the request fails with
+`500` and the VM record is removed again.
 
-Start and stop the VM:
+Rookery persists the desired power state. A VM that was started comes back
+automatically after an API restart or a host reboot; a VM that was stopped
+explicitly stays down until it is started again. Stopping is always explicit:
 
 ```bash
-curl -sS -X POST http://127.0.0.1:8080/api/vms/<uuid>/start
 curl -sS -X POST http://127.0.0.1:8080/api/vms/<uuid>/stop
+curl -sS -X POST http://127.0.0.1:8080/api/vms/<uuid>/start
 ```
 
 Open the noVNC console at:

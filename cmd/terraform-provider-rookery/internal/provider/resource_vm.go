@@ -47,7 +47,7 @@ func (r *vmResource) Metadata(_ context.Context, req resource.MetadataRequest, r
 
 func (r *vmResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A QEMU/KVM virtual machine. Runtime power actions are intentionally not managed by this resource.",
+		Description: "A QEMU/KVM virtual machine. Creating a VM starts it; power actions are otherwise not managed by this resource.",
 		Attributes: map[string]schema.Attribute{
 			"id":          schema.StringAttribute{Computed: true, PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
 			"name":        schema.StringAttribute{Required: true, Description: "VM name."},
