@@ -39,6 +39,9 @@
           VNFs
           <span class="tab-count" id="vnf-tab-count">0</span>
         </button>
+        <button class="tab" id="tab-settings" type="button" role="tab" aria-selected="false" aria-controls="settings-panel" tabindex="-1">
+          Settings
+        </button>
       </nav>
 
       <section class="readiness sidebar-status" aria-labelledby="readiness-heading">
@@ -67,6 +70,24 @@
             </div>
             <p class="readiness-target" id="vpp-target">…</p>
             <p class="readiness-detail" id="vpp-detail">Checking the binary API socket…</p>
+          </article>
+
+          <article class="readiness-card" id="rookery-startup-script-card" data-state="checking">
+            <div class="readiness-card-top">
+              <span class="readiness-label">Rookery startup</span>
+              <span class="readiness-state" id="rookery-startup-script-state">checking</span>
+            </div>
+            <p class="readiness-target" id="rookery-startup-script-target">…</p>
+            <p class="readiness-detail" id="rookery-startup-script-detail">Checking the latest run…</p>
+          </article>
+
+          <article class="readiness-card" id="vpp-startup-script-card" data-state="checking">
+            <div class="readiness-card-top">
+              <span class="readiness-label">VPP startup</span>
+              <span class="readiness-state" id="vpp-startup-script-state">checking</span>
+            </div>
+            <p class="readiness-target" id="vpp-startup-script-target">…</p>
+            <p class="readiness-detail" id="vpp-startup-script-detail">Checking the latest run…</p>
           </article>
         </div>
       </section>
@@ -133,6 +154,10 @@
 
       <section class="tab-panel" id="vnfs-panel" role="tabpanel" aria-labelledby="tab-vnfs" tabindex="0" hidden>
         <div id="vnfs-root"></div>
+      </section>
+
+      <section class="tab-panel" id="settings-panel" role="tabpanel" aria-labelledby="tab-settings" tabindex="0" hidden>
+        <div id="settings-root"></div>
       </section>
     </main>
   </div>

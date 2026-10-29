@@ -89,49 +89,76 @@ func (f *fakeDiskProvisioner) ListThinVolumes(_ context.Context, vg, thinPool st
 }
 
 type fakeNetworkProvisioner struct {
-	ensuredACLs     []int64
-	deletedACLs     []uint32
-	interfaceACLs   map[uint32][2][]uint32
-	nextBD          uint32
-	createdBDs      []string
-	ensuredBDs      []uint32
-	ensuredNames    []string
-	deletedBDs      []uint32
-	createdIfs      []string
-	ensuredIfs      []string
-	deletedIfs      []uint32
-	createdTaps     []string
-	deletedTaps     []uint32
-	ensuredHostTaps []string
-	deletedHostTaps []string
-	createdMemifs   []string
-	deletedMemifs   []uint32
-	createMemifErr  error
-	deleteMemifErr  error
-	resetCounters   int
-	createBDErr     error
-	deleteBDErr     error
-	ensureBDErr     error
-	createIfErr     error
-	ensureIfErr     error
-	deleteIfErr     error
-	createTapErr    error
-	deleteTapErr    error
-	graph           host.VPPGraph
-	graphErr        error
-	vppInterfaces   []host.VPPInterface
-	interfacesErr   error
-	captureStatus   host.PacketCaptureStatus
-	captureErr      error
-	captureFiles    []host.PacketCaptureFile
-	captureData     map[string][]byte
-	deletedCapture  string
-	aclCounters     []host.ACLInterfaceCounters
-	aclCounterErr   error
-	fibRoutes       []host.FIBRoute
-	fibErr          error
-	traceResult     host.TraceResult
-	traceErr        error
+	ensuredACLs          []int64
+	deletedACLs          []uint32
+	interfaceACLs        map[uint32][2][]uint32
+	nextBD               uint32
+	createdBDs           []string
+	ensuredBDs           []uint32
+	ensuredNames         []string
+	deletedBDs           []uint32
+	ensuredPipes         [][3]uint32
+	deletedPipes         []uint32
+	interfaceRouteTables []string
+	createdIfs           []string
+	ensuredIfs           []string
+	deletedIfs           []uint32
+	createdTaps          []string
+	deletedTaps          []uint32
+	ensuredHostTaps      []string
+	deletedHostTaps      []string
+	addedAddresses       []string
+	deletedAddresses     []string
+	enabledDHCP          []string
+	disabledDHCP         []string
+	createdMemifs        []string
+	deletedMemifs        []uint32
+	createMemifErr       error
+	deleteMemifErr       error
+	resetCounters        int
+	createBDErr          error
+	deleteBDErr          error
+	ensureBDErr          error
+	createIfErr          error
+	ensureIfErr          error
+	deleteIfErr          error
+	createTapErr         error
+	deleteTapErr         error
+	graph                host.VPPGraph
+	graphErr             error
+	vppInterfaces        []host.VPPInterface
+	interfacesErr        error
+	captureStatus        host.PacketCaptureStatus
+	captureErr           error
+	captureFiles         []host.PacketCaptureFile
+	captureData          map[string][]byte
+	deletedCapture       string
+	aclCounters          []host.ACLInterfaceCounters
+	aclCounterErr        error
+	fibRoutes            []host.FIBRoute
+	fibErr               error
+	traceResult          host.TraceResult
+	traceErr             error
+}
+
+func (f *fakeNetworkProvisioner) AddInterfaceAddress(_ context.Context, name, cidr string) error {
+	f.addedAddresses = append(f.addedAddresses, name+" "+cidr)
+	return nil
+}
+
+func (f *fakeNetworkProvisioner) DelInterfaceAddress(_ context.Context, name, cidr string) error {
+	f.deletedAddresses = append(f.deletedAddresses, name+" "+cidr)
+	return nil
+}
+
+func (f *fakeNetworkProvisioner) EnableDHCPClient(_ context.Context, name string) error {
+	f.enabledDHCP = append(f.enabledDHCP, name)
+	return nil
+}
+
+func (f *fakeNetworkProvisioner) DisableDHCPClient(_ context.Context, name string) error {
+	f.disabledDHCP = append(f.disabledDHCP, name)
+	return nil
 }
 
 func (f *fakeNetworkProvisioner) Ping(_ context.Context) error { return nil }
@@ -301,6 +328,20 @@ func (f *fakeNetworkProvisioner) EnsureBridgeDomain(_ context.Context, bdID uint
 	return nil
 }
 
+func (f *fakeNetworkProvisioner) CreatePipe(_ context.Context, bdA, bdB uint32) (host.PipeRuntime, error) {
+	return host.PipeRuntime{Instance: 1, ParentSwIfIndex: 70, EndpointASwIfIndex: bdA, EndpointBSwIfIndex: bdB}, nil
+}
+
+func (f *fakeNetworkProvisioner) EnsurePipe(_ context.Context, instance, bdA, bdB uint32) (host.PipeRuntime, error) {
+	f.ensuredPipes = append(f.ensuredPipes, [3]uint32{instance, bdA, bdB})
+	return host.PipeRuntime{Instance: instance, ParentSwIfIndex: 70, EndpointASwIfIndex: bdA, EndpointBSwIfIndex: bdB}, nil
+}
+
+func (f *fakeNetworkProvisioner) DeletePipe(_ context.Context, _ uint32, parent uint32) error {
+	f.deletedPipes = append(f.deletedPipes, parent)
+	return nil
+}
+
 func (f *fakeNetworkProvisioner) DeleteBridgeDomain(_ context.Context, bdID uint32) error {
 	if f.deleteBDErr != nil {
 		return f.deleteBDErr
@@ -392,7 +433,8 @@ func (f *fakeNetworkProvisioner) DeleteRouteTable(_ context.Context, _ uint32, _
 	return nil
 }
 
-func (f *fakeNetworkProvisioner) SetInterfaceRouteTable(_ context.Context, _ uint32, _ bool, _ uint32) error {
+func (f *fakeNetworkProvisioner) SetInterfaceRouteTable(_ context.Context, swIfIndex uint32, ipv6 bool, tableID uint32) error {
+	f.interfaceRouteTables = append(f.interfaceRouteTables, fmt.Sprintf("%d/%t/%d", swIfIndex, ipv6, tableID))
 	return nil
 }
 func (f *fakeNetworkProvisioner) InterfaceRouteTable(_ context.Context, _ uint32, _ bool) (uint32, error) {
@@ -411,6 +453,10 @@ func (f *fakeNetworkProvisioner) DeleteHostInterface(_ context.Context, _ string
 }
 
 func (f *fakeNetworkProvisioner) AddRoute(_ context.Context, _ uint32, _ bool, _, _, _ string, _ uint32, _ uint32) error {
+	return nil
+}
+
+func (f *fakeNetworkProvisioner) AddRouteSpec(_ context.Context, _ host.RouteSpec) error {
 	return nil
 }
 
@@ -480,7 +526,7 @@ func (f *fakeVNFManager) StartMemif(_ context.Context, vnf store.VNF, socketPath
 	return nil
 }
 
-func (f *fakeVNFManager) StartShared(_ context.Context, vnf store.VNF, socketPath string, ifID uint32, address string) error {
+func (f *fakeVNFManager) StartShared(_ context.Context, vnf store.VNF, socketPath string, ifID uint32, address, ipv6Address string) error {
 	if f.startErr != nil {
 		return f.startErr
 	}
@@ -518,6 +564,10 @@ func (f *fakeVNFManager) Leases(_ context.Context, vnfID int64) ([]store.VNFLeas
 		return nil, f.leaseErr
 	}
 	return f.leases[vnfID], nil
+}
+
+func (f *fakeVNFManager) DNSRecords(context.Context, int64) ([]host.DNSRecordView, error) {
+	return nil, nil
 }
 
 func (f *fakeVNFManager) BGPStatus(_ context.Context, vnfID int64) (host.BGPStatus, error) {
@@ -932,6 +982,19 @@ func createAPI(t *testing.T, handler http.Handler, name string) store.VM {
 	return decode[store.VM](t, recorder)
 }
 
+// createStoppedAPI creates a VM (which starts automatically) and stops it for
+// tests that need a stopped VM to change disks or interfaces.
+func createStoppedAPI(t *testing.T, handler http.Handler, name string) store.VM {
+	t.Helper()
+
+	vm := createAPI(t, handler, name)
+	recorder := do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/stop", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("stop %q status = %d, body = %s", name, recorder.Code, recorder.Body.String())
+	}
+	return decode[store.VM](t, recorder)
+}
+
 func TestRouteTableAssignment(t *testing.T) {
 	env := newTestAPI(t)
 	network := createNetworkAPI(t, env.handler, "routes-net")
@@ -974,6 +1037,7 @@ func TestRouteTableAssignment(t *testing.T) {
 	recorder = do(t, env.handler, http.MethodPost, fmt.Sprintf("/api/route-tables/%d/routes", table.ID), map[string]any{
 		"ipv6":         true,
 		"prefix":       "2001:db8:10::/64",
+		"description":  "tenant route",
 		"next_hop":     "2001:db8::1",
 		"interface_id": iface.ID,
 	})
@@ -981,8 +1045,21 @@ func TestRouteTableAssignment(t *testing.T) {
 		t.Fatalf("create route status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 	route := decode[store.Route](t, recorder)
-	if route.TableID != 42 || !route.IPv6 || route.InterfaceID == nil || *route.InterfaceID != iface.ID {
+	if route.TableID != 42 || !route.IPv6 || route.InterfaceID == nil || *route.InterfaceID != iface.ID || route.Description != "tenant route" {
 		t.Fatalf("created route = %+v", route)
+	}
+
+	recorder = do(t, env.handler, http.MethodPut, fmt.Sprintf("/api/routes/%d", route.ID), map[string]any{
+		"prefix":      "2001:db8:10::/64",
+		"description": "updated tenant route",
+		"next_hop":    "2001:db8::2",
+	})
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("update route status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	updatedRoute := decode[store.Route](t, recorder)
+	if updatedRoute.Description != "updated tenant route" || updatedRoute.NextHop != "2001:db8::2" {
+		t.Fatalf("updated route = %+v", updatedRoute)
 	}
 
 	recorder = do(t, env.handler, http.MethodPost, fmt.Sprintf("/api/route-tables/%d/routes", table.ID), map[string]any{
@@ -996,7 +1073,7 @@ func TestRouteTableAssignment(t *testing.T) {
 		t.Fatalf("create egress route status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 	egressRoute := decode[store.Route](t, recorder)
-	if egressRoute.EgressInterface != "bvi1" || egressRoute.Preference != 5 || egressRoute.InterfaceID != nil {
+	if egressRoute.EgressInterface != "bvi1" || egressRoute.Preference == nil || *egressRoute.Preference != 5 || egressRoute.InterfaceID != nil {
 		t.Fatalf("egress route = %+v", egressRoute)
 	}
 
@@ -1424,7 +1501,7 @@ func TestVMCRUD(t *testing.T) {
 	if _, err := uuid.Parse(created.ID); err != nil {
 		t.Fatalf("created id = %q, want UUID: %v", created.ID, err)
 	}
-	if created.Status != store.StatusStopped || created.VCPUs != 1 || created.MemoryMB != 512 {
+	if created.Status != store.StatusRunning || created.VCPUs != 1 || created.MemoryMB != 512 {
 		t.Fatalf("created defaults = %+v", created)
 	}
 	if created.ConsoleEnabled {
@@ -1531,6 +1608,15 @@ func TestVMMultipleDisks(t *testing.T) {
 	if created.DiskID == nil || *created.DiskID != first.ID {
 		t.Fatalf("created primary disk = %v, want %d", created.DiskID, first.ID)
 	}
+	if created.Status != store.StatusRunning {
+		t.Fatalf("created status = %q, want running", created.Status)
+	}
+
+	// Disk changes require a stopped VM; stopping is always explicit.
+	recorder = do(t, handler, http.MethodPost, "/api/vms/"+created.ID+"/stop", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("stop multi status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
 
 	recorder = do(t, handler, http.MethodPut, "/api/vms/"+created.ID, map[string]any{
 		"name":      "multi",
@@ -1563,6 +1649,11 @@ func TestVMMultipleDisks(t *testing.T) {
 		t.Fatalf("create other status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 	other := decode[store.VM](t, recorder)
+
+	recorder = do(t, handler, http.MethodPost, "/api/vms/"+other.ID+"/stop", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("stop other status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
 
 	recorder = do(t, handler, http.MethodPut, "/api/vms/"+other.ID, map[string]any{
 		"name":      "other",
@@ -1948,7 +2039,7 @@ func TestDiskProvisionerFailures(t *testing.T) {
 func TestVMStartStop(t *testing.T) {
 	env := newTestAPI(t)
 	handler := env.handler
-	vm := createAPI(t, handler, "vm01")
+	vm := createStoppedAPI(t, handler, "vm01")
 
 	recorder := do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/start", nil)
 	if recorder.Code != http.StatusOK {
@@ -1958,8 +2049,11 @@ func TestVMStartStop(t *testing.T) {
 	if started.Status != store.StatusRunning {
 		t.Fatalf("start status = %q, want running", started.Status)
 	}
-	if !env.vms.Running(vm.ID) || len(env.vms.started) != 1 {
+	if !env.vms.Running(vm.ID) || len(env.vms.started) != 2 || env.vms.started[1] != vm.ID {
 		t.Fatalf("controller start state = running %v, calls %v", env.vms.Running(vm.ID), env.vms.started)
+	}
+	if got, err := env.store.GetVM(context.Background(), vm.ID); err != nil || got.DesiredState != store.DesiredRunning {
+		t.Fatalf("desired state after start = %q, err = %v", got.DesiredState, err)
 	}
 
 	recorder = do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/start", nil)
@@ -1975,7 +2069,7 @@ func TestVMStartStop(t *testing.T) {
 	if stopped.Status != store.StatusStopped {
 		t.Fatalf("stop status = %q, want stopped", stopped.Status)
 	}
-	if env.vms.Running(vm.ID) || len(env.vms.stopped) != 1 {
+	if env.vms.Running(vm.ID) || len(env.vms.stopped) != 2 || env.vms.stopped[1] != vm.ID {
 		t.Fatalf("controller stop state = running %v, calls %v", env.vms.Running(vm.ID), env.vms.stopped)
 	}
 
@@ -1988,7 +2082,7 @@ func TestVMStartStop(t *testing.T) {
 func TestVMStartFailureMarksError(t *testing.T) {
 	env := newTestAPI(t)
 	handler := env.handler
-	vm := createAPI(t, handler, "vm01")
+	vm := createStoppedAPI(t, handler, "vm01")
 
 	env.vms.startErr = errors.New("KVM is not available")
 	recorder := do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/start", nil)
@@ -2008,7 +2102,7 @@ func TestVMStartFailureMarksError(t *testing.T) {
 func TestVMStopFailureKeepsRunning(t *testing.T) {
 	env := newTestAPI(t)
 	handler := env.handler
-	vm := createAPI(t, handler, "vm01")
+	vm := createStoppedAPI(t, handler, "vm01")
 
 	recorder := do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/start", nil)
 	if recorder.Code != http.StatusOK {
@@ -2030,7 +2124,7 @@ func TestVMStopFailureKeepsRunning(t *testing.T) {
 func TestDeleteRunningVMStopsQEMU(t *testing.T) {
 	env := newTestAPI(t)
 	handler := env.handler
-	vm := createAPI(t, handler, "vm01")
+	vm := createStoppedAPI(t, handler, "vm01")
 
 	recorder := do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/start", nil)
 	if recorder.Code != http.StatusOK {
@@ -2044,15 +2138,15 @@ func TestDeleteRunningVMStopsQEMU(t *testing.T) {
 	if env.vms.Running(vm.ID) {
 		t.Fatal("QEMU still running after VM delete")
 	}
-	if len(env.vms.stopped) != 1 || env.vms.stopped[0] != vm.ID {
-		t.Fatalf("stop calls = %v, want one for %s", env.vms.stopped, vm.ID)
+	if len(env.vms.stopped) != 2 || env.vms.stopped[1] != vm.ID {
+		t.Fatalf("stop calls = %v, want the delete stop for %s", env.vms.stopped, vm.ID)
 	}
 }
 
 func TestVMResetAndCtrlAltDel(t *testing.T) {
 	env := newTestAPI(t)
 	handler := env.handler
-	vm := createAPI(t, handler, "vm01")
+	vm := createStoppedAPI(t, handler, "vm01")
 
 	for _, action := range []string{"reset", "ctrl-alt-del"} {
 		recorder := do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/"+action, nil)
@@ -2097,7 +2191,7 @@ func TestVMResetAndCtrlAltDel(t *testing.T) {
 func TestVMResetFallsBackWhenMonitorMissing(t *testing.T) {
 	env := newTestAPI(t)
 	handler := env.handler
-	vm := createAPI(t, handler, "vm01")
+	vm := createStoppedAPI(t, handler, "vm01")
 
 	recorder := do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/start", nil)
 	if recorder.Code != http.StatusOK {
@@ -2109,10 +2203,10 @@ func TestVMResetFallsBackWhenMonitorMissing(t *testing.T) {
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("reset fallback status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
-	if len(env.vms.stopped) != 1 || env.vms.stopped[0] != vm.ID {
+	if len(env.vms.stopped) != 2 || env.vms.stopped[1] != vm.ID {
 		t.Fatalf("stop calls = %v", env.vms.stopped)
 	}
-	if len(env.vms.started) != 2 || env.vms.started[1] != vm.ID {
+	if len(env.vms.started) != 3 || env.vms.started[2] != vm.ID {
 		t.Fatalf("start calls = %v, want a restart", env.vms.started)
 	}
 	if !env.vms.Running(vm.ID) {
@@ -2131,7 +2225,7 @@ func TestVMResetFallsBackWhenMonitorMissing(t *testing.T) {
 func TestVMCtrlAltDelReportsMissingMonitor(t *testing.T) {
 	env := newTestAPI(t)
 	handler := env.handler
-	vm := createAPI(t, handler, "vm01")
+	vm := createStoppedAPI(t, handler, "vm01")
 
 	recorder := do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/start", nil)
 	if recorder.Code != http.StatusOK {
@@ -2799,6 +2893,100 @@ func TestVNFCleansLegacyNetworkDHCP(t *testing.T) {
 	}
 }
 
+func TestRouteDefaultLookupTableName(t *testing.T) {
+	ctx := context.Background()
+	env := newTestAPI(t)
+	recorder := do(t, env.handler, http.MethodPost, "/api/route-tables/0/routes", map[string]any{
+		"ipv6":              false,
+		"prefix":            "10.10.1.0/24",
+		"ipv4_lookup_table": "default",
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create route status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	route := decode[store.Route](t, recorder)
+	if route.IPv4LookupTable == nil || *route.IPv4LookupTable != "default" {
+		t.Fatalf("default lookup table = %+v", route.IPv4LookupTable)
+	}
+	if route.Preference != nil || route.Count != nil || route.NextHopTable != nil || route.Weight != nil || route.UDPEncap != nil {
+		t.Fatalf("unexpected optional route fields = %+v", route)
+	}
+
+	recorder = do(t, env.handler, http.MethodPut, fmt.Sprintf("/api/routes/%d", route.ID), map[string]any{
+		"prefix":   "10.10.1.0/24",
+		"next_hop": "10.10.1.1",
+	})
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("update route status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	updated := decode[store.Route](t, recorder)
+	if updated.IPv4LookupTable != nil {
+		t.Fatalf("lookup table was not cleared: %+v", updated.IPv4LookupTable)
+	}
+
+	if _, err := env.store.CreateRouteTable(ctx, store.RouteTable{Name: "lookup-v4", TableID: 600}); err != nil {
+		t.Fatal(err)
+	}
+	recorder = do(t, env.handler, http.MethodPost, "/api/route-tables/0/routes", map[string]any{
+		"ipv6":              false,
+		"prefix":            "10.11.0.0/24",
+		"ipv4_lookup_table": "lookup-v4",
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create named lookup route status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	named := decode[store.Route](t, recorder)
+	if named.IPv4LookupTable == nil || *named.IPv4LookupTable != "lookup-v4" {
+		t.Fatalf("named lookup table = %+v", named.IPv4LookupTable)
+	}
+	recorder = do(t, env.handler, http.MethodPost, "/api/route-tables/0/routes", map[string]any{
+		"ipv6":              false,
+		"prefix":            "10.12.0.0/24",
+		"ipv4_lookup_table": "missing-table",
+	})
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("missing lookup table status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestReconcileVPPInterfaceRouteTables(t *testing.T) {
+	env := newTestAPI(t)
+	ctx := context.Background()
+	network := createNetworkAPI(t, env.handler, "lab")
+	tap, err := env.store.CreateNetworkHostTap(ctx, store.NetworkHostTap{
+		NetworkID: network.ID, Name: "tap-lab", SwIfIndex: 30,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ipv4, err := env.store.CreateRouteTable(ctx, store.RouteTable{Name: "lab-v4", TableID: 500})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ipv6, err := env.store.CreateRouteTable(ctx, store.RouteTable{Name: "lab-v6", TableID: 501, IPv6: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.store.SetVPPInterfaceRouteTables(ctx, tap.Name, ipv4.TableID, ipv6.TableID); err != nil {
+		t.Fatal(err)
+	}
+	env.networks.vppInterfaces = []host.VPPInterface{{Name: tap.Name, SwIfIndex: 30}}
+	env.networks.interfaceRouteTables = nil
+
+	if err := env.server.ReconcileVPPInterfaceRouteTables(ctx); err != nil {
+		t.Fatalf("reconcile interface route tables: %v", err)
+	}
+	want := []string{"30/false/500", "30/true/501"}
+	if len(env.networks.interfaceRouteTables) != len(want) {
+		t.Fatalf("interface route table calls = %+v", env.networks.interfaceRouteTables)
+	}
+	for i := range want {
+		if env.networks.interfaceRouteTables[i] != want[i] {
+			t.Fatalf("interface route table calls = %+v, want %+v", env.networks.interfaceRouteTables, want)
+		}
+	}
+}
+
 func TestReconcileNetworks(t *testing.T) {
 	env := newTestAPI(t)
 	network := createNetworkAPI(t, env.handler, "lab")
@@ -2819,6 +3007,48 @@ func TestReconcileNetworks(t *testing.T) {
 	env.networks.ensureBDErr = errors.New("bridge domain unavailable")
 	if err := env.server.ReconcileNetworks(context.Background()); err == nil {
 		t.Fatal("expected bridge-domain reconciliation error")
+	}
+}
+
+func TestReconcileNetworkPipes(t *testing.T) {
+	env := newTestAPI(t)
+	networkA := createNetworkAPI(t, env.handler, "lab-a")
+	networkB := createNetworkAPICIDR(t, env.handler, "lab-b", "10.21.0.0/24", "fd00:21::/64")
+	created := do(t, env.handler, http.MethodPost, "/api/network-pipes", map[string]any{
+		"network_a_id": networkB.ID, "network_b_id": networkA.ID,
+	})
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create pipe status = %d, body = %s", created.Code, created.Body.String())
+	}
+	pipe := decode[store.NetworkPipe](t, created)
+	if pipe.NetworkAID != networkA.ID || pipe.NetworkBID != networkB.ID || pipe.Instance != 1 || pipe.ParentSwIfIndex != 70 {
+		t.Fatalf("created pipe = %+v", pipe)
+	}
+
+	if err := env.server.ReconcileNetworkPipes(context.Background()); err != nil {
+		t.Fatalf("reconcile network pipes: %v", err)
+	}
+	if len(env.networks.ensuredPipes) != 1 {
+		t.Fatalf("ensured pipes = %+v", env.networks.ensuredPipes)
+	}
+	call := env.networks.ensuredPipes[0]
+	if call[0] != 1 || call[1] != networkA.BridgeDomainID || call[2] != networkB.BridgeDomainID {
+		t.Fatalf("ensured pipe = %+v, networks = %d/%d", call, networkA.BridgeDomainID, networkB.BridgeDomainID)
+	}
+	updated, err := env.store.GetNetworkPipe(context.Background(), pipe.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ParentSwIfIndex != 70 || updated.EndpointASwIfIndex != networkA.BridgeDomainID || updated.EndpointBSwIfIndex != networkB.BridgeDomainID {
+		t.Fatalf("updated pipe = %+v", updated)
+	}
+
+	deleted := do(t, env.handler, http.MethodDelete, fmt.Sprintf("/api/network-pipes/%d", pipe.ID), nil)
+	if deleted.Code != http.StatusNoContent {
+		t.Fatalf("delete pipe status = %d, body = %s", deleted.Code, deleted.Body.String())
+	}
+	if len(env.networks.deletedPipes) != 1 || env.networks.deletedPipes[0] != 70 {
+		t.Fatalf("deleted pipe runtimes = %+v", env.networks.deletedPipes)
 	}
 }
 
@@ -3040,6 +3270,74 @@ func TestRunInfrastructureReconcilerStartsEnabledVNFs(t *testing.T) {
 	}
 	if !foundBD {
 		t.Fatalf("reconciler did not ensure bridge domain %d", network.BridgeDomainID)
+	}
+}
+
+func TestRunInfrastructureReconcilerAutostartsVMs(t *testing.T) {
+	env := newTestAPI(t)
+	handler := env.handler
+	ctx := context.Background()
+
+	autostart := createAPI(t, handler, "auto-start")
+	manual := createAPI(t, handler, "stays-stopped")
+
+	recorder := do(t, handler, http.MethodPost, "/api/vms/"+manual.ID+"/stop", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("stop VM status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	created, err := env.store.GetVM(ctx, autostart.ID)
+	if err != nil {
+		t.Fatalf("get auto-start VM: %v", err)
+	}
+	if created.DesiredState != store.DesiredRunning {
+		t.Fatalf("desired state after start = %q, want running", created.DesiredState)
+	}
+	stopped, err := env.store.GetVM(ctx, manual.ID)
+	if err != nil {
+		t.Fatalf("get stopped VM: %v", err)
+	}
+	if stopped.DesiredState != store.DesiredStopped {
+		t.Fatalf("desired state after stop = %q, want stopped", stopped.DesiredState)
+	}
+
+	// Simulate a host reboot: every QEMU process is gone, but the records keep
+	// their desired state.
+	delete(env.vms.running, autostart.ID)
+	delete(env.vms.running, manual.ID)
+
+	runCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		env.server.RunInfrastructureReconciler(runCtx)
+		close(done)
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		got, err := env.store.GetVM(ctx, autostart.ID)
+		if err == nil && got.Status == store.StatusRunning && env.vms.Running(autostart.ID) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("infrastructure reconciler did not stop")
+	}
+
+	if !env.vms.Running(autostart.ID) {
+		t.Fatal("VM with desired state running was not auto-started")
+	}
+	if env.vms.Running(manual.ID) {
+		t.Fatal("explicitly stopped VM was auto-started")
+	}
+	restarted, err := env.store.GetVM(ctx, autostart.ID)
+	if err != nil {
+		t.Fatalf("get auto-started VM: %v", err)
+	}
+	if restarted.Status != store.StatusRunning {
+		t.Fatalf("auto-started VM status = %q, want running", restarted.Status)
 	}
 }
 
@@ -3622,6 +3920,15 @@ func TestEditVMInterfaces(t *testing.T) {
 	if len(vm.Interfaces) != 1 || vm.Interfaces[0].ID != first.ID {
 		t.Fatalf("created vm interfaces = %+v", vm.Interfaces)
 	}
+	if vm.Status != store.StatusRunning {
+		t.Fatalf("created vm status = %q, want running", vm.Status)
+	}
+
+	// Interface changes require a stopped VM; stopping is always explicit.
+	recorder = do(t, handler, http.MethodPost, "/api/vms/"+vm.ID+"/stop", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("stop vm status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
 
 	// Omitting interface_ids leaves attachments unchanged.
 	recorder = do(t, handler, http.MethodPut, "/api/vms/"+vm.ID, map[string]any{"name": vm.Name})
@@ -3789,7 +4096,7 @@ func TestNetworkInterfaceCRUD(t *testing.T) {
 		t.Fatalf("interfaces = %+v", interfaces)
 	}
 
-	vm := createAPI(t, handler, "vm01")
+	vm := createStoppedAPI(t, handler, "vm01")
 	recorder = do(t, handler, http.MethodPut, fmt.Sprintf("/api/interfaces/%d", iface.ID), map[string]any{
 		"attached_vm_id": vm.ID,
 	})
@@ -3966,7 +4273,7 @@ func TestNetworkInterfaceVPPFailures(t *testing.T) {
 func TestVNCProxy(t *testing.T) {
 	env := newTestAPI(t)
 	handler := env.handler
-	vm := createAPI(t, handler, "vm01")
+	vm := createStoppedAPI(t, handler, "vm01")
 
 	recorder := do(t, handler, http.MethodGet, "/ws/vms/"+vm.ID+"/vnc", nil)
 	if recorder.Code != http.StatusForbidden {

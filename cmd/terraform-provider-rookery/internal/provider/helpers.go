@@ -77,6 +77,19 @@ func stringList(ctx context.Context, values []string) (types.List, diag.Diagnost
 	return types.ListValueFrom(ctx, types.StringType, values)
 }
 
+func stringSet(ctx context.Context, values []string) (types.Set, diag.Diagnostics) {
+	return types.SetValueFrom(ctx, types.StringType, values)
+}
+
+func stringSetValues(ctx context.Context, value types.Set) ([]string, diag.Diagnostics) {
+	if value.IsNull() || value.IsUnknown() {
+		return nil, nil
+	}
+	var values []string
+	diags := value.ElementsAs(ctx, &values, false)
+	return values, diags
+}
+
 func parseID(value string, what string) (int64, error) {
 	id, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
 	if err != nil || id <= 0 {
@@ -90,6 +103,21 @@ func optionalStringValue(value string) types.String {
 		return types.StringNull()
 	}
 	return types.StringValue(value)
+}
+
+func optionalUint32Value(value *uint32) types.Int64 {
+	if value == nil {
+		return types.Int64Null()
+	}
+	return types.Int64Value(int64(*value))
+}
+
+func uint32Pointer(v types.Int64) *uint32 {
+	if v.IsNull() || v.IsUnknown() {
+		return nil
+	}
+	value := uint32(v.ValueInt64())
+	return &value
 }
 
 func optionalInt64Value(value *int64) types.Int64 {

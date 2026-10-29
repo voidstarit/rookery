@@ -33,6 +33,12 @@ func (s *Server) RunInfrastructureReconciler(ctx context.Context) {
 		}
 	}
 
+	// Rookery and VPP startup scripts run once the FD.io VPP API is reachable.
+	// They run independently of the infrastructure reconciliation worker, which
+	// can take longer or retry. The VPP script also runs on every reconnect.
+	go s.runRookeryStartupScriptOnce()
+	go s.runVPPStartupScript()
+
 	// The initial reconciliation runs in the same background worker as later
 	// VPP-restart rebuilds so the watcher can detect another VPP restart while
 	// the initial pass is still in progress.
@@ -42,6 +48,9 @@ func (s *Server) RunInfrastructureReconciler(ctx context.Context) {
 func (s *Server) reconcileInfrastructure(ctx context.Context) error {
 	var errs []error
 	if err := s.ReconcileNetworks(ctx); err != nil {
+		errs = append(errs, err)
+	}
+	if err := s.ReconcileNetworkPipes(ctx); err != nil {
 		errs = append(errs, err)
 	}
 	if err := s.ReconcileNetworkHostTaps(ctx); err != nil {
@@ -68,7 +77,60 @@ func (s *Server) reconcileInfrastructure(ctx context.Context) error {
 	if err := s.reconcileVNFBindings(ctx); err != nil {
 		errs = append(errs, err)
 	}
+	if err := s.ReconcileVPPInterfaceAddresses(ctx); err != nil {
+		errs = append(errs, err)
+	}
+	if err := s.ReconcileVPPInterfaceRouteTables(ctx); err != nil {
+		errs = append(errs, err)
+	}
+	s.autostartVMs(ctx)
 	return errors.Join(errs...)
+}
+
+// autostartVMs applies the persisted desired power state after an API restart
+// or a host reboot. VMs the user started come back even when QEMU died with
+// the host; VMs the user stopped stay down. It runs after the VPP resources are
+// reconciled so attached vhost-user sockets exist before QEMU launches.
+func (s *Server) autostartVMs(ctx context.Context) {
+	if s.vms == nil {
+		return
+	}
+	s.runMu.Lock()
+	defer s.runMu.Unlock()
+	vms, err := s.store.ListVMs(ctx)
+	if err != nil {
+		s.logger.Warn().Err(err).Msg("could not list VMs for auto-start")
+		return
+	}
+	for _, vm := range vms {
+		if vm.DesiredState != store.DesiredRunning {
+			continue
+		}
+		if s.vms.Running(vm.ID) {
+			if vm.Status != store.StatusRunning {
+				if _, err := s.store.SetVMStatus(ctx, vm.ID, store.StatusRunning); err != nil {
+					s.logger.Warn().Err(err).Str("vm_id", vm.ID).Msg("could not repair auto-start VM status")
+				}
+			}
+			continue
+		}
+		if len(vm.Disks) == 0 && vm.Disk == nil {
+			s.logger.Warn().Str("vm_id", vm.ID).Str("vm", vm.Name).Msg("cannot auto-start VM without a disk")
+			continue
+		}
+		if err := s.vms.Start(ctx, vm); err != nil {
+			s.logger.Error().Err(err).Str("vm_id", vm.ID).Str("vm", vm.Name).Msg("could not auto-start VM")
+			if _, statusErr := s.store.SetVMStatus(ctx, vm.ID, store.StatusError); statusErr != nil {
+				s.logger.Warn().Err(statusErr).Str("vm_id", vm.ID).Msg("could not mark VM as failed")
+			}
+			continue
+		}
+		if _, err := s.store.SetVMStatus(ctx, vm.ID, store.StatusRunning); err != nil {
+			s.logger.Warn().Err(err).Str("vm_id", vm.ID).Msg("could not update auto-started VM status")
+			continue
+		}
+		s.logger.Info().Str("vm_id", vm.ID).Str("vm", vm.Name).Msg("VM auto-started from desired state")
+	}
 }
 
 // reconcileVMStatuses aligns stored VM status with live QEMU processes. It
@@ -173,6 +235,7 @@ func (s *Server) watchVPP(ctx context.Context, initiallyDirty bool) {
 			}
 		}
 
+		reconnected := false
 		pingCtx, cancel := context.WithTimeout(ctx, vppWatchInterval)
 		pingErr := s.networks.Ping(pingCtx)
 		identity, identityErr := s.networks.Identity()
@@ -194,6 +257,7 @@ func (s *Server) watchVPP(ctx context.Context, initiallyDirty bool) {
 			s.logger.Info().Msg("VPP API is reachable again")
 			healthy = true
 			pendingReconcile = true
+			reconnected = true
 		}
 		if identityErr == nil && identity != "" {
 			if lastIdentity != "" && identity != lastIdentity {
@@ -203,12 +267,16 @@ func (s *Server) watchVPP(ctx context.Context, initiallyDirty bool) {
 					Msg("VPP restart detected; rebuilding VPP resources")
 				pendingReconcile = true
 				pendingReset = true
+				reconnected = true
 				// Do not cancel the in-flight worker here. Starting a second
 				// worker while the first can still receive VPP API responses
 				// causes duplicate BVI creation (VPP aborts on duplicate
 				// 'bviN-tx' interface nodes).
 			}
 			lastIdentity = identity
+		}
+		if reconnected {
+			go s.runVPPStartupScript()
 		}
 
 		if !pendingReconcile || !healthy || reconcileDone != nil {
@@ -456,16 +524,26 @@ func (s *Server) ReconcileVNFs(ctx context.Context) error {
 		return fmt.Errorf("list VNFs for reconciliation: %w", err)
 	}
 
+	s.vnfSpecsMu.Lock()
+	ensureRunning := !s.vnfSpecsSynced
+	s.vnfSpecsMu.Unlock()
+
 	var errs []error
 	for _, vnf := range vnfs {
-		if !vnf.Enabled || vnf.Type == store.VNFTypeNAT44 || s.vnfs.Running(ctx, vnf.ID) {
+		if !vnf.Enabled || vnf.Type == store.VNFTypeNAT44 {
 			continue
 		}
-		if err := s.reconcileVNF(ctx, vnf); err != nil {
+		if err := s.reconcileVNF(ctx, vnf, ensureRunning); err != nil {
 			errs = append(errs, fmt.Errorf("VNF %s: %w", vnf.Name, err))
 		}
 	}
-	return errors.Join(errs...)
+	result := errors.Join(errs...)
+	if result == nil && ensureRunning {
+		s.vnfSpecsMu.Lock()
+		s.vnfSpecsSynced = true
+		s.vnfSpecsMu.Unlock()
+	}
+	return result
 }
 
 // reconcileVNFBindings moves already-running VNF interfaces into their
@@ -506,7 +584,7 @@ func (s *Server) reconcileVNFBindings(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF) error {
+func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF, ensureRunning bool) error {
 	s.resourceMu.Lock()
 	defer s.resourceMu.Unlock()
 
@@ -520,8 +598,14 @@ func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF) error {
 		return fmt.Errorf("reload VNF: %w", err)
 	}
 	vnf = current
-	if !vnf.Enabled || s.vnfs.Running(ctx, vnf.ID) {
+	if !vnf.Enabled {
 		return nil
+	}
+	if s.vnfs.Running(ctx, vnf.ID) {
+		if !ensureRunning {
+			return nil
+		}
+		return s.ensureRunningVNFSpec(ctx, vnf)
 	}
 	if s.memifDHCP && vnf.Type == store.VNFTypeDHCPv4 {
 		network, err := s.store.GetNetwork(ctx, vnf.NetworkID)

@@ -149,7 +149,14 @@ sequenceDiagram
 
 QEMU always runs with `-nic none`; guest networking is explicitly built from
 attached VPP vhost-user interfaces. `reconnect=1` lets QEMU reattach after VPP
-recreates its sockets.
+recreates its sockets. `POST /api/vms` performs the same launch steps right
+after inserting the VM record, so new VMs are running; if the launch fails the
+record is removed again and the error is returned. Each VM stores the power
+state it should have (`desired_state`): starting or creating a VM records
+`running` and stopping records `stopped`. After the VPP resources are
+reconciled, the API starts every VM that should be running but has no live QEMU
+process, which brings VMs back after a host reboot while leaving explicitly
+stopped VMs down.
 
 ### Network dataplane
 

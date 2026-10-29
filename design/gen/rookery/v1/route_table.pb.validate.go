@@ -573,8 +573,6 @@ func (m *Route) validate(all bool) error {
 
 	// no validation rules for EgressInterface
 
-	// no validation rules for Preference
-
 	if all {
 		switch v := interface{}(m.GetCreatedAt()).(type) {
 		case interface{ ValidateAll() error }:
@@ -633,8 +631,46 @@ func (m *Route) validate(all bool) error {
 		}
 	}
 
+	// no validation rules for NextHopTable
+
+	// no validation rules for Ipv4LookupTable
+
+	// no validation rules for Ipv6LookupTable
+
+	// no validation rules for ResolveViaHost
+
+	// no validation rules for ResolveViaConnected
+
+	// no validation rules for RxIpv4Interface
+
+	// no validation rules for RxIpv6Interface
+
+	// no validation rules for Drop
+
+	// no validation rules for Description
+
 	if m.InterfaceId != nil {
 		// no validation rules for InterfaceId
+	}
+
+	if m.Preference != nil {
+		// no validation rules for Preference
+	}
+
+	if m.Count != nil {
+		// no validation rules for Count
+	}
+
+	if m.Weight != nil {
+		// no validation rules for Weight
+	}
+
+	if m.UdpEncap != nil {
+		// no validation rules for UdpEncap
+	}
+
+	if m.MplsLookupTable != nil {
+		// no validation rules for MplsLookupTable
 	}
 
 	if len(errors) > 0 {
@@ -1023,7 +1059,108 @@ func (m *CreateRouteRequest) validate(all bool) error {
 
 	}
 
-	// no validation rules for Preference
+	if m.GetNextHopTable() != "" {
+
+		if utf8.RuneCountInString(m.GetNextHopTable()) > 63 {
+			err := CreateRouteRequestValidationError{
+				field:  "NextHopTable",
+				reason: "value length must be at most 63 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.GetIpv4LookupTable() != "" {
+
+		if utf8.RuneCountInString(m.GetIpv4LookupTable()) > 63 {
+			err := CreateRouteRequestValidationError{
+				field:  "Ipv4LookupTable",
+				reason: "value length must be at most 63 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.GetIpv6LookupTable() != "" {
+
+		if utf8.RuneCountInString(m.GetIpv6LookupTable()) > 63 {
+			err := CreateRouteRequestValidationError{
+				field:  "Ipv6LookupTable",
+				reason: "value length must be at most 63 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	// no validation rules for ResolveViaHost
+
+	// no validation rules for ResolveViaConnected
+
+	if m.GetRxIpv4Interface() != "" {
+
+		if utf8.RuneCountInString(m.GetRxIpv4Interface()) > 64 {
+			err := CreateRouteRequestValidationError{
+				field:  "RxIpv4Interface",
+				reason: "value length must be at most 64 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.GetRxIpv6Interface() != "" {
+
+		if utf8.RuneCountInString(m.GetRxIpv6Interface()) > 64 {
+			err := CreateRouteRequestValidationError{
+				field:  "RxIpv6Interface",
+				reason: "value length must be at most 64 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if len(m.GetOutLabels()) > 16 {
+		err := CreateRouteRequestValidationError{
+			field:  "OutLabels",
+			reason: "value must contain no more than 16 item(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	// no validation rules for Drop
+
+	if utf8.RuneCountInString(m.GetDescription()) > 1000 {
+		err := CreateRouteRequestValidationError{
+			field:  "Description",
+			reason: "value length must be at most 1000 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
 
 	if m.InterfaceId != nil {
 
@@ -1038,6 +1175,48 @@ func (m *CreateRouteRequest) validate(all bool) error {
 			errors = append(errors, err)
 		}
 
+	}
+
+	if m.Preference != nil {
+		// no validation rules for Preference
+	}
+
+	if m.Count != nil {
+
+		if m.GetCount() > 100000 {
+			err := CreateRouteRequestValidationError{
+				field:  "Count",
+				reason: "value must be less than or equal to 100000",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.Weight != nil {
+
+		if m.GetWeight() > 255 {
+			err := CreateRouteRequestValidationError{
+				field:  "Weight",
+				reason: "value must be less than or equal to 255",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.UdpEncap != nil {
+		// no validation rules for UdpEncap
+	}
+
+	if m.MplsLookupTable != nil {
+		// no validation rules for MplsLookupTable
 	}
 
 	if len(errors) > 0 {
@@ -1119,6 +1298,320 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = CreateRouteRequestValidationError{}
+
+// Validate checks the field values on UpdateRouteRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *UpdateRouteRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on UpdateRouteRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// UpdateRouteRequestMultiError, or nil if none found.
+func (m *UpdateRouteRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *UpdateRouteRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetId() <= 0 {
+		err := UpdateRouteRequestValidationError{
+			field:  "Id",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if l := utf8.RuneCountInString(m.GetPrefix()); l < 1 || l > 64 {
+		err := UpdateRouteRequestValidationError{
+			field:  "Prefix",
+			reason: "value length must be between 1 and 64 runes, inclusive",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if m.GetNextHop() != "" {
+
+		if utf8.RuneCountInString(m.GetNextHop()) > 64 {
+			err := UpdateRouteRequestValidationError{
+				field:  "NextHop",
+				reason: "value length must be at most 64 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.GetEgressInterface() != "" {
+
+		if utf8.RuneCountInString(m.GetEgressInterface()) > 64 {
+			err := UpdateRouteRequestValidationError{
+				field:  "EgressInterface",
+				reason: "value length must be at most 64 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.GetNextHopTable() != "" {
+
+		if utf8.RuneCountInString(m.GetNextHopTable()) > 63 {
+			err := UpdateRouteRequestValidationError{
+				field:  "NextHopTable",
+				reason: "value length must be at most 63 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.GetIpv4LookupTable() != "" {
+
+		if utf8.RuneCountInString(m.GetIpv4LookupTable()) > 63 {
+			err := UpdateRouteRequestValidationError{
+				field:  "Ipv4LookupTable",
+				reason: "value length must be at most 63 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.GetIpv6LookupTable() != "" {
+
+		if utf8.RuneCountInString(m.GetIpv6LookupTable()) > 63 {
+			err := UpdateRouteRequestValidationError{
+				field:  "Ipv6LookupTable",
+				reason: "value length must be at most 63 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	// no validation rules for ResolveViaHost
+
+	// no validation rules for ResolveViaConnected
+
+	if m.GetRxIpv4Interface() != "" {
+
+		if utf8.RuneCountInString(m.GetRxIpv4Interface()) > 64 {
+			err := UpdateRouteRequestValidationError{
+				field:  "RxIpv4Interface",
+				reason: "value length must be at most 64 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.GetRxIpv6Interface() != "" {
+
+		if utf8.RuneCountInString(m.GetRxIpv6Interface()) > 64 {
+			err := UpdateRouteRequestValidationError{
+				field:  "RxIpv6Interface",
+				reason: "value length must be at most 64 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if len(m.GetOutLabels()) > 16 {
+		err := UpdateRouteRequestValidationError{
+			field:  "OutLabels",
+			reason: "value must contain no more than 16 item(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	// no validation rules for Drop
+
+	if utf8.RuneCountInString(m.GetDescription()) > 1000 {
+		err := UpdateRouteRequestValidationError{
+			field:  "Description",
+			reason: "value length must be at most 1000 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if m.InterfaceId != nil {
+
+		if m.GetInterfaceId() <= 0 {
+			err := UpdateRouteRequestValidationError{
+				field:  "InterfaceId",
+				reason: "value must be greater than 0",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.Preference != nil {
+		// no validation rules for Preference
+	}
+
+	if m.Count != nil {
+
+		if m.GetCount() > 100000 {
+			err := UpdateRouteRequestValidationError{
+				field:  "Count",
+				reason: "value must be less than or equal to 100000",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.Weight != nil {
+
+		if m.GetWeight() > 255 {
+			err := UpdateRouteRequestValidationError{
+				field:  "Weight",
+				reason: "value must be less than or equal to 255",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.UdpEncap != nil {
+		// no validation rules for UdpEncap
+	}
+
+	if m.MplsLookupTable != nil {
+		// no validation rules for MplsLookupTable
+	}
+
+	if len(errors) > 0 {
+		return UpdateRouteRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// UpdateRouteRequestMultiError is an error wrapping multiple validation errors
+// returned by UpdateRouteRequest.ValidateAll() if the designated constraints
+// aren't met.
+type UpdateRouteRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m UpdateRouteRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m UpdateRouteRequestMultiError) AllErrors() []error { return m }
+
+// UpdateRouteRequestValidationError is the validation error returned by
+// UpdateRouteRequest.Validate if the designated constraints aren't met.
+type UpdateRouteRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e UpdateRouteRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e UpdateRouteRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e UpdateRouteRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e UpdateRouteRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e UpdateRouteRequestValidationError) ErrorName() string {
+	return "UpdateRouteRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e UpdateRouteRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sUpdateRouteRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = UpdateRouteRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = UpdateRouteRequestValidationError{}
 
 // Validate checks the field values on DeleteRouteRequest with the rules
 // defined in the proto definition for this message. If any rules are

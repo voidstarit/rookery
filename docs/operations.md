@@ -24,7 +24,7 @@ SQLite. It uses the Go standard library HTTP server and the pure-Go
 UI, favicon, and SQL migrations are embedded into the binary with `go:embed`.
 Creating a disk provisions a blank thin-LVM volume in a registered storage backend;
 VM creation attaches one or more of those pre-created disks and optionally a read-only
-ISO as boot media. VMs run under QEMU with KVM acceleration, and the UI opens an
+ISO as boot media, then starts the VM; stopping it is always an explicit action. VMs run under QEMU with KVM acceleration, and the UI opens an
 embedded noVNC client through a server-side WebSocket-to-Unix-socket proxy.
 Rookery Networks are VPP bridge domains; vhost-user interfaces created on a
 network can be attached to VMs and become virtio-net devices when the VM starts.
@@ -37,7 +37,7 @@ The server has two commands:
 - `serve` — run the gateway API and UI. It starts even when prerequisites are
   missing and reports readiness. The bootstrapped default storage backend needs its thin
   pool; additional storage backends are validated when used. VM creation needs
-  the thin pool and VPP. Installation media only registers existing files and
+  the thin pool and VPP, and starts the VM, so QEMU/KVM must be available too. Installation media only registers existing files and
   has no host prerequisites.
 
 The API intentionally has **no authentication or authorization**, including the
@@ -132,6 +132,14 @@ its persisted desired VNFs after a restart. The API owns SQLite and all VPP
 provisioning (memifs, taps, BVIs, NAT44) and controls the daemon over the
 internal gRPC socket configured by `api.vnf_addr` / `vnf.listen`.
 
+When upgrading both binaries, restart `vnfs` first and then restart
+`rookery serve`. On startup the API re-sends the current database configuration
+to already-running VNFs once; the daemon compares the spec hash and only
+restarts a runtime when the configuration changed. This repairs desired specs
+written by an older daemon, including DHCP DNS integration and the shared stack
+IPv6 address. If `vnfs` is restarted independently after an upgrade, restart
+the API or restart the affected VNFs to re-send their configuration.
+
 ## Logging
 
 Both binaries log through `zerolog`. `-log-level` (`trace`, `debug`, `info`,
@@ -185,14 +193,27 @@ an authenticating proxy if end users can reach the API.
 
 ## VM lifecycle and console
 
-Each VM has a UUID. The **Start** action launches QEMU with `-accel kvm`, every
-attached thin-LVM disk as a virtio drive (in attachment order), and the optional
-ISO as a read-only CD-ROM. Attached network interfaces become vhost-user virtio-net devices with
-their stored MAC addresses. VMs with attached interfaces also get a shared
-`memory-backend-memfd` and a single NUMA node, because vhost-user backends such
-as VPP cannot map guest virtqueues from anonymous RAM. If VPP shows a vhost
-interface as link-down with zero memory regions, check that the QEMU process
-has this shared memory backend. The **Monitor** action opens a live telemetry dialog that samples the QEMU
+Each VM has a UUID. Creating a VM launches QEMU immediately with `-accel kvm`,
+every attached thin-LVM disk as a virtio drive (in attachment order), and the
+optional ISO as a read-only CD-ROM. Attached network interfaces become
+vhost-user virtio-net devices with their stored MAC addresses. VMs with
+attached interfaces also get a shared `memory-backend-memfd` and a single NUMA
+node, because vhost-user backends such as VPP cannot map guest virtqueues from
+anonymous RAM. If VPP shows a vhost interface as link-down with zero memory
+regions, check that the QEMU process has this shared memory backend. If QEMU
+cannot start, the API removes the new VM record again and reports the error, so
+a failed create leaves no VM behind. The **Start** action launches a VM that was
+explicitly stopped, and **Stop** shuts it down.
+
+Rookery stores a desired power state per VM. Starting a VM (or creating one)
+marks it as wanting to run, and stopping it marks it as wanting to stay down.
+On API startup, and after VPP is rebuilt, every VM that wants to run but has no
+live QEMU process is started again — so VMs that were running when the host
+rebooted come back, while VMs that were stopped explicitly stay down. Startup
+auto-start runs after the VPP bridge domains and vhost-user interfaces are
+restored, and failures are logged without stopping the API.
+
+The **Monitor** action opens a live telemetry dialog that samples the QEMU
 process every two seconds and shows CPU usage, RSS/virtual memory, disk read
 and write rates, network RX/TX rates, uptime, and PID. It also keeps 60 samples
 (about two minutes) and draws CPU, memory RSS, disk I/O, and network I/O history

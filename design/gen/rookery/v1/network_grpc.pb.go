@@ -20,10 +20,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	NetworkService_ListNetworks_FullMethodName  = "/rookery.v1.NetworkService/ListNetworks"
-	NetworkService_GetNetwork_FullMethodName    = "/rookery.v1.NetworkService/GetNetwork"
-	NetworkService_CreateNetwork_FullMethodName = "/rookery.v1.NetworkService/CreateNetwork"
-	NetworkService_DeleteNetwork_FullMethodName = "/rookery.v1.NetworkService/DeleteNetwork"
+	NetworkService_ListNetworks_FullMethodName      = "/rookery.v1.NetworkService/ListNetworks"
+	NetworkService_GetNetwork_FullMethodName        = "/rookery.v1.NetworkService/GetNetwork"
+	NetworkService_CreateNetwork_FullMethodName     = "/rookery.v1.NetworkService/CreateNetwork"
+	NetworkService_UpdateNetwork_FullMethodName     = "/rookery.v1.NetworkService/UpdateNetwork"
+	NetworkService_DeleteNetwork_FullMethodName     = "/rookery.v1.NetworkService/DeleteNetwork"
+	NetworkService_ListNetworkPipes_FullMethodName  = "/rookery.v1.NetworkService/ListNetworkPipes"
+	NetworkService_CreateNetworkPipe_FullMethodName = "/rookery.v1.NetworkService/CreateNetworkPipe"
+	NetworkService_DeleteNetworkPipe_FullMethodName = "/rookery.v1.NetworkService/DeleteNetworkPipe"
 )
 
 // NetworkServiceClient is the client API for NetworkService service.
@@ -35,7 +39,11 @@ type NetworkServiceClient interface {
 	ListNetworks(ctx context.Context, in *ListNetworksRequest, opts ...grpc.CallOption) (*ListNetworksResponse, error)
 	GetNetwork(ctx context.Context, in *GetNetworkRequest, opts ...grpc.CallOption) (*Network, error)
 	CreateNetwork(ctx context.Context, in *CreateNetworkRequest, opts ...grpc.CallOption) (*Network, error)
+	UpdateNetwork(ctx context.Context, in *UpdateNetworkRequest, opts ...grpc.CallOption) (*Network, error)
 	DeleteNetwork(ctx context.Context, in *DeleteNetworkRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	ListNetworkPipes(ctx context.Context, in *ListNetworkPipesRequest, opts ...grpc.CallOption) (*ListNetworkPipesResponse, error)
+	CreateNetworkPipe(ctx context.Context, in *CreateNetworkPipeRequest, opts ...grpc.CallOption) (*NetworkPipe, error)
+	DeleteNetworkPipe(ctx context.Context, in *DeleteNetworkPipeRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type networkServiceClient struct {
@@ -76,10 +84,50 @@ func (c *networkServiceClient) CreateNetwork(ctx context.Context, in *CreateNetw
 	return out, nil
 }
 
+func (c *networkServiceClient) UpdateNetwork(ctx context.Context, in *UpdateNetworkRequest, opts ...grpc.CallOption) (*Network, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Network)
+	err := c.cc.Invoke(ctx, NetworkService_UpdateNetwork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *networkServiceClient) DeleteNetwork(ctx context.Context, in *DeleteNetworkRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, NetworkService_DeleteNetwork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *networkServiceClient) ListNetworkPipes(ctx context.Context, in *ListNetworkPipesRequest, opts ...grpc.CallOption) (*ListNetworkPipesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListNetworkPipesResponse)
+	err := c.cc.Invoke(ctx, NetworkService_ListNetworkPipes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *networkServiceClient) CreateNetworkPipe(ctx context.Context, in *CreateNetworkPipeRequest, opts ...grpc.CallOption) (*NetworkPipe, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(NetworkPipe)
+	err := c.cc.Invoke(ctx, NetworkService_CreateNetworkPipe_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *networkServiceClient) DeleteNetworkPipe(ctx context.Context, in *DeleteNetworkPipeRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, NetworkService_DeleteNetworkPipe_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +143,11 @@ type NetworkServiceServer interface {
 	ListNetworks(context.Context, *ListNetworksRequest) (*ListNetworksResponse, error)
 	GetNetwork(context.Context, *GetNetworkRequest) (*Network, error)
 	CreateNetwork(context.Context, *CreateNetworkRequest) (*Network, error)
+	UpdateNetwork(context.Context, *UpdateNetworkRequest) (*Network, error)
 	DeleteNetwork(context.Context, *DeleteNetworkRequest) (*emptypb.Empty, error)
+	ListNetworkPipes(context.Context, *ListNetworkPipesRequest) (*ListNetworkPipesResponse, error)
+	CreateNetworkPipe(context.Context, *CreateNetworkPipeRequest) (*NetworkPipe, error)
+	DeleteNetworkPipe(context.Context, *DeleteNetworkPipeRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedNetworkServiceServer()
 }
 
@@ -115,8 +167,20 @@ func (UnimplementedNetworkServiceServer) GetNetwork(context.Context, *GetNetwork
 func (UnimplementedNetworkServiceServer) CreateNetwork(context.Context, *CreateNetworkRequest) (*Network, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateNetwork not implemented")
 }
+func (UnimplementedNetworkServiceServer) UpdateNetwork(context.Context, *UpdateNetworkRequest) (*Network, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateNetwork not implemented")
+}
 func (UnimplementedNetworkServiceServer) DeleteNetwork(context.Context, *DeleteNetworkRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteNetwork not implemented")
+}
+func (UnimplementedNetworkServiceServer) ListNetworkPipes(context.Context, *ListNetworkPipesRequest) (*ListNetworkPipesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNetworkPipes not implemented")
+}
+func (UnimplementedNetworkServiceServer) CreateNetworkPipe(context.Context, *CreateNetworkPipeRequest) (*NetworkPipe, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateNetworkPipe not implemented")
+}
+func (UnimplementedNetworkServiceServer) DeleteNetworkPipe(context.Context, *DeleteNetworkPipeRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteNetworkPipe not implemented")
 }
 func (UnimplementedNetworkServiceServer) mustEmbedUnimplementedNetworkServiceServer() {}
 func (UnimplementedNetworkServiceServer) testEmbeddedByValue()                        {}
@@ -193,6 +257,24 @@ func _NetworkService_CreateNetwork_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NetworkService_UpdateNetwork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateNetworkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetworkServiceServer).UpdateNetwork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetworkService_UpdateNetwork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetworkServiceServer).UpdateNetwork(ctx, req.(*UpdateNetworkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NetworkService_DeleteNetwork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteNetworkRequest)
 	if err := dec(in); err != nil {
@@ -207,6 +289,60 @@ func _NetworkService_DeleteNetwork_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NetworkServiceServer).DeleteNetwork(ctx, req.(*DeleteNetworkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetworkService_ListNetworkPipes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListNetworkPipesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetworkServiceServer).ListNetworkPipes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetworkService_ListNetworkPipes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetworkServiceServer).ListNetworkPipes(ctx, req.(*ListNetworkPipesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetworkService_CreateNetworkPipe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateNetworkPipeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetworkServiceServer).CreateNetworkPipe(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetworkService_CreateNetworkPipe_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetworkServiceServer).CreateNetworkPipe(ctx, req.(*CreateNetworkPipeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetworkService_DeleteNetworkPipe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteNetworkPipeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetworkServiceServer).DeleteNetworkPipe(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetworkService_DeleteNetworkPipe_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetworkServiceServer).DeleteNetworkPipe(ctx, req.(*DeleteNetworkPipeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -231,8 +367,24 @@ var NetworkService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _NetworkService_CreateNetwork_Handler,
 		},
 		{
+			MethodName: "UpdateNetwork",
+			Handler:    _NetworkService_UpdateNetwork_Handler,
+		},
+		{
 			MethodName: "DeleteNetwork",
 			Handler:    _NetworkService_DeleteNetwork_Handler,
+		},
+		{
+			MethodName: "ListNetworkPipes",
+			Handler:    _NetworkService_ListNetworkPipes_Handler,
+		},
+		{
+			MethodName: "CreateNetworkPipe",
+			Handler:    _NetworkService_CreateNetworkPipe_Handler,
+		},
+		{
+			MethodName: "DeleteNetworkPipe",
+			Handler:    _NetworkService_DeleteNetworkPipe_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

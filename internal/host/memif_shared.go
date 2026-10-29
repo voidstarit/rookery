@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -32,11 +33,12 @@ import (
 // memif. All userspace VNFs on that network (DHCPv4 and later BGP) register
 // listeners on this stack instead of creating a memif per VNF.
 type sharedNetwork struct {
-	networkID int64
-	address   string
-	socket    string
-	ifID      uint32
-	mac       net.HardwareAddr
+	networkID   int64
+	address     string
+	ipv6Address string
+	socket      string
+	ifID        uint32
+	mac         net.HardwareAddr
 
 	stack  *stack.Stack
 	link   *channel.Endpoint
@@ -58,6 +60,7 @@ type sharedNetworkConfig struct {
 	SocketPath  string
 	InterfaceID uint32
 	Address     string // IPv4 service CIDR, normally .2/prefix
+	IPv6Address string // IPv6 service CIDR, normally .2/prefix
 	MAC         net.HardwareAddr
 }
 
@@ -106,6 +109,16 @@ func startSharedNetwork(ctx context.Context, cfg sharedNetworkConfig) (*sharedNe
 	if bits != 32 {
 		return nil, fmt.Errorf("shared VNF address %q is not IPv4", cfg.Address)
 	}
+	var ipv6Addr net.IP
+	ipv6Prefix := 0
+	if strings.TrimSpace(cfg.IPv6Address) != "" {
+		parsed, parsedNet, err := net.ParseCIDR(strings.TrimSpace(cfg.IPv6Address))
+		if err != nil || parsed.To4() != nil {
+			return nil, fmt.Errorf("parse shared IPv6 VNF address %q: %w", cfg.IPv6Address, err)
+		}
+		ipv6Addr = parsed.To16()
+		ipv6Prefix, _ = parsedNet.Mask.Size()
+	}
 
 	s := stack.New(stack.Options{
 		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol, ipv6.NewProtocol, arp.NewProtocol},
@@ -122,7 +135,17 @@ func startSharedNetwork(ctx context.Context, cfg sharedNetworkConfig) (*sharedNe
 	}, stack.AddressProperties{}); err != nil {
 		return nil, fmt.Errorf("assign shared netstack address %s: %v", ip, err)
 	}
-	s.SetRouteTable([]tcpip.Route{{Destination: header.IPv4EmptySubnet, NIC: 1}})
+	routes := []tcpip.Route{{Destination: header.IPv4EmptySubnet, NIC: 1}}
+	if ipv6Addr != nil {
+		if err := s.AddProtocolAddress(1, tcpip.ProtocolAddress{
+			Protocol:          header.IPv6ProtocolNumber,
+			AddressWithPrefix: tcpip.AddressWithPrefix{Address: tcpip.AddrFromSlice(ipv6Addr), PrefixLen: ipv6Prefix},
+		}, stack.AddressProperties{}); err != nil {
+			return nil, fmt.Errorf("assign shared IPv6 netstack address %s: %v", cfg.IPv6Address, err)
+		}
+		routes = append(routes, tcpip.Route{Destination: header.IPv6EmptySubnet, NIC: 1})
+	}
+	s.SetRouteTable(routes)
 
 	memif, err := newMemifLink(cfg.SocketPath, cfg.InterfaceID, fmt.Sprintf("net%d-vnf", cfg.NetworkID), cfg.MAC)
 	if err != nil {
@@ -133,17 +156,18 @@ func startSharedNetwork(ctx context.Context, cfg sharedNetworkConfig) (*sharedNe
 
 	runCtx, cancel := context.WithCancel(context.Background())
 	n := &sharedNetwork{
-		networkID: cfg.NetworkID,
-		address:   cfg.Address,
-		socket:    cfg.SocketPath,
-		ifID:      cfg.InterfaceID,
-		mac:       cfg.MAC,
-		stack:     s,
-		link:      link,
-		memif:     memif,
-		cancel:    cancel,
-		done:      make(chan struct{}),
-		vnfs:      make(map[int64]string),
+		networkID:   cfg.NetworkID,
+		address:     cfg.Address,
+		ipv6Address: cfg.IPv6Address,
+		socket:      cfg.SocketPath,
+		ifID:        cfg.InterfaceID,
+		mac:         cfg.MAC,
+		stack:       s,
+		link:        link,
+		memif:       memif,
+		cancel:      cancel,
+		done:        make(chan struct{}),
+		vnfs:        make(map[int64]string),
 	}
 	go n.pumpRX(runCtx)
 	go n.pumpTX(runCtx)
@@ -390,6 +414,52 @@ func (n *sharedNetwork) close() {
 			n.stack.Wait()
 		}
 	})
+}
+
+// ensureIPv6Address adds the network's IPv6 service address to an existing
+// shared stack. Older daemons created stacks without an IPv6 address; an API
+// upgrade can add it without discarding the running DHCP/DNS VNFs.
+func (n *sharedNetwork) ensureIPv6Address(cidr string) error {
+	cidr = strings.TrimSpace(cidr)
+	if cidr == "" {
+		return nil
+	}
+	parsed, parsedNet, err := net.ParseCIDR(cidr)
+	if err != nil || parsed.To4() != nil {
+		return fmt.Errorf("parse shared IPv6 VNF address %q: %w", cidr, err)
+	}
+	prefix, _ := parsedNet.Mask.Size()
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.ipv6Address == cidr {
+		return nil
+	}
+	if n.ipv6Address != "" {
+		return fmt.Errorf("shared VNF memif for network %d already uses IPv6 %s", n.networkID, n.ipv6Address)
+	}
+	if err := n.stack.AddProtocolAddress(1, tcpip.ProtocolAddress{
+		Protocol:          header.IPv6ProtocolNumber,
+		AddressWithPrefix: tcpip.AddressWithPrefix{Address: tcpip.AddrFromSlice(parsed.To16()), PrefixLen: prefix},
+	}, stack.AddressProperties{}); err != nil {
+		return fmt.Errorf("assign shared IPv6 netstack address %s: %v", cidr, err)
+	}
+	n.stack.SetRouteTable([]tcpip.Route{
+		{Destination: header.IPv4EmptySubnet, NIC: 1},
+		{Destination: header.IPv6EmptySubnet, NIC: 1},
+	})
+	n.ipv6Address = cidr
+	log.Info().Int64("network_id", n.networkID).Str("ipv6_address", cidr).Msg("added IPv6 service address to shared VNF stack")
+	return nil
+}
+
+func (n *sharedNetwork) dnsHandler() *dnsHandler {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.dns == nil {
+		return nil
+	}
+	return n.dns.handler
 }
 
 func (n *sharedNetwork) isClosed() bool {

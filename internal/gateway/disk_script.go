@@ -35,6 +35,15 @@ type diskScriptDisk struct {
 	TemplateDiskName string `json:"template_disk_name,omitempty"`
 }
 
+type diskProvisionInfo struct {
+	Operation  string            `json:"operation"`
+	RequestID  string            `json:"request_id"`
+	Disk       diskScriptDisk    `json:"disk"`
+	Template   diskScriptDisk    `json:"template"`
+	Backend    diskScriptBackend `json:"backend"`
+	Properties map[string]any    `json:"properties"`
+}
+
 type diskScriptBackend struct {
 	ID     int64                      `json:"id"`
 	Name   string                     `json:"name"`
@@ -48,6 +57,91 @@ func diskScriptRecord(disk store.Disk) diskScriptDisk {
 		VG: disk.VG, ThinPool: disk.ThinPool, Device: disk.Device,
 		IsTemplate: disk.IsTemplate, TemplateDiskID: disk.TemplateDiskID, TemplateDiskName: disk.TemplateDiskName,
 	}
+}
+
+func (s *diskService) runTemplateProvisioningScript(ctx context.Context, backend store.StorageBackend, disk store.Disk, template *store.Disk, properties map[string]any) error {
+	if template == nil {
+		return nil
+	}
+	if len(properties) == 0 {
+		s.logger.Info().
+			Str("disk", disk.Name).
+			Str("template", template.Name).
+			Msg("template provisioning skipped: no properties supplied")
+		return nil
+	}
+	script := strings.TrimSpace(template.ProvisioningScript)
+	if script == "" {
+		if len(properties) > 0 {
+			return fmt.Errorf("template %q has no provisioning_script", template.Name)
+		}
+		return nil
+	}
+	timeout := 5 * time.Minute
+	if configured := strings.TrimSpace(template.ProvisioningTimeout); configured != "" {
+		parsed, err := time.ParseDuration(configured)
+		if err != nil || parsed <= 0 {
+			return fmt.Errorf("invalid provisioning_timeout %q", configured)
+		}
+		timeout = parsed
+	}
+	if properties == nil {
+		properties = map[string]any{}
+	}
+	info := diskProvisionInfo{
+		Operation:  "provision",
+		RequestID:  uuid.NewString(),
+		Disk:       diskScriptRecord(disk),
+		Template:   diskScriptRecord(*template),
+		Backend:    diskScriptBackend{ID: backend.ID, Name: backend.Name, Driver: backend.Driver, Config: backend.Config},
+		Properties: properties,
+	}
+	payload, err := json.Marshal(info)
+	if err != nil {
+		return fmt.Errorf("encode provisioning payload: %w", err)
+	}
+	s.logger.Info().
+		Str("script", script).
+		Str("request_id", info.RequestID).
+		Str("disk", disk.Name).
+		Str("template", template.Name).
+		Int("properties", len(properties)).
+		Msg("template provisioning script starting")
+	runCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	command := exec.CommandContext(runCtx, script)
+	command.Env = append(os.Environ(), "ROOKERY_PROVISION_JSON="+string(payload))
+	var output bytes.Buffer
+	command.Stdout = &output
+	command.Stderr = &output
+	err = command.Run()
+	text := strings.TrimSpace(output.String())
+	if err != nil {
+		s.logger.Error().
+			Str("script", script).
+			Str("request_id", info.RequestID).
+			Str("operation", "provision").
+			Str("disk", disk.Name).
+			Str("template", template.Name).
+			Int("properties", len(properties)).
+			Err(err).
+			Str("output", text).
+			Msg("template provisioning script failed")
+		if text == "" {
+			return fmt.Errorf("template provisioning script failed: %w", err)
+		}
+		return fmt.Errorf("template provisioning script failed: %w: %s", err, text)
+	}
+	s.logger.Info().
+		Str("script", script).
+		Str("request_id", info.RequestID).
+		Str("operation", "provision").
+		Str("disk", disk.Name).
+		Str("template", template.Name).
+		Int("properties", len(properties)).
+		Str("output", text).
+		Msg("template provisioning script completed")
+	return nil
 }
 
 func (s *diskService) runDiskPreparationScript(ctx context.Context, operation string, backend store.StorageBackend, disk store.Disk, template *store.Disk) error {

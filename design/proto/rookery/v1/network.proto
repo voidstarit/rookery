@@ -29,8 +29,33 @@ service NetworkService {
     };
   }
 
+  rpc UpdateNetwork(UpdateNetworkRequest) returns (Network) {
+    option (google.api.http) = {
+      put: "/api/networks/{id}"
+      body: "*"
+    };
+  }
+
   rpc DeleteNetwork(DeleteNetworkRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {delete: "/api/networks/{id}"};
+  }
+
+  rpc ListNetworkPipes(ListNetworkPipesRequest) returns (ListNetworkPipesResponse) {
+    option (google.api.http) = {
+      get: "/api/network-pipes"
+      response_body: "pipes"
+    };
+  }
+
+  rpc CreateNetworkPipe(CreateNetworkPipeRequest) returns (NetworkPipe) {
+    option (google.api.http) = {
+      post: "/api/network-pipes"
+      body: "*"
+    };
+  }
+
+  rpc DeleteNetworkPipe(DeleteNetworkPipeRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/network-pipes/{id}"};
   }
 }
 
@@ -69,6 +94,41 @@ message CreateNetworkRequest {
   string ipv6_cidr = 3 [(validate.rules).string = {min_len: 1}];
 }
 
+message UpdateNetworkRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  string ipv4_cidr = 2 [(validate.rules).string = {min_len: 1}];
+  string ipv6_cidr = 3 [(validate.rules).string = {min_len: 1}];
+}
+
 message DeleteNetworkRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message NetworkPipe {
+  int64 id = 1;
+  int64 network_a_id = 2;
+  string network_a_name = 3;
+  int64 network_b_id = 4;
+  string network_b_name = 5;
+  uint32 instance = 6;
+  uint32 parent_sw_if_index = 7;
+  uint32 endpoint_a_sw_if_index = 8;
+  uint32 endpoint_b_sw_if_index = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+message ListNetworkPipesRequest {}
+
+message ListNetworkPipesResponse {
+  repeated NetworkPipe pipes = 1;
+}
+
+message CreateNetworkPipeRequest {
+  int64 network_a_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 network_b_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+
+message DeleteNetworkPipeRequest {
   int64 id = 1 [(validate.rules).int64 = {gt: 0}];
 }

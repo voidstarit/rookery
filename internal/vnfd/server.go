@@ -34,11 +34,12 @@ import (
 type Manager interface {
 	Start(ctx context.Context, vnf store.VNF, hostIf string) error
 	StartMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32) error
-	StartShared(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32, address string) error
+	StartShared(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32, address, ipv6Address string) error
 	Stop(ctx context.Context, vnfID int64, removeLeases bool) error
 	Running(vnfID int64) bool
 	Healthy(vnfID int64) bool
 	Leases(ctx context.Context, vnfID int64) ([]store.VNFLease, error)
+	DNSRecords(vnfID int64) []host.DNSRecordView
 	BGPStatus(ctx context.Context, vnfID int64) (host.BGPStatus, error)
 	CleanupLegacyNetwork(networkID int64)
 	ResetRuntime(ctx context.Context) error
@@ -222,7 +223,7 @@ func (s *Server) EnsureVNF(ctx context.Context, request *rookeryv1.EnsureVNFRequ
 		} else if strings.TrimSpace(spec.GetSharedAddress()) == "" {
 			err = errors.New("shared memif address is required")
 		} else {
-			err = s.manager.StartShared(ctx, vnf, spec.GetMemifSocket(), spec.GetMemifSwIfIndex(), spec.GetSharedAddress())
+			err = s.manager.StartShared(ctx, vnf, spec.GetMemifSocket(), spec.GetMemifSwIfIndex(), spec.GetSharedAddress(), spec.GetSharedIpv6Address())
 		}
 	case "memif":
 		if strings.TrimSpace(spec.GetMemifSocket()) == "" {
@@ -291,6 +292,22 @@ func (s *Server) ResetRuntime(ctx context.Context, _ *rookeryv1.ResetRuntimeRequ
 	s.mu.Unlock()
 	s.logger.Trace().Time("supervision_resumes", pausedUntil).Msg("VNF runtimes reset")
 	return &emptypb.Empty{}, nil
+}
+
+// ListDNSRecords returns the dynamic records currently registered by DHCP
+// leases for a DNS VNF. Static records are stored by the API.
+func (s *Server) ListDNSRecords(_ context.Context, request *rookeryv1.ListDNSRecordsRequest) (*rookeryv1.ListDNSRecordsResponse, error) {
+	if request.GetId() <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "vnf id is required")
+	}
+	response := &rookeryv1.ListDNSRecordsResponse{VnfId: request.GetId()}
+	for _, record := range s.manager.DNSRecords(request.GetId()) {
+		response.Records = append(response.Records, &rookeryv1.VNFDNSRecord{
+			Name: record.Name, Type: record.Type, Value: record.Value, Ttl: record.TTL,
+			Source: record.Source, SourceVnfId: record.SourceVNFID,
+		})
+	}
+	return response, nil
 }
 
 // CleanupLegacyNetwork removes files left by the legacy per-network DHCP.
@@ -558,6 +575,9 @@ func configFromProto(c *rookeryv1.VNFConfig) store.VNFConfig {
 		DNSRecords:        dnsRecords,
 		DNSForward:        c.GetDnsForward(),
 		DNSForwarders:     append([]string(nil), c.GetDnsForwarders()...),
+		DNSVNFID:          c.GetDnsVnfId(),
+		DNSDomain:         c.GetDnsDomain(),
+		DNSTTL:            c.GetDnsTtl(),
 		DHCPOptions:       dhcpOptions,
 	}
 }

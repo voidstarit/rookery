@@ -39,6 +39,81 @@ dedicated network; the API then creates a BVI (`bvi<network-id>`) and takes
 over the selected outside NIC. Do not point another NAT44 setup at the same
 outside NIC.
 
+## Startup scripts
+
+Rookery has two server-level startup scripts, both configured under
+**Settings** and reported in the sidebar **Readiness** section after each run.
+Both run as the API user with `/bin/sh -c`, have a five-minute timeout, and
+retain the first 64 KiB of combined stdout/stderr with a truncation marker.
+Only configure trusted commands.
+
+### Rookery startup script
+
+The Rookery startup script runs once per API process after Rookery starts. It
+is **empty and disabled by default**. It is intended for host-level setup that
+should happen only once when the API starts. It does not rerun when VPP
+restarts.
+
+### VPP startup script
+
+The VPP startup script runs every time Rookery establishes a VPP connection,
+including after the connection drops and is re-established or VPP restarts. It
+is **enabled by default** with:
+
+```sh
+# Assign NAT44 workers
+vppctl set nat workers 0
+```
+
+Both scripts receive `ROOKERY_STARTUP_SCRIPT=1` and, when configured,
+`ROOKERY_VPP_SOCKET` in their environment. Saving a script resets its status to
+`pending` and it runs on the next applicable trigger. The Settings page shows
+the last exit code and output; the Readiness section shows the latest status in
+green for exit code `0` and red for any nonzero exit code (or a timeout).
+
+## VPP interface addresses
+
+Rookery-owned VPP interfaces can carry IPv4 and IPv6 addresses. Use the
+**Addresses** action on a virtual vhost-user interface, a host tap, or a host
+interface that is currently in VPP. Addresses are entered one CIDR per line,
+for example `10.20.0.10/24` and `fd00:20::10/64`. The addresses are applied to
+VPP immediately and stored in `vpp_interface_addresses`; startup/VPP-restart
+reconciliation reapplies them after the interfaces are recreated. Leaving the
+list empty removes only the Rookery-managed addresses for that interface.
+
+The same dialog has an **Enable DHCP client (IPv4)** toggle. VPP requests a
+DHCP lease for that specific interface. The setting is persisted and the DHCP
+client is re-enabled when the interface is recreated after an API or VPP
+restart. It can be combined with static addresses. The dialog shows both the
+host-side Linux addresses and the current live VPP-side addresses, along with
+the DHCP client status, with a **Refresh status** action after enabling the
+client. Host interface and host tap rows also show both sides.
+
+Addresses managed by other Rookery features (for example network BVI or NAT44
+dynamic addresses) are not included in this list and are not removed by this
+action.
+
+## Bridge-domain pipes
+
+A bridge-domain pipe joins two Rookery Networks at L2 without routing between
+them. Use **BD pipes** under **Rookery Networks** to choose two networks. Rookery
+creates a VPP pipe pair, places one end in each bridge domain, and records the
+pipe so it can be recreated after an API or VPP restart. VPP names the endpoints
+`pipe<instance>.0` and `pipe<instance>.1`; both ends use the normal 1500-byte
+MTU and are brought up by Rookery. Traffic entering one bridge domain is passed
+to the other, so keep bridge-domain addressing and broadcast domains in mind
+when connecting them.
+
+A pair of networks can have only one pipe. Use **A addresses** or **B addresses**
+on a pipe row to assign IPv4/IPv6 addresses to the corresponding
+`pipe<instance>.0`/`.1` endpoint. They use the same management and
+reconciliation as other Rookery-owned VPP interfaces and are removed when the
+pipe is deleted. Because pipe endpoints are bridge-domain ports, addresses on
+them are primarily for management or point-to-point use; normal VM/network
+traffic is switched at L2. The pipe list is available at
+`GET /api/network-pipes` even when VPP is unavailable, while create and delete
+require VPP readiness.
+
 ## ACLs
 
 The **Rookery Networks** tab also manages named ACLs. An ACL has a unique name,
@@ -70,10 +145,28 @@ blocked while an interface or static route references it. VPP table definitions,
 interface bindings, and static routes are recreated during startup reconciliation
 after a VPP restart.
 
-Use **Routes** on a table row to list, add, and delete static entries. Each route
-has a prefix, an optional next hop, an optional egress, and a preference metric.
-The egress can be a Rookery interface or any VPP interface by name, including a
-network BVI; the UI offers both. When an egress is set and the next hop is
+Vhost-user interfaces use the **Route tables** action on their interface row;
+their bindings live in `virtual_interfaces` and default to the owning network's
+VRF tables when the interface is created. Existing interface assignments can
+still be changed explicitly. Host interfaces currently in VPP and host taps
+expose the same action. Their bindings are stored in
+`vpp_interface_route_tables` and reapplied after an API or VPP restart. A
+non-default table moves that interface out of the bridge-domain/network VRF,
+so use it only when the host interface or tap needs to participate in a
+specific VRF. Clearing the override through
+`DELETE /api/vpp/interfaces/{name}/route-tables` restores the automatic
+network-VRF binding.
+
+Use **Routes** on a table row to list, add, and delete static entries. The form
+supports the VPP `ip route` options: count, destination prefix, table,
+next-hop address/interface, next-hop table, weight, preference, UDP encap,
+IPv4/IPv6/MPLS lookup tables, resolve-via-host/connected, rx-ip4/rx-ip6,
+out-labels, and drop. A route has a prefix, an optional next hop, an optional
+egress, and a preference metric.
+The egress can be a Rookery interface or any VPP interface by name. The UI
+lists Rookery vhost interfaces, network BVIs, host interfaces currently in VPP,
+and host taps; the **Other VPP interface** field accepts any remaining VPP name
+such as `host-eno4`. When an egress is set and the next hop is
 omitted, Rookery installs an attached/glean route, which is useful for importing
 a bridge-domain subnet into a VRF without requiring ARP for a gateway. An
 interface-only route is required when the gateway address belongs to the BVI
@@ -81,6 +174,16 @@ itself, because a `via <bvi-address> dev bviX` route can never resolve. When a
 next hop is present, it must resolve inside the route's own table: bind the
 owning interface into that table or add an interface-only route for the next
 hop. The route editor works for the default VRF `0` as well as custom tables.
+
+Route-table options use Rookery route-table names rather than VPP IDs:
+**Next-hop table**, **IPv4 lookup table**, and **IPv6 lookup table** present
+selectors populated from the route tables. Choose `default` for VPP table `0`.
+This keeps configurations stable if VPP table IDs are reallocated. The MPLS
+lookup option remains a numeric table ID because Rookery does not currently
+model named MPLS tables.
+
+Other numeric route options are optional: leaving one blank omits it from the
+VPP command; explicit zero remains meaningful where supported.
 
 The route editor is a full page at
 `/route-tables/{id}?ipv6=<bool>` (the legacy
@@ -133,14 +236,28 @@ or `/vnfs/{id}/edit`, so refreshing keeps the form open; lease and session
 views remain dialogs.
 
 DNS VNFs provide a small authoritative DNS server on the network's shared VNF
-memif, reachable at the network service address (`.2`, UDP/TCP 53). Define
-records with a name, type (`A`, `AAAA`, `CNAME`, `TXT`), value, and TTL; names
-are fully qualified and may use a leading wildcard such as `*.lab1.test`.
-Set **Forward names without a local record** to send other queries to the
-configured upstream servers (IP or IP:port), or disable it to answer unknown
-names with NXDOMAIN. If forwarding is enabled without upstreams, the daemon uses
-`/etc/resolv.conf`. Local records always take precedence. Point DHCP clients at
-the `.2` service address through the DHCP VNF's DNS field.
+memif, reachable at the network service address (`.2`, UDP/TCP 53 over both
+IPv4 and IPv6). Define records with a name, type (`A`, `AAAA`, `CNAME`, `TXT`,
+`PTR`), value, and TTL; names are fully qualified and may use a leading wildcard
+such as `*.lab1.test`. Set **Forward names without a local record** to send
+other queries to the configured upstream servers (IP or IP:port), or disable it
+to answer unknown names with NXDOMAIN. If forwarding is enabled without
+upstreams, the daemon uses `/etc/resolv.conf`. Local records always take
+precedence. Point DHCP clients at the `.2` service address through the DHCP
+VNF's DNS field.
+
+A DHCPv4 or DHCPv6 VNF can register its active leases in a DNS VNF on the same
+network. Set `dns_vnf_id` to the DNS VNF id, `dns_domain` to the suffix used for
+names (for example `lab1.test`), and optionally `dns_ttl` (default 300 seconds).
+The daemon prefers the client's DHCP FQDN option, falls back to the DHCP
+hostname plus the domain suffix, and uses a MAC/DUID-derived `host-...` name if
+the client sends no usable name or the name conflicts. A/AAAA and PTR records
+are updated while the lease changes and removed on DHCPRELEASE or expiry. The
+integration uses the lease files, so it is rebuilt after either runtime
+restarts. The selected DNS VNF must be on the same network, and deleting it is
+blocked while a DHCP VNF references it. The DNS row in the VNFs tab has a
+**Records** action that lists configured records and live DHCP-derived records
+in one table, including each dynamic record's source DHCP VNF.
 
 BGP VNFs are embedded GoBGP speakers with one peer, using the address family of
 `local_ip` (IPv4 or IPv6 unicast). Choose a `memif` transport for a gVisor
@@ -205,6 +322,12 @@ must be the network BVI address (`.1`). The IPv6 CIDR currently defines the
 allowed IPv6 range and reservations; IPv6 BVI/memif address assignment follows
 with shared DHCPv6.
 
+Use **Edit CIDRs** on a network row to change its prefixes. To avoid leaving
+VPP, DHCP, or NAT state inconsistent, Rookery blocks the change while the
+network has any VNFs, host taps, legacy DHCP configuration, or a BVI/gateway.
+Remove those first. L2 interface, VM, and bridge-domain-pipe attachments do not
+depend on the network CIDR and do not block the update.
+
 ## VNF networking
 
 DHCPv4 VNFs use one shared memif per network by default. Creating a network
@@ -258,7 +381,9 @@ supported). The API starts even when the daemon is absent — enabled VNFs show
 `degraded` until it is reachable, and desired runtimes are re-ensured when the
 daemon becomes reachable. The API queries runtime state on demand (VNF views
 and start/stop/restart decisions) instead of polling; the daemon restores its
-persisted desired specs on its own restart.
+persisted desired specs on its own restart. API startup also re-sends current
+specs to already-running VNFs once, so upgrading from an older daemon refreshes
+stale desired specs without manually recreating the VNFs.
 
 DHCPv4 uses CoreDHCP's DHCPv4 server with a per-VNF bitmap allocator. DHCPv6
 uses CoreDHCP's DHCPv6 server with stateful IA_NA allocation from the configured

@@ -48,6 +48,7 @@ type VirtualInterface struct {
 	Ipv6TableId    uint32                 `protobuf:"varint,19,opt,name=ipv6_table_id,json=ipv6TableId,proto3" json:"ipv6_table_id,omitempty"`
 	Ipv4TableName  string                 `protobuf:"bytes,20,opt,name=ipv4_table_name,json=ipv4TableName,proto3" json:"ipv4_table_name,omitempty"`
 	Ipv6TableName  string                 `protobuf:"bytes,21,opt,name=ipv6_table_name,json=ipv6TableName,proto3" json:"ipv6_table_name,omitempty"`
+	VppAddresses   []string               `protobuf:"bytes,22,rep,name=vpp_addresses,json=vppAddresses,proto3" json:"vpp_addresses,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -227,6 +228,13 @@ func (x *VirtualInterface) GetIpv6TableName() string {
 		return x.Ipv6TableName
 	}
 	return ""
+}
+
+func (x *VirtualInterface) GetVppAddresses() []string {
+	if x != nil {
+		return x.VppAddresses
+	}
+	return nil
 }
 
 type VMInterface struct {
@@ -901,12 +909,432 @@ func (*ResetInterfaceCountersRequest) Descriptor() ([]byte, []int) {
 	return file_rookery_v1_interface_proto_rawDescGZIP(), []int{12}
 }
 
+type VPPInterfaceAddresses struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	Name                 string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Addresses            []string               `protobuf:"bytes,2,rep,name=addresses,proto3" json:"addresses,omitempty"`
+	DhcpClientEnabled    bool                   `protobuf:"varint,3,opt,name=dhcp_client_enabled,json=dhcpClientEnabled,proto3" json:"dhcp_client_enabled,omitempty"`
+	LiveAddresses        []string               `protobuf:"bytes,4,rep,name=live_addresses,json=liveAddresses,proto3" json:"live_addresses,omitempty"`
+	DhcpClientConfigured bool                   `protobuf:"varint,5,opt,name=dhcp_client_configured,json=dhcpClientConfigured,proto3" json:"dhcp_client_configured,omitempty"`
+	DhcpClientStatus     string                 `protobuf:"bytes,6,opt,name=dhcp_client_status,json=dhcpClientStatus,proto3" json:"dhcp_client_status,omitempty"`
+	StatusDetail         string                 `protobuf:"bytes,7,opt,name=status_detail,json=statusDetail,proto3" json:"status_detail,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *VPPInterfaceAddresses) Reset() {
+	*x = VPPInterfaceAddresses{}
+	mi := &file_rookery_v1_interface_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VPPInterfaceAddresses) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VPPInterfaceAddresses) ProtoMessage() {}
+
+func (x *VPPInterfaceAddresses) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_interface_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VPPInterfaceAddresses.ProtoReflect.Descriptor instead.
+func (*VPPInterfaceAddresses) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_interface_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *VPPInterfaceAddresses) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *VPPInterfaceAddresses) GetAddresses() []string {
+	if x != nil {
+		return x.Addresses
+	}
+	return nil
+}
+
+func (x *VPPInterfaceAddresses) GetDhcpClientEnabled() bool {
+	if x != nil {
+		return x.DhcpClientEnabled
+	}
+	return false
+}
+
+func (x *VPPInterfaceAddresses) GetLiveAddresses() []string {
+	if x != nil {
+		return x.LiveAddresses
+	}
+	return nil
+}
+
+func (x *VPPInterfaceAddresses) GetDhcpClientConfigured() bool {
+	if x != nil {
+		return x.DhcpClientConfigured
+	}
+	return false
+}
+
+func (x *VPPInterfaceAddresses) GetDhcpClientStatus() string {
+	if x != nil {
+		return x.DhcpClientStatus
+	}
+	return ""
+}
+
+func (x *VPPInterfaceAddresses) GetStatusDetail() string {
+	if x != nil {
+		return x.StatusDetail
+	}
+	return ""
+}
+
+type GetVPPInterfaceAddressesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetVPPInterfaceAddressesRequest) Reset() {
+	*x = GetVPPInterfaceAddressesRequest{}
+	mi := &file_rookery_v1_interface_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetVPPInterfaceAddressesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetVPPInterfaceAddressesRequest) ProtoMessage() {}
+
+func (x *GetVPPInterfaceAddressesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_interface_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetVPPInterfaceAddressesRequest.ProtoReflect.Descriptor instead.
+func (*GetVPPInterfaceAddressesRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_interface_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *GetVPPInterfaceAddressesRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type UpdateVPPInterfaceAddressesRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Name              string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Addresses         []string               `protobuf:"bytes,2,rep,name=addresses,proto3" json:"addresses,omitempty"`
+	DhcpClientEnabled bool                   `protobuf:"varint,3,opt,name=dhcp_client_enabled,json=dhcpClientEnabled,proto3" json:"dhcp_client_enabled,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *UpdateVPPInterfaceAddressesRequest) Reset() {
+	*x = UpdateVPPInterfaceAddressesRequest{}
+	mi := &file_rookery_v1_interface_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateVPPInterfaceAddressesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateVPPInterfaceAddressesRequest) ProtoMessage() {}
+
+func (x *UpdateVPPInterfaceAddressesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_interface_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateVPPInterfaceAddressesRequest.ProtoReflect.Descriptor instead.
+func (*UpdateVPPInterfaceAddressesRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_interface_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *UpdateVPPInterfaceAddressesRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UpdateVPPInterfaceAddressesRequest) GetAddresses() []string {
+	if x != nil {
+		return x.Addresses
+	}
+	return nil
+}
+
+func (x *UpdateVPPInterfaceAddressesRequest) GetDhcpClientEnabled() bool {
+	if x != nil {
+		return x.DhcpClientEnabled
+	}
+	return false
+}
+
+type VPPInterfaceRouteTables struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Ipv4TableId   uint32                 `protobuf:"varint,2,opt,name=ipv4_table_id,json=ipv4TableId,proto3" json:"ipv4_table_id,omitempty"`
+	Ipv6TableId   uint32                 `protobuf:"varint,3,opt,name=ipv6_table_id,json=ipv6TableId,proto3" json:"ipv6_table_id,omitempty"`
+	Ipv4TableName string                 `protobuf:"bytes,4,opt,name=ipv4_table_name,json=ipv4TableName,proto3" json:"ipv4_table_name,omitempty"`
+	Ipv6TableName string                 `protobuf:"bytes,5,opt,name=ipv6_table_name,json=ipv6TableName,proto3" json:"ipv6_table_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VPPInterfaceRouteTables) Reset() {
+	*x = VPPInterfaceRouteTables{}
+	mi := &file_rookery_v1_interface_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VPPInterfaceRouteTables) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VPPInterfaceRouteTables) ProtoMessage() {}
+
+func (x *VPPInterfaceRouteTables) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_interface_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VPPInterfaceRouteTables.ProtoReflect.Descriptor instead.
+func (*VPPInterfaceRouteTables) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_interface_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *VPPInterfaceRouteTables) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *VPPInterfaceRouteTables) GetIpv4TableId() uint32 {
+	if x != nil {
+		return x.Ipv4TableId
+	}
+	return 0
+}
+
+func (x *VPPInterfaceRouteTables) GetIpv6TableId() uint32 {
+	if x != nil {
+		return x.Ipv6TableId
+	}
+	return 0
+}
+
+func (x *VPPInterfaceRouteTables) GetIpv4TableName() string {
+	if x != nil {
+		return x.Ipv4TableName
+	}
+	return ""
+}
+
+func (x *VPPInterfaceRouteTables) GetIpv6TableName() string {
+	if x != nil {
+		return x.Ipv6TableName
+	}
+	return ""
+}
+
+type GetVPPInterfaceRouteTablesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetVPPInterfaceRouteTablesRequest) Reset() {
+	*x = GetVPPInterfaceRouteTablesRequest{}
+	mi := &file_rookery_v1_interface_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetVPPInterfaceRouteTablesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetVPPInterfaceRouteTablesRequest) ProtoMessage() {}
+
+func (x *GetVPPInterfaceRouteTablesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_interface_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetVPPInterfaceRouteTablesRequest.ProtoReflect.Descriptor instead.
+func (*GetVPPInterfaceRouteTablesRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_interface_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *GetVPPInterfaceRouteTablesRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type UpdateVPPInterfaceRouteTablesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Ipv4TableId   uint32                 `protobuf:"varint,2,opt,name=ipv4_table_id,json=ipv4TableId,proto3" json:"ipv4_table_id,omitempty"`
+	Ipv6TableId   uint32                 `protobuf:"varint,3,opt,name=ipv6_table_id,json=ipv6TableId,proto3" json:"ipv6_table_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateVPPInterfaceRouteTablesRequest) Reset() {
+	*x = UpdateVPPInterfaceRouteTablesRequest{}
+	mi := &file_rookery_v1_interface_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateVPPInterfaceRouteTablesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateVPPInterfaceRouteTablesRequest) ProtoMessage() {}
+
+func (x *UpdateVPPInterfaceRouteTablesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_interface_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateVPPInterfaceRouteTablesRequest.ProtoReflect.Descriptor instead.
+func (*UpdateVPPInterfaceRouteTablesRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_interface_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *UpdateVPPInterfaceRouteTablesRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UpdateVPPInterfaceRouteTablesRequest) GetIpv4TableId() uint32 {
+	if x != nil {
+		return x.Ipv4TableId
+	}
+	return 0
+}
+
+func (x *UpdateVPPInterfaceRouteTablesRequest) GetIpv6TableId() uint32 {
+	if x != nil {
+		return x.Ipv6TableId
+	}
+	return 0
+}
+
+type DeleteVPPInterfaceRouteTablesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteVPPInterfaceRouteTablesRequest) Reset() {
+	*x = DeleteVPPInterfaceRouteTablesRequest{}
+	mi := &file_rookery_v1_interface_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteVPPInterfaceRouteTablesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteVPPInterfaceRouteTablesRequest) ProtoMessage() {}
+
+func (x *DeleteVPPInterfaceRouteTablesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_interface_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteVPPInterfaceRouteTablesRequest.ProtoReflect.Descriptor instead.
+func (*DeleteVPPInterfaceRouteTablesRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_interface_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *DeleteVPPInterfaceRouteTablesRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
 var File_rookery_v1_interface_proto protoreflect.FileDescriptor
 
 const file_rookery_v1_interface_proto_rawDesc = "" +
 	"\n" +
 	"\x1arookery/v1/interface.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\xd0\x06\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\xf5\x06\n" +
 	"\x10VirtualInterface\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +
@@ -934,7 +1362,8 @@ const file_rookery_v1_interface_proto_rawDesc = "" +
 	"\ripv4_table_id\x18\x12 \x01(\rR\vipv4TableId\x12\"\n" +
 	"\ripv6_table_id\x18\x13 \x01(\rR\vipv6TableId\x12&\n" +
 	"\x0fipv4_table_name\x18\x14 \x01(\tR\ripv4TableName\x12&\n" +
-	"\x0fipv6_table_name\x18\x15 \x01(\tR\ripv6TableNameB\x11\n" +
+	"\x0fipv6_table_name\x18\x15 \x01(\tR\ripv6TableName\x12#\n" +
+	"\rvpp_addresses\x18\x16 \x03(\tR\fvppAddressesB\x11\n" +
 	"\x0f_attached_vm_idB\x11\n" +
 	"\x0f_ingress_acl_idB\x10\n" +
 	"\x0e_egress_acl_id\"\x98\x02\n" +
@@ -996,7 +1425,40 @@ const file_rookery_v1_interface_proto_rawDesc = "" +
 	"\n" +
 	"interfaces\x18\x01 \x03(\v2\x1d.rookery.v1.InterfaceCountersR\n" +
 	"interfaces\"\x1f\n" +
-	"\x1dResetInterfaceCountersRequest2\xea\a\n" +
+	"\x1dResetInterfaceCountersRequest\"\xa9\x02\n" +
+	"\x15VPPInterfaceAddresses\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
+	"\taddresses\x18\x02 \x03(\tR\taddresses\x12.\n" +
+	"\x13dhcp_client_enabled\x18\x03 \x01(\bR\x11dhcpClientEnabled\x12%\n" +
+	"\x0elive_addresses\x18\x04 \x03(\tR\rliveAddresses\x124\n" +
+	"\x16dhcp_client_configured\x18\x05 \x01(\bR\x14dhcpClientConfigured\x12,\n" +
+	"\x12dhcp_client_status\x18\x06 \x01(\tR\x10dhcpClientStatus\x12#\n" +
+	"\rstatus_detail\x18\a \x01(\tR\fstatusDetail\"A\n" +
+	"\x1fGetVPPInterfaceAddressesRequest\x12\x1e\n" +
+	"\x04name\x18\x01 \x01(\tB\n" +
+	"\xfaB\ar\x05\x10\x01\x18\x80\x01R\x04name\"\xa2\x01\n" +
+	"\"UpdateVPPInterfaceAddressesRequest\x12\x1e\n" +
+	"\x04name\x18\x01 \x01(\tB\n" +
+	"\xfaB\ar\x05\x10\x01\x18\x80\x01R\x04name\x12,\n" +
+	"\taddresses\x18\x02 \x03(\tB\x0e\xfaB\v\x92\x01\b\x10 \"\x04r\x02\x18@R\taddresses\x12.\n" +
+	"\x13dhcp_client_enabled\x18\x03 \x01(\bR\x11dhcpClientEnabled\"\xc5\x01\n" +
+	"\x17VPPInterfaceRouteTables\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\"\n" +
+	"\ripv4_table_id\x18\x02 \x01(\rR\vipv4TableId\x12\"\n" +
+	"\ripv6_table_id\x18\x03 \x01(\rR\vipv6TableId\x12&\n" +
+	"\x0fipv4_table_name\x18\x04 \x01(\tR\ripv4TableName\x12&\n" +
+	"\x0fipv6_table_name\x18\x05 \x01(\tR\ripv6TableName\"C\n" +
+	"!GetVPPInterfaceRouteTablesRequest\x12\x1e\n" +
+	"\x04name\x18\x01 \x01(\tB\n" +
+	"\xfaB\ar\x05\x10\x01\x18\x80\x01R\x04name\"\x8e\x01\n" +
+	"$UpdateVPPInterfaceRouteTablesRequest\x12\x1e\n" +
+	"\x04name\x18\x01 \x01(\tB\n" +
+	"\xfaB\ar\x05\x10\x01\x18\x80\x01R\x04name\x12\"\n" +
+	"\ripv4_table_id\x18\x02 \x01(\rR\vipv4TableId\x12\"\n" +
+	"\ripv6_table_id\x18\x03 \x01(\rR\vipv6TableId\"F\n" +
+	"$DeleteVPPInterfaceRouteTablesRequest\x12\x1e\n" +
+	"\x04name\x18\x01 \x01(\tB\n" +
+	"\xfaB\ar\x05\x10\x01\x18\x80\x01R\x04name2\x97\x0e\n" +
 	"\x10InterfaceService\x12|\n" +
 	"\x0eListInterfaces\x12!.rookery.v1.ListInterfacesRequest\x1a\".rookery.v1.ListInterfacesResponse\"#\x82\xd3\xe4\x93\x02\x1db\n" +
 	"interfaces\x12\x0f/api/interfaces\x12k\n" +
@@ -1007,7 +1469,12 @@ const file_rookery_v1_interface_proto_rawDesc = "" +
 	"\x0fDeleteInterface\x12\".rookery.v1.DeleteInterfaceRequest\x1a\x16.google.protobuf.Empty\"\x1c\x82\xd3\xe4\x93\x02\x16*\x14/api/interfaces/{id}\x12\x9a\x01\n" +
 	"\x15ListInterfaceCounters\x12(.rookery.v1.ListInterfaceCountersRequest\x1a).rookery.v1.ListInterfaceCountersResponse\",\x82\xd3\xe4\x93\x02&b\n" +
 	"interfaces\x12\x18/api/interfaces/counters\x12}\n" +
-	"\x16ResetInterfaceCounters\x12).rookery.v1.ResetInterfaceCountersRequest\x1a\x16.google.protobuf.Empty\" \x82\xd3\xe4\x93\x02\x1a*\x18/api/interfaces/countersB?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
+	"\x16ResetInterfaceCounters\x12).rookery.v1.ResetInterfaceCountersRequest\x1a\x16.google.protobuf.Empty\" \x82\xd3\xe4\x93\x02\x1a*\x18/api/interfaces/counters\x12\x98\x01\n" +
+	"\x18GetVPPInterfaceAddresses\x12+.rookery.v1.GetVPPInterfaceAddressesRequest\x1a!.rookery.v1.VPPInterfaceAddresses\",\x82\xd3\xe4\x93\x02&\x12$/api/vpp/interfaces/{name}/addresses\x12\xa1\x01\n" +
+	"\x1bUpdateVPPInterfaceAddresses\x12..rookery.v1.UpdateVPPInterfaceAddressesRequest\x1a!.rookery.v1.VPPInterfaceAddresses\"/\x82\xd3\xe4\x93\x02):\x01*\x1a$/api/vpp/interfaces/{name}/addresses\x12\xa1\x01\n" +
+	"\x1aGetVPPInterfaceRouteTables\x12-.rookery.v1.GetVPPInterfaceRouteTablesRequest\x1a#.rookery.v1.VPPInterfaceRouteTables\"/\x82\xd3\xe4\x93\x02)\x12'/api/vpp/interfaces/{name}/route-tables\x12\xaa\x01\n" +
+	"\x1dUpdateVPPInterfaceRouteTables\x120.rookery.v1.UpdateVPPInterfaceRouteTablesRequest\x1a#.rookery.v1.VPPInterfaceRouteTables\"2\x82\xd3\xe4\x93\x02,:\x01*\x1a'/api/vpp/interfaces/{name}/route-tables\x12\x9a\x01\n" +
+	"\x1dDeleteVPPInterfaceRouteTables\x120.rookery.v1.DeleteVPPInterfaceRouteTablesRequest\x1a\x16.google.protobuf.Empty\"/\x82\xd3\xe4\x93\x02)*'/api/vpp/interfaces/{name}/route-tablesB?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
 
 var (
 	file_rookery_v1_interface_proto_rawDescOnce sync.Once
@@ -1021,29 +1488,36 @@ func file_rookery_v1_interface_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_interface_proto_rawDescData
 }
 
-var file_rookery_v1_interface_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_rookery_v1_interface_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_rookery_v1_interface_proto_goTypes = []any{
-	(*VirtualInterface)(nil),              // 0: rookery.v1.VirtualInterface
-	(*VMInterface)(nil),                   // 1: rookery.v1.VMInterface
-	(*ListInterfacesRequest)(nil),         // 2: rookery.v1.ListInterfacesRequest
-	(*ListInterfacesResponse)(nil),        // 3: rookery.v1.ListInterfacesResponse
-	(*GetInterfaceRequest)(nil),           // 4: rookery.v1.GetInterfaceRequest
-	(*CreateInterfaceRequest)(nil),        // 5: rookery.v1.CreateInterfaceRequest
-	(*UpdateInterfaceRequest)(nil),        // 6: rookery.v1.UpdateInterfaceRequest
-	(*SetInterfaceACLsRequest)(nil),       // 7: rookery.v1.SetInterfaceACLsRequest
-	(*DeleteInterfaceRequest)(nil),        // 8: rookery.v1.DeleteInterfaceRequest
-	(*InterfaceCounters)(nil),             // 9: rookery.v1.InterfaceCounters
-	(*ListInterfaceCountersRequest)(nil),  // 10: rookery.v1.ListInterfaceCountersRequest
-	(*ListInterfaceCountersResponse)(nil), // 11: rookery.v1.ListInterfaceCountersResponse
-	(*ResetInterfaceCountersRequest)(nil), // 12: rookery.v1.ResetInterfaceCountersRequest
-	(*timestamppb.Timestamp)(nil),         // 13: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),                 // 14: google.protobuf.Empty
+	(*VirtualInterface)(nil),                     // 0: rookery.v1.VirtualInterface
+	(*VMInterface)(nil),                          // 1: rookery.v1.VMInterface
+	(*ListInterfacesRequest)(nil),                // 2: rookery.v1.ListInterfacesRequest
+	(*ListInterfacesResponse)(nil),               // 3: rookery.v1.ListInterfacesResponse
+	(*GetInterfaceRequest)(nil),                  // 4: rookery.v1.GetInterfaceRequest
+	(*CreateInterfaceRequest)(nil),               // 5: rookery.v1.CreateInterfaceRequest
+	(*UpdateInterfaceRequest)(nil),               // 6: rookery.v1.UpdateInterfaceRequest
+	(*SetInterfaceACLsRequest)(nil),              // 7: rookery.v1.SetInterfaceACLsRequest
+	(*DeleteInterfaceRequest)(nil),               // 8: rookery.v1.DeleteInterfaceRequest
+	(*InterfaceCounters)(nil),                    // 9: rookery.v1.InterfaceCounters
+	(*ListInterfaceCountersRequest)(nil),         // 10: rookery.v1.ListInterfaceCountersRequest
+	(*ListInterfaceCountersResponse)(nil),        // 11: rookery.v1.ListInterfaceCountersResponse
+	(*ResetInterfaceCountersRequest)(nil),        // 12: rookery.v1.ResetInterfaceCountersRequest
+	(*VPPInterfaceAddresses)(nil),                // 13: rookery.v1.VPPInterfaceAddresses
+	(*GetVPPInterfaceAddressesRequest)(nil),      // 14: rookery.v1.GetVPPInterfaceAddressesRequest
+	(*UpdateVPPInterfaceAddressesRequest)(nil),   // 15: rookery.v1.UpdateVPPInterfaceAddressesRequest
+	(*VPPInterfaceRouteTables)(nil),              // 16: rookery.v1.VPPInterfaceRouteTables
+	(*GetVPPInterfaceRouteTablesRequest)(nil),    // 17: rookery.v1.GetVPPInterfaceRouteTablesRequest
+	(*UpdateVPPInterfaceRouteTablesRequest)(nil), // 18: rookery.v1.UpdateVPPInterfaceRouteTablesRequest
+	(*DeleteVPPInterfaceRouteTablesRequest)(nil), // 19: rookery.v1.DeleteVPPInterfaceRouteTablesRequest
+	(*timestamppb.Timestamp)(nil),                // 20: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),                        // 21: google.protobuf.Empty
 }
 var file_rookery_v1_interface_proto_depIdxs = []int32{
-	13, // 0: rookery.v1.VirtualInterface.created_at:type_name -> google.protobuf.Timestamp
-	13, // 1: rookery.v1.VirtualInterface.updated_at:type_name -> google.protobuf.Timestamp
+	20, // 0: rookery.v1.VirtualInterface.created_at:type_name -> google.protobuf.Timestamp
+	20, // 1: rookery.v1.VirtualInterface.updated_at:type_name -> google.protobuf.Timestamp
 	0,  // 2: rookery.v1.ListInterfacesResponse.interfaces:type_name -> rookery.v1.VirtualInterface
-	13, // 3: rookery.v1.InterfaceCounters.sampled_at:type_name -> google.protobuf.Timestamp
+	20, // 3: rookery.v1.InterfaceCounters.sampled_at:type_name -> google.protobuf.Timestamp
 	9,  // 4: rookery.v1.ListInterfaceCountersResponse.interfaces:type_name -> rookery.v1.InterfaceCounters
 	2,  // 5: rookery.v1.InterfaceService.ListInterfaces:input_type -> rookery.v1.ListInterfacesRequest
 	4,  // 6: rookery.v1.InterfaceService.GetInterface:input_type -> rookery.v1.GetInterfaceRequest
@@ -1053,16 +1527,26 @@ var file_rookery_v1_interface_proto_depIdxs = []int32{
 	8,  // 10: rookery.v1.InterfaceService.DeleteInterface:input_type -> rookery.v1.DeleteInterfaceRequest
 	10, // 11: rookery.v1.InterfaceService.ListInterfaceCounters:input_type -> rookery.v1.ListInterfaceCountersRequest
 	12, // 12: rookery.v1.InterfaceService.ResetInterfaceCounters:input_type -> rookery.v1.ResetInterfaceCountersRequest
-	3,  // 13: rookery.v1.InterfaceService.ListInterfaces:output_type -> rookery.v1.ListInterfacesResponse
-	0,  // 14: rookery.v1.InterfaceService.GetInterface:output_type -> rookery.v1.VirtualInterface
-	0,  // 15: rookery.v1.InterfaceService.CreateInterface:output_type -> rookery.v1.VirtualInterface
-	0,  // 16: rookery.v1.InterfaceService.UpdateInterface:output_type -> rookery.v1.VirtualInterface
-	0,  // 17: rookery.v1.InterfaceService.SetInterfaceACLs:output_type -> rookery.v1.VirtualInterface
-	14, // 18: rookery.v1.InterfaceService.DeleteInterface:output_type -> google.protobuf.Empty
-	11, // 19: rookery.v1.InterfaceService.ListInterfaceCounters:output_type -> rookery.v1.ListInterfaceCountersResponse
-	14, // 20: rookery.v1.InterfaceService.ResetInterfaceCounters:output_type -> google.protobuf.Empty
-	13, // [13:21] is the sub-list for method output_type
-	5,  // [5:13] is the sub-list for method input_type
+	14, // 13: rookery.v1.InterfaceService.GetVPPInterfaceAddresses:input_type -> rookery.v1.GetVPPInterfaceAddressesRequest
+	15, // 14: rookery.v1.InterfaceService.UpdateVPPInterfaceAddresses:input_type -> rookery.v1.UpdateVPPInterfaceAddressesRequest
+	17, // 15: rookery.v1.InterfaceService.GetVPPInterfaceRouteTables:input_type -> rookery.v1.GetVPPInterfaceRouteTablesRequest
+	18, // 16: rookery.v1.InterfaceService.UpdateVPPInterfaceRouteTables:input_type -> rookery.v1.UpdateVPPInterfaceRouteTablesRequest
+	19, // 17: rookery.v1.InterfaceService.DeleteVPPInterfaceRouteTables:input_type -> rookery.v1.DeleteVPPInterfaceRouteTablesRequest
+	3,  // 18: rookery.v1.InterfaceService.ListInterfaces:output_type -> rookery.v1.ListInterfacesResponse
+	0,  // 19: rookery.v1.InterfaceService.GetInterface:output_type -> rookery.v1.VirtualInterface
+	0,  // 20: rookery.v1.InterfaceService.CreateInterface:output_type -> rookery.v1.VirtualInterface
+	0,  // 21: rookery.v1.InterfaceService.UpdateInterface:output_type -> rookery.v1.VirtualInterface
+	0,  // 22: rookery.v1.InterfaceService.SetInterfaceACLs:output_type -> rookery.v1.VirtualInterface
+	21, // 23: rookery.v1.InterfaceService.DeleteInterface:output_type -> google.protobuf.Empty
+	11, // 24: rookery.v1.InterfaceService.ListInterfaceCounters:output_type -> rookery.v1.ListInterfaceCountersResponse
+	21, // 25: rookery.v1.InterfaceService.ResetInterfaceCounters:output_type -> google.protobuf.Empty
+	13, // 26: rookery.v1.InterfaceService.GetVPPInterfaceAddresses:output_type -> rookery.v1.VPPInterfaceAddresses
+	13, // 27: rookery.v1.InterfaceService.UpdateVPPInterfaceAddresses:output_type -> rookery.v1.VPPInterfaceAddresses
+	16, // 28: rookery.v1.InterfaceService.GetVPPInterfaceRouteTables:output_type -> rookery.v1.VPPInterfaceRouteTables
+	16, // 29: rookery.v1.InterfaceService.UpdateVPPInterfaceRouteTables:output_type -> rookery.v1.VPPInterfaceRouteTables
+	21, // 30: rookery.v1.InterfaceService.DeleteVPPInterfaceRouteTables:output_type -> google.protobuf.Empty
+	18, // [18:31] is the sub-list for method output_type
+	5,  // [5:18] is the sub-list for method input_type
 	5,  // [5:5] is the sub-list for extension type_name
 	5,  // [5:5] is the sub-list for extension extendee
 	0,  // [0:5] is the sub-list for field type_name
@@ -1082,7 +1566,7 @@ func file_rookery_v1_interface_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_interface_proto_rawDesc), len(file_rookery_v1_interface_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

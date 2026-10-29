@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,14 +25,18 @@ import (
 const dnsListenPort = 53
 
 type sharedDNS struct {
-	vnfID       int64
-	handler     *dnsHandler
-	udpServer   *dns.Server
-	tcpServer   *dns.Server
-	udpConn     *gonet.UDPConn
-	tcpListener *gonet.TCPListener
-	done        chan struct{}
-	closeOnce   sync.Once
+	vnfID        int64
+	handler      *dnsHandler
+	udpServer    *dns.Server
+	tcpServer    *dns.Server
+	udpConn      *gonet.UDPConn
+	tcpListener  *gonet.TCPListener
+	udpServer6   *dns.Server
+	tcpServer6   *dns.Server
+	udpConn6     *gonet.UDPConn
+	tcpListener6 *gonet.TCPListener
+	done         chan struct{}
+	closeOnce    sync.Once
 }
 
 // addDNS starts a DNS server on the shared network stack. The endpoint is
@@ -71,15 +76,54 @@ func (n *sharedNetwork) addDNS(vnf store.VNF) error {
 		return fmt.Errorf("listen for shared DNS TCP: %v", err)
 	}
 
+	var udpConn6 *gonet.UDPConn
+	var tcpListener6 *gonet.TCPListener
+	if strings.TrimSpace(n.ipv6Address) != "" {
+		ipv6IP, _, err := net.ParseCIDR(strings.TrimSpace(n.ipv6Address))
+		if err != nil || ipv6IP.To4() != nil {
+			_ = udpConn.Close()
+			_ = tcpListener.Close()
+			return fmt.Errorf("parse shared DNS IPv6 address %q: %w", n.ipv6Address, err)
+		}
+		listenAddr := tcpip.FullAddress{NIC: 1, Addr: tcpip.AddrFromSlice(ipv6IP.To16()), Port: dnsListenPort}
+		var wq6 waiter.Queue
+		endpoint6, tcpipErr := n.stack.NewEndpoint(udp.ProtocolNumber, header.IPv6ProtocolNumber, &wq6)
+		if tcpipErr != nil {
+			_ = udpConn.Close()
+			_ = tcpListener.Close()
+			return fmt.Errorf("create shared DNS IPv6 UDP endpoint: %v", tcpipErr)
+		}
+		if err := endpoint6.Bind(listenAddr); err != nil {
+			endpoint6.Close()
+			_ = udpConn.Close()
+			_ = tcpListener.Close()
+			return fmt.Errorf("bind shared DNS IPv6 UDP endpoint: %v", err)
+		}
+		udpConn6 = gonet.NewUDPConn(&wq6, endpoint6)
+		tcpListener6, err = gonet.ListenTCP(n.stack, listenAddr, header.IPv6ProtocolNumber)
+		if err != nil {
+			_ = udpConn6.Close()
+			_ = udpConn.Close()
+			_ = tcpListener.Close()
+			return fmt.Errorf("listen for shared DNS IPv6 TCP: %v", err)
+		}
+	}
+
 	component := &sharedDNS{
-		vnfID:       vnf.ID,
-		handler:     handler,
-		udpConn:     udpConn,
-		tcpListener: tcpListener,
-		done:        make(chan struct{}),
+		vnfID:        vnf.ID,
+		handler:      handler,
+		udpConn:      udpConn,
+		tcpListener:  tcpListener,
+		udpConn6:     udpConn6,
+		tcpListener6: tcpListener6,
+		done:         make(chan struct{}),
 	}
 	component.udpServer = &dns.Server{PacketConn: udpConn, Handler: handler, UDPSize: 4096}
 	component.tcpServer = &dns.Server{Listener: tcpListener, Handler: handler}
+	if udpConn6 != nil {
+		component.udpServer6 = &dns.Server{PacketConn: udpConn6, Handler: handler, UDPSize: 4096}
+		component.tcpServer6 = &dns.Server{Listener: tcpListener6, Handler: handler}
+	}
 
 	n.mu.Lock()
 	if n.dns != nil {
@@ -96,6 +140,7 @@ func (n *sharedNetwork) addDNS(vnf store.VNF) error {
 		Int64("vnf_id", vnf.ID).
 		Int64("network_id", n.networkID).
 		Str("address", n.address).
+		Str("ipv6_address", n.ipv6Address).
 		Str("socket", n.socket).
 		Int("records", len(vnf.Config.DNSRecords)).
 		Bool("forward", vnf.Config.DNSForward).
@@ -106,40 +151,46 @@ func (n *sharedNetwork) addDNS(vnf store.VNF) error {
 
 func (s *sharedDNS) serve() {
 	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		if err := s.udpServer.ActivateAndServe(); err != nil && !errors.Is(err, net.ErrClosed) {
-			log.Warn().Int64("vnf_id", s.vnfID).Err(err).Msg("shared DNS UDP server stopped")
+	start := func(server *dns.Server, network string) {
+		if server == nil {
+			return
 		}
-	}()
-	go func() {
-		defer wg.Done()
-		if err := s.tcpServer.ActivateAndServe(); err != nil && !errors.Is(err, net.ErrClosed) {
-			log.Warn().Int64("vnf_id", s.vnfID).Err(err).Msg("shared DNS TCP server stopped")
-		}
-	}()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := server.ActivateAndServe(); err != nil && !errors.Is(err, net.ErrClosed) {
+				log.Warn().Int64("vnf_id", s.vnfID).Str("network", network).Err(err).Msg("shared DNS server stopped")
+			}
+		}()
+	}
+	start(s.udpServer, "udp4")
+	start(s.tcpServer, "tcp4")
+	start(s.udpServer6, "udp6")
+	start(s.tcpServer6, "tcp6")
 	wg.Wait()
 	close(s.done)
 }
 
 func (s *sharedDNS) close() {
 	s.closeOnce.Do(func() {
-		if s.udpServer != nil || s.tcpServer != nil {
+		if s.udpServer != nil || s.tcpServer != nil || s.udpServer6 != nil || s.tcpServer6 != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), vnfStopTimeout)
 			defer cancel()
-			if s.udpServer != nil {
-				_ = s.udpServer.ShutdownContext(ctx)
-			}
-			if s.tcpServer != nil {
-				_ = s.tcpServer.ShutdownContext(ctx)
+			for _, server := range []*dns.Server{s.udpServer, s.tcpServer, s.udpServer6, s.tcpServer6} {
+				if server != nil {
+					_ = server.ShutdownContext(ctx)
+				}
 			}
 		}
-		if s.udpConn != nil {
-			_ = s.udpConn.Close()
+		for _, conn := range []*gonet.UDPConn{s.udpConn, s.udpConn6} {
+			if conn != nil {
+				_ = conn.Close()
+			}
 		}
-		if s.tcpListener != nil {
-			_ = s.tcpListener.Close()
+		for _, listener := range []*gonet.TCPListener{s.tcpListener, s.tcpListener6} {
+			if listener != nil {
+				_ = listener.Close()
+			}
 		}
 		select {
 		case <-s.done:
@@ -153,10 +204,27 @@ type dnsWildcardRecords struct {
 	records []store.DNSRecord
 }
 
+type dnsDynamicRecord struct {
+	source string
+	record store.DNSRecord
+}
+
+// DNSRecordView is one dynamic record together with the DHCP VNF that owns it.
+type DNSRecordView struct {
+	Name        string
+	Type        string
+	Value       string
+	TTL         uint32
+	Source      string
+	SourceVNFID int64
+}
+
 type dnsHandler struct {
+	mu         sync.RWMutex
 	vnfID      int64
 	networkID  int64
 	records    map[string][]store.DNSRecord
+	dynamic    map[string][]dnsDynamicRecord
 	wildcards  []dnsWildcardRecords
 	forward    bool
 	forwarders []string
@@ -165,6 +233,7 @@ type dnsHandler struct {
 func newDNSHandler(config store.VNFConfig) *dnsHandler {
 	handler := &dnsHandler{
 		records: make(map[string][]store.DNSRecord, len(config.DNSRecords)),
+		dynamic: make(map[string][]dnsDynamicRecord),
 		forward: config.DNSForward,
 	}
 	for _, record := range config.DNSRecords {
@@ -275,8 +344,17 @@ func (h *dnsHandler) logResponse(writer dns.ResponseWriter, request, response *d
 }
 
 func (h *dnsHandler) lookup(name string) ([]store.DNSRecord, bool) {
-	if records, ok := h.records[name]; ok {
-		return records, false
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	records := h.records[name]
+	dynamic := h.dynamic[name]
+	if len(records) > 0 || len(dynamic) > 0 {
+		combined := make([]store.DNSRecord, 0, len(records)+len(dynamic))
+		combined = append(combined, records...)
+		for _, record := range dynamic {
+			combined = append(combined, record.record)
+		}
+		return combined, false
 	}
 	for _, wildcard := range h.wildcards {
 		if name == wildcard.suffix || !strings.HasSuffix(name, "."+wildcard.suffix) {
@@ -285,6 +363,81 @@ func (h *dnsHandler) lookup(name string) ([]store.DNSRecord, bool) {
 		return wildcard.records, true
 	}
 	return nil, false
+}
+
+// DynamicRecords returns a sorted snapshot of lease-derived records.
+func (h *dnsHandler) DynamicRecords() []DNSRecordView {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	records := make([]DNSRecordView, 0)
+	for _, entries := range h.dynamic {
+		for _, entry := range entries {
+			sourceID, _ := strconv.ParseInt(strings.TrimPrefix(entry.source, "dhcp-"), 10, 64)
+			records = append(records, DNSRecordView{
+				Name: entry.record.Name, Type: entry.record.Type, Value: entry.record.Value,
+				TTL: entry.record.TTL, Source: entry.source, SourceVNFID: sourceID,
+			})
+		}
+	}
+	sort.Slice(records, func(i, j int) bool {
+		if records[i].Name == records[j].Name {
+			if records[i].Type == records[j].Type {
+				return records[i].Value < records[j].Value
+			}
+			return records[i].Type < records[j].Type
+		}
+		return records[i].Name < records[j].Name
+	})
+	return records
+}
+
+// StaticNameTaken reports whether name already has a configured local record.
+// Dynamic DHCP records use it to avoid shadowing administrator-managed data.
+func (h *dnsHandler) StaticNameTaken(name string) bool {
+	name = dns.CanonicalName(strings.TrimSpace(name))
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.records[name]) > 0
+}
+
+// ReplaceDynamic replaces every dynamic record owned by source. The caller is
+// responsible for avoiding collisions with other lease owners.
+func (h *dnsHandler) ReplaceDynamic(source string, records []store.DNSRecord) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.removeDynamicLocked(source)
+	for _, record := range records {
+		name := dns.CanonicalName(strings.TrimSpace(record.Name))
+		if name == "." || name == "" {
+			continue
+		}
+		record.Name = name
+		record.Type = strings.ToUpper(strings.TrimSpace(record.Type))
+		h.dynamic[name] = append(h.dynamic[name], dnsDynamicRecord{source: source, record: record})
+	}
+}
+
+// RemoveDynamic removes every dynamic record owned by source.
+func (h *dnsHandler) RemoveDynamic(source string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.removeDynamicLocked(source)
+}
+
+func (h *dnsHandler) removeDynamicLocked(source string) {
+	for name, records := range h.dynamic {
+		filtered := records[:0]
+		for _, record := range records {
+			if record.source != source {
+				filtered = append(filtered, record)
+			}
+		}
+		if len(filtered) == 0 {
+			delete(h.dynamic, name)
+			continue
+		}
+		h.dynamic[name] = filtered
+	}
 }
 
 func (h *dnsHandler) answer(response *dns.Msg, question dns.Question, owner string, records []store.DNSRecord, wildcard bool) {
@@ -390,6 +543,8 @@ func dnsRecordRR(record store.DNSRecord, owner string, wildcard bool) dns.RR {
 		return &dns.CNAME{Hdr: header, Target: dns.Fqdn(record.Value)}
 	case "TXT":
 		return &dns.TXT{Hdr: header, Txt: []string{record.Value}}
+	case "PTR":
+		return &dns.PTR{Hdr: header, Ptr: dns.Fqdn(record.Value)}
 	default:
 		return &dns.TXT{Hdr: header, Txt: []string{record.Value}}
 	}
@@ -405,6 +560,8 @@ func recordQType(recordType string) uint16 {
 		return dns.TypeCNAME
 	case "TXT":
 		return dns.TypeTXT
+	case "PTR":
+		return dns.TypePTR
 	default:
 		return dns.TypeTXT
 	}

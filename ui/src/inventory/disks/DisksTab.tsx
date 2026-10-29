@@ -5,6 +5,7 @@ import type { Disk, StorageBackend } from "../types";
 import { DiskDialog } from "./DiskDialog";
 import { ImportDisksDialog } from "./ImportDisksDialog";
 import { StorageBackendDialog } from "./StorageBackendDialog";
+import { TemplateProvisioningDialog } from "./TemplateProvisioningDialog";
 import { navigate, useRoute } from "../router";
 
 const numberFormat = new Intl.NumberFormat();
@@ -29,7 +30,12 @@ export function DisksTab() {
   const [diskDialogOpen, setDiskDialogOpen] = useState(false);
   const [backendDialog, setBackendDialog] = useState<{ backend: StorageBackend | null } | null>(null);
   const [importBackend, setImportBackend] = useState<StorageBackend | null>(null);
+  const [provisioningDisk, setProvisioningDisk] = useState<Disk | null>(null);
   const route = useRoute();
+
+  useEffect(() => {
+    setProvisioningDisk(null);
+  }, [route.path, route.search]);
 
   useEffect(() => {
     const [section, second, third] = route.segments;
@@ -410,6 +416,11 @@ export function DisksTab() {
                     <td class="updated hide-sm">{formatDate(disk.updated_at)}</td>
                     <td>
                       <div class="actions">
+                        {disk.is_template ? (
+                          <button class="row-action" type="button" onClick={() => setProvisioningDisk(disk)}>
+                            Provisioning
+                          </button>
+                        ) : null}
                         <button
                           class="row-action"
                           type="button"
@@ -461,6 +472,18 @@ export function DisksTab() {
           )}
         </div>
       </section>
+
+      {provisioningDisk ? (
+        <TemplateProvisioningDialog
+          disk={provisioningDisk}
+          onClose={() => setProvisioningDisk(null)}
+          onSaved={(disk) => {
+            setProvisioningDisk(null);
+            publishDisks(disks.map((item) => (item.id === disk.id ? disk : item)));
+            showToast(`Saved provisioning for ${disk.name}`);
+          }}
+        />
+      ) : null}
 
       {diskDialogOpen ? (
         <DiskDialog

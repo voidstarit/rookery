@@ -9,12 +9,15 @@ import (
 	"testing"
 
 	"github.com/voidstarit/rookery/internal/gateway"
+	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/readiness"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
 type fakeNetworkRuntime struct {
-	deleted []uint32
+	deleted     []uint32
+	pipeCreated [][2]uint32
+	pipeDeleted []uint32
 }
 
 func (f *fakeNetworkRuntime) CreateBridgeDomain(_ context.Context, _ string, reserved []uint32) (uint32, error) {
@@ -22,6 +25,20 @@ func (f *fakeNetworkRuntime) CreateBridgeDomain(_ context.Context, _ string, res
 }
 func (f *fakeNetworkRuntime) DeleteBridgeDomain(_ context.Context, bdID uint32) error {
 	f.deleted = append(f.deleted, bdID)
+	return nil
+}
+
+func (f *fakeNetworkRuntime) CreatePipe(_ context.Context, bdA, bdB uint32) (host.PipeRuntime, error) {
+	f.pipeCreated = append(f.pipeCreated, [2]uint32{bdA, bdB})
+	return host.PipeRuntime{Instance: 5, ParentSwIfIndex: 90, EndpointASwIfIndex: 91, EndpointBSwIfIndex: 92}, nil
+}
+
+func (f *fakeNetworkRuntime) EnsurePipe(_ context.Context, instance, bdA, bdB uint32) (host.PipeRuntime, error) {
+	return host.PipeRuntime{Instance: instance, EndpointASwIfIndex: bdA, EndpointBSwIfIndex: bdB}, nil
+}
+
+func (f *fakeNetworkRuntime) DeletePipe(_ context.Context, _ uint32, parent uint32) error {
+	f.pipeDeleted = append(f.pipeDeleted, parent)
 	return nil
 }
 
@@ -74,7 +91,8 @@ func TestNetworkWriteRoutes(t *testing.T) {
 }
 
 type fakeNetworkWriter struct {
-	deleted []int64
+	deleted     []int64
+	deletedPipe []int64
 }
 
 func (f *fakeNetworkWriter) CreateNetwork(_ context.Context, name, ipv4CIDR, ipv6CIDR string) (store.Network, error) {
@@ -82,6 +100,13 @@ func (f *fakeNetworkWriter) CreateNetwork(_ context.Context, name, ipv4CIDR, ipv
 }
 func (f *fakeNetworkWriter) DeleteNetwork(_ context.Context, id int64) error {
 	f.deleted = append(f.deleted, id)
+	return nil
+}
+func (f *fakeNetworkWriter) CreateNetworkPipe(_ context.Context, a, b int64) (store.NetworkPipe, error) {
+	return store.NetworkPipe{ID: 7, NetworkAID: a, NetworkBID: b, Instance: 2}, nil
+}
+func (f *fakeNetworkWriter) DeleteNetworkPipe(_ context.Context, id int64) error {
+	f.deletedPipe = append(f.deletedPipe, id)
 	return nil
 }
 
@@ -119,4 +144,188 @@ func TestNetworkDeleteWithWriter(t *testing.T) {
 	if len(writer.deleted) != 1 || writer.deleted[0] != network.ID {
 		t.Fatalf("deleted networks = %+v", writer.deleted)
 	}
+}
+
+func TestNetworkPipeRoutes(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "network-pipes.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	networkA, err := st.CreateNetwork(ctx, store.Network{Name: "lab-a", BridgeDomainID: 300})
+	if err != nil {
+		t.Fatal(err)
+	}
+	networkB, err := st.CreateNetwork(ctx, store.Network{Name: "lab-b", BridgeDomainID: 301})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := &fakeNetworkRuntime{}
+	gw, err := gateway.New(st, fakeReadiness{status: readiness.Status{
+		Ready: true, VPP: readiness.VPPStatus{ComponentStatus: readiness.ComponentStatus{Ready: true}},
+	}}, gateway.WithNetworkRuntime(runtime))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	server := httptest.NewServer(gw.Handler)
+	t.Cleanup(server.Close)
+
+	body := `{"network_a_id":` + jsonID(networkB.ID) + `,"network_b_id":` + jsonID(networkA.ID) + `}`
+	created, err := http.Post(server.URL+"/api/network-pipes", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.StatusCode != http.StatusCreated {
+		t.Fatalf("create pipe status = %d, body = %s", created.StatusCode, readBody(t, created))
+	}
+	var pipe map[string]any
+	decodeBody(t, created, &pipe)
+	if pipe["network_a_name"] != "lab-a" || pipe["network_b_name"] != "lab-b" {
+		t.Fatalf("pipe = %+v", pipe)
+	}
+	if pipe["instance"].(float64) != 5 || pipe["endpoint_a_sw_if_index"].(float64) != 91 || pipe["endpoint_b_sw_if_index"].(float64) != 92 {
+		t.Fatalf("pipe runtime = %+v", pipe)
+	}
+	if len(runtime.pipeCreated) != 1 || runtime.pipeCreated[0] != [2]uint32{300, 301} {
+		t.Fatalf("created pipes = %+v", runtime.pipeCreated)
+	}
+
+	listed, err := http.Get(server.URL + "/api/network-pipes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if listed.StatusCode != http.StatusOK {
+		t.Fatalf("list pipes status = %d, body = %s", listed.StatusCode, readBody(t, listed))
+	}
+	var pipes []map[string]any
+	decodeBody(t, listed, &pipes)
+	if len(pipes) != 1 || pipes[0]["id"].(float64) != pipe["id"].(float64) {
+		t.Fatalf("pipes = %+v", pipes)
+	}
+
+	blockedRequest, err := http.NewRequest(http.MethodDelete, server.URL+"/api/networks/"+jsonID(networkA.ID), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocked, err := http.DefaultClient.Do(blockedRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if blocked.StatusCode != http.StatusConflict {
+		t.Fatalf("delete network with pipe status = %d, body = %s", blocked.StatusCode, readBody(t, blocked))
+	}
+	_ = blocked.Body.Close()
+
+	duplicate, err := http.Post(server.URL+"/api/network-pipes", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate.StatusCode != http.StatusConflict {
+		t.Fatalf("duplicate pipe status = %d, body = %s", duplicate.StatusCode, readBody(t, duplicate))
+	}
+	_ = duplicate.Body.Close()
+	if len(runtime.pipeDeleted) != 1 || runtime.pipeDeleted[0] != 90 {
+		t.Fatalf("rolled back pipes = %+v", runtime.pipeDeleted)
+	}
+
+	request, err := http.NewRequest(http.MethodDelete, server.URL+"/api/network-pipes/"+jsonID(pipe["id"]), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete pipe status = %d, body = %s", deleted.StatusCode, readBody(t, deleted))
+	}
+	_ = deleted.Body.Close()
+	if len(runtime.pipeDeleted) != 2 || runtime.pipeDeleted[1] != 90 {
+		t.Fatalf("deleted pipes = %+v", runtime.pipeDeleted)
+	}
+}
+
+func TestNetworkUpdateCIDRs(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "network-update.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	network, err := st.CreateNetwork(ctx, store.Network{
+		Name: "lab", BridgeDomainID: 620, IPv4CIDR: "10.20.0.0/24", IPv6CIDR: "fd00:20::/64",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gw, err := gateway.New(st, fakeReadiness{status: readiness.Status{
+		Ready: true, VPP: readiness.VPPStatus{ComponentStatus: readiness.ComponentStatus{Ready: true}},
+	}}, gateway.WithNetworkRuntime(&fakeNetworkRuntime{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	server := httptest.NewServer(gw.Handler)
+	t.Cleanup(server.Close)
+
+	request, err := http.NewRequest(http.MethodPut, server.URL+"/api/networks/"+jsonID(network.ID),
+		strings.NewReader(`{"ipv4_cidr":"10.30.0.0/24","ipv6_cidr":"fd00:30::/64"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("update network status = %d, body = %s", response.StatusCode, readBody(t, response))
+	}
+	var updated map[string]any
+	decodeBody(t, response, &updated)
+	if updated["ipv4_cidr"] != "10.30.0.0/24" || updated["ipv6_cidr"] != "fd00:30::/64" {
+		t.Fatalf("updated network = %+v", updated)
+	}
+	stored, err := st.GetNetwork(ctx, network.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.IPv4CIDR != "10.30.0.0/24" || stored.IPv6CIDR != "fd00:30::/64" {
+		t.Fatalf("stored network = %+v", stored)
+	}
+
+	request, err = http.NewRequest(http.MethodPut, server.URL+"/api/networks/"+jsonID(network.ID),
+		strings.NewReader(`{"ipv4_cidr":"not-a-cidr","ipv6_cidr":"fd00:30::/64"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err = http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid CIDR status = %d, body = %s", response.StatusCode, readBody(t, response))
+	}
+	_ = response.Body.Close()
+
+	if _, err := st.CreateVNF(ctx, store.VNF{Name: "lab-dns", NetworkID: network.ID, Type: store.VNFTypeDNS}); err != nil {
+		t.Fatal(err)
+	}
+	request, err = http.NewRequest(http.MethodPut, server.URL+"/api/networks/"+jsonID(network.ID),
+		strings.NewReader(`{"ipv4_cidr":"10.40.0.0/24","ipv6_cidr":"fd00:40::/64"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err = http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusConflict {
+		t.Fatalf("update network with VNF status = %d, body = %s", response.StatusCode, readBody(t, response))
+	}
+	_ = response.Body.Close()
 }

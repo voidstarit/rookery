@@ -858,6 +858,64 @@ func (m *StatusResponse) validate(all bool) error {
 		}
 	}
 
+	if all {
+		switch v := interface{}(m.GetRookeryStartupScript()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, StatusResponseValidationError{
+					field:  "RookeryStartupScript",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, StatusResponseValidationError{
+					field:  "RookeryStartupScript",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetRookeryStartupScript()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return StatusResponseValidationError{
+				field:  "RookeryStartupScript",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if all {
+		switch v := interface{}(m.GetVppStartupScript()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, StatusResponseValidationError{
+					field:  "VppStartupScript",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, StatusResponseValidationError{
+					field:  "VppStartupScript",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetVppStartupScript()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return StatusResponseValidationError{
+				field:  "VppStartupScript",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
 	if len(errors) > 0 {
 		return StatusResponseMultiError(errors)
 	}
@@ -935,3 +993,743 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = StatusResponseValidationError{}
+
+// Validate checks the field values on StartupScriptStatus with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *StartupScriptStatus) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on StartupScriptStatus with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// StartupScriptStatusMultiError, or nil if none found.
+func (m *StartupScriptStatus) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *StartupScriptStatus) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Enabled
+
+	// no validation rules for Status
+
+	// no validation rules for ExitCode
+
+	if all {
+		switch v := interface{}(m.GetRanAt()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, StartupScriptStatusValidationError{
+					field:  "RanAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, StartupScriptStatusValidationError{
+					field:  "RanAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetRanAt()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return StartupScriptStatusValidationError{
+				field:  "RanAt",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return StartupScriptStatusMultiError(errors)
+	}
+
+	return nil
+}
+
+// StartupScriptStatusMultiError is an error wrapping multiple validation
+// errors returned by StartupScriptStatus.ValidateAll() if the designated
+// constraints aren't met.
+type StartupScriptStatusMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m StartupScriptStatusMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m StartupScriptStatusMultiError) AllErrors() []error { return m }
+
+// StartupScriptStatusValidationError is the validation error returned by
+// StartupScriptStatus.Validate if the designated constraints aren't met.
+type StartupScriptStatusValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e StartupScriptStatusValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e StartupScriptStatusValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e StartupScriptStatusValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e StartupScriptStatusValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e StartupScriptStatusValidationError) ErrorName() string {
+	return "StartupScriptStatusValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e StartupScriptStatusValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sStartupScriptStatus.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = StartupScriptStatusValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = StartupScriptStatusValidationError{}
+
+// Validate checks the field values on GetStartupScriptRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *GetStartupScriptRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetStartupScriptRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// GetStartupScriptRequestMultiError, or nil if none found.
+func (m *GetStartupScriptRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetStartupScriptRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if len(errors) > 0 {
+		return GetStartupScriptRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// GetStartupScriptRequestMultiError is an error wrapping multiple validation
+// errors returned by GetStartupScriptRequest.ValidateAll() if the designated
+// constraints aren't met.
+type GetStartupScriptRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetStartupScriptRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetStartupScriptRequestMultiError) AllErrors() []error { return m }
+
+// GetStartupScriptRequestValidationError is the validation error returned by
+// GetStartupScriptRequest.Validate if the designated constraints aren't met.
+type GetStartupScriptRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetStartupScriptRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetStartupScriptRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetStartupScriptRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetStartupScriptRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetStartupScriptRequestValidationError) ErrorName() string {
+	return "GetStartupScriptRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e GetStartupScriptRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetStartupScriptRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetStartupScriptRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetStartupScriptRequestValidationError{}
+
+// Validate checks the field values on UpdateStartupScriptRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *UpdateStartupScriptRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on UpdateStartupScriptRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// UpdateStartupScriptRequestMultiError, or nil if none found.
+func (m *UpdateStartupScriptRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *UpdateStartupScriptRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Enabled
+
+	if utf8.RuneCountInString(m.GetScript()) > 65536 {
+		err := UpdateStartupScriptRequestValidationError{
+			field:  "Script",
+			reason: "value length must be at most 65536 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return UpdateStartupScriptRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// UpdateStartupScriptRequestMultiError is an error wrapping multiple
+// validation errors returned by UpdateStartupScriptRequest.ValidateAll() if
+// the designated constraints aren't met.
+type UpdateStartupScriptRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m UpdateStartupScriptRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m UpdateStartupScriptRequestMultiError) AllErrors() []error { return m }
+
+// UpdateStartupScriptRequestValidationError is the validation error returned
+// by UpdateStartupScriptRequest.Validate if the designated constraints aren't met.
+type UpdateStartupScriptRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e UpdateStartupScriptRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e UpdateStartupScriptRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e UpdateStartupScriptRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e UpdateStartupScriptRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e UpdateStartupScriptRequestValidationError) ErrorName() string {
+	return "UpdateStartupScriptRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e UpdateStartupScriptRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sUpdateStartupScriptRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = UpdateStartupScriptRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = UpdateStartupScriptRequestValidationError{}
+
+// Validate checks the field values on StartupScript with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *StartupScript) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on StartupScript with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in StartupScriptMultiError, or
+// nil if none found.
+func (m *StartupScript) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *StartupScript) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Enabled
+
+	// no validation rules for Script
+
+	// no validation rules for Status
+
+	// no validation rules for ExitCode
+
+	// no validation rules for Output
+
+	if all {
+		switch v := interface{}(m.GetRanAt()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, StartupScriptValidationError{
+					field:  "RanAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, StartupScriptValidationError{
+					field:  "RanAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetRanAt()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return StartupScriptValidationError{
+				field:  "RanAt",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if all {
+		switch v := interface{}(m.GetUpdatedAt()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, StartupScriptValidationError{
+					field:  "UpdatedAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, StartupScriptValidationError{
+					field:  "UpdatedAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetUpdatedAt()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return StartupScriptValidationError{
+				field:  "UpdatedAt",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return StartupScriptMultiError(errors)
+	}
+
+	return nil
+}
+
+// StartupScriptMultiError is an error wrapping multiple validation errors
+// returned by StartupScript.ValidateAll() if the designated constraints
+// aren't met.
+type StartupScriptMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m StartupScriptMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m StartupScriptMultiError) AllErrors() []error { return m }
+
+// StartupScriptValidationError is the validation error returned by
+// StartupScript.Validate if the designated constraints aren't met.
+type StartupScriptValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e StartupScriptValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e StartupScriptValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e StartupScriptValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e StartupScriptValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e StartupScriptValidationError) ErrorName() string { return "StartupScriptValidationError" }
+
+// Error satisfies the builtin error interface
+func (e StartupScriptValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sStartupScript.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = StartupScriptValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = StartupScriptValidationError{}
+
+// Validate checks the field values on GetVPPStartupScriptRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *GetVPPStartupScriptRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetVPPStartupScriptRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// GetVPPStartupScriptRequestMultiError, or nil if none found.
+func (m *GetVPPStartupScriptRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetVPPStartupScriptRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if len(errors) > 0 {
+		return GetVPPStartupScriptRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// GetVPPStartupScriptRequestMultiError is an error wrapping multiple
+// validation errors returned by GetVPPStartupScriptRequest.ValidateAll() if
+// the designated constraints aren't met.
+type GetVPPStartupScriptRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetVPPStartupScriptRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetVPPStartupScriptRequestMultiError) AllErrors() []error { return m }
+
+// GetVPPStartupScriptRequestValidationError is the validation error returned
+// by GetVPPStartupScriptRequest.Validate if the designated constraints aren't met.
+type GetVPPStartupScriptRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetVPPStartupScriptRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetVPPStartupScriptRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetVPPStartupScriptRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetVPPStartupScriptRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetVPPStartupScriptRequestValidationError) ErrorName() string {
+	return "GetVPPStartupScriptRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e GetVPPStartupScriptRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetVPPStartupScriptRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetVPPStartupScriptRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetVPPStartupScriptRequestValidationError{}
+
+// Validate checks the field values on UpdateVPPStartupScriptRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *UpdateVPPStartupScriptRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on UpdateVPPStartupScriptRequest with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the result is a list of violation errors wrapped in
+// UpdateVPPStartupScriptRequestMultiError, or nil if none found.
+func (m *UpdateVPPStartupScriptRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *UpdateVPPStartupScriptRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Enabled
+
+	if utf8.RuneCountInString(m.GetScript()) > 65536 {
+		err := UpdateVPPStartupScriptRequestValidationError{
+			field:  "Script",
+			reason: "value length must be at most 65536 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return UpdateVPPStartupScriptRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// UpdateVPPStartupScriptRequestMultiError is an error wrapping multiple
+// validation errors returned by UpdateVPPStartupScriptRequest.ValidateAll()
+// if the designated constraints aren't met.
+type UpdateVPPStartupScriptRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m UpdateVPPStartupScriptRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m UpdateVPPStartupScriptRequestMultiError) AllErrors() []error { return m }
+
+// UpdateVPPStartupScriptRequestValidationError is the validation error
+// returned by UpdateVPPStartupScriptRequest.Validate if the designated
+// constraints aren't met.
+type UpdateVPPStartupScriptRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e UpdateVPPStartupScriptRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e UpdateVPPStartupScriptRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e UpdateVPPStartupScriptRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e UpdateVPPStartupScriptRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e UpdateVPPStartupScriptRequestValidationError) ErrorName() string {
+	return "UpdateVPPStartupScriptRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e UpdateVPPStartupScriptRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sUpdateVPPStartupScriptRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = UpdateVPPStartupScriptRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = UpdateVPPStartupScriptRequestValidationError{}

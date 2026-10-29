@@ -71,6 +71,7 @@ message HostInterface {
   bool vpp_up = 11;
   string vpp_type = 12;
   bool managed = 13;
+  repeated string vpp_addresses = 14;
 }
 
 message ListHostInterfacesRequest {}
@@ -99,6 +100,7 @@ message HostTap {
   string ipv4_address = 6;
   google.protobuf.Timestamp created_at = 7;
   google.protobuf.Timestamp updated_at = 8;
+  repeated string vpp_addresses = 9;
 }
 
 message ListHostTapsRequest {

@@ -128,6 +128,11 @@ func (p *RookeryProvider) Resources(_ context.Context) []func() resource.Resourc
 		NewVNFResource,
 		NewVMResource,
 		NewHostInterfaceResource,
+		NewNetworkPipeResource,
+		NewHostTapResource,
+		NewVPPInterfaceAddressesResource,
+		NewVPPInterfaceRouteTablesResource,
+		NewStartupScriptResource,
 	}
 }
 
@@ -145,6 +150,11 @@ func (p *RookeryProvider) DataSources(_ context.Context) []func() datasource.Dat
 		NewVNFDataSource,
 		NewVMDataSource,
 		NewHostInterfaceDataSource,
+		NewNetworkPipeDataSource,
+		NewHostTapDataSource,
+		NewVPPInterfaceAddressesDataSource,
+		NewVPPInterfaceRouteTablesDataSource,
+		NewStartupScriptDataSource,
 	}
 }
 

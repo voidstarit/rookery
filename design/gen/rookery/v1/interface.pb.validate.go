@@ -1813,3 +1813,838 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = ResetInterfaceCountersRequestValidationError{}
+
+// Validate checks the field values on VPPInterfaceAddresses with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *VPPInterfaceAddresses) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on VPPInterfaceAddresses with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// VPPInterfaceAddressesMultiError, or nil if none found.
+func (m *VPPInterfaceAddresses) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *VPPInterfaceAddresses) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Name
+
+	// no validation rules for DhcpClientEnabled
+
+	// no validation rules for DhcpClientConfigured
+
+	// no validation rules for DhcpClientStatus
+
+	// no validation rules for StatusDetail
+
+	if len(errors) > 0 {
+		return VPPInterfaceAddressesMultiError(errors)
+	}
+
+	return nil
+}
+
+// VPPInterfaceAddressesMultiError is an error wrapping multiple validation
+// errors returned by VPPInterfaceAddresses.ValidateAll() if the designated
+// constraints aren't met.
+type VPPInterfaceAddressesMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m VPPInterfaceAddressesMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m VPPInterfaceAddressesMultiError) AllErrors() []error { return m }
+
+// VPPInterfaceAddressesValidationError is the validation error returned by
+// VPPInterfaceAddresses.Validate if the designated constraints aren't met.
+type VPPInterfaceAddressesValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e VPPInterfaceAddressesValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e VPPInterfaceAddressesValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e VPPInterfaceAddressesValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e VPPInterfaceAddressesValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e VPPInterfaceAddressesValidationError) ErrorName() string {
+	return "VPPInterfaceAddressesValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e VPPInterfaceAddressesValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sVPPInterfaceAddresses.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = VPPInterfaceAddressesValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = VPPInterfaceAddressesValidationError{}
+
+// Validate checks the field values on GetVPPInterfaceAddressesRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *GetVPPInterfaceAddressesRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetVPPInterfaceAddressesRequest with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the result is a list of violation errors wrapped in
+// GetVPPInterfaceAddressesRequestMultiError, or nil if none found.
+func (m *GetVPPInterfaceAddressesRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetVPPInterfaceAddressesRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if l := utf8.RuneCountInString(m.GetName()); l < 1 || l > 128 {
+		err := GetVPPInterfaceAddressesRequestValidationError{
+			field:  "Name",
+			reason: "value length must be between 1 and 128 runes, inclusive",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return GetVPPInterfaceAddressesRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// GetVPPInterfaceAddressesRequestMultiError is an error wrapping multiple
+// validation errors returned by GetVPPInterfaceAddressesRequest.ValidateAll()
+// if the designated constraints aren't met.
+type GetVPPInterfaceAddressesRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetVPPInterfaceAddressesRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetVPPInterfaceAddressesRequestMultiError) AllErrors() []error { return m }
+
+// GetVPPInterfaceAddressesRequestValidationError is the validation error
+// returned by GetVPPInterfaceAddressesRequest.Validate if the designated
+// constraints aren't met.
+type GetVPPInterfaceAddressesRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetVPPInterfaceAddressesRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetVPPInterfaceAddressesRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetVPPInterfaceAddressesRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetVPPInterfaceAddressesRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetVPPInterfaceAddressesRequestValidationError) ErrorName() string {
+	return "GetVPPInterfaceAddressesRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e GetVPPInterfaceAddressesRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetVPPInterfaceAddressesRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetVPPInterfaceAddressesRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetVPPInterfaceAddressesRequestValidationError{}
+
+// Validate checks the field values on UpdateVPPInterfaceAddressesRequest with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the first error encountered is returned, or nil if there are
+// no violations.
+func (m *UpdateVPPInterfaceAddressesRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on UpdateVPPInterfaceAddressesRequest
+// with the rules defined in the proto definition for this message. If any
+// rules are violated, the result is a list of violation errors wrapped in
+// UpdateVPPInterfaceAddressesRequestMultiError, or nil if none found.
+func (m *UpdateVPPInterfaceAddressesRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *UpdateVPPInterfaceAddressesRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if l := utf8.RuneCountInString(m.GetName()); l < 1 || l > 128 {
+		err := UpdateVPPInterfaceAddressesRequestValidationError{
+			field:  "Name",
+			reason: "value length must be between 1 and 128 runes, inclusive",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(m.GetAddresses()) > 32 {
+		err := UpdateVPPInterfaceAddressesRequestValidationError{
+			field:  "Addresses",
+			reason: "value must contain no more than 32 item(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	for idx, item := range m.GetAddresses() {
+		_, _ = idx, item
+
+		if utf8.RuneCountInString(item) > 64 {
+			err := UpdateVPPInterfaceAddressesRequestValidationError{
+				field:  fmt.Sprintf("Addresses[%v]", idx),
+				reason: "value length must be at most 64 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	// no validation rules for DhcpClientEnabled
+
+	if len(errors) > 0 {
+		return UpdateVPPInterfaceAddressesRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// UpdateVPPInterfaceAddressesRequestMultiError is an error wrapping multiple
+// validation errors returned by
+// UpdateVPPInterfaceAddressesRequest.ValidateAll() if the designated
+// constraints aren't met.
+type UpdateVPPInterfaceAddressesRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m UpdateVPPInterfaceAddressesRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m UpdateVPPInterfaceAddressesRequestMultiError) AllErrors() []error { return m }
+
+// UpdateVPPInterfaceAddressesRequestValidationError is the validation error
+// returned by UpdateVPPInterfaceAddressesRequest.Validate if the designated
+// constraints aren't met.
+type UpdateVPPInterfaceAddressesRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e UpdateVPPInterfaceAddressesRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e UpdateVPPInterfaceAddressesRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e UpdateVPPInterfaceAddressesRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e UpdateVPPInterfaceAddressesRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e UpdateVPPInterfaceAddressesRequestValidationError) ErrorName() string {
+	return "UpdateVPPInterfaceAddressesRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e UpdateVPPInterfaceAddressesRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sUpdateVPPInterfaceAddressesRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = UpdateVPPInterfaceAddressesRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = UpdateVPPInterfaceAddressesRequestValidationError{}
+
+// Validate checks the field values on VPPInterfaceRouteTables with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *VPPInterfaceRouteTables) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on VPPInterfaceRouteTables with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// VPPInterfaceRouteTablesMultiError, or nil if none found.
+func (m *VPPInterfaceRouteTables) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *VPPInterfaceRouteTables) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Name
+
+	// no validation rules for Ipv4TableId
+
+	// no validation rules for Ipv6TableId
+
+	// no validation rules for Ipv4TableName
+
+	// no validation rules for Ipv6TableName
+
+	if len(errors) > 0 {
+		return VPPInterfaceRouteTablesMultiError(errors)
+	}
+
+	return nil
+}
+
+// VPPInterfaceRouteTablesMultiError is an error wrapping multiple validation
+// errors returned by VPPInterfaceRouteTables.ValidateAll() if the designated
+// constraints aren't met.
+type VPPInterfaceRouteTablesMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m VPPInterfaceRouteTablesMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m VPPInterfaceRouteTablesMultiError) AllErrors() []error { return m }
+
+// VPPInterfaceRouteTablesValidationError is the validation error returned by
+// VPPInterfaceRouteTables.Validate if the designated constraints aren't met.
+type VPPInterfaceRouteTablesValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e VPPInterfaceRouteTablesValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e VPPInterfaceRouteTablesValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e VPPInterfaceRouteTablesValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e VPPInterfaceRouteTablesValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e VPPInterfaceRouteTablesValidationError) ErrorName() string {
+	return "VPPInterfaceRouteTablesValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e VPPInterfaceRouteTablesValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sVPPInterfaceRouteTables.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = VPPInterfaceRouteTablesValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = VPPInterfaceRouteTablesValidationError{}
+
+// Validate checks the field values on GetVPPInterfaceRouteTablesRequest with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the first error encountered is returned, or nil if there are
+// no violations.
+func (m *GetVPPInterfaceRouteTablesRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetVPPInterfaceRouteTablesRequest
+// with the rules defined in the proto definition for this message. If any
+// rules are violated, the result is a list of violation errors wrapped in
+// GetVPPInterfaceRouteTablesRequestMultiError, or nil if none found.
+func (m *GetVPPInterfaceRouteTablesRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetVPPInterfaceRouteTablesRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if l := utf8.RuneCountInString(m.GetName()); l < 1 || l > 128 {
+		err := GetVPPInterfaceRouteTablesRequestValidationError{
+			field:  "Name",
+			reason: "value length must be between 1 and 128 runes, inclusive",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return GetVPPInterfaceRouteTablesRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// GetVPPInterfaceRouteTablesRequestMultiError is an error wrapping multiple
+// validation errors returned by
+// GetVPPInterfaceRouteTablesRequest.ValidateAll() if the designated
+// constraints aren't met.
+type GetVPPInterfaceRouteTablesRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetVPPInterfaceRouteTablesRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetVPPInterfaceRouteTablesRequestMultiError) AllErrors() []error { return m }
+
+// GetVPPInterfaceRouteTablesRequestValidationError is the validation error
+// returned by GetVPPInterfaceRouteTablesRequest.Validate if the designated
+// constraints aren't met.
+type GetVPPInterfaceRouteTablesRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetVPPInterfaceRouteTablesRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetVPPInterfaceRouteTablesRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetVPPInterfaceRouteTablesRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetVPPInterfaceRouteTablesRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetVPPInterfaceRouteTablesRequestValidationError) ErrorName() string {
+	return "GetVPPInterfaceRouteTablesRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e GetVPPInterfaceRouteTablesRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetVPPInterfaceRouteTablesRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetVPPInterfaceRouteTablesRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetVPPInterfaceRouteTablesRequestValidationError{}
+
+// Validate checks the field values on UpdateVPPInterfaceRouteTablesRequest
+// with the rules defined in the proto definition for this message. If any
+// rules are violated, the first error encountered is returned, or nil if
+// there are no violations.
+func (m *UpdateVPPInterfaceRouteTablesRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on UpdateVPPInterfaceRouteTablesRequest
+// with the rules defined in the proto definition for this message. If any
+// rules are violated, the result is a list of violation errors wrapped in
+// UpdateVPPInterfaceRouteTablesRequestMultiError, or nil if none found.
+func (m *UpdateVPPInterfaceRouteTablesRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *UpdateVPPInterfaceRouteTablesRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if l := utf8.RuneCountInString(m.GetName()); l < 1 || l > 128 {
+		err := UpdateVPPInterfaceRouteTablesRequestValidationError{
+			field:  "Name",
+			reason: "value length must be between 1 and 128 runes, inclusive",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	// no validation rules for Ipv4TableId
+
+	// no validation rules for Ipv6TableId
+
+	if len(errors) > 0 {
+		return UpdateVPPInterfaceRouteTablesRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// UpdateVPPInterfaceRouteTablesRequestMultiError is an error wrapping multiple
+// validation errors returned by
+// UpdateVPPInterfaceRouteTablesRequest.ValidateAll() if the designated
+// constraints aren't met.
+type UpdateVPPInterfaceRouteTablesRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m UpdateVPPInterfaceRouteTablesRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m UpdateVPPInterfaceRouteTablesRequestMultiError) AllErrors() []error { return m }
+
+// UpdateVPPInterfaceRouteTablesRequestValidationError is the validation error
+// returned by UpdateVPPInterfaceRouteTablesRequest.Validate if the designated
+// constraints aren't met.
+type UpdateVPPInterfaceRouteTablesRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e UpdateVPPInterfaceRouteTablesRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e UpdateVPPInterfaceRouteTablesRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e UpdateVPPInterfaceRouteTablesRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e UpdateVPPInterfaceRouteTablesRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e UpdateVPPInterfaceRouteTablesRequestValidationError) ErrorName() string {
+	return "UpdateVPPInterfaceRouteTablesRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e UpdateVPPInterfaceRouteTablesRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sUpdateVPPInterfaceRouteTablesRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = UpdateVPPInterfaceRouteTablesRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = UpdateVPPInterfaceRouteTablesRequestValidationError{}
+
+// Validate checks the field values on DeleteVPPInterfaceRouteTablesRequest
+// with the rules defined in the proto definition for this message. If any
+// rules are violated, the first error encountered is returned, or nil if
+// there are no violations.
+func (m *DeleteVPPInterfaceRouteTablesRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on DeleteVPPInterfaceRouteTablesRequest
+// with the rules defined in the proto definition for this message. If any
+// rules are violated, the result is a list of violation errors wrapped in
+// DeleteVPPInterfaceRouteTablesRequestMultiError, or nil if none found.
+func (m *DeleteVPPInterfaceRouteTablesRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *DeleteVPPInterfaceRouteTablesRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if l := utf8.RuneCountInString(m.GetName()); l < 1 || l > 128 {
+		err := DeleteVPPInterfaceRouteTablesRequestValidationError{
+			field:  "Name",
+			reason: "value length must be between 1 and 128 runes, inclusive",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return DeleteVPPInterfaceRouteTablesRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// DeleteVPPInterfaceRouteTablesRequestMultiError is an error wrapping multiple
+// validation errors returned by
+// DeleteVPPInterfaceRouteTablesRequest.ValidateAll() if the designated
+// constraints aren't met.
+type DeleteVPPInterfaceRouteTablesRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m DeleteVPPInterfaceRouteTablesRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m DeleteVPPInterfaceRouteTablesRequestMultiError) AllErrors() []error { return m }
+
+// DeleteVPPInterfaceRouteTablesRequestValidationError is the validation error
+// returned by DeleteVPPInterfaceRouteTablesRequest.Validate if the designated
+// constraints aren't met.
+type DeleteVPPInterfaceRouteTablesRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e DeleteVPPInterfaceRouteTablesRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e DeleteVPPInterfaceRouteTablesRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e DeleteVPPInterfaceRouteTablesRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e DeleteVPPInterfaceRouteTablesRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e DeleteVPPInterfaceRouteTablesRequestValidationError) ErrorName() string {
+	return "DeleteVPPInterfaceRouteTablesRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e DeleteVPPInterfaceRouteTablesRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sDeleteVPPInterfaceRouteTablesRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = DeleteVPPInterfaceRouteTablesRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = DeleteVPPInterfaceRouteTablesRequestValidationError{}

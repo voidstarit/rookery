@@ -55,7 +55,7 @@ export function InterfaceRouteTablesDialog({
   };
 
   const options = (familyIPv6: boolean) =>
-    tables.filter((table) => table.ipv6 === familyIPv6);
+    tables.filter((table) => table.ipv6 === familyIPv6 && table.table_id !== 0);
 
   return (
     <dialog

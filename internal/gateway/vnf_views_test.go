@@ -32,6 +32,9 @@ func (fakeVNFStatusProvider) VNFSessions(context.Context, store.VNF) ([]string, 
 func (fakeVNFStatusProvider) VNFBGP(context.Context, store.VNF) (host.BGPStatus, error) {
 	return host.BGPStatus{}, nil
 }
+func (fakeVNFStatusProvider) VNFDNSRecords(context.Context, store.VNF) ([]host.DNSRecordView, error) {
+	return nil, nil
+}
 
 func TestVNFViews(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "vnf-views.db"))
@@ -136,6 +139,9 @@ func (f *fakeBGPProvider) VNFSessions(context.Context, store.VNF) ([]string, err
 func (f *fakeBGPProvider) VNFBGP(context.Context, store.VNF) (host.BGPStatus, error) {
 	return f.status, nil
 }
+func (f *fakeBGPProvider) VNFDNSRecords(context.Context, store.VNF) ([]host.DNSRecordView, error) {
+	return nil, nil
+}
 
 func TestVNFBGPView(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "vnf-bgp.db"))
@@ -201,5 +207,81 @@ func TestVNFBGPView(t *testing.T) {
 	asPath := item["as_path"].([]any)
 	if len(asPath) != 2 || jsonInteger(asPath[0]) != 65040 || jsonInteger(asPath[1]) != 65100 {
 		t.Fatalf("as_path = %+v", asPath)
+	}
+}
+
+type fakeDNSProvider struct {
+	records []host.DNSRecordView
+	err     error
+}
+
+func (f *fakeDNSProvider) VNFStatus(context.Context, store.VNF) (string, string, int) {
+	return "running", "", 0
+}
+func (f *fakeDNSProvider) VNFSessions(context.Context, store.VNF) ([]string, error) {
+	return nil, nil
+}
+func (f *fakeDNSProvider) VNFBGP(context.Context, store.VNF) (host.BGPStatus, error) {
+	return host.BGPStatus{}, nil
+}
+func (f *fakeDNSProvider) VNFDNSRecords(context.Context, store.VNF) ([]host.DNSRecordView, error) {
+	return f.records, f.err
+}
+
+func TestVNFDNSRecordsView(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "vnf-dns-records.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	network, err := st.CreateNetwork(context.Background(), store.Network{Name: "lab", BridgeDomainID: 320})
+	if err != nil {
+		t.Fatal(err)
+	}
+	vnf, err := st.CreateVNF(context.Background(), store.VNF{
+		Name: "dns", NetworkID: network.ID, Type: store.VNFTypeDNS, Enabled: true,
+		Config: store.VNFConfig{DNSRecords: []store.DNSRecord{
+			{Name: "router.lab.test.", Type: "A", Value: "10.20.0.1", TTL: 300},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := &fakeDNSProvider{records: []host.DNSRecordView{
+		{Name: "web.lab.test.", Type: "A", Value: "10.20.0.50", TTL: 300, Source: "dhcp-2", SourceVNFID: 2},
+	}}
+	gw, err := gateway.New(st, fakeReadiness{}, gateway.WithVNFStatusProvider(provider))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	server := httptest.NewServer(gw.Handler)
+	t.Cleanup(server.Close)
+
+	response, err := http.Get(server.URL + "/api/vnfs/" + jsonID(vnf.ID) + "/dns-records")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("dns records status = %d, body = %s", response.StatusCode, readBody(t, response))
+	}
+	var body struct {
+		Records []struct {
+			Name         string `json:"name"`
+			Type         string `json:"type"`
+			Source       string `json:"source"`
+			SourceVNFID  int64  `json:"source_vnf_id"`
+			DynamicError string `json:"dynamic_error"`
+		} `json:"records"`
+	}
+	decodeBody(t, response, &body)
+	if len(body.Records) != 2 {
+		t.Fatalf("records = %+v", body.Records)
+	}
+	if body.Records[0].Name != "router.lab.test." || body.Records[0].Source != "static" {
+		t.Fatalf("static record = %+v", body.Records[0])
+	}
+	if body.Records[1].Name != "web.lab.test." || body.Records[1].Source != "dhcp" || body.Records[1].SourceVNFID != 2 {
+		t.Fatalf("dynamic record = %+v", body.Records[1])
 	}
 }

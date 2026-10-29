@@ -5,6 +5,7 @@ package rookery.v1;
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
+import "validate/validate.proto";
 
 option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
 option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
@@ -16,7 +17,7 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
   schemes: HTTP
 };
 
-// SystemService exposes host and readiness information.
+// SystemService exposes host and readiness information plus server settings.
 service SystemService {
   rpc GetHealth(GetHealthRequest) returns (HealthResponse) {
     option (google.api.http) = {get: "/api/healthz"};
@@ -24,6 +25,28 @@ service SystemService {
 
   rpc GetStatus(GetStatusRequest) returns (StatusResponse) {
     option (google.api.http) = {get: "/api/status"};
+  }
+
+  rpc GetStartupScript(GetStartupScriptRequest) returns (StartupScript) {
+    option (google.api.http) = {get: "/api/startup-script"};
+  }
+
+  rpc UpdateStartupScript(UpdateStartupScriptRequest) returns (StartupScript) {
+    option (google.api.http) = {
+      put: "/api/startup-script"
+      body: "*"
+    };
+  }
+
+  rpc GetVPPStartupScript(GetVPPStartupScriptRequest) returns (StartupScript) {
+    option (google.api.http) = {get: "/api/vpp-startup-script"};
+  }
+
+  rpc UpdateVPPStartupScript(UpdateVPPStartupScriptRequest) returns (StartupScript) {
+    option (google.api.http) = {
+      put: "/api/vpp-startup-script"
+      body: "*"
+    };
   }
 }
 
@@ -64,4 +87,37 @@ message StatusResponse {
   google.protobuf.Timestamp checked_at = 2;
   ThinPoolStatus thin_pool = 3;
   VPPStatus vpp = 4;
+  StartupScriptStatus rookery_startup_script = 5;
+  StartupScriptStatus vpp_startup_script = 6;
+}
+
+message StartupScriptStatus {
+  bool enabled = 1;
+  string status = 2;
+  int32 exit_code = 3;
+  google.protobuf.Timestamp ran_at = 4;
+}
+
+message GetStartupScriptRequest {}
+
+message UpdateStartupScriptRequest {
+  bool enabled = 1;
+  string script = 2 [(validate.rules).string = {max_len: 65536}];
+}
+
+message StartupScript {
+  bool enabled = 1;
+  string script = 2;
+  string status = 3;
+  int32 exit_code = 4;
+  string output = 5;
+  google.protobuf.Timestamp ran_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message GetVPPStartupScriptRequest {}
+
+message UpdateVPPStartupScriptRequest {
+  bool enabled = 1;
+  string script = 2 [(validate.rules).string = {max_len: 65536}];
 }

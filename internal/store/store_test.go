@@ -125,6 +125,9 @@ func TestVMCrud(t *testing.T) {
 	if created.ConsoleEnabled {
 		t.Fatal("new VM has console access enabled by default")
 	}
+	if created.DesiredState != store.DesiredStopped {
+		t.Fatalf("desired state = %q, want stopped", created.DesiredState)
+	}
 
 	got, err := st.GetVM(ctx, created.ID)
 	if err != nil {
@@ -135,6 +138,17 @@ func TestVMCrud(t *testing.T) {
 	}
 	if got.Disk == nil || got.Disk.ID != created.Disk.ID {
 		t.Fatalf("get vm disk = %+v", got.Disk)
+	}
+
+	started, err := st.SetVMDesiredState(ctx, created.ID, store.DesiredRunning)
+	if err != nil {
+		t.Fatalf("set desired state: %v", err)
+	}
+	if started.DesiredState != store.DesiredRunning {
+		t.Fatalf("desired state = %q, want running", started.DesiredState)
+	}
+	if _, err := st.SetVMDesiredState(ctx, created.ID, "paused"); err == nil {
+		t.Fatal("invalid desired state was accepted")
 	}
 
 	updated, err := st.UpdateVM(ctx, store.VM{
@@ -982,5 +996,50 @@ func TestTemplateDiskCannotAttachToVM(t *testing.T) {
 	}
 	if _, err := st.CreateVM(ctx, store.VM{Name: "vm", VCPUs: 1, MemoryMB: 512, DiskIDs: []int64{disk.ID}}); !errors.Is(err, store.ErrDiskIsTemplate) {
 		t.Fatalf("create vm with template error = %v, want ErrDiskIsTemplate", err)
+	}
+}
+
+func TestInterfaceDefaultsToNetworkRouteTable(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	network, err := st.CreateNetwork(ctx, store.Network{
+		Name: "route-default", BridgeDomainID: 902, IPv4CIDR: "10.20.0.0/24", IPv6CIDR: "fd00:20::/64",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SetNetworkRouteTable(ctx, network.ID, 100002); err != nil {
+		t.Fatal(err)
+	}
+	iface, err := st.CreateInterface(ctx, store.VirtualInterface{
+		Name: "route-default-eth0", NetworkID: network.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if iface.IPv4TableID != 100002 || iface.IPv6TableID != 100002 {
+		t.Fatalf("interface route tables = %d/%d, want 100002/100002", iface.IPv4TableID, iface.IPv6TableID)
+	}
+}
+
+func TestDiskProvisioningSettings(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	disk, err := st.CreateDisk(ctx, store.Disk{
+		Name: "template", SizeGB: 5, VG: "vg0", ThinPool: "pool", IsTemplate: true,
+		ProvisioningScript: "/usr/local/bin/provision", ProvisioningTimeout: "5m",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if disk.ProvisioningScript != "/usr/local/bin/provision" || disk.ProvisioningTimeout != "5m" {
+		t.Fatalf("disk provisioning = %+v", disk)
+	}
+	updated, err := st.SetDiskProvisioning(ctx, disk.ID, "/usr/local/bin/provision2", "1m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ProvisioningScript != "/usr/local/bin/provision2" || updated.ProvisioningTimeout != "1m" {
+		t.Fatalf("updated disk provisioning = %+v", updated)
 	}
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 )
@@ -44,6 +45,9 @@ func (d *diskDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 			"is_template":          dschema.BoolAttribute{Computed: true},
 			"template_disk_id":     dschema.Int64Attribute{Computed: true},
 			"template_disk_name":   dschema.StringAttribute{Computed: true},
+			"provisioning_script":  dschema.StringAttribute{Computed: true},
+			"provisioning_timeout": dschema.StringAttribute{Computed: true},
+			"provisioning_json":    dschema.StringAttribute{Computed: true},
 		},
 	}
 }
@@ -82,6 +86,7 @@ func (d *diskDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 		return
 	}
 	setDiskState(&config, disk)
+	config.ProvisioningJSON = types.StringNull()
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 

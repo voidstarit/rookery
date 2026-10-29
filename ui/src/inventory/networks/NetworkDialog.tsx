@@ -3,16 +3,18 @@ import { api } from "../../shared/api";
 import type { Network } from "../types";
 
 type NetworkDialogProps = {
+  network?: Network | null;
   onClose: () => void;
   onSaved: (network: Network) => void;
 };
 
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
-export function NetworkDialog({ onClose, onSaved }: NetworkDialogProps) {
-  const [name, setName] = useState("");
-  const [ipv4CIDR, setIpv4CIDR] = useState("10.0.0.0/16");
-  const [ipv6CIDR, setIpv6CIDR] = useState("fd00:20::/64");
+export function NetworkDialog({ network, onClose, onSaved }: NetworkDialogProps) {
+  const editing = Boolean(network);
+  const [name, setName] = useState(network?.name || "");
+  const [ipv4CIDR, setIpv4CIDR] = useState(network?.ipv4_cidr || "10.0.0.0/16");
+  const [ipv6CIDR, setIpv6CIDR] = useState(network?.ipv6_cidr || "fd00:20::/64");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDialogElement | null>(null);
@@ -38,15 +40,18 @@ export function NetworkDialog({ onClose, onSaved }: NetworkDialogProps) {
     setError("");
     setSaving(true);
     try {
-      const network = await api<Network>("/api/networks", {
-        method: "POST",
-        body: JSON.stringify({
-          name: name.trim(),
-          ipv4_cidr: ipv4CIDR.trim(),
-          ipv6_cidr: ipv6CIDR.trim(),
-        }),
-      });
-      onSaved(network);
+      const saved = await api<Network>(
+        editing && network ? `/api/networks/${network.id}` : "/api/networks",
+        {
+          method: editing ? "PUT" : "POST",
+          body: JSON.stringify(
+            editing
+              ? { ipv4_cidr: ipv4CIDR.trim(), ipv6_cidr: ipv6CIDR.trim() }
+              : { name: name.trim(), ipv4_cidr: ipv4CIDR.trim(), ipv6_cidr: ipv6CIDR.trim() }
+          ),
+        }
+      );
+      onSaved(saved);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -75,7 +80,7 @@ export function NetworkDialog({ onClose, onSaved }: NetworkDialogProps) {
         <header class="dialog-head">
           <div>
             <p class="eyebrow">VPP bridge domain</p>
-            <h2 id="network-dialog-title">Create Rookery Network</h2>
+            <h2 id="network-dialog-title">{editing ? "Edit Rookery Network" : "Create Rookery Network"}</h2>
           </div>
           <button class="icon-button" type="button" aria-label="Close dialog" onClick={close}>
             ×
@@ -95,9 +100,12 @@ export function NetworkDialog({ onClose, onSaved }: NetworkDialogProps) {
               spellcheck={false}
               placeholder="lab-net"
               value={name}
+              disabled={editing}
               onInput={(event) => setName(event.currentTarget.value)}
             />
-            <span class="field-hint">Letters, digits, dots, dashes and underscores.</span>
+            <span class="field-hint">
+              {editing ? "The network name is immutable." : "Letters, digits, dots, dashes and underscores."}
+            </span>
           </label>
 
           <label class="field">
@@ -111,7 +119,10 @@ export function NetworkDialog({ onClose, onSaved }: NetworkDialogProps) {
               value={ipv4CIDR}
               onInput={(event) => setIpv4CIDR(event.currentTarget.value)}
             />
-            <span class="field-hint">Address range for this network; .1 is the BVI and .2 the VNF stack.</span>
+            <span class="field-hint">
+              Address range for this network; .1 is the BVI and .2 the VNF stack.
+              {editing ? " CIDRs can only be changed while the network has no VNFs, host taps, or BVI." : ""}
+            </span>
           </label>
 
           <label class="field">

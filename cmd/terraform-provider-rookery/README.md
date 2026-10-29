@@ -67,29 +67,109 @@ provider "rookery" {
 | Resource | Notes |
 | --- | --- |
 | `rookery_storage_backend` | LVM thin-pool backend |
-| `rookery_disk` | Thin volume or template clone |
+| `rookery_disk` | Thin volume, template, or provisioned template clone |
 | `rookery_media` | Read-only ISO/image path |
 | `rookery_network` | VPP bridge domain + isolated VRF |
+| `rookery_network_pipe` | L2 pipe pair between two networks |
 | `rookery_interface` | vhost-user interface, optional VM, ACLs, route tables (`ipv4_table_id`/`ipv6_table_id` are VPP table ids; use `rookery_route_table.app.table_id`) |
+| `rookery_host_tap` | Persistent VPP tap between a network and the Linux host |
+| `rookery_vpp_interface_addresses` | Managed IPv4/IPv6 addresses and DHCP client for a Rookery VPP interface |
+| `rookery_vpp_interface_route_tables` | IPv4/IPv6 FIB binding for a host interface, host tap, or pipe endpoint |
 | `rookery_acl` | Ordered permit/deny rule set |
 | `rookery_route_table` | Custom VRF table (IDs 100000+ are reserved) |
-| `rookery_route` | Static route in a route table |
+| `rookery_route` | Static route in a route table, including VPP path options |
 | `rookery_vnf` | DHCPv4/DHCPv6/NAT44/BGP network function |
 | `rookery_vm` | VM definition, disks, interfaces, boot media |
 | `rookery_host_interface` | Take a physical NIC into VPP |
+| `rookery_startup_script` | Server-level Rookery or VPP reconnect script |
 
 VM power actions (`start`, `stop`, `reset`, `ctrl-alt-del`) are deliberately
 not part of `rookery_vm`; use the Rookery UI or API for runtime operations.
+Creating a VM starts it, so a freshly applied `rookery_vm` reports
+`status = "running"`; stop it explicitly when you need it down.
+Rookery also persists the desired power state, so VMs that were running come
+back after an API restart or host reboot, while explicitly stopped VMs stay
+down.
 Changing `disk_ids` or `interface_ids` requires the VM to be stopped.
-`rookery_media`, `rookery_network`, and `rookery_route_table` are immutable and
-replaced when changed. `rookery_route` is also immutable.
+`rookery_media` and `rookery_route_table` are immutable and replaced when
+changed. `rookery_network` names remain immutable, but its `ipv4_cidr` and
+`ipv6_cidr` can be updated while the network has no VNFs, host taps, or BVI.
+`rookery_route` is also immutable.
+
+`rookery_disk` templates can set `provisioning_script` and
+`provisioning_timeout`. Clones created with `template_disk_id` can pass
+`provisioning_json = jsonencode({...})`; the object is sent to the template
+script through `ROOKERY_PROVISION_JSON` under `properties`. An omitted or empty
+`provisioning_json` skips provisioning entirely. The reference script
+`scripts/template-provision.sh` handles both whole-disk filesystems and
+partitioned LVM clones, logs the received payload and each stage, and always
+attempts to unmount the clone. Set `resize_disk = true` in the provisioning
+object to extend the root partition and grow the filesystem. The reference
+script supports a DOS table with root followed by an extended/swap partition
+(the swap is moved and recreated with the same UUID/label) and a single-root
+partition. Other layouts are resized only within their current partition.
+
+`rookery_network_pipe` exposes computed `endpoint_a_name` and
+`endpoint_b_name` values (`pipe<instance>.0` and `.1`) for use with
+`rookery_vpp_interface_addresses` and `rookery_vpp_interface_route_tables`.
+Pipes are immutable; replace the resource to change the network pair.
+
+`rookery_host_tap` creates a persistent host-side tap. Its `name` defaults to
+`hostnet<network_id>`, and `ipv4_address` may be omitted. Use the VPP address
+resource for additional IPv4/IPv6 addresses.
+
+`rookery_vpp_interface_addresses` manages the complete Rookery address set and
+IPv4 DHCP client state for one interface. Set `addresses = []` explicitly to
+clear addresses and set `dhcp_client_enabled = false` to disable DHCP;
+destroying the resource clears managed addresses and disables DHCP. The
+interface can be a vhost-user interface (`name` from `rookery_interface`), a
+host interface (`host-<nic>`), a host tap (its `name`), a pipe endpoint, or a
+VNF tap.
+
+`rookery_vpp_interface_route_tables` binds a host interface, host tap, or pipe
+endpoint to IPv4/IPv6 tables; use `0` for the default table. Destroying the
+resource removes the override and restores the automatic default (the network
+VRF for host taps, or the default table for host interfaces and pipe
+endpoints). Vhost-user interfaces use `rookery_interface`'s
+`ipv4_table_id`/`ipv6_table_id` fields instead.
+
+`rookery_startup_script` manages a server-level script with `kind = "rookery"`
+(once per API process) or `kind = "vpp"` (on every VPP connection/reconnect).
+Only one resource of each kind should exist. Destroying the resource disables
+the script but keeps its text for troubleshooting.
+
+`rookery_route` exposes the VPP path options `route_count`, `next_hop_table`,
+`weight`, `udp_encap`, `ipv4_lookup_table`, `ipv6_lookup_table`,
+`mpls_lookup_table`, `resolve_via_host`, `resolve_via_connected`,
+`rx_ipv4_interface`, `rx_ipv6_interface`, `out_labels`, `drop`, and
+`description`. `next_hop_table` and the IPv4/IPv6 lookup tables take the
+Rookery route-table name; use `default` for table `0`. Numeric options are
+nullable: omit one to leave it out of the VPP command, or set it to `0`
+explicitly when zero is meaningful, for example:
+
+```hcl
+resource "rookery_route" "lookup" {
+  route_table_id    = 0
+  ipv6              = false
+  prefix            = "10.10.1.0/24"
+  ipv4_lookup_table = "app-vrf"
+}
+```
 
 `rookery_vnf.config_json` uses protobuf JSON. Write proto field names (for
 example `range_start`, `outside_interface`, `advertise_prefixes`) and use
-`jsonencode({...})`. The provider reads configuration back with proto field
-names. For DHCPv4, `transport` can be omitted (use the network default),
-`"shared"`, `"dedicated"`, or `"tap"`; `"memif"` is the legacy alias for a
-dedicated memif.
+`jsonencode({...})`. The provider stores the configured JSON as-is, and the
+server normalizes some fields (the `bind_ip` and `gateway` it derives for a
+DHCPv4 VNF on a NAT network, the default `lease_time`). Use the `rookery_vnf`
+data source when you need the server's canonical configuration. For DHCPv4,
+`transport` can be omitted (use the network default), `"shared"`,
+`"dedicated"`, or `"tap"`; `"memif"` is the legacy alias for a dedicated memif.
+
+DHCPv4 and DHCPv6 VNFs can integrate with a DNS VNF on the same network by
+setting `dns_vnf_id`, `dns_domain` (the suffix for generated names), and
+optionally `dns_ttl` (default `300`). The DNS VNF maintains A/AAAA and PTR
+records for active leases. Set the DHCP `dns` field to the DNS VNF's `.2`
+service address (IPv4 for DHCPv4, IPv6 for DHCPv6) so clients use it.
 
 ## Data sources
 
@@ -102,13 +182,18 @@ Each resource has a matching data source:
 | `rookery_disk` | `id` or `name` |
 | `rookery_media` | `id` or `name` |
 | `rookery_network` | `id` or `name` |
+| `rookery_network_pipe` | `id`, or `network_a_id` + `network_b_id` |
 | `rookery_interface` | `id` or `name` |
+| `rookery_host_tap` | `id` or `name` |
+| `rookery_vpp_interface_addresses` | `name` |
+| `rookery_vpp_interface_route_tables` | `name` |
 | `rookery_acl` | `id` or `name` |
 | `rookery_route_table` | `id`, `table_id` + `ipv6`, or `name` + optional `ipv6` |
 | `rookery_route` | `route_table_id` + `ipv6` + `id`, or `route_table_id` + `ipv6` + `prefix` |
 | `rookery_vnf` | `id` or `name` |
 | `rookery_vm` | `id` or `name` |
 | `rookery_host_interface` | `nic` |
+| `rookery_startup_script` | `kind` (`rookery` or `vpp`) |
 
 For route tables and routes, `route_table_id = 0` refers to the default table.
 The two default route tables share record id 0, so set `ipv6` when looking one
@@ -123,6 +208,11 @@ Most resources import by numeric id:
 terraform import rookery_network.app 3
 terraform import rookery_vm.app 0f8d4a5e-...
 terraform import rookery_host_interface.uplink enp1s0
+terraform import rookery_network_pipe.app_edge 7
+terraform import rookery_host_tap.app 4
+terraform import rookery_vpp_interface_addresses.app_vm0 app-vm0
+terraform import rookery_vpp_interface_route_tables.app_tap hostnet1
+terraform import rookery_startup_script.vpp vpp
 ```
 
 Routes use a composite import id:
@@ -136,5 +226,7 @@ terraform import rookery_route.app 7/false/42
 
 ## Example
 
-See `examples/complete/main.tf` for a full network, disk, VM, ACL, route, and
-DHCP VNF example.
+See `examples/complete/main.tf` for a full network, disk, VM, ACL, route,
+DHCP VNF, host tap, network pipe, address, route-table, startup-script, and
+template-provisioning example. See `examples/data-sources/main.tf` for the
+matching data sources.

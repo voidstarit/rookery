@@ -175,6 +175,7 @@ func (s *Server) DeleteNetworkHostTap(ctx context.Context, tap store.NetworkHost
 		}
 		return hostTapInternalError(err)
 	}
+	_ = s.store.DeleteVPPInterfaceAddresses(ctx, tap.Name)
 	s.logger.Info().
 		Str("network", tap.NetworkName).
 		Str("interface", tap.Name).

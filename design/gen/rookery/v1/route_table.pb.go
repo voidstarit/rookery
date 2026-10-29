@@ -314,21 +314,35 @@ func (x *ListFIBRoutesResponse) GetRoutes() []*FIBRoute {
 }
 
 type Route struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Id              int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	RouteTableId    int64                  `protobuf:"varint,2,opt,name=route_table_id,json=routeTableId,proto3" json:"route_table_id,omitempty"`
-	TableId         uint32                 `protobuf:"varint,3,opt,name=table_id,json=tableId,proto3" json:"table_id,omitempty"`
-	Ipv6            bool                   `protobuf:"varint,4,opt,name=ipv6,proto3" json:"ipv6,omitempty"`
-	Prefix          string                 `protobuf:"bytes,5,opt,name=prefix,proto3" json:"prefix,omitempty"`
-	NextHop         string                 `protobuf:"bytes,6,opt,name=next_hop,json=nextHop,proto3" json:"next_hop,omitempty"`
-	InterfaceId     *int64                 `protobuf:"varint,7,opt,name=interface_id,json=interfaceId,proto3,oneof" json:"interface_id,omitempty"`
-	InterfaceName   string                 `protobuf:"bytes,8,opt,name=interface_name,json=interfaceName,proto3" json:"interface_name,omitempty"`
-	EgressInterface string                 `protobuf:"bytes,11,opt,name=egress_interface,json=egressInterface,proto3" json:"egress_interface,omitempty"`
-	Preference      uint32                 `protobuf:"varint,12,opt,name=preference,proto3" json:"preference,omitempty"`
-	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Id                  int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	RouteTableId        int64                  `protobuf:"varint,2,opt,name=route_table_id,json=routeTableId,proto3" json:"route_table_id,omitempty"`
+	TableId             uint32                 `protobuf:"varint,3,opt,name=table_id,json=tableId,proto3" json:"table_id,omitempty"`
+	Ipv6                bool                   `protobuf:"varint,4,opt,name=ipv6,proto3" json:"ipv6,omitempty"`
+	Prefix              string                 `protobuf:"bytes,5,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	NextHop             string                 `protobuf:"bytes,6,opt,name=next_hop,json=nextHop,proto3" json:"next_hop,omitempty"`
+	InterfaceId         *int64                 `protobuf:"varint,7,opt,name=interface_id,json=interfaceId,proto3,oneof" json:"interface_id,omitempty"`
+	InterfaceName       string                 `protobuf:"bytes,8,opt,name=interface_name,json=interfaceName,proto3" json:"interface_name,omitempty"`
+	EgressInterface     string                 `protobuf:"bytes,11,opt,name=egress_interface,json=egressInterface,proto3" json:"egress_interface,omitempty"`
+	Preference          *uint32                `protobuf:"varint,12,opt,name=preference,proto3,oneof" json:"preference,omitempty"`
+	CreatedAt           *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt           *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Count               *uint32                `protobuf:"varint,13,opt,name=count,proto3,oneof" json:"count,omitempty"`
+	NextHopTable        string                 `protobuf:"bytes,14,opt,name=next_hop_table,json=nextHopTable,proto3" json:"next_hop_table,omitempty"`
+	Weight              *uint32                `protobuf:"varint,15,opt,name=weight,proto3,oneof" json:"weight,omitempty"`
+	UdpEncap            *uint32                `protobuf:"varint,16,opt,name=udp_encap,json=udpEncap,proto3,oneof" json:"udp_encap,omitempty"`
+	Ipv4LookupTable     string                 `protobuf:"bytes,17,opt,name=ipv4_lookup_table,json=ipv4LookupTable,proto3" json:"ipv4_lookup_table,omitempty"`
+	Ipv6LookupTable     string                 `protobuf:"bytes,18,opt,name=ipv6_lookup_table,json=ipv6LookupTable,proto3" json:"ipv6_lookup_table,omitempty"`
+	MplsLookupTable     *uint32                `protobuf:"varint,19,opt,name=mpls_lookup_table,json=mplsLookupTable,proto3,oneof" json:"mpls_lookup_table,omitempty"`
+	ResolveViaHost      bool                   `protobuf:"varint,20,opt,name=resolve_via_host,json=resolveViaHost,proto3" json:"resolve_via_host,omitempty"`
+	ResolveViaConnected bool                   `protobuf:"varint,21,opt,name=resolve_via_connected,json=resolveViaConnected,proto3" json:"resolve_via_connected,omitempty"`
+	RxIpv4Interface     string                 `protobuf:"bytes,22,opt,name=rx_ipv4_interface,json=rxIpv4Interface,proto3" json:"rx_ipv4_interface,omitempty"`
+	RxIpv6Interface     string                 `protobuf:"bytes,23,opt,name=rx_ipv6_interface,json=rxIpv6Interface,proto3" json:"rx_ipv6_interface,omitempty"`
+	OutLabels           []uint32               `protobuf:"varint,24,rep,packed,name=out_labels,json=outLabels,proto3" json:"out_labels,omitempty"`
+	Drop                bool                   `protobuf:"varint,25,opt,name=drop,proto3" json:"drop,omitempty"`
+	Description         string                 `protobuf:"bytes,26,opt,name=description,proto3" json:"description,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *Route) Reset() {
@@ -425,8 +439,8 @@ func (x *Route) GetEgressInterface() string {
 }
 
 func (x *Route) GetPreference() uint32 {
-	if x != nil {
-		return x.Preference
+	if x != nil && x.Preference != nil {
+		return *x.Preference
 	}
 	return 0
 }
@@ -443,6 +457,104 @@ func (x *Route) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *Route) GetCount() uint32 {
+	if x != nil && x.Count != nil {
+		return *x.Count
+	}
+	return 0
+}
+
+func (x *Route) GetNextHopTable() string {
+	if x != nil {
+		return x.NextHopTable
+	}
+	return ""
+}
+
+func (x *Route) GetWeight() uint32 {
+	if x != nil && x.Weight != nil {
+		return *x.Weight
+	}
+	return 0
+}
+
+func (x *Route) GetUdpEncap() uint32 {
+	if x != nil && x.UdpEncap != nil {
+		return *x.UdpEncap
+	}
+	return 0
+}
+
+func (x *Route) GetIpv4LookupTable() string {
+	if x != nil {
+		return x.Ipv4LookupTable
+	}
+	return ""
+}
+
+func (x *Route) GetIpv6LookupTable() string {
+	if x != nil {
+		return x.Ipv6LookupTable
+	}
+	return ""
+}
+
+func (x *Route) GetMplsLookupTable() uint32 {
+	if x != nil && x.MplsLookupTable != nil {
+		return *x.MplsLookupTable
+	}
+	return 0
+}
+
+func (x *Route) GetResolveViaHost() bool {
+	if x != nil {
+		return x.ResolveViaHost
+	}
+	return false
+}
+
+func (x *Route) GetResolveViaConnected() bool {
+	if x != nil {
+		return x.ResolveViaConnected
+	}
+	return false
+}
+
+func (x *Route) GetRxIpv4Interface() string {
+	if x != nil {
+		return x.RxIpv4Interface
+	}
+	return ""
+}
+
+func (x *Route) GetRxIpv6Interface() string {
+	if x != nil {
+		return x.RxIpv6Interface
+	}
+	return ""
+}
+
+func (x *Route) GetOutLabels() []uint32 {
+	if x != nil {
+		return x.OutLabels
+	}
+	return nil
+}
+
+func (x *Route) GetDrop() bool {
+	if x != nil {
+		return x.Drop
+	}
+	return false
+}
+
+func (x *Route) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
 }
 
 type ListRoutesRequest struct {
@@ -542,16 +654,30 @@ func (x *ListRoutesResponse) GetRoutes() []*Route {
 }
 
 type CreateRouteRequest struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	RouteTableId    int64                  `protobuf:"varint,1,opt,name=route_table_id,json=routeTableId,proto3" json:"route_table_id,omitempty"`
-	Ipv6            bool                   `protobuf:"varint,2,opt,name=ipv6,proto3" json:"ipv6,omitempty"`
-	Prefix          string                 `protobuf:"bytes,3,opt,name=prefix,proto3" json:"prefix,omitempty"`
-	NextHop         string                 `protobuf:"bytes,4,opt,name=next_hop,json=nextHop,proto3" json:"next_hop,omitempty"`
-	InterfaceId     *int64                 `protobuf:"varint,5,opt,name=interface_id,json=interfaceId,proto3,oneof" json:"interface_id,omitempty"`
-	EgressInterface string                 `protobuf:"bytes,6,opt,name=egress_interface,json=egressInterface,proto3" json:"egress_interface,omitempty"`
-	Preference      uint32                 `protobuf:"varint,7,opt,name=preference,proto3" json:"preference,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	RouteTableId        int64                  `protobuf:"varint,1,opt,name=route_table_id,json=routeTableId,proto3" json:"route_table_id,omitempty"`
+	Ipv6                bool                   `protobuf:"varint,2,opt,name=ipv6,proto3" json:"ipv6,omitempty"`
+	Prefix              string                 `protobuf:"bytes,3,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	NextHop             string                 `protobuf:"bytes,4,opt,name=next_hop,json=nextHop,proto3" json:"next_hop,omitempty"`
+	InterfaceId         *int64                 `protobuf:"varint,5,opt,name=interface_id,json=interfaceId,proto3,oneof" json:"interface_id,omitempty"`
+	EgressInterface     string                 `protobuf:"bytes,6,opt,name=egress_interface,json=egressInterface,proto3" json:"egress_interface,omitempty"`
+	Preference          *uint32                `protobuf:"varint,7,opt,name=preference,proto3,oneof" json:"preference,omitempty"`
+	Count               *uint32                `protobuf:"varint,8,opt,name=count,proto3,oneof" json:"count,omitempty"`
+	NextHopTable        string                 `protobuf:"bytes,9,opt,name=next_hop_table,json=nextHopTable,proto3" json:"next_hop_table,omitempty"`
+	Weight              *uint32                `protobuf:"varint,10,opt,name=weight,proto3,oneof" json:"weight,omitempty"`
+	UdpEncap            *uint32                `protobuf:"varint,11,opt,name=udp_encap,json=udpEncap,proto3,oneof" json:"udp_encap,omitempty"`
+	Ipv4LookupTable     string                 `protobuf:"bytes,12,opt,name=ipv4_lookup_table,json=ipv4LookupTable,proto3" json:"ipv4_lookup_table,omitempty"`
+	Ipv6LookupTable     string                 `protobuf:"bytes,13,opt,name=ipv6_lookup_table,json=ipv6LookupTable,proto3" json:"ipv6_lookup_table,omitempty"`
+	MplsLookupTable     *uint32                `protobuf:"varint,14,opt,name=mpls_lookup_table,json=mplsLookupTable,proto3,oneof" json:"mpls_lookup_table,omitempty"`
+	ResolveViaHost      bool                   `protobuf:"varint,15,opt,name=resolve_via_host,json=resolveViaHost,proto3" json:"resolve_via_host,omitempty"`
+	ResolveViaConnected bool                   `protobuf:"varint,16,opt,name=resolve_via_connected,json=resolveViaConnected,proto3" json:"resolve_via_connected,omitempty"`
+	RxIpv4Interface     string                 `protobuf:"bytes,17,opt,name=rx_ipv4_interface,json=rxIpv4Interface,proto3" json:"rx_ipv4_interface,omitempty"`
+	RxIpv6Interface     string                 `protobuf:"bytes,18,opt,name=rx_ipv6_interface,json=rxIpv6Interface,proto3" json:"rx_ipv6_interface,omitempty"`
+	OutLabels           []uint32               `protobuf:"varint,19,rep,packed,name=out_labels,json=outLabels,proto3" json:"out_labels,omitempty"`
+	Drop                bool                   `protobuf:"varint,20,opt,name=drop,proto3" json:"drop,omitempty"`
+	Description         string                 `protobuf:"bytes,21,opt,name=description,proto3" json:"description,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *CreateRouteRequest) Reset() {
@@ -627,10 +753,304 @@ func (x *CreateRouteRequest) GetEgressInterface() string {
 }
 
 func (x *CreateRouteRequest) GetPreference() uint32 {
-	if x != nil {
-		return x.Preference
+	if x != nil && x.Preference != nil {
+		return *x.Preference
 	}
 	return 0
+}
+
+func (x *CreateRouteRequest) GetCount() uint32 {
+	if x != nil && x.Count != nil {
+		return *x.Count
+	}
+	return 0
+}
+
+func (x *CreateRouteRequest) GetNextHopTable() string {
+	if x != nil {
+		return x.NextHopTable
+	}
+	return ""
+}
+
+func (x *CreateRouteRequest) GetWeight() uint32 {
+	if x != nil && x.Weight != nil {
+		return *x.Weight
+	}
+	return 0
+}
+
+func (x *CreateRouteRequest) GetUdpEncap() uint32 {
+	if x != nil && x.UdpEncap != nil {
+		return *x.UdpEncap
+	}
+	return 0
+}
+
+func (x *CreateRouteRequest) GetIpv4LookupTable() string {
+	if x != nil {
+		return x.Ipv4LookupTable
+	}
+	return ""
+}
+
+func (x *CreateRouteRequest) GetIpv6LookupTable() string {
+	if x != nil {
+		return x.Ipv6LookupTable
+	}
+	return ""
+}
+
+func (x *CreateRouteRequest) GetMplsLookupTable() uint32 {
+	if x != nil && x.MplsLookupTable != nil {
+		return *x.MplsLookupTable
+	}
+	return 0
+}
+
+func (x *CreateRouteRequest) GetResolveViaHost() bool {
+	if x != nil {
+		return x.ResolveViaHost
+	}
+	return false
+}
+
+func (x *CreateRouteRequest) GetResolveViaConnected() bool {
+	if x != nil {
+		return x.ResolveViaConnected
+	}
+	return false
+}
+
+func (x *CreateRouteRequest) GetRxIpv4Interface() string {
+	if x != nil {
+		return x.RxIpv4Interface
+	}
+	return ""
+}
+
+func (x *CreateRouteRequest) GetRxIpv6Interface() string {
+	if x != nil {
+		return x.RxIpv6Interface
+	}
+	return ""
+}
+
+func (x *CreateRouteRequest) GetOutLabels() []uint32 {
+	if x != nil {
+		return x.OutLabels
+	}
+	return nil
+}
+
+func (x *CreateRouteRequest) GetDrop() bool {
+	if x != nil {
+		return x.Drop
+	}
+	return false
+}
+
+func (x *CreateRouteRequest) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+type UpdateRouteRequest struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Id                  int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Prefix              string                 `protobuf:"bytes,2,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	NextHop             string                 `protobuf:"bytes,3,opt,name=next_hop,json=nextHop,proto3" json:"next_hop,omitempty"`
+	InterfaceId         *int64                 `protobuf:"varint,4,opt,name=interface_id,json=interfaceId,proto3,oneof" json:"interface_id,omitempty"`
+	EgressInterface     string                 `protobuf:"bytes,5,opt,name=egress_interface,json=egressInterface,proto3" json:"egress_interface,omitempty"`
+	Preference          *uint32                `protobuf:"varint,6,opt,name=preference,proto3,oneof" json:"preference,omitempty"`
+	Count               *uint32                `protobuf:"varint,7,opt,name=count,proto3,oneof" json:"count,omitempty"`
+	NextHopTable        string                 `protobuf:"bytes,8,opt,name=next_hop_table,json=nextHopTable,proto3" json:"next_hop_table,omitempty"`
+	Weight              *uint32                `protobuf:"varint,9,opt,name=weight,proto3,oneof" json:"weight,omitempty"`
+	UdpEncap            *uint32                `protobuf:"varint,10,opt,name=udp_encap,json=udpEncap,proto3,oneof" json:"udp_encap,omitempty"`
+	Ipv4LookupTable     string                 `protobuf:"bytes,11,opt,name=ipv4_lookup_table,json=ipv4LookupTable,proto3" json:"ipv4_lookup_table,omitempty"`
+	Ipv6LookupTable     string                 `protobuf:"bytes,12,opt,name=ipv6_lookup_table,json=ipv6LookupTable,proto3" json:"ipv6_lookup_table,omitempty"`
+	MplsLookupTable     *uint32                `protobuf:"varint,13,opt,name=mpls_lookup_table,json=mplsLookupTable,proto3,oneof" json:"mpls_lookup_table,omitempty"`
+	ResolveViaHost      bool                   `protobuf:"varint,14,opt,name=resolve_via_host,json=resolveViaHost,proto3" json:"resolve_via_host,omitempty"`
+	ResolveViaConnected bool                   `protobuf:"varint,15,opt,name=resolve_via_connected,json=resolveViaConnected,proto3" json:"resolve_via_connected,omitempty"`
+	RxIpv4Interface     string                 `protobuf:"bytes,16,opt,name=rx_ipv4_interface,json=rxIpv4Interface,proto3" json:"rx_ipv4_interface,omitempty"`
+	RxIpv6Interface     string                 `protobuf:"bytes,17,opt,name=rx_ipv6_interface,json=rxIpv6Interface,proto3" json:"rx_ipv6_interface,omitempty"`
+	OutLabels           []uint32               `protobuf:"varint,18,rep,packed,name=out_labels,json=outLabels,proto3" json:"out_labels,omitempty"`
+	Drop                bool                   `protobuf:"varint,19,opt,name=drop,proto3" json:"drop,omitempty"`
+	Description         string                 `protobuf:"bytes,20,opt,name=description,proto3" json:"description,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *UpdateRouteRequest) Reset() {
+	*x = UpdateRouteRequest{}
+	mi := &file_rookery_v1_route_table_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateRouteRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateRouteRequest) ProtoMessage() {}
+
+func (x *UpdateRouteRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_route_table_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateRouteRequest.ProtoReflect.Descriptor instead.
+func (*UpdateRouteRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_route_table_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *UpdateRouteRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *UpdateRouteRequest) GetPrefix() string {
+	if x != nil {
+		return x.Prefix
+	}
+	return ""
+}
+
+func (x *UpdateRouteRequest) GetNextHop() string {
+	if x != nil {
+		return x.NextHop
+	}
+	return ""
+}
+
+func (x *UpdateRouteRequest) GetInterfaceId() int64 {
+	if x != nil && x.InterfaceId != nil {
+		return *x.InterfaceId
+	}
+	return 0
+}
+
+func (x *UpdateRouteRequest) GetEgressInterface() string {
+	if x != nil {
+		return x.EgressInterface
+	}
+	return ""
+}
+
+func (x *UpdateRouteRequest) GetPreference() uint32 {
+	if x != nil && x.Preference != nil {
+		return *x.Preference
+	}
+	return 0
+}
+
+func (x *UpdateRouteRequest) GetCount() uint32 {
+	if x != nil && x.Count != nil {
+		return *x.Count
+	}
+	return 0
+}
+
+func (x *UpdateRouteRequest) GetNextHopTable() string {
+	if x != nil {
+		return x.NextHopTable
+	}
+	return ""
+}
+
+func (x *UpdateRouteRequest) GetWeight() uint32 {
+	if x != nil && x.Weight != nil {
+		return *x.Weight
+	}
+	return 0
+}
+
+func (x *UpdateRouteRequest) GetUdpEncap() uint32 {
+	if x != nil && x.UdpEncap != nil {
+		return *x.UdpEncap
+	}
+	return 0
+}
+
+func (x *UpdateRouteRequest) GetIpv4LookupTable() string {
+	if x != nil {
+		return x.Ipv4LookupTable
+	}
+	return ""
+}
+
+func (x *UpdateRouteRequest) GetIpv6LookupTable() string {
+	if x != nil {
+		return x.Ipv6LookupTable
+	}
+	return ""
+}
+
+func (x *UpdateRouteRequest) GetMplsLookupTable() uint32 {
+	if x != nil && x.MplsLookupTable != nil {
+		return *x.MplsLookupTable
+	}
+	return 0
+}
+
+func (x *UpdateRouteRequest) GetResolveViaHost() bool {
+	if x != nil {
+		return x.ResolveViaHost
+	}
+	return false
+}
+
+func (x *UpdateRouteRequest) GetResolveViaConnected() bool {
+	if x != nil {
+		return x.ResolveViaConnected
+	}
+	return false
+}
+
+func (x *UpdateRouteRequest) GetRxIpv4Interface() string {
+	if x != nil {
+		return x.RxIpv4Interface
+	}
+	return ""
+}
+
+func (x *UpdateRouteRequest) GetRxIpv6Interface() string {
+	if x != nil {
+		return x.RxIpv6Interface
+	}
+	return ""
+}
+
+func (x *UpdateRouteRequest) GetOutLabels() []uint32 {
+	if x != nil {
+		return x.OutLabels
+	}
+	return nil
+}
+
+func (x *UpdateRouteRequest) GetDrop() bool {
+	if x != nil {
+		return x.Drop
+	}
+	return false
+}
+
+func (x *UpdateRouteRequest) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
 }
 
 type DeleteRouteRequest struct {
@@ -642,7 +1062,7 @@ type DeleteRouteRequest struct {
 
 func (x *DeleteRouteRequest) Reset() {
 	*x = DeleteRouteRequest{}
-	mi := &file_rookery_v1_route_table_proto_msgTypes[8]
+	mi := &file_rookery_v1_route_table_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -654,7 +1074,7 @@ func (x *DeleteRouteRequest) String() string {
 func (*DeleteRouteRequest) ProtoMessage() {}
 
 func (x *DeleteRouteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_route_table_proto_msgTypes[8]
+	mi := &file_rookery_v1_route_table_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -667,7 +1087,7 @@ func (x *DeleteRouteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteRouteRequest.ProtoReflect.Descriptor instead.
 func (*DeleteRouteRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_route_table_proto_rawDescGZIP(), []int{8}
+	return file_rookery_v1_route_table_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *DeleteRouteRequest) GetId() int64 {
@@ -696,7 +1116,7 @@ type RouteTable struct {
 
 func (x *RouteTable) Reset() {
 	*x = RouteTable{}
-	mi := &file_rookery_v1_route_table_proto_msgTypes[9]
+	mi := &file_rookery_v1_route_table_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -708,7 +1128,7 @@ func (x *RouteTable) String() string {
 func (*RouteTable) ProtoMessage() {}
 
 func (x *RouteTable) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_route_table_proto_msgTypes[9]
+	mi := &file_rookery_v1_route_table_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -721,7 +1141,7 @@ func (x *RouteTable) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RouteTable.ProtoReflect.Descriptor instead.
 func (*RouteTable) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_route_table_proto_rawDescGZIP(), []int{9}
+	return file_rookery_v1_route_table_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *RouteTable) GetId() int64 {
@@ -809,7 +1229,7 @@ type ListRouteTablesRequest struct {
 
 func (x *ListRouteTablesRequest) Reset() {
 	*x = ListRouteTablesRequest{}
-	mi := &file_rookery_v1_route_table_proto_msgTypes[10]
+	mi := &file_rookery_v1_route_table_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -821,7 +1241,7 @@ func (x *ListRouteTablesRequest) String() string {
 func (*ListRouteTablesRequest) ProtoMessage() {}
 
 func (x *ListRouteTablesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_route_table_proto_msgTypes[10]
+	mi := &file_rookery_v1_route_table_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -834,7 +1254,7 @@ func (x *ListRouteTablesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRouteTablesRequest.ProtoReflect.Descriptor instead.
 func (*ListRouteTablesRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_route_table_proto_rawDescGZIP(), []int{10}
+	return file_rookery_v1_route_table_proto_rawDescGZIP(), []int{11}
 }
 
 type ListRouteTablesResponse struct {
@@ -846,7 +1266,7 @@ type ListRouteTablesResponse struct {
 
 func (x *ListRouteTablesResponse) Reset() {
 	*x = ListRouteTablesResponse{}
-	mi := &file_rookery_v1_route_table_proto_msgTypes[11]
+	mi := &file_rookery_v1_route_table_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -858,7 +1278,7 @@ func (x *ListRouteTablesResponse) String() string {
 func (*ListRouteTablesResponse) ProtoMessage() {}
 
 func (x *ListRouteTablesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_route_table_proto_msgTypes[11]
+	mi := &file_rookery_v1_route_table_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -871,7 +1291,7 @@ func (x *ListRouteTablesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRouteTablesResponse.ProtoReflect.Descriptor instead.
 func (*ListRouteTablesResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_route_table_proto_rawDescGZIP(), []int{11}
+	return file_rookery_v1_route_table_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ListRouteTablesResponse) GetRouteTables() []*RouteTable {
@@ -892,7 +1312,7 @@ type CreateRouteTableRequest struct {
 
 func (x *CreateRouteTableRequest) Reset() {
 	*x = CreateRouteTableRequest{}
-	mi := &file_rookery_v1_route_table_proto_msgTypes[12]
+	mi := &file_rookery_v1_route_table_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -904,7 +1324,7 @@ func (x *CreateRouteTableRequest) String() string {
 func (*CreateRouteTableRequest) ProtoMessage() {}
 
 func (x *CreateRouteTableRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_route_table_proto_msgTypes[12]
+	mi := &file_rookery_v1_route_table_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -917,7 +1337,7 @@ func (x *CreateRouteTableRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRouteTableRequest.ProtoReflect.Descriptor instead.
 func (*CreateRouteTableRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_route_table_proto_rawDescGZIP(), []int{12}
+	return file_rookery_v1_route_table_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *CreateRouteTableRequest) GetName() string {
@@ -950,7 +1370,7 @@ type DeleteRouteTableRequest struct {
 
 func (x *DeleteRouteTableRequest) Reset() {
 	*x = DeleteRouteTableRequest{}
-	mi := &file_rookery_v1_route_table_proto_msgTypes[13]
+	mi := &file_rookery_v1_route_table_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -962,7 +1382,7 @@ func (x *DeleteRouteTableRequest) String() string {
 func (*DeleteRouteTableRequest) ProtoMessage() {}
 
 func (x *DeleteRouteTableRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_route_table_proto_msgTypes[13]
+	mi := &file_rookery_v1_route_table_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -975,7 +1395,7 @@ func (x *DeleteRouteTableRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteRouteTableRequest.ProtoReflect.Descriptor instead.
 func (*DeleteRouteTableRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_route_table_proto_rawDescGZIP(), []int{13}
+	return file_rookery_v1_route_table_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *DeleteRouteTableRequest) GetId() int64 {
@@ -996,7 +1416,7 @@ type SetInterfaceRouteTablesRequest struct {
 
 func (x *SetInterfaceRouteTablesRequest) Reset() {
 	*x = SetInterfaceRouteTablesRequest{}
-	mi := &file_rookery_v1_route_table_proto_msgTypes[14]
+	mi := &file_rookery_v1_route_table_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1008,7 +1428,7 @@ func (x *SetInterfaceRouteTablesRequest) String() string {
 func (*SetInterfaceRouteTablesRequest) ProtoMessage() {}
 
 func (x *SetInterfaceRouteTablesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_route_table_proto_msgTypes[14]
+	mi := &file_rookery_v1_route_table_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1021,7 +1441,7 @@ func (x *SetInterfaceRouteTablesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetInterfaceRouteTablesRequest.ProtoReflect.Descriptor instead.
 func (*SetInterfaceRouteTablesRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_route_table_proto_rawDescGZIP(), []int{14}
+	return file_rookery_v1_route_table_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SetInterfaceRouteTablesRequest) GetId() int64 {
@@ -1076,7 +1496,7 @@ const file_rookery_v1_route_table_proto_rawDesc = "" +
 	"\x0eroute_table_id\x18\x01 \x01(\x03R\frouteTableId\x12\x12\n" +
 	"\x04ipv6\x18\x02 \x01(\bR\x04ipv6\"E\n" +
 	"\x15ListFIBRoutesResponse\x12,\n" +
-	"\x06routes\x18\x01 \x03(\v2\x14.rookery.v1.FIBRouteR\x06routes\"\xc0\x03\n" +
+	"\x06routes\x18\x01 \x03(\v2\x14.rookery.v1.FIBRouteR\x06routes\"\xa1\b\n" +
 	"\x05Route\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12$\n" +
 	"\x0eroute_table_id\x18\x02 \x01(\x03R\frouteTableId\x12\x19\n" +
@@ -1086,21 +1506,42 @@ const file_rookery_v1_route_table_proto_rawDesc = "" +
 	"\bnext_hop\x18\x06 \x01(\tR\anextHop\x12&\n" +
 	"\finterface_id\x18\a \x01(\x03H\x00R\vinterfaceId\x88\x01\x01\x12%\n" +
 	"\x0einterface_name\x18\b \x01(\tR\rinterfaceName\x12)\n" +
-	"\x10egress_interface\x18\v \x01(\tR\x0fegressInterface\x12\x1e\n" +
+	"\x10egress_interface\x18\v \x01(\tR\x0fegressInterface\x12#\n" +
 	"\n" +
-	"preference\x18\f \x01(\rR\n" +
-	"preference\x129\n" +
+	"preference\x18\f \x01(\rH\x01R\n" +
+	"preference\x88\x01\x01\x129\n" +
 	"\n" +
 	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
 	"updated_at\x18\n" +
-	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAtB\x0f\n" +
-	"\r_interface_id\"M\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x19\n" +
+	"\x05count\x18\r \x01(\rH\x02R\x05count\x88\x01\x01\x12$\n" +
+	"\x0enext_hop_table\x18\x0e \x01(\tR\fnextHopTable\x12\x1b\n" +
+	"\x06weight\x18\x0f \x01(\rH\x03R\x06weight\x88\x01\x01\x12 \n" +
+	"\tudp_encap\x18\x10 \x01(\rH\x04R\budpEncap\x88\x01\x01\x12*\n" +
+	"\x11ipv4_lookup_table\x18\x11 \x01(\tR\x0fipv4LookupTable\x12*\n" +
+	"\x11ipv6_lookup_table\x18\x12 \x01(\tR\x0fipv6LookupTable\x12/\n" +
+	"\x11mpls_lookup_table\x18\x13 \x01(\rH\x05R\x0fmplsLookupTable\x88\x01\x01\x12(\n" +
+	"\x10resolve_via_host\x18\x14 \x01(\bR\x0eresolveViaHost\x122\n" +
+	"\x15resolve_via_connected\x18\x15 \x01(\bR\x13resolveViaConnected\x12*\n" +
+	"\x11rx_ipv4_interface\x18\x16 \x01(\tR\x0frxIpv4Interface\x12*\n" +
+	"\x11rx_ipv6_interface\x18\x17 \x01(\tR\x0frxIpv6Interface\x12\x1d\n" +
+	"\n" +
+	"out_labels\x18\x18 \x03(\rR\toutLabels\x12\x12\n" +
+	"\x04drop\x18\x19 \x01(\bR\x04drop\x12 \n" +
+	"\vdescription\x18\x1a \x01(\tR\vdescriptionB\x0f\n" +
+	"\r_interface_idB\r\n" +
+	"\v_preferenceB\b\n" +
+	"\x06_countB\t\n" +
+	"\a_weightB\f\n" +
+	"\n" +
+	"_udp_encapB\x14\n" +
+	"\x12_mpls_lookup_table\"M\n" +
 	"\x11ListRoutesRequest\x12$\n" +
 	"\x0eroute_table_id\x18\x01 \x01(\x03R\frouteTableId\x12\x12\n" +
 	"\x04ipv6\x18\x02 \x01(\bR\x04ipv6\"?\n" +
 	"\x12ListRoutesResponse\x12)\n" +
-	"\x06routes\x18\x01 \x03(\v2\x11.rookery.v1.RouteR\x06routes\"\xb1\x02\n" +
+	"\x06routes\x18\x01 \x03(\v2\x11.rookery.v1.RouteR\x06routes\"\xf7\a\n" +
 	"\x12CreateRouteRequest\x12$\n" +
 	"\x0eroute_table_id\x18\x01 \x01(\x03R\frouteTableId\x12\x12\n" +
 	"\x04ipv6\x18\x02 \x01(\bR\x04ipv6\x12!\n" +
@@ -1109,11 +1550,77 @@ const file_rookery_v1_route_table_proto_rawDesc = "" +
 	"\xfaB\ar\x05\x18@\xd0\x01\x01R\anextHop\x12/\n" +
 	"\finterface_id\x18\x05 \x01(\x03B\a\xfaB\x04\"\x02 \x00H\x00R\vinterfaceId\x88\x01\x01\x125\n" +
 	"\x10egress_interface\x18\x06 \x01(\tB\n" +
-	"\xfaB\ar\x05\x18@\xd0\x01\x01R\x0fegressInterface\x12\x1e\n" +
+	"\xfaB\ar\x05\x18@\xd0\x01\x01R\x0fegressInterface\x12#\n" +
 	"\n" +
-	"preference\x18\a \x01(\rR\n" +
-	"preferenceB\x0f\n" +
-	"\r_interface_id\"-\n" +
+	"preference\x18\a \x01(\rH\x01R\n" +
+	"preference\x88\x01\x01\x12$\n" +
+	"\x05count\x18\b \x01(\rB\t\xfaB\x06*\x04\x18\xa0\x8d\x06H\x02R\x05count\x88\x01\x01\x120\n" +
+	"\x0enext_hop_table\x18\t \x01(\tB\n" +
+	"\xfaB\ar\x05\x18?\xd0\x01\x01R\fnextHopTable\x12%\n" +
+	"\x06weight\x18\n" +
+	" \x01(\rB\b\xfaB\x05*\x03\x18\xff\x01H\x03R\x06weight\x88\x01\x01\x12 \n" +
+	"\tudp_encap\x18\v \x01(\rH\x04R\budpEncap\x88\x01\x01\x126\n" +
+	"\x11ipv4_lookup_table\x18\f \x01(\tB\n" +
+	"\xfaB\ar\x05\x18?\xd0\x01\x01R\x0fipv4LookupTable\x126\n" +
+	"\x11ipv6_lookup_table\x18\r \x01(\tB\n" +
+	"\xfaB\ar\x05\x18?\xd0\x01\x01R\x0fipv6LookupTable\x12/\n" +
+	"\x11mpls_lookup_table\x18\x0e \x01(\rH\x05R\x0fmplsLookupTable\x88\x01\x01\x12(\n" +
+	"\x10resolve_via_host\x18\x0f \x01(\bR\x0eresolveViaHost\x122\n" +
+	"\x15resolve_via_connected\x18\x10 \x01(\bR\x13resolveViaConnected\x126\n" +
+	"\x11rx_ipv4_interface\x18\x11 \x01(\tB\n" +
+	"\xfaB\ar\x05\x18@\xd0\x01\x01R\x0frxIpv4Interface\x126\n" +
+	"\x11rx_ipv6_interface\x18\x12 \x01(\tB\n" +
+	"\xfaB\ar\x05\x18@\xd0\x01\x01R\x0frxIpv6Interface\x12'\n" +
+	"\n" +
+	"out_labels\x18\x13 \x03(\rB\b\xfaB\x05\x92\x01\x02\x10\x10R\toutLabels\x12\x12\n" +
+	"\x04drop\x18\x14 \x01(\bR\x04drop\x12*\n" +
+	"\vdescription\x18\x15 \x01(\tB\b\xfaB\x05r\x03\x18\xe8\aR\vdescriptionB\x0f\n" +
+	"\r_interface_idB\r\n" +
+	"\v_preferenceB\b\n" +
+	"\x06_countB\t\n" +
+	"\a_weightB\f\n" +
+	"\n" +
+	"_udp_encapB\x14\n" +
+	"\x12_mpls_lookup_table\"\xd6\a\n" +
+	"\x12UpdateRouteRequest\x12\x17\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x12!\n" +
+	"\x06prefix\x18\x02 \x01(\tB\t\xfaB\x06r\x04\x10\x01\x18@R\x06prefix\x12%\n" +
+	"\bnext_hop\x18\x03 \x01(\tB\n" +
+	"\xfaB\ar\x05\x18@\xd0\x01\x01R\anextHop\x12/\n" +
+	"\finterface_id\x18\x04 \x01(\x03B\a\xfaB\x04\"\x02 \x00H\x00R\vinterfaceId\x88\x01\x01\x125\n" +
+	"\x10egress_interface\x18\x05 \x01(\tB\n" +
+	"\xfaB\ar\x05\x18@\xd0\x01\x01R\x0fegressInterface\x12#\n" +
+	"\n" +
+	"preference\x18\x06 \x01(\rH\x01R\n" +
+	"preference\x88\x01\x01\x12$\n" +
+	"\x05count\x18\a \x01(\rB\t\xfaB\x06*\x04\x18\xa0\x8d\x06H\x02R\x05count\x88\x01\x01\x120\n" +
+	"\x0enext_hop_table\x18\b \x01(\tB\n" +
+	"\xfaB\ar\x05\x18?\xd0\x01\x01R\fnextHopTable\x12%\n" +
+	"\x06weight\x18\t \x01(\rB\b\xfaB\x05*\x03\x18\xff\x01H\x03R\x06weight\x88\x01\x01\x12 \n" +
+	"\tudp_encap\x18\n" +
+	" \x01(\rH\x04R\budpEncap\x88\x01\x01\x126\n" +
+	"\x11ipv4_lookup_table\x18\v \x01(\tB\n" +
+	"\xfaB\ar\x05\x18?\xd0\x01\x01R\x0fipv4LookupTable\x126\n" +
+	"\x11ipv6_lookup_table\x18\f \x01(\tB\n" +
+	"\xfaB\ar\x05\x18?\xd0\x01\x01R\x0fipv6LookupTable\x12/\n" +
+	"\x11mpls_lookup_table\x18\r \x01(\rH\x05R\x0fmplsLookupTable\x88\x01\x01\x12(\n" +
+	"\x10resolve_via_host\x18\x0e \x01(\bR\x0eresolveViaHost\x122\n" +
+	"\x15resolve_via_connected\x18\x0f \x01(\bR\x13resolveViaConnected\x126\n" +
+	"\x11rx_ipv4_interface\x18\x10 \x01(\tB\n" +
+	"\xfaB\ar\x05\x18@\xd0\x01\x01R\x0frxIpv4Interface\x126\n" +
+	"\x11rx_ipv6_interface\x18\x11 \x01(\tB\n" +
+	"\xfaB\ar\x05\x18@\xd0\x01\x01R\x0frxIpv6Interface\x12'\n" +
+	"\n" +
+	"out_labels\x18\x12 \x03(\rB\b\xfaB\x05\x92\x01\x02\x10\x10R\toutLabels\x12\x12\n" +
+	"\x04drop\x18\x13 \x01(\bR\x04drop\x12*\n" +
+	"\vdescription\x18\x14 \x01(\tB\b\xfaB\x05r\x03\x18\xe8\aR\vdescriptionB\x0f\n" +
+	"\r_interface_idB\r\n" +
+	"\v_preferenceB\b\n" +
+	"\x06_countB\t\n" +
+	"\a_weightB\f\n" +
+	"\n" +
+	"_udp_encapB\x14\n" +
+	"\x12_mpls_lookup_table\"-\n" +
 	"\x12DeleteRouteRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\xf7\x02\n" +
 	"\n" +
@@ -1147,7 +1654,7 @@ const file_rookery_v1_route_table_proto_rawDesc = "" +
 	"\x1eSetInterfaceRouteTablesRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x12\"\n" +
 	"\ripv4_table_id\x18\x02 \x01(\rR\vipv4TableId\x12\"\n" +
-	"\ripv6_table_id\x18\x03 \x01(\rR\vipv6TableId2\xfe\a\n" +
+	"\ripv6_table_id\x18\x03 \x01(\rR\vipv6TableId2\xdd\b\n" +
 	"\x11RouteTableService\x12\x83\x01\n" +
 	"\x0fListRouteTables\x12\".rookery.v1.ListRouteTablesRequest\x1a#.rookery.v1.ListRouteTablesResponse\"'\x82\xd3\xe4\x93\x02!b\froute_tables\x12\x11/api/route-tables\x12m\n" +
 	"\x10CreateRouteTable\x12#.rookery.v1.CreateRouteTableRequest\x1a\x16.rookery.v1.RouteTable\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/route-tables\x12o\n" +
@@ -1155,7 +1662,8 @@ const file_rookery_v1_route_table_proto_rawDesc = "" +
 	"\x17SetInterfaceRouteTables\x12*.rookery.v1.SetInterfaceRouteTablesRequest\x1a\x1c.rookery.v1.VirtualInterface\",\x82\xd3\xe4\x93\x02&:\x01*\x1a!/api/interfaces/{id}/route-tables\x12\x86\x01\n" +
 	"\n" +
 	"ListRoutes\x12\x1d.rookery.v1.ListRoutesRequest\x1a\x1e.rookery.v1.ListRoutesResponse\"9\x82\xd3\xe4\x93\x023b\x06routes\x12)/api/route-tables/{route_table_id}/routes\x12v\n" +
-	"\vCreateRoute\x12\x1e.rookery.v1.CreateRouteRequest\x1a\x11.rookery.v1.Route\"4\x82\xd3\xe4\x93\x02.:\x01*\")/api/route-tables/{route_table_id}/routes\x12_\n" +
+	"\vCreateRoute\x12\x1e.rookery.v1.CreateRouteRequest\x1a\x11.rookery.v1.Route\"4\x82\xd3\xe4\x93\x02.:\x01*\")/api/route-tables/{route_table_id}/routes\x12]\n" +
+	"\vUpdateRoute\x12\x1e.rookery.v1.UpdateRouteRequest\x1a\x11.rookery.v1.Route\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\x1a\x10/api/routes/{id}\x12_\n" +
 	"\vDeleteRoute\x12\x1e.rookery.v1.DeleteRouteRequest\x1a\x16.google.protobuf.Empty\"\x18\x82\xd3\xe4\x93\x02\x12*\x10/api/routes/{id}\x12\x8c\x01\n" +
 	"\rListFIBRoutes\x12 .rookery.v1.ListFIBRoutesRequest\x1a!.rookery.v1.ListFIBRoutesResponse\"6\x82\xd3\xe4\x93\x020b\x06routes\x12&/api/route-tables/{route_table_id}/fibB?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
 
@@ -1171,7 +1679,7 @@ func file_rookery_v1_route_table_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_route_table_proto_rawDescData
 }
 
-var file_rookery_v1_route_table_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_rookery_v1_route_table_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_rookery_v1_route_table_proto_goTypes = []any{
 	(*FIBPath)(nil),                        // 0: rookery.v1.FIBPath
 	(*FIBRoute)(nil),                       // 1: rookery.v1.FIBRoute
@@ -1181,44 +1689,47 @@ var file_rookery_v1_route_table_proto_goTypes = []any{
 	(*ListRoutesRequest)(nil),              // 5: rookery.v1.ListRoutesRequest
 	(*ListRoutesResponse)(nil),             // 6: rookery.v1.ListRoutesResponse
 	(*CreateRouteRequest)(nil),             // 7: rookery.v1.CreateRouteRequest
-	(*DeleteRouteRequest)(nil),             // 8: rookery.v1.DeleteRouteRequest
-	(*RouteTable)(nil),                     // 9: rookery.v1.RouteTable
-	(*ListRouteTablesRequest)(nil),         // 10: rookery.v1.ListRouteTablesRequest
-	(*ListRouteTablesResponse)(nil),        // 11: rookery.v1.ListRouteTablesResponse
-	(*CreateRouteTableRequest)(nil),        // 12: rookery.v1.CreateRouteTableRequest
-	(*DeleteRouteTableRequest)(nil),        // 13: rookery.v1.DeleteRouteTableRequest
-	(*SetInterfaceRouteTablesRequest)(nil), // 14: rookery.v1.SetInterfaceRouteTablesRequest
-	(*timestamppb.Timestamp)(nil),          // 15: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),                  // 16: google.protobuf.Empty
-	(*VirtualInterface)(nil),               // 17: rookery.v1.VirtualInterface
+	(*UpdateRouteRequest)(nil),             // 8: rookery.v1.UpdateRouteRequest
+	(*DeleteRouteRequest)(nil),             // 9: rookery.v1.DeleteRouteRequest
+	(*RouteTable)(nil),                     // 10: rookery.v1.RouteTable
+	(*ListRouteTablesRequest)(nil),         // 11: rookery.v1.ListRouteTablesRequest
+	(*ListRouteTablesResponse)(nil),        // 12: rookery.v1.ListRouteTablesResponse
+	(*CreateRouteTableRequest)(nil),        // 13: rookery.v1.CreateRouteTableRequest
+	(*DeleteRouteTableRequest)(nil),        // 14: rookery.v1.DeleteRouteTableRequest
+	(*SetInterfaceRouteTablesRequest)(nil), // 15: rookery.v1.SetInterfaceRouteTablesRequest
+	(*timestamppb.Timestamp)(nil),          // 16: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),                  // 17: google.protobuf.Empty
+	(*VirtualInterface)(nil),               // 18: rookery.v1.VirtualInterface
 }
 var file_rookery_v1_route_table_proto_depIdxs = []int32{
 	0,  // 0: rookery.v1.FIBRoute.paths:type_name -> rookery.v1.FIBPath
 	1,  // 1: rookery.v1.ListFIBRoutesResponse.routes:type_name -> rookery.v1.FIBRoute
-	15, // 2: rookery.v1.Route.created_at:type_name -> google.protobuf.Timestamp
-	15, // 3: rookery.v1.Route.updated_at:type_name -> google.protobuf.Timestamp
+	16, // 2: rookery.v1.Route.created_at:type_name -> google.protobuf.Timestamp
+	16, // 3: rookery.v1.Route.updated_at:type_name -> google.protobuf.Timestamp
 	4,  // 4: rookery.v1.ListRoutesResponse.routes:type_name -> rookery.v1.Route
-	15, // 5: rookery.v1.RouteTable.created_at:type_name -> google.protobuf.Timestamp
-	15, // 6: rookery.v1.RouteTable.updated_at:type_name -> google.protobuf.Timestamp
-	9,  // 7: rookery.v1.ListRouteTablesResponse.route_tables:type_name -> rookery.v1.RouteTable
-	10, // 8: rookery.v1.RouteTableService.ListRouteTables:input_type -> rookery.v1.ListRouteTablesRequest
-	12, // 9: rookery.v1.RouteTableService.CreateRouteTable:input_type -> rookery.v1.CreateRouteTableRequest
-	13, // 10: rookery.v1.RouteTableService.DeleteRouteTable:input_type -> rookery.v1.DeleteRouteTableRequest
-	14, // 11: rookery.v1.RouteTableService.SetInterfaceRouteTables:input_type -> rookery.v1.SetInterfaceRouteTablesRequest
+	16, // 5: rookery.v1.RouteTable.created_at:type_name -> google.protobuf.Timestamp
+	16, // 6: rookery.v1.RouteTable.updated_at:type_name -> google.protobuf.Timestamp
+	10, // 7: rookery.v1.ListRouteTablesResponse.route_tables:type_name -> rookery.v1.RouteTable
+	11, // 8: rookery.v1.RouteTableService.ListRouteTables:input_type -> rookery.v1.ListRouteTablesRequest
+	13, // 9: rookery.v1.RouteTableService.CreateRouteTable:input_type -> rookery.v1.CreateRouteTableRequest
+	14, // 10: rookery.v1.RouteTableService.DeleteRouteTable:input_type -> rookery.v1.DeleteRouteTableRequest
+	15, // 11: rookery.v1.RouteTableService.SetInterfaceRouteTables:input_type -> rookery.v1.SetInterfaceRouteTablesRequest
 	5,  // 12: rookery.v1.RouteTableService.ListRoutes:input_type -> rookery.v1.ListRoutesRequest
 	7,  // 13: rookery.v1.RouteTableService.CreateRoute:input_type -> rookery.v1.CreateRouteRequest
-	8,  // 14: rookery.v1.RouteTableService.DeleteRoute:input_type -> rookery.v1.DeleteRouteRequest
-	2,  // 15: rookery.v1.RouteTableService.ListFIBRoutes:input_type -> rookery.v1.ListFIBRoutesRequest
-	11, // 16: rookery.v1.RouteTableService.ListRouteTables:output_type -> rookery.v1.ListRouteTablesResponse
-	9,  // 17: rookery.v1.RouteTableService.CreateRouteTable:output_type -> rookery.v1.RouteTable
-	16, // 18: rookery.v1.RouteTableService.DeleteRouteTable:output_type -> google.protobuf.Empty
-	17, // 19: rookery.v1.RouteTableService.SetInterfaceRouteTables:output_type -> rookery.v1.VirtualInterface
-	6,  // 20: rookery.v1.RouteTableService.ListRoutes:output_type -> rookery.v1.ListRoutesResponse
-	4,  // 21: rookery.v1.RouteTableService.CreateRoute:output_type -> rookery.v1.Route
-	16, // 22: rookery.v1.RouteTableService.DeleteRoute:output_type -> google.protobuf.Empty
-	3,  // 23: rookery.v1.RouteTableService.ListFIBRoutes:output_type -> rookery.v1.ListFIBRoutesResponse
-	16, // [16:24] is the sub-list for method output_type
-	8,  // [8:16] is the sub-list for method input_type
+	8,  // 14: rookery.v1.RouteTableService.UpdateRoute:input_type -> rookery.v1.UpdateRouteRequest
+	9,  // 15: rookery.v1.RouteTableService.DeleteRoute:input_type -> rookery.v1.DeleteRouteRequest
+	2,  // 16: rookery.v1.RouteTableService.ListFIBRoutes:input_type -> rookery.v1.ListFIBRoutesRequest
+	12, // 17: rookery.v1.RouteTableService.ListRouteTables:output_type -> rookery.v1.ListRouteTablesResponse
+	10, // 18: rookery.v1.RouteTableService.CreateRouteTable:output_type -> rookery.v1.RouteTable
+	17, // 19: rookery.v1.RouteTableService.DeleteRouteTable:output_type -> google.protobuf.Empty
+	18, // 20: rookery.v1.RouteTableService.SetInterfaceRouteTables:output_type -> rookery.v1.VirtualInterface
+	6,  // 21: rookery.v1.RouteTableService.ListRoutes:output_type -> rookery.v1.ListRoutesResponse
+	4,  // 22: rookery.v1.RouteTableService.CreateRoute:output_type -> rookery.v1.Route
+	4,  // 23: rookery.v1.RouteTableService.UpdateRoute:output_type -> rookery.v1.Route
+	17, // 24: rookery.v1.RouteTableService.DeleteRoute:output_type -> google.protobuf.Empty
+	3,  // 25: rookery.v1.RouteTableService.ListFIBRoutes:output_type -> rookery.v1.ListFIBRoutesResponse
+	17, // [17:26] is the sub-list for method output_type
+	8,  // [8:17] is the sub-list for method input_type
 	8,  // [8:8] is the sub-list for extension type_name
 	8,  // [8:8] is the sub-list for extension extendee
 	0,  // [0:8] is the sub-list for field type_name
@@ -1232,13 +1743,14 @@ func file_rookery_v1_route_table_proto_init() {
 	file_rookery_v1_interface_proto_init()
 	file_rookery_v1_route_table_proto_msgTypes[4].OneofWrappers = []any{}
 	file_rookery_v1_route_table_proto_msgTypes[7].OneofWrappers = []any{}
+	file_rookery_v1_route_table_proto_msgTypes[8].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_route_table_proto_rawDesc), len(file_rookery_v1_route_table_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

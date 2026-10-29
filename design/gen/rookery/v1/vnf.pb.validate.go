@@ -1035,6 +1035,34 @@ func (m *VNFConfig) validate(all bool) error {
 
 	}
 
+	// no validation rules for DnsVnfId
+
+	if m.GetDnsDomain() != "" {
+
+		if utf8.RuneCountInString(m.GetDnsDomain()) > 253 {
+			err := VNFConfigValidationError{
+				field:  "DnsDomain",
+				reason: "value length must be at most 253 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.GetDnsTtl() > 86400 {
+		err := VNFConfigValidationError{
+			field:  "DnsTtl",
+			reason: "value must be less than or equal to 86400",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
 	if len(errors) > 0 {
 		return VNFConfigMultiError(errors)
 	}
@@ -3247,3 +3275,369 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = GetVNFBGPRequestValidationError{}
+
+// Validate checks the field values on VNFDNSRecord with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *VNFDNSRecord) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on VNFDNSRecord with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in VNFDNSRecordMultiError, or
+// nil if none found.
+func (m *VNFDNSRecord) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *VNFDNSRecord) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Name
+
+	// no validation rules for Type
+
+	// no validation rules for Value
+
+	// no validation rules for Ttl
+
+	// no validation rules for Source
+
+	// no validation rules for SourceVnfId
+
+	if len(errors) > 0 {
+		return VNFDNSRecordMultiError(errors)
+	}
+
+	return nil
+}
+
+// VNFDNSRecordMultiError is an error wrapping multiple validation errors
+// returned by VNFDNSRecord.ValidateAll() if the designated constraints aren't met.
+type VNFDNSRecordMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m VNFDNSRecordMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m VNFDNSRecordMultiError) AllErrors() []error { return m }
+
+// VNFDNSRecordValidationError is the validation error returned by
+// VNFDNSRecord.Validate if the designated constraints aren't met.
+type VNFDNSRecordValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e VNFDNSRecordValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e VNFDNSRecordValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e VNFDNSRecordValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e VNFDNSRecordValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e VNFDNSRecordValidationError) ErrorName() string { return "VNFDNSRecordValidationError" }
+
+// Error satisfies the builtin error interface
+func (e VNFDNSRecordValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sVNFDNSRecord.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = VNFDNSRecordValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = VNFDNSRecordValidationError{}
+
+// Validate checks the field values on ListVNFDNSRecordsRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ListVNFDNSRecordsRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ListVNFDNSRecordsRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ListVNFDNSRecordsRequestMultiError, or nil if none found.
+func (m *ListVNFDNSRecordsRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ListVNFDNSRecordsRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetId() <= 0 {
+		err := ListVNFDNSRecordsRequestValidationError{
+			field:  "Id",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return ListVNFDNSRecordsRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// ListVNFDNSRecordsRequestMultiError is an error wrapping multiple validation
+// errors returned by ListVNFDNSRecordsRequest.ValidateAll() if the designated
+// constraints aren't met.
+type ListVNFDNSRecordsRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ListVNFDNSRecordsRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ListVNFDNSRecordsRequestMultiError) AllErrors() []error { return m }
+
+// ListVNFDNSRecordsRequestValidationError is the validation error returned by
+// ListVNFDNSRecordsRequest.Validate if the designated constraints aren't met.
+type ListVNFDNSRecordsRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ListVNFDNSRecordsRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ListVNFDNSRecordsRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ListVNFDNSRecordsRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ListVNFDNSRecordsRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ListVNFDNSRecordsRequestValidationError) ErrorName() string {
+	return "ListVNFDNSRecordsRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ListVNFDNSRecordsRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListVNFDNSRecordsRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ListVNFDNSRecordsRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ListVNFDNSRecordsRequestValidationError{}
+
+// Validate checks the field values on ListVNFDNSRecordsResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ListVNFDNSRecordsResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ListVNFDNSRecordsResponse with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ListVNFDNSRecordsResponseMultiError, or nil if none found.
+func (m *ListVNFDNSRecordsResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ListVNFDNSRecordsResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for VnfId
+
+	// no validation rules for Type
+
+	for idx, item := range m.GetRecords() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ListVNFDNSRecordsResponseValidationError{
+						field:  fmt.Sprintf("Records[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ListVNFDNSRecordsResponseValidationError{
+						field:  fmt.Sprintf("Records[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ListVNFDNSRecordsResponseValidationError{
+					field:  fmt.Sprintf("Records[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	// no validation rules for DynamicError
+
+	if len(errors) > 0 {
+		return ListVNFDNSRecordsResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// ListVNFDNSRecordsResponseMultiError is an error wrapping multiple validation
+// errors returned by ListVNFDNSRecordsResponse.ValidateAll() if the
+// designated constraints aren't met.
+type ListVNFDNSRecordsResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ListVNFDNSRecordsResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ListVNFDNSRecordsResponseMultiError) AllErrors() []error { return m }
+
+// ListVNFDNSRecordsResponseValidationError is the validation error returned by
+// ListVNFDNSRecordsResponse.Validate if the designated constraints aren't met.
+type ListVNFDNSRecordsResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ListVNFDNSRecordsResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ListVNFDNSRecordsResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ListVNFDNSRecordsResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ListVNFDNSRecordsResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ListVNFDNSRecordsResponseValidationError) ErrorName() string {
+	return "ListVNFDNSRecordsResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ListVNFDNSRecordsResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListVNFDNSRecordsResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ListVNFDNSRecordsResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ListVNFDNSRecordsResponseValidationError{}

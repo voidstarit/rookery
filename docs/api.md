@@ -50,9 +50,11 @@ localhost or sit behind an access-controlled proxy.
 ## Terraform provider
 
 `cmd/terraform-provider-rookery/` implements a Terraform provider that creates
-Rookery resources over the public mTLS gRPC listener. It
-covers storage backends, disks, media, networks, interfaces, ACLs, route tables
-and routes, VNFs, VMs, and host-interface takeover. Matching data sources look
+Rookery resources over the public mTLS gRPC listener. It covers storage
+backends, disks, media, networks and network pipes, vhost and host interfaces,
+host taps, managed VPP addresses and interface route-table bindings, ACLs,
+route tables and routes, VNFs, VMs, startup scripts, and host-interface
+takeover. Matching data sources look
 up existing resources, and `rookery_status` exposes current readiness. Configure
 it with the CA, client certificate, and private key downloaded from the
 **Client certificates** dialog:
@@ -112,6 +114,10 @@ static UI.
 | -------- | ------------------ | --------------------------------- |
 | `GET`    | `/api/healthz`     | Liveness and database check       |
 | `GET`    | `/api/status`      | Thin pool and VPP readiness       |
+| `GET`    | `/api/startup-script` | Get the Rookery startup script and its last execution result |
+| `PUT`    | `/api/startup-script` | Configure the Rookery startup script (`enabled`, `script`) |
+| `GET`    | `/api/vpp-startup-script` | Get the VPP connection startup script and its last execution result |
+| `PUT`    | `/api/vpp-startup-script` | Configure the VPP startup script (`enabled`, `script`) |
 | `GET`    | `/api/storage-backends` | List registered storage backends |
 | `POST`   | `/api/storage-backends` | Register an LVM thin-pool backend |
 | `GET`    | `/api/storage-backends/{id}` | Get one storage backend |
@@ -120,9 +126,9 @@ static UI.
 | `GET`    | `/api/storage-backends/{id}/importable-disks` | List existing thin volumes and registration state |
 | `POST`   | `/api/storage-backends/{id}/import-disks` | Register existing thin volumes as disks |
 | `GET`    | `/api/disks`       | List all disks                    |
-| `POST`   | `/api/disks`       | Create a thin-LVM disk or template clone |
+| `POST`   | `/api/disks`       | Create a thin-LVM disk, template, or provisioned template clone |
 | `GET`    | `/api/disks/{id}`  | Get one disk                      |
-| `PUT`    | `/api/disks/{id}`  | Mark or unmark a disk as a template |
+| `PUT`    | `/api/disks/{id}`  | Update template status or template provisioning settings |
 | `DELETE` | `/api/disks/{id}`  | Delete an unattached disk         |
 | `GET`    | `/api/media`       | List installation media           |
 | `POST`   | `/api/media`       | Register an existing ISO file     |
@@ -131,7 +137,35 @@ static UI.
 | `GET`    | `/api/networks`    | List Rookery Networks (VPP bridge domains) |
 | `POST`   | `/api/networks`    | Create a VPP bridge domain with IPv4/IPv6 CIDRs |
 | `GET`    | `/api/networks/{id}` | Get one network                 |
+| `PUT`    | `/api/networks/{id}` | Update a network's IPv4/IPv6 CIDRs |
+| `GET`    | `/api/network-pipes` | List bridge-domain pipes |
+| `POST`   | `/api/network-pipes` | Create a VPP pipe between two bridge domains (`network_a_id`, `network_b_id`) |
+| `DELETE` | `/api/network-pipes/{id}` | Delete a bridge-domain pipe |
 | `DELETE` | `/api/networks/{id}` | Delete a network, stopping its VNFs and removing its BVI/bridge domain |
+| `GET`    | `/api/vpp/interfaces/{name}/addresses` | List Rookery-managed addresses on a VPP interface |
+| `PUT`    | `/api/vpp/interfaces/{name}/addresses` | Replace the managed IPv4/IPv6 addresses on a VPP interface |
+| `GET`    | `/api/vpp/interfaces/{name}/route-tables` | Get IPv4/IPv6 FIB bindings for a host interface or host tap |
+| `PUT`    | `/api/vpp/interfaces/{name}/route-tables` | Set IPv4/IPv6 FIB bindings for a host interface, host tap, or pipe endpoint |
+| `DELETE` | `/api/vpp/interfaces/{name}/route-tables` | Remove the explicit binding and restore the automatic default |
+
+Network CIDRs can be changed with `PUT /api/networks/{id}` while the network has
+no VNFs, host taps, legacy DHCP configuration, or BVI/gateway.
+
+The VPP interface address PUT body accepts `addresses` (CIDR strings) and
+`dhcp_client_enabled` (IPv4 DHCP client). The GET/PUT response also includes
+`live_addresses`, `dhcp_client_configured`, `dhcp_client_status`, and
+`status_detail` from the live VPP interface.
+The VPP interface address GET/PUT also accepts the two endpoints of a
+bridge-domain pipe (`pipe<instance>.0` and `.1`); their managed addresses are
+removed when the pipe is deleted. The interface route-table GET/PUT applies to
+host interfaces and host taps.
+The request/response uses `ipv4_table_id`/`ipv6_table_id`; `0` selects the
+default VRF. With no explicit binding, a host tap reports its network VRF;
+saving the form creates an explicit override, including default (`0`).
+`DELETE /api/vpp/interfaces/{name}/route-tables` removes that explicit override:
+the interface returns to its network VRF (host taps) or the default table
+(host interfaces). Vhost-user interfaces continue to use
+`PUT /api/interfaces/{id}/route-tables`.
 | `GET`    | `/api/host/interfaces` | List physical/external NICs, link state, and VPP host-interface correlation |
 | `POST`   | `/api/host/interfaces/{name}/attach` | Take over a wired NIC into VPP and persist the attachment |
 | `DELETE` | `/api/host/interfaces/{name}` | Detach a persisted host NIC from VPP |
@@ -164,6 +198,7 @@ static UI.
 | `GET`    | `/api/vnfs/{id}/leases` | Inspect current and expired DHCP leases |
 | `GET`    | `/api/vnfs/{id}/sessions` | Inspect VPP NAT44 translations |
 | `GET`    | `/api/vnfs/{id}/bgp` | Live GoBGP session and received/advertised prefix status |
+| `GET`    | `/api/vnfs/{id}/dns-records` | Static DNS records plus dynamic records registered by DHCP leases |
 | `GET`    | `/api/acls`        | List ACL definitions              |
 | `POST`   | `/api/acls`        | Create an ACL                     |
 | `GET`    | `/api/acls/{id}`   | Get one ACL and its full rules    |
@@ -174,6 +209,15 @@ static UI.
 | `DELETE` | `/api/route-tables/{id}` | Delete an unassigned route table |
 | `GET`    | `/api/route-tables/{id}/routes?ipv6=<bool>` | List static routes in a table |
 | `POST`   | `/api/route-tables/{id}/routes` | Add a static route |
+| `PUT`    | `/api/routes/{id}` | Edit a static route |
+
+Route creation accepts the VPP route path options (`count`, `next_hop_table`,
+`weight`, `udp_encap`, lookup tables, resolve flags, rx interfaces,
+`out_labels`, and `drop`) in addition to prefix, next hop, egress, and
+preference. `next_hop_table`, `ipv4_lookup_table`, and `ipv6_lookup_table`
+accept Rookery route-table names; `default` selects table `0`. MPLS lookup
+remains numeric. Numeric options are optional: omit one to leave it out of the
+VPP command.
 | `DELETE` | `/api/routes/{id}` | Delete a static route |
 | `GET`    | `/api/route-tables/{id}/fib?ipv6=<bool>` | Inspect live VPP FIB entries, including dynamic routes |
 | `GET`    | `/api/interfaces`  | List vhost-user interfaces        |
@@ -186,7 +230,7 @@ static UI.
 | `PUT`    | `/api/interfaces/{id}/route-tables` | Bind IPv4/IPv6 FIB tables |
 | `DELETE` | `/api/interfaces/{id}` | Delete an unattached interface |
 | `GET`    | `/api/vms`         | List all VMs                       |
-| `POST`   | `/api/vms`         | Create a VM with an existing disk |
+| `POST`   | `/api/vms`         | Create a VM with an existing disk and start it |
 | `GET`    | `/api/vms/{id}`    | Get one VM                         |
 | `GET`    | `/api/vms/{id}/metrics` | QEMU process CPU/memory/I/O and VPP vhost RX/TX telemetry |
 | `PUT`    | `/api/vms/{id}`    | Update VM settings                 |
@@ -274,13 +318,18 @@ curl -sS -X POST http://127.0.0.1:8080/api/vms \
 
 The first disk ID is the boot disk. Omit `boot_media_id` to boot from the disks
 instead. The created VM has a UUID
-`id`; use that UUID in all VM paths and in the console URL.
+`id`; use that UUID in all VM paths and in the console URL. Rookery starts the
+VM as part of creation, so the response reports `status: "running"`. If QEMU
+cannot start (for example when KVM is unavailable), the request fails with
+`500` and the VM record is removed again.
 
-Start and stop the VM:
+Rookery persists the desired power state. A VM that was started comes back
+automatically after an API restart or a host reboot; a VM that was stopped
+explicitly stays down until it is started again. Stopping is always explicit:
 
 ```bash
-curl -sS -X POST http://127.0.0.1:8080/api/vms/<uuid>/start
 curl -sS -X POST http://127.0.0.1:8080/api/vms/<uuid>/stop
+curl -sS -X POST http://127.0.0.1:8080/api/vms/<uuid>/start
 ```
 
 Open the noVNC console at:
@@ -341,8 +390,9 @@ curl -sS -X POST http://127.0.0.1:8080/api/vnfs \
   -H 'Content-Type: application/json' \
   -d '{"name":"lab-dhcpv4","network_id":1,"type":"dhcpv4","enabled":true,
        "config":{"gateway":"10.20.0.1/24","range_start":"10.20.0.100",
-                 "range_end":"10.20.0.200","dns":"1.1.1.1",
-                 "lease_time":"12h"}}'
+                 "range_end":"10.20.0.200","dns":"10.20.0.2",
+                 "lease_time":"12h","dns_vnf_id":1,
+                 "dns_domain":"lab.test","dns_ttl":300}}'
 ```
 
 Add a DHCPv6 VNF with an IPv6 gateway and range:
@@ -352,8 +402,9 @@ curl -sS -X POST http://127.0.0.1:8080/api/vnfs \
   -H 'Content-Type: application/json' \
   -d '{"name":"lab-dhcpv6","network_id":1,"type":"dhcpv6","enabled":true,
        "config":{"gateway":"fd00:20::1/64","range_start":"fd00:20::100",
-                 "range_end":"fd00:20::200","dns":"2001:4860:4860::8888",
-                 "lease_time":"12h"}}'
+                 "range_end":"fd00:20::200","dns":"fd00:20::2",
+                 "lease_time":"12h","dns_vnf_id":1,
+                 "dns_domain":"lab.test","dns_ttl":300}}'
 ```
 
 DHCP VNFs also accept extra options through `dhcp_options`. Each option has a
@@ -396,8 +447,13 @@ curl -sS -X POST http://127.0.0.1:8080/api/vnfs \
        }}'
 ```
 
-The DNS server listens on the network service address `.2` (UDP/TCP 53).
-Set the DHCP VNF's `dns` field to that address if clients should use it.
+The DNS server listens on the network service address `.2` over IPv4 and IPv6
+(UDP/TCP 53). DHCPv4 and DHCPv6 VNFs can select this DNS VNF with
+`config.dns_vnf_id` (same network only), `config.dns_domain`, and
+`config.dns_ttl`; the daemon creates A/AAAA and PTR records for active leases,
+preferring the client FQDN and falling back to a MAC/DUID-derived name. Records
+are removed on DHCPRELEASE and expiry. Set the DHCP VNF's `dns` field to the
+matching `.2` service address if clients should use it.
 
 Create a dedicated NAT network, then add NAT44 with a static outside address
 and DHCPv4 for clients. The outside NIC must not be the host default route; the
@@ -517,6 +573,28 @@ the clone; it also refuses to remove an unrelated pre-existing LV during
 create-failure cleanup. Set the backend's `preparation_script` to the script's
 absolute path. See [`scripts/README.md`](../scripts/README.md) for requirements and standalone CLI
 usage.
+
+Template disks also accept `provisioning_script` and `provisioning_timeout`
+(default `5m`). After the backend preparation script creates a clone, Rookery
+runs this script as the API user with `ROOKERY_PROVISION_JSON` containing
+`operation` (`provision`), `request_id`, `disk`, `template`, `backend`, and the
+caller's arbitrary `properties` object. `POST /api/disks` accepts
+`provisioning` as a JSON object when `template_disk_id` is set. The reference
+script supports `properties.resize_disk = true` to extend a supported root
+partition (including a DOS root-plus-swap layout, with the swap recreated using
+its original UUID/label) and grow the filesystem. Other layouts are resized
+only within their current partition. Provisioning is skipped when that object
+is omitted or empty. If provisioning fails or times
+out, clone creation is rolled back and the preparation script's `delete`
+operation runs. `PUT /api/disks/{id}` can set or clear a template's
+`provisioning_script`/`provisioning_timeout`.
+
+See [`scripts/template-provision.sh`](../scripts/template-provision.sh) for a
+reference script that mounts the clone (including partitioned LVM images),
+changes the hostname, timezone, and SSH authorized keys, logs each stage, and
+always attempts to unmount the clone. Scripts run with the API user's
+privileges and should only contain trusted commands. See
+[`scripts/README.md`](../scripts/README.md) for setup details.
 
 Media fields: `name` (required, unique, max 127 chars) and `path` (required,
 absolute path to an existing regular file). `size_bytes` is read from the file

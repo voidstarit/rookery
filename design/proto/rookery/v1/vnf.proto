@@ -55,6 +55,12 @@ service VNFService {
   rpc GetVNFBGP(GetVNFBGPRequest) returns (VNFBGPStatus) {
     option (google.api.http) = {get: "/api/vnfs/{id}/bgp"};
   }
+
+  // ListVNFDNSRecords returns the static DNS records and the dynamic records
+  // currently registered by DHCP leases.
+  rpc ListVNFDNSRecords(ListVNFDNSRecordsRequest) returns (ListVNFDNSRecordsResponse) {
+    option (google.api.http) = {get: "/api/vnfs/{id}/dns-records"};
+  }
 }
 
 message DHCPStaticAssignment {
@@ -73,7 +79,7 @@ message DNATRule {
 
 // DNSRecord is one local record served by a DNS VNF. Name is a fully qualified
 // domain name; wildcard names such as *.lab1.test are supported. Type is A,
-// AAAA, CNAME, or TXT.
+// AAAA, CNAME, TXT, or PTR.
 message DNSRecord {
   string name = 1 [(validate.rules).string = {min_len: 1, max_len: 255}];
   string type = 2 [(validate.rules).string = {min_len: 1, max_len: 16}];
@@ -138,6 +144,14 @@ message VNFConfig {
   // v6 option 23) and server-managed options are rejected; use config.dns for
   // DNS servers.
   repeated DHCPOption dhcp_options = 29 [(validate.rules).repeated = {max_items: 64}];
+
+  // DHCP DNS integration. Select a DNS VNF on the same network; the daemon
+  // creates dynamic A/AAAA and PTR records for active DHCP leases. DNSDomain
+  // is the suffix used when a client does not provide an FQDN; DNSTTL is the
+  // dynamic record TTL in seconds (0 means the default 300).
+  int64 dns_vnf_id = 30;
+  string dns_domain = 31 [(validate.rules).string = {ignore_empty: true, max_len: 253}];
+  uint32 dns_ttl = 32 [(validate.rules).uint32 = {lte: 86400}];
 }
 
 message VNF {
@@ -249,4 +263,25 @@ message VNFBGPStatus {
 
 message GetVNFBGPRequest {
   int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message VNFDNSRecord {
+  string name = 1;
+  string type = 2;
+  string value = 3;
+  uint32 ttl = 4;
+  // source is "static" for configured records or "dhcp" for lease-derived records.
+  string source = 5;
+  int64 source_vnf_id = 6;
+}
+
+message ListVNFDNSRecordsRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListVNFDNSRecordsResponse {
+  int64 vnf_id = 1;
+  string type = 2;
+  repeated VNFDNSRecord records = 3;
+  string dynamic_error = 4;
 }

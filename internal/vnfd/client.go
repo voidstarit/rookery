@@ -58,20 +58,20 @@ func (c *Client) Close() {
 
 // Start starts a tap-backed runtime through the daemon.
 func (c *Client) Start(ctx context.Context, vnf store.VNF, hostIf string) error {
-	return c.ensure(ctx, vnf, "tap", hostIf, "", 0, "")
+	return c.ensure(ctx, vnf, "tap", hostIf, "", 0, "", "")
 }
 
 // StartMemif starts a dedicated memif-backed runtime through the daemon.
 func (c *Client) StartMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32) error {
-	return c.ensure(ctx, vnf, "memif", "", socketPath, ifID, "")
+	return c.ensure(ctx, vnf, "memif", "", socketPath, ifID, "", "")
 }
 
 // StartShared starts a runtime on its network's shared memif.
-func (c *Client) StartShared(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32, address string) error {
-	return c.ensure(ctx, vnf, "shared", "", socketPath, ifID, address)
+func (c *Client) StartShared(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32, address, ipv6Address string) error {
+	return c.ensure(ctx, vnf, "shared", "", socketPath, ifID, address, ipv6Address)
 }
 
-func (c *Client) ensure(ctx context.Context, vnf store.VNF, transport, tapHost string, socket string, ifID uint32, sharedAddress string) error {
+func (c *Client) ensure(ctx context.Context, vnf store.VNF, transport, tapHost string, socket string, ifID uint32, sharedAddress, sharedIPv6Address string) error {
 	c.logger.Trace().
 		Int64("vnf_id", vnf.ID).
 		Str("type", vnf.Type).
@@ -84,7 +84,7 @@ func (c *Client) ensure(ctx context.Context, vnf store.VNF, transport, tapHost s
 	callCtx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 	response, err := c.client.EnsureVNF(callCtx, &rookeryv1.EnsureVNFRequest{
-		Vnf: specFor(vnf, transport, tapHost, socket, ifID, sharedAddress),
+		Vnf: specFor(vnf, transport, tapHost, socket, ifID, sharedAddress, sharedIPv6Address),
 	})
 	if err != nil {
 		c.logger.Trace().Int64("vnf_id", vnf.ID).Str("transport", transport).Err(err).Msg("ensure VNF runtime failed")
@@ -145,6 +145,24 @@ func (c *Client) Leases(ctx context.Context, vnfID int64) ([]store.VNFLease, err
 	}
 	c.logger.Trace().Int64("vnf_id", vnfID).Int("leases", len(leases)).Msg("VNF leases read")
 	return leases, nil
+}
+
+// DNSRecords returns the dynamic DNS records registered for a DNS VNF.
+func (c *Client) DNSRecords(ctx context.Context, vnfID int64) ([]host.DNSRecordView, error) {
+	callCtx, cancel := context.WithTimeout(ctx, statusTimeout)
+	defer cancel()
+	response, err := c.client.ListDNSRecords(callCtx, &rookeryv1.ListDNSRecordsRequest{Id: vnfID})
+	if err != nil {
+		return nil, grpcError("read DNS records", err)
+	}
+	records := make([]host.DNSRecordView, 0, len(response.GetRecords()))
+	for _, record := range response.GetRecords() {
+		records = append(records, host.DNSRecordView{
+			Name: record.GetName(), Type: record.GetType(), Value: record.GetValue(), TTL: record.GetTtl(),
+			Source: record.GetSource(), SourceVNFID: record.GetSourceVnfId(),
+		})
+	}
+	return records, nil
 }
 
 // BGPStatus returns the daemon's live GoBGP snapshot for a BGP VNF.
@@ -272,18 +290,19 @@ func Listen(addr string) (net.Listener, error) {
 }
 
 // specFor builds the control spec from an API-side VNF record.
-func specFor(vnf store.VNF, transport, tapHost string, socket string, ifID uint32, sharedAddress string) *rookeryv1.VNFSpec {
+func specFor(vnf store.VNF, transport, tapHost string, socket string, ifID uint32, sharedAddress, sharedIPv6Address string) *rookeryv1.VNFSpec {
 	return &rookeryv1.VNFSpec{
-		Id:             vnf.ID,
-		Name:           vnf.Name,
-		Type:           vnf.Type,
-		NetworkId:      vnf.NetworkID,
-		Transport:      transport,
-		Config:         configToProto(vnf.Config),
-		TapHostName:    tapHost,
-		MemifSocket:    socket,
-		MemifSwIfIndex: ifID,
-		SharedAddress:  sharedAddress,
+		Id:                vnf.ID,
+		Name:              vnf.Name,
+		Type:              vnf.Type,
+		NetworkId:         vnf.NetworkID,
+		Transport:         transport,
+		Config:            configToProto(vnf.Config),
+		TapHostName:       tapHost,
+		MemifSocket:       socket,
+		MemifSwIfIndex:    ifID,
+		SharedAddress:     sharedAddress,
+		SharedIpv6Address: sharedIPv6Address,
 	}
 }
 
@@ -327,6 +346,9 @@ func configToProto(config store.VNFConfig) *rookeryv1.VNFConfig {
 		DnsRecords:        dnsRecords,
 		DnsForward:        config.DNSForward,
 		DnsForwarders:     append([]string(nil), config.DNSForwarders...),
+		DnsVnfId:          config.DNSVNFID,
+		DnsDomain:         config.DNSDomain,
+		DnsTtl:            config.DNSTTL,
 		DhcpOptions:       dhcpOptions,
 	}
 }

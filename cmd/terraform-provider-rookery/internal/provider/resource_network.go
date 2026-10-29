@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"errors"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -55,14 +54,12 @@ func (r *networkResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"ipv4_cidr": schema.StringAttribute{
-				Required:      true,
-				Description:   "IPv4 prefix for the network.",
-				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+				Required:    true,
+				Description: "IPv4 prefix for the network. Can be updated while the network has no VNFs, host taps, or BVI.",
 			},
 			"ipv6_cidr": schema.StringAttribute{
-				Required:      true,
-				Description:   "IPv6 prefix for the network.",
-				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+				Required:    true,
+				Description: "IPv6 prefix for the network. Can be updated while the network has no VNFs, host taps, or BVI.",
 			},
 			"bridge_domain_id": schema.Int64Attribute{Computed: true},
 			"interface_count":  schema.Int64Attribute{Computed: true},
@@ -126,8 +123,30 @@ func (r *networkResource) Read(ctx context.Context, req resource.ReadRequest, re
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func (r *networkResource) Update(_ context.Context, _ resource.UpdateRequest, resp *resource.UpdateResponse) {
-	resp.Diagnostics.AddError("Update network", errors.New("networks are immutable; replace the resource instead").Error())
+func (r *networkResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan networkModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	client, err := r.requireClient()
+	if err != nil {
+		resp.Diagnostics.AddError("Update network", err.Error())
+		return
+	}
+	callCtx, cancel := context.WithTimeout(ctx, client.Timeout())
+	defer cancel()
+	network, err := client.Networks.UpdateNetwork(callCtx, &rookeryv1.UpdateNetworkRequest{
+		Id:       plan.ID.ValueInt64(),
+		Ipv4Cidr: plan.IPv4CIDR.ValueString(),
+		Ipv6Cidr: plan.IPv6CIDR.ValueString(),
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Update network", err.Error())
+		return
+	}
+	setNetworkState(&plan, network)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *networkResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

@@ -343,6 +343,68 @@ func (s *Server) CleanupNetworkVNFs(ctx context.Context, network store.Network) 
 	return s.deleteMemif(ctx, network.VNFMemifSwIfIndex, network.VNFMemifHostName)
 }
 
+// ensureRunningVNFSpec sends the current store configuration to an already
+// running VNF. The daemon compares the spec hash and restarts the runtime only
+// when it differs; this repairs stale desired specs after a daemon upgrade.
+func (s *Server) ensureRunningVNFSpec(ctx context.Context, vnf store.VNF) error {
+	if s.vnfs == nil {
+		return nil
+	}
+	if vnf.Type == store.VNFTypeDNS {
+		network, err := s.store.GetNetwork(ctx, vnf.NetworkID)
+		if err != nil {
+			return err
+		}
+		network, err = s.ensureNetworkCIDRs(ctx, network)
+		if err != nil {
+			return err
+		}
+		if network.VNFMemifSocket == "" {
+			network, err = s.ensureNetworkSharedMemif(ctx, network)
+			if err != nil {
+				return err
+			}
+		}
+		serviceCIDR, err := netutil.HostCIDR(network.IPv4CIDR, 2)
+		if err != nil {
+			return err
+		}
+		serviceIPv6CIDR, err := netutil.HostCIDR(network.IPv6CIDR, 2)
+		if err != nil {
+			return err
+		}
+		return s.vnfs.StartShared(ctx, vnf, network.VNFMemifSocket, host.NetworkVNFMemifID(network.ID), serviceCIDR, serviceIPv6CIDR)
+	}
+	if vnf.Type == store.VNFTypeDHCPv4 && s.memifDHCP {
+		network, err := s.store.GetNetwork(ctx, vnf.NetworkID)
+		if err != nil {
+			return err
+		}
+		if s.effectiveVNFTransport(network, vnf) == vnfTransportShared {
+			network, err = s.ensureNetworkCIDRs(ctx, network)
+			if err != nil {
+				return err
+			}
+			serviceCIDR, err := netutil.HostCIDR(network.IPv4CIDR, 2)
+			if err != nil {
+				return err
+			}
+			serviceIPv6CIDR, err := netutil.HostCIDR(network.IPv6CIDR, 2)
+			if err != nil {
+				return err
+			}
+			return s.vnfs.StartShared(ctx, vnf, network.VNFMemifSocket, host.NetworkVNFMemifID(network.ID), serviceCIDR, serviceIPv6CIDR)
+		}
+	}
+	if strings.TrimSpace(vnf.MemifSocket) != "" {
+		return s.vnfs.StartMemif(ctx, vnf, vnf.MemifSocket, vnf.MemifSwIfIndex)
+	}
+	if strings.TrimSpace(vnf.TapHostName) != "" {
+		return s.vnfs.Start(ctx, vnf, vnf.TapHostName)
+	}
+	return nil
+}
+
 // activateSharedDNS starts a DNS VNF on the network's shared VNF memif. The
 // server listens on the network service address (.2) and answers local records
 // plus optional upstream queries.
@@ -366,6 +428,10 @@ func (s *Server) activateSharedDNS(ctx context.Context, vnf store.VNF, network s
 	if err != nil {
 		return vnf, err
 	}
+	serviceIPv6CIDR, err := netutil.HostCIDR(network.IPv6CIDR, 2)
+	if err != nil {
+		return vnf, err
+	}
 	network, err = s.ensureNetworkVNFResources(ctx, network, gateway)
 	if err != nil {
 		return vnf, err
@@ -383,7 +449,7 @@ func (s *Server) activateSharedDNS(ctx context.Context, vnf store.VNF, network s
 		_ = s.deleteTap(ctx, vnf.TapSwIfIndex, vnf.TapHostName)
 	}
 
-	if err := s.vnfs.StartShared(ctx, vnf, network.VNFMemifSocket, host.NetworkVNFMemifID(network.ID), serviceCIDR); err != nil {
+	if err := s.vnfs.StartShared(ctx, vnf, network.VNFMemifSocket, host.NetworkVNFMemifID(network.ID), serviceCIDR, serviceIPv6CIDR); err != nil {
 		return vnf, err
 	}
 	vnf.Enabled = true
@@ -429,6 +495,10 @@ func (s *Server) activateSharedVNF(ctx context.Context, vnf store.VNF, network s
 	if err != nil {
 		return vnf, err
 	}
+	serviceIPv6CIDR, err := netutil.HostCIDR(network.IPv6CIDR, 2)
+	if err != nil {
+		return vnf, err
+	}
 	if err := s.validateVNFNetwork(vnf, network); err != nil {
 		return vnf, err
 	}
@@ -449,7 +519,7 @@ func (s *Server) activateSharedVNF(ctx context.Context, vnf store.VNF, network s
 	vnf.Config.BindIP = serviceCIDR
 	// The daemon needs the memif interface ID for the handshake, not the VPP
 	// sw_if_index stored on the network for cleanup/counters.
-	if err := s.vnfs.StartShared(ctx, vnf, network.VNFMemifSocket, host.NetworkVNFMemifID(network.ID), serviceCIDR); err != nil {
+	if err := s.vnfs.StartShared(ctx, vnf, network.VNFMemifSocket, host.NetworkVNFMemifID(network.ID), serviceCIDR, serviceIPv6CIDR); err != nil {
 		return vnf, err
 	}
 

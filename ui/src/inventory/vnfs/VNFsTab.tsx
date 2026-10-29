@@ -5,6 +5,7 @@ import type { Network, StatusResponse, VNF } from "../types";
 import { formatDate } from "./format";
 import { VNFPage } from "./VNFPage";
 import { VNFBGPStatusDialog } from "./VNFBGPStatusDialog";
+import { VNFDNSRecordsDialog } from "./VNFDNSRecordsDialog";
 import { VNFLeasesDialog } from "./VNFLeasesDialog";
 import { VNFSessionsDialog } from "./VNFSessionsDialog";
 import { navigate, useRoute } from "../router";
@@ -24,6 +25,7 @@ export function VNFsTab() {
   const [leasesVNF, setLeasesVNF] = useState<VNF | null>(null);
   const [sessionsVNF, setSessionsVNF] = useState<VNF | null>(null);
   const [bgpVNF, setBGPVNF] = useState<VNF | null>(null);
+  const [dnsVNF, setDNSVNF] = useState<VNF | null>(null);
   const route = useRoute();
 
   useEffect(() => {
@@ -32,6 +34,7 @@ export function VNFsTab() {
       setLeasesVNF(null);
       setSessionsVNF(null);
       setBGPVNF(null);
+      setDNSVNF(null);
       return;
     }
     const action = route.segments[1];
@@ -40,6 +43,7 @@ export function VNFsTab() {
       setLeasesVNF(null);
       setSessionsVNF(null);
       setBGPVNF(null);
+      setDNSVNF(null);
       setDialog({ vnf: null, networkID });
       return;
     }
@@ -51,6 +55,7 @@ export function VNFsTab() {
         setLeasesVNF(mode === "leases" ? vnf : null);
         setSessionsVNF(mode === "sessions" ? vnf : null);
         setBGPVNF(mode === "bgp" ? vnf : null);
+        setDNSVNF(mode === "dns" ? vnf : null);
       }
       return;
     }
@@ -58,6 +63,7 @@ export function VNFsTab() {
     setLeasesVNF(null);
     setSessionsVNF(null);
     setBGPVNF(null);
+    setDNSVNF(null);
   }, [route.path, route.search, vnfs]);
 
   const publishVNFs = (list: VNF[]) => {
@@ -136,6 +142,7 @@ export function VNFsTab() {
         setDialog(null);
         setLeasesVNF(null);
         setSessionsVNF(null);
+        setDNSVNF(null);
       }
     };
 
@@ -227,6 +234,7 @@ export function VNFsTab() {
         key={dialog.vnf ? `edit-${dialog.vnf.id}` : `new-${dialog.networkID ?? "default"}`}
         vnf={dialog.vnf}
         networks={networks}
+        vnfs={vnfs}
         vppReady={vppReady}
         initialNetworkID={dialog.networkID}
         onClose={() => {
@@ -324,7 +332,7 @@ export function VNFsTab() {
                           </span>
                         ) : vnf.type === "dns" ? (
                           <span class="vm-description">
-                            {Array.isArray(vnf.config.dns_records) ? vnf.config.dns_records.length : 0} records
+                            {Array.isArray(vnf.config.dns_records) ? vnf.config.dns_records.length : 0} static
                             {vnf.config.dns_forward ? " · forwarding" : " · authoritative"}
                           </span>
                         ) : vnf.tap_host_name ? (
@@ -359,7 +367,15 @@ export function VNFsTab() {
                             >
                               Status
                             </button>
-                          ) : vnf.type === "dns" ? null : (
+                          ) : vnf.type === "dns" ? (
+                            <button
+                              class="row-action"
+                              type="button"
+                              onClick={() => navigate(`/vnfs/${vnf.id}/dns`)}
+                            >
+                              Records
+                            </button>
+                          ) : (
                             <button
                               class="row-action"
                               type="button"
@@ -398,7 +414,7 @@ export function VNFsTab() {
                 ◈
               </div>
               <h3>No network functions yet</h3>
-              <p>Add a DHCP, NAT44, or BGP function and attach it to a Network.</p>
+              <p>Add a DHCP, DNS, NAT44, or BGP function and attach it to a Network.</p>
               <button
                 class="button primary"
                 type="button"
@@ -440,6 +456,17 @@ export function VNFsTab() {
           vnf={bgpVNF}
           onClose={() => {
             setBGPVNF(null);
+            navigate("/vnfs", true);
+          }}
+        />
+      ) : null}
+
+      {dnsVNF ? (
+        <VNFDNSRecordsDialog
+          key={`dns-${dnsVNF.id}`}
+          vnf={dnsVNF}
+          onClose={() => {
+            setDNSVNF(null);
             navigate("/vnfs", true);
           }}
         />

@@ -79,6 +79,33 @@ func (s *Store) GetRouteTableByID(ctx context.Context, tableID uint32, ipv6 bool
 	return table, nil
 }
 
+// GetRouteTableByName returns a route table by name and address family.
+func (s *Store) GetRouteTableByName(ctx context.Context, name string, ipv6 bool) (RouteTable, error) {
+	row := s.db.QueryRowContext(ctx, routeTableSelect+` WHERE name = ? AND is_ipv6 = ?`, strings.TrimSpace(name), ipv6)
+	table, err := scanRouteTable(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return RouteTable{}, ErrRouteTableNotFound
+	}
+	if err != nil {
+		return RouteTable{}, err
+	}
+	return table, nil
+}
+
+// ResolveRouteTableName maps a stored route-table name to its VPP table ID.
+// "default" refers to the implicit table 0.
+func (s *Store) ResolveRouteTableName(ctx context.Context, name string, ipv6 bool) (uint32, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || strings.EqualFold(name, "default") {
+		return 0, nil
+	}
+	table, err := s.GetRouteTableByName(ctx, name, ipv6)
+	if err != nil {
+		return 0, err
+	}
+	return table.TableID, nil
+}
+
 // CreateRouteTable records a custom VPP IP table definition.
 func (s *Store) CreateRouteTable(ctx context.Context, table RouteTable) (RouteTable, error) {
 	table.Name = strings.TrimSpace(table.Name)
@@ -87,6 +114,9 @@ func (s *Store) CreateRouteTable(ctx context.Context, table RouteTable) (RouteTa
 	}
 	if len(table.Name) > 63 {
 		return RouteTable{}, errors.New("route table name must be at most 63 characters")
+	}
+	if strings.EqualFold(table.Name, "default") {
+		return RouteTable{}, errors.New("route table name \"default\" is reserved for VPP table 0")
 	}
 	if table.TableID == 0 {
 		return RouteTable{}, errors.New("route table id must be greater than zero")
@@ -141,6 +171,23 @@ func (s *Store) DeleteRouteTable(ctx context.Context, id int64) error {
 		return err
 	} else if count > 0 {
 		return ErrRouteTableInUse
+	}
+	query := `SELECT 1 FROM routes WHERE next_hop_table_name = ? AND is_ipv6 = ?`
+	args := []any{table.Name, table.IPv6}
+	if !table.IPv6 {
+		query += ` UNION ALL SELECT 1 FROM routes WHERE ipv4_lookup_table_name = ?`
+		args = append(args, table.Name)
+	} else {
+		query += ` UNION ALL SELECT 1 FROM routes WHERE ipv6_lookup_table_name = ?`
+		args = append(args, table.Name)
+	}
+	query += ` LIMIT 1`
+	err = s.db.QueryRowContext(ctx, query, args...).Scan(&used)
+	switch {
+	case err == nil:
+		return ErrRouteTableInUse
+	case !errors.Is(err, sql.ErrNoRows):
+		return fmt.Errorf("check route table option usage: %w", err)
 	}
 	res, err := s.db.ExecContext(ctx, `DELETE FROM route_tables WHERE id = ?`, id)
 	if err != nil {
@@ -244,7 +291,10 @@ func (s *Store) RouteTableInterfaceCount(ctx context.Context, tableID uint32, ip
 		column = "ipv6_table_id"
 	}
 	var count int64
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM virtual_interfaces WHERE `+column+` = ?`, tableID).Scan(&count); err != nil {
+	if err := s.db.QueryRowContext(ctx, `
+		SELECT (SELECT COUNT(*) FROM virtual_interfaces WHERE `+column+` = ?)
+		     + (SELECT COUNT(*) FROM vpp_interface_route_tables WHERE `+column+` = ?)`,
+		tableID, tableID).Scan(&count); err != nil {
 		return 0, fmt.Errorf("count route table interfaces: %w", err)
 	}
 	return count, nil

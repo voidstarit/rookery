@@ -19,6 +19,9 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
   const [source, setSource] = useState<"empty" | "template">("empty");
   const [templateID, setTemplateID] = useState("");
   const [markAsTemplate, setMarkAsTemplate] = useState(false);
+  const [provisioningScript, setProvisioningScript] = useState("");
+  const [provisioningTimeout, setProvisioningTimeout] = useState("5m");
+  const [provisioningJSON, setProvisioningJSON] = useState("{}");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDialogElement | null>(null);
@@ -56,6 +59,19 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
     if (saving || !formRef.current?.reportValidity()) {
       return;
     }
+    let provisioning: unknown;
+    if (source === "template" && template?.provisioning_script) {
+      try {
+        provisioning = JSON.parse(provisioningJSON || "{}");
+      } catch {
+        setError("Provisioning properties must be valid JSON.");
+        return;
+      }
+      if (provisioning === null || Array.isArray(provisioning) || typeof provisioning !== "object") {
+        setError("Provisioning properties must be a JSON object.");
+        return;
+      }
+    }
     setError("");
     setSaving(true);
     try {
@@ -66,7 +82,20 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
           size_gb: Number(sizeGB),
           storage_backend_id: Number(backendID),
           ...(source === "template" && template ? { template_disk_id: template.id } : {}),
-          ...(source === "empty" && supportsTemplates ? { is_template: markAsTemplate } : {}),
+          ...(source === "template" && template?.provisioning_script && provisioning !== undefined
+            ? { provisioning }
+            : {}),
+          ...(source === "empty" && supportsTemplates
+            ? {
+                is_template: markAsTemplate,
+                ...(markAsTemplate
+                  ? {
+                      provisioning_script: provisioningScript.trim(),
+                      provisioning_timeout: provisioningTimeout.trim(),
+                    }
+                  : {}),
+              }
+            : {}),
         }),
       });
       onSaved(disk);
@@ -170,7 +199,8 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
                 </option>
               </select>
               <span class="field-hint">
-                Template clones run the backend preparation script; empty disks use the thin pool directly.
+                Template clones run the backend preparation script and the template's
+                provisioning script when one is configured; empty disks use the thin pool directly.
               </span>
             </label>
           ) : null}
@@ -192,7 +222,7 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
                 <option value="">Select a template…</option>
                 {templates.map((disk) => (
                   <option value={String(disk.id)} key={disk.id}>
-                    {disk.name} · {disk.size_gb} GB
+                    {disk.name} · {disk.size_gb} GB{disk.provisioning_script ? " · provisioning" : ""}
                   </option>
                 ))}
               </select>
@@ -207,6 +237,57 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
                   onChange={(event) => setMarkAsTemplate(event.currentTarget.checked)}
                 />
                 <span>Mark this new disk as a template</span>
+              </span>
+            </label>
+          ) : null}
+          {supportsTemplates && source === "empty" && markAsTemplate ? (
+            <>
+              <label class="field field-wide">
+                <span class="field-label">VM provisioning script</span>
+                <input
+                  type="text"
+                  placeholder="/usr/local/sbin/rookery-provision-template"
+                  value={provisioningScript}
+                  onInput={(event) => setProvisioningScript(event.currentTarget.value)}
+                />
+                <span class="field-hint">
+                  Optional absolute-path script run after a clone is created. It receives
+                  <code>ROOKERY_PROVISION_JSON</code>.
+                </span>
+              </label>
+              <label class="field">
+                <span class="field-label">Provisioning timeout</span>
+                <input
+                  type="text"
+                  placeholder="5m"
+                  value={provisioningTimeout}
+                  onInput={(event) => setProvisioningTimeout(event.currentTarget.value)}
+                />
+              </label>
+            </>
+          ) : null}
+          {supportsTemplates && source === "template" && template && !template.provisioning_script ? (
+            <p class="field-hint field-wide">
+              This template has no provisioning script, so there are no key-values to pass.
+              Close this dialog and use <strong>Provisioning</strong> on the template row to
+              configure one first.
+            </p>
+          ) : null}
+          {supportsTemplates && source === "template" && template?.provisioning_script ? (
+            <label class="field field-wide">
+              <span class="field-label">Provisioning properties (JSON object)</span>
+              <textarea
+                rows={6}
+                spellcheck={false}
+                value={provisioningJSON}
+                onInput={(event) => setProvisioningJSON(event.currentTarget.value)}
+              />
+              <span class="field-hint">
+                Passed to the template provisioning script through
+                <code>ROOKERY_PROVISION_JSON</code> under <code>properties</code>.
+                Set <code>"resize_disk": true</code> to extend the root
+                partition and filesystem with the reference script. Leave
+                <code>{}</code> empty to skip provisioning.
               </span>
             </label>
           ) : null}

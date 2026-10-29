@@ -69,6 +69,11 @@ func (s *hostService) listInterfaces(ctx context.Context) (*rookeryv1.ListHostIn
 				item.VppUp = vppIface.Up
 				item.VppType = vppIface.Type
 				item.VppSwIfIndex = &vppIface.SwIfIndex
+				if s.addresses != nil && (s.readiness == nil || s.readiness.Status().VPP.Ready) {
+					if addresses, err := s.addresses.InterfaceAddresses(ctx, vppIface.Name); err == nil {
+						item.VppAddresses = addresses
+					}
+				}
 				break
 			}
 		}
@@ -180,6 +185,7 @@ func (s *hostService) DetachHostInterface(ctx context.Context, request *rookeryv
 		if err := s.store.DeleteHostInterfaceRecord(ctx, name); err != nil && !errors.Is(err, store.ErrNotFound) {
 			return nil, status.Error(codes.Internal, "could not remove host interface record")
 		}
+		_ = s.store.DeleteVPPInterfaceAddresses(ctx, "host-"+name)
 	}
 	return &emptypb.Empty{}, nil
 }
@@ -199,7 +205,13 @@ func (s *hostService) ListHostTaps(ctx context.Context, request *rookeryv1.ListH
 	}
 	response := &rookeryv1.ListHostTapsResponse{Taps: make([]*rookeryv1.HostTap, 0, len(taps))}
 	for _, tap := range taps {
-		response.Taps = append(response.Taps, hostTapToProto(tap))
+		item := hostTapToProto(tap)
+		if s.addresses != nil && (s.readiness == nil || s.readiness.Status().VPP.Ready) {
+			if addresses, err := s.addresses.InterfaceAddresses(ctx, tap.Name); err == nil {
+				item.VppAddresses = addresses
+			}
+		}
+		response.Taps = append(response.Taps, item)
 	}
 	return response, nil
 }

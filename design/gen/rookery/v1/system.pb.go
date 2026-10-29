@@ -7,6 +7,7 @@
 package rookeryv1
 
 import (
+	_ "github.com/envoyproxy/protoc-gen-validate/validate"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -369,13 +370,15 @@ func (x *VPPStatus) GetSocket() string {
 }
 
 type StatusResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ready         bool                   `protobuf:"varint,1,opt,name=ready,proto3" json:"ready,omitempty"`
-	CheckedAt     *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=checked_at,json=checkedAt,proto3" json:"checked_at,omitempty"`
-	ThinPool      *ThinPoolStatus        `protobuf:"bytes,3,opt,name=thin_pool,json=thinPool,proto3" json:"thin_pool,omitempty"`
-	Vpp           *VPPStatus             `protobuf:"bytes,4,opt,name=vpp,proto3" json:"vpp,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	Ready                bool                   `protobuf:"varint,1,opt,name=ready,proto3" json:"ready,omitempty"`
+	CheckedAt            *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=checked_at,json=checkedAt,proto3" json:"checked_at,omitempty"`
+	ThinPool             *ThinPoolStatus        `protobuf:"bytes,3,opt,name=thin_pool,json=thinPool,proto3" json:"thin_pool,omitempty"`
+	Vpp                  *VPPStatus             `protobuf:"bytes,4,opt,name=vpp,proto3" json:"vpp,omitempty"`
+	RookeryStartupScript *StartupScriptStatus   `protobuf:"bytes,5,opt,name=rookery_startup_script,json=rookeryStartupScript,proto3" json:"rookery_startup_script,omitempty"`
+	VppStartupScript     *StartupScriptStatus   `protobuf:"bytes,6,opt,name=vpp_startup_script,json=vppStartupScript,proto3" json:"vpp_startup_script,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *StatusResponse) Reset() {
@@ -436,12 +439,362 @@ func (x *StatusResponse) GetVpp() *VPPStatus {
 	return nil
 }
 
+func (x *StatusResponse) GetRookeryStartupScript() *StartupScriptStatus {
+	if x != nil {
+		return x.RookeryStartupScript
+	}
+	return nil
+}
+
+func (x *StatusResponse) GetVppStartupScript() *StartupScriptStatus {
+	if x != nil {
+		return x.VppStartupScript
+	}
+	return nil
+}
+
+type StartupScriptStatus struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	ExitCode      int32                  `protobuf:"varint,3,opt,name=exit_code,json=exitCode,proto3" json:"exit_code,omitempty"`
+	RanAt         *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=ran_at,json=ranAt,proto3" json:"ran_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartupScriptStatus) Reset() {
+	*x = StartupScriptStatus{}
+	mi := &file_rookery_v1_system_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartupScriptStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartupScriptStatus) ProtoMessage() {}
+
+func (x *StartupScriptStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_system_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartupScriptStatus.ProtoReflect.Descriptor instead.
+func (*StartupScriptStatus) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_system_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *StartupScriptStatus) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *StartupScriptStatus) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *StartupScriptStatus) GetExitCode() int32 {
+	if x != nil {
+		return x.ExitCode
+	}
+	return 0
+}
+
+func (x *StartupScriptStatus) GetRanAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RanAt
+	}
+	return nil
+}
+
+type GetStartupScriptRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetStartupScriptRequest) Reset() {
+	*x = GetStartupScriptRequest{}
+	mi := &file_rookery_v1_system_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetStartupScriptRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetStartupScriptRequest) ProtoMessage() {}
+
+func (x *GetStartupScriptRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_system_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetStartupScriptRequest.ProtoReflect.Descriptor instead.
+func (*GetStartupScriptRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_system_proto_rawDescGZIP(), []int{8}
+}
+
+type UpdateStartupScriptRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Script        string                 `protobuf:"bytes,2,opt,name=script,proto3" json:"script,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateStartupScriptRequest) Reset() {
+	*x = UpdateStartupScriptRequest{}
+	mi := &file_rookery_v1_system_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateStartupScriptRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateStartupScriptRequest) ProtoMessage() {}
+
+func (x *UpdateStartupScriptRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_system_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateStartupScriptRequest.ProtoReflect.Descriptor instead.
+func (*UpdateStartupScriptRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_system_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *UpdateStartupScriptRequest) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *UpdateStartupScriptRequest) GetScript() string {
+	if x != nil {
+		return x.Script
+	}
+	return ""
+}
+
+type StartupScript struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Script        string                 `protobuf:"bytes,2,opt,name=script,proto3" json:"script,omitempty"`
+	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	ExitCode      int32                  `protobuf:"varint,4,opt,name=exit_code,json=exitCode,proto3" json:"exit_code,omitempty"`
+	Output        string                 `protobuf:"bytes,5,opt,name=output,proto3" json:"output,omitempty"`
+	RanAt         *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=ran_at,json=ranAt,proto3" json:"ran_at,omitempty"`
+	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartupScript) Reset() {
+	*x = StartupScript{}
+	mi := &file_rookery_v1_system_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartupScript) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartupScript) ProtoMessage() {}
+
+func (x *StartupScript) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_system_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartupScript.ProtoReflect.Descriptor instead.
+func (*StartupScript) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_system_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *StartupScript) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *StartupScript) GetScript() string {
+	if x != nil {
+		return x.Script
+	}
+	return ""
+}
+
+func (x *StartupScript) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *StartupScript) GetExitCode() int32 {
+	if x != nil {
+		return x.ExitCode
+	}
+	return 0
+}
+
+func (x *StartupScript) GetOutput() string {
+	if x != nil {
+		return x.Output
+	}
+	return ""
+}
+
+func (x *StartupScript) GetRanAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RanAt
+	}
+	return nil
+}
+
+func (x *StartupScript) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+type GetVPPStartupScriptRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetVPPStartupScriptRequest) Reset() {
+	*x = GetVPPStartupScriptRequest{}
+	mi := &file_rookery_v1_system_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetVPPStartupScriptRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetVPPStartupScriptRequest) ProtoMessage() {}
+
+func (x *GetVPPStartupScriptRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_system_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetVPPStartupScriptRequest.ProtoReflect.Descriptor instead.
+func (*GetVPPStartupScriptRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_system_proto_rawDescGZIP(), []int{11}
+}
+
+type UpdateVPPStartupScriptRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Script        string                 `protobuf:"bytes,2,opt,name=script,proto3" json:"script,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateVPPStartupScriptRequest) Reset() {
+	*x = UpdateVPPStartupScriptRequest{}
+	mi := &file_rookery_v1_system_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateVPPStartupScriptRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateVPPStartupScriptRequest) ProtoMessage() {}
+
+func (x *UpdateVPPStartupScriptRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_system_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateVPPStartupScriptRequest.ProtoReflect.Descriptor instead.
+func (*UpdateVPPStartupScriptRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_system_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *UpdateVPPStartupScriptRequest) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *UpdateVPPStartupScriptRequest) GetScript() string {
+	if x != nil {
+		return x.Script
+	}
+	return ""
+}
+
 var File_rookery_v1_system_proto protoreflect.FileDescriptor
 
 const file_rookery_v1_system_proto_rawDesc = "" +
 	"\n" +
 	"\x17rookery/v1/system.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\x12\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\x1a\x17validate/validate.proto\"\x12\n" +
 	"\x10GetHealthRequest\"(\n" +
 	"\x0eHealthResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\"\x12\n" +
@@ -466,16 +819,44 @@ const file_rookery_v1_system_proto_rawDesc = "" +
 	"\x06detail\x18\x03 \x01(\tR\x06detail\x129\n" +
 	"\n" +
 	"checked_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcheckedAt\x12\x16\n" +
-	"\x06socket\x18\x05 \x01(\tR\x06socket\"\xc3\x01\n" +
+	"\x06socket\x18\x05 \x01(\tR\x06socket\"\xe9\x02\n" +
 	"\x0eStatusResponse\x12\x14\n" +
 	"\x05ready\x18\x01 \x01(\bR\x05ready\x129\n" +
 	"\n" +
 	"checked_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tcheckedAt\x127\n" +
 	"\tthin_pool\x18\x03 \x01(\v2\x1a.rookery.v1.ThinPoolStatusR\bthinPool\x12'\n" +
-	"\x03vpp\x18\x04 \x01(\v2\x15.rookery.v1.VPPStatusR\x03vpp2\xc8\x01\n" +
+	"\x03vpp\x18\x04 \x01(\v2\x15.rookery.v1.VPPStatusR\x03vpp\x12U\n" +
+	"\x16rookery_startup_script\x18\x05 \x01(\v2\x1f.rookery.v1.StartupScriptStatusR\x14rookeryStartupScript\x12M\n" +
+	"\x12vpp_startup_script\x18\x06 \x01(\v2\x1f.rookery.v1.StartupScriptStatusR\x10vppStartupScript\"\x97\x01\n" +
+	"\x13StartupScriptStatus\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1b\n" +
+	"\texit_code\x18\x03 \x01(\x05R\bexitCode\x121\n" +
+	"\x06ran_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x05ranAt\"\x19\n" +
+	"\x17GetStartupScriptRequest\"Y\n" +
+	"\x1aUpdateStartupScriptRequest\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\x12!\n" +
+	"\x06script\x18\x02 \x01(\tB\t\xfaB\x06r\x04\x18\x80\x80\x04R\x06script\"\xfc\x01\n" +
+	"\rStartupScript\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x16\n" +
+	"\x06script\x18\x02 \x01(\tR\x06script\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\x12\x1b\n" +
+	"\texit_code\x18\x04 \x01(\x05R\bexitCode\x12\x16\n" +
+	"\x06output\x18\x05 \x01(\tR\x06output\x121\n" +
+	"\x06ran_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x05ranAt\x129\n" +
+	"\n" +
+	"updated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x1c\n" +
+	"\x1aGetVPPStartupScriptRequest\"\\\n" +
+	"\x1dUpdateVPPStartupScriptRequest\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\x12!\n" +
+	"\x06script\x18\x02 \x01(\tB\t\xfaB\x06r\x04\x18\x80\x80\x04R\x06script2\xb3\x05\n" +
 	"\rSystemService\x12[\n" +
 	"\tGetHealth\x12\x1c.rookery.v1.GetHealthRequest\x1a\x1a.rookery.v1.HealthResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/api/healthz\x12Z\n" +
-	"\tGetStatus\x12\x1c.rookery.v1.GetStatusRequest\x1a\x1a.rookery.v1.StatusResponse\"\x13\x82\xd3\xe4\x93\x02\r\x12\v/api/statusB\x95\x01\x92AS\x12N\n" +
+	"\tGetStatus\x12\x1c.rookery.v1.GetStatusRequest\x1a\x1a.rookery.v1.StatusResponse\"\x13\x82\xd3\xe4\x93\x02\r\x12\v/api/status\x12o\n" +
+	"\x10GetStartupScript\x12#.rookery.v1.GetStartupScriptRequest\x1a\x19.rookery.v1.StartupScript\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/api/startup-script\x12x\n" +
+	"\x13UpdateStartupScript\x12&.rookery.v1.UpdateStartupScriptRequest\x1a\x19.rookery.v1.StartupScript\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\x1a\x13/api/startup-script\x12y\n" +
+	"\x13GetVPPStartupScript\x12&.rookery.v1.GetVPPStartupScriptRequest\x1a\x19.rookery.v1.StartupScript\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/api/vpp-startup-script\x12\x82\x01\n" +
+	"\x16UpdateVPPStartupScript\x12).rookery.v1.UpdateVPPStartupScriptRequest\x1a\x19.rookery.v1.StartupScript\"\"\x82\xd3\xe4\x93\x02\x1c:\x01*\x1a\x17/api/vpp-startup-scriptB\x95\x01\x92AS\x12N\n" +
 	"\vRookery API\x12:Virtual-machine, storage, network, and VPP management API.2\x031.0*\x01\x01Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
 
 var (
@@ -490,33 +871,52 @@ func file_rookery_v1_system_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_system_proto_rawDescData
 }
 
-var file_rookery_v1_system_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_rookery_v1_system_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_rookery_v1_system_proto_goTypes = []any{
-	(*GetHealthRequest)(nil),      // 0: rookery.v1.GetHealthRequest
-	(*HealthResponse)(nil),        // 1: rookery.v1.HealthResponse
-	(*GetStatusRequest)(nil),      // 2: rookery.v1.GetStatusRequest
-	(*ComponentStatus)(nil),       // 3: rookery.v1.ComponentStatus
-	(*ThinPoolStatus)(nil),        // 4: rookery.v1.ThinPoolStatus
-	(*VPPStatus)(nil),             // 5: rookery.v1.VPPStatus
-	(*StatusResponse)(nil),        // 6: rookery.v1.StatusResponse
-	(*timestamppb.Timestamp)(nil), // 7: google.protobuf.Timestamp
+	(*GetHealthRequest)(nil),              // 0: rookery.v1.GetHealthRequest
+	(*HealthResponse)(nil),                // 1: rookery.v1.HealthResponse
+	(*GetStatusRequest)(nil),              // 2: rookery.v1.GetStatusRequest
+	(*ComponentStatus)(nil),               // 3: rookery.v1.ComponentStatus
+	(*ThinPoolStatus)(nil),                // 4: rookery.v1.ThinPoolStatus
+	(*VPPStatus)(nil),                     // 5: rookery.v1.VPPStatus
+	(*StatusResponse)(nil),                // 6: rookery.v1.StatusResponse
+	(*StartupScriptStatus)(nil),           // 7: rookery.v1.StartupScriptStatus
+	(*GetStartupScriptRequest)(nil),       // 8: rookery.v1.GetStartupScriptRequest
+	(*UpdateStartupScriptRequest)(nil),    // 9: rookery.v1.UpdateStartupScriptRequest
+	(*StartupScript)(nil),                 // 10: rookery.v1.StartupScript
+	(*GetVPPStartupScriptRequest)(nil),    // 11: rookery.v1.GetVPPStartupScriptRequest
+	(*UpdateVPPStartupScriptRequest)(nil), // 12: rookery.v1.UpdateVPPStartupScriptRequest
+	(*timestamppb.Timestamp)(nil),         // 13: google.protobuf.Timestamp
 }
 var file_rookery_v1_system_proto_depIdxs = []int32{
-	7, // 0: rookery.v1.ComponentStatus.checked_at:type_name -> google.protobuf.Timestamp
-	7, // 1: rookery.v1.ThinPoolStatus.checked_at:type_name -> google.protobuf.Timestamp
-	7, // 2: rookery.v1.VPPStatus.checked_at:type_name -> google.protobuf.Timestamp
-	7, // 3: rookery.v1.StatusResponse.checked_at:type_name -> google.protobuf.Timestamp
-	4, // 4: rookery.v1.StatusResponse.thin_pool:type_name -> rookery.v1.ThinPoolStatus
-	5, // 5: rookery.v1.StatusResponse.vpp:type_name -> rookery.v1.VPPStatus
-	0, // 6: rookery.v1.SystemService.GetHealth:input_type -> rookery.v1.GetHealthRequest
-	2, // 7: rookery.v1.SystemService.GetStatus:input_type -> rookery.v1.GetStatusRequest
-	1, // 8: rookery.v1.SystemService.GetHealth:output_type -> rookery.v1.HealthResponse
-	6, // 9: rookery.v1.SystemService.GetStatus:output_type -> rookery.v1.StatusResponse
-	8, // [8:10] is the sub-list for method output_type
-	6, // [6:8] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	13, // 0: rookery.v1.ComponentStatus.checked_at:type_name -> google.protobuf.Timestamp
+	13, // 1: rookery.v1.ThinPoolStatus.checked_at:type_name -> google.protobuf.Timestamp
+	13, // 2: rookery.v1.VPPStatus.checked_at:type_name -> google.protobuf.Timestamp
+	13, // 3: rookery.v1.StatusResponse.checked_at:type_name -> google.protobuf.Timestamp
+	4,  // 4: rookery.v1.StatusResponse.thin_pool:type_name -> rookery.v1.ThinPoolStatus
+	5,  // 5: rookery.v1.StatusResponse.vpp:type_name -> rookery.v1.VPPStatus
+	7,  // 6: rookery.v1.StatusResponse.rookery_startup_script:type_name -> rookery.v1.StartupScriptStatus
+	7,  // 7: rookery.v1.StatusResponse.vpp_startup_script:type_name -> rookery.v1.StartupScriptStatus
+	13, // 8: rookery.v1.StartupScriptStatus.ran_at:type_name -> google.protobuf.Timestamp
+	13, // 9: rookery.v1.StartupScript.ran_at:type_name -> google.protobuf.Timestamp
+	13, // 10: rookery.v1.StartupScript.updated_at:type_name -> google.protobuf.Timestamp
+	0,  // 11: rookery.v1.SystemService.GetHealth:input_type -> rookery.v1.GetHealthRequest
+	2,  // 12: rookery.v1.SystemService.GetStatus:input_type -> rookery.v1.GetStatusRequest
+	8,  // 13: rookery.v1.SystemService.GetStartupScript:input_type -> rookery.v1.GetStartupScriptRequest
+	9,  // 14: rookery.v1.SystemService.UpdateStartupScript:input_type -> rookery.v1.UpdateStartupScriptRequest
+	11, // 15: rookery.v1.SystemService.GetVPPStartupScript:input_type -> rookery.v1.GetVPPStartupScriptRequest
+	12, // 16: rookery.v1.SystemService.UpdateVPPStartupScript:input_type -> rookery.v1.UpdateVPPStartupScriptRequest
+	1,  // 17: rookery.v1.SystemService.GetHealth:output_type -> rookery.v1.HealthResponse
+	6,  // 18: rookery.v1.SystemService.GetStatus:output_type -> rookery.v1.StatusResponse
+	10, // 19: rookery.v1.SystemService.GetStartupScript:output_type -> rookery.v1.StartupScript
+	10, // 20: rookery.v1.SystemService.UpdateStartupScript:output_type -> rookery.v1.StartupScript
+	10, // 21: rookery.v1.SystemService.GetVPPStartupScript:output_type -> rookery.v1.StartupScript
+	10, // 22: rookery.v1.SystemService.UpdateVPPStartupScript:output_type -> rookery.v1.StartupScript
+	17, // [17:23] is the sub-list for method output_type
+	11, // [11:17] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_rookery_v1_system_proto_init() }
@@ -530,7 +930,7 @@ func file_rookery_v1_system_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_system_proto_rawDesc), len(file_rookery_v1_system_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

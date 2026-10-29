@@ -710,6 +710,141 @@ var _ interface {
 
 var _CreateNetworkRequest_Name_Pattern = regexp.MustCompile("^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
+// Validate checks the field values on UpdateNetworkRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *UpdateNetworkRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on UpdateNetworkRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// UpdateNetworkRequestMultiError, or nil if none found.
+func (m *UpdateNetworkRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *UpdateNetworkRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetId() <= 0 {
+		err := UpdateNetworkRequestValidationError{
+			field:  "Id",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetIpv4Cidr()) < 1 {
+		err := UpdateNetworkRequestValidationError{
+			field:  "Ipv4Cidr",
+			reason: "value length must be at least 1 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetIpv6Cidr()) < 1 {
+		err := UpdateNetworkRequestValidationError{
+			field:  "Ipv6Cidr",
+			reason: "value length must be at least 1 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return UpdateNetworkRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// UpdateNetworkRequestMultiError is an error wrapping multiple validation
+// errors returned by UpdateNetworkRequest.ValidateAll() if the designated
+// constraints aren't met.
+type UpdateNetworkRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m UpdateNetworkRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m UpdateNetworkRequestMultiError) AllErrors() []error { return m }
+
+// UpdateNetworkRequestValidationError is the validation error returned by
+// UpdateNetworkRequest.Validate if the designated constraints aren't met.
+type UpdateNetworkRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e UpdateNetworkRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e UpdateNetworkRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e UpdateNetworkRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e UpdateNetworkRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e UpdateNetworkRequestValidationError) ErrorName() string {
+	return "UpdateNetworkRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e UpdateNetworkRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sUpdateNetworkRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = UpdateNetworkRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = UpdateNetworkRequestValidationError{}
+
 // Validate checks the field values on DeleteNetworkRequest with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
@@ -822,3 +957,653 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = DeleteNetworkRequestValidationError{}
+
+// Validate checks the field values on NetworkPipe with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *NetworkPipe) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on NetworkPipe with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in NetworkPipeMultiError, or
+// nil if none found.
+func (m *NetworkPipe) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *NetworkPipe) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Id
+
+	// no validation rules for NetworkAId
+
+	// no validation rules for NetworkAName
+
+	// no validation rules for NetworkBId
+
+	// no validation rules for NetworkBName
+
+	// no validation rules for Instance
+
+	// no validation rules for ParentSwIfIndex
+
+	// no validation rules for EndpointASwIfIndex
+
+	// no validation rules for EndpointBSwIfIndex
+
+	if all {
+		switch v := interface{}(m.GetCreatedAt()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, NetworkPipeValidationError{
+					field:  "CreatedAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, NetworkPipeValidationError{
+					field:  "CreatedAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetCreatedAt()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return NetworkPipeValidationError{
+				field:  "CreatedAt",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if all {
+		switch v := interface{}(m.GetUpdatedAt()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, NetworkPipeValidationError{
+					field:  "UpdatedAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, NetworkPipeValidationError{
+					field:  "UpdatedAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetUpdatedAt()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return NetworkPipeValidationError{
+				field:  "UpdatedAt",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return NetworkPipeMultiError(errors)
+	}
+
+	return nil
+}
+
+// NetworkPipeMultiError is an error wrapping multiple validation errors
+// returned by NetworkPipe.ValidateAll() if the designated constraints aren't met.
+type NetworkPipeMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m NetworkPipeMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m NetworkPipeMultiError) AllErrors() []error { return m }
+
+// NetworkPipeValidationError is the validation error returned by
+// NetworkPipe.Validate if the designated constraints aren't met.
+type NetworkPipeValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e NetworkPipeValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e NetworkPipeValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e NetworkPipeValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e NetworkPipeValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e NetworkPipeValidationError) ErrorName() string { return "NetworkPipeValidationError" }
+
+// Error satisfies the builtin error interface
+func (e NetworkPipeValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sNetworkPipe.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = NetworkPipeValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = NetworkPipeValidationError{}
+
+// Validate checks the field values on ListNetworkPipesRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ListNetworkPipesRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ListNetworkPipesRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ListNetworkPipesRequestMultiError, or nil if none found.
+func (m *ListNetworkPipesRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ListNetworkPipesRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if len(errors) > 0 {
+		return ListNetworkPipesRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// ListNetworkPipesRequestMultiError is an error wrapping multiple validation
+// errors returned by ListNetworkPipesRequest.ValidateAll() if the designated
+// constraints aren't met.
+type ListNetworkPipesRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ListNetworkPipesRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ListNetworkPipesRequestMultiError) AllErrors() []error { return m }
+
+// ListNetworkPipesRequestValidationError is the validation error returned by
+// ListNetworkPipesRequest.Validate if the designated constraints aren't met.
+type ListNetworkPipesRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ListNetworkPipesRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ListNetworkPipesRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ListNetworkPipesRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ListNetworkPipesRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ListNetworkPipesRequestValidationError) ErrorName() string {
+	return "ListNetworkPipesRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ListNetworkPipesRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListNetworkPipesRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ListNetworkPipesRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ListNetworkPipesRequestValidationError{}
+
+// Validate checks the field values on ListNetworkPipesResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ListNetworkPipesResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ListNetworkPipesResponse with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ListNetworkPipesResponseMultiError, or nil if none found.
+func (m *ListNetworkPipesResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ListNetworkPipesResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	for idx, item := range m.GetPipes() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ListNetworkPipesResponseValidationError{
+						field:  fmt.Sprintf("Pipes[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ListNetworkPipesResponseValidationError{
+						field:  fmt.Sprintf("Pipes[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ListNetworkPipesResponseValidationError{
+					field:  fmt.Sprintf("Pipes[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return ListNetworkPipesResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// ListNetworkPipesResponseMultiError is an error wrapping multiple validation
+// errors returned by ListNetworkPipesResponse.ValidateAll() if the designated
+// constraints aren't met.
+type ListNetworkPipesResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ListNetworkPipesResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ListNetworkPipesResponseMultiError) AllErrors() []error { return m }
+
+// ListNetworkPipesResponseValidationError is the validation error returned by
+// ListNetworkPipesResponse.Validate if the designated constraints aren't met.
+type ListNetworkPipesResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ListNetworkPipesResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ListNetworkPipesResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ListNetworkPipesResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ListNetworkPipesResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ListNetworkPipesResponseValidationError) ErrorName() string {
+	return "ListNetworkPipesResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ListNetworkPipesResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListNetworkPipesResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ListNetworkPipesResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ListNetworkPipesResponseValidationError{}
+
+// Validate checks the field values on CreateNetworkPipeRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *CreateNetworkPipeRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on CreateNetworkPipeRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// CreateNetworkPipeRequestMultiError, or nil if none found.
+func (m *CreateNetworkPipeRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *CreateNetworkPipeRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetNetworkAId() <= 0 {
+		err := CreateNetworkPipeRequestValidationError{
+			field:  "NetworkAId",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if m.GetNetworkBId() <= 0 {
+		err := CreateNetworkPipeRequestValidationError{
+			field:  "NetworkBId",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return CreateNetworkPipeRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// CreateNetworkPipeRequestMultiError is an error wrapping multiple validation
+// errors returned by CreateNetworkPipeRequest.ValidateAll() if the designated
+// constraints aren't met.
+type CreateNetworkPipeRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m CreateNetworkPipeRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m CreateNetworkPipeRequestMultiError) AllErrors() []error { return m }
+
+// CreateNetworkPipeRequestValidationError is the validation error returned by
+// CreateNetworkPipeRequest.Validate if the designated constraints aren't met.
+type CreateNetworkPipeRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e CreateNetworkPipeRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e CreateNetworkPipeRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e CreateNetworkPipeRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e CreateNetworkPipeRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e CreateNetworkPipeRequestValidationError) ErrorName() string {
+	return "CreateNetworkPipeRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e CreateNetworkPipeRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sCreateNetworkPipeRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = CreateNetworkPipeRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = CreateNetworkPipeRequestValidationError{}
+
+// Validate checks the field values on DeleteNetworkPipeRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *DeleteNetworkPipeRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on DeleteNetworkPipeRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// DeleteNetworkPipeRequestMultiError, or nil if none found.
+func (m *DeleteNetworkPipeRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *DeleteNetworkPipeRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetId() <= 0 {
+		err := DeleteNetworkPipeRequestValidationError{
+			field:  "Id",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return DeleteNetworkPipeRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// DeleteNetworkPipeRequestMultiError is an error wrapping multiple validation
+// errors returned by DeleteNetworkPipeRequest.ValidateAll() if the designated
+// constraints aren't met.
+type DeleteNetworkPipeRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m DeleteNetworkPipeRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m DeleteNetworkPipeRequestMultiError) AllErrors() []error { return m }
+
+// DeleteNetworkPipeRequestValidationError is the validation error returned by
+// DeleteNetworkPipeRequest.Validate if the designated constraints aren't met.
+type DeleteNetworkPipeRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e DeleteNetworkPipeRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e DeleteNetworkPipeRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e DeleteNetworkPipeRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e DeleteNetworkPipeRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e DeleteNetworkPipeRequestValidationError) ErrorName() string {
+	return "DeleteNetworkPipeRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e DeleteNetworkPipeRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sDeleteNetworkPipeRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = DeleteNetworkPipeRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = DeleteNetworkPipeRequestValidationError{}

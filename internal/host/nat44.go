@@ -488,6 +488,15 @@ func (v *VPPNetwork) DelInterfaceIPv4(ctx context.Context, name, cidr string) er
 	if strings.TrimSpace(name) == "" || strings.TrimSpace(cidr) == "" {
 		return errors.New("interface name and IPv4 CIDR are required")
 	}
+	return v.DelInterfaceAddress(ctx, name, cidr)
+}
+
+// DelInterfaceAddress removes an IPv4 or IPv6 address from a VPP interface.
+// Missing addresses are tolerated.
+func (v *VPPNetwork) DelInterfaceAddress(ctx context.Context, name, cidr string) error {
+	if strings.TrimSpace(name) == "" || strings.TrimSpace(cidr) == "" {
+		return errors.New("interface name and CIDR are required")
+	}
 	_, _ = v.runCLI(ctx, "set", "interface", "ip", "address", "del", name, cidr)
 	return nil
 }
@@ -1033,6 +1042,42 @@ func (v *VPPNetwork) interfaceHasIPv4(ctx context.Context, interfaceName string)
 		}
 	}
 	return false
+}
+
+// EnableDHCPClient enables VPP's IPv4 DHCP client on an interface. It is
+// idempotent and leaves an existing lease alone.
+func (v *VPPNetwork) EnableDHCPClient(ctx context.Context, name string) error {
+	if strings.TrimSpace(name) == "" {
+		return errors.New("interface name is required")
+	}
+	if v.dhcpClientConfigured(ctx, name) {
+		return nil
+	}
+	hostname, _ := os.Hostname()
+	if hostname == "" {
+		hostname = "rookery"
+	}
+	out, err := v.runCLI(ctx, "set", "dhcp", "client", "intfc", name, "hostname", hostname)
+	if err != nil && !cliAlreadyExists(out) {
+		return fmt.Errorf("enable DHCP client on %s: %w: %s", name, err, out)
+	}
+	return nil
+}
+
+// DisableDHCPClient disables VPP's IPv4 DHCP client on an interface. Missing
+// clients are tolerated.
+func (v *VPPNetwork) DisableDHCPClient(ctx context.Context, name string) error {
+	if strings.TrimSpace(name) == "" {
+		return errors.New("interface name is required")
+	}
+	if !v.dhcpClientConfigured(ctx, name) {
+		return nil
+	}
+	out, err := v.runCLI(ctx, "set", "dhcp", "client", "del", "intfc", name)
+	if err != nil && !cliAlreadyExists(out) {
+		return fmt.Errorf("disable DHCP client on %s: %w: %s", name, err, out)
+	}
+	return nil
 }
 
 // dhcpClientConfigured reports whether VPP already has a DHCP client on the

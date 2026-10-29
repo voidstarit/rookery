@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"google.golang.org/grpc/codes"
@@ -10,6 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
+	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/netutil"
 	"github.com/voidstarit/rookery/internal/store"
 )
@@ -219,15 +221,12 @@ func (s *routeTableService) CreateRoute(ctx context.Context, request *rookeryv1.
 		return nil, routeTableStoreError(err)
 	}
 	var interfaceID *int64
-	swIfIndex := uint32(0)
 	if request.GetInterfaceId() != 0 {
 		id := request.GetInterfaceId()
-		iface, err := s.store.GetInterface(ctx, id)
-		if err != nil {
+		if _, err := s.store.GetInterface(ctx, id); err != nil {
 			return nil, storeReadError(err, store.ErrInterfaceNotFound, "interface not found")
 		}
 		interfaceID = &id
-		swIfIndex = iface.SwIfIndex
 	}
 	egress := strings.TrimSpace(request.GetEgressInterface())
 	if interfaceID != nil && egress != "" {
@@ -235,17 +234,93 @@ func (s *routeTableService) CreateRoute(ctx context.Context, request *rookeryv1.
 	}
 	created, err := s.store.CreateRoute(ctx, store.Route{
 		TableID: table.TableID, IPv6: table.IPv6, Prefix: request.GetPrefix(),
-		NextHop: request.GetNextHop(), InterfaceID: interfaceID,
-		EgressInterface: egress, Preference: request.GetPreference(),
+		Description: request.GetDescription(), NextHop: request.GetNextHop(), InterfaceID: interfaceID,
+		EgressInterface: egress, Preference: request.Preference,
+		Count: request.Count, NextHopTable: trimmedStringPointer(request.NextHopTable),
+		Weight: request.Weight, UDPEncap: request.UdpEncap,
+		IPv4LookupTable: trimmedStringPointer(request.Ipv4LookupTable),
+		IPv6LookupTable: trimmedStringPointer(request.Ipv6LookupTable),
+		MPLSLookupTable: request.MplsLookupTable,
+		ResolveViaHost:  request.GetResolveViaHost(), ResolveViaConnected: request.GetResolveViaConnected(),
+		RxIPv4Interface: request.GetRxIpv4Interface(), RxIPv6Interface: request.GetRxIpv6Interface(),
+		OutLabels: request.GetOutLabels(), Drop: request.GetDrop(),
 	})
 	if err != nil {
 		return nil, routeStoreError(err)
 	}
-	if err := s.runtime.AddRoute(ctx, created.TableID, created.IPv6, created.Prefix, created.NextHop, created.EgressInterface, swIfIndex, created.Preference); err != nil {
+	spec, err := s.routeSpec(ctx, created)
+	if err != nil {
+		_ = s.store.DeleteRoute(ctx, created.ID)
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	if err := s.runtime.AddRouteSpec(ctx, spec); err != nil {
 		_ = s.store.DeleteRoute(ctx, created.ID)
 		return nil, status.Error(codes.InvalidArgument, "could not install route: "+err.Error())
 	}
 	return routeToProto(created, request.GetRouteTableId()), nil
+}
+
+func (s *routeTableService) UpdateRoute(ctx context.Context, request *rookeryv1.UpdateRouteRequest) (*rookeryv1.Route, error) {
+	if err := s.runtimeReady(); err != nil {
+		return nil, err
+	}
+	existing, err := s.store.GetRoute(ctx, request.GetId())
+	if err != nil {
+		return nil, routeStoreError(err)
+	}
+	var interfaceID *int64
+	interfaceName := ""
+	if request.GetInterfaceId() != 0 {
+		id := request.GetInterfaceId()
+		iface, err := s.store.GetInterface(ctx, id)
+		if err != nil {
+			return nil, storeReadError(err, store.ErrInterfaceNotFound, "interface not found")
+		}
+		interfaceID = &id
+		interfaceName = iface.Name
+	}
+	egress := strings.TrimSpace(request.GetEgressInterface())
+	if interfaceID != nil && egress != "" {
+		return nil, status.Error(codes.InvalidArgument, "interface_id and egress_interface are mutually exclusive")
+	}
+	updated := store.Route{
+		ID: existing.ID, TableID: existing.TableID, IPv6: existing.IPv6,
+		Prefix: request.GetPrefix(), Description: request.GetDescription(), NextHop: request.GetNextHop(),
+		InterfaceID: interfaceID, InterfaceName: interfaceName, EgressInterface: egress,
+		Preference: request.Preference,
+		Count:      request.Count, NextHopTable: trimmedStringPointer(request.NextHopTable), Weight: request.Weight,
+		UDPEncap: request.UdpEncap, IPv4LookupTable: trimmedStringPointer(request.Ipv4LookupTable),
+		IPv6LookupTable: trimmedStringPointer(request.Ipv6LookupTable), MPLSLookupTable: request.MplsLookupTable,
+		ResolveViaHost: request.GetResolveViaHost(), ResolveViaConnected: request.GetResolveViaConnected(),
+		RxIPv4Interface: request.GetRxIpv4Interface(), RxIPv6Interface: request.GetRxIpv6Interface(),
+		OutLabels: request.GetOutLabels(), Drop: request.GetDrop(),
+	}
+	existingSpec, err := s.routeSpec(ctx, existing)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	updatedSpec, err := s.routeSpec(ctx, updated)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	_ = s.runtime.DeleteRoute(ctx, existing.TableID, existing.IPv6, existing.Prefix)
+	if err := s.runtime.AddRouteSpec(ctx, updatedSpec); err != nil {
+		_ = s.runtime.AddRouteSpec(ctx, existingSpec)
+		return nil, status.Error(codes.InvalidArgument, "could not install route: "+err.Error())
+	}
+	saved, err := s.store.UpdateRoute(ctx, existing.ID, updated)
+	if err != nil {
+		_ = s.runtime.DeleteRoute(ctx, updated.TableID, updated.IPv6, updated.Prefix)
+		_ = s.runtime.AddRouteSpec(ctx, existingSpec)
+		return nil, routeStoreError(err)
+	}
+	var tableRecordID int64
+	if existing.TableID != 0 {
+		if table, err := s.store.GetRouteTableByID(ctx, existing.TableID, existing.IPv6); err == nil {
+			tableRecordID = table.ID
+		}
+	}
+	return routeToProto(saved, tableRecordID), nil
 }
 
 func (s *routeTableService) DeleteRoute(ctx context.Context, request *rookeryv1.DeleteRouteRequest) (*emptypb.Empty, error) {
@@ -300,10 +375,16 @@ func (s *routeTableService) ListFIBRoutes(ctx context.Context, request *rookeryv
 func routeToProto(route store.Route, routeTableID int64) *rookeryv1.Route {
 	return &rookeryv1.Route{
 		Id: route.ID, RouteTableId: routeTableID, TableId: route.TableID, Ipv6: route.IPv6,
-		Prefix: route.Prefix, NextHop: route.NextHop, InterfaceId: route.InterfaceID,
+		Prefix: route.Prefix, Description: route.Description, NextHop: route.NextHop, InterfaceId: route.InterfaceID,
 		InterfaceName: route.InterfaceName, EgressInterface: route.EgressInterface,
-		Preference: route.Preference, CreatedAt: timestamp(route.CreatedAt),
-		UpdatedAt: timestamp(route.UpdatedAt),
+		Preference: route.Preference, Count: route.Count, NextHopTable: stringValue(route.NextHopTable),
+		Weight: route.Weight, UdpEncap: route.UDPEncap,
+		Ipv4LookupTable: stringValue(route.IPv4LookupTable), Ipv6LookupTable: stringValue(route.IPv6LookupTable),
+		MplsLookupTable: route.MPLSLookupTable,
+		ResolveViaHost:  route.ResolveViaHost, ResolveViaConnected: route.ResolveViaConnected,
+		RxIpv4Interface: route.RxIPv4Interface, RxIpv6Interface: route.RxIPv6Interface,
+		OutLabels: route.OutLabels, Drop: route.Drop,
+		CreatedAt: timestamp(route.CreatedAt), UpdatedAt: timestamp(route.UpdatedAt),
 	}
 }
 
@@ -320,4 +401,59 @@ func routeStoreError(err error) error {
 	default:
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
+}
+
+func (s *routeTableService) routeSpec(ctx context.Context, route store.Route) (host.RouteSpec, error) {
+	egress := route.EgressInterface
+	if egress == "" {
+		egress = route.InterfaceName
+	}
+	nextHopTable, err := s.resolveRouteTableName(ctx, route.NextHopTable, route.IPv6, "next-hop table")
+	if err != nil {
+		return host.RouteSpec{}, err
+	}
+	ipv4Lookup, err := s.resolveRouteTableName(ctx, route.IPv4LookupTable, false, "IPv4 lookup table")
+	if err != nil {
+		return host.RouteSpec{}, err
+	}
+	ipv6Lookup, err := s.resolveRouteTableName(ctx, route.IPv6LookupTable, true, "IPv6 lookup table")
+	if err != nil {
+		return host.RouteSpec{}, err
+	}
+	return host.RouteSpec{
+		TableID: route.TableID, IPv6: route.IPv6, Prefix: route.Prefix,
+		NextHop: route.NextHop, EgressInterface: egress, Preference: route.Preference,
+		Count: route.Count, NextHopTable: nextHopTable, Weight: route.Weight,
+		UDPEncap: route.UDPEncap, IPv4LookupTable: ipv4Lookup,
+		IPv6LookupTable: ipv6Lookup, MPLSLookupTable: route.MPLSLookupTable,
+		ResolveViaHost: route.ResolveViaHost, ResolveViaConnected: route.ResolveViaConnected,
+		RxIPv4Interface: route.RxIPv4Interface, RxIPv6Interface: route.RxIPv6Interface,
+		OutLabels: route.OutLabels, Drop: route.Drop,
+	}, nil
+}
+
+func (s *routeTableService) resolveRouteTableName(ctx context.Context, name *string, ipv6 bool, label string) (*uint32, error) {
+	if name == nil {
+		return nil, nil
+	}
+	id, err := s.store.ResolveRouteTableName(ctx, *name, ipv6)
+	if err != nil {
+		return nil, fmt.Errorf("%s %q: %w", label, *name, err)
+	}
+	return &id, nil
+}
+
+func trimmedStringPointer(value string) *string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }

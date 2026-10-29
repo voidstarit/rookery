@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1190,14 +1191,12 @@ func (v *VPPNetwork) AddRoute(ctx context.Context, tableID uint32, ipv6 bool, pr
 
 // DeleteRoute removes a static route from an IP FIB/VRF table.
 func (v *VPPNetwork) DeleteRoute(ctx context.Context, tableID uint32, ipv6 bool, prefix string) error {
-	parsedPrefix, err := ip_types.ParsePrefix(strings.TrimSpace(prefix))
-	if err != nil {
-		return fmt.Errorf("parse route prefix: %w", err)
+	apiErr := v.deleteRouteAPI(ctx, tableID, ipv6, prefix)
+	cliErr := v.deleteRouteCLI(ctx, tableID, prefix)
+	if apiErr != nil && cliErr != nil {
+		return errors.Join(apiErr, cliErr)
 	}
-	if (parsedPrefix.Address.Af == ip_types.ADDRESS_IP6) != ipv6 {
-		return errors.New("route prefix family does not match the table")
-	}
-	return v.changeRoute(ctx, false, ipapi.IPRoute{TableID: tableID, Prefix: parsedPrefix})
+	return nil
 }
 
 func (v *VPPNetwork) changeRoute(ctx context.Context, isAdd bool, route ipapi.IPRoute) error {
@@ -1327,4 +1326,42 @@ func isVPPNotFound(err error) bool {
 		}
 	}
 	return false
+}
+
+// InterfaceAddresses returns the IPv4 and IPv6 prefixes currently assigned to
+// a VPP interface.
+func (v *VPPNetwork) InterfaceAddresses(ctx context.Context, name string) ([]string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, errors.New("interface name is required")
+	}
+	out, err := v.runCLIRaw(ctx, "show", "interface", "address", name)
+	if err != nil {
+		return nil, fmt.Errorf("show interface address %s: %w: %s", name, err, out)
+	}
+	seen := make(map[string]bool)
+	addresses := make([]string, 0)
+	for _, field := range strings.Fields(out) {
+		field = strings.Trim(field, ",")
+		if _, _, err := net.ParseCIDR(field); err == nil && !seen[field] {
+			seen[field] = true
+			addresses = append(addresses, field)
+		}
+	}
+	sort.Strings(addresses)
+	return addresses, nil
+}
+
+// DHCPClientStatus returns whether VPP has a DHCP client configured on an
+// interface and the raw status text.
+func (v *VPPNetwork) DHCPClientStatus(ctx context.Context, name string) (bool, string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return false, "", errors.New("interface name is required")
+	}
+	out, err := v.runCLIRaw(ctx, "show", "dhcp", "client", "intfc", name)
+	if err != nil {
+		return false, strings.TrimSpace(out), fmt.Errorf("show DHCP client %s: %w", name, err)
+	}
+	return strings.Contains(out, name), strings.TrimSpace(out), nil
 }

@@ -7,55 +7,46 @@
   },
   "tags": [
     {
-      "name": "SystemService",
-      "description": "SystemService exposes host and readiness information."
+      "name": "SystemService"
     },
     {
-      "name": "DiskService",
-      "description": "DiskService manages pre-created thin-LVM disks."
+      "name": "DiskService"
     },
     {
-      "name": "MediaService",
-      "description": "MediaService manages read-only installation media records."
+      "name": "MediaService"
     },
     {
-      "name": "NetworkService",
-      "description": "NetworkService manages VPP bridge domains presented as Rookery Networks."
+      "name": "NetworkService"
     },
     {
-      "name": "InterfaceService",
-      "description": "InterfaceService manages VPP vhost-user interfaces and their VM attachment."
+      "name": "InterfaceService"
     },
     {
-      "name": "ACLService",
-      "description": "ACLService manages ordered interface ingress/egress ACLs."
+      "name": "ACLService"
     },
     {
-      "name": "VNFService",
-      "description": "VNFService manages DHCP, NAT44, BGP, and DNS network functions."
+      "name": "VNFService"
     },
     {
-      "name": "VMService",
-      "description": "VMService manages virtual machines and their QEMU lifecycle."
+      "name": "VMService"
     },
     {
-      "name": "StorageBackendService",
-      "description": "StorageBackendService manages disk provisioning backends."
+      "name": "StorageBackendService"
     },
     {
-      "name": "HostService",
-      "description": "HostService exposes Linux host network information used by network functions."
+      "name": "HostService"
     },
     {
-      "name": "TroubleshootService",
-      "description": "TroubleshootService exposes VPP topology and ACL diagnostics."
+      "name": "TroubleshootService"
     },
     {
-      "name": "CaptureService",
-      "description": "CaptureService manages VPP pcap traces and retained capture metadata.\nThe pcap download itself remains a native streaming HTTP endpoint."
+      "name": "CaptureService"
     },
     {
       "name": "RouteTableService"
+    },
+    {
+      "name": "VNFDaemon"
     }
   ],
   "schemes": [
@@ -424,6 +415,177 @@
         ]
       }
     },
+    "/api/host/interfaces/{name}": {
+      "delete": {
+        "summary": "DetachHostInterface removes the VPP host-interface; the Linux NIC becomes\navailable to the host again.",
+        "operationId": "HostService_DetachHostInterface",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "HostService"
+        ]
+      }
+    },
+    "/api/host/interfaces/{name}/attach": {
+      "post": {
+        "summary": "AttachHostInterface takes over a host NIC into VPP and persists it so it\nis recreated after a VPP restart.",
+        "operationId": "HostService_AttachHostInterface",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1HostInterface"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/HostServiceAttachHostInterfaceBody"
+            }
+          }
+        ],
+        "tags": [
+          "HostService"
+        ]
+      }
+    },
+    "/api/host/taps": {
+      "get": {
+        "summary": "ListHostTaps lists persistent taps that connect a Rookery Network to the\nLinux host.",
+        "operationId": "HostService_ListHostTaps",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1HostTap"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "network_id",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "HostService"
+        ]
+      },
+      "post": {
+        "summary": "CreateHostTap creates a VPP tap on a network bridge domain and persists it\nso it is recreated after an API or VPP restart.",
+        "operationId": "HostService_CreateHostTap",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1HostTap"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateHostTapRequest"
+            }
+          }
+        ],
+        "tags": [
+          "HostService"
+        ]
+      }
+    },
+    "/api/host/taps/{id}": {
+      "delete": {
+        "summary": "DeleteHostTap removes a persistent network host tap.",
+        "operationId": "HostService_DeleteHostTap",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "HostService"
+        ]
+      }
+    },
     "/api/interfaces": {
       "get": {
         "operationId": "InterfaceService_ListInterfaces",
@@ -475,6 +637,55 @@
             }
           }
         ],
+        "tags": [
+          "InterfaceService"
+        ]
+      }
+    },
+    "/api/interfaces/counters": {
+      "get": {
+        "summary": "ListInterfaceCounters returns cumulative VPP RX/TX counters for every\nregistered virtual interface. It must be declared after GetInterface:\ngrpc-gateway registers handlers in declaration order and tries the newest\nfirst, so the literal /api/interfaces/counters path must be registered\nafter the /api/interfaces/{id} pattern to win over it.",
+        "operationId": "InterfaceService_ListInterfaceCounters",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1InterfaceCounters"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "InterfaceService"
+        ]
+      },
+      "delete": {
+        "summary": "ResetInterfaceCounters clears the RX/TX counters for all VPP interfaces\n(vppctl clear interfaces). Like ListInterfaceCounters it must stay after\nDeleteInterface so the literal path beats /api/interfaces/{id}.",
+        "operationId": "InterfaceService_ResetInterfaceCounters",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
         "tags": [
           "InterfaceService"
         ]
@@ -617,6 +828,45 @@
         ]
       }
     },
+    "/api/interfaces/{id}/route-tables": {
+      "put": {
+        "operationId": "RouteTableService_SetInterfaceRouteTables",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VirtualInterface"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/RouteTableServiceSetInterfaceRouteTablesBody"
+            }
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      }
+    },
     "/api/media": {
       "get": {
         "operationId": "MediaService_ListMedia",
@@ -734,6 +984,94 @@
         ]
       }
     },
+    "/api/network-pipes": {
+      "get": {
+        "operationId": "NetworkService_ListNetworkPipes",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1NetworkPipe"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetworkService"
+        ]
+      },
+      "post": {
+        "operationId": "NetworkService_CreateNetworkPipe",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1NetworkPipe"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateNetworkPipeRequest"
+            }
+          }
+        ],
+        "tags": [
+          "NetworkService"
+        ]
+      }
+    },
+    "/api/network-pipes/{id}": {
+      "delete": {
+        "operationId": "NetworkService_DeleteNetworkPipe",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "NetworkService"
+        ]
+      }
+    },
     "/api/networks": {
       "get": {
         "operationId": "NetworkService_ListNetworks",
@@ -848,6 +1186,371 @@
         ],
         "tags": [
           "NetworkService"
+        ]
+      },
+      "put": {
+        "operationId": "NetworkService_UpdateNetwork",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Network"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/NetworkServiceUpdateNetworkBody"
+            }
+          }
+        ],
+        "tags": [
+          "NetworkService"
+        ]
+      }
+    },
+    "/api/route-tables": {
+      "get": {
+        "operationId": "RouteTableService_ListRouteTables",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1RouteTable"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "RouteTableService"
+        ]
+      },
+      "post": {
+        "operationId": "RouteTableService_CreateRouteTable",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RouteTable"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateRouteTableRequest"
+            }
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      }
+    },
+    "/api/route-tables/{id}": {
+      "delete": {
+        "operationId": "RouteTableService_DeleteRouteTable",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      }
+    },
+    "/api/route-tables/{route_table_id}/fib": {
+      "get": {
+        "operationId": "RouteTableService_ListFIBRoutes",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1FIBRoute"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "route_table_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "ipv6",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      }
+    },
+    "/api/route-tables/{route_table_id}/routes": {
+      "get": {
+        "operationId": "RouteTableService_ListRoutes",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1Route"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "route_table_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "ipv6",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      },
+      "post": {
+        "operationId": "RouteTableService_CreateRoute",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Route"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "route_table_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/RouteTableServiceCreateRouteBody"
+            }
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      }
+    },
+    "/api/routes/{id}": {
+      "delete": {
+        "operationId": "RouteTableService_DeleteRoute",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      },
+      "put": {
+        "operationId": "RouteTableService_UpdateRoute",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1Route"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/RouteTableServiceUpdateRouteBody"
+            }
+          }
+        ],
+        "tags": [
+          "RouteTableService"
+        ]
+      }
+    },
+    "/api/startup-script": {
+      "get": {
+        "operationId": "SystemService_GetStartupScript",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1StartupScript"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "SystemService"
+        ]
+      },
+      "put": {
+        "operationId": "SystemService_UpdateStartupScript",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1StartupScript"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1UpdateStartupScriptRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SystemService"
         ]
       }
     },
@@ -1285,6 +1988,104 @@
         },
         "tags": [
           "CaptureService"
+        ]
+      }
+    },
+    "/api/troubleshoot/trace": {
+      "get": {
+        "operationId": "TroubleshootService_GetTrace",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1TraceResult"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TroubleshootService"
+        ]
+      },
+      "delete": {
+        "operationId": "TroubleshootService_ClearTrace",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TroubleshootService"
+        ]
+      },
+      "post": {
+        "operationId": "TroubleshootService_StartTrace",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1TraceResult"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1StartTraceRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TroubleshootService"
+        ]
+      }
+    },
+    "/api/troubleshoot/trace/nodes": {
+      "get": {
+        "operationId": "TroubleshootService_ListTraceNodes",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TroubleshootService"
         ]
       }
     },
@@ -1774,6 +2575,69 @@
         ]
       }
     },
+    "/api/vnfs/{id}/bgp": {
+      "get": {
+        "operationId": "VNFService_GetVNFBGP",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VNFBGPStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "VNFService"
+        ]
+      }
+    },
+    "/api/vnfs/{id}/dns-records": {
+      "get": {
+        "summary": "ListVNFDNSRecords returns the static DNS records and the dynamic records\ncurrently registered by DHCP leases.",
+        "operationId": "VNFService_ListVNFDNSRecords",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListVNFDNSRecordsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "VNFService"
+        ]
+      }
+    },
     "/api/vnfs/{id}/leases": {
       "get": {
         "operationId": "VNFService_ListVNFLeases",
@@ -1867,77 +2731,34 @@
         ]
       }
     },
-    "/api/interfaces/{id}/route-tables": {
+    "/api/vpp-startup-script": {
+      "get": {
+        "operationId": "SystemService_GetVPPStartupScript",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1StartupScript"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "SystemService"
+        ]
+      },
       "put": {
-        "operationId": "RouteTableService_SetInterfaceRouteTables",
+        "operationId": "SystemService_UpdateVPPStartupScript",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1VirtualInterface"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "int64"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/RouteTableServiceSetInterfaceRouteTablesBody"
-            }
-          }
-        ],
-        "tags": [
-          "RouteTableService"
-        ]
-      }
-    },
-    "/api/route-tables": {
-      "get": {
-        "operationId": "RouteTableService_ListRouteTables",
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "$ref": "#/definitions/v1RouteTable"
-              }
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "RouteTableService"
-        ]
-      },
-      "post": {
-        "operationId": "RouteTableService_CreateRouteTable",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1RouteTable"
+              "$ref": "#/definitions/v1StartupScript"
             }
           },
           "default": {
@@ -1953,24 +2774,24 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1CreateRouteTableRequest"
+              "$ref": "#/definitions/v1UpdateVPPStartupScriptRequest"
             }
           }
         ],
         "tags": [
-          "RouteTableService"
+          "SystemService"
         ]
       }
     },
-    "/api/route-tables/{id}": {
-      "delete": {
-        "operationId": "RouteTableService_DeleteRouteTable",
+    "/api/vpp/interfaces/{name}/addresses": {
+      "get": {
+        "summary": "GetVPPInterfaceAddresses returns Rookery-managed IPv4/IPv6 addresses for a\nVPP interface owned by Rookery (vhost-user, host tap, host interface, or\nVNF tap).",
+        "operationId": "InterfaceService_GetVPPInterfaceAddresses",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "type": "object",
-              "properties": {}
+              "$ref": "#/definitions/v1VPPInterfaceAddresses"
             }
           },
           "default": {
@@ -1982,300 +2803,23 @@
         },
         "parameters": [
           {
-            "name": "id",
+            "name": "name",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "int64"
+            "type": "string"
           }
         ],
-        "tags": [
-          "RouteTableService"
-        ]
-      }
-    },
-    "/api/route-tables/{route_table_id}/fib": {
-      "get": {
-        "operationId": "RouteTableService_ListFIBRoutes",
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "$ref": "#/definitions/v1FIBRoute"
-              }
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "route_table_id",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "int64"
-          },
-          {
-            "name": "ipv6",
-            "in": "query",
-            "required": false,
-            "type": "boolean"
-          }
-        ],
-        "tags": [
-          "RouteTableService"
-        ]
-      }
-    },
-    "/api/route-tables/{route_table_id}/routes": {
-      "get": {
-        "operationId": "RouteTableService_ListRoutes",
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "$ref": "#/definitions/v1Route"
-              }
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "route_table_id",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "int64"
-          },
-          {
-            "name": "ipv6",
-            "in": "query",
-            "required": false,
-            "type": "boolean"
-          }
-        ],
-        "tags": [
-          "RouteTableService"
-        ]
-      },
-      "post": {
-        "operationId": "RouteTableService_CreateRoute",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1Route"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "route_table_id",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "int64"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/RouteTableServiceCreateRouteBody"
-            }
-          }
-        ],
-        "tags": [
-          "RouteTableService"
-        ]
-      }
-    },
-    "/api/routes/{id}": {
-      "delete": {
-        "operationId": "RouteTableService_DeleteRoute",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "type": "object",
-              "properties": {}
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "int64"
-          }
-        ],
-        "tags": [
-          "RouteTableService"
-        ]
-      }
-    },
-    "/api/troubleshoot/trace": {
-      "get": {
-        "operationId": "TroubleshootService_GetTrace",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1TraceResult"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "TroubleshootService"
-        ]
-      },
-      "delete": {
-        "operationId": "TroubleshootService_ClearTrace",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "type": "object",
-              "properties": {}
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "TroubleshootService"
-        ]
-      },
-      "post": {
-        "operationId": "TroubleshootService_StartTrace",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1TraceResult"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1StartTraceRequest"
-            }
-          }
-        ],
-        "tags": [
-          "TroubleshootService"
-        ]
-      }
-    },
-    "/api/troubleshoot/trace/nodes": {
-      "get": {
-        "operationId": "TroubleshootService_ListTraceNodes",
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "TroubleshootService"
-        ]
-      }
-    },
-    "/api/interfaces/counters": {
-      "get": {
-        "operationId": "InterfaceService_ListInterfaceCounters",
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "$ref": "#/definitions/v1InterfaceCounters"
-              }
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
         "tags": [
           "InterfaceService"
         ]
       },
-      "delete": {
-        "operationId": "InterfaceService_ResetInterfaceCounters",
+      "put": {
+        "operationId": "InterfaceService_UpdateVPPInterfaceAddresses",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "type": "object",
-              "properties": {}
+              "$ref": "#/definitions/v1VPPInterfaceAddresses"
             }
           },
           "default": {
@@ -2285,19 +2829,36 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/InterfaceServiceUpdateVPPInterfaceAddressesBody"
+            }
+          }
+        ],
         "tags": [
           "InterfaceService"
         ]
       }
     },
-    "/api/vnfs/{id}/bgp": {
+    "/api/vpp/interfaces/{name}/route-tables": {
       "get": {
-        "operationId": "VNFService_GetVNFBGP",
+        "summary": "GetVPPInterfaceRouteTables returns the IPv4/IPv6 FIB binding for a Rookery\nhost interface, host tap, or bridge-domain pipe endpoint. Vhost-user\ninterfaces use the dedicated /api/interfaces/{id}/route-tables endpoint.",
+        "operationId": "InterfaceService_GetVPPInterfaceRouteTables",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1VNFBGPStatus"
+              "$ref": "#/definitions/v1VPPInterfaceRouteTables"
             }
           },
           "default": {
@@ -2309,89 +2870,19 @@
         },
         "parameters": [
           {
-            "name": "id",
+            "name": "name",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "int64"
+            "type": "string"
           }
         ],
         "tags": [
-          "VNFService"
-        ]
-      }
-    },
-    "/api/host/taps": {
-      "get": {
-        "summary": "ListHostTaps lists persistent taps that connect a Rookery Network to the\nLinux host.",
-        "operationId": "HostService_ListHostTaps",
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "$ref": "#/definitions/v1HostTap"
-              }
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "network_id",
-            "in": "query",
-            "required": false,
-            "type": "string",
-            "format": "int64"
-          }
-        ],
-        "tags": [
-          "HostService"
+          "InterfaceService"
         ]
       },
-      "post": {
-        "summary": "CreateHostTap creates a VPP tap on a network bridge domain and persists it\nso it is recreated after an API or VPP restart.",
-        "operationId": "HostService_CreateHostTap",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1HostTap"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1CreateHostTapRequest"
-            }
-          }
-        ],
-        "tags": [
-          "HostService"
-        ]
-      }
-    },
-    "/api/host/taps/{id}": {
       "delete": {
-        "summary": "DeleteHostTap removes a persistent network host tap.",
-        "operationId": "HostService_DeleteHostTap",
+        "summary": "DeleteVPPInterfaceRouteTables removes an explicit route-table override so\nthe interface returns to its automatic default (the network VRF for host\ntaps, or the default table for host interfaces).",
+        "operationId": "InterfaceService_DeleteVPPInterfaceRouteTables",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -2409,15 +2900,50 @@
         },
         "parameters": [
           {
-            "name": "id",
+            "name": "name",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "int64"
+            "type": "string"
           }
         ],
         "tags": [
-          "HostService"
+          "InterfaceService"
+        ]
+      },
+      "put": {
+        "operationId": "InterfaceService_UpdateVPPInterfaceRouteTables",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VPPInterfaceRouteTables"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/InterfaceServiceUpdateVPPInterfaceRouteTablesBody"
+            }
+          }
+        ],
+        "tags": [
+          "InterfaceService"
         ]
       }
     }
@@ -2449,8 +2975,17 @@
       "properties": {
         "is_template": {
           "type": "boolean"
+        },
+        "provisioning_script": {
+          "type": "string"
+        },
+        "provisioning_timeout": {
+          "type": "string"
         }
       }
+    },
+    "HostServiceAttachHostInterfaceBody": {
+      "type": "object"
     },
     "InterfaceServiceSetInterfaceACLsBody": {
       "type": "object",
@@ -2479,6 +3014,204 @@
       "type": "object",
       "properties": {
         "attached_vm_id": {
+          "type": "string"
+        }
+      }
+    },
+    "InterfaceServiceUpdateVPPInterfaceAddressesBody": {
+      "type": "object",
+      "properties": {
+        "addresses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dhcp_client_enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "InterfaceServiceUpdateVPPInterfaceRouteTablesBody": {
+      "type": "object",
+      "properties": {
+        "ipv4_table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv6_table_id": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "NetworkServiceUpdateNetworkBody": {
+      "type": "object",
+      "properties": {
+        "ipv4_cidr": {
+          "type": "string"
+        },
+        "ipv6_cidr": {
+          "type": "string"
+        }
+      }
+    },
+    "RouteTableServiceCreateRouteBody": {
+      "type": "object",
+      "properties": {
+        "ipv6": {
+          "type": "boolean"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "next_hop": {
+          "type": "string"
+        },
+        "interface_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "egress_interface": {
+          "type": "string"
+        },
+        "preference": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "next_hop_table": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "udp_encap": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv4_lookup_table": {
+          "type": "string"
+        },
+        "ipv6_lookup_table": {
+          "type": "string"
+        },
+        "mpls_lookup_table": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "resolve_via_host": {
+          "type": "boolean"
+        },
+        "resolve_via_connected": {
+          "type": "boolean"
+        },
+        "rx_ipv4_interface": {
+          "type": "string"
+        },
+        "rx_ipv6_interface": {
+          "type": "string"
+        },
+        "out_labels": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "drop": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "RouteTableServiceSetInterfaceRouteTablesBody": {
+      "type": "object",
+      "properties": {
+        "ipv4_table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv6_table_id": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "RouteTableServiceUpdateRouteBody": {
+      "type": "object",
+      "properties": {
+        "prefix": {
+          "type": "string"
+        },
+        "next_hop": {
+          "type": "string"
+        },
+        "interface_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "egress_interface": {
+          "type": "string"
+        },
+        "preference": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "next_hop_table": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "udp_encap": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv4_lookup_table": {
+          "type": "string"
+        },
+        "ipv6_lookup_table": {
+          "type": "string"
+        },
+        "mpls_lookup_table": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "resolve_via_host": {
+          "type": "boolean"
+        },
+        "resolve_via_connected": {
+          "type": "boolean"
+        },
+        "rx_ipv4_interface": {
+          "type": "string"
+        },
+        "rx_ipv6_interface": {
+          "type": "string"
+        },
+        "out_labels": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "drop": {
+          "type": "boolean"
+        },
+        "description": {
           "type": "string"
         }
       }
@@ -2585,7 +3318,15 @@
           "type": "string"
         }
       },
-      "additionalProperties": true
+      "additionalProperties": {}
+    },
+    "protobufNullValue": {
+      "type": "string",
+      "enum": [
+        "NULL_VALUE"
+      ],
+      "default": "NULL_VALUE",
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\n The JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
     },
     "rpcStatus": {
       "type": "object",
@@ -2789,6 +3530,30 @@
         },
         "is_template": {
           "type": "boolean"
+        },
+        "provisioning_script": {
+          "type": "string"
+        },
+        "provisioning_timeout": {
+          "type": "string"
+        },
+        "provisioning": {
+          "type": "object"
+        }
+      }
+    },
+    "v1CreateHostTapRequest": {
+      "type": "object",
+      "properties": {
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "ipv4_address": {
+          "type": "string"
         }
       }
     },
@@ -2818,11 +3583,45 @@
         }
       }
     },
+    "v1CreateNetworkPipeRequest": {
+      "type": "object",
+      "properties": {
+        "network_a_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "network_b_id": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
     "v1CreateNetworkRequest": {
       "type": "object",
       "properties": {
         "name": {
           "type": "string"
+        },
+        "ipv4_cidr": {
+          "type": "string"
+        },
+        "ipv6_cidr": {
+          "type": "string"
+        }
+      }
+    },
+    "v1CreateRouteTableRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv6": {
+          "type": "boolean"
         }
       }
     },
@@ -2914,6 +3713,22 @@
         }
       }
     },
+    "v1DHCPOption": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "format": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "description": "DHCPOption is an extra DHCPv4/DHCPv6 option advertised by a DHCP VNF.\nFormat selects how Value is encoded: string, ipv4, ipv6, hex, uint8, uint16,\nuint32, or domain-list. Server-managed option codes are rejected."
+    },
     "v1DHCPStaticAssignment": {
       "type": "object",
       "properties": {
@@ -2943,6 +3758,25 @@
           "format": "int32"
         }
       }
+    },
+    "v1DNSRecord": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "ttl": {
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "description": "DNSRecord is one local record served by a DNS VNF. Name is a fully qualified\ndomain name; wildcard names such as *.lab1.test are supported. Type is A,\nAAAA, CNAME, TXT, or PTR."
     },
     "v1Disk": {
       "type": "object",
@@ -2997,6 +3831,77 @@
         },
         "template_disk_name": {
           "type": "string"
+        },
+        "provisioning_script": {
+          "type": "string"
+        },
+        "provisioning_timeout": {
+          "type": "string"
+        }
+      }
+    },
+    "v1FIBPath": {
+      "type": "object",
+      "properties": {
+        "sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "interface_name": {
+          "type": "string"
+        },
+        "next_hop": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "preference": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "proto": {
+          "type": "string"
+        }
+      }
+    },
+    "v1FIBRoute": {
+      "type": "object",
+      "properties": {
+        "prefix": {
+          "type": "string"
+        },
+        "table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv6": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "source_name": {
+          "type": "string"
+        },
+        "dynamic": {
+          "type": "boolean"
+        },
+        "stats_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1FIBPath"
+          }
         }
       }
     },
@@ -3050,8 +3955,58 @@
         },
         "vpp_type": {
           "type": "string"
+        },
+        "managed": {
+          "type": "boolean"
+        },
+        "vpp_addresses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
+    },
+    "v1HostTap": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "network_name": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv4_address": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "vpp_addresses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "HostTap is a VPP tap that bridges a Rookery Network to the Linux host. The\nhost-side interface is named `name`; `ipv4_address` is optional and, when\nset, is assigned to that interface."
     },
     "v1ImportDisksResponse": {
       "type": "object",
@@ -3090,6 +4045,38 @@
         },
         "storage_backend_name": {
           "type": "string"
+        }
+      }
+    },
+    "v1InterfaceCounters": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "rx_packets": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "tx_packets": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "rx_bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "tx_bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "sampled_at": {
+          "type": "string",
+          "format": "date-time"
         }
       }
     },
@@ -3153,6 +4140,18 @@
         }
       }
     },
+    "v1ListFIBRoutesResponse": {
+      "type": "object",
+      "properties": {
+        "routes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1FIBRoute"
+          }
+        }
+      }
+    },
     "v1ListHostInterfacesResponse": {
       "type": "object",
       "properties": {
@@ -3165,6 +4164,18 @@
         }
       }
     },
+    "v1ListHostTapsResponse": {
+      "type": "object",
+      "properties": {
+        "taps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1HostTap"
+          }
+        }
+      }
+    },
     "v1ListImportableDisksResponse": {
       "type": "object",
       "properties": {
@@ -3173,6 +4184,18 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1ImportableDisk"
+          }
+        }
+      }
+    },
+    "v1ListInterfaceCountersResponse": {
+      "type": "object",
+      "properties": {
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1InterfaceCounters"
           }
         }
       }
@@ -3201,6 +4224,18 @@
         }
       }
     },
+    "v1ListNetworkPipesResponse": {
+      "type": "object",
+      "properties": {
+        "pipes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1NetworkPipe"
+          }
+        }
+      }
+    },
     "v1ListNetworksResponse": {
       "type": "object",
       "properties": {
@@ -3209,6 +4244,30 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1Network"
+          }
+        }
+      }
+    },
+    "v1ListRouteTablesResponse": {
+      "type": "object",
+      "properties": {
+        "route_tables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1RouteTable"
+          }
+        }
+      }
+    },
+    "v1ListRoutesResponse": {
+      "type": "object",
+      "properties": {
+        "routes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Route"
           }
         }
       }
@@ -3225,6 +4284,17 @@
         }
       }
     },
+    "v1ListTraceNodesResponse": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "v1ListVMsResponse": {
       "type": "object",
       "properties": {
@@ -3234,6 +4304,28 @@
             "type": "object",
             "$ref": "#/definitions/v1VM"
           }
+        }
+      }
+    },
+    "v1ListVNFDNSRecordsResponse": {
+      "type": "object",
+      "properties": {
+        "vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "type": {
+          "type": "string"
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VNFDNSRecord"
+          }
+        },
+        "dynamic_error": {
+          "type": "string"
         }
       }
     },
@@ -3348,6 +4440,63 @@
         "updated_at": {
           "type": "string",
           "format": "date-time"
+        },
+        "ipv4_cidr": {
+          "type": "string"
+        },
+        "ipv6_cidr": {
+          "type": "string"
+        },
+        "route_table_id": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "v1NetworkPipe": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "network_a_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "network_a_name": {
+          "type": "string"
+        },
+        "network_b_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "network_b_name": {
+          "type": "string"
+        },
+        "instance": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "parent_sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "endpoint_a_sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "endpoint_b_sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
         }
       }
     },
@@ -3434,6 +4583,149 @@
         }
       }
     },
+    "v1Route": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "route_table_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv6": {
+          "type": "boolean"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "next_hop": {
+          "type": "string"
+        },
+        "interface_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "interface_name": {
+          "type": "string"
+        },
+        "egress_interface": {
+          "type": "string"
+        },
+        "preference": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "next_hop_table": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "udp_encap": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv4_lookup_table": {
+          "type": "string"
+        },
+        "ipv6_lookup_table": {
+          "type": "string"
+        },
+        "mpls_lookup_table": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "resolve_via_host": {
+          "type": "boolean"
+        },
+        "resolve_via_connected": {
+          "type": "boolean"
+        },
+        "rx_ipv4_interface": {
+          "type": "string"
+        },
+        "rx_ipv6_interface": {
+          "type": "string"
+        },
+        "out_labels": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "drop": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RouteTable": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv6": {
+          "type": "boolean"
+        },
+        "is_default": {
+          "type": "boolean"
+        },
+        "interface_count": {
+          "type": "string",
+          "format": "int64"
+        },
+        "route_count": {
+          "type": "string",
+          "format": "int64"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "managed": {
+          "type": "boolean"
+        }
+      }
+    },
     "v1StartCaptureRequest": {
       "type": "object",
       "properties": {
@@ -3453,6 +4745,66 @@
         }
       }
     },
+    "v1StartTraceRequest": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "v1StartupScript": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "script": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "exit_code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "output": {
+          "type": "string"
+        },
+        "ran_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1StartupScriptStatus": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string"
+        },
+        "exit_code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "ran_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
     "v1StatusResponse": {
       "type": "object",
       "properties": {
@@ -3468,6 +4820,12 @@
         },
         "vpp": {
           "$ref": "#/definitions/v1VPPStatus"
+        },
+        "rookery_startup_script": {
+          "$ref": "#/definitions/v1StartupScriptStatus"
+        },
+        "vpp_startup_script": {
+          "$ref": "#/definitions/v1StartupScriptStatus"
         }
       }
     },
@@ -3550,6 +4908,47 @@
           "type": "string"
         },
         "name": {
+          "type": "string"
+        }
+      }
+    },
+    "v1TraceResult": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "raw": {
+          "type": "string"
+        },
+        "captured_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1UpdateStartupScriptRequest": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "script": {
+          "type": "string"
+        }
+      }
+    },
+    "v1UpdateVPPStartupScriptRequest": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "script": {
           "type": "string"
         }
       }
@@ -3834,6 +5233,69 @@
         }
       }
     },
+    "v1VNFBGPReceivedPrefix": {
+      "type": "object",
+      "properties": {
+        "prefix": {
+          "type": "string"
+        },
+        "next_hop": {
+          "type": "string"
+        },
+        "as_path": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      }
+    },
+    "v1VNFBGPStatus": {
+      "type": "object",
+      "properties": {
+        "vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "type": {
+          "type": "string"
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "established": {
+          "type": "boolean"
+        },
+        "session_state": {
+          "type": "string"
+        },
+        "peer_address": {
+          "type": "string"
+        },
+        "peer_as": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "local_as": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "advertised": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "received": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VNFBGPReceivedPrefix"
+          }
+        }
+      }
+    },
     "v1VNFConfig": {
       "type": "object",
       "properties": {
@@ -3883,26 +5345,18 @@
         },
         "transport": {
           "type": "string",
-          "description": "BGP configuration. IPv4 unicast only for now."
+          "description": "Transport override for DHCPv4: shared, dedicated, or tap. memif is a\nlegacy alias for dedicated memif. Empty selects the network default.\nBGP supports tap and memif (dedicated) transport."
         },
         "local_as": {
           "type": "integer",
           "format": "int64"
         },
+        "router_id": {
+          "type": "string"
+        },
         "peer_as": {
           "type": "integer",
           "format": "int64"
-        },
-        "multihop_ttl": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "target_table_id": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "router_id": {
-          "type": "string"
         },
         "peer_ip": {
           "type": "string"
@@ -3913,11 +5367,19 @@
         "peer_gateway": {
           "type": "string"
         },
+        "multihop_ttl": {
+          "type": "integer",
+          "format": "int64"
+        },
         "password": {
           "type": "string"
         },
         "passive": {
           "type": "boolean"
+        },
+        "target_table_id": {
+          "type": "integer",
+          "format": "int64"
         },
         "advertise_prefixes": {
           "type": "array",
@@ -3926,7 +5388,8 @@
           }
         },
         "next_hop": {
-          "type": "string"
+          "type": "string",
+          "description": "next_hop overrides the BGP NEXT_HOP for advertised prefixes. Empty means\nuse local_ip. Must match the local_ip address family."
         },
         "dns_records": {
           "type": "array",
@@ -3952,6 +5415,44 @@
             "$ref": "#/definitions/v1DHCPOption"
           },
           "description": "Extra DHCPv4/DHCPv6 options advertised by a DHCP VNF. DNS (v4 option 6,\nv6 option 23) and server-managed options are rejected; use config.dns for\nDNS servers."
+        },
+        "dns_vnf_id": {
+          "type": "string",
+          "format": "int64",
+          "description": "DHCP DNS integration. Select a DNS VNF on the same network; the daemon\ncreates dynamic A/AAAA and PTR records for active DHCP leases. DNSDomain\nis the suffix used when a client does not provide an FQDN; DNSTTL is the\ndynamic record TTL in seconds (0 means the default 300)."
+        },
+        "dns_domain": {
+          "type": "string"
+        },
+        "dns_ttl": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "v1VNFDNSRecord": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "ttl": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "source": {
+          "type": "string",
+          "description": "source is \"static\" for configured records or \"dhcp\" for lease-derived records."
+        },
+        "source_vnf_id": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },
@@ -4061,6 +5562,60 @@
         }
       }
     },
+    "v1VPPInterfaceAddresses": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "addresses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dhcp_client_enabled": {
+          "type": "boolean"
+        },
+        "live_addresses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dhcp_client_configured": {
+          "type": "boolean"
+        },
+        "dhcp_client_status": {
+          "type": "string"
+        },
+        "status_detail": {
+          "type": "string"
+        }
+      }
+    },
+    "v1VPPInterfaceRouteTables": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "ipv4_table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv6_table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "ipv4_table_name": {
+          "type": "string"
+        },
+        "ipv6_table_name": {
+          "type": "string"
+        }
+      }
+    },
     "v1VPPStatus": {
       "type": "object",
       "properties": {
@@ -4162,482 +5717,14 @@
         },
         "ipv6_table_name": {
           "type": "string"
-        }
-      }
-    },
-    "RouteTableServiceCreateRouteBody": {
-      "type": "object",
-      "properties": {
-        "ipv6": {
-          "type": "boolean"
         },
-        "prefix": {
-          "type": "string"
-        },
-        "next_hop": {
-          "type": "string"
-        },
-        "interface_id": {
-          "type": "string",
-          "format": "int64"
-        },
-        "egress_interface": {
-          "type": "string"
-        },
-        "preference": {
-          "type": "integer",
-          "format": "int64"
-        }
-      }
-    },
-    "RouteTableServiceSetInterfaceRouteTablesBody": {
-      "type": "object",
-      "properties": {
-        "ipv4_table_id": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "ipv6_table_id": {
-          "type": "integer",
-          "format": "int64"
-        }
-      }
-    },
-    "v1CreateRouteTableRequest": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "table_id": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "ipv6": {
-          "type": "boolean"
-        }
-      }
-    },
-    "v1FIBPath": {
-      "type": "object",
-      "properties": {
-        "sw_if_index": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "interface_name": {
-          "type": "string"
-        },
-        "next_hop": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string"
-        },
-        "weight": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "preference": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "proto": {
-          "type": "string"
-        }
-      }
-    },
-    "v1FIBRoute": {
-      "type": "object",
-      "properties": {
-        "prefix": {
-          "type": "string"
-        },
-        "table_id": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "ipv6": {
-          "type": "boolean"
-        },
-        "source": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "source_name": {
-          "type": "string"
-        },
-        "dynamic": {
-          "type": "boolean"
-        },
-        "stats_index": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "paths": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1FIBPath"
-          }
-        }
-      }
-    },
-    "v1ListFIBRoutesResponse": {
-      "type": "object",
-      "properties": {
-        "routes": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1FIBRoute"
-          }
-        }
-      }
-    },
-    "v1ListRouteTablesResponse": {
-      "type": "object",
-      "properties": {
-        "route_tables": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1RouteTable"
-          }
-        }
-      }
-    },
-    "v1ListRoutesResponse": {
-      "type": "object",
-      "properties": {
-        "routes": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1Route"
-          }
-        }
-      }
-    },
-    "v1Route": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "format": "int64"
-        },
-        "route_table_id": {
-          "type": "string",
-          "format": "int64"
-        },
-        "table_id": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "ipv6": {
-          "type": "boolean"
-        },
-        "prefix": {
-          "type": "string"
-        },
-        "next_hop": {
-          "type": "string"
-        },
-        "interface_id": {
-          "type": "string",
-          "format": "int64"
-        },
-        "interface_name": {
-          "type": "string"
-        },
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updated_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "egress_interface": {
-          "type": "string"
-        },
-        "preference": {
-          "type": "integer",
-          "format": "int64"
-        }
-      }
-    },
-    "v1RouteTable": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "format": "int64"
-        },
-        "name": {
-          "type": "string"
-        },
-        "table_id": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "ipv6": {
-          "type": "boolean"
-        },
-        "is_default": {
-          "type": "boolean"
-        },
-        "interface_count": {
-          "type": "string",
-          "format": "int64"
-        },
-        "route_count": {
-          "type": "string",
-          "format": "int64"
-        },
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updated_at": {
-          "type": "string",
-          "format": "date-time"
-        }
-      }
-    },
-    "v1ListTraceNodesResponse": {
-      "type": "object",
-      "properties": {
-        "nodes": {
+        "vpp_addresses": {
           "type": "array",
           "items": {
             "type": "string"
           }
         }
       }
-    },
-    "v1StartTraceRequest": {
-      "type": "object",
-      "properties": {
-        "node": {
-          "type": "string"
-        },
-        "count": {
-          "type": "integer",
-          "format": "int64"
-        }
-      }
-    },
-    "v1TraceResult": {
-      "type": "object",
-      "properties": {
-        "node": {
-          "type": "string"
-        },
-        "count": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "raw": {
-          "type": "string"
-        },
-        "captured_at": {
-          "type": "string",
-          "format": "date-time"
-        }
-      }
-    },
-    "v1InterfaceCounters": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "sw_if_index": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "rx_packets": {
-          "type": "string",
-          "format": "uint64"
-        },
-        "tx_packets": {
-          "type": "string",
-          "format": "uint64"
-        },
-        "rx_bytes": {
-          "type": "string",
-          "format": "uint64"
-        },
-        "tx_bytes": {
-          "type": "string",
-          "format": "uint64"
-        },
-        "sampled_at": {
-          "type": "string",
-          "format": "date-time"
-        }
-      }
-    },
-    "v1VNFBGPReceivedPrefix": {
-      "type": "object",
-      "properties": {
-        "prefix": {
-          "type": "string"
-        },
-        "next_hop": {
-          "type": "string"
-        },
-        "as_path": {
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      }
-    },
-    "v1VNFBGPStatus": {
-      "type": "object",
-      "properties": {
-        "vnf_id": {
-          "type": "string",
-          "format": "int64"
-        },
-        "type": {
-          "type": "string"
-        },
-        "running": {
-          "type": "boolean"
-        },
-        "established": {
-          "type": "boolean"
-        },
-        "session_state": {
-          "type": "string"
-        },
-        "peer_address": {
-          "type": "string"
-        },
-        "peer_as": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "local_as": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "advertised": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "received": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1VNFBGPReceivedPrefix"
-          }
-        }
-      }
-    },
-    "v1CreateHostTapRequest": {
-      "type": "object",
-      "properties": {
-        "network_id": {
-          "type": "string",
-          "format": "int64"
-        },
-        "name": {
-          "type": "string"
-        },
-        "ipv4_address": {
-          "type": "string"
-        }
-      }
-    },
-    "v1HostTap": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "format": "int64"
-        },
-        "network_id": {
-          "type": "string",
-          "format": "int64"
-        },
-        "network_name": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "sw_if_index": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "ipv4_address": {
-          "type": "string"
-        },
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updated_at": {
-          "type": "string",
-          "format": "date-time"
-        }
-      },
-      "description": "HostTap is a VPP tap that bridges a Rookery Network to the Linux host. The\nhost-side interface is named `name`; `ipv4_address` is optional and, when\nset, is assigned to that interface."
-    },
-    "v1ListHostTapsResponse": {
-      "type": "object",
-      "properties": {
-        "taps": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1HostTap"
-          }
-        }
-      }
-    },
-    "v1DNSRecord": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string"
-        },
-        "value": {
-          "type": "string"
-        },
-        "ttl": {
-          "type": "integer",
-          "format": "int64"
-        }
-      },
-      "description": "DNSRecord is one local record served by a DNS VNF. Name is a fully qualified\ndomain name; wildcard names such as *.lab1.test are supported. Type is A,\nAAAA, CNAME, or TXT."
-    },
-    "v1DHCPOption": {
-      "type": "object",
-      "properties": {
-        "code": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "format": {
-          "type": "string"
-        },
-        "value": {
-          "type": "string"
-        }
-      },
-      "description": "DHCPOption is an extra DHCPv4/DHCPv6 option advertised by a DHCP VNF.\nFormat selects how Value is encoded: string, ipv4, ipv6, hex, uint8, uint16,\nuint32, or domain-list. Server-managed option codes are rejected."
     }
   }
 }

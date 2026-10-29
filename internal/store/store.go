@@ -113,12 +113,26 @@ func Statuses() []string {
 	}
 }
 
+const (
+	// DesiredRunning means the VM should be running, including after an API or
+	// host restart.
+	DesiredRunning = "running"
+	// DesiredStopped means the VM was stopped explicitly and stays down.
+	DesiredStopped = "stopped"
+)
+
+// ValidDesiredState reports whether s is a desired power state.
+func ValidDesiredState(s string) bool {
+	return s == DesiredRunning || s == DesiredStopped
+}
+
 // VM is a virtual machine record.
 type VM struct {
 	ID             string        `json:"id"`
 	Name           string        `json:"name"`
 	Description    string        `json:"description"`
 	Status         string        `json:"status"`
+	DesiredState   string        `json:"desired_state"`
 	VCPUs          int           `json:"vcpus"`
 	MemoryMB       int           `json:"memory_mb"`
 	DiskID         *int64        `json:"disk_id,omitempty"`
@@ -178,6 +192,17 @@ type Network struct {
 	RouteTableID      uint32    `json:"route_table_id,omitempty"`
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+// StartupScript is the singleton server-level script run after API startup.
+type StartupScript struct {
+	Enabled   bool       `json:"enabled"`
+	Script    string     `json:"script,omitempty"`
+	Status    string     `json:"status"`
+	ExitCode  int        `json:"exit_code"`
+	Output    string     `json:"output,omitempty"`
+	RanAt     *time.Time `json:"ran_at,omitempty"`
+	UpdatedAt time.Time  `json:"updated_at"`
 }
 
 const (
@@ -248,6 +273,14 @@ type VNFConfig struct {
 	DNSRecords    []DNSRecord `json:"dns_records,omitempty"`
 	DNSForward    bool        `json:"dns_forward,omitempty"`
 	DNSForwarders []string    `json:"dns_forwarders,omitempty"`
+
+	// DHCP DNS integration. A DHCPv4/DHCPv6 VNF can register dynamic A/AAAA
+	// and PTR records for its leases in another DNS VNF on the same network.
+	// DNSDomain is the suffix used when the client does not send a FQDN;
+	// DNSTTL defaults to 300 seconds.
+	DNSVNFID  int64  `json:"dns_vnf_id,omitempty"`
+	DNSDomain string `json:"dns_domain,omitempty"`
+	DNSTTL    uint32 `json:"dns_ttl,omitempty"`
 
 	// DHCPOptions are extra DHCPv4/DHCPv6 options advertised by a DHCP VNF.
 	// Code is the DHCP option code; Format controls how Value is encoded.
@@ -381,22 +414,24 @@ type VMInterface struct {
 
 // Disk is a pre-created thin-LVM disk that can be attached to a VM.
 type Disk struct {
-	ID                 int64     `json:"id"`
-	Name               string    `json:"name"`
-	SizeGB             int       `json:"size_gb"`
-	StorageBackendID   *int64    `json:"storage_backend_id,omitempty"`
-	StorageBackendName string    `json:"storage_backend_name,omitempty"`
-	VG                 string    `json:"vg"`
-	ThinPool           string    `json:"thin_pool"`
-	Device             string    `json:"device"`
-	IsTemplate         bool      `json:"is_template"`
-	TemplateDiskID     *int64    `json:"template_disk_id,omitempty"`
-	TemplateDiskName   string    `json:"template_disk_name,omitempty"`
-	PreparedByScript   bool      `json:"-"`
-	AttachedVMID       *string   `json:"attached_vm_id,omitempty"`
-	AttachedVMName     string    `json:"attached_vm_name,omitempty"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	ID                  int64     `json:"id"`
+	Name                string    `json:"name"`
+	SizeGB              int       `json:"size_gb"`
+	StorageBackendID    *int64    `json:"storage_backend_id,omitempty"`
+	StorageBackendName  string    `json:"storage_backend_name,omitempty"`
+	VG                  string    `json:"vg"`
+	ThinPool            string    `json:"thin_pool"`
+	Device              string    `json:"device"`
+	IsTemplate          bool      `json:"is_template"`
+	TemplateDiskID      *int64    `json:"template_disk_id,omitempty"`
+	TemplateDiskName    string    `json:"template_disk_name,omitempty"`
+	ProvisioningScript  string    `json:"provisioning_script,omitempty"`
+	ProvisioningTimeout string    `json:"provisioning_timeout,omitempty"`
+	PreparedByScript    bool      `json:"-"`
+	AttachedVMID        *string   `json:"attached_vm_id,omitempty"`
+	AttachedVMName      string    `json:"attached_vm_name,omitempty"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
 }
 
 // ImportDisk describes an existing volume that should be added to inventory.
@@ -471,8 +506,94 @@ func Open(dbPath string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if err := ensureStartupScriptSchema(ctx, db); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := ensureVPPInterfaceAddressesSchema(ctx, db); err != nil {
+		db.Close()
+		return nil, err
+	}
 
 	return &Store{db: db}, nil
+}
+
+// ensureVPPInterfaceAddressesSchema repairs development databases that recorded
+// a higher schema version before the address table was added.
+func ensureVPPInterfaceAddressesSchema(ctx context.Context, db *sql.DB) error {
+	var exists int
+	if err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM sqlite_master
+		WHERE type = 'table' AND name = 'vpp_interface_addresses'`).Scan(&exists); err != nil {
+		return fmt.Errorf("inspect vpp_interface_addresses schema: %w", err)
+	}
+	if exists != 0 {
+		_, err := db.ExecContext(ctx, `
+			CREATE TABLE IF NOT EXISTS vpp_interface_dhcp_clients (
+			  interface_name TEXT PRIMARY KEY,
+			  enabled INTEGER NOT NULL DEFAULT 0,
+			  updated_at INTEGER NOT NULL
+			)`)
+		if err != nil {
+			return fmt.Errorf("create vpp_interface_dhcp_clients table: %w", err)
+		}
+		return nil
+	}
+	body, err := migrations.ReadFile("migrations/0028_vpp_interface_addresses.sql")
+	if err != nil {
+		return fmt.Errorf("read vpp_interface_addresses migration: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, string(body)); err != nil {
+		return fmt.Errorf("create vpp_interface_addresses table: %w", err)
+	}
+	return nil
+}
+
+// ensureStartupScriptSchema recreates the startup-script singleton if a
+// development database is missing the table or has the pre-split schema. This
+// is intentionally limited to this server setting; normal schema changes stay
+// in the numbered migrations.
+func ensureStartupScriptSchema(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, `SELECT name FROM pragma_table_info('startup_script')`)
+	if err != nil {
+		return fmt.Errorf("inspect startup_script schema: %w", err)
+	}
+	columns := make(map[string]bool)
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return fmt.Errorf("inspect startup_script column: %w", err)
+		}
+		columns[name] = true
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close startup_script schema rows: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("inspect startup_script schema: %w", err)
+	}
+
+	required := []string{
+		"id", "enabled", "script", "status", "exit_code", "output", "ran_at", "updated_at",
+		"vpp_enabled", "vpp_script", "vpp_status", "vpp_exit_code", "vpp_output", "vpp_ran_at", "vpp_updated_at",
+	}
+	for _, name := range required {
+		if !columns[name] {
+			body, err := migrations.ReadFile("migrations/0027_startup_script.sql")
+			if err != nil {
+				return fmt.Errorf("read startup_script migration: %w", err)
+			}
+			if _, err := db.ExecContext(ctx, `DROP TABLE IF EXISTS startup_script`); err != nil {
+				return fmt.Errorf("replace startup_script table: %w", err)
+			}
+			if _, err := db.ExecContext(ctx, string(body)); err != nil {
+				return fmt.Errorf("create startup_script table: %w", err)
+			}
+			return nil
+		}
+	}
+	return nil
 }
 
 // Close closes the underlying database.
@@ -508,6 +629,9 @@ func (s *Store) CreateVM(ctx context.Context, vm VM) (VM, error) {
 	}
 	vm.DiskID = &diskIDs[0]
 	vm.DiskIDs = diskIDs
+	if vm.DesiredState == "" {
+		vm.DesiredState = DesiredStopped
+	}
 
 	now := time.Now().UTC().UnixMilli()
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -516,9 +640,9 @@ func (s *Store) CreateVM(ctx context.Context, vm VM) (VM, error) {
 	}
 	defer tx.Rollback()
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO vms (id, name, description, status, vcpus, memory_mb, disk_id, boot_media_id, console_enabled, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		vm.ID, vm.Name, vm.Description, vm.Status, vm.VCPUs, vm.MemoryMB, diskIDs[0], vm.BootMediaID, vm.ConsoleEnabled, now, now,
+		INSERT INTO vms (id, name, description, status, desired_state, vcpus, memory_mb, disk_id, boot_media_id, console_enabled, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		vm.ID, vm.Name, vm.Description, vm.Status, vm.DesiredState, vm.VCPUs, vm.MemoryMB, diskIDs[0], vm.BootMediaID, vm.ConsoleEnabled, now, now,
 	); err != nil {
 		if constraintErr := classifyVMCreateError(err, vm.Name); constraintErr != nil {
 			return VM{}, constraintErr
@@ -714,6 +838,34 @@ func (s *Store) SetVMStatus(ctx context.Context, id, status string) (VM, error) 
 	return s.GetVM(ctx, id)
 }
 
+// SetVMDesiredState records the power state the VM should have after an API or
+// host restart. Starting a VM sets DesiredRunning; stopping it sets
+// DesiredStopped so reconciliation leaves it down.
+func (s *Store) SetVMDesiredState(ctx context.Context, id, state string) (VM, error) {
+	if !ValidDesiredState(state) {
+		return VM{}, fmt.Errorf("invalid desired state %q", state)
+	}
+	now := time.Now().UTC().UnixMilli()
+
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE vms SET desired_state = ?, updated_at = ? WHERE id = ?`,
+		state, now, id,
+	)
+	if err != nil {
+		return VM{}, fmt.Errorf("update vm desired state: %w", err)
+	}
+
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return VM{}, fmt.Errorf("read updated rows: %w", err)
+	}
+	if affected == 0 {
+		return VM{}, ErrNotFound
+	}
+
+	return s.GetVM(ctx, id)
+}
+
 // DeleteVM deletes a VM by ID, releasing its disks and network interfaces.
 func (s *Store) DeleteVM(ctx context.Context, id string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -747,12 +899,17 @@ func (s *Store) DeleteVM(ctx context.Context, id string) error {
 
 // CreateDisk inserts a disk record and returns the stored record.
 func (s *Store) CreateDisk(ctx context.Context, disk Disk) (Disk, error) {
+	if !disk.IsTemplate && (disk.ProvisioningScript != "" || disk.ProvisioningTimeout != "") {
+		return Disk{}, errors.New("provisioning settings require a template disk")
+	}
 	now := time.Now().UTC().UnixMilli()
 
 	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO disks (name, size_gb, vg, thin_pool, storage_backend_id, is_template, template_disk_id, prepared_by_script, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		disk.Name, disk.SizeGB, disk.VG, disk.ThinPool, disk.StorageBackendID, disk.IsTemplate, disk.TemplateDiskID, disk.PreparedByScript, now, now,
+		INSERT INTO disks (name, size_gb, vg, thin_pool, storage_backend_id, is_template, template_disk_id,
+			provisioning_script, provisioning_timeout, prepared_by_script, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		disk.Name, disk.SizeGB, disk.VG, disk.ThinPool, disk.StorageBackendID, disk.IsTemplate, disk.TemplateDiskID,
+		disk.ProvisioningScript, disk.ProvisioningTimeout, disk.PreparedByScript, now, now,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -885,6 +1042,27 @@ func (s *Store) SetDiskTemplate(ctx context.Context, id int64, isTemplate bool) 
 	now := time.Now().UTC().UnixMilli()
 	if _, err := s.db.ExecContext(ctx, `UPDATE disks SET is_template = ?, updated_at = ? WHERE id = ?`, isTemplate, now, id); err != nil {
 		return Disk{}, fmt.Errorf("update disk template flag: %w", err)
+	}
+	return s.GetDisk(ctx, id)
+}
+
+// SetDiskProvisioning stores the provisioning script and timeout for a template disk.
+func (s *Store) SetDiskProvisioning(ctx context.Context, id int64, script, timeout string) (Disk, error) {
+	disk, err := s.GetDisk(ctx, id)
+	if err != nil {
+		return Disk{}, err
+	}
+	if disk.AttachedVMID != nil {
+		return Disk{}, ErrDiskInUse
+	}
+	if !disk.IsTemplate {
+		return Disk{}, errors.New("provisioning settings require a template disk")
+	}
+	now := time.Now().UTC().UnixMilli()
+	if _, err := s.db.ExecContext(ctx, `
+		UPDATE disks SET provisioning_script = ?, provisioning_timeout = ?, updated_at = ? WHERE id = ?`,
+		script, timeout, now, id); err != nil {
+		return Disk{}, fmt.Errorf("update disk provisioning settings: %w", err)
 	}
 	return s.GetDisk(ctx, id)
 }
@@ -1073,6 +1251,129 @@ func (s *Store) CreateNetwork(ctx context.Context, network Network) (Network, er
 		return Network{}, fmt.Errorf("read inserted network id: %w", err)
 	}
 	return s.GetNetwork(ctx, id)
+}
+
+// GetStartupScript returns the singleton Rookery startup script.
+func (s *Store) GetStartupScript(ctx context.Context) (StartupScript, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT enabled, script, status, exit_code, output, ran_at, updated_at
+		FROM startup_script WHERE id = 1`)
+	var (
+		script    StartupScript
+		enabled   int64
+		ranAt     sql.NullInt64
+		updatedAt int64
+	)
+	if err := row.Scan(&enabled, &script.Script, &script.Status, &script.ExitCode,
+		&script.Output, &ranAt, &updatedAt); err != nil {
+		return StartupScript{}, fmt.Errorf("get startup script: %w", err)
+	}
+	script.Enabled = enabled != 0
+	if ranAt.Valid {
+		value := time.UnixMilli(ranAt.Int64).UTC()
+		script.RanAt = &value
+	}
+	script.UpdatedAt = time.UnixMilli(updatedAt).UTC()
+	return script, nil
+}
+
+// SetStartupScript stores the startup script configuration. Saving a new
+// configuration resets the previous execution result; an enabled script is
+// pending until the next API startup.
+func (s *Store) SetStartupScript(ctx context.Context, enabled bool, script string) (StartupScript, error) {
+	status := "disabled"
+	if enabled {
+		status = "pending"
+	}
+	enabledValue := 0
+	if enabled {
+		enabledValue = 1
+	}
+	if _, err := s.db.ExecContext(ctx, `
+		UPDATE startup_script
+		SET enabled = ?, script = ?, status = ?, exit_code = -1, output = '',
+		    ran_at = NULL, updated_at = ?
+		WHERE id = 1`,
+		enabledValue, script, status, time.Now().UTC().UnixMilli(),
+	); err != nil {
+		return StartupScript{}, fmt.Errorf("update startup script: %w", err)
+	}
+	return s.GetStartupScript(ctx)
+}
+
+// SetStartupScriptResult stores the outcome of a startup script run.
+func (s *Store) SetStartupScriptResult(ctx context.Context, status string, exitCode int, output string, ranAt time.Time) (StartupScript, error) {
+	if _, err := s.db.ExecContext(ctx, `
+		UPDATE startup_script
+		SET status = ?, exit_code = ?, output = ?, ran_at = ?, updated_at = ?
+		WHERE id = 1`,
+		status, exitCode, output, ranAt.UTC().UnixMilli(), time.Now().UTC().UnixMilli(),
+	); err != nil {
+		return StartupScript{}, fmt.Errorf("update startup script result: %w", err)
+	}
+	return s.GetStartupScript(ctx)
+}
+
+// GetVPPStartupScript returns the VPP startup script and its last execution
+// result.
+func (s *Store) GetVPPStartupScript(ctx context.Context) (StartupScript, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT vpp_enabled, vpp_script, vpp_status, vpp_exit_code, vpp_output,
+		       vpp_ran_at, vpp_updated_at
+		FROM startup_script WHERE id = 1`)
+	var (
+		script    StartupScript
+		enabled   int64
+		ranAt     sql.NullInt64
+		updatedAt int64
+	)
+	if err := row.Scan(&enabled, &script.Script, &script.Status, &script.ExitCode,
+		&script.Output, &ranAt, &updatedAt); err != nil {
+		return StartupScript{}, fmt.Errorf("get VPP startup script: %w", err)
+	}
+	script.Enabled = enabled != 0
+	if ranAt.Valid {
+		value := time.UnixMilli(ranAt.Int64).UTC()
+		script.RanAt = &value
+	}
+	script.UpdatedAt = time.UnixMilli(updatedAt).UTC()
+	return script, nil
+}
+
+// SetVPPStartupScript stores the VPP reconnect script configuration.
+func (s *Store) SetVPPStartupScript(ctx context.Context, enabled bool, script string) (StartupScript, error) {
+	status := "disabled"
+	if enabled {
+		status = "pending"
+	}
+	enabledValue := 0
+	if enabled {
+		enabledValue = 1
+	}
+	if _, err := s.db.ExecContext(ctx, `
+		UPDATE startup_script
+		SET vpp_enabled = ?, vpp_script = ?, vpp_status = ?, vpp_exit_code = -1,
+		    vpp_output = '', vpp_ran_at = NULL, vpp_updated_at = ?
+		WHERE id = 1`,
+		enabledValue, script, status, time.Now().UTC().UnixMilli(),
+	); err != nil {
+		return StartupScript{}, fmt.Errorf("update VPP startup script: %w", err)
+	}
+	return s.GetVPPStartupScript(ctx)
+}
+
+// SetVPPStartupScriptResult stores the outcome of a VPP startup script run.
+func (s *Store) SetVPPStartupScriptResult(ctx context.Context, status string, exitCode int, output string, ranAt time.Time) (StartupScript, error) {
+	if _, err := s.db.ExecContext(ctx, `
+		UPDATE startup_script
+		SET vpp_status = ?, vpp_exit_code = ?, vpp_output = ?, vpp_ran_at = ?,
+		    vpp_updated_at = ?
+		WHERE id = 1`,
+		status, exitCode, output, ranAt.UTC().UnixMilli(), time.Now().UTC().UnixMilli(),
+	); err != nil {
+		return StartupScript{}, fmt.Errorf("update VPP startup script result: %w", err)
+	}
+	return s.GetVPPStartupScript(ctx)
 }
 
 // ListNetworks returns all networks ordered by name.
@@ -1389,6 +1690,16 @@ func (s *Store) DeleteNetwork(ctx context.Context, id int64) error {
 	case !errors.Is(err, sql.ErrNoRows):
 		return fmt.Errorf("check network usage: %w", err)
 	}
+	var pipeID int64
+	err = s.db.QueryRowContext(ctx,
+		`SELECT id FROM network_pipes WHERE network_a_id = ? OR network_b_id = ? LIMIT 1`, id, id,
+	).Scan(&pipeID)
+	switch {
+	case err == nil:
+		return ErrNetworkInUse
+	case !errors.Is(err, sql.ErrNoRows):
+		return fmt.Errorf("check network pipe usage: %w", err)
+	}
 
 	res, err := s.db.ExecContext(ctx, `DELETE FROM networks WHERE id = ?`, id)
 	if err != nil {
@@ -1409,8 +1720,13 @@ func (s *Store) DeleteNetwork(ctx context.Context, id int64) error {
 
 // CreateInterface inserts a vhost-user interface record.
 func (s *Store) CreateInterface(ctx context.Context, iface VirtualInterface) (VirtualInterface, error) {
-	if _, err := s.GetNetwork(ctx, iface.NetworkID); err != nil {
+	network, err := s.GetNetwork(ctx, iface.NetworkID)
+	if err != nil {
 		return VirtualInterface{}, err
+	}
+	if iface.IPv4TableID == 0 && iface.IPv6TableID == 0 && network.RouteTableID != 0 {
+		iface.IPv4TableID = network.RouteTableID
+		iface.IPv6TableID = network.RouteTableID
 	}
 	if iface.AttachedVMID != nil {
 		if _, err := s.GetVM(ctx, *iface.AttachedVMID); err != nil {
@@ -1421,9 +1737,11 @@ func (s *Store) CreateInterface(ctx context.Context, iface VirtualInterface) (Vi
 	now := time.Now().UTC().UnixMilli()
 	res, err := s.db.ExecContext(ctx, `
 		INSERT INTO virtual_interfaces
-			(name, network_id, socket_path, mac, sw_if_index, attached_vm_id, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		iface.Name, iface.NetworkID, iface.SocketPath, iface.MAC, iface.SwIfIndex, iface.AttachedVMID, now, now,
+			(name, network_id, socket_path, mac, sw_if_index, attached_vm_id,
+			 ipv4_table_id, ipv6_table_id, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		iface.Name, iface.NetworkID, iface.SocketPath, iface.MAC, iface.SwIfIndex, iface.AttachedVMID,
+		iface.IPv4TableID, iface.IPv6TableID, now, now,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -1969,7 +2287,7 @@ type scanner interface {
 }
 
 const vmSelect = `
-	SELECT v.id, v.name, v.description, v.status, v.vcpus, v.memory_mb,
+	SELECT v.id, v.name, v.description, v.status, v.desired_state, v.vcpus, v.memory_mb,
 	       v.disk_id, d.name, d.size_gb, d.vg, d.thin_pool,
 	       v.boot_media_id, m.name, m.path, m.size_bytes,
 	       v.console_enabled, v.created_at, v.updated_at
@@ -1980,7 +2298,8 @@ const vmSelect = `
 const diskSelect = `
 	SELECT d.id, d.name, d.size_gb, d.vg, d.thin_pool,
 	       d.storage_backend_id, sb.name, d.is_template, d.template_disk_id,
-	       d.prepared_by_script, td.name, v.id, v.name, d.created_at, d.updated_at
+	       d.provisioning_script, d.provisioning_timeout, d.prepared_by_script,
+	       td.name, v.id, v.name, d.created_at, d.updated_at
 	FROM disks AS d
 	LEFT JOIN storage_backends AS sb ON sb.id = d.storage_backend_id
 	LEFT JOIN disks AS td ON td.id = d.template_disk_id
@@ -2008,6 +2327,7 @@ func scanVM(s scanner) (VM, error) {
 		&vm.Name,
 		&vm.Description,
 		&vm.Status,
+		&vm.DesiredState,
 		&vm.VCPUs,
 		&vm.MemoryMB,
 		&diskID,
@@ -2062,17 +2382,19 @@ func scanVM(s scanner) (VM, error) {
 
 func scanDisk(s scanner) (Disk, error) {
 	var (
-		disk             Disk
-		backendID        sql.NullInt64
-		backend          sql.NullString
-		isTemplate       int64
-		templateID       sql.NullInt64
-		preparedByScript int64
-		templateName     sql.NullString
-		vmID             sql.NullString
-		vmName           sql.NullString
-		createdAt        int64
-		updatedAt        int64
+		disk                Disk
+		backendID           sql.NullInt64
+		backend             sql.NullString
+		isTemplate          int64
+		templateID          sql.NullInt64
+		provisioningScript  string
+		provisioningTimeout string
+		preparedByScript    int64
+		templateName        sql.NullString
+		vmID                sql.NullString
+		vmName              sql.NullString
+		createdAt           int64
+		updatedAt           int64
 	)
 	if err := s.Scan(
 		&disk.ID,
@@ -2084,6 +2406,8 @@ func scanDisk(s scanner) (Disk, error) {
 		&backend,
 		&isTemplate,
 		&templateID,
+		&provisioningScript,
+		&provisioningTimeout,
 		&preparedByScript,
 		&templateName,
 		&vmID,
@@ -2096,6 +2420,8 @@ func scanDisk(s scanner) (Disk, error) {
 
 	disk.Device = devicePath(disk.VG, disk.Name)
 	disk.IsTemplate = isTemplate != 0
+	disk.ProvisioningScript = provisioningScript
+	disk.ProvisioningTimeout = provisioningTimeout
 	disk.PreparedByScript = preparedByScript != 0
 	if templateID.Valid {
 		id := templateID.Int64

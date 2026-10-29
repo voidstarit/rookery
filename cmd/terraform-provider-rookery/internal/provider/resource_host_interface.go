@@ -41,6 +41,7 @@ type hostInterfaceModel struct {
 	VPPUp        types.Bool   `tfsdk:"vpp_up"`
 	VPPType      types.String `tfsdk:"vpp_type"`
 	Managed      types.Bool   `tfsdk:"managed"`
+	VPPAddresses types.List   `tfsdk:"vpp_addresses"`
 }
 
 func (r *hostInterfaceResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -67,6 +68,7 @@ func (r *hostInterfaceResource) Schema(_ context.Context, _ resource.SchemaReque
 			"vpp_up":        schema.BoolAttribute{Computed: true},
 			"vpp_type":      schema.StringAttribute{Computed: true},
 			"managed":       schema.BoolAttribute{Computed: true},
+			"vpp_addresses": schema.ListAttribute{Computed: true, ElementType: types.StringType},
 		},
 	}
 }
@@ -163,5 +165,8 @@ func setHostInterfaceState(ctx context.Context, state *hostInterfaceModel, iface
 	state.VPPUp = types.BoolValue(iface.GetVppUp())
 	state.VPPType = optionalStringValue(iface.GetVppType())
 	state.Managed = types.BoolValue(iface.GetManaged())
+	vppAddresses, vppAddressDiags := stringList(ctx, iface.GetVppAddresses())
+	diags.Append(vppAddressDiags...)
+	state.VPPAddresses = vppAddresses
 	return diags
 }

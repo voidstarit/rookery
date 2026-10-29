@@ -50,6 +50,9 @@ type VMController interface {
 // DHCP tap interfaces.
 type NetworkProvisioner interface {
 	CreateBridgeDomain(ctx context.Context, name string, reserved []uint32) (uint32, error)
+	CreatePipe(ctx context.Context, bdA, bdB uint32) (host.PipeRuntime, error)
+	EnsurePipe(ctx context.Context, instance, bdA, bdB uint32) (host.PipeRuntime, error)
+	DeletePipe(ctx context.Context, instance, parentSwIfIndex uint32) error
 	EnsureBridgeDomain(ctx context.Context, bdID uint32, name string) error
 	DeleteBridgeDomain(ctx context.Context, bdID uint32) error
 	CreateVhostUser(ctx context.Context, name, mac string, bdID uint32) (socketPath string, swIfIndex uint32, err error)
@@ -66,8 +69,13 @@ type NetworkProvisioner interface {
 	DeleteRouteTable(ctx context.Context, tableID uint32, ipv6 bool) error
 	SetInterfaceRouteTable(ctx context.Context, swIfIndex uint32, ipv6 bool, tableID uint32) error
 	InterfaceRouteTable(ctx context.Context, swIfIndex uint32, ipv6 bool) (uint32, error)
+	AddInterfaceAddress(ctx context.Context, name, cidr string) error
+	DelInterfaceAddress(ctx context.Context, name, cidr string) error
+	EnableDHCPClient(ctx context.Context, name string) error
+	DisableDHCPClient(ctx context.Context, name string) error
 	DelInterfaceIPv4(ctx context.Context, name, cidr string) error
 	AddRoute(ctx context.Context, tableID uint32, ipv6 bool, prefix, nextHop, egressName string, swIfIndex uint32, preference uint32) error
+	AddRouteSpec(ctx context.Context, spec host.RouteSpec) error
 	DeleteRoute(ctx context.Context, tableID uint32, ipv6 bool, prefix string) error
 	DeleteTap(ctx context.Context, swIfIndex uint32) error
 	Ping(ctx context.Context) error
@@ -104,10 +112,11 @@ type NAT44Provisioner interface {
 type VNFManager interface {
 	Start(ctx context.Context, vnf store.VNF, hostIf string) error
 	StartMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32) error
-	StartShared(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32, address string) error
+	StartShared(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32, address, ipv6Address string) error
 	Stop(ctx context.Context, vnfID int64, removeLeases bool) error
 	Running(ctx context.Context, vnfID int64) bool
 	Leases(ctx context.Context, vnfID int64) ([]store.VNFLease, error)
+	DNSRecords(ctx context.Context, vnfID int64) ([]host.DNSRecordView, error)
 	BGPStatus(ctx context.Context, vnfID int64) (host.BGPStatus, error)
 	CleanupLegacyNetwork(networkID int64)
 	ResetRuntime(ctx context.Context) error
@@ -129,8 +138,15 @@ type Server struct {
 	natMu      sync.Mutex
 	natRunning map[int64]bool
 
+	vnfSpecsMu     sync.Mutex
+	vnfSpecsSynced bool
+
 	memifDHCP bool
 	memifDir  string
+
+	vppSocket          string
+	rookeryStartupOnce sync.Once
+	vppStartupMu       sync.Mutex
 
 	// resourceMu serializes host provisioning (disks, bridge domains, vhost
 	// interfaces) with VM attachment so resources cannot be removed mid-operation.
@@ -156,6 +172,12 @@ func (s *Server) ResourceMutex() *sync.Mutex {
 func (s *Server) ConfigureMemifDHCP(enabled bool, dir string) {
 	s.memifDHCP = enabled
 	s.memifDir = dir
+}
+
+// SetVPPSocket records the VPP binary API socket exposed to network startup
+// scripts. It is optional and is passed through as ROOKERY_VPP_SOCKET.
+func (s *Server) SetVPPSocket(socket string) {
+	s.vppSocket = socket
 }
 
 func newServer(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMController, networks NetworkProvisioner, vnfs VNFManager, nat NAT44Provisioner, logger zerolog.Logger) *Server {

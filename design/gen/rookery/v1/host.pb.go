@@ -40,6 +40,7 @@ type HostInterface struct {
 	VppUp         bool                   `protobuf:"varint,11,opt,name=vpp_up,json=vppUp,proto3" json:"vpp_up,omitempty"`
 	VppType       string                 `protobuf:"bytes,12,opt,name=vpp_type,json=vppType,proto3" json:"vpp_type,omitempty"`
 	Managed       bool                   `protobuf:"varint,13,opt,name=managed,proto3" json:"managed,omitempty"`
+	VppAddresses  []string               `protobuf:"bytes,14,rep,name=vpp_addresses,json=vppAddresses,proto3" json:"vpp_addresses,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -163,6 +164,13 @@ func (x *HostInterface) GetManaged() bool {
 		return x.Managed
 	}
 	return false
+}
+
+func (x *HostInterface) GetVppAddresses() []string {
+	if x != nil {
+		return x.VppAddresses
+	}
+	return nil
 }
 
 type ListHostInterfacesRequest struct {
@@ -346,6 +354,7 @@ type HostTap struct {
 	Ipv4Address   string                 `protobuf:"bytes,6,opt,name=ipv4_address,json=ipv4Address,proto3" json:"ipv4_address,omitempty"`
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	VppAddresses  []string               `protobuf:"bytes,9,rep,name=vpp_addresses,json=vppAddresses,proto3" json:"vpp_addresses,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -432,6 +441,13 @@ func (x *HostTap) GetCreatedAt() *timestamppb.Timestamp {
 func (x *HostTap) GetUpdatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.UpdatedAt
+	}
+	return nil
+}
+
+func (x *HostTap) GetVppAddresses() []string {
+	if x != nil {
+		return x.VppAddresses
 	}
 	return nil
 }
@@ -633,7 +649,7 @@ var File_rookery_v1_host_proto protoreflect.FileDescriptor
 const file_rookery_v1_host_proto_rawDesc = "" +
 	"\n" +
 	"\x15rookery/v1/host.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\x8d\x03\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\xb2\x03\n" +
 	"\rHostInterface\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x0e\n" +
 	"\x02up\x18\x02 \x01(\bR\x02up\x12\x1c\n" +
@@ -649,7 +665,8 @@ const file_rookery_v1_host_proto_rawDesc = "" +
 	" \x01(\tR\avppName\x12\x15\n" +
 	"\x06vpp_up\x18\v \x01(\bR\x05vppUp\x12\x19\n" +
 	"\bvpp_type\x18\f \x01(\tR\avppType\x12\x18\n" +
-	"\amanaged\x18\r \x01(\bR\amanagedB\x12\n" +
+	"\amanaged\x18\r \x01(\bR\amanaged\x12#\n" +
+	"\rvpp_addresses\x18\x0e \x03(\tR\fvppAddressesB\x12\n" +
 	"\x10_vpp_sw_if_index\"\x1b\n" +
 	"\x19ListHostInterfacesRequest\"W\n" +
 	"\x1aListHostInterfacesResponse\x129\n" +
@@ -659,7 +676,7 @@ const file_rookery_v1_host_proto_rawDesc = "" +
 	"\x1aAttachHostInterfaceRequest\x12\x1b\n" +
 	"\x04name\x18\x01 \x01(\tB\a\xfaB\x04r\x02\x10\x01R\x04name\"9\n" +
 	"\x1aDetachHostInterfaceRequest\x12\x1b\n" +
-	"\x04name\x18\x01 \x01(\tB\a\xfaB\x04r\x02\x10\x01R\x04name\"\xa8\x02\n" +
+	"\x04name\x18\x01 \x01(\tB\a\xfaB\x04r\x02\x10\x01R\x04name\"\xcd\x02\n" +
 	"\aHostTap\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1d\n" +
 	"\n" +
@@ -671,7 +688,8 @@ const file_rookery_v1_host_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"?\n" +
+	"updated_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12#\n" +
+	"\rvpp_addresses\x18\t \x03(\tR\fvppAddresses\"?\n" +
 	"\x13ListHostTapsRequest\x12(\n" +
 	"\n" +
 	"network_id\x18\x01 \x01(\x03B\t\xfaB\x06\"\x04 \x00@\x01R\tnetworkId\"?\n" +

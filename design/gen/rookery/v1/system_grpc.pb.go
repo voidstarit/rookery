@@ -19,18 +19,26 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SystemService_GetHealth_FullMethodName = "/rookery.v1.SystemService/GetHealth"
-	SystemService_GetStatus_FullMethodName = "/rookery.v1.SystemService/GetStatus"
+	SystemService_GetHealth_FullMethodName              = "/rookery.v1.SystemService/GetHealth"
+	SystemService_GetStatus_FullMethodName              = "/rookery.v1.SystemService/GetStatus"
+	SystemService_GetStartupScript_FullMethodName       = "/rookery.v1.SystemService/GetStartupScript"
+	SystemService_UpdateStartupScript_FullMethodName    = "/rookery.v1.SystemService/UpdateStartupScript"
+	SystemService_GetVPPStartupScript_FullMethodName    = "/rookery.v1.SystemService/GetVPPStartupScript"
+	SystemService_UpdateVPPStartupScript_FullMethodName = "/rookery.v1.SystemService/UpdateVPPStartupScript"
 )
 
 // SystemServiceClient is the client API for SystemService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// SystemService exposes host and readiness information.
+// SystemService exposes host and readiness information plus server settings.
 type SystemServiceClient interface {
 	GetHealth(ctx context.Context, in *GetHealthRequest, opts ...grpc.CallOption) (*HealthResponse, error)
 	GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	GetStartupScript(ctx context.Context, in *GetStartupScriptRequest, opts ...grpc.CallOption) (*StartupScript, error)
+	UpdateStartupScript(ctx context.Context, in *UpdateStartupScriptRequest, opts ...grpc.CallOption) (*StartupScript, error)
+	GetVPPStartupScript(ctx context.Context, in *GetVPPStartupScriptRequest, opts ...grpc.CallOption) (*StartupScript, error)
+	UpdateVPPStartupScript(ctx context.Context, in *UpdateVPPStartupScriptRequest, opts ...grpc.CallOption) (*StartupScript, error)
 }
 
 type systemServiceClient struct {
@@ -61,14 +69,58 @@ func (c *systemServiceClient) GetStatus(ctx context.Context, in *GetStatusReques
 	return out, nil
 }
 
+func (c *systemServiceClient) GetStartupScript(ctx context.Context, in *GetStartupScriptRequest, opts ...grpc.CallOption) (*StartupScript, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StartupScript)
+	err := c.cc.Invoke(ctx, SystemService_GetStartupScript_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *systemServiceClient) UpdateStartupScript(ctx context.Context, in *UpdateStartupScriptRequest, opts ...grpc.CallOption) (*StartupScript, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StartupScript)
+	err := c.cc.Invoke(ctx, SystemService_UpdateStartupScript_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *systemServiceClient) GetVPPStartupScript(ctx context.Context, in *GetVPPStartupScriptRequest, opts ...grpc.CallOption) (*StartupScript, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StartupScript)
+	err := c.cc.Invoke(ctx, SystemService_GetVPPStartupScript_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *systemServiceClient) UpdateVPPStartupScript(ctx context.Context, in *UpdateVPPStartupScriptRequest, opts ...grpc.CallOption) (*StartupScript, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StartupScript)
+	err := c.cc.Invoke(ctx, SystemService_UpdateVPPStartupScript_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SystemServiceServer is the server API for SystemService service.
 // All implementations must embed UnimplementedSystemServiceServer
 // for forward compatibility.
 //
-// SystemService exposes host and readiness information.
+// SystemService exposes host and readiness information plus server settings.
 type SystemServiceServer interface {
 	GetHealth(context.Context, *GetHealthRequest) (*HealthResponse, error)
 	GetStatus(context.Context, *GetStatusRequest) (*StatusResponse, error)
+	GetStartupScript(context.Context, *GetStartupScriptRequest) (*StartupScript, error)
+	UpdateStartupScript(context.Context, *UpdateStartupScriptRequest) (*StartupScript, error)
+	GetVPPStartupScript(context.Context, *GetVPPStartupScriptRequest) (*StartupScript, error)
+	UpdateVPPStartupScript(context.Context, *UpdateVPPStartupScriptRequest) (*StartupScript, error)
 	mustEmbedUnimplementedSystemServiceServer()
 }
 
@@ -84,6 +136,18 @@ func (UnimplementedSystemServiceServer) GetHealth(context.Context, *GetHealthReq
 }
 func (UnimplementedSystemServiceServer) GetStatus(context.Context, *GetStatusRequest) (*StatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetStatus not implemented")
+}
+func (UnimplementedSystemServiceServer) GetStartupScript(context.Context, *GetStartupScriptRequest) (*StartupScript, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetStartupScript not implemented")
+}
+func (UnimplementedSystemServiceServer) UpdateStartupScript(context.Context, *UpdateStartupScriptRequest) (*StartupScript, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateStartupScript not implemented")
+}
+func (UnimplementedSystemServiceServer) GetVPPStartupScript(context.Context, *GetVPPStartupScriptRequest) (*StartupScript, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetVPPStartupScript not implemented")
+}
+func (UnimplementedSystemServiceServer) UpdateVPPStartupScript(context.Context, *UpdateVPPStartupScriptRequest) (*StartupScript, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateVPPStartupScript not implemented")
 }
 func (UnimplementedSystemServiceServer) mustEmbedUnimplementedSystemServiceServer() {}
 func (UnimplementedSystemServiceServer) testEmbeddedByValue()                       {}
@@ -142,6 +206,78 @@ func _SystemService_GetStatus_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SystemService_GetStartupScript_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetStartupScriptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemServiceServer).GetStartupScript(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemService_GetStartupScript_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemServiceServer).GetStartupScript(ctx, req.(*GetStartupScriptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SystemService_UpdateStartupScript_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateStartupScriptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemServiceServer).UpdateStartupScript(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemService_UpdateStartupScript_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemServiceServer).UpdateStartupScript(ctx, req.(*UpdateStartupScriptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SystemService_GetVPPStartupScript_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetVPPStartupScriptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemServiceServer).GetVPPStartupScript(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemService_GetVPPStartupScript_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemServiceServer).GetVPPStartupScript(ctx, req.(*GetVPPStartupScriptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SystemService_UpdateVPPStartupScript_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateVPPStartupScriptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemServiceServer).UpdateVPPStartupScript(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemService_UpdateVPPStartupScript_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemServiceServer).UpdateVPPStartupScript(ctx, req.(*UpdateVPPStartupScriptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SystemService_ServiceDesc is the grpc.ServiceDesc for SystemService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -156,6 +292,22 @@ var SystemService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetStatus",
 			Handler:    _SystemService_GetStatus_Handler,
+		},
+		{
+			MethodName: "GetStartupScript",
+			Handler:    _SystemService_GetStartupScript_Handler,
+		},
+		{
+			MethodName: "UpdateStartupScript",
+			Handler:    _SystemService_UpdateStartupScript_Handler,
+		},
+		{
+			MethodName: "GetVPPStartupScript",
+			Handler:    _SystemService_GetVPPStartupScript_Handler,
+		},
+		{
+			MethodName: "UpdateVPPStartupScript",
+			Handler:    _SystemService_UpdateVPPStartupScript_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

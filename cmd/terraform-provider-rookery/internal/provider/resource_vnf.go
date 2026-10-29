@@ -210,6 +210,13 @@ func vnfConfigFromJSON(value types.String) (*rookeryv1.VNFConfig, error) {
 	return config, nil
 }
 
+// setVNFState copies the server's VNF into state. config_json is
+// Optional+Computed and sensitive, and Terraform requires an applied value that
+// was known during plan to match the planned value exactly. The server also
+// normalizes the config (derived bind_ip and gateway, default lease time), so
+// re-encoding it would neither match the plan nor stay stable across refreshes.
+// Keep the caller's JSON and only encode the server's config when there is no
+// value yet, such as after an import or for the data source.
 func setVNFState(state *vnfModel, vnf *rookeryv1.VNF) diag.Diagnostics {
 	var diags diag.Diagnostics
 	state.ID = types.Int64Value(vnf.GetId())
@@ -218,19 +225,28 @@ func setVNFState(state *vnfModel, vnf *rookeryv1.VNF) diag.Diagnostics {
 	state.NetworkName = optionalStringValue(vnf.GetNetworkName())
 	state.Type = types.StringValue(vnf.GetType())
 	state.Enabled = types.BoolValue(vnf.GetEnabled())
-	configJSON := []byte("{}")
-	if vnf.GetConfig() != nil {
-		if encoded, err := (protojson.MarshalOptions{UseProtoNames: true}).Marshal(vnf.GetConfig()); err == nil {
-			configJSON = encoded
-		} else {
-			diags.AddError("Encode VNF config", err.Error())
-		}
+	if state.ConfigJSON.IsNull() || state.ConfigJSON.IsUnknown() {
+		encoded, encodeDiags := encodeVNFConfig(vnf.GetConfig())
+		diags.Append(encodeDiags...)
+		state.ConfigJSON = encoded
 	}
-	state.ConfigJSON = types.StringValue(string(configJSON))
 	state.TapSWIfIndex = types.Int64Value(int64(vnf.GetTapSwIfIndex()))
 	state.TapHostName = optionalStringValue(vnf.GetTapHostName())
 	state.Status = optionalStringValue(vnf.GetStatus())
 	state.StatusDetail = optionalStringValue(vnf.GetStatusDetail())
 	state.LeaseCount = types.Int64Value(int64(vnf.GetLeaseCount()))
 	return diags
+}
+
+func encodeVNFConfig(config *rookeryv1.VNFConfig) (types.String, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	if config == nil {
+		return types.StringValue("{}"), diags
+	}
+	encoded, err := (protojson.MarshalOptions{UseProtoNames: true}).Marshal(config)
+	if err != nil {
+		diags.AddError("Encode VNF config", err.Error())
+		return types.StringValue("{}"), diags
+	}
+	return types.StringValue(string(encoded)), diags
 }

@@ -43,6 +43,7 @@ func (d *hostInterfaceDataSource) Schema(_ context.Context, _ datasource.SchemaR
 			"vpp_up":        dschema.BoolAttribute{Computed: true},
 			"vpp_type":      dschema.StringAttribute{Computed: true},
 			"managed":       dschema.BoolAttribute{Computed: true},
+			"vpp_addresses": dschema.ListAttribute{Computed: true, ElementType: types.StringType},
 		},
 	}
 }
