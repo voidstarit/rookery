@@ -351,6 +351,11 @@ export function VMsTab() {
                             {vm.description}
                           </span>
                         ) : null}
+                        {vm.cgroup_class ? (
+                          <span class="vm-description" title={`Cgroup class: ${vm.cgroup_class}`}>
+                            class {vm.cgroup_class}
+                          </span>
+                        ) : null}
                       </td>
                       <td>
                         <span class="status-badge" data-status={vm.status}>

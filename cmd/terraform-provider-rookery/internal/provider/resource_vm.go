@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -39,7 +40,7 @@ type vmModel struct {
 	InterfaceIDs   types.List   `tfsdk:"interface_ids"`
 	BootMediaID    types.Int64  `tfsdk:"boot_media_id"`
 	ConsoleEnabled types.Bool   `tfsdk:"console_enabled"`
-	Cgroup         types.Object `tfsdk:"cgroup"`
+	CgroupClass    types.String `tfsdk:"cgroup_class"`
 }
 
 func (r *vmResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -72,24 +73,10 @@ func (r *vmResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *r
 				Description: "Optional installation media id used as a read-only CD-ROM. Omit to clear it on update.",
 			},
 			"console_enabled": schema.BoolAttribute{Optional: true, Computed: true, Description: "Allow VNC console access."},
-			"cgroup": schema.SingleNestedAttribute{
+			"cgroup_class": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Optional per-VM cgroup v2 limits. Requires host cgroup limits to be enabled.",
-				Attributes: map[string]schema.Attribute{
-					"enabled":          schema.BoolAttribute{Required: true, Description: "Run the VM in its own child cgroup."},
-					"cpus":             schema.StringAttribute{Optional: true, Computed: true, Description: "cpuset.cpus value, for example 0-3,7. Empty inherits the host set."},
-					"memory_max_bytes": schema.Int64Attribute{Optional: true, Computed: true, Description: "Per-VM memory.max value in bytes; 0 inherits the host setting."},
-					"cpu_weight":       schema.Int64Attribute{Optional: true, Computed: true, Description: "Per-VM cpu.weight (1-10000); 0 inherits the host setting."},
-					"io_limits": schema.ListNestedAttribute{
-						Optional:    true,
-						Computed:    true,
-						Description: "Per-block-device I/O limits; omitted values inherit host limits.",
-						NestedObject: schema.NestedAttributeObject{
-							Attributes: cgroupIOLimitSchemaAttributes(),
-						},
-					},
-				},
+				Description: "Optional cgroup class name defined in rookery_cgroup_settings, such as prod/web.",
 			},
 		},
 	}
@@ -124,11 +111,6 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 	if interfaceSet {
 		interfaces = interfaceIDs
 	}
-	cgroup, cgroupDiags := vmCgroupFromObject(ctx, plan.Cgroup)
-	resp.Diagnostics.Append(cgroupDiags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
 	callCtx, cancel := context.WithTimeout(ctx, client.Timeout())
 	defer cancel()
 	vm, err := client.VMs.CreateVM(callCtx, &rookeryv1.CreateVMRequest{
@@ -140,7 +122,7 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		ConsoleEnabled: boolPointer(plan.ConsoleEnabled),
 		InterfaceIds:   interfaces,
 		DiskIds:        diskIDs,
-		Cgroup:         cgroup,
+		CgroupClass:    plan.CgroupClass.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Create VM", err.Error())
@@ -206,15 +188,6 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
 		description = plan.Description.ValueString()
 	}
-	cgroup, cgroupDiags := vmCgroupFromObject(ctx, plan.Cgroup)
-	resp.Diagnostics.Append(cgroupDiags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	if cgroup == nil && !state.Cgroup.IsNull() && !state.Cgroup.IsUnknown() {
-		// Removing the block from configuration clears the per-VM overrides.
-		cgroup = &rookeryv1.VMCgroup{Enabled: false}
-	}
 	request := &rookeryv1.UpdateVMRequest{
 		Id:             plan.ID.ValueString(),
 		Name:           stringPointer(plan.Name),
@@ -223,7 +196,9 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		MemoryMb:       int32Pointer(plan.MemoryMB),
 		BootMediaId:    int64Pointer(plan.BootMediaID),
 		ConsoleEnabled: boolPointer(plan.ConsoleEnabled),
-		Cgroup:         cgroup,
+	}
+	if !plan.CgroupClass.IsUnknown() && !plan.CgroupClass.Equal(state.CgroupClass) {
+		request.CgroupClass = proto.String(strings.TrimSpace(plan.CgroupClass.ValueString()))
 	}
 	if !plan.DiskIDs.Equal(state.DiskIDs) {
 		request.DiskIds = diskIDs
@@ -292,9 +267,7 @@ func setVMState(ctx context.Context, state *vmModel, vm *rookeryv1.VM) diag.Diag
 	interfaceList, interfaceDiags := int64List(ctx, interfaceIDs)
 	diags.Append(interfaceDiags...)
 	state.InterfaceIDs = interfaceList
-	cgroup, cgroupDiags := vmCgroupToObject(ctx, vm.GetCgroup())
-	diags.Append(cgroupDiags...)
-	state.Cgroup = cgroup
+	state.CgroupClass = types.StringValue(vm.GetCgroupClass())
 	return diags
 }
 

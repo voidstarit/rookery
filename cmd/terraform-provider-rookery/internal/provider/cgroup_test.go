@@ -7,7 +7,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 )
@@ -42,7 +41,7 @@ func TestCgroupSchemasAreValid(t *testing.T) {
 	}
 }
 
-func TestVMCgroupObjectRoundTrip(t *testing.T) {
+func TestCgroupClassRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	limits, diags := types.ListValueFrom(ctx, cgroupIOLimitObjectType, []cgroupIOLimitModel{{
 		Device:  types.StringValue("/dev/mapper/vg0-vm-root"),
@@ -51,32 +50,36 @@ func TestVMCgroupObjectRoundTrip(t *testing.T) {
 	if diags.HasError() {
 		t.Fatalf("build limits: %v", diags)
 	}
-	object, diags := types.ObjectValueFrom(ctx, vmCgroupAttrTypes, vmCgroupModel{
-		Enabled: types.BoolValue(true), CPUs: types.StringValue("0-3"),
+	list, diags := types.ListValueFrom(ctx, cgroupClassObjectType, []cgroupClassModel{{
+		Name: types.StringValue("prod/web"), CPUs: types.StringValue("0-3"),
 		MemoryMaxBytes: types.Int64Value(2 << 30), CPUWeight: types.Int64Value(500), IOLimits: limits,
-	})
+	}})
 	if diags.HasError() {
-		t.Fatalf("build cgroup: %v", diags)
+		t.Fatalf("build classes: %v", diags)
 	}
-	cgroup, diags := vmCgroupFromObject(ctx, object)
+	classes, diags := cgroupClassesFromList(ctx, list)
+	if diags.HasError() {
+		t.Fatalf("read classes: %v", diags)
+	}
+	protos, diags := cgroupClassesToProto(ctx, classes)
 	if diags.HasError() {
 		t.Fatalf("convert to proto: %v", diags)
 	}
-	if !cgroup.GetEnabled() || cgroup.GetCpus() != "0-3" || cgroup.GetMemoryMaxBytes() != 2<<30 ||
-		cgroup.GetCpuWeight() != 500 || len(cgroup.GetIoLimits()) != 1 || cgroup.GetIoLimits()[0].GetDevice() != "/dev/mapper/vg0-vm-root" {
-		t.Fatalf("cgroup = %+v", cgroup)
+	if len(protos) != 1 || protos[0].GetName() != "prod/web" || protos[0].GetCpus() != "0-3" ||
+		protos[0].GetMemoryMaxBytes() != 2<<30 || len(protos[0].GetIoLimits()) != 1 {
+		t.Fatalf("classes = %+v", protos)
 	}
 
-	roundTrip, diags := vmCgroupToObject(ctx, cgroup)
+	roundTrip, diags := cgroupClassesFromProto(ctx, protos)
 	if diags.HasError() {
 		t.Fatalf("convert from proto: %v", diags)
 	}
-	var model vmCgroupModel
-	if diags := roundTrip.As(ctx, &model, basetypes.ObjectAsOptions{}); diags.HasError() {
+	var models []cgroupClassModel
+	if diags := roundTrip.ElementsAs(ctx, &models, false); diags.HasError() {
 		t.Fatalf("read round trip: %v", diags)
 	}
-	if !model.Enabled.ValueBool() || model.CPUs.ValueString() != "0-3" || model.MemoryMaxBytes.ValueInt64() != 2<<30 {
-		t.Fatalf("round trip model = %+v", model)
+	if len(models) != 1 || models[0].Name.ValueString() != "prod/web" || models[0].MemoryMaxBytes.ValueInt64() != 2<<30 {
+		t.Fatalf("round trip models = %+v", models)
 	}
 }
 
@@ -87,12 +90,14 @@ func TestSetCgroupSettingsState(t *testing.T) {
 		Available: true, Configured: true, Root: "/sys/fs/cgroup/rookery",
 		OnlineCpus: []int32{0, 1, 2, 3},
 		IoLimits:   []*rookeryv1.CgroupIOLimit{{Device: "/dev/sda", WriteBps: 1024, Weight: 200}},
+		Classes:    []*rookeryv1.CgroupClass{{Name: "prod/web", Cpus: "0-1"}},
 	}
 	if diags := setCgroupSettingsState(context.Background(), &state, settings); diags.HasError() {
 		t.Fatalf("set state: %v", diags)
 	}
 	if state.ID.ValueString() != cgroupSettingsID || !state.Enabled.ValueBool() || state.CPUs.ValueString() != "0-3" ||
-		state.MemoryMaxBytes.ValueInt64() != 1<<30 || state.IOLimits.IsNull() || len(state.IOLimits.Elements()) != 1 {
+		state.MemoryMaxBytes.ValueInt64() != 1<<30 || state.IOLimits.IsNull() || len(state.IOLimits.Elements()) != 1 ||
+		state.Classes.IsNull() || len(state.Classes.Elements()) != 1 {
 		t.Fatalf("state = %+v", state)
 	}
 }

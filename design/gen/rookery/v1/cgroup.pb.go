@@ -109,6 +109,85 @@ func (x *CgroupIOLimit) GetWeight() int32 {
 	return 0
 }
 
+// CgroupClass is a named, hierarchical cgroup profile. Name uses
+// slash-separated segments such as "production/web"; parent cgroups are created
+// automatically and zero values inherit the host or parent class setting.
+type CgroupClass struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Name           string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Cpus           string                 `protobuf:"bytes,2,opt,name=cpus,proto3" json:"cpus,omitempty"`
+	MemoryMaxBytes int64                  `protobuf:"varint,3,opt,name=memory_max_bytes,json=memoryMaxBytes,proto3" json:"memory_max_bytes,omitempty"`
+	CpuWeight      int32                  `protobuf:"varint,4,opt,name=cpu_weight,json=cpuWeight,proto3" json:"cpu_weight,omitempty"`
+	IoLimits       []*CgroupIOLimit       `protobuf:"bytes,5,rep,name=io_limits,json=ioLimits,proto3" json:"io_limits,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CgroupClass) Reset() {
+	*x = CgroupClass{}
+	mi := &file_rookery_v1_cgroup_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CgroupClass) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CgroupClass) ProtoMessage() {}
+
+func (x *CgroupClass) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_cgroup_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CgroupClass.ProtoReflect.Descriptor instead.
+func (*CgroupClass) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_cgroup_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *CgroupClass) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CgroupClass) GetCpus() string {
+	if x != nil {
+		return x.Cpus
+	}
+	return ""
+}
+
+func (x *CgroupClass) GetMemoryMaxBytes() int64 {
+	if x != nil {
+		return x.MemoryMaxBytes
+	}
+	return 0
+}
+
+func (x *CgroupClass) GetCpuWeight() int32 {
+	if x != nil {
+		return x.CpuWeight
+	}
+	return 0
+}
+
+func (x *CgroupClass) GetIoLimits() []*CgroupIOLimit {
+	if x != nil {
+		return x.IoLimits
+	}
+	return nil
+}
+
 // CgroupSettings is the host-wide cgroup v2 configuration plus runtime status.
 type CgroupSettings struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -126,13 +205,14 @@ type CgroupSettings struct {
 	OnlineCpus     []int32                `protobuf:"varint,12,rep,packed,name=online_cpus,json=onlineCpus,proto3" json:"online_cpus,omitempty"`
 	CpuModel       string                 `protobuf:"bytes,13,opt,name=cpu_model,json=cpuModel,proto3" json:"cpu_model,omitempty"`
 	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Classes        []*CgroupClass         `protobuf:"bytes,15,rep,name=classes,proto3" json:"classes,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CgroupSettings) Reset() {
 	*x = CgroupSettings{}
-	mi := &file_rookery_v1_cgroup_proto_msgTypes[1]
+	mi := &file_rookery_v1_cgroup_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -144,7 +224,7 @@ func (x *CgroupSettings) String() string {
 func (*CgroupSettings) ProtoMessage() {}
 
 func (x *CgroupSettings) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_cgroup_proto_msgTypes[1]
+	mi := &file_rookery_v1_cgroup_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -157,7 +237,7 @@ func (x *CgroupSettings) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CgroupSettings.ProtoReflect.Descriptor instead.
 func (*CgroupSettings) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_cgroup_proto_rawDescGZIP(), []int{1}
+	return file_rookery_v1_cgroup_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *CgroupSettings) GetEnabled() bool {
@@ -258,80 +338,9 @@ func (x *CgroupSettings) GetUpdatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
-// VMCgroup holds optional per-VM cgroup overrides. When enabled is false the
-// VM runs in the shared cgroup and inherits host-wide limits.
-type VMCgroup struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Enabled        bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	Cpus           string                 `protobuf:"bytes,2,opt,name=cpus,proto3" json:"cpus,omitempty"`
-	MemoryMaxBytes int64                  `protobuf:"varint,3,opt,name=memory_max_bytes,json=memoryMaxBytes,proto3" json:"memory_max_bytes,omitempty"`
-	CpuWeight      int32                  `protobuf:"varint,4,opt,name=cpu_weight,json=cpuWeight,proto3" json:"cpu_weight,omitempty"`
-	IoLimits       []*CgroupIOLimit       `protobuf:"bytes,5,rep,name=io_limits,json=ioLimits,proto3" json:"io_limits,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *VMCgroup) Reset() {
-	*x = VMCgroup{}
-	mi := &file_rookery_v1_cgroup_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *VMCgroup) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*VMCgroup) ProtoMessage() {}
-
-func (x *VMCgroup) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_cgroup_proto_msgTypes[2]
+func (x *CgroupSettings) GetClasses() []*CgroupClass {
 	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use VMCgroup.ProtoReflect.Descriptor instead.
-func (*VMCgroup) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_cgroup_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *VMCgroup) GetEnabled() bool {
-	if x != nil {
-		return x.Enabled
-	}
-	return false
-}
-
-func (x *VMCgroup) GetCpus() string {
-	if x != nil {
-		return x.Cpus
-	}
-	return ""
-}
-
-func (x *VMCgroup) GetMemoryMaxBytes() int64 {
-	if x != nil {
-		return x.MemoryMaxBytes
-	}
-	return 0
-}
-
-func (x *VMCgroup) GetCpuWeight() int32 {
-	if x != nil {
-		return x.CpuWeight
-	}
-	return 0
-}
-
-func (x *VMCgroup) GetIoLimits() []*CgroupIOLimit {
-	if x != nil {
-		return x.IoLimits
+		return x.Classes
 	}
 	return nil
 }
@@ -351,7 +360,16 @@ const file_rookery_v1_cgroup_proto_rawDesc = "" +
 	"\n" +
 	"write_iops\x18\x05 \x01(\x03B\a\xfaB\x04\"\x02(\x00R\twriteIops\x12\"\n" +
 	"\x06weight\x18\x06 \x01(\x05B\n" +
-	"\xfaB\a\x1a\x05\x18\x90N(\x00R\x06weight\"\xff\x03\n" +
+	"\xfaB\a\x1a\x05\x18\x90N(\x00R\x06weight\"\xeb\x01\n" +
+	"\vCgroupClass\x12\x1e\n" +
+	"\x04name\x18\x01 \x01(\tB\n" +
+	"\xfaB\ar\x05\x10\x01\x18\xc8\x01R\x04name\x12\x1c\n" +
+	"\x04cpus\x18\x02 \x01(\tB\b\xfaB\x05r\x03\x18\x80\x04R\x04cpus\x121\n" +
+	"\x10memory_max_bytes\x18\x03 \x01(\x03B\a\xfaB\x04\"\x02(\x00R\x0ememoryMaxBytes\x12)\n" +
+	"\n" +
+	"cpu_weight\x18\x04 \x01(\x05B\n" +
+	"\xfaB\a\x1a\x05\x18\x90N(\x00R\tcpuWeight\x12@\n" +
+	"\tio_limits\x18\x05 \x03(\v2\x19.rookery.v1.CgroupIOLimitB\b\xfaB\x05\x92\x01\x02\x10@R\bioLimits\"\xb2\x04\n" +
 	"\x0eCgroupSettings\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x1c\n" +
 	"\x04cpus\x18\x02 \x01(\tB\b\xfaB\x05r\x03\x18\x80\x04R\x04cpus\x12\x1c\n" +
@@ -373,15 +391,8 @@ const file_rookery_v1_cgroup_proto_rawDesc = "" +
 	"onlineCpus\x12\x1b\n" +
 	"\tcpu_model\x18\r \x01(\tR\bcpuModel\x129\n" +
 	"\n" +
-	"updated_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xe2\x01\n" +
-	"\bVMCgroup\x12\x18\n" +
-	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x1c\n" +
-	"\x04cpus\x18\x02 \x01(\tB\b\xfaB\x05r\x03\x18\x80\x04R\x04cpus\x121\n" +
-	"\x10memory_max_bytes\x18\x03 \x01(\x03B\a\xfaB\x04\"\x02(\x00R\x0ememoryMaxBytes\x12)\n" +
-	"\n" +
-	"cpu_weight\x18\x04 \x01(\x05B\n" +
-	"\xfaB\a\x1a\x05\x18\x90N(\x00R\tcpuWeight\x12@\n" +
-	"\tio_limits\x18\x05 \x03(\v2\x19.rookery.v1.CgroupIOLimitB\b\xfaB\x05\x92\x01\x02\x10@R\bioLimitsB?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
+	"updated_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x121\n" +
+	"\aclasses\x18\x0f \x03(\v2\x17.rookery.v1.CgroupClassR\aclassesB?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
 
 var (
 	file_rookery_v1_cgroup_proto_rawDescOnce sync.Once
@@ -398,19 +409,20 @@ func file_rookery_v1_cgroup_proto_rawDescGZIP() []byte {
 var file_rookery_v1_cgroup_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_rookery_v1_cgroup_proto_goTypes = []any{
 	(*CgroupIOLimit)(nil),         // 0: rookery.v1.CgroupIOLimit
-	(*CgroupSettings)(nil),        // 1: rookery.v1.CgroupSettings
-	(*VMCgroup)(nil),              // 2: rookery.v1.VMCgroup
+	(*CgroupClass)(nil),           // 1: rookery.v1.CgroupClass
+	(*CgroupSettings)(nil),        // 2: rookery.v1.CgroupSettings
 	(*timestamppb.Timestamp)(nil), // 3: google.protobuf.Timestamp
 }
 var file_rookery_v1_cgroup_proto_depIdxs = []int32{
-	0, // 0: rookery.v1.CgroupSettings.io_limits:type_name -> rookery.v1.CgroupIOLimit
-	3, // 1: rookery.v1.CgroupSettings.updated_at:type_name -> google.protobuf.Timestamp
-	0, // 2: rookery.v1.VMCgroup.io_limits:type_name -> rookery.v1.CgroupIOLimit
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	0, // 0: rookery.v1.CgroupClass.io_limits:type_name -> rookery.v1.CgroupIOLimit
+	0, // 1: rookery.v1.CgroupSettings.io_limits:type_name -> rookery.v1.CgroupIOLimit
+	3, // 2: rookery.v1.CgroupSettings.updated_at:type_name -> google.protobuf.Timestamp
+	1, // 3: rookery.v1.CgroupSettings.classes:type_name -> rookery.v1.CgroupClass
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_rookery_v1_cgroup_proto_init() }

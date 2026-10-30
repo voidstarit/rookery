@@ -246,13 +246,13 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 		listener = bufconn.Listen(1 << 20)
 	}
 	server := grpc.NewServer(grpc.ChainUnaryInterceptor(errorLogInterceptor(options.logger), validationInterceptor))
-	var cgroupVMs VMCgroupUpdater
-	if updater, ok := options.vmController.(VMCgroupUpdater); ok {
-		cgroupVMs = updater
+	var cgroupUpdater CgroupUpdater
+	if updater, ok := options.vmController.(CgroupUpdater); ok {
+		cgroupUpdater = updater
 	}
 	system := &systemService{
 		store: st, readiness: ready, cgroup: options.cgroup,
-		vms: options.vmController, cgroupVMs: cgroupVMs,
+		vms: options.vmController, cgroupUpdater: cgroupUpdater,
 	}
 	vms := &vmService{store: st, runtime: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, mu: options.vmMutex, logger: options.logger}
 	disks := &diskService{store: st, runtime: options.diskProvisioner, readiness: ready, mu: options.diskMutex, logger: options.logger}
@@ -431,11 +431,11 @@ func errorHandler(_ context.Context, _ *runtime.ServeMux, _ runtime.Marshaler, w
 
 type systemService struct {
 	rookeryv1.UnimplementedSystemServiceServer
-	store     *store.Store
-	readiness Readiness
-	cgroup    CgroupRuntime
-	vms       VMController
-	cgroupVMs VMCgroupUpdater
+	store         *store.Store
+	readiness     Readiness
+	cgroup        CgroupRuntime
+	vms           VMController
+	cgroupUpdater CgroupUpdater
 }
 
 func (s *systemService) GetHealth(ctx context.Context, _ *rookeryv1.GetHealthRequest) (*rookeryv1.HealthResponse, error) {
@@ -559,15 +559,7 @@ func vmToProto(vm store.VM) *rookeryv1.VM {
 			IngressAclName: iface.IngressACLName, EgressAclName: iface.EgressACLName,
 		})
 	}
-	if !vm.Cgroup.Empty() {
-		result.Cgroup = &rookeryv1.VMCgroup{
-			Enabled:        vm.Cgroup.Enabled,
-			Cpus:           vm.Cgroup.CPUs,
-			MemoryMaxBytes: vm.Cgroup.MemoryMaxBytes,
-			CpuWeight:      int32(vm.Cgroup.CPUWeight),
-			IoLimits:       cgroupIOLimitsToProto(vm.Cgroup.IOLimits),
-		}
-	}
+	result.CgroupClass = vm.CgroupClass
 	return result
 }
 

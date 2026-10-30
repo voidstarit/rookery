@@ -833,6 +833,7 @@ type UpdateCgroupSettingsRequest struct {
 	MemoryMaxBytes int64                  `protobuf:"varint,4,opt,name=memory_max_bytes,json=memoryMaxBytes,proto3" json:"memory_max_bytes,omitempty"`
 	CpuWeight      int32                  `protobuf:"varint,5,opt,name=cpu_weight,json=cpuWeight,proto3" json:"cpu_weight,omitempty"`
 	IoLimits       []*CgroupIOLimit       `protobuf:"bytes,6,rep,name=io_limits,json=ioLimits,proto3" json:"io_limits,omitempty"`
+	Classes        []*CgroupClass         `protobuf:"bytes,7,rep,name=classes,proto3" json:"classes,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -909,6 +910,13 @@ func (x *UpdateCgroupSettingsRequest) GetIoLimits() []*CgroupIOLimit {
 	return nil
 }
 
+func (x *UpdateCgroupSettingsRequest) GetClasses() []*CgroupClass {
+	if x != nil {
+		return x.Classes
+	}
+	return nil
+}
+
 var File_rookery_v1_system_proto protoreflect.FileDescriptor
 
 const file_rookery_v1_system_proto_rawDesc = "" +
@@ -970,7 +978,7 @@ const file_rookery_v1_system_proto_rawDesc = "" +
 	"\x1dUpdateVPPStartupScriptRequest\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12!\n" +
 	"\x06script\x18\x02 \x01(\tB\t\xfaB\x06r\x04\x18\x80\x80\x04R\x06script\"\x1a\n" +
-	"\x18GetCgroupSettingsRequest\"\x93\x02\n" +
+	"\x18GetCgroupSettingsRequest\"\xd0\x02\n" +
 	"\x1bUpdateCgroupSettingsRequest\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x1c\n" +
 	"\x04cpus\x18\x02 \x01(\tB\b\xfaB\x05r\x03\x18\x80\x04R\x04cpus\x12\x1c\n" +
@@ -979,7 +987,8 @@ const file_rookery_v1_system_proto_rawDesc = "" +
 	"\n" +
 	"cpu_weight\x18\x05 \x01(\x05B\n" +
 	"\xfaB\a\x1a\x05\x18\x90N(\x00R\tcpuWeight\x12@\n" +
-	"\tio_limits\x18\x06 \x03(\v2\x19.rookery.v1.CgroupIOLimitB\b\xfaB\x05\x92\x01\x02\x10@R\bioLimits2\xa6\a\n" +
+	"\tio_limits\x18\x06 \x03(\v2\x19.rookery.v1.CgroupIOLimitB\b\xfaB\x05\x92\x01\x02\x10@R\bioLimits\x12;\n" +
+	"\aclasses\x18\a \x03(\v2\x17.rookery.v1.CgroupClassB\b\xfaB\x05\x92\x01\x02\x10@R\aclasses2\xa6\a\n" +
 	"\rSystemService\x12[\n" +
 	"\tGetHealth\x12\x1c.rookery.v1.GetHealthRequest\x1a\x1a.rookery.v1.HealthResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/api/healthz\x12Z\n" +
 	"\tGetStatus\x12\x1c.rookery.v1.GetStatusRequest\x1a\x1a.rookery.v1.StatusResponse\"\x13\x82\xd3\xe4\x93\x02\r\x12\v/api/status\x12o\n" +
@@ -1022,7 +1031,8 @@ var file_rookery_v1_system_proto_goTypes = []any{
 	(*UpdateCgroupSettingsRequest)(nil),   // 14: rookery.v1.UpdateCgroupSettingsRequest
 	(*timestamppb.Timestamp)(nil),         // 15: google.protobuf.Timestamp
 	(*CgroupIOLimit)(nil),                 // 16: rookery.v1.CgroupIOLimit
-	(*CgroupSettings)(nil),                // 17: rookery.v1.CgroupSettings
+	(*CgroupClass)(nil),                   // 17: rookery.v1.CgroupClass
+	(*CgroupSettings)(nil),                // 18: rookery.v1.CgroupSettings
 }
 var file_rookery_v1_system_proto_depIdxs = []int32{
 	15, // 0: rookery.v1.ComponentStatus.checked_at:type_name -> google.protobuf.Timestamp
@@ -1037,27 +1047,28 @@ var file_rookery_v1_system_proto_depIdxs = []int32{
 	15, // 9: rookery.v1.StartupScript.ran_at:type_name -> google.protobuf.Timestamp
 	15, // 10: rookery.v1.StartupScript.updated_at:type_name -> google.protobuf.Timestamp
 	16, // 11: rookery.v1.UpdateCgroupSettingsRequest.io_limits:type_name -> rookery.v1.CgroupIOLimit
-	0,  // 12: rookery.v1.SystemService.GetHealth:input_type -> rookery.v1.GetHealthRequest
-	2,  // 13: rookery.v1.SystemService.GetStatus:input_type -> rookery.v1.GetStatusRequest
-	8,  // 14: rookery.v1.SystemService.GetStartupScript:input_type -> rookery.v1.GetStartupScriptRequest
-	9,  // 15: rookery.v1.SystemService.UpdateStartupScript:input_type -> rookery.v1.UpdateStartupScriptRequest
-	11, // 16: rookery.v1.SystemService.GetVPPStartupScript:input_type -> rookery.v1.GetVPPStartupScriptRequest
-	12, // 17: rookery.v1.SystemService.UpdateVPPStartupScript:input_type -> rookery.v1.UpdateVPPStartupScriptRequest
-	13, // 18: rookery.v1.SystemService.GetCgroupSettings:input_type -> rookery.v1.GetCgroupSettingsRequest
-	14, // 19: rookery.v1.SystemService.UpdateCgroupSettings:input_type -> rookery.v1.UpdateCgroupSettingsRequest
-	1,  // 20: rookery.v1.SystemService.GetHealth:output_type -> rookery.v1.HealthResponse
-	6,  // 21: rookery.v1.SystemService.GetStatus:output_type -> rookery.v1.StatusResponse
-	10, // 22: rookery.v1.SystemService.GetStartupScript:output_type -> rookery.v1.StartupScript
-	10, // 23: rookery.v1.SystemService.UpdateStartupScript:output_type -> rookery.v1.StartupScript
-	10, // 24: rookery.v1.SystemService.GetVPPStartupScript:output_type -> rookery.v1.StartupScript
-	10, // 25: rookery.v1.SystemService.UpdateVPPStartupScript:output_type -> rookery.v1.StartupScript
-	17, // 26: rookery.v1.SystemService.GetCgroupSettings:output_type -> rookery.v1.CgroupSettings
-	17, // 27: rookery.v1.SystemService.UpdateCgroupSettings:output_type -> rookery.v1.CgroupSettings
-	20, // [20:28] is the sub-list for method output_type
-	12, // [12:20] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	17, // 12: rookery.v1.UpdateCgroupSettingsRequest.classes:type_name -> rookery.v1.CgroupClass
+	0,  // 13: rookery.v1.SystemService.GetHealth:input_type -> rookery.v1.GetHealthRequest
+	2,  // 14: rookery.v1.SystemService.GetStatus:input_type -> rookery.v1.GetStatusRequest
+	8,  // 15: rookery.v1.SystemService.GetStartupScript:input_type -> rookery.v1.GetStartupScriptRequest
+	9,  // 16: rookery.v1.SystemService.UpdateStartupScript:input_type -> rookery.v1.UpdateStartupScriptRequest
+	11, // 17: rookery.v1.SystemService.GetVPPStartupScript:input_type -> rookery.v1.GetVPPStartupScriptRequest
+	12, // 18: rookery.v1.SystemService.UpdateVPPStartupScript:input_type -> rookery.v1.UpdateVPPStartupScriptRequest
+	13, // 19: rookery.v1.SystemService.GetCgroupSettings:input_type -> rookery.v1.GetCgroupSettingsRequest
+	14, // 20: rookery.v1.SystemService.UpdateCgroupSettings:input_type -> rookery.v1.UpdateCgroupSettingsRequest
+	1,  // 21: rookery.v1.SystemService.GetHealth:output_type -> rookery.v1.HealthResponse
+	6,  // 22: rookery.v1.SystemService.GetStatus:output_type -> rookery.v1.StatusResponse
+	10, // 23: rookery.v1.SystemService.GetStartupScript:output_type -> rookery.v1.StartupScript
+	10, // 24: rookery.v1.SystemService.UpdateStartupScript:output_type -> rookery.v1.StartupScript
+	10, // 25: rookery.v1.SystemService.GetVPPStartupScript:output_type -> rookery.v1.StartupScript
+	10, // 26: rookery.v1.SystemService.UpdateVPPStartupScript:output_type -> rookery.v1.StartupScript
+	18, // 27: rookery.v1.SystemService.GetCgroupSettings:output_type -> rookery.v1.CgroupSettings
+	18, // 28: rookery.v1.SystemService.UpdateCgroupSettings:output_type -> rookery.v1.CgroupSettings
+	21, // [21:29] is the sub-list for method output_type
+	13, // [13:21] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_rookery_v1_system_proto_init() }

@@ -18,6 +18,17 @@ message CgroupIOLimit {
   int32 weight = 6 [(validate.rules).int32 = {gte: 0, lte: 10000}];
 }
 
+// CgroupClass is a named, hierarchical cgroup profile. Name uses
+// slash-separated segments such as "production/web"; parent cgroups are created
+// automatically and zero values inherit the host or parent class setting.
+message CgroupClass {
+  string name = 1 [(validate.rules).string = {min_len: 1, max_len: 200}];
+  string cpus = 2 [(validate.rules).string = {max_len: 512}];
+  int64 memory_max_bytes = 3 [(validate.rules).int64 = {gte: 0}];
+  int32 cpu_weight = 4 [(validate.rules).int32 = {gte: 0, lte: 10000}];
+  repeated CgroupIOLimit io_limits = 5 [(validate.rules).repeated = {max_items: 64}];
+}
+
 // CgroupSettings is the host-wide cgroup v2 configuration plus runtime status.
 message CgroupSettings {
   bool enabled = 1;
@@ -34,14 +45,5 @@ message CgroupSettings {
   repeated int32 online_cpus = 12;
   string cpu_model = 13;
   google.protobuf.Timestamp updated_at = 14;
-}
-
-// VMCgroup holds optional per-VM cgroup overrides. When enabled is false the
-// VM runs in the shared cgroup and inherits host-wide limits.
-message VMCgroup {
-  bool enabled = 1;
-  string cpus = 2 [(validate.rules).string = {max_len: 512}];
-  int64 memory_max_bytes = 3 [(validate.rules).int64 = {gte: 0}];
-  int32 cpu_weight = 4 [(validate.rules).int32 = {gte: 0, lte: 10000}];
-  repeated CgroupIOLimit io_limits = 5 [(validate.rules).repeated = {max_items: 64}];
+  repeated CgroupClass classes = 15;
 }

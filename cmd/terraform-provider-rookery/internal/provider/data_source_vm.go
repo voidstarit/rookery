@@ -42,22 +42,7 @@ func (d *vmDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, res
 			"interface_ids":   dschema.ListAttribute{Computed: true, ElementType: types.Int64Type},
 			"boot_media_id":   dschema.Int64Attribute{Computed: true},
 			"console_enabled": dschema.BoolAttribute{Computed: true},
-			"cgroup": dschema.SingleNestedAttribute{
-				Computed:    true,
-				Description: "Per-VM cgroup v2 limits, if configured.",
-				Attributes: map[string]dschema.Attribute{
-					"enabled":          dschema.BoolAttribute{Computed: true},
-					"cpus":             dschema.StringAttribute{Computed: true},
-					"memory_max_bytes": dschema.Int64Attribute{Computed: true},
-					"cpu_weight":       dschema.Int64Attribute{Computed: true},
-					"io_limits": dschema.ListNestedAttribute{
-						Computed: true,
-						NestedObject: dschema.NestedAttributeObject{
-							Attributes: cgroupIOLimitDataSourceAttributes(),
-						},
-					},
-				},
-			},
+			"cgroup_class":    dschema.StringAttribute{Computed: true},
 		},
 	}
 }

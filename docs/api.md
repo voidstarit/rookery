@@ -53,8 +53,9 @@ localhost or sit behind an access-controlled proxy.
 Rookery resources over the public mTLS gRPC listener. It covers storage
 backends, disks, media, networks and network pipes, vhost and host interfaces,
 host taps, managed VPP addresses and interface route-table bindings, ACLs,
-route tables and routes, VNFs, VMs (including optional per-VM cgroup limits),
-host-wide cgroup settings, startup scripts, and host-interface takeover.
+route tables and routes, VNFs, VMs (with optional cgroup class assignment),
+host-wide cgroup settings and reusable classes, startup scripts, and
+host-interface takeover.
 Matching data sources look up existing resources, and `rookery_status` exposes
 current readiness. Configure
 it with the CA, client certificate, and private key downloaded from the
@@ -119,8 +120,8 @@ static UI.
 | `PUT`    | `/api/startup-script` | Configure the Rookery startup script (`enabled`, `script`) |
 | `GET`    | `/api/vpp-startup-script` | Get the VPP connection startup script and its last execution result |
 | `PUT`    | `/api/vpp-startup-script` | Configure the VPP startup script (`enabled`, `script`) |
-| `GET`    | `/api/cgroup-settings` | Get host-wide cgroup v2 limits and runtime status |
-| `PUT`    | `/api/cgroup-settings` | Apply host-wide cgroup v2 limits |
+| `GET`    | `/api/cgroup-settings` | Get host-wide cgroup v2 limits, classes, and runtime status |
+| `PUT`    | `/api/cgroup-settings` | Apply host-wide cgroup v2 limits and classes |
 | `GET`    | `/api/storage-backends` | List registered storage backends |
 | `POST`   | `/api/storage-backends` | Register an LVM thin-pool backend |
 | `GET`    | `/api/storage-backends/{id}` | Get one storage backend |

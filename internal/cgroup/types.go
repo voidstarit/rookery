@@ -1,24 +1,20 @@
 // Package cgroup manages the cgroup v2 hierarchy used to constrain QEMU
-// processes. The host-level settings are applied to a parent cgroup while each
-// VM can optionally receive its own child cgroup.
+// processes. Host settings are applied to a parent cgroup and reusable class
+// definitions form a hierarchy below it; VMs run in a class member leaf or the
+// shared cgroup.
 package cgroup
 
-import (
-	"slices"
-	"time"
-)
+import "time"
 
 const (
 	// DefaultRoot is the Rookery cgroup below the cgroup2 mount point.
 	DefaultRoot = "/sys/fs/cgroup/rookery"
-	// sharedName is the child cgroup used by VMs without per-VM limits.
+	// sharedName is the child cgroup used by VMs without a class.
 	sharedName = "shared"
-	// vmPrefix prefixes per-VM child cgroup names.
-	vmPrefix = "vm-"
 )
 
 // IOLimit is a per-block-device I/O constraint. Zero values mean "no limit"
-// (or inherit the host setting when used in a VM override).
+// (or inherit the host setting when used in a class override).
 type IOLimit struct {
 	Device    string `json:"device"`
 	ReadBPS   int64  `json:"read_bps,omitempty"`
@@ -28,7 +24,19 @@ type IOLimit struct {
 	Weight    int    `json:"weight,omitempty"`
 }
 
-// Settings are the host-wide cgroup limits configured from the Settings tab.
+// Class is a named, hierarchical cgroup profile. Name uses slash-separated
+// path segments such as "production/web"; parent cgroups are created
+// automatically. Zero values inherit the host setting or the parent class.
+type Class struct {
+	Name           string    `json:"name"`
+	CPUs           string    `json:"cpus,omitempty"`
+	MemoryMaxBytes int64     `json:"memory_max_bytes,omitempty"`
+	CPUWeight      int       `json:"cpu_weight,omitempty"`
+	IOLimits       []IOLimit `json:"io_limits,omitempty"`
+}
+
+// Settings are the host-wide cgroup limits and class definitions configured
+// from the Settings tab.
 type Settings struct {
 	Enabled        bool      `json:"enabled"`
 	CPUs           string    `json:"cpus,omitempty"`
@@ -36,16 +44,7 @@ type Settings struct {
 	MemoryMaxBytes int64     `json:"memory_max_bytes,omitempty"`
 	CPUWeight      int       `json:"cpu_weight,omitempty"`
 	IOLimits       []IOLimit `json:"io_limits,omitempty"`
-}
-
-// VMLimits are the optional per-VM overrides. When Enabled is false the VM
-// runs in the shared cgroup and only inherits host limits.
-type VMLimits struct {
-	Enabled        bool      `json:"enabled,omitempty"`
-	CPUs           string    `json:"cpus,omitempty"`
-	MemoryMaxBytes int64     `json:"memory_max_bytes,omitempty"`
-	CPUWeight      int       `json:"cpu_weight,omitempty"`
-	IOLimits       []IOLimit `json:"io_limits,omitempty"`
+	Classes        []Class   `json:"classes,omitempty"`
 }
 
 // Placement describes the cgroup a QEMU process should be placed in.
@@ -73,18 +72,4 @@ type Status struct {
 type CgroupSettings struct {
 	Settings
 	UpdatedAt time.Time `json:"updated_at"`
-}
-
-// Empty reports whether the VM has any explicit cgroup configuration.
-func (v VMLimits) Empty() bool {
-	return !v.Enabled && v.CPUs == "" && v.MemoryMaxBytes == 0 && v.CPUWeight == 0 && len(v.IOLimits) == 0
-}
-
-// Equal reports whether two per-VM limit sets are identical.
-func (v VMLimits) Equal(other VMLimits) bool {
-	return v.Enabled == other.Enabled &&
-		v.CPUs == other.CPUs &&
-		v.MemoryMaxBytes == other.MemoryMaxBytes &&
-		v.CPUWeight == other.CPUWeight &&
-		slices.Equal(v.IOLimits, other.IOLimits)
 }

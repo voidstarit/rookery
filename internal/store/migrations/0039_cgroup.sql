@@ -1,6 +1,5 @@
--- Optional per-VM cgroup v2 resource limits, encoded as JSON. An empty object
--- (the default) means the VM runs in the shared cgroup and inherits host-wide
--- limits from Settings.
+-- Legacy per-VM cgroup v2 resource limits, encoded as JSON. Superseded by
+-- vms.cgroup_class in 0040; the column is kept for migration compatibility.
 ALTER TABLE vms ADD COLUMN cgroup TEXT NOT NULL DEFAULT '{}';
 
 -- Singleton host-wide cgroup settings.

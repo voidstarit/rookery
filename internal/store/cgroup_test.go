@@ -27,6 +27,10 @@ func TestCgroupSettingsRoundTrip(t *testing.T) {
 	settings := cgroup.Settings{
 		Enabled: true, CPUs: "0-3", Mems: "0", MemoryMaxBytes: 8 << 30, CPUWeight: 500,
 		IOLimits: []cgroup.IOLimit{{Device: "/dev/sda", ReadBPS: 10 << 20, Weight: 200}},
+		Classes: []cgroup.Class{
+			{Name: "prod", CPUs: "0-1", MemoryMaxBytes: 2 << 30, CPUWeight: 300},
+			{Name: "prod/web", CPUs: "1", IOLimits: []cgroup.IOLimit{{Device: "/dev/sdb", WriteBPS: 5 << 20}}},
+		},
 	}
 	saved, err := st.SetCgroupSettings(ctx, settings)
 	if err != nil {
@@ -44,9 +48,13 @@ func TestCgroupSettingsRoundTrip(t *testing.T) {
 		loaded.IOLimits[0].Device != "/dev/sda" || loaded.IOLimits[0].Weight != 200 {
 		t.Fatalf("loaded settings = %+v, want %+v", loaded, settings)
 	}
+	if len(loaded.Classes) != 2 || loaded.Classes[1].Name != "prod/web" ||
+		len(loaded.Classes[1].IOLimits) != 1 {
+		t.Fatalf("loaded classes = %+v", loaded.Classes)
+	}
 }
 
-func TestVMCgroupRoundTrip(t *testing.T) {
+func TestVMCgroupClassRoundTrip(t *testing.T) {
 	st, err := Open(filepath.Join(t.TempDir(), "vm-cgroup.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
@@ -60,25 +68,21 @@ func TestVMCgroupRoundTrip(t *testing.T) {
 	}
 	vm, err := st.CreateVM(ctx, VM{
 		Name: "cgroup-vm", VCPUs: 2, MemoryMB: 512, DiskID: &disk.ID,
-		Cgroup: cgroup.VMLimits{
-			Enabled: true, CPUs: "0-1", MemoryMaxBytes: 1 << 30, CPUWeight: 300,
-			IOLimits: []cgroup.IOLimit{{Device: disk.Device, WriteBPS: 5 << 20}},
-		},
+		CgroupClass: "prod/web",
 	})
 	if err != nil {
 		t.Fatalf("create VM: %v", err)
 	}
-	if !vm.Cgroup.Enabled || vm.Cgroup.CPUs != "0-1" || len(vm.Cgroup.IOLimits) != 1 {
-		t.Fatalf("created VM cgroup = %+v", vm.Cgroup)
+	if vm.CgroupClass != "prod/web" {
+		t.Fatalf("created VM class = %q", vm.CgroupClass)
 	}
 
-	vm.Cgroup = cgroup.VMLimits{Enabled: true, CPUs: "2", CPUWeight: 700}
+	vm.CgroupClass = "batch"
 	updated, err := st.UpdateVM(ctx, vm)
 	if err != nil {
 		t.Fatalf("update VM: %v", err)
 	}
-	if updated.Cgroup.CPUs != "2" || updated.Cgroup.CPUWeight != 700 || len(updated.Cgroup.IOLimits) != 0 ||
-		updated.Cgroup.MemoryMaxBytes != 0 {
-		t.Fatalf("updated VM cgroup = %+v", updated.Cgroup)
+	if updated.CgroupClass != "batch" {
+		t.Fatalf("updated VM class = %q", updated.CgroupClass)
 	}
 }

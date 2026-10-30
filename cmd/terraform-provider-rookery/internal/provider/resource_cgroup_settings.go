@@ -37,6 +37,7 @@ type cgroupSettingsModel struct {
 	MemoryMaxBytes types.Int64  `tfsdk:"memory_max_bytes"`
 	CPUWeight      types.Int64  `tfsdk:"cpu_weight"`
 	IOLimits       types.List   `tfsdk:"io_limits"`
+	Classes        types.List   `tfsdk:"classes"`
 	Available      types.Bool   `tfsdk:"available"`
 	Configured     types.Bool   `tfsdk:"configured"`
 	Reason         types.String `tfsdk:"reason"`
@@ -75,6 +76,14 @@ func (r *cgroupSettingsResource) Schema(_ context.Context, _ resource.SchemaRequ
 					Attributes: cgroupIOLimitSchemaAttributes(),
 				},
 			},
+			"classes": schema.ListNestedAttribute{
+				Optional:    true,
+				Computed:    true,
+				Description: "Named cgroup classes assigned to VMs. Names use slash-separated hierarchy paths.",
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: cgroupClassSchemaAttributes(),
+				},
+			},
 			"available":   schema.BoolAttribute{Computed: true, Description: "Whether cgroup v2 is mounted."},
 			"configured":  schema.BoolAttribute{Computed: true, Description: "Whether the host cgroup hierarchy is currently applied."},
 			"reason":      schema.StringAttribute{Computed: true},
@@ -103,6 +112,16 @@ func (r *cgroupSettingsResource) Create(ctx context.Context, req resource.Create
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	classes, classDiags := cgroupClassesFromList(ctx, plan.Classes)
+	resp.Diagnostics.Append(classDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	classProtos, classProtoDiags := cgroupClassesToProto(ctx, classes)
+	resp.Diagnostics.Append(classProtoDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	callCtx, cancel := context.WithTimeout(ctx, client.Timeout())
 	defer cancel()
 	settings, err := client.System.UpdateCgroupSettings(callCtx, &rookeryv1.UpdateCgroupSettingsRequest{
@@ -112,6 +131,7 @@ func (r *cgroupSettingsResource) Create(ctx context.Context, req resource.Create
 		MemoryMaxBytes: plan.MemoryMaxBytes.ValueInt64(),
 		CpuWeight:      int32(plan.CPUWeight.ValueInt64()),
 		IoLimits:       cgroupIOLimitsToProto(limits),
+		Classes:        classProtos,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Configure cgroup settings", err.Error())
@@ -159,6 +179,16 @@ func (r *cgroupSettingsResource) Update(ctx context.Context, req resource.Update
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	classes, classDiags := cgroupClassesFromList(ctx, plan.Classes)
+	resp.Diagnostics.Append(classDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	classProtos, classProtoDiags := cgroupClassesToProto(ctx, classes)
+	resp.Diagnostics.Append(classProtoDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	callCtx, cancel := context.WithTimeout(ctx, client.Timeout())
 	defer cancel()
 	settings, err := client.System.UpdateCgroupSettings(callCtx, &rookeryv1.UpdateCgroupSettingsRequest{
@@ -168,6 +198,7 @@ func (r *cgroupSettingsResource) Update(ctx context.Context, req resource.Update
 		MemoryMaxBytes: plan.MemoryMaxBytes.ValueInt64(),
 		CpuWeight:      int32(plan.CPUWeight.ValueInt64()),
 		IoLimits:       cgroupIOLimitsToProto(limits),
+		Classes:        classProtos,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Update cgroup settings", err.Error())
@@ -210,6 +241,9 @@ func setCgroupSettingsState(ctx context.Context, state *cgroupSettingsModel, set
 	limits, limitDiags := cgroupIOLimitsFromProto(ctx, settings.GetIoLimits())
 	diags.Append(limitDiags...)
 	state.IOLimits = limits
+	classes, classDiags := cgroupClassesFromProto(ctx, settings.GetClasses())
+	diags.Append(classDiags...)
+	state.Classes = classes
 	state.Available = types.BoolValue(settings.GetAvailable())
 	state.Configured = types.BoolValue(settings.GetConfigured())
 	state.Reason = optionalStringValue(settings.GetReason())

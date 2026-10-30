@@ -10,40 +10,9 @@ import (
 	"testing"
 	"time"
 
-	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/cgroup"
 	"github.com/voidstarit/rookery/internal/store"
 )
-
-func TestApplyVMCgroup(t *testing.T) {
-	vm := store.VM{MemoryMB: 512}
-	err := applyVMCgroup(&vm, &rookeryv1.VMCgroup{
-		Enabled: true, Cpus: "0", MemoryMaxBytes: 1 << 30, CpuWeight: 500,
-		IoLimits: []*rookeryv1.CgroupIOLimit{{Device: "/dev/sda", ReadBps: 1024}},
-	})
-	if err != nil {
-		t.Fatalf("applyVMCgroup: %v", err)
-	}
-	if !vm.Cgroup.Enabled || vm.Cgroup.MemoryMaxBytes != 1<<30 || len(vm.Cgroup.IOLimits) != 1 {
-		t.Fatalf("vm cgroup = %+v", vm.Cgroup)
-	}
-
-	if err := applyVMCgroup(&store.VM{MemoryMB: 1024}, &rookeryv1.VMCgroup{
-		Enabled: true, MemoryMaxBytes: 512 << 20,
-	}); err == nil {
-		t.Fatal("applyVMCgroup accepted a memory limit below the VM memory")
-	}
-
-	if err := applyVMCgroup(&store.VM{MemoryMB: 512}, &rookeryv1.VMCgroup{
-		Enabled: true,
-		IoLimits: []*rookeryv1.CgroupIOLimit{
-			{Device: "/dev/sda"},
-			{Device: "/dev/sda"},
-		},
-	}); err == nil {
-		t.Fatal("applyVMCgroup accepted duplicate I/O devices")
-	}
-}
 
 type recordingCgroupRuntime struct {
 	settings     cgroup.Settings
@@ -88,7 +57,8 @@ func TestUpdateCgroupSettingsHTTP(t *testing.T) {
 		"cpus": "0-1",
 		"memory_max_bytes": 1073741824,
 		"cpu_weight": 500,
-		"io_limits": [{"device": "/dev/sda", "read_bps": 1048576, "weight": 200}]
+		"io_limits": [{"device": "/dev/sda", "read_bps": 1048576, "weight": 200}],
+		"classes": [{"name": "prod", "cpus": "0", "memory_max_bytes": 536870912}]
 	}`)
 	response, err := http.NewRequest(http.MethodPut, server.URL+"/api/cgroup-settings", bytes.NewReader(body))
 	if err != nil {
@@ -103,7 +73,8 @@ func TestUpdateCgroupSettingsHTTP(t *testing.T) {
 	if result.StatusCode != http.StatusOK {
 		t.Fatalf("PUT status = %d", result.StatusCode)
 	}
-	if !runtime.settings.Enabled || runtime.settings.MemoryMaxBytes != 1<<30 || len(runtime.settings.IOLimits) != 1 {
+	if !runtime.settings.Enabled || runtime.settings.MemoryMaxBytes != 1<<30 || len(runtime.settings.IOLimits) != 1 ||
+		len(runtime.settings.Classes) != 1 || runtime.settings.Classes[0].Name != "prod" {
 		t.Fatalf("applied settings = %+v", runtime.settings)
 	}
 	var payload map[string]any

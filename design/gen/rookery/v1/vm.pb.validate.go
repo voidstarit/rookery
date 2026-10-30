@@ -257,34 +257,7 @@ func (m *VM) validate(all bool) error {
 		}
 	}
 
-	if all {
-		switch v := interface{}(m.GetCgroup()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, VMValidationError{
-					field:  "Cgroup",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, VMValidationError{
-					field:  "Cgroup",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetCgroup()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return VMValidationError{
-				field:  "Cgroup",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
+	// no validation rules for CgroupClass
 
 	if m.DiskId != nil {
 		// no validation rules for DiskId
@@ -779,33 +752,15 @@ func (m *CreateVMRequest) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
-	if all {
-		switch v := interface{}(m.GetCgroup()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, CreateVMRequestValidationError{
-					field:  "Cgroup",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, CreateVMRequestValidationError{
-					field:  "Cgroup",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
+	if utf8.RuneCountInString(m.GetCgroupClass()) > 200 {
+		err := CreateVMRequestValidationError{
+			field:  "CgroupClass",
+			reason: "value length must be at most 200 runes",
 		}
-	} else if v, ok := interface{}(m.GetCgroup()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return CreateVMRequestValidationError{
-				field:  "Cgroup",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
+		if !all {
+			return err
 		}
+		errors = append(errors, err)
 	}
 
 	if m.Status != nil {
@@ -1001,35 +956,6 @@ func (m *UpdateVMRequest) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
-	if all {
-		switch v := interface{}(m.GetCgroup()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, UpdateVMRequestValidationError{
-					field:  "Cgroup",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, UpdateVMRequestValidationError{
-					field:  "Cgroup",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetCgroup()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return UpdateVMRequestValidationError{
-				field:  "Cgroup",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
-	}
-
 	if m.Name != nil {
 
 		if l := utf8.RuneCountInString(m.GetName()); l < 1 || l > 64 {
@@ -1141,6 +1067,21 @@ func (m *UpdateVMRequest) validate(all bool) error {
 
 	if m.ReplaceDiskIds != nil {
 		// no validation rules for ReplaceDiskIds
+	}
+
+	if m.CgroupClass != nil {
+
+		if utf8.RuneCountInString(m.GetCgroupClass()) > 200 {
+			err := UpdateVMRequestValidationError{
+				field:  "CgroupClass",
+				reason: "value length must be at most 200 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
 	}
 
 	if len(errors) > 0 {

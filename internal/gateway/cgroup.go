@@ -40,6 +40,7 @@ func (s *systemService) UpdateCgroupSettings(ctx context.Context, request *rooke
 		MemoryMaxBytes: request.GetMemoryMaxBytes(),
 		CPUWeight:      int(request.GetCpuWeight()),
 		IOLimits:       cgroupIOLimitsFromProto(request.GetIoLimits()),
+		Classes:        cgroupClassesFromProto(request.GetClasses()),
 	})
 	if s.cgroup != nil {
 		if err := s.cgroup.Validate(settings); err != nil {
@@ -50,6 +51,11 @@ func (s *systemService) UpdateCgroupSettings(ctx context.Context, request *rooke
 	}
 
 	previous, previousErr := s.store.GetCgroupSettings(ctx)
+	if previousErr == nil && settings.Enabled {
+		if err := s.validateClassAssignments(ctx, previous.Settings, settings); err != nil {
+			return nil, err
+		}
+	}
 	saved, err := s.store.SetCgroupSettings(ctx, settings)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not save cgroup settings")
@@ -81,7 +87,7 @@ func (s *systemService) UpdateCgroupSettings(ctx context.Context, request *rooke
 // current host settings. It returns human-readable failures for VMs that could
 // not be updated.
 func (s *systemService) applyCgroupsToRunningVMs(ctx context.Context) []string {
-	if s.vms == nil || s.cgroupVMs == nil {
+	if s.vms == nil || s.cgroupUpdater == nil {
 		return nil
 	}
 	vms, err := s.store.ListVMs(ctx)
@@ -93,11 +99,48 @@ func (s *systemService) applyCgroupsToRunningVMs(ctx context.Context) []string {
 		if !s.vms.Running(vm.ID) {
 			continue
 		}
-		if err := s.cgroupVMs.ApplyCgroup(ctx, vm); err != nil {
+		if err := s.cgroupUpdater.ApplyCgroup(ctx, vm); err != nil {
 			problems = append(problems, fmt.Sprintf("%s: %v", vm.Name, err))
 		}
 	}
 	return problems
+}
+
+// validateClassAssignments rejects removing a class while any VM still refers
+// to it, and rejects enabling settings while a VM points at an undefined class.
+func (s *systemService) validateClassAssignments(ctx context.Context, before, after cgroup.Settings) error {
+	kept := make(map[string]struct{}, len(after.Classes))
+	for _, class := range after.Classes {
+		kept[strings.TrimSpace(class.Name)] = struct{}{}
+	}
+	removed := make(map[string]struct{})
+	for _, class := range before.Classes {
+		name := strings.TrimSpace(class.Name)
+		if _, ok := kept[name]; !ok {
+			removed[name] = struct{}{}
+		}
+	}
+	vms, err := s.store.ListVMs(ctx)
+	if err != nil {
+		return status.Error(codes.Internal, "could not list VMs")
+	}
+	for _, vm := range vms {
+		className := strings.TrimSpace(vm.CgroupClass)
+		if className == "" {
+			continue
+		}
+		if _, ok := removed[className]; ok {
+			return status.Errorf(codes.InvalidArgument,
+				"cgroup class %q is assigned to VM %q; reassign the VM before removing the class",
+				className, vm.Name)
+		}
+		if _, ok := kept[className]; !ok {
+			return status.Errorf(codes.InvalidArgument,
+				"cgroup class %q assigned to VM %q is not defined",
+				className, vm.Name)
+		}
+	}
+	return nil
 }
 
 func (s *systemService) cgroupStatus() cgroup.Status {
@@ -123,6 +166,7 @@ func cgroupSettingsToProto(stored cgroup.CgroupSettings, runtime cgroup.Status) 
 		MemoryMaxBytes: stored.MemoryMaxBytes,
 		CpuWeight:      int32(stored.CPUWeight),
 		IoLimits:       cgroupIOLimitsToProto(stored.IOLimits),
+		Classes:        cgroupClassesToProto(stored.Classes),
 		Available:      runtime.Available,
 		Configured:     runtime.Configured,
 		Reason:         runtime.Reason,
@@ -136,6 +180,43 @@ func cgroupSettingsToProto(stored cgroup.CgroupSettings, runtime cgroup.Status) 
 	}
 	for _, cpu := range runtime.OnlineCPUs {
 		result.OnlineCpus = append(result.OnlineCpus, int32(cpu))
+	}
+	return result
+}
+
+func cgroupClassesFromProto(classes []*rookeryv1.CgroupClass) []cgroup.Class {
+	if len(classes) == 0 {
+		return nil
+	}
+	result := make([]cgroup.Class, 0, len(classes))
+	for _, class := range classes {
+		if class == nil {
+			continue
+		}
+		result = append(result, cgroup.Class{
+			Name:           strings.TrimSpace(class.GetName()),
+			CPUs:           strings.TrimSpace(class.GetCpus()),
+			MemoryMaxBytes: class.GetMemoryMaxBytes(),
+			CPUWeight:      int(class.GetCpuWeight()),
+			IOLimits:       cgroupIOLimitsFromProto(class.GetIoLimits()),
+		})
+	}
+	return result
+}
+
+func cgroupClassesToProto(classes []cgroup.Class) []*rookeryv1.CgroupClass {
+	if len(classes) == 0 {
+		return nil
+	}
+	result := make([]*rookeryv1.CgroupClass, 0, len(classes))
+	for _, class := range classes {
+		result = append(result, &rookeryv1.CgroupClass{
+			Name:           class.Name,
+			Cpus:           class.CPUs,
+			MemoryMaxBytes: class.MemoryMaxBytes,
+			CpuWeight:      int32(class.CPUWeight),
+			IoLimits:       cgroupIOLimitsToProto(class.IOLimits),
+		})
 	}
 	return result
 }

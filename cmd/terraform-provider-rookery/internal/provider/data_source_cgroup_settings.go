@@ -42,6 +42,12 @@ func (d *cgroupSettingsDataSource) Schema(_ context.Context, _ datasource.Schema
 					Attributes: cgroupIOLimitDataSourceAttributes(),
 				},
 			},
+			"classes": dschema.ListNestedAttribute{
+				Computed: true,
+				NestedObject: dschema.NestedAttributeObject{
+					Attributes: cgroupClassDataSourceAttributes(),
+				},
+			},
 			"available":   dschema.BoolAttribute{Computed: true},
 			"configured":  dschema.BoolAttribute{Computed: true},
 			"reason":      dschema.StringAttribute{Computed: true},

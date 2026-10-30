@@ -30,6 +30,14 @@ export type CgroupIOLimit = {
   weight?: number;
 };
 
+export type CgroupClass = {
+  name: string;
+  cpus?: string;
+  memory_max_bytes?: number;
+  cpu_weight?: number;
+  io_limits?: CgroupIOLimit[];
+};
+
 export type CgroupSettings = {
   enabled?: boolean;
   cpus?: string;
@@ -37,6 +45,7 @@ export type CgroupSettings = {
   memory_max_bytes?: number;
   cpu_weight?: number;
   io_limits?: CgroupIOLimit[];
+  classes?: CgroupClass[];
   available?: boolean;
   configured?: boolean;
   reason?: string;
@@ -45,14 +54,6 @@ export type CgroupSettings = {
   online_cpus?: number[];
   cpu_model?: string;
   updated_at?: string;
-};
-
-export type VMCgroup = {
-  enabled?: boolean;
-  cpus?: string;
-  memory_max_bytes?: number;
-  cpu_weight?: number;
-  io_limits?: CgroupIOLimit[];
 };
 
 export type HostBlockDevice = {
@@ -141,7 +142,7 @@ export type VM = {
   boot_media?: VMMedia;
   interfaces?: VMInterface[];
   console_enabled: boolean;
-  cgroup?: VMCgroup;
+  cgroup_class?: string;
   created_at?: string;
   updated_at?: string;
 };

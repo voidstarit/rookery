@@ -8,7 +8,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 )
@@ -100,58 +99,100 @@ func cgroupIOLimitsFromProto(ctx context.Context, limits []*rookeryv1.CgroupIOLi
 	return types.ListValueFrom(ctx, cgroupIOLimitObjectType, models)
 }
 
-type vmCgroupModel struct {
-	Enabled        types.Bool   `tfsdk:"enabled"`
+type cgroupClassModel struct {
+	Name           types.String `tfsdk:"name"`
 	CPUs           types.String `tfsdk:"cpus"`
 	MemoryMaxBytes types.Int64  `tfsdk:"memory_max_bytes"`
 	CPUWeight      types.Int64  `tfsdk:"cpu_weight"`
 	IOLimits       types.List   `tfsdk:"io_limits"`
 }
 
-var vmCgroupAttrTypes = map[string]attr.Type{
-	"enabled":          types.BoolType,
+var cgroupClassAttrTypes = map[string]attr.Type{
+	"name":             types.StringType,
 	"cpus":             types.StringType,
 	"memory_max_bytes": types.Int64Type,
 	"cpu_weight":       types.Int64Type,
 	"io_limits":        types.ListType{ElemType: cgroupIOLimitObjectType},
 }
 
-func vmCgroupFromObject(ctx context.Context, object types.Object) (*rookeryv1.VMCgroup, diag.Diagnostics) {
-	if object.IsNull() || object.IsUnknown() {
-		return nil, nil
+var cgroupClassObjectType = types.ObjectType{AttrTypes: cgroupClassAttrTypes}
+
+func cgroupClassSchemaAttributes() map[string]schema.Attribute {
+	return map[string]schema.Attribute{
+		"name":             schema.StringAttribute{Required: true, Description: "Slash-separated class path, for example prod or prod/web."},
+		"cpus":             schema.StringAttribute{Optional: true, Computed: true, Description: "Class cpuset.cpus; empty inherits the host or parent class."},
+		"memory_max_bytes": schema.Int64Attribute{Optional: true, Computed: true, Description: "Class memory.max in bytes; 0 inherits the host or parent class."},
+		"cpu_weight":       schema.Int64Attribute{Optional: true, Computed: true, Description: "Class cpu.weight (1-10000); 0 inherits."},
+		"io_limits": schema.ListNestedAttribute{
+			Optional: true, Computed: true,
+			Description:  "Class per-block-device I/O limits; omitted values inherit.",
+			NestedObject: schema.NestedAttributeObject{Attributes: cgroupIOLimitSchemaAttributes()},
+		},
 	}
-	var model vmCgroupModel
-	diags := object.As(ctx, &model, basetypes.ObjectAsOptions{})
-	if diags.HasError() {
-		return nil, diags
-	}
-	limits, limitDiags := cgroupIOLimitsFromList(ctx, model.IOLimits)
-	diags.Append(limitDiags...)
-	if diags.HasError() {
-		return nil, diags
-	}
-	return &rookeryv1.VMCgroup{
-		Enabled:        model.Enabled.ValueBool(),
-		Cpus:           model.CPUs.ValueString(),
-		MemoryMaxBytes: model.MemoryMaxBytes.ValueInt64(),
-		CpuWeight:      int32(model.CPUWeight.ValueInt64()),
-		IoLimits:       cgroupIOLimitsToProto(limits),
-	}, diags
 }
 
-func vmCgroupToObject(ctx context.Context, cgroup *rookeryv1.VMCgroup) (types.Object, diag.Diagnostics) {
-	if cgroup == nil {
-		return types.ObjectNull(vmCgroupAttrTypes), nil
+func cgroupClassDataSourceAttributes() map[string]dschema.Attribute {
+	return map[string]dschema.Attribute{
+		"name":             dschema.StringAttribute{Computed: true},
+		"cpus":             dschema.StringAttribute{Computed: true},
+		"memory_max_bytes": dschema.Int64Attribute{Computed: true},
+		"cpu_weight":       dschema.Int64Attribute{Computed: true},
+		"io_limits": dschema.ListNestedAttribute{
+			Computed:     true,
+			NestedObject: dschema.NestedAttributeObject{Attributes: cgroupIOLimitDataSourceAttributes()},
+		},
 	}
-	limits, diags := cgroupIOLimitsFromProto(ctx, cgroup.GetIoLimits())
-	if diags.HasError() {
-		return types.ObjectNull(vmCgroupAttrTypes), diags
+}
+
+func cgroupClassesFromList(ctx context.Context, list types.List) ([]cgroupClassModel, diag.Diagnostics) {
+	if list.IsNull() || list.IsUnknown() {
+		return nil, nil
 	}
-	return types.ObjectValueFrom(ctx, vmCgroupAttrTypes, vmCgroupModel{
-		Enabled:        types.BoolValue(cgroup.GetEnabled()),
-		CPUs:           types.StringValue(cgroup.GetCpus()),
-		MemoryMaxBytes: types.Int64Value(cgroup.GetMemoryMaxBytes()),
-		CPUWeight:      types.Int64Value(int64(cgroup.GetCpuWeight())),
-		IOLimits:       limits,
-	})
+	var classes []cgroupClassModel
+	diags := list.ElementsAs(ctx, &classes, false)
+	return classes, diags
+}
+
+func cgroupClassesToProto(ctx context.Context, classes []cgroupClassModel) ([]*rookeryv1.CgroupClass, diag.Diagnostics) {
+	if len(classes) == 0 {
+		return nil, nil
+	}
+	result := make([]*rookeryv1.CgroupClass, 0, len(classes))
+	var diags diag.Diagnostics
+	for _, class := range classes {
+		limits, limitDiags := cgroupIOLimitsFromList(ctx, class.IOLimits)
+		diags.Append(limitDiags...)
+		if diags.HasError() {
+			return nil, diags
+		}
+		result = append(result, &rookeryv1.CgroupClass{
+			Name:           class.Name.ValueString(),
+			Cpus:           class.CPUs.ValueString(),
+			MemoryMaxBytes: class.MemoryMaxBytes.ValueInt64(),
+			CpuWeight:      int32(class.CPUWeight.ValueInt64()),
+			IoLimits:       cgroupIOLimitsToProto(limits),
+		})
+	}
+	return result, diags
+}
+
+func cgroupClassesFromProto(ctx context.Context, classes []*rookeryv1.CgroupClass) (types.List, diag.Diagnostics) {
+	models := make([]cgroupClassModel, 0, len(classes))
+	for _, class := range classes {
+		if class == nil {
+			continue
+		}
+		limits, diags := cgroupIOLimitsFromProto(ctx, class.GetIoLimits())
+		if diags.HasError() {
+			return types.ListNull(cgroupClassObjectType), diags
+		}
+		models = append(models, cgroupClassModel{
+			Name:           types.StringValue(class.GetName()),
+			CPUs:           types.StringValue(class.GetCpus()),
+			MemoryMaxBytes: types.Int64Value(class.GetMemoryMaxBytes()),
+			CPUWeight:      types.Int64Value(int64(class.GetCpuWeight())),
+			IOLimits:       limits,
+		})
+	}
+	return types.ListValueFrom(ctx, cgroupClassObjectType, models)
 }

@@ -3376,8 +3376,8 @@
         "replace_disk_ids": {
           "type": "boolean"
         },
-        "cgroup": {
-          "$ref": "#/definitions/v1VMCgroup"
+        "cgroup_class": {
+          "type": "string"
         }
       }
     },
@@ -3573,6 +3573,33 @@
         }
       }
     },
+    "v1CgroupClass": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "cpus": {
+          "type": "string"
+        },
+        "memory_max_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "cpu_weight": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "io_limits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1CgroupIOLimit"
+          }
+        }
+      },
+      "description": "CgroupClass is a named, hierarchical cgroup profile. Name uses\nslash-separated segments such as \"production/web\"; parent cgroups are created\nautomatically and zero values inherit the host or parent class setting."
+    },
     "v1CgroupIOLimit": {
       "type": "object",
       "properties": {
@@ -3657,6 +3684,13 @@
         "updated_at": {
           "type": "string",
           "format": "date-time"
+        },
+        "classes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1CgroupClass"
+          }
         }
       },
       "description": "CgroupSettings is the host-wide cgroup v2 configuration plus runtime status."
@@ -3862,8 +3896,8 @@
           "type": "string",
           "format": "int64"
         },
-        "cgroup": {
-          "$ref": "#/definitions/v1VMCgroup"
+        "cgroup_class": {
+          "type": "string"
         }
       }
     },
@@ -5173,6 +5207,13 @@
             "type": "object",
             "$ref": "#/definitions/v1CgroupIOLimit"
           }
+        },
+        "classes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1CgroupClass"
+          }
         }
       }
     },
@@ -5267,37 +5308,10 @@
           "type": "string",
           "format": "date-time"
         },
-        "cgroup": {
-          "$ref": "#/definitions/v1VMCgroup"
+        "cgroup_class": {
+          "type": "string"
         }
       }
-    },
-    "v1VMCgroup": {
-      "type": "object",
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
-        "cpus": {
-          "type": "string"
-        },
-        "memory_max_bytes": {
-          "type": "string",
-          "format": "int64"
-        },
-        "cpu_weight": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "io_limits": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1CgroupIOLimit"
-          }
-        }
-      },
-      "description": "VMCgroup holds optional per-VM cgroup overrides. When enabled is false the\nVM runs in the shared cgroup and inherits host-wide limits."
     },
     "v1VMDisk": {
       "type": "object",

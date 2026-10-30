@@ -201,6 +201,194 @@ var _ interface {
 	ErrorName() string
 } = CgroupIOLimitValidationError{}
 
+// Validate checks the field values on CgroupClass with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *CgroupClass) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on CgroupClass with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in CgroupClassMultiError, or
+// nil if none found.
+func (m *CgroupClass) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *CgroupClass) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if l := utf8.RuneCountInString(m.GetName()); l < 1 || l > 200 {
+		err := CgroupClassValidationError{
+			field:  "Name",
+			reason: "value length must be between 1 and 200 runes, inclusive",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetCpus()) > 512 {
+		err := CgroupClassValidationError{
+			field:  "Cpus",
+			reason: "value length must be at most 512 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if m.GetMemoryMaxBytes() < 0 {
+		err := CgroupClassValidationError{
+			field:  "MemoryMaxBytes",
+			reason: "value must be greater than or equal to 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if val := m.GetCpuWeight(); val < 0 || val > 10000 {
+		err := CgroupClassValidationError{
+			field:  "CpuWeight",
+			reason: "value must be inside range [0, 10000]",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(m.GetIoLimits()) > 64 {
+		err := CgroupClassValidationError{
+			field:  "IoLimits",
+			reason: "value must contain no more than 64 item(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	for idx, item := range m.GetIoLimits() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, CgroupClassValidationError{
+						field:  fmt.Sprintf("IoLimits[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, CgroupClassValidationError{
+						field:  fmt.Sprintf("IoLimits[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return CgroupClassValidationError{
+					field:  fmt.Sprintf("IoLimits[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return CgroupClassMultiError(errors)
+	}
+
+	return nil
+}
+
+// CgroupClassMultiError is an error wrapping multiple validation errors
+// returned by CgroupClass.ValidateAll() if the designated constraints aren't met.
+type CgroupClassMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m CgroupClassMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m CgroupClassMultiError) AllErrors() []error { return m }
+
+// CgroupClassValidationError is the validation error returned by
+// CgroupClass.Validate if the designated constraints aren't met.
+type CgroupClassValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e CgroupClassValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e CgroupClassValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e CgroupClassValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e CgroupClassValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e CgroupClassValidationError) ErrorName() string { return "CgroupClassValidationError" }
+
+// Error satisfies the builtin error interface
+func (e CgroupClassValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sCgroupClass.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = CgroupClassValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = CgroupClassValidationError{}
+
 // Validate checks the field values on CgroupSettings with the rules defined in
 // the proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.
@@ -355,6 +543,40 @@ func (m *CgroupSettings) validate(all bool) error {
 		}
 	}
 
+	for idx, item := range m.GetClasses() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, CgroupSettingsValidationError{
+						field:  fmt.Sprintf("Classes[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, CgroupSettingsValidationError{
+						field:  fmt.Sprintf("Classes[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return CgroupSettingsValidationError{
+					field:  fmt.Sprintf("Classes[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
 	if len(errors) > 0 {
 		return CgroupSettingsMultiError(errors)
 	}
@@ -432,182 +654,3 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = CgroupSettingsValidationError{}
-
-// Validate checks the field values on VMCgroup with the rules defined in the
-// proto definition for this message. If any rules are violated, the first
-// error encountered is returned, or nil if there are no violations.
-func (m *VMCgroup) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on VMCgroup with the rules defined in
-// the proto definition for this message. If any rules are violated, the
-// result is a list of violation errors wrapped in VMCgroupMultiError, or nil
-// if none found.
-func (m *VMCgroup) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *VMCgroup) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	// no validation rules for Enabled
-
-	if utf8.RuneCountInString(m.GetCpus()) > 512 {
-		err := VMCgroupValidationError{
-			field:  "Cpus",
-			reason: "value length must be at most 512 runes",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
-
-	if m.GetMemoryMaxBytes() < 0 {
-		err := VMCgroupValidationError{
-			field:  "MemoryMaxBytes",
-			reason: "value must be greater than or equal to 0",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
-
-	if val := m.GetCpuWeight(); val < 0 || val > 10000 {
-		err := VMCgroupValidationError{
-			field:  "CpuWeight",
-			reason: "value must be inside range [0, 10000]",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
-
-	if len(m.GetIoLimits()) > 64 {
-		err := VMCgroupValidationError{
-			field:  "IoLimits",
-			reason: "value must contain no more than 64 item(s)",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
-
-	for idx, item := range m.GetIoLimits() {
-		_, _ = idx, item
-
-		if all {
-			switch v := interface{}(item).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, VMCgroupValidationError{
-						field:  fmt.Sprintf("IoLimits[%v]", idx),
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, VMCgroupValidationError{
-						field:  fmt.Sprintf("IoLimits[%v]", idx),
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return VMCgroupValidationError{
-					field:  fmt.Sprintf("IoLimits[%v]", idx),
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if len(errors) > 0 {
-		return VMCgroupMultiError(errors)
-	}
-
-	return nil
-}
-
-// VMCgroupMultiError is an error wrapping multiple validation errors returned
-// by VMCgroup.ValidateAll() if the designated constraints aren't met.
-type VMCgroupMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m VMCgroupMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m VMCgroupMultiError) AllErrors() []error { return m }
-
-// VMCgroupValidationError is the validation error returned by
-// VMCgroup.Validate if the designated constraints aren't met.
-type VMCgroupValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e VMCgroupValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e VMCgroupValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e VMCgroupValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e VMCgroupValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e VMCgroupValidationError) ErrorName() string { return "VMCgroupValidationError" }
-
-// Error satisfies the builtin error interface
-func (e VMCgroupValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sVMCgroup.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = VMCgroupValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = VMCgroupValidationError{}

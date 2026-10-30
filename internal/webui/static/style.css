@@ -3134,3 +3134,34 @@ body.route-page-mode #networks-panel .panel-spaced {
 .cgroup-vm-fields .field-wide {
   grid-column: 1 / -1;
 }
+
+.cgroup-class-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-top: 0.65rem;
+}
+
+.cgroup-class {
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.012);
+}
+
+.cgroup-class-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.cgroup-class-name {
+  flex: 1 1 16rem;
+}
+
+.cgroup-class-grid {
+  margin-top: 0.7rem;
+  padding: 0;
+}

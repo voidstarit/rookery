@@ -71,7 +71,8 @@ func TestMergeIOLimits(t *testing.T) {
 
 func TestClampChildCPUs(t *testing.T) {
 	root := t.TempDir()
-	for _, name := range []string{sharedName, "vm-test"} {
+	names := []string{sharedName, filepath.Join(classesDir, "prod"), filepath.Join(classesDir, "prod", membersDir)}
+	for _, name := range names {
 		dir := filepath.Join(root, name)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
@@ -86,7 +87,7 @@ func TestClampChildCPUs(t *testing.T) {
 	if err := clampChildCPUs(root, "0-3", "0"); err != nil {
 		t.Fatalf("clampChildCPUs: %v", err)
 	}
-	for _, name := range []string{sharedName, "vm-test"} {
+	for _, name := range names {
 		for file, want := range map[string]string{"cpuset.cpus": "0-3", "cpuset.mems": "0"} {
 			data, err := os.ReadFile(filepath.Join(root, name, file))
 			if err != nil {
@@ -116,21 +117,39 @@ func TestConfigureDisabledRemovesHierarchy(t *testing.T) {
 	}
 }
 
-func TestDisabledVMOverridesUseHostLimits(t *testing.T) {
+func TestClassEffectiveLimits(t *testing.T) {
 	manager := New("")
-	manager.settings = Settings{CPUs: ""}
-	effective, err := manager.effectiveLimitsLocked(VMLimits{
-		Enabled: false, CPUs: "0", MemoryMaxBytes: 1 << 30, CPUWeight: 500,
-		IOLimits: []IOLimit{{Device: "/dev/null", ReadBPS: 1024}},
-	})
+	manager.settings = Settings{
+		Enabled: true, CPUs: "0-7", MemoryMaxBytes: 8 << 30, CPUWeight: 100,
+		IOLimits: []IOLimit{{Device: "/dev/sda", ReadBPS: 1000}},
+		Classes: []Class{
+			{Name: "prod", CPUs: "0-3", MemoryMaxBytes: 4 << 30, CPUWeight: 300},
+			{Name: "prod/web", CPUs: "0-1", MemoryMaxBytes: 2 << 30,
+				IOLimits: []IOLimit{{Device: "/dev/sda", WriteBPS: 2000}}},
+		},
+	}
+	effective, err := manager.effectiveLimitsLocked("prod/web")
 	if err != nil {
 		t.Fatalf("effectiveLimitsLocked: %v", err)
 	}
-	if effective.MemoryMaxBytes != 0 || effective.CPUWeight != 0 || len(effective.IOLimits) != 0 {
-		t.Fatalf("disabled VM overrides leaked into shared limits: %+v", effective)
+	if effective.CPUs != "0-1" || effective.MemoryMaxBytes != 2<<30 || effective.CPUWeight != 300 {
+		t.Fatalf("class effective limits = %+v", effective)
 	}
-	if effective.CPUs == "" {
-		t.Fatal("effective CPU set is empty")
+	if len(effective.IOLimits) != 1 || effective.IOLimits[0].ReadBPS != 1000 || effective.IOLimits[0].WriteBPS != 2000 {
+		t.Fatalf("class I/O limits = %+v", effective.IOLimits)
+	}
+}
+
+func TestClassNames(t *testing.T) {
+	for _, name := range []string{"prod", "prod/web", "prod/web-1"} {
+		if err := ValidateClassName(name); err != nil {
+			t.Fatalf("ValidateClassName(%q): %v", name, err)
+		}
+	}
+	for _, name := range []string{"", "/prod", "prod/", "prod//web", "prod/../web", "prod/members", "-prod", "prod/web space"} {
+		if err := ValidateClassName(name); err == nil {
+			t.Fatalf("ValidateClassName(%q) = nil error, want failure", name)
+		}
 	}
 }
 
@@ -227,9 +246,6 @@ func TestDisabledSettingsSkipValidation(t *testing.T) {
 	if err := ValidateSettings(Settings{Enabled: false, CPUs: "bogus", MemoryMaxBytes: -1}); err != nil {
 		t.Fatalf("ValidateSettings disabled: %v", err)
 	}
-	if err := ValidateVMLimits(VMLimits{Enabled: false, CPUs: "bogus", MemoryMaxBytes: -1}); err != nil {
-		t.Fatalf("ValidateVMLimits disabled: %v", err)
-	}
 }
 
 func TestInvalidEnabledSettingsDoNotRunUnconstrained(t *testing.T) {
@@ -240,7 +256,7 @@ func TestInvalidEnabledSettingsDoNotRunUnconstrained(t *testing.T) {
 	if !manager.Settings().Enabled {
 		t.Fatal("manager discarded the enabled setting after a validation failure")
 	}
-	if _, err := manager.Place("00000000-0000-0000-0000-000000000001", VMLimits{}); err == nil {
+	if _, err := manager.Place(""); err == nil {
 		t.Fatal("Place succeeded with invalid enabled settings")
 	}
 }
@@ -251,7 +267,7 @@ func TestDisabledManagerDoesNotPlace(t *testing.T) {
 	if err := manager.Configure(Settings{Enabled: false}); err != nil {
 		t.Fatalf("Configure disabled: %v", err)
 	}
-	placement, err := manager.Place("00000000-0000-0000-0000-000000000001", VMLimits{Enabled: true})
+	placement, err := manager.Place("prod")
 	if err != nil {
 		t.Fatalf("Place: %v", err)
 	}
@@ -260,5 +276,93 @@ func TestDisabledManagerDoesNotPlace(t *testing.T) {
 	}
 	if err := manager.Configure(Settings{Enabled: true}); err == nil {
 		t.Fatal("Configure enabled without a cgroup2 mount = nil error, want failure")
+	}
+}
+
+func TestConfigureFakeClassHierarchy(t *testing.T) {
+	mount := t.TempDir()
+	root := filepath.Join(mount, "rookery")
+	dirs := []string{
+		mount, root, filepath.Join(root, sharedName),
+		filepath.Join(root, classesDir),
+		filepath.Join(root, classesDir, "prod"),
+		filepath.Join(root, classesDir, "prod", membersDir),
+		filepath.Join(root, classesDir, "prod", "web"),
+		filepath.Join(root, classesDir, "prod", "web", membersDir),
+	}
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{
+			"cgroup.controllers", "cgroup.subtree_control", "cgroup.procs",
+			"cpuset.cpus", "cpuset.mems", "memory.max", "cpu.weight", "io.max", "io.weight",
+		} {
+			if err := os.WriteFile(filepath.Join(dir, name), nil, 0o644); err != nil {
+				t.Fatalf("create %s/%s: %v", dir, name, err)
+			}
+		}
+	}
+	for _, dir := range []string{mount, root} {
+		if err := os.WriteFile(filepath.Join(dir, "cgroup.controllers"), []byte("cpu cpuset memory io pids"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	manager := New("")
+	manager.mount = mount
+	manager.root = root
+	settings := Settings{
+		Enabled: true, CPUs: "0-1", Mems: "0", MemoryMaxBytes: 8 << 30,
+		Classes: []Class{
+			{Name: "prod", CPUs: "0-1", MemoryMaxBytes: 4 << 30},
+			{Name: "prod/web", CPUs: "0", MemoryMaxBytes: 2 << 30},
+		},
+	}
+	if err := manager.Configure(settings); err != nil {
+		t.Fatalf("Configure: %v", err)
+	}
+	for path, want := range map[string]string{
+		filepath.Join(root, classesDir, "prod", "memory.max"):         "4294967296",
+		filepath.Join(root, classesDir, "prod", "web", "memory.max"):  "2147483648",
+		filepath.Join(root, classesDir, "prod", "web", "cpuset.cpus"): "0",
+	} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		if got := strings.TrimSpace(string(data)); got != want {
+			t.Fatalf("%s = %q, want %q", path, got, want)
+		}
+	}
+	placement, err := manager.Place("prod/web")
+	if err != nil {
+		t.Fatalf("Place class: %v", err)
+	}
+	if want := filepath.Join(root, classesDir, "prod", "web", membersDir); placement.Path != want {
+		t.Fatalf("placement = %q, want %q", placement.Path, want)
+	}
+	if _, err := manager.Place("missing"); err == nil {
+		t.Fatal("Place accepted an unknown class")
+	}
+}
+
+func TestValidateClassCPUHierarchy(t *testing.T) {
+	online, err := OnlineCPUs()
+	if err != nil || len(online) < 2 {
+		t.Skip("need at least two online CPUs")
+	}
+	host := FormatCPUSet(online[:2])
+	child := FormatCPUSet(online[:1])
+	settings := Settings{
+		Enabled: true, CPUs: host,
+		Classes: []Class{{Name: "prod", CPUs: host}, {Name: "prod/web", CPUs: child}},
+	}
+	if err := validateClassCPUHierarchy(settings, online); err != nil {
+		t.Fatalf("valid hierarchy: %v", err)
+	}
+	settings.Classes[1].CPUs = FormatCPUSet(online)
+	if err := validateClassCPUHierarchy(settings, online); err == nil {
+		t.Fatal("child class CPU set outside parent was accepted")
 	}
 }

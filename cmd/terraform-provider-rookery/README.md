@@ -79,10 +79,10 @@ provider "rookery" {
 | `rookery_route_table` | Custom VRF table (IDs 100000+ are reserved) |
 | `rookery_route` | Static route in a route table, including VPP path options |
 | `rookery_vnf` | DHCPv4/DHCPv6/NAT44/BGP network function |
-| `rookery_vm` | VM definition, disks, interfaces, boot media |
+| `rookery_vm` | VM definition, disks, interfaces, boot media, cgroup class |
 | `rookery_host_interface` | Take a physical NIC into VPP |
 | `rookery_startup_script` | Server-level Rookery or VPP reconnect script |
-| `rookery_cgroup_settings` | Host-wide cgroup v2 limits for QEMU |
+| `rookery_cgroup_settings` | Host-wide cgroup limits and reusable VM classes |
 
 VM power actions (`start`, `stop`, `reset`, `ctrl-alt-del`) are deliberately
 not part of `rookery_vm`; use the Rookery UI or API for runtime operations.
@@ -144,8 +144,12 @@ configuration. Set `enabled = true` to place all QEMU processes under the
 Rookery hierarchy and apply `cpus`, `mems`, `memory_max_bytes`, `cpu_weight`,
 and per-block-device `io_limits`. Saving settings applies them to all running
 VMs. Setting `enabled = false` or destroying the resource moves running QEMU
-processes out of the Rookery hierarchy and removes the cgroups. `io_limits`
-uses:
+processes out of the Rookery hierarchy and removes the cgroups.
+
+`classes` defines reusable, hierarchical profiles. Names are slash-separated
+paths such as `prod`, `prod/web`, or `prod/web/frontend`; parent cgroups are
+created automatically. Values inherit from the host or parent class when
+omitted:
 
 ```hcl
 resource "rookery_cgroup_settings" "host" {
@@ -162,28 +166,40 @@ resource "rookery_cgroup_settings" "host" {
       weight    = 200
     },
   ]
+
+  classes = [
+    {
+      name             = "prod"
+      cpus             = "0-3"
+      memory_max_bytes = 16 * 1024 * 1024 * 1024
+      cpu_weight       = 400
+    },
+    {
+      name             = "prod/web"
+      cpus             = "0-1"
+      memory_max_bytes = 6 * 1024 * 1024 * 1024
+      cpu_weight       = 300
+    },
+  ]
 }
 ```
 
-`rookery_vm` accepts an optional `cgroup` block for a dedicated child cgroup.
-Values override the host defaults; omitted values inherit them. Per-VM limits
-require host cgroup limits to be enabled:
+Assign a class with `cgroup_class`; omit it or set it to an empty string for the
+shared cgroup. Per-class limits require host cgroup limits to be enabled:
 
 ```hcl
 resource "rookery_vm" "app" {
-  name      = "app-vm0"
-  vcpus     = 2
-  memory_mb = 2048
-  disk_ids  = [rookery_disk.root.id]
+  name         = "app-vm0"
+  vcpus        = 2
+  memory_mb    = 2048
+  disk_ids     = [rookery_disk.root.id]
+  cgroup_class = "prod/web"
 
-  cgroup = {
-    enabled          = true
-    cpus             = "0-1"
-    memory_max_bytes = 3 * 1024 * 1024 * 1024
-    cpu_weight       = 300
-  }
+  depends_on = [rookery_cgroup_settings.host]
 }
 ```
+
+Use `depends_on` so classes exist before VMs are created or updated.
 
 `rookery_route` exposes the VPP path options `route_count`, `next_hop_table`,
 `weight`, `udp_encap`, `ipv4_lookup_table`, `ipv6_lookup_table`,

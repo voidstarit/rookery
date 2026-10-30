@@ -9,7 +9,6 @@ import "validate/validate.proto";
 import "rookery/v1/disk.proto";
 import "rookery/v1/interface.proto";
 import "rookery/v1/media.proto";
-import "rookery/v1/cgroup.proto";
 
 option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
 
@@ -82,7 +81,7 @@ message VM {
   bool console_enabled = 14;
   google.protobuf.Timestamp created_at = 15;
   google.protobuf.Timestamp updated_at = 16;
-  VMCgroup cgroup = 17;
+  string cgroup_class = 17;
 }
 
 message ListVMsRequest {}
@@ -110,7 +109,7 @@ message CreateVMRequest {
   repeated int64 interface_ids = 8;
   repeated int64 disk_ids = 9;
   optional int64 disk_id = 10 [(validate.rules).int64 = {gt: 0}];
-  VMCgroup cgroup = 11;
+  string cgroup_class = 11 [(validate.rules).string = {max_len: 200}];
 }
 
 message UpdateVMRequest {
@@ -132,7 +131,7 @@ message UpdateVMRequest {
   // be cleared because every VM requires at least one disk.
   optional bool replace_interface_ids = 11;
   optional bool replace_disk_ids = 12;
-  VMCgroup cgroup = 13;
+  optional string cgroup_class = 13 [(validate.rules).string = {max_len: 200}];
 }
 
 message DeleteVMRequest {

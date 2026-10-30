@@ -336,8 +336,8 @@ func TestMigrationPreservesLegacyVMsWithoutDisks(t *testing.T) {
 	if err := st.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 39 {
-		t.Fatalf("schema version = %d, want 39", version)
+	if version != 40 {
+		t.Fatalf("schema version = %d, want 40", version)
 	}
 }
 
@@ -535,6 +535,9 @@ func TestMigrationBackfillsVMPowerState(t *testing.T) {
 // older database before running the migrations again.
 func dropCgroupSchema(t *testing.T, db *sql.DB) {
 	t.Helper()
+	if _, err := db.Exec(`ALTER TABLE vms DROP COLUMN cgroup_class`); err != nil {
+		t.Fatalf("drop vms.cgroup_class: %v", err)
+	}
 	if _, err := db.Exec(`ALTER TABLE vms DROP COLUMN cgroup`); err != nil {
 		t.Fatalf("drop vms.cgroup: %v", err)
 	}

@@ -13,7 +13,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
-	"github.com/voidstarit/rookery/internal/cgroup"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -37,6 +36,9 @@ func (s *vmService) CreateVM(ctx context.Context, request *rookeryv1.CreateVMReq
 	vm, err := vmFromCreateRequest(request)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	if err := s.validateCgroupClass(ctx, vm.CgroupClass); err != nil {
+		return nil, err
 	}
 	interfaceIDs, err := normalizeGatewayIDs(request.GetInterfaceIds(), gatewayMaxVMInterfaces, "interface_ids")
 	if err != nil {
@@ -140,6 +142,9 @@ func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMReq
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
+	if err := s.validateCgroupClass(ctx, vm.CgroupClass); err != nil {
+		return nil, err
+	}
 	// Empty repeated fields mean "leave the current set unchanged" unless the
 	// caller explicitly requests replacement.
 	changeInterfaces := request.GetReplaceInterfaceIds() || len(request.GetInterfaceIds()) > 0
@@ -195,11 +200,11 @@ func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMReq
 			return nil, status.Errorf(codes.Aborted, "disk %q is already attached to another VM", disk.Name)
 		}
 	}
-	var cgroupUpdater VMCgroupUpdater
-	applyCgroup := request.Cgroup != nil && !vm.Cgroup.Equal(existing.Cgroup) &&
+	var cgroupUpdater CgroupUpdater
+	applyCgroup := request.CgroupClass != nil && vm.CgroupClass != existing.CgroupClass &&
 		s.runtime != nil && s.runtime.Running(existing.ID)
 	if applyCgroup {
-		cgroupUpdater, _ = s.runtime.(VMCgroupUpdater)
+		cgroupUpdater, _ = s.runtime.(CgroupUpdater)
 		applyCgroup = cgroupUpdater != nil
 	}
 	if applyCgroup {
@@ -258,11 +263,7 @@ func vmFromCreateRequest(request *rookeryv1.CreateVMRequest) (store.VM, error) {
 	if request.ConsoleEnabled != nil {
 		vm.ConsoleEnabled = request.GetConsoleEnabled()
 	}
-	if request.Cgroup != nil {
-		if err := applyVMCgroup(&vm, request.Cgroup); err != nil {
-			return store.VM{}, err
-		}
-	}
+	vm.CgroupClass = strings.TrimSpace(request.GetCgroupClass())
 	diskIDs := request.GetDiskIds()
 	if len(diskIDs) == 0 && request.DiskId != nil {
 		diskIDs = []int64{request.GetDiskId()}
@@ -310,30 +311,27 @@ func vmFromUpdateRequest(existing store.VM, request *rookeryv1.UpdateVMRequest) 
 	if request.ConsoleEnabled != nil {
 		vm.ConsoleEnabled = request.GetConsoleEnabled()
 	}
-	if request.Cgroup != nil {
-		if err := applyVMCgroup(&vm, request.Cgroup); err != nil {
-			return store.VM{}, err
-		}
+	if request.CgroupClass != nil {
+		vm.CgroupClass = strings.TrimSpace(request.GetCgroupClass())
 	}
 	return vm, nil
 }
 
-func applyVMCgroup(vm *store.VM, value *rookeryv1.VMCgroup) error {
-	limits := cgroup.NormalizeVMLimits(cgroup.VMLimits{
-		Enabled:        value.GetEnabled(),
-		CPUs:           value.GetCpus(),
-		MemoryMaxBytes: value.GetMemoryMaxBytes(),
-		CPUWeight:      int(value.GetCpuWeight()),
-		IOLimits:       cgroupIOLimitsFromProto(value.GetIoLimits()),
-	})
-	if err := cgroup.ValidateVMLimits(limits); err != nil {
-		return err
+func (s *vmService) validateCgroupClass(ctx context.Context, className string) error {
+	className = strings.TrimSpace(className)
+	if className == "" {
+		return nil
 	}
-	if limits.Enabled && limits.MemoryMaxBytes > 0 && limits.MemoryMaxBytes < int64(vm.MemoryMB)*1024*1024 {
-		return fmt.Errorf("cgroup memory_max_bytes must be at least the VM memory (%d MB)", vm.MemoryMB)
+	settings, err := s.store.GetCgroupSettings(ctx)
+	if err != nil {
+		return status.Error(codes.Internal, "could not read cgroup settings")
 	}
-	vm.Cgroup = limits
-	return nil
+	for _, class := range settings.Classes {
+		if strings.TrimSpace(class.Name) == className {
+			return nil
+		}
+	}
+	return status.Errorf(codes.InvalidArgument, "cgroup class %q not found", className)
 }
 
 func applyVMName(vm *store.VM, value string, required bool) error {

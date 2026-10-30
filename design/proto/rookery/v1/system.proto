@@ -147,4 +147,5 @@ message UpdateCgroupSettingsRequest {
   int64 memory_max_bytes = 4 [(validate.rules).int64 = {gte: 0}];
   int32 cpu_weight = 5 [(validate.rules).int32 = {gte: 0, lte: 10000}];
   repeated CgroupIOLimit io_limits = 6 [(validate.rules).repeated = {max_items: 64}];
+  repeated CgroupClass classes = 7 [(validate.rules).repeated = {max_items: 64}];
 }

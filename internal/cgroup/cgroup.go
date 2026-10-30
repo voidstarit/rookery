@@ -22,11 +22,13 @@ const (
 	maxValue       = "max"
 	defaultWeight  = 100
 	maxIOLimits    = 64
+	classesDir     = "classes"
+	membersDir     = "members"
 )
 
 var managedControllers = []string{"cpu", "cpuset", "memory", "io"}
 
-// Manager applies host limits and creates per-VM cgroups.
+// Manager applies host limits and creates the class hierarchy.
 type Manager struct {
 	mu         sync.Mutex
 	root       string
@@ -110,21 +112,23 @@ func NormalizeSettings(settings Settings) Settings {
 }
 
 // ValidateSettings checks host-wide settings without touching the cgroup
-// hierarchy. Disabled settings are not applied, so their field values are not
-// validated and can be cleared or fixed before enabling them again.
+// hierarchy. Disabled host limits are not applied, so host fields are not
+// validated, but class definitions are still checked and can be prepared before
+// enabling them.
 func ValidateSettings(settings Settings) error {
-	if !settings.Enabled {
-		return nil
+	settings = normalizeSettings(settings)
+	if settings.Enabled {
+		return validateSettings(settings)
 	}
-	return validateSettings(normalizeSettings(settings))
+	return validateClasses(settings.Classes)
 }
 
 // Validate checks settings without touching the cgroup hierarchy.
 func (m *Manager) Validate(settings Settings) error {
-	if !settings.Enabled {
-		return nil
+	if settings.Enabled {
+		return validateSettings(settings)
 	}
-	return validateSettings(settings)
+	return validateClasses(settings.Classes)
 }
 
 // Configure validates and applies host-wide settings. The desired settings
@@ -161,25 +165,21 @@ func (m *Manager) Configure(settings Settings) error {
 	return nil
 }
 
-// Place creates (or reuses) the cgroup for a VM and returns where QEMU should
-// be launched. When host limits are disabled it returns an empty Placement.
-func (m *Manager) Place(vmID string, limits VMLimits) (Placement, error) {
+// Place ensures the shared or named class cgroup and returns where QEMU
+// should be launched. When host limits are disabled it returns an empty
+// Placement. An empty className selects the shared cgroup.
+func (m *Manager) Place(className string) (Placement, error) {
 	if m == nil {
 		return Placement{}, nil
-	}
-	if strings.TrimSpace(vmID) == "" || strings.ContainsAny(vmID, `/\`) {
-		return Placement{}, fmt.Errorf("invalid VM id for cgroup placement")
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if !m.settings.Enabled {
 		return Placement{}, nil
 	}
-	if m.settings.Enabled {
-		if err := validateSettings(m.settings); err != nil {
-			m.lastError = err.Error()
-			return Placement{}, err
-		}
+	if err := validateSettings(m.settings); err != nil {
+		m.lastError = err.Error()
+		return Placement{}, err
 	}
 	if err := m.ensureLocked(); err != nil {
 		m.lastError = err.Error()
@@ -188,20 +188,18 @@ func (m *Manager) Place(vmID string, limits VMLimits) (Placement, error) {
 	m.configured = true
 	m.lastError = ""
 
-	name := sharedName
-	if limits.Enabled {
-		name = vmPrefix + vmID
+	name := strings.TrimSpace(className)
+	var dir string
+	if name == "" {
+		dir = filepath.Join(m.root, sharedName)
+	} else {
+		if !m.classExistsLocked(name) {
+			return Placement{}, fmt.Errorf("cgroup class %q not found", name)
+		}
+		dir = filepath.Join(m.root, classesDir, filepath.FromSlash(name), membersDir)
 	}
-	effective, err := m.effectiveLimitsLocked(limits)
-	if err != nil {
-		return Placement{}, err
-	}
-	dir := filepath.Join(m.root, name)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return Placement{}, fmt.Errorf("create VM cgroup %s: %w", dir, err)
-	}
-	if err := applyLimits(dir, effective); err != nil {
-		return Placement{}, err
+		return Placement{}, fmt.Errorf("create cgroup %s: %w", dir, err)
 	}
 	return Placement{Path: dir, Enabled: true}, nil
 }
@@ -215,25 +213,9 @@ func (m *Manager) Assign(placement Placement, pid int) error {
 	return writeCgroup(placement.Path, procsFile, strconv.Itoa(pid), true)
 }
 
-// CleanupVM removes a VM's child cgroup when it has no processes left.
-func (m *Manager) CleanupVM(vmID string) {
-	if m == nil || strings.TrimSpace(vmID) == "" || strings.ContainsAny(vmID, `/\`) {
-		return
-	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.mount == "" || m.validateRoot() != nil {
-		return
-	}
-	path := filepath.Join(m.root, vmPrefix+vmID)
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, syscall.EBUSY) {
-		return
-	}
-}
-
 // Release moves a process out of the Rookery cgroup hierarchy so it is no
-// longer constrained. It is used when per-VM limits are disabled while
-// host-wide limits are off.
+// longer constrained. It is used when a VM is unassigned while host-wide
+// limits are off.
 func (m *Manager) Release(pid int) error {
 	if m == nil || pid < 1 {
 		return nil
@@ -387,13 +369,13 @@ func (m *Manager) ensureLocked() error {
 	moveQEMUProcesses(m.root, shared)
 	_ = enableControllers(m.root, managedControllers)
 
-	effective, err := m.effectiveLimitsLocked(VMLimits{})
+	effective, err := m.effectiveLimitsLocked("")
 	if err != nil {
 		return err
 	}
 	// Shrinking the parent cpuset while a child still references removed CPUs
-	// fails with EBUSY. Clamp existing children first; per-VM cgroups are
-	// restored from their stored configuration on the next VM start.
+	// fails with EBUSY. Clamp existing children first; class limits are
+	// restored from settings on the next reconciliation.
 	if err := clampChildCPUs(m.root, effective.CPUs, effective.Mems); err != nil {
 		return err
 	}
@@ -401,6 +383,9 @@ func (m *Manager) ensureLocked() error {
 		return err
 	}
 	if err := applyLimits(shared, effective); err != nil {
+		return err
+	}
+	if err := m.ensureClassesLocked(); err != nil {
 		return err
 	}
 	return nil
@@ -418,15 +403,8 @@ func clampChildCPUs(dir, allowedCPUs, allowedMems string) error {
 	if err != nil {
 		return err
 	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		child := filepath.Join(dir, entry.Name())
+	entries := collectCgroupDirs(dir)
+	for _, child := range entries[1:] {
 		if err := clampCgroupCPUSet(filepath.Join(child, "cpuset.cpus"), allowed); err != nil {
 			return err
 		}
@@ -511,14 +489,90 @@ type appliedLimits struct {
 	IOLimits       []IOLimit
 }
 
-func (m *Manager) effectiveLimitsLocked(vm VMLimits) (appliedLimits, error) {
-	if !vm.Enabled {
-		vm = VMLimits{}
+// ensureClassesLocked creates the classes subtree and applies every class's
+// effective limits. Class nodes have controllers enabled and no processes;
+// VMs run in a per-class members leaf so a class may have both VMs and child
+// classes without violating cgroup v2's no-internal-process rule.
+func (m *Manager) ensureClassesLocked() error {
+	if !m.settings.Enabled {
+		return nil
 	}
+	classesRoot := filepath.Join(m.root, classesDir)
+	if len(m.settings.Classes) == 0 {
+		if _, err := os.Stat(classesRoot); errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+	}
+	if err := os.MkdirAll(classesRoot, 0o755); err != nil {
+		return fmt.Errorf("create cgroup classes root %s: %w", classesRoot, err)
+	}
+	_ = enableControllers(classesRoot, managedControllers)
+	hostLimits, err := m.effectiveLimitsLocked("")
+	if err != nil {
+		return err
+	}
+	if err := applyLimits(classesRoot, hostLimits); err != nil {
+		return err
+	}
+
+	defined := classMap(m.settings.Classes)
+	nodeSet := make(map[string]struct{})
+	for name := range defined {
+		for _, prefix := range classPrefixes(name) {
+			nodeSet[prefix] = struct{}{}
+		}
+	}
+	nodes := make([]string, 0, len(nodeSet))
+	for name := range nodeSet {
+		nodes = append(nodes, name)
+	}
+	sort.Slice(nodes, func(i, j int) bool {
+		di, dj := strings.Count(nodes[i], "/"), strings.Count(nodes[j], "/")
+		if di != dj {
+			return di < dj
+		}
+		return nodes[i] < nodes[j]
+	})
+
+	desired := map[string]struct{}{classesRoot: {}}
+	for _, name := range nodes {
+		dir := filepath.Join(classesRoot, filepath.FromSlash(name))
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("create cgroup class %s: %w", name, err)
+		}
+		desired[dir] = struct{}{}
+		_ = enableControllers(dir, managedControllers)
+		effective, err := m.effectiveLimitsLocked(name)
+		if err != nil {
+			return err
+		}
+		if err := applyLimits(dir, effective); err != nil {
+			return err
+		}
+		if _, ok := defined[name]; !ok {
+			continue
+		}
+		members := filepath.Join(dir, membersDir)
+		if err := os.MkdirAll(members, 0o755); err != nil {
+			return fmt.Errorf("create cgroup class members %s: %w", name, err)
+		}
+		desired[members] = struct{}{}
+	}
+
+	dirs := collectCgroupDirs(classesRoot)
+	for i := len(dirs) - 1; i >= 0; i-- {
+		if _, ok := desired[dirs[i]]; ok {
+			continue
+		}
+		if err := os.Remove(dirs[i]); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove stale cgroup class %s: %w", dirs[i], err)
+		}
+	}
+	return nil
+}
+
+func (m *Manager) effectiveLimitsLocked(className string) (appliedLimits, error) {
 	host := m.settings
-	if !host.Enabled {
-		host = Settings{}
-	}
 	online, err := OnlineCPUs()
 	if err != nil {
 		return appliedLimits{}, err
@@ -529,28 +583,12 @@ func (m *Manager) effectiveLimitsLocked(vm VMLimits) (appliedLimits, error) {
 			return appliedLimits{}, err
 		}
 	}
-	vmCPUs := strings.TrimSpace(vm.CPUs)
 	effectiveCPUs := hostCPUs
 	if effectiveCPUs == "" {
 		// Always write an explicit cpuset so clearing a previous restriction
 		// actually resets the cgroup instead of leaving the old CPU list.
 		effectiveCPUs = FormatCPUSet(online)
 	}
-	if vmCPUs != "" {
-		allowed := online
-		if hostCPUs != "" {
-			allowed, err = ParseCPUSet(hostCPUs)
-			if err != nil {
-				return appliedLimits{}, err
-			}
-		}
-		canonical, err := ValidateCPUSet(vmCPUs, allowed)
-		if err != nil {
-			return appliedLimits{}, fmt.Errorf("VM CPU set: %w", err)
-		}
-		effectiveCPUs = canonical
-	}
-
 	mems := host.Mems
 	if mems == "" {
 		nodes, err := OnlineMems()
@@ -561,18 +599,81 @@ func (m *Manager) effectiveLimitsLocked(vm VMLimits) (appliedLimits, error) {
 	}
 
 	memory := host.MemoryMaxBytes
-	if vm.MemoryMaxBytes > 0 {
-		memory = vm.MemoryMaxBytes
-	}
 	weight := host.CPUWeight
-	if vm.CPUWeight > 0 {
-		weight = vm.CPUWeight
+	ioLimits := host.IOLimits
+	className = strings.TrimSpace(className)
+	if className != "" {
+		classes := classMap(host.Classes)
+		for _, prefix := range classPrefixes(className) {
+			class, ok := classes[prefix]
+			if !ok {
+				continue
+			}
+			if class.CPUs != "" {
+				allowed, err := ParseCPUSet(effectiveCPUs)
+				if err != nil {
+					return appliedLimits{}, err
+				}
+				canonical, err := ValidateCPUSet(class.CPUs, allowed)
+				if err != nil {
+					return appliedLimits{}, fmt.Errorf("cgroup class %s CPU set: %w", prefix, err)
+				}
+				effectiveCPUs = canonical
+			}
+			if class.MemoryMaxBytes > 0 {
+				memory = class.MemoryMaxBytes
+			}
+			if class.CPUWeight > 0 {
+				weight = class.CPUWeight
+			}
+			ioLimits = mergeIOLimits(ioLimits, class.IOLimits)
+		}
 	}
 	return appliedLimits{
 		CPUs: effectiveCPUs, Mems: mems,
 		MemoryMaxBytes: memory, CPUWeight: weight,
-		IOLimits: mergeIOLimits(host.IOLimits, vm.IOLimits),
+		IOLimits: ioLimits,
 	}, nil
+}
+
+func (m *Manager) classExistsLocked(name string) bool {
+	name = strings.TrimSpace(name)
+	for _, class := range m.settings.Classes {
+		if strings.TrimSpace(class.Name) == name {
+			return true
+		}
+	}
+	return false
+}
+
+func classMap(classes []Class) map[string]Class {
+	result := make(map[string]Class, len(classes))
+	for _, class := range classes {
+		name := strings.TrimSpace(class.Name)
+		if name != "" {
+			result[name] = class
+		}
+	}
+	return result
+}
+
+// classPrefixes returns "prod", "prod/web" for "prod/web".
+func classPrefixes(name string) []string {
+	segments := strings.Split(strings.Trim(name, "/"), "/")
+	result := make([]string, 0, len(segments))
+	current := ""
+	for _, segment := range segments {
+		if segment == "" {
+			continue
+		}
+		if current == "" {
+			current = segment
+		} else {
+			current += "/" + segment
+		}
+		result = append(result, current)
+	}
+	return result
 }
 
 func mergeIOLimits(host, vm []IOLimit) []IOLimit {
@@ -853,40 +954,143 @@ func validateSettings(settings Settings) error {
 	if _, err := ValidateMems(settings.Mems, mems); err != nil {
 		return err
 	}
-	return validateIOLimits(settings.IOLimits)
-}
-
-// NormalizeVMLimits trims optional VM values and canonicalizes I/O device
-// paths.
-func NormalizeVMLimits(limits VMLimits) VMLimits {
-	limits.CPUs = strings.TrimSpace(limits.CPUs)
-	if cpus, err := CanonicalCPUSet(limits.CPUs); err == nil {
-		limits.CPUs = cpus
-	}
-	limits.IOLimits = normalizeIOLimits(limits.IOLimits)
-	return limits
-}
-
-// ValidateVMLimits validates optional per-VM limits without applying them.
-// Disabled per-VM limits are not applied, so they are not validated.
-func ValidateVMLimits(limits VMLimits) error {
-	if !limits.Enabled {
-		return nil
-	}
-	if limits.MemoryMaxBytes < 0 {
-		return errors.New("memory_max_bytes must not be negative")
-	}
-	if limits.CPUWeight < 0 || limits.CPUWeight > 10000 {
-		return errors.New("cpu_weight must be between 1 and 10000 (0 means inherit)")
-	}
-	online, err := OnlineCPUs()
-	if err != nil {
+	if err := validateIOLimits(settings.IOLimits); err != nil {
 		return err
 	}
-	if _, err := ValidateCPUSet(limits.CPUs, online); err != nil {
+	if err := validateClasses(settings.Classes); err != nil {
 		return err
 	}
-	return validateIOLimits(limits.IOLimits)
+	return validateClassCPUHierarchy(settings, online)
+}
+
+func validateClassCPUHierarchy(settings Settings, online []int) error {
+	hostCPUs := settings.CPUs
+	if hostCPUs == "" {
+		hostCPUs = FormatCPUSet(online)
+	}
+	classes := classMap(settings.Classes)
+	cache := make(map[string]string, len(classes))
+	var effective func(string) (string, error)
+	effective = func(name string) (string, error) {
+		if cpus, ok := cache[name]; ok {
+			return cpus, nil
+		}
+		allowed := hostCPUs
+		if parent := parentClassName(name); parent != "" {
+			var err error
+			allowed, err = effective(parent)
+			if err != nil {
+				return "", err
+			}
+		}
+		class, ok := classes[name]
+		if !ok || strings.TrimSpace(class.CPUs) == "" {
+			cache[name] = allowed
+			return allowed, nil
+		}
+		allowedSet, err := ParseCPUSet(allowed)
+		if err != nil {
+			return "", err
+		}
+		canonical, err := ValidateCPUSet(class.CPUs, allowedSet)
+		if err != nil {
+			return "", fmt.Errorf("cgroup class %s CPU set: %w", name, err)
+		}
+		cache[name] = canonical
+		return canonical, nil
+	}
+	for name := range classes {
+		if _, err := effective(name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func parentClassName(name string) string {
+	if index := strings.LastIndex(name, "/"); index > 0 {
+		return name[:index]
+	}
+	return ""
+}
+
+// ValidateClassName validates a slash-separated cgroup class path.
+func ValidateClassName(name string) error {
+	_, err := classSegments(name)
+	return err
+}
+
+func classSegments(name string) ([]string, error) {
+	name = strings.TrimSpace(name)
+	switch {
+	case name == "":
+		return nil, errors.New("cgroup class name is required")
+	case len(name) > 200:
+		return nil, errors.New("cgroup class name must be at most 200 characters")
+	case strings.HasPrefix(name, "/") || strings.HasSuffix(name, "/"):
+		return nil, fmt.Errorf("cgroup class %q must not start or end with /", name)
+	}
+	segments := strings.Split(name, "/")
+	if len(segments) > 8 {
+		return nil, fmt.Errorf("cgroup class %q is nested too deeply", name)
+	}
+	for _, segment := range segments {
+		switch segment {
+		case "":
+			return nil, fmt.Errorf("cgroup class %q contains an empty path segment", name)
+		case ".", "..":
+			return nil, fmt.Errorf("cgroup class %q contains an invalid path segment", name)
+		case membersDir:
+			return nil, fmt.Errorf("cgroup class %q uses reserved segment %q", name, membersDir)
+		}
+		if len(segment) > 63 {
+			return nil, fmt.Errorf("cgroup class segment %q is too long", segment)
+		}
+		for position, char := range segment {
+			switch {
+			case char >= 'a' && char <= 'z':
+			case char >= 'A' && char <= 'Z':
+			case char >= '0' && char <= '9':
+			case char == '.', char == '_', char == '-':
+				if position == 0 {
+					return nil, fmt.Errorf("cgroup class segment %q must start with a letter or digit", segment)
+				}
+			default:
+				return nil, fmt.Errorf("cgroup class segment %q contains invalid character %q", segment, char)
+			}
+		}
+	}
+	return segments, nil
+}
+
+func validateClasses(classes []Class) error {
+	if len(classes) > 64 {
+		return errors.New("at most 64 cgroup classes are allowed")
+	}
+	seen := make(map[string]struct{}, len(classes))
+	for _, class := range classes {
+		name := strings.TrimSpace(class.Name)
+		if err := ValidateClassName(name); err != nil {
+			return err
+		}
+		if _, ok := seen[name]; ok {
+			return fmt.Errorf("duplicate cgroup class %q", name)
+		}
+		seen[name] = struct{}{}
+		if class.MemoryMaxBytes < 0 {
+			return fmt.Errorf("cgroup class %s memory_max_bytes must not be negative", name)
+		}
+		if class.CPUWeight < 0 || class.CPUWeight > 10000 {
+			return fmt.Errorf("cgroup class %s cpu_weight must be between 1 and 10000 (0 means inherit)", name)
+		}
+		if _, err := CanonicalCPUSet(class.CPUs); err != nil {
+			return fmt.Errorf("cgroup class %s: %w", name, err)
+		}
+		if err := validateIOLimits(class.IOLimits); err != nil {
+			return fmt.Errorf("cgroup class %s: %w", name, err)
+		}
+	}
+	return nil
 }
 
 func validateIOLimits(limits []IOLimit) error {
@@ -927,6 +1131,20 @@ func normalizeSettings(settings Settings) Settings {
 		settings.Mems = mems
 	}
 	settings.IOLimits = normalizeIOLimits(settings.IOLimits)
+	if len(settings.Classes) > 0 {
+		classes := make([]Class, 0, len(settings.Classes))
+		for _, class := range settings.Classes {
+			class.Name = strings.TrimSpace(class.Name)
+			class.CPUs = strings.TrimSpace(class.CPUs)
+			if cpus, err := CanonicalCPUSet(class.CPUs); err == nil {
+				class.CPUs = cpus
+			}
+			class.IOLimits = normalizeIOLimits(class.IOLimits)
+			classes = append(classes, class)
+		}
+		sort.Slice(classes, func(i, j int) bool { return classes[i].Name < classes[j].Name })
+		settings.Classes = classes
+	}
 	return settings
 }
 
@@ -948,6 +1166,14 @@ func normalizeIOLimits(limits []IOLimit) []IOLimit {
 
 func cloneSettings(settings Settings) Settings {
 	settings.IOLimits = append([]IOLimit(nil), settings.IOLimits...)
+	if len(settings.Classes) > 0 {
+		classes := make([]Class, len(settings.Classes))
+		for i, class := range settings.Classes {
+			class.IOLimits = append([]IOLimit(nil), class.IOLimits...)
+			classes[i] = class
+		}
+		settings.Classes = classes
+	}
 	return settings
 }
 
