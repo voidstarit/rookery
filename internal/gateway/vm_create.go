@@ -326,12 +326,24 @@ func (s *vmService) validateCgroupClass(ctx context.Context, className string) e
 	if err != nil {
 		return status.Error(codes.Internal, "could not read cgroup settings")
 	}
+	found := false
 	for _, class := range settings.Classes {
 		if strings.TrimSpace(class.Name) == className {
-			return nil
+			found = true
+			break
 		}
 	}
-	return status.Errorf(codes.InvalidArgument, "cgroup class %q not found", className)
+	if !found {
+		return status.Errorf(codes.InvalidArgument, "cgroup class %q not found", className)
+	}
+	prefix := className + "/"
+	for _, class := range settings.Classes {
+		if strings.HasPrefix(strings.TrimSpace(class.Name), prefix) {
+			return status.Errorf(codes.InvalidArgument,
+				"cgroup class %q has child classes; assign the VM to a leaf class", className)
+		}
+	}
+	return nil
 }
 
 func applyVMName(vm *store.VM, value string, required bool) error {

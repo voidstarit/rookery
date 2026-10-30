@@ -22,8 +22,6 @@ const (
 	maxValue       = "max"
 	defaultWeight  = 100
 	maxIOLimits    = 64
-	classesDir     = "classes"
-	membersDir     = "members"
 )
 
 var managedControllers = []string{"cpu", "cpuset", "memory", "io"}
@@ -196,7 +194,10 @@ func (m *Manager) Place(className string) (Placement, error) {
 		if !m.classExistsLocked(name) {
 			return Placement{}, fmt.Errorf("cgroup class %q not found", name)
 		}
-		dir = filepath.Join(m.root, classesDir, filepath.FromSlash(name), membersDir)
+		if m.classHasChildrenLocked(name) {
+			return Placement{}, fmt.Errorf("cgroup class %q has child classes; assign the VM to a leaf class", name)
+		}
+		dir = filepath.Join(m.root, filepath.FromSlash(name))
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return Placement{}, fmt.Errorf("create cgroup %s: %w", dir, err)
@@ -489,32 +490,11 @@ type appliedLimits struct {
 	IOLimits       []IOLimit
 }
 
-// ensureClassesLocked creates the classes subtree and applies every class's
-// effective limits. Class nodes have controllers enabled and no processes;
-// VMs run in a per-class members leaf so a class may have both VMs and child
-// classes without violating cgroup v2's no-internal-process rule.
+// ensureClassesLocked creates class nodes directly below the Rookery root and
+// applies their effective limits. A class with child classes is a grouping node
+// with controllers enabled and no processes; VMs are only assigned to leaf
+// classes.
 func (m *Manager) ensureClassesLocked() error {
-	if !m.settings.Enabled {
-		return nil
-	}
-	classesRoot := filepath.Join(m.root, classesDir)
-	if len(m.settings.Classes) == 0 {
-		if _, err := os.Stat(classesRoot); errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-	}
-	if err := os.MkdirAll(classesRoot, 0o755); err != nil {
-		return fmt.Errorf("create cgroup classes root %s: %w", classesRoot, err)
-	}
-	_ = enableControllers(classesRoot, managedControllers)
-	hostLimits, err := m.effectiveLimitsLocked("")
-	if err != nil {
-		return err
-	}
-	if err := applyLimits(classesRoot, hostLimits); err != nil {
-		return err
-	}
-
 	defined := classMap(m.settings.Classes)
 	nodeSet := make(map[string]struct{})
 	for name := range defined {
@@ -534,14 +514,19 @@ func (m *Manager) ensureClassesLocked() error {
 		return nodes[i] < nodes[j]
 	})
 
-	desired := map[string]struct{}{classesRoot: {}}
+	desired := map[string]struct{}{
+		m.root:                            {},
+		filepath.Join(m.root, sharedName): {},
+	}
 	for _, name := range nodes {
-		dir := filepath.Join(classesRoot, filepath.FromSlash(name))
+		dir := filepath.Join(m.root, filepath.FromSlash(name))
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("create cgroup class %s: %w", name, err)
 		}
 		desired[dir] = struct{}{}
-		_ = enableControllers(dir, managedControllers)
+		if classHasChildren(name, defined) {
+			_ = enableControllers(dir, managedControllers)
+		}
 		effective, err := m.effectiveLimitsLocked(name)
 		if err != nil {
 			return err
@@ -549,26 +534,35 @@ func (m *Manager) ensureClassesLocked() error {
 		if err := applyLimits(dir, effective); err != nil {
 			return err
 		}
-		if _, ok := defined[name]; !ok {
-			continue
-		}
-		members := filepath.Join(dir, membersDir)
-		if err := os.MkdirAll(members, 0o755); err != nil {
-			return fmt.Errorf("create cgroup class members %s: %w", name, err)
-		}
-		desired[members] = struct{}{}
 	}
 
-	dirs := collectCgroupDirs(classesRoot)
+	dirs := collectCgroupDirs(m.root)
 	for i := len(dirs) - 1; i >= 0; i-- {
+		if dirs[i] == m.root {
+			continue
+		}
 		if _, ok := desired[dirs[i]]; ok {
 			continue
 		}
 		if err := os.Remove(dirs[i]); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("remove stale cgroup class %s: %w", dirs[i], err)
+			return fmt.Errorf("remove stale cgroup %s: %w", dirs[i], err)
 		}
 	}
 	return nil
+}
+
+func classHasChildren(name string, classes map[string]Class) bool {
+	prefix := name + "/"
+	for other := range classes {
+		if strings.HasPrefix(other, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Manager) classHasChildrenLocked(name string) bool {
+	return classHasChildren(name, classMap(m.settings.Classes))
 }
 
 func (m *Manager) effectiveLimitsLocked(className string) (appliedLimits, error) {
@@ -1034,14 +1028,15 @@ func classSegments(name string) ([]string, error) {
 	if len(segments) > 3 {
 		return nil, fmt.Errorf("cgroup class %q is nested too deeply (maximum 3 levels below the root)", name)
 	}
-	for _, segment := range segments {
+	for position, segment := range segments {
 		switch segment {
 		case "":
 			return nil, fmt.Errorf("cgroup class %q contains an empty path segment", name)
 		case ".", "..":
 			return nil, fmt.Errorf("cgroup class %q contains an invalid path segment", name)
-		case membersDir:
-			return nil, fmt.Errorf("cgroup class %q uses reserved segment %q", name, membersDir)
+		}
+		if position == 0 && segment == sharedName {
+			return nil, fmt.Errorf("cgroup class %q uses reserved top-level name %q", name, sharedName)
 		}
 		if len(segment) > 63 {
 			return nil, fmt.Errorf("cgroup class segment %q is too long", segment)

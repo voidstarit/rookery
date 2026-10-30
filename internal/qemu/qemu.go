@@ -167,8 +167,8 @@ func (q *QEMU) Start(ctx context.Context, vm store.VM) error {
 }
 
 // ApplyCgroup applies a VM's class to a running QEMU process. It moves the
-// process into the class members cgroup, or releases it from the Rookery
-// hierarchy when host-wide limits are disabled.
+// process into the leaf class cgroup, or releases it from the Rookery hierarchy
+// when host-wide limits are disabled.
 func (q *QEMU) ApplyCgroup(ctx context.Context, vm store.VM) error {
 	if q.cgroups == nil {
 		return nil

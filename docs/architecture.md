@@ -159,7 +159,7 @@ process, which brings VMs back after a host reboot while leaving explicitly
 stopped VMs down.
 
 When cgroup limits are enabled, before QEMU is launched, the cgroup manager
-creates or reuses the shared cgroup or the VM's class `members` cgroup below the
+creates or reuses the shared cgroup or the VM's leaf class cgroup below the
 configured parent and applies host/class limits. QEMU is started with
 `CLONE_INTO_CGROUP` where available, then its pid is written to `cgroup.procs`
 as a fallback, so every QEMU process is accounted under the hierarchy.

@@ -149,8 +149,8 @@ export function CgroupSettingsPanel() {
 
       <p class="field-hint">
         Rookery runs QEMU below {settings?.root || "/sys/fs/cgroup/rookery-cgroup"}. VMs without a cgroup
-        class run in the shared child cgroup; each class gets a hierarchical child cgroup under
-        <code>classes/</code>.
+        class run in the shared child cgroup; each class is a cgroup node below the
+        <code>rookery-cgroup</code> root, for example <code>rookery-cgroup/prod/web</code>.
       </p>
 
       <div class="cgroup-status">
@@ -259,8 +259,9 @@ export function CgroupSettingsPanel() {
             Define a tree of reusable profiles below <code>rookery-cgroup</code>. Class paths are
             slash-separated and may be up to 3 levels deep, for example <code>prod</code>,{" "}
             <code>prod/web</code>, or <code>prod/web/frontend</code>. Define the parent class first.
-            Assign a class to a VM instead of entering limits per VM. Class limits are shared by every
-            VM assigned to that class; allow enough memory for all of them.
+            VMs can only be assigned to leaf classes; parent classes group their children and inherit
+            limits. Assign a class to a VM instead of entering limits per VM. Class limits are shared
+            by every VM assigned to that class; allow enough memory for all of them.
           </span>
           <CgroupClassEditor
             classes={classes}

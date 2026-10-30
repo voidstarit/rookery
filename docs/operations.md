@@ -241,16 +241,16 @@ there, using `clone3(CLONE_INTO_CGROUP)` when the kernel supports it and an
 explicit `cgroup.procs` move otherwise. Rookery creates:
 
 - `<cgroup-root>/shared` for VMs without a class.
-- `<cgroup-root>/classes/<path>` for each class path, with controllers enabled
-  and no processes.
-- `<cgroup-root>/classes/<path>/members` for VMs assigned to that class.
+- `<cgroup-root>/<path>` for each class path, for example
+  `<cgroup-root>/prod/web/frontend`.
 
 Class names are slash-separated paths such as `prod`, `prod/web`, or
 `prod/web/frontend`, nested up to three levels below `rookery-cgroup`. Define
-the parent class first; the tree editor shows the hierarchy. The separate
-`members` leaf keeps class nodes free of processes while controllers are
-distributed, satisfying cgroup v2's no-internal-process rule. Class values
-inherit from the host and parent class when omitted.
+the parent class first; the tree editor shows the hierarchy. VMs are assigned
+only to leaf classes so a class node that has child classes stays free of
+processes while controllers are distributed, satisfying cgroup v2's
+no-internal-process rule. Parent classes group children and can carry inherited
+limits. Class values inherit from the host and parent class when omitted.
 
 Host and class settings map to cgroup v2 attributes:
 
@@ -274,7 +274,7 @@ VMs store only a `cgroup_class` name. A VM without a class runs in the shared
 child cgroup and inherits host ceilings. Assigning a class applies that class's
 CPU, memory, CPU weight, and I/O limits. Saving a VM applies its class change
 immediately (when cgroup limits are enabled): Rookery moves the running QEMU
-process (all of its threads) into the shared or class member cgroup as needed,
+process (all of its threads) into the shared or leaf class cgroup as needed,
 without stopping it. Saving host-wide settings also re-places every running VM
 immediately. Shrinking the host CPU or memory-node set clamps running child
 cgroups to the remaining CPUs/nodes so the parent update can succeed. Removing

@@ -71,7 +71,7 @@ func TestMergeIOLimits(t *testing.T) {
 
 func TestClampChildCPUs(t *testing.T) {
 	root := t.TempDir()
-	names := []string{sharedName, filepath.Join(classesDir, "prod"), filepath.Join(classesDir, "prod", membersDir)}
+	names := []string{sharedName, "prod", filepath.Join("prod", "web")}
 	for _, name := range names {
 		dir := filepath.Join(root, name)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -146,7 +146,7 @@ func TestClassNames(t *testing.T) {
 			t.Fatalf("ValidateClassName(%q): %v", name, err)
 		}
 	}
-	for _, name := range []string{"", "/prod", "prod/", "prod//web", "prod/../web", "prod/members", "-prod", "prod/web space", "a/b/c/d"} {
+	for _, name := range []string{"", "/prod", "prod/", "prod//web", "prod/../web", "shared", "-prod", "prod/web space", "a/b/c/d"} {
 		if err := ValidateClassName(name); err == nil {
 			t.Fatalf("ValidateClassName(%q) = nil error, want failure", name)
 		}
@@ -287,11 +287,8 @@ func TestConfigureFakeClassHierarchy(t *testing.T) {
 	root := filepath.Join(mount, "rookery")
 	dirs := []string{
 		mount, root, filepath.Join(root, sharedName),
-		filepath.Join(root, classesDir),
-		filepath.Join(root, classesDir, "prod"),
-		filepath.Join(root, classesDir, "prod", membersDir),
-		filepath.Join(root, classesDir, "prod", "web"),
-		filepath.Join(root, classesDir, "prod", "web", membersDir),
+		filepath.Join(root, "prod"),
+		filepath.Join(root, "prod", "web"),
 	}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -326,9 +323,9 @@ func TestConfigureFakeClassHierarchy(t *testing.T) {
 		t.Fatalf("Configure: %v", err)
 	}
 	for path, want := range map[string]string{
-		filepath.Join(root, classesDir, "prod", "memory.max"):         "4294967296",
-		filepath.Join(root, classesDir, "prod", "web", "memory.max"):  "2147483648",
-		filepath.Join(root, classesDir, "prod", "web", "cpuset.cpus"): "0",
+		filepath.Join(root, "prod", "memory.max"):         "4294967296",
+		filepath.Join(root, "prod", "web", "memory.max"):  "2147483648",
+		filepath.Join(root, "prod", "web", "cpuset.cpus"): "0",
 	} {
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -342,7 +339,7 @@ func TestConfigureFakeClassHierarchy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Place class: %v", err)
 	}
-	if want := filepath.Join(root, classesDir, "prod", "web", membersDir); placement.Path != want {
+	if want := filepath.Join(root, "prod", "web"); placement.Path != want {
 		t.Fatalf("placement = %q, want %q", placement.Path, want)
 	}
 	if _, err := manager.Place("missing"); err == nil {

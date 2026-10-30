@@ -139,6 +139,14 @@ func (s *systemService) validateClassAssignments(ctx context.Context, before, af
 				"cgroup class %q assigned to VM %q is not defined",
 				className, vm.Name)
 		}
+		prefix := className + "/"
+		for _, class := range after.Classes {
+			if strings.HasPrefix(strings.TrimSpace(class.Name), prefix) {
+				return status.Errorf(codes.InvalidArgument,
+					"cgroup class %q assigned to VM %q has child classes; assign the VM to a leaf class",
+					className, vm.Name)
+			}
+		}
 	}
 	return nil
 }

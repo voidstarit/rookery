@@ -1,7 +1,7 @@
 // Package cgroup manages the cgroup v2 hierarchy used to constrain QEMU
 // processes. Host settings are applied to a parent cgroup and reusable class
-// definitions form a hierarchy below it; VMs run in a class member leaf or the
-// shared cgroup.
+// definitions form a tree below it; VMs run directly in leaf class cgroups or
+// the shared cgroup.
 package cgroup
 
 import "time"

@@ -79,6 +79,9 @@ export function VMDialog({
   const selectedDiskIDs = new Set(selectedDisks.map((disk) => disk.id));
   const selectedInterfaceIDs = new Set(selectedInterfaces.map((iface) => iface.id));
   const cgroupClasses = Array.isArray(cgroupSettings?.classes) ? cgroupSettings.classes : [];
+  const leafCgroupClasses = cgroupClasses.filter(
+    (item) => !cgroupClasses.some((other) => other.name.startsWith(item.name + "/"))
+  );
 
   const availableDisks = disks.filter((disk) => {
     if (disk.is_template) {
@@ -403,10 +406,10 @@ export function VMDialog({
               </span>
               <select value={cgroupClass} onChange={(event) => setCgroupClass(event.currentTarget.value)}>
                 <option value="">Shared cgroup (host defaults)</option>
-                {!cgroupClasses.some((item) => item.name === cgroupClass) && cgroupClass ? (
-                  <option value={cgroupClass}>{cgroupClass} (class missing)</option>
+                {!leafCgroupClasses.some((item) => item.name === cgroupClass) && cgroupClass ? (
+                  <option value={cgroupClass}>{cgroupClass} (not a leaf class)</option>
                 ) : null}
-                {cgroupClasses.map((item) => (
+                {leafCgroupClasses.map((item) => (
                   <option value={item.name} key={item.name}>
                     {item.name}
                   </option>
