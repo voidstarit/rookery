@@ -53,9 +53,10 @@ localhost or sit behind an access-controlled proxy.
 Rookery resources over the public mTLS gRPC listener. It covers storage
 backends, disks, media, networks and network pipes, vhost and host interfaces,
 host taps, managed VPP addresses and interface route-table bindings, ACLs,
-route tables and routes, VNFs, VMs, startup scripts, and host-interface
-takeover. Matching data sources look
-up existing resources, and `rookery_status` exposes current readiness. Configure
+route tables and routes, VNFs, VMs (including optional per-VM cgroup limits),
+host-wide cgroup settings, startup scripts, and host-interface takeover.
+Matching data sources look up existing resources, and `rookery_status` exposes
+current readiness. Configure
 it with the CA, client certificate, and private key downloaded from the
 **Client certificates** dialog:
 

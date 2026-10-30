@@ -133,6 +133,7 @@ func (p *RookeryProvider) Resources(_ context.Context) []func() resource.Resourc
 		NewVPPInterfaceAddressesResource,
 		NewVPPInterfaceRouteTablesResource,
 		NewStartupScriptResource,
+		NewCgroupSettingsResource,
 	}
 }
 
@@ -155,6 +156,7 @@ func (p *RookeryProvider) DataSources(_ context.Context) []func() datasource.Dat
 		NewVPPInterfaceAddressesDataSource,
 		NewVPPInterfaceRouteTablesDataSource,
 		NewStartupScriptDataSource,
+		NewCgroupSettingsDataSource,
 	}
 }
 
