@@ -131,7 +131,7 @@ export function CgroupSettingsPanel() {
   const statusReason = settings?.reason || "";
   const statusDetail = enabledNow
     ? settings?.configured
-      ? `Applied at ${settings?.root || "/sys/fs/cgroup/rookery"}`
+      ? `Applied at ${settings?.root || "/sys/fs/cgroup/rookery-cgroup"}`
       : "Enabled but not applied yet"
     : "Disabled";
 
@@ -148,7 +148,7 @@ export function CgroupSettingsPanel() {
       </div>
 
       <p class="field-hint">
-        Rookery runs QEMU below {settings?.root || "/sys/fs/cgroup/rookery"}. VMs without a cgroup
+        Rookery runs QEMU below {settings?.root || "/sys/fs/cgroup/rookery-cgroup"}. VMs without a cgroup
         class run in the shared child cgroup; each class gets a hierarchical child cgroup under
         <code>classes/</code>.
       </p>
@@ -254,28 +254,19 @@ export function CgroupSettingsPanel() {
         </div>
 
         <div class="field field-wide">
-          <div class="cgroup-class-head">
-            <span class="field-label">Classes</span>
-            <button
-              class="button ghost"
-              type="button"
-              disabled={loading || saving || classes.length >= 64}
-              onClick={() => setClasses((current) => [...current, nextClass(current)])}
-            >
-              Add class
-            </button>
-          </div>
+          <span class="field-label">Classes</span>
           <span class="field-hint">
-            Define reusable profiles as slash-separated paths such as <code>prod</code>,{" "}
-            <code>prod/web</code>, or <code>prod/web/frontend</code>. Parent cgroups are created
-            automatically. Assign a class to a VM instead of entering limits per VM. Class limits are
-            shared by every VM assigned to that class; allow enough memory for all of them.
+            Define a tree of reusable profiles below <code>rookery-cgroup</code>. Class paths are
+            slash-separated and may be up to 3 levels deep, for example <code>prod</code>,{" "}
+            <code>prod/web</code>, or <code>prod/web/frontend</code>. Define the parent class first.
+            Assign a class to a VM instead of entering limits per VM. Class limits are shared by every
+            VM assigned to that class; allow enough memory for all of them.
           </span>
           <CgroupClassEditor
             classes={classes}
             devices={devices}
             onlineCPUs={onlineCPUs}
-            disabled={loading}
+            disabled={loading || saving}
             onChange={setClasses}
           />
         </div>
@@ -296,12 +287,66 @@ export function CgroupSettingsPanel() {
   );
 }
 
-function nextClass(classes: CgroupClass[]): CgroupClass {
+function nextClassName(classes: CgroupClass[], parent?: string): string {
   let index = 1;
-  while (classes.some((item) => item.name === `class-${index}`)) {
+  while (true) {
+    const candidate = parent ? `${parent}/class-${index}` : `class-${index}`;
+    if (!classes.some((item) => item.name === candidate)) {
+      return candidate;
+    }
     index++;
   }
-  return { name: `class-${index}` };
+}
+
+function parentClass(name: string): string {
+  const index = name.lastIndexOf("/");
+  return index > 0 ? name.slice(0, index) : "";
+}
+
+function classSegment(name: string): string {
+  const index = name.lastIndexOf("/");
+  return index >= 0 ? name.slice(index + 1) : name;
+}
+
+function renameClass(classes: CgroupClass[], oldName: string, rawSegment: string): CgroupClass[] | null {
+  const segment = rawSegment.trim();
+  if (!segment || segment.includes("/")) {
+    return null;
+  }
+  const parent = parentClass(oldName);
+  const newName = parent ? `${parent}/${segment}` : segment;
+  if (newName === oldName) {
+    return classes;
+  }
+  if (classes.some((item) => item.name === newName)) {
+    return null;
+  }
+  return classes.map((item) => {
+    if (item.name === oldName) {
+      return { ...item, name: newName };
+    }
+    if (item.name.startsWith(oldName + "/")) {
+      return { ...item, name: newName + item.name.slice(oldName.length) };
+    }
+    return item;
+  });
+}
+
+function classSummary(item: CgroupClass): string {
+  const parts: string[] = [];
+  if (item.cpus) {
+    parts.push(`CPU ${item.cpus}`);
+  }
+  if (item.memory_max_bytes) {
+    parts.push(`${bytesToMB(item.memory_max_bytes)} MB`);
+  }
+  if (item.cpu_weight) {
+    parts.push(`weight ${item.cpu_weight}`);
+  }
+  if (item.io_limits?.length) {
+    parts.push(`${item.io_limits.length} I/O`);
+  }
+  return parts.length ? parts.join(" · ") : "inherits host limits";
 }
 
 type CgroupClassEditorProps = {
@@ -313,38 +358,80 @@ type CgroupClassEditorProps = {
 };
 
 function CgroupClassEditor({ classes, devices, onlineCPUs, disabled, onChange }: CgroupClassEditorProps) {
-  const update = (index: number, patch: Partial<CgroupClass>) => {
-    onChange(classes.map((item, current) => (current === index ? { ...item, ...patch } : item)));
+  const update = (name: string, patch: Partial<CgroupClass>) => {
+    onChange(classes.map((item) => (item.name === name ? { ...item, ...patch } : item)));
   };
-  const remove = (index: number) => {
-    onChange(classes.filter((_, current) => current !== index));
+  const remove = (name: string) => {
+    onChange(classes.filter((item) => item.name !== name && !item.name.startsWith(name + "/")));
+  };
+  const add = (parent?: string) => {
+    onChange([...classes, { name: nextClassName(classes, parent) }]);
   };
 
-  if (classes.length === 0) {
-    return <p class="field-hint">No classes defined. VMs without a class run in the shared cgroup.</p>;
+  const byName = new Map(classes.map((item) => [item.name, item]));
+  const children = new Map<string, CgroupClass[]>();
+  const roots: CgroupClass[] = [];
+  for (const item of classes) {
+    const parent = parentClass(item.name);
+    if (parent && byName.has(parent)) {
+      const current = children.get(parent) || [];
+      current.push(item);
+      children.set(parent, current);
+    } else {
+      roots.push(item);
+    }
   }
+  for (const list of children.values()) {
+    list.sort((a, b) => a.name.localeCompare(b.name));
+  }
+  roots.sort((a, b) => a.name.localeCompare(b.name));
 
-  return (
-    <div class="cgroup-class-editor">
-      {classes.map((item, index) => (
-        <div class="cgroup-class" key={index}>
-          <div class="cgroup-class-head">
-            <label class="field cgroup-class-name">
-              <span class="field-label">Class path</span>
-              <input
-                type="text"
-                disabled={disabled}
-                value={item.name || ""}
-                placeholder="prod/web"
-                spellcheck={false}
-                onInput={(event) => update(index, { name: event.currentTarget.value })}
-              />
-            </label>
-            <button class="row-action danger" type="button" disabled={disabled} onClick={() => remove(index)}>
-              Remove class
+  const renderNode = (item: CgroupClass) => {
+    const depth = item.name.split("/").length;
+    const childItems = children.get(item.name) || [];
+    const segment = classSegment(item.name);
+    return (
+      <div class="cgroup-tree-node" key={item.name}>
+        <div class="cgroup-tree-node-head">
+          <div class="cgroup-tree-title">
+            <input
+              class="cgroup-tree-name"
+              type="text"
+              defaultValue={segment}
+              disabled={disabled}
+              aria-label={`Class name for ${item.name}`}
+              onBlur={(event) => {
+                const renamed = renameClass(classes, item.name, event.currentTarget.value);
+                if (!renamed) {
+                  event.currentTarget.value = segment;
+                  return;
+                }
+                onChange(renamed);
+              }}
+            />
+            <span class="cgroup-tree-path">{item.name}</span>
+            <span class="field-hint">{classSummary(item)}</span>
+          </div>
+          <div class="actions">
+            {depth < 3 ? (
+              <button class="row-action" type="button" disabled={disabled || classes.length >= 64} onClick={() => add(item.name)}>
+                Add child
+              </button>
+            ) : null}
+            <button
+              class="row-action danger"
+              type="button"
+              disabled={disabled || childItems.length > 0}
+              title={childItems.length > 0 ? "Remove child classes first." : ""}
+              onClick={() => remove(item.name)}
+            >
+              Remove
             </button>
           </div>
+        </div>
 
+        <details class="cgroup-tree-limits">
+          <summary>Limits</summary>
           <div class="form-grid cgroup-class-grid">
             <div class="field field-wide">
               <span class="field-label">CPU cores</span>
@@ -352,7 +439,7 @@ function CgroupClassEditor({ classes, devices, onlineCPUs, disabled, onChange }:
                 value={item.cpus || ""}
                 options={onlineCPUs}
                 disabled={disabled}
-                onChange={(value) => update(index, { cpus: value })}
+                onChange={(value) => update(item.name, { cpus: value })}
                 hint="Empty inherits the host/parent class CPU set. A non-empty set must be a subset of it."
               />
             </div>
@@ -366,7 +453,7 @@ function CgroupClassEditor({ classes, devices, onlineCPUs, disabled, onChange }:
                 disabled={disabled}
                 value={bytesToMB(item.memory_max_bytes)}
                 placeholder="inherit"
-                onInput={(event) => update(index, { memory_max_bytes: mbToBytes(event.currentTarget.value) })}
+                onInput={(event) => update(item.name, { memory_max_bytes: mbToBytes(event.currentTarget.value) })}
               />
             </label>
 
@@ -380,7 +467,7 @@ function CgroupClassEditor({ classes, devices, onlineCPUs, disabled, onChange }:
                 disabled={disabled}
                 value={weightValue(item.cpu_weight)}
                 placeholder="inherit"
-                onInput={(event) => update(index, { cpu_weight: limitNumber(event.currentTarget.value) })}
+                onInput={(event) => update(item.name, { cpu_weight: limitNumber(event.currentTarget.value) })}
               />
             </label>
 
@@ -390,13 +477,29 @@ function CgroupClassEditor({ classes, devices, onlineCPUs, disabled, onChange }:
                 limits={item.io_limits || []}
                 devices={devices}
                 disabled={disabled}
-                onChange={(limits) => update(index, { io_limits: limits })}
+                onChange={(limits) => update(item.name, { io_limits: limits })}
               />
             </div>
           </div>
+        </details>
+
+        {childItems.length > 0 ? <div class="cgroup-tree-children">{childItems.map(renderNode)}</div> : null}
+      </div>
+    );
+  };
+
+  return (
+    <div class="cgroup-tree">
+      <div class="cgroup-tree-root">
+        <div>
+          <span class="cgroup-tree-root-name">rookery-cgroup</span>
+          <span class="field-hint">Root limits are the host settings above; classes nest up to 3 levels below.</span>
         </div>
-      ))}
+        <button class="button ghost" type="button" disabled={disabled || classes.length >= 64} onClick={() => add()}>
+          Add top-level class
+        </button>
+      </div>
+      {roots.length > 0 ? roots.map(renderNode) : <p class="field-hint">No classes defined. VMs without a class run in the shared cgroup.</p>}
     </div>
   );
 }
-

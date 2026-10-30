@@ -141,15 +141,18 @@ func TestClassEffectiveLimits(t *testing.T) {
 }
 
 func TestClassNames(t *testing.T) {
-	for _, name := range []string{"prod", "prod/web", "prod/web-1"} {
+	for _, name := range []string{"prod", "prod/web", "prod/web-1", "prod/web/frontend"} {
 		if err := ValidateClassName(name); err != nil {
 			t.Fatalf("ValidateClassName(%q): %v", name, err)
 		}
 	}
-	for _, name := range []string{"", "/prod", "prod/", "prod//web", "prod/../web", "prod/members", "-prod", "prod/web space"} {
+	for _, name := range []string{"", "/prod", "prod/", "prod//web", "prod/../web", "prod/members", "-prod", "prod/web space", "a/b/c/d"} {
 		if err := ValidateClassName(name); err == nil {
 			t.Fatalf("ValidateClassName(%q) = nil error, want failure", name)
 		}
+	}
+	if err := validateClasses([]Class{{Name: "prod/web"}}); err == nil {
+		t.Fatal("validateClasses accepted a class without its parent")
 	}
 }
 

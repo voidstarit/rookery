@@ -69,7 +69,7 @@ running VMs.
 - Permission to create `/run/rookery` (or configure another `-run-dir`) and to
   start QEMU processes
 - cgroup v2 mounted at `/sys/fs/cgroup` and write access below `-cgroup-root`
-  (default `/sys/fs/cgroup/rookery`) to enable host and class resource limits;
+  (default `/sys/fs/cgroup/rookery-cgroup`) to enable host and class resource limits;
   Rookery reports cgroup availability in Settings and refuses to start a VM
   when enabled limits cannot be applied
 
@@ -246,7 +246,8 @@ explicit `cgroup.procs` move otherwise. Rookery creates:
 - `<cgroup-root>/classes/<path>/members` for VMs assigned to that class.
 
 Class names are slash-separated paths such as `prod`, `prod/web`, or
-`prod/web/frontend`; parent cgroups are created automatically. The separate
+`prod/web/frontend`, nested up to three levels below `rookery-cgroup`. Define
+the parent class first; the tree editor shows the hierarchy. The separate
 `members` leaf keeps class nodes free of processes while controllers are
 distributed, satisfying cgroup v2's no-internal-process rule. Class values
 inherit from the host and parent class when omitted.
@@ -299,7 +300,7 @@ but one running VM cannot accept the new limits, the API reports that VM.
 | `-vpp-socket`     | `ROOKERY_VPP_SOCKET` | `/run/vpp/api.sock` | `serve`, `init`, `vnfs` | VPP binary API Unix socket |
 | `-qemu-bin`       | `ROOKERY_QEMU_BIN`   | `qemu-system-x86_64`| `serve`         | QEMU system emulator binary |
 | `-run-dir`        | `ROOKERY_RUN_DIR`    | `/run/rookery`    | `serve`, `vnfs` | QEMU pid/VNC sockets; VNF state and lease files |
-| `-cgroup-root`    | `ROOKERY_CGROUP_ROOT`| `/sys/fs/cgroup/rookery` | `serve`   | Parent cgroup v2 for QEMU resource limits |
+| `-cgroup-root`    | `ROOKERY_CGROUP_ROOT`| `/sys/fs/cgroup/rookery-cgroup` | `serve`   | Parent cgroup v2 for QEMU resource limits |
 | `-memif-dir`      | `ROOKERY_MEMIF_DIR`    | `/run/rookery/memif`| `serve`         | VNF memif socket directory |
 | `-vhost-dir`      | `ROOKERY_VHOST_DIR`  | `/run/vpp`          | `serve`, `vnfs` | VPP vhost-user socket directory |
 | `-vnf-addr`       | `ROOKERY_VNF_ADDR`   | `unix:///run/rookery/vnfs.sock` | `serve` | VNF daemon control address (`unix://` or `tcp://`) |
@@ -351,7 +352,7 @@ api:
   db: /var/lib/rookery/rookery.db
   check_interval: 10s
   rate_limit: 3
-  cgroup_root: /sys/fs/cgroup/rookery
+  cgroup_root: /sys/fs/cgroup/rookery-cgroup
   log_level: info
   mtls_addr: ":8443"
 

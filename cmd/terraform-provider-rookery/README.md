@@ -146,10 +146,10 @@ and per-block-device `io_limits`. Saving settings applies them to all running
 VMs. Setting `enabled = false` or destroying the resource moves running QEMU
 processes out of the Rookery hierarchy and removes the cgroups.
 
-`classes` defines reusable, hierarchical profiles. Names are slash-separated
-paths such as `prod`, `prod/web`, or `prod/web/frontend`; parent cgroups are
-created automatically. Values inherit from the host or parent class when
-omitted:
+`classes` defines reusable, hierarchical profiles below `rookery-cgroup`.
+Names are slash-separated paths such as `prod`, `prod/web`, or
+`prod/web/frontend`, up to three levels deep. Define the parent class before its
+children. Values inherit from the host or parent class when omitted:
 
 ```hcl
 resource "rookery_cgroup_settings" "host" {

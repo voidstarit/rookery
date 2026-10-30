@@ -1031,8 +1031,8 @@ func classSegments(name string) ([]string, error) {
 		return nil, fmt.Errorf("cgroup class %q must not start or end with /", name)
 	}
 	segments := strings.Split(name, "/")
-	if len(segments) > 8 {
-		return nil, fmt.Errorf("cgroup class %q is nested too deeply", name)
+	if len(segments) > 3 {
+		return nil, fmt.Errorf("cgroup class %q is nested too deeply (maximum 3 levels below the root)", name)
 	}
 	for _, segment := range segments {
 		switch segment {
@@ -1088,6 +1088,14 @@ func validateClasses(classes []Class) error {
 		}
 		if err := validateIOLimits(class.IOLimits); err != nil {
 			return fmt.Errorf("cgroup class %s: %w", name, err)
+		}
+	}
+	for _, class := range classes {
+		name := strings.TrimSpace(class.Name)
+		if parent := parentClassName(name); parent != "" {
+			if _, ok := seen[parent]; !ok {
+				return fmt.Errorf("cgroup class %s requires parent class %q to be defined", name, parent)
+			}
 		}
 	}
 	return nil

@@ -8,7 +8,7 @@ import "time"
 
 const (
 	// DefaultRoot is the Rookery cgroup below the cgroup2 mount point.
-	DefaultRoot = "/sys/fs/cgroup/rookery"
+	DefaultRoot = "/sys/fs/cgroup/rookery-cgroup"
 	// sharedName is the child cgroup used by VMs without a class.
 	sharedName = "shared"
 )
