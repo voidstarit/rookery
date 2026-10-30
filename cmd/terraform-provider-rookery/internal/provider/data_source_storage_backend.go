@@ -31,6 +31,7 @@ func (d *storageBackendDataSource) Schema(_ context.Context, _ datasource.Schema
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a storage backend by id or name.",
 		Attributes: map[string]dschema.Attribute{
+			"labels":      labelsDataSourceAttribute(),
 			"id":          dschema.Int64Attribute{Optional: true, Computed: true, Description: "Backend id."},
 			"name":        dschema.StringAttribute{Optional: true, Computed: true, Description: "Backend name."},
 			"title":       dschema.StringAttribute{Computed: true},
@@ -86,6 +87,12 @@ func (d *storageBackendDataSource) Read(ctx context.Context, req datasource.Read
 		return
 	}
 	resp.Diagnostics.Append(setStorageBackendState(ctx, &config, backend)...)
+	entityLabels, err := readEntityLabels(callCtx, client, "storage_backend", fmt.Sprintf("%d", backend.GetId()))
+	if err != nil {
+		resp.Diagnostics.AddError("Read storage backend labels", err.Error())
+		return
+	}
+	config.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 

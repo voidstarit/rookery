@@ -31,6 +31,7 @@ func (d *vnfDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, re
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a network function by id or name.",
 		Attributes: map[string]dschema.Attribute{
+			"labels":          labelsDataSourceAttribute(),
 			"id":              dschema.Int64Attribute{Optional: true, Computed: true},
 			"name":            dschema.StringAttribute{Optional: true, Computed: true},
 			"network_id":      dschema.Int64Attribute{Computed: true},
@@ -81,6 +82,12 @@ func (d *vnfDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 		return
 	}
 	resp.Diagnostics.Append(setVNFState(&config, vnf)...)
+	entityLabels, err := readEntityLabels(callCtx, client, "vnf", fmt.Sprintf("%d", vnf.GetId()))
+	if err != nil {
+		resp.Diagnostics.AddError("Read VNF labels", err.Error())
+		return
+	}
+	config.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 

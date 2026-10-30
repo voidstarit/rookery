@@ -2,7 +2,7 @@ package provider
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -36,6 +36,7 @@ type hostTapModel struct {
 	SwIfIndex    types.Int64  `tfsdk:"sw_if_index"`
 	IPv4Address  types.String `tfsdk:"ipv4_address"`
 	VPPAddresses types.List   `tfsdk:"vpp_addresses"`
+	Labels       types.Set    `tfsdk:"labels"`
 }
 
 func (r *hostTapResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -46,7 +47,8 @@ func (r *hostTapResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 	resp.Schema = schema.Schema{
 		Description: "A persistent VPP tap connecting a Rookery Network to the Linux host.",
 		Attributes: map[string]schema.Attribute{
-			"id": schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
+			"labels": labelsResourceAttribute(),
+			"id":     schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
 			"network_id": schema.Int64Attribute{
 				Required:      true,
 				Description:   "Network id.",
@@ -94,6 +96,12 @@ func (r *hostTapResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 	resp.Diagnostics.Append(setHostTapState(ctx, &plan, tap)...)
+	entityLabels, err := applyEntityLabels(callCtx, client, "host_tap", fmt.Sprintf("%d", tap.GetId()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Create host tap labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -118,6 +126,12 @@ func (r *hostTapResource) Read(ctx context.Context, req resource.ReadRequest, re
 	for _, tap := range response.GetTaps() {
 		if tap.GetId() == state.ID.ValueInt64() {
 			resp.Diagnostics.Append(setHostTapState(ctx, &state, tap)...)
+			entityLabels, err := readEntityLabels(callCtx, client, "host_tap", fmt.Sprintf("%d", state.ID.ValueInt64()))
+			if err != nil {
+				resp.Diagnostics.AddError("Read host tap labels", err.Error())
+				return
+			}
+			state.Labels = entityLabels
 			resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 			return
 		}
@@ -125,8 +139,26 @@ func (r *hostTapResource) Read(ctx context.Context, req resource.ReadRequest, re
 	resp.State.RemoveResource(ctx)
 }
 
-func (r *hostTapResource) Update(_ context.Context, _ resource.UpdateRequest, resp *resource.UpdateResponse) {
-	resp.Diagnostics.AddError("Update host tap", errors.New("host taps are immutable; replace the resource instead").Error())
+func (r *hostTapResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan hostTapModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	client, err := r.requireClient()
+	if err != nil {
+		resp.Diagnostics.AddError("Update host tap labels", err.Error())
+		return
+	}
+	callCtx, cancel := context.WithTimeout(ctx, client.Timeout())
+	defer cancel()
+	entityLabels, err := applyEntityLabels(callCtx, client, "host_tap", fmt.Sprintf("%d", plan.ID.ValueInt64()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Update host tap labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *hostTapResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

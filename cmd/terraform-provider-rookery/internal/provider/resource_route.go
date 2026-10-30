@@ -58,6 +58,7 @@ type routeModel struct {
 	RxIPv6Interface     types.String `tfsdk:"rx_ipv6_interface"`
 	OutLabels           types.List   `tfsdk:"out_labels"`
 	Drop                types.Bool   `tfsdk:"drop"`
+	Labels              types.Set    `tfsdk:"labels"`
 }
 
 func (r *routeResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -68,7 +69,8 @@ func (r *routeResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 	resp.Schema = schema.Schema{
 		Description: "A static route in a Rookery route table. The next hop is optional when an egress interface is set.",
 		Attributes: map[string]schema.Attribute{
-			"id": schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
+			"labels": labelsResourceAttribute(),
+			"id":     schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
 			"route_table_id": schema.Int64Attribute{
 				Required:      true,
 				Description:   "Rookery route table record id (the id attribute of rookery_route_table), or 0 for the default table.",
@@ -171,6 +173,12 @@ func (r *routeResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 	resp.Diagnostics.Append(setRouteState(ctx, &plan, route)...)
+	entityLabels, err := applyEntityLabels(callCtx, client, "route", fmt.Sprintf("%d", route.GetId()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Create route labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -202,6 +210,12 @@ func (r *routeResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	for _, route := range response.GetRoutes() {
 		if route.GetId() == state.ID.ValueInt64() {
 			resp.Diagnostics.Append(setRouteState(ctx, &state, route)...)
+			entityLabels, err := readEntityLabels(callCtx, client, "route", fmt.Sprintf("%d", state.ID.ValueInt64()))
+			if err != nil {
+				resp.Diagnostics.AddError("Read route labels", err.Error())
+				return
+			}
+			state.Labels = entityLabels
 			resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 			return
 		}
@@ -209,8 +223,26 @@ func (r *routeResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	resp.State.RemoveResource(ctx)
 }
 
-func (r *routeResource) Update(_ context.Context, _ resource.UpdateRequest, resp *resource.UpdateResponse) {
-	resp.Diagnostics.AddError("Update route", "routes are immutable; replace the resource instead")
+func (r *routeResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan routeModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	client, err := r.requireClient()
+	if err != nil {
+		resp.Diagnostics.AddError("Update route labels", err.Error())
+		return
+	}
+	callCtx, cancel := context.WithTimeout(ctx, client.Timeout())
+	defer cancel()
+	entityLabels, err := applyEntityLabels(callCtx, client, "route", fmt.Sprintf("%d", plan.ID.ValueInt64()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Update route labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *routeResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

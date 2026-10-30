@@ -32,6 +32,7 @@ func (d *diskDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a disk by id or name.",
 		Attributes: map[string]dschema.Attribute{
+			"labels":               labelsDataSourceAttribute(),
 			"id":                   dschema.Int64Attribute{Optional: true, Computed: true},
 			"name":                 dschema.StringAttribute{Optional: true, Computed: true},
 			"size_gb":              dschema.Int64Attribute{Computed: true},
@@ -87,6 +88,12 @@ func (d *diskDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	}
 	setDiskState(&config, disk)
 	config.ProvisioningJSON = types.StringNull()
+	entityLabels, err := readEntityLabels(callCtx, client, "disk", fmt.Sprintf("%d", disk.GetId()))
+	if err != nil {
+		resp.Diagnostics.AddError("Read disk labels", err.Error())
+		return
+	}
+	config.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../../shared/api";
 import { showToast } from "../../shared/toast";
+import { EntityLabels, useEntityLabels } from "../../shared/labels";
 import type { Media, VM } from "../types";
 import { MediaDialog } from "./MediaDialog";
 import { navigate, useRoute } from "../router";
@@ -40,6 +41,7 @@ export function MediaTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const entityLabels = useEntityLabels("media");
   const route = useRoute();
 
   useEffect(() => {
@@ -209,6 +211,13 @@ export function MediaTab() {
                             {item.path}
                           </span>
                         ) : null}
+                        <EntityLabels
+                          entityType="media"
+                          entityID={item.id}
+                          name={item.name}
+                          labels={entityLabels.labels[String(item.id)]}
+                          onSaved={(labels) => entityLabels.setEntityLabels(String(item.id), labels)}
+                        />
                       </td>
                       <td class="mono">{formatBytes(item.size_bytes)}</td>
                       <td

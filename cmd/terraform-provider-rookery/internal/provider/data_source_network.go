@@ -31,6 +31,7 @@ func (d *networkDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a Rookery network by id or name.",
 		Attributes: map[string]dschema.Attribute{
+			"labels":           labelsDataSourceAttribute(),
 			"id":               dschema.Int64Attribute{Optional: true, Computed: true},
 			"name":             dschema.StringAttribute{Optional: true, Computed: true},
 			"ipv4_cidr":        dschema.StringAttribute{Computed: true},
@@ -79,6 +80,12 @@ func (d *networkDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 	setNetworkState(&config, network)
+	entityLabels, err := readEntityLabels(callCtx, client, "network", fmt.Sprintf("%d", network.GetId()))
+	if err != nil {
+		resp.Diagnostics.AddError("Read network labels", err.Error())
+		return
+	}
+	config.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 

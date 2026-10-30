@@ -103,6 +103,9 @@ func (s *networkService) UpdateNetwork(ctx context.Context, request *rookeryv1.U
 	if err != nil {
 		return nil, storeReadError(err, store.ErrNetworkNotFound, "network not found")
 	}
+	if network.IPv4CIDR == ipv4CIDR && network.IPv6CIDR == ipv6CIDR {
+		return networkToProto(network), nil
+	}
 	if network.BVIHostName != "" || network.IPv4Gateway != "" {
 		return nil, status.Error(codes.Aborted, "remove the network BVI before changing network CIDRs")
 	}

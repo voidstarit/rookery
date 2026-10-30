@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { APIError, api } from "../../shared/api";
 import { showToast } from "../../shared/toast";
+import { EntityLabels, useEntityLabels } from "../../shared/labels";
 import type { Network, StatusResponse, VNF } from "../types";
 import { formatDate } from "./format";
 import { VNFPage } from "./VNFPage";
@@ -26,6 +27,7 @@ export function VNFsTab() {
   const [sessionsVNF, setSessionsVNF] = useState<VNF | null>(null);
   const [bgpVNF, setBGPVNF] = useState<VNF | null>(null);
   const [dnsVNF, setDNSVNF] = useState<VNF | null>(null);
+  const entityLabels = useEntityLabels("vnf");
   const route = useRoute();
 
   useEffect(() => {
@@ -345,6 +347,13 @@ export function VNFsTab() {
                               : ""}
                           </span>
                         ) : null}
+                        <EntityLabels
+                          entityType="vnf"
+                          entityID={vnf.id}
+                          name={vnf.name}
+                          labels={entityLabels.labels[String(vnf.id)]}
+                          onSaved={(labels) => entityLabels.setEntityLabels(String(vnf.id), labels)}
+                        />
                       </td>
                       <td class="mono">{typeLabel}</td>
                       <td class="mono">{network?.name || vnf.network_name || `network ${vnf.network_id}`}</td>

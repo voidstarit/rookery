@@ -176,3 +176,18 @@ func TestSetCgroupSettingsStatePreservesClassOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestLabelsSetRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	set, diags := labelsToSet(ctx, []string{"web", "prod"})
+	if diags.HasError() {
+		t.Fatalf("labelsToSet: %v", diags)
+	}
+	values, diags := labelsFromSet(ctx, set)
+	if diags.HasError() {
+		t.Fatalf("labelsFromSet: %v", diags)
+	}
+	if len(values) != 2 || values[0] != "web" || values[1] != "prod" {
+		t.Fatalf("labels = %#v", values)
+	}
+}

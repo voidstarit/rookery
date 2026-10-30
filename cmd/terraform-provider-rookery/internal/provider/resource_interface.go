@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -47,6 +48,7 @@ type interfaceModel struct {
 	IPv4TableName  types.String `tfsdk:"ipv4_table_name"`
 	IPv6TableName  types.String `tfsdk:"ipv6_table_name"`
 	VPPAddresses   types.List   `tfsdk:"vpp_addresses"`
+	Labels         types.Set    `tfsdk:"labels"`
 }
 
 func (r *interfaceResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -57,7 +59,8 @@ func (r *interfaceResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 	resp.Schema = schema.Schema{
 		Description: "A Rookery vhost-user interface in a network bridge domain.",
 		Attributes: map[string]schema.Attribute{
-			"id": schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
+			"labels": labelsResourceAttribute(),
+			"id":     schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
 			"name": schema.StringAttribute{
 				Required:      true,
 				Description:   "Interface name.",
@@ -144,6 +147,12 @@ func (r *interfaceResource) Create(ctx context.Context, req resource.CreateReque
 		}
 	}
 	resp.Diagnostics.Append(setInterfaceState(ctx, &plan, iface)...)
+	entityLabels, err := applyEntityLabels(callCtx, client, "interface", fmt.Sprintf("%d", iface.GetId()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Create interface labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -170,6 +179,12 @@ func (r *interfaceResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 	resp.Diagnostics.Append(setInterfaceState(ctx, &state, iface)...)
+	entityLabels, err := readEntityLabels(callCtx, client, "interface", fmt.Sprintf("%d", state.ID.ValueInt64()))
+	if err != nil {
+		resp.Diagnostics.AddError("Read interface labels", err.Error())
+		return
+	}
+	state.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -230,6 +245,12 @@ func (r *interfaceResource) Update(ctx context.Context, req resource.UpdateReque
 		}
 	}
 	resp.Diagnostics.Append(setInterfaceState(ctx, &plan, iface)...)
+	entityLabels, err := applyEntityLabels(callCtx, client, "interface", fmt.Sprintf("%d", plan.ID.ValueInt64()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Update interface labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 

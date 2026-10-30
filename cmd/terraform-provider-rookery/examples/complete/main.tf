@@ -22,6 +22,7 @@ resource "rookery_storage_backend" "pool" {
   name   = "pool"
   title  = "Primary LVM thin pool"
   driver = "lvm-thin"
+  labels = ["storage", "primary"]
 
   config = {
     vg                 = "vg0"
@@ -33,6 +34,7 @@ resource "rookery_storage_backend" "pool" {
 
 resource "rookery_network" "app" {
   name      = "app"
+  labels    = ["prod", "web"]
   ipv4_cidr = "10.20.0.0/16"
   ipv6_cidr = "fd00:20::/64"
 }
@@ -46,16 +48,19 @@ resource "rookery_network" "edge" {
 resource "rookery_network_pipe" "app_edge" {
   network_a_id = rookery_network.app.id
   network_b_id = rookery_network.edge.id
+  labels       = ["backbone"]
 }
 
 resource "rookery_interface" "app" {
   name       = "app-vm0"
   network_id = rookery_network.app.id
+  labels     = ["app"]
 }
 
 resource "rookery_host_tap" "app" {
   network_id   = rookery_network.app.id
   name         = "hosttap0"
+  labels       = ["host"]
   ipv4_address = "10.20.0.20/24"
 }
 
@@ -79,6 +84,7 @@ resource "rookery_disk" "root" {
   name               = "app-vm0-root"
   size_gb            = 20
   storage_backend_id = rookery_storage_backend.pool.id
+  labels             = ["os"]
 }
 
 resource "rookery_disk" "template" {
@@ -109,12 +115,14 @@ resource "rookery_vm" "app" {
   disk_ids      = [rookery_disk.root.id]
   interface_ids = [rookery_interface.app.id]
   cgroup_class  = "prod/web/frontend"
+  labels        = ["prod", "web", "critical"]
 
   depends_on = [rookery_cgroup_settings.host]
 }
 
 resource "rookery_acl" "app" {
-  name = "app"
+  name   = "app"
+  labels = ["web"]
   rules = [
     {
       action      = "permit"
@@ -134,11 +142,13 @@ resource "rookery_acl" "app" {
 resource "rookery_route_table" "app" {
   name     = "app-vrf"
   table_id = 200
+  labels   = ["app"]
   ipv6     = false
 }
 
 resource "rookery_route" "app" {
   route_table_id = rookery_route_table.app.id
+  labels         = ["app"]
   ipv6           = false
   prefix         = "10.20.0.0/16"
   next_hop       = "10.20.0.1"
@@ -206,6 +216,7 @@ resource "rookery_cgroup_settings" "host" {
 resource "rookery_vnf" "dns" {
   name       = "app-dns"
   network_id = rookery_network.app.id
+  labels     = ["dns"]
   type       = "dns"
   enabled    = true
   config_json = jsonencode({

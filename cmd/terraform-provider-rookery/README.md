@@ -84,6 +84,25 @@ provider "rookery" {
 | `rookery_startup_script` | Server-level Rookery or VPP reconnect script |
 | `rookery_cgroup_settings` | Host-wide cgroup limits and reusable VM classes |
 
+All first-class resources and data sources expose a free-form `labels` set:
+`rookery_storage_backend`, `rookery_disk`, `rookery_media`, `rookery_network`,
+`rookery_network_pipe`, `rookery_interface`, `rookery_host_tap`,
+`rookery_acl`, `rookery_route_table`, `rookery_route`, `rookery_vnf`,
+`rookery_vm`, and `rookery_host_interface`. Assign any number of labels:
+
+```hcl
+resource "rookery_vm" "app" {
+  name     = "app-vm0"
+  disk_ids = [rookery_disk.root.id]
+  labels   = ["prod", "web", "critical"]
+}
+```
+
+Labels are stored by the Rookery label API. Changing labels updates the entity
+in place, including media, routes, route tables, pipes, and host taps whose
+other fields are immutable. Data sources expose the current label set as a
+computed `labels` attribute.
+
 VM power actions (`start`, `stop`, `reset`, `ctrl-alt-del`) are deliberately
 not part of `rookery_vm`; use the Rookery UI or API for runtime operations.
 Creating a VM starts it, so a freshly applied `rookery_vm` reports

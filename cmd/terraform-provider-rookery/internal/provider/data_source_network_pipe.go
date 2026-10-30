@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -29,6 +30,7 @@ func (d *networkPipeDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a bridge-domain pipe by id or by its two network ids.",
 		Attributes: map[string]dschema.Attribute{
+			"labels":                 labelsDataSourceAttribute(),
 			"id":                     dschema.Int64Attribute{Optional: true, Computed: true},
 			"network_a_id":           dschema.Int64Attribute{Optional: true, Computed: true},
 			"network_a_name":         dschema.StringAttribute{Computed: true},
@@ -90,5 +92,11 @@ func (d *networkPipeDataSource) Read(ctx context.Context, req datasource.ReadReq
 		return
 	}
 	setNetworkPipeState(&config, found, false)
+	entityLabels, err := readEntityLabels(callCtx, client, "network_pipe", fmt.Sprintf("%d", found.GetId()))
+	if err != nil {
+		resp.Diagnostics.AddError("Read network pipe labels", err.Error())
+		return
+	}
+	config.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../../shared/api";
 import { showToast } from "../../shared/toast";
+import { EntityLabels, useEntityLabels } from "../../shared/labels";
 import type { Disk, StorageBackend } from "../types";
 import { DiskDialog } from "./DiskDialog";
 import { ImportDisksDialog } from "./ImportDisksDialog";
@@ -31,6 +32,8 @@ export function DisksTab() {
   const [backendDialog, setBackendDialog] = useState<{ backend: StorageBackend | null } | null>(null);
   const [importBackend, setImportBackend] = useState<StorageBackend | null>(null);
   const [provisioningDisk, setProvisioningDisk] = useState<Disk | null>(null);
+  const diskLabels = useEntityLabels("disk");
+  const backendLabels = useEntityLabels("storage_backend");
   const route = useRoute();
 
   useEffect(() => {
@@ -290,6 +293,13 @@ export function DisksTab() {
                             {[backend.title, backend.description].filter(Boolean).join(" · ")}
                           </span>
                         ) : null}
+                        <EntityLabels
+                          entityType="storage_backend"
+                          entityID={backend.id}
+                          name={backend.name}
+                          labels={backendLabels.labels[String(backend.id)]}
+                          onSaved={(labels) => backendLabels.setEntityLabels(String(backend.id), labels)}
+                        />
                       </td>
                       <td class="mono">{backend.driver === "lvm-thin" ? "LVM thin" : backend.driver}</td>
                       <td class="mono">
@@ -401,6 +411,13 @@ export function DisksTab() {
                           {disk.device}
                         </span>
                       ) : null}
+                      <EntityLabels
+                        entityType="disk"
+                        entityID={disk.id}
+                        name={disk.name}
+                        labels={diskLabels.labels[String(disk.id)]}
+                        onSaved={(labels) => diskLabels.setEntityLabels(String(disk.id), labels)}
+                      />
                     </td>
                     <td class="mono">{numberFormat.format(disk.size_gb)} GB</td>
                     <td class={disk.storage_backend_name ? "mono" : "mono muted"}>

@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// LabelService manages free-form labels attached to inventory entities.
+service LabelService {
+  rpc ListEntityLabels(ListEntityLabelsRequest) returns (ListEntityLabelsResponse) {
+    option (google.api.http) = {
+      get: "/api/labels/{entity_type}"
+      response_body: "entities"
+    };
+  }
+
+  rpc GetEntityLabels(GetEntityLabelsRequest) returns (EntityLabels) {
+    option (google.api.http) = {get: "/api/labels/{entity_type}/{entity_id}"};
+  }
+
+  rpc SetEntityLabels(SetEntityLabelsRequest) returns (EntityLabels) {
+    option (google.api.http) = {
+      put: "/api/labels/{entity_type}/{entity_id}"
+      body: "*"
+    };
+  }
+}
+
+message EntityLabels {
+  string entity_type = 1;
+  string entity_id = 2;
+  repeated string labels = 3;
+}
+
+message ListEntityLabelsRequest {
+  string entity_type = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 32
+  }];
+}
+
+message ListEntityLabelsResponse {
+  repeated EntityLabels entities = 1;
+}
+
+message GetEntityLabelsRequest {
+  string entity_type = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 32
+  }];
+  string entity_id = 2 [(validate.rules).string = {
+    min_len: 1
+    max_len: 200
+  }];
+}
+
+message SetEntityLabelsRequest {
+  string entity_type = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 32
+  }];
+  string entity_id = 2 [(validate.rules).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  repeated string labels = 3;
+}

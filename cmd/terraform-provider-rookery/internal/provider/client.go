@@ -45,6 +45,7 @@ type Client struct {
 	HostInterfaces  rookeryv1.HostServiceClient
 	Troubleshoot    rookeryv1.TroubleshootServiceClient
 	Captures        rookeryv1.CaptureServiceClient
+	Labels          rookeryv1.LabelServiceClient
 
 	timeout time.Duration
 }
@@ -115,6 +116,7 @@ func NewClient(config ClientConfig) (*Client, error) {
 		HostInterfaces:  rookeryv1.NewHostServiceClient(conn),
 		Troubleshoot:    rookeryv1.NewTroubleshootServiceClient(conn),
 		Captures:        rookeryv1.NewCaptureServiceClient(conn),
+		Labels:          rookeryv1.NewLabelServiceClient(conn),
 		timeout:         timeout,
 	}, nil
 }

@@ -32,6 +32,7 @@ func (d *vmDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, res
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a VM by id or name.",
 		Attributes: map[string]dschema.Attribute{
+			"labels":          labelsDataSourceAttribute(),
 			"id":              dschema.StringAttribute{Optional: true, Computed: true},
 			"name":            dschema.StringAttribute{Optional: true, Computed: true},
 			"description":     dschema.StringAttribute{Computed: true},
@@ -81,6 +82,12 @@ func (d *vmDataSource) Read(ctx context.Context, req datasource.ReadRequest, res
 		return
 	}
 	resp.Diagnostics.Append(setVMState(ctx, &config, vm)...)
+	entityLabels, err := readEntityLabels(callCtx, client, "vm", vm.GetId())
+	if err != nil {
+		resp.Diagnostics.AddError("Read VM labels", err.Error())
+		return
+	}
+	config.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 

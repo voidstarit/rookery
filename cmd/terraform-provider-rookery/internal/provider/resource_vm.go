@@ -41,6 +41,7 @@ type vmModel struct {
 	BootMediaID    types.Int64  `tfsdk:"boot_media_id"`
 	ConsoleEnabled types.Bool   `tfsdk:"console_enabled"`
 	CgroupClass    types.String `tfsdk:"cgroup_class"`
+	Labels         types.Set    `tfsdk:"labels"`
 }
 
 func (r *vmResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -51,6 +52,7 @@ func (r *vmResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *r
 	resp.Schema = schema.Schema{
 		Description: "A QEMU/KVM virtual machine. Creating a VM starts it; power actions are otherwise not managed by this resource.",
 		Attributes: map[string]schema.Attribute{
+			"labels":      labelsResourceAttribute(),
 			"id":          schema.StringAttribute{Computed: true, PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
 			"name":        schema.StringAttribute{Required: true, Description: "VM name."},
 			"description": schema.StringAttribute{Optional: true, Computed: true, Description: "VM description."},
@@ -133,6 +135,12 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 	resp.Diagnostics.Append(setVMState(ctx, &plan, vm)...)
+	entityLabels, err := applyEntityLabels(callCtx, client, "vm", vm.GetId(), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Create VM labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -159,6 +167,12 @@ func (r *vmResource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 		return
 	}
 	resp.Diagnostics.Append(setVMState(ctx, &state, vm)...)
+	entityLabels, err := readEntityLabels(callCtx, client, "vm", state.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Read VM labels", err.Error())
+		return
+	}
+	state.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -224,6 +238,12 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		return
 	}
 	resp.Diagnostics.Append(setVMState(ctx, &plan, vm)...)
+	entityLabels, err := applyEntityLabels(callCtx, client, "vm", plan.ID.ValueString(), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Update VM labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 

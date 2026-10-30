@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../../shared/api";
+import { EntityLabels, useEntityLabels } from "../../shared/labels";
 import { navigate } from "../router";
 import type { FIBRoute, Route, RouteTable } from "../types";
 
@@ -34,6 +35,7 @@ export function RouteTablePage({ table, onBack, onChanged }: RouteTablePageProps
   const [fibLoading, setFibLoading] = useState(true);
   const [error, setError] = useState("");
   const [fibError, setFibError] = useState("");
+  const routeLabels = useEntityLabels("route");
   const formPath = `/route-tables/${table.id}/routes/new?ipv6=${table.ipv6}`;
 
   const loadRoutes = async () => {
@@ -144,6 +146,13 @@ export function RouteTablePage({ table, onBack, onChanged }: RouteTablePageProps
                     <td>
                       <span class="vm-name mono">{route.prefix}</span>
                       {route.description ? <span class="vm-description">{route.description}</span> : null}
+                      <EntityLabels
+                        entityType="route"
+                        entityID={route.id}
+                        name={route.prefix}
+                        labels={routeLabels.labels[String(route.id)]}
+                        onSaved={(labels) => routeLabels.setEntityLabels(String(route.id), labels)}
+                      />
                     </td>
                     <td class="mono">{route.drop ? "drop" : route.next_hop || "attached"}</td>
                     <td class="mono">{route.egress_interface || route.interface_name || "resolved by table"}</td>

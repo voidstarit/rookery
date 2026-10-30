@@ -266,6 +266,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	hostInterfaces := &hostService{source: options.vppInterfaces, store: st, writer: options.hostWriter, taps: options.hostTapWriter, addresses: options.interfaceAddresses, readiness: ready}
 	troubleshoot := &troubleshootService{runtime: options.diagnostics, readiness: ready}
 	captures := &captureService{runtime: options.diagnostics, readiness: ready}
+	entityLabels := &labelService{store: st}
 	rookeryv1.RegisterSystemServiceServer(server, system)
 	rookeryv1.RegisterVMServiceServer(server, vms)
 	rookeryv1.RegisterDiskServiceServer(server, disks)
@@ -279,6 +280,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	rookeryv1.RegisterHostServiceServer(server, hostInterfaces)
 	rookeryv1.RegisterTroubleshootServiceServer(server, troubleshoot)
 	rookeryv1.RegisterCaptureServiceServer(server, captures)
+	rookeryv1.RegisterLabelServiceServer(server, entityLabels)
 	healthServer := health.NewServer()
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 	healthpb.RegisterHealthServer(server, healthServer)
@@ -332,6 +334,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 		rookeryv1.RegisterHostServiceHandler,
 		rookeryv1.RegisterTroubleshootServiceHandler,
 		rookeryv1.RegisterCaptureServiceHandler,
+		rookeryv1.RegisterLabelServiceHandler,
 	}
 	for _, register := range registrations {
 		if err := register(ctx, mux, conn); err != nil {

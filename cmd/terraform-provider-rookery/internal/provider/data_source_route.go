@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -30,6 +31,7 @@ func (d *routeDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a route by id or prefix. route_table_id and ipv6 are required as lookup context; use 0 for the default table.",
 		Attributes: map[string]dschema.Attribute{
+			"labels":                labelsDataSourceAttribute(),
 			"id":                    dschema.Int64Attribute{Optional: true, Computed: true},
 			"route_table_id":        dschema.Int64Attribute{Optional: true, Computed: true},
 			"ipv6":                  dschema.BoolAttribute{Optional: true, Computed: true},
@@ -107,5 +109,11 @@ func (d *routeDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 	resp.Diagnostics.Append(setRouteState(ctx, &config, found)...)
+	entityLabels, err := readEntityLabels(callCtx, client, "route", fmt.Sprintf("%d", found.GetId()))
+	if err != nil {
+		resp.Diagnostics.AddError("Read route labels", err.Error())
+		return
+	}
+	config.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }

@@ -104,3 +104,7 @@ output "vm_status" {
 output "cgroup_status" {
   value = data.rookery_cgroup_settings.host.configured
 }
+
+output "vm_labels" {
+  value = data.rookery_vm.app.labels
+}

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
 import { formatCount } from "../../shared/format";
 import { showToast } from "../../shared/toast";
+import { EntityLabels, useEntityLabels } from "../../shared/labels";
 import type {
   ACL,
   ACLDirectionCounters,
@@ -152,6 +153,13 @@ export function NetworksTab() {
   const [countersError, setCountersError] = useState("");
   const countersInFlightRef = useRef(false);
   const lastCountersRef = useRef<{ at: number; bytes: Record<string, { rx: number; tx: number }> } | null>(null);
+  const networkLabels = useEntityLabels("network");
+  const pipeLabels = useEntityLabels("network_pipe");
+  const hostInterfaceLabels = useEntityLabels("host_interface");
+  const hostTapLabels = useEntityLabels("host_tap");
+  const interfaceLabels = useEntityLabels("interface");
+  const aclLabels = useEntityLabels("acl");
+  const routeTableLabels = useEntityLabels("route_table");
   const route = useRoute();
 
   useEffect(() => {
@@ -1029,6 +1037,13 @@ export function NetworksTab() {
                             {network.ipv4_gateway ? ` · ${network.ipv4_gateway}` : ""}
                           </span>
                         ) : null}
+                        <EntityLabels
+                          entityType="network"
+                          entityID={network.id}
+                          name={network.name}
+                          labels={networkLabels.labels[String(network.id)]}
+                          onSaved={(labels) => networkLabels.setEntityLabels(String(network.id), labels)}
+                        />
                       </td>
                       <td class="mono">bd {network.bridge_domain_id}</td>
                       <td class={count ? "mono" : "mono muted"}>{String(count)}</td>
@@ -1143,8 +1158,19 @@ export function NetworksTab() {
               <tbody>
                 {networkPipes.map((pipe) => (
                   <tr key={pipe.id}>
-                    <td><span class="vm-name">{pipe.network_a_name}</span></td>
-                    <td><span class="vm-name">{pipe.network_b_name}</span></td>
+                    <td>
+                      <span class="vm-name">{pipe.network_a_name}</span>
+                    </td>
+                    <td>
+                      <span class="vm-name">{pipe.network_b_name}</span>
+                      <EntityLabels
+                        entityType="network_pipe"
+                        entityID={pipe.id}
+                        name={`${pipe.network_a_name} ↔ ${pipe.network_b_name}`}
+                        labels={pipeLabels.labels[String(pipe.id)]}
+                        onSaved={(labels) => pipeLabels.setEntityLabels(String(pipe.id), labels)}
+                      />
+                    </td>
                     <td class="mono">pipe{pipe.instance}</td>
                     <td class="mono">
                       <span>{pipeEndpointName(pipe, 0)} ({pipe.endpoint_a_sw_if_index || "—"})</span>
@@ -1257,6 +1283,13 @@ export function NetworksTab() {
                   <tr key={iface.name}>
                     <td>
                       <span class="vm-name mono">{iface.name}</span>
+                      <EntityLabels
+                        entityType="host_interface"
+                        entityID={iface.name}
+                        name={iface.name}
+                        labels={hostInterfaceLabels.labels[iface.name]}
+                        onSaved={(labels) => hostInterfaceLabels.setEntityLabels(iface.name, labels)}
+                      />
                     </td>
                     <td class="mono">
                       <div class="address-stack">
@@ -1451,6 +1484,13 @@ export function NetworksTab() {
                   <tr key={tap.id}>
                     <td>
                       <span class="vm-name mono">{tap.name}</span>
+                      <EntityLabels
+                        entityType="host_tap"
+                        entityID={tap.id}
+                        name={tap.name}
+                        labels={hostTapLabels.labels[String(tap.id)]}
+                        onSaved={(labels) => hostTapLabels.setEntityLabels(String(tap.id), labels)}
+                      />
                     </td>
                     <td>
                       <span class="vm-name">{tap.network_name}</span>
@@ -1656,6 +1696,13 @@ export function NetworksTab() {
                           FIB v4: {iface.ipv4_table_name || "default"} · v6:{" "}
                           {iface.ipv6_table_name || "default"}
                         </span>
+                        <EntityLabels
+                          entityType="interface"
+                          entityID={iface.id}
+                          name={iface.name}
+                          labels={interfaceLabels.labels[String(iface.id)]}
+                          onSaved={(labels) => interfaceLabels.setEntityLabels(String(iface.id), labels)}
+                        />
                       </td>
                       <td class="mono">{iface.network_name || "—"}</td>
                       <td class="mono">{iface.mac || "—"}</td>
@@ -1901,6 +1948,13 @@ export function NetworksTab() {
                             {acl.description}
                           </span>
                         ) : null}
+                        <EntityLabels
+                          entityType="acl"
+                          entityID={acl.id}
+                          name={acl.name}
+                          labels={aclLabels.labels[String(acl.id)]}
+                          onSaved={(labels) => aclLabels.setEntityLabels(String(acl.id), labels)}
+                        />
                       </td>
                       <td>{acl.title || "—"}</td>
                       <td class="mono">
@@ -2052,6 +2106,15 @@ export function NetworksTab() {
                         {table.is_default ? <span class="vm-description">default VRF</span> : null}
                         {table.network_id ? (
                           <span class="vm-description">network VRF · network {table.network_id}</span>
+                        ) : null}
+                        {!table.is_default ? (
+                          <EntityLabels
+                            entityType="route_table"
+                            entityID={table.id}
+                            name={table.name}
+                            labels={routeTableLabels.labels[String(table.id)]}
+                            onSaved={(labels) => routeTableLabels.setEntityLabels(String(table.id), labels)}
+                          />
                         ) : null}
                       </td>
                       <td class="mono">{table.ipv6 ? "IPv6" : "IPv4"}</td>
