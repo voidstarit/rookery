@@ -128,3 +128,51 @@ func TestValidateCgroupClassTree(t *testing.T) {
 		t.Fatal("duplicate class was accepted")
 	}
 }
+
+func TestSetCgroupSettingsStatePreservesClassOrder(t *testing.T) {
+	ctx := context.Background()
+	empty, diags := types.ListValueFrom(ctx, cgroupIOLimitObjectType, []cgroupIOLimitModel{})
+	if diags.HasError() {
+		t.Fatalf("build empty limits: %v", diags)
+	}
+	class := func(name string, weight int64) cgroupClassModel {
+		return cgroupClassModel{
+			Name: types.StringValue(name), CPUs: types.StringValue(""),
+			MemoryMaxBytes: types.Int64Value(0), CPUWeight: types.Int64Value(weight), IOLimits: empty,
+		}
+	}
+	planned, diags := types.ListValueFrom(ctx, cgroupClassObjectType, []cgroupClassModel{
+		class("critical", 0),
+		class("critical/core", 6000),
+		class("critical/service", 3000),
+		class("critical/application", 1000),
+	})
+	if diags.HasError() {
+		t.Fatalf("build classes: %v", diags)
+	}
+	state := cgroupSettingsModel{Classes: planned}
+	settings := &rookeryv1.CgroupSettings{Classes: []*rookeryv1.CgroupClass{
+		{Name: "critical"},
+		{Name: "critical/application", CpuWeight: 1000},
+		{Name: "critical/core", CpuWeight: 6000},
+		{Name: "critical/service", CpuWeight: 3000},
+	}}
+	if diags := setCgroupSettingsState(ctx, &state, settings); diags.HasError() {
+		t.Fatalf("set state: %v", diags)
+	}
+	var models []cgroupClassModel
+	if diags := state.Classes.ElementsAs(ctx, &models, false); diags.HasError() {
+		t.Fatalf("read classes: %v", diags)
+	}
+	wantNames := []string{"critical", "critical/core", "critical/service", "critical/application"}
+	wantWeights := []int64{0, 6000, 3000, 1000}
+	if len(models) != len(wantNames) {
+		t.Fatalf("classes = %+v", models)
+	}
+	for i := range models {
+		if models[i].Name.ValueString() != wantNames[i] || models[i].CPUWeight.ValueInt64() != wantWeights[i] {
+			t.Fatalf("classes[%d] = %q weight %d, want %q weight %d",
+				i, models[i].Name.ValueString(), models[i].CPUWeight.ValueInt64(), wantNames[i], wantWeights[i])
+		}
+	}
+}

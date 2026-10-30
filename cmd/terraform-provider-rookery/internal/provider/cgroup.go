@@ -180,24 +180,72 @@ func cgroupClassesToProto(ctx context.Context, classes []cgroupClassModel) ([]*r
 }
 
 func cgroupClassesFromProto(ctx context.Context, classes []*rookeryv1.CgroupClass) (types.List, diag.Diagnostics) {
-	models := make([]cgroupClassModel, 0, len(classes))
+	return cgroupClassesFromProtoOrdered(ctx, classes, nil)
+}
+
+// cgroupClassesFromProtoOrdered converts API classes to Terraform state while
+// preserving the caller's class order. The API normalizes and sorts classes
+// lexicographically; Terraform lists are order-sensitive, so using API order
+// directly after apply produces "inconsistent result after apply" errors.
+func cgroupClassesFromProtoOrdered(ctx context.Context, classes []*rookeryv1.CgroupClass, order []string) (types.List, diag.Diagnostics) {
+	byName := make(map[string]cgroupClassModel, len(classes))
+	apiOrder := make([]string, 0, len(classes))
+	var diags diag.Diagnostics
 	for _, class := range classes {
 		if class == nil {
 			continue
 		}
-		limits, diags := cgroupIOLimitsFromProto(ctx, class.GetIoLimits())
+		name := strings.TrimSpace(class.GetName())
+		if _, exists := byName[name]; !exists {
+			apiOrder = append(apiOrder, name)
+		}
+		limits, limitDiags := cgroupIOLimitsFromProto(ctx, class.GetIoLimits())
+		diags.Append(limitDiags...)
 		if diags.HasError() {
 			return types.ListNull(cgroupClassObjectType), diags
 		}
-		models = append(models, cgroupClassModel{
-			Name:           types.StringValue(class.GetName()),
+		byName[name] = cgroupClassModel{
+			Name:           types.StringValue(name),
 			CPUs:           types.StringValue(class.GetCpus()),
 			MemoryMaxBytes: types.Int64Value(class.GetMemoryMaxBytes()),
 			CPUWeight:      types.Int64Value(int64(class.GetCpuWeight())),
 			IOLimits:       limits,
-		})
+		}
+	}
+	models := make([]cgroupClassModel, 0, len(byName))
+	for _, name := range order {
+		name = strings.TrimSpace(name)
+		model, ok := byName[name]
+		if !ok {
+			continue
+		}
+		models = append(models, model)
+		delete(byName, name)
+	}
+	for _, name := range apiOrder {
+		model, ok := byName[name]
+		if !ok {
+			continue
+		}
+		models = append(models, model)
+		delete(byName, name)
 	}
 	return types.ListValueFrom(ctx, cgroupClassObjectType, models)
+}
+
+func cgroupClassNames(ctx context.Context, list types.List) []string {
+	if list.IsNull() || list.IsUnknown() {
+		return nil
+	}
+	var models []cgroupClassModel
+	if diags := list.ElementsAs(ctx, &models, false); diags.HasError() {
+		return nil
+	}
+	names := make([]string, 0, len(models))
+	for _, model := range models {
+		names = append(names, strings.TrimSpace(model.Name.ValueString()))
+	}
+	return names
 }
 
 // validateCgroupClassModels mirrors the server's class tree validation so

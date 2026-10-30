@@ -240,6 +240,7 @@ func (r *cgroupSettingsResource) ImportState(ctx context.Context, req resource.I
 
 func setCgroupSettingsState(ctx context.Context, state *cgroupSettingsModel, settings *rookeryv1.CgroupSettings) diag.Diagnostics {
 	var diags diag.Diagnostics
+	classOrder := cgroupClassNames(ctx, state.Classes)
 	state.ID = types.StringValue(cgroupSettingsID)
 	state.Enabled = types.BoolValue(settings.GetEnabled())
 	state.CPUs = types.StringValue(settings.GetCpus())
@@ -249,7 +250,7 @@ func setCgroupSettingsState(ctx context.Context, state *cgroupSettingsModel, set
 	limits, limitDiags := cgroupIOLimitsFromProto(ctx, settings.GetIoLimits())
 	diags.Append(limitDiags...)
 	state.IOLimits = limits
-	classes, classDiags := cgroupClassesFromProto(ctx, settings.GetClasses())
+	classes, classDiags := cgroupClassesFromProtoOrdered(ctx, settings.GetClasses(), classOrder)
 	diags.Append(classDiags...)
 	state.Classes = classes
 	state.Available = types.BoolValue(settings.GetAvailable())
