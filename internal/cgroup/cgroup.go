@@ -537,6 +537,19 @@ func (m *Manager) ensureClassesLocked() error {
 	}
 
 	dirs := collectCgroupDirs(m.root)
+	shared := filepath.Join(m.root, sharedName)
+	// Before removing the old layout, move any QEMU processes out of stale
+	// class/member cgroups. cgroup directories with live processes cannot be
+	// removed, and older Rookery releases placed VMs in classes/<name>/members.
+	for _, dir := range dirs {
+		if dir == m.root {
+			continue
+		}
+		if _, ok := desired[dir]; ok {
+			continue
+		}
+		moveQEMUProcesses(dir, shared)
+	}
 	for i := len(dirs) - 1; i >= 0; i-- {
 		if dirs[i] == m.root {
 			continue
@@ -545,6 +558,12 @@ func (m *Manager) ensureClassesLocked() error {
 			continue
 		}
 		if err := os.Remove(dirs[i]); err != nil && !errors.Is(err, os.ErrNotExist) {
+			// A non-QEMU process or a manual cgroup can keep a stale
+			// directory busy. Leave it in place rather than failing a settings
+			// save; the remaining Rookery hierarchy is still applied.
+			if errors.Is(err, syscall.EBUSY) || errors.Is(err, syscall.ENOTEMPTY) {
+				continue
+			}
 			return fmt.Errorf("remove stale cgroup %s: %w", dirs[i], err)
 		}
 	}
