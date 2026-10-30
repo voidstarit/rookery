@@ -118,13 +118,20 @@ func TestConfigureDisabledRemovesHierarchy(t *testing.T) {
 }
 
 func TestClassEffectiveLimits(t *testing.T) {
+	online, err := OnlineCPUs()
+	if err != nil || len(online) == 0 {
+		t.Fatalf("online CPUs: %v", err)
+	}
+	hostCPUs := FormatCPUSet(online)
+	prodCPUs := FormatCPUSet(online[:min(2, len(online))])
+	webCPUs := FormatCPUSet(online[:1])
 	manager := New("")
 	manager.settings = Settings{
-		Enabled: true, CPUs: "0-7", MemoryMaxBytes: 8 << 30, CPUWeight: 100,
+		Enabled: true, CPUs: hostCPUs, MemoryMaxBytes: 8 << 30, CPUWeight: 100,
 		IOLimits: []IOLimit{{Device: "/dev/sda", ReadBPS: 1000}},
 		Classes: []Class{
-			{Name: "prod", CPUs: "0-3", MemoryMaxBytes: 4 << 30, CPUWeight: 300},
-			{Name: "prod/web", CPUs: "0-1", MemoryMaxBytes: 2 << 30,
+			{Name: "prod", CPUs: prodCPUs, MemoryMaxBytes: 4 << 30, CPUWeight: 300},
+			{Name: "prod/web", CPUs: webCPUs, MemoryMaxBytes: 2 << 30,
 				IOLimits: []IOLimit{{Device: "/dev/sda", WriteBPS: 2000}}},
 		},
 	}
@@ -132,7 +139,7 @@ func TestClassEffectiveLimits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("effectiveLimitsLocked: %v", err)
 	}
-	if effective.CPUs != "0-1" || effective.MemoryMaxBytes != 2<<30 || effective.CPUWeight != 300 {
+	if effective.CPUs != webCPUs || effective.MemoryMaxBytes != 2<<30 || effective.CPUWeight != 300 {
 		t.Fatalf("class effective limits = %+v", effective)
 	}
 	if len(effective.IOLimits) != 1 || effective.IOLimits[0].ReadBPS != 1000 || effective.IOLimits[0].WriteBPS != 2000 {
