@@ -181,6 +181,12 @@ resource "rookery_cgroup_settings" "host" {
       memory_max_bytes = 6 * 1024 * 1024 * 1024
       cpu_weight       = 300
     },
+    {
+      name             = "prod/web/frontend"
+      cpus             = "0"
+      memory_max_bytes = 3 * 1024 * 1024 * 1024
+      cpu_weight       = 200
+    },
   ]
 }
 ```
@@ -194,7 +200,7 @@ resource "rookery_vm" "app" {
   vcpus        = 2
   memory_mb    = 2048
   disk_ids     = [rookery_disk.root.id]
-  cgroup_class = "prod/web"
+  cgroup_class = "prod/web/frontend"
 
   depends_on = [rookery_cgroup_settings.host]
 }

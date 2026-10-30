@@ -79,7 +79,7 @@ func (r *cgroupSettingsResource) Schema(_ context.Context, _ resource.SchemaRequ
 			"classes": schema.ListNestedAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Named cgroup classes assigned to VMs. Names use slash-separated hierarchy paths.",
+				Description: "Named cgroup classes. The flat list uses slash-separated paths to encode the tree below rookery-cgroup; maximum 3 levels, parents must be defined, and VMs may only use leaf classes.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: cgroupClassSchemaAttributes(),
 				},
@@ -115,6 +115,10 @@ func (r *cgroupSettingsResource) Create(ctx context.Context, req resource.Create
 	classes, classDiags := cgroupClassesFromList(ctx, plan.Classes)
 	resp.Diagnostics.Append(classDiags...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := validateCgroupClassModels(ctx, classes); err != nil {
+		resp.Diagnostics.AddError("Invalid cgroup classes", err.Error())
 		return
 	}
 	classProtos, classProtoDiags := cgroupClassesToProto(ctx, classes)
@@ -182,6 +186,10 @@ func (r *cgroupSettingsResource) Update(ctx context.Context, req resource.Update
 	classes, classDiags := cgroupClassesFromList(ctx, plan.Classes)
 	resp.Diagnostics.Append(classDiags...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := validateCgroupClassModels(ctx, classes); err != nil {
+		resp.Diagnostics.AddError("Invalid cgroup classes", err.Error())
 		return
 	}
 	classProtos, classProtoDiags := cgroupClassesToProto(ctx, classes)

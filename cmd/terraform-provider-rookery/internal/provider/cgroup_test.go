@@ -101,3 +101,30 @@ func TestSetCgroupSettingsState(t *testing.T) {
 		t.Fatalf("state = %+v", state)
 	}
 }
+
+func TestValidateCgroupClassTree(t *testing.T) {
+	ctx := context.Background()
+	empty, diags := types.ListValueFrom(ctx, cgroupIOLimitObjectType, []cgroupIOLimitModel{})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	class := func(name string) cgroupClassModel {
+		return cgroupClassModel{
+			Name: types.StringValue(name), CPUs: types.StringValue(""),
+			MemoryMaxBytes: types.Int64Value(0), CPUWeight: types.Int64Value(0), IOLimits: empty,
+		}
+	}
+	valid := []cgroupClassModel{class("prod"), class("prod/web"), class("prod/web/frontend")}
+	if err := validateCgroupClassModels(ctx, valid); err != nil {
+		t.Fatalf("valid tree: %v", err)
+	}
+	if err := validateCgroupClassModels(ctx, []cgroupClassModel{class("prod/web")}); err == nil {
+		t.Fatal("class without parent was accepted")
+	}
+	if err := validateCgroupClassModels(ctx, []cgroupClassModel{class("a/b/c/d")}); err == nil {
+		t.Fatal("class deeper than three levels was accepted")
+	}
+	if err := validateCgroupClassModels(ctx, []cgroupClassModel{class("prod"), class("prod")}); err == nil {
+		t.Fatal("duplicate class was accepted")
+	}
+}

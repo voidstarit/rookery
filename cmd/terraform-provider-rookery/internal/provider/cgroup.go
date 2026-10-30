@@ -2,6 +2,8 @@ package provider
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -10,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
+	"github.com/voidstarit/rookery/internal/cgroup"
 )
 
 func cgroupIOLimitSchemaAttributes() map[string]schema.Attribute {
@@ -195,4 +198,93 @@ func cgroupClassesFromProto(ctx context.Context, classes []*rookeryv1.CgroupClas
 		})
 	}
 	return types.ListValueFrom(ctx, cgroupClassObjectType, models)
+}
+
+// validateCgroupClassModels mirrors the server's class tree validation so
+// Terraform reports configuration errors before an API call.
+func validateCgroupClassModels(ctx context.Context, classes []cgroupClassModel) error {
+	if len(classes) > 64 {
+		return fmt.Errorf("at most 64 cgroup classes are allowed")
+	}
+	seen := make(map[string]struct{}, len(classes))
+	for _, class := range classes {
+		name := strings.TrimSpace(class.Name.ValueString())
+		if err := cgroup.ValidateClassName(name); err != nil {
+			return err
+		}
+		if _, ok := seen[name]; ok {
+			return fmt.Errorf("duplicate cgroup class %q", name)
+		}
+		seen[name] = struct{}{}
+		if class.MemoryMaxBytes.ValueInt64() < 0 {
+			return fmt.Errorf("cgroup class %s memory_max_bytes must not be negative", name)
+		}
+		if class.CPUWeight.ValueInt64() < 0 || class.CPUWeight.ValueInt64() > 10000 {
+			return fmt.Errorf("cgroup class %s cpu_weight must be between 1 and 10000 (0 inherits)", name)
+		}
+		if cpus := strings.TrimSpace(class.CPUs.ValueString()); cpus != "" {
+			if _, err := cgroup.CanonicalCPUSet(cpus); err != nil {
+				return fmt.Errorf("cgroup class %s: %w", name, err)
+			}
+		}
+		limits, diags := cgroupIOLimitsFromList(ctx, class.IOLimits)
+		if diags.HasError() {
+			return fmt.Errorf("cgroup class %s has invalid I/O limits", name)
+		}
+		devices := make(map[string]struct{}, len(limits))
+		for _, limit := range limits {
+			device := strings.TrimSpace(limit.Device.ValueString())
+			if device == "" {
+				return fmt.Errorf("cgroup class %s has an I/O limit without a device", name)
+			}
+			if _, ok := devices[device]; ok {
+				return fmt.Errorf("cgroup class %s has duplicate I/O device %q", name, device)
+			}
+			devices[device] = struct{}{}
+			if limit.ReadBPS.ValueInt64() < 0 || limit.WriteBPS.ValueInt64() < 0 ||
+				limit.ReadIOPS.ValueInt64() < 0 || limit.WriteIOPS.ValueInt64() < 0 ||
+				limit.Weight.ValueInt64() < 0 || limit.Weight.ValueInt64() > 10000 {
+				return fmt.Errorf("cgroup class %s has invalid I/O limits for %s", name, device)
+			}
+		}
+	}
+	for name := range seen {
+		index := strings.LastIndex(name, "/")
+		if index <= 0 {
+			continue
+		}
+		parent := name[:index]
+		if _, ok := seen[parent]; !ok {
+			return fmt.Errorf("cgroup class %s requires parent class %q to be defined", name, parent)
+		}
+	}
+	return nil
+}
+
+func validateVMCgroupClass(ctx context.Context, client *Client, className string) error {
+	className = strings.TrimSpace(className)
+	if className == "" {
+		return nil
+	}
+	settings, err := client.System.GetCgroupSettings(ctx, &rookeryv1.GetCgroupSettingsRequest{})
+	if err != nil {
+		return fmt.Errorf("read cgroup settings: %w", err)
+	}
+	found := false
+	for _, class := range settings.GetClasses() {
+		if strings.TrimSpace(class.GetName()) == className {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("cgroup class %q not found", className)
+	}
+	prefix := className + "/"
+	for _, class := range settings.GetClasses() {
+		if strings.HasPrefix(strings.TrimSpace(class.GetName()), prefix) {
+			return fmt.Errorf("cgroup class %q has child classes; assign the VM to a leaf class", className)
+		}
+	}
+	return nil
 }

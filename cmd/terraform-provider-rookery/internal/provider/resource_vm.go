@@ -76,7 +76,7 @@ func (r *vmResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *r
 			"cgroup_class": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Optional cgroup class name defined in rookery_cgroup_settings, such as prod/web.",
+				Description: "Optional leaf cgroup class name defined in rookery_cgroup_settings, such as prod/web/frontend.",
 			},
 		},
 	}
@@ -113,6 +113,10 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 	}
 	callCtx, cancel := context.WithTimeout(ctx, client.Timeout())
 	defer cancel()
+	if err := validateVMCgroupClass(callCtx, client, plan.CgroupClass.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Create VM", err.Error())
+		return
+	}
 	vm, err := client.VMs.CreateVM(callCtx, &rookeryv1.CreateVMRequest{
 		Name:           plan.Name.ValueString(),
 		Description:    plan.Description.ValueString(),
@@ -210,6 +214,10 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 	}
 	callCtx, cancel := context.WithTimeout(ctx, client.Timeout())
 	defer cancel()
+	if err := validateVMCgroupClass(callCtx, client, plan.CgroupClass.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Update VM", err.Error())
+		return
+	}
 	vm, err := client.VMs.UpdateVM(callCtx, request)
 	if err != nil {
 		resp.Diagnostics.AddError("Update VM", err.Error())
