@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
+import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
 import type { VirtualInterface, VM } from "../types";
 
 type AttachDialogProps = {
@@ -11,6 +12,7 @@ type AttachDialogProps = {
 
 export function AttachDialog({ iface, vms, onClose, onSaved }: AttachDialogProps) {
   const [vmID, setVMID] = useState(iface.attached_vm_id || "");
+  const [labels, setLabels] = useEntityLabelDraft("interface", iface.id);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDialogElement | null>(null);
@@ -37,6 +39,7 @@ export function AttachDialog({ iface, vms, onClose, onSaved }: AttachDialogProps
         method: "PUT",
         body: JSON.stringify({ attached_vm_id: vmID || null }),
       });
+      await saveEntityLabelsWithToast("interface", updated.id, updated.name, labels);
       onSaved(updated);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -94,6 +97,9 @@ export function AttachDialog({ iface, vms, onClose, onSaved }: AttachDialogProps
             </select>
             <span class="field-hint">Interfaces take effect when the VM is started.</span>
           </label>
+          <div class="field field-wide">
+            <LabelsInput labels={labels} onChange={setLabels} disabled={saving} />
+          </div>
         </div>
 
         {error ? (

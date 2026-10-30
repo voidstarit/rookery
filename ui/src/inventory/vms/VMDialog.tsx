@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
+import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
 import type {
   CgroupSettings,
   Disk,
@@ -60,6 +61,7 @@ export function VMDialog({
   const [consoleEnabled, setConsoleEnabled] = useState(Boolean(vm?.console_enabled));
   const [cgroupSettings, setCgroupSettings] = useState<CgroupSettings | null>(null);
   const [cgroupClass, setCgroupClass] = useState(vm?.cgroup_class || "");
+  const [labels, setLabels] = useEntityLabelDraft("vm", vm?.id);
   const [bootMediaID, setBootMediaID] = useState(
     vm?.boot_media_id !== undefined ? String(vm.boot_media_id) : ""
   );
@@ -232,6 +234,7 @@ export function VMDialog({
         method: editing ? "PUT" : "POST",
         body: JSON.stringify(payload),
       });
+      await saveEntityLabelsWithToast("vm", saved.id, saved.name || name.trim(), labels);
       onSaved(saved);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -486,6 +489,10 @@ export function VMDialog({
               onInput={(event) => setDescription(event.currentTarget.value)}
             />
           </label>
+
+          <div class="field field-wide">
+            <LabelsInput labels={labels} onChange={setLabels} disabled={saving} />
+          </div>
         </div>
 
         {error ? (

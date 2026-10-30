@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
+import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
 import type {
   DHCPOption,
   DHCPStaticAssignment,
@@ -327,6 +328,7 @@ export function VNFPage({ vnf, networks, vnfs, vppReady, initialNetworkID, onClo
   const [hostInterfacesLoading, setHostInterfacesLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [labels, setLabels] = useEntityLabelDraft("vnf", vnf?.id);
   const nameRef = useRef<HTMLInputElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
 
@@ -512,6 +514,7 @@ export function VNFPage({ vnf, networks, vnfs, vppReady, initialNetworkID, onClo
         method: editing ? "PUT" : "POST",
         body: JSON.stringify(payload),
       });
+      await saveEntityLabelsWithToast("vnf", saved.id, saved.name, labels);
       onSaved(saved);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : String(err));
@@ -761,6 +764,12 @@ export function VNFPage({ vnf, networks, vnfs, vppReady, initialNetworkID, onClo
               </span>
             </label>
           ) : null}
+        </div>
+
+        <div class="form-grid">
+          <div class="field field-wide">
+            <LabelsInput labels={labels} onChange={setLabels} disabled={saving} />
+          </div>
         </div>
 
         {!nat44 && !bgp && !dns ? (

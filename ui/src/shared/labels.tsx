@@ -34,11 +34,178 @@ export function useEntityLabels(entityType: string) {
     void reload();
   }, [entityType]);
 
+  useEffect(() => {
+    const onLabelsChanged = (event: Event) => {
+      const detail = (event as CustomEvent).detail as {
+        entityType?: string;
+        entityID?: string;
+        labels?: string[];
+      };
+      if (!detail || detail.entityType !== entityType || !detail.entityID) {
+        return;
+      }
+      setLabelsState((current) => ({
+        ...current,
+        [detail.entityID as string]: Array.isArray(detail.labels) ? detail.labels : [],
+      }));
+    };
+    window.addEventListener("rookery:labels-changed", onLabelsChanged);
+    return () => window.removeEventListener("rookery:labels-changed", onLabelsChanged);
+  }, [entityType]);
+
   const setEntityLabels = (entityID: string, next: string[]) => {
     setLabelsState((current) => ({ ...current, [entityID]: next }));
   };
 
   return { labels, reload, setEntityLabels };
+}
+
+export function useEntityLabelDraft(entityType: string, entityID?: string | number) {
+  const [labels, setLabels] = useState<string[]>([]);
+  useEffect(() => {
+    if (entityID === undefined || entityID === null || String(entityID) === "") {
+      setLabels([]);
+      return;
+    }
+    let active = true;
+    api<EntityLabelsRecord>(
+      `/api/labels/${encodeURIComponent(entityType)}/${encodeURIComponent(String(entityID))}`
+    )
+      .then((record) => {
+        if (active) {
+          setLabels(Array.isArray(record.labels) ? record.labels : []);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLabels([]);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [entityType, entityID]);
+  return [labels, setLabels] as const;
+}
+
+export async function saveEntityLabels(
+  entityType: string,
+  entityID: string | number,
+  labels: string[]
+): Promise<string[]> {
+  const updated = await api<EntityLabelsRecord>(
+    `/api/labels/${encodeURIComponent(entityType)}/${encodeURIComponent(String(entityID))}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ labels }),
+    }
+  );
+  const next = Array.isArray(updated.labels) ? updated.labels : [];
+  window.dispatchEvent(
+    new CustomEvent("rookery:labels-changed", {
+      detail: { entityType, entityID: String(entityID), labels: next },
+    })
+  );
+  return next;
+}
+
+export async function saveEntityLabelsWithToast(
+  entityType: string,
+  entityID: string | number,
+  name: string,
+  labels: string[]
+): Promise<void> {
+  try {
+    await saveEntityLabels(entityType, entityID, labels);
+  } catch (err) {
+    showToast(
+      `Saved ${name}, but labels could not be updated: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+      true
+    );
+  }
+}
+
+type LabelsInputProps = {
+  labels: string[];
+  onChange: (labels: string[]) => void;
+  disabled?: boolean;
+};
+
+export function LabelsInput({ labels, onChange, disabled = false }: LabelsInputProps) {
+  const [input, setInput] = useState("");
+  const values = Array.isArray(labels) ? labels : [];
+
+  const add = () => {
+    const additions = input
+      .split(/[\n,]+/)
+      .map((value) => value.trim())
+      .filter(Boolean);
+    if (additions.length === 0) {
+      return;
+    }
+    const next = [...values];
+    for (const value of additions) {
+      if (!next.includes(value)) {
+        next.push(value);
+      }
+    }
+    onChange(next);
+    setInput("");
+  };
+
+  return (
+    <div class="labels-field">
+      <span class="field-label">Labels</span>
+      <div class="labels-editor-list">
+        {values.length ? (
+          values.map((label) => (
+            <span class="label-chip editable" key={label}>
+              {label}
+              <button
+                type="button"
+                aria-label={`Remove ${label}`}
+                disabled={disabled}
+                onClick={() => onChange(values.filter((item) => item !== label))}
+              >
+                ×
+              </button>
+            </span>
+          ))
+        ) : (
+          <span class="field-hint">No labels yet.</span>
+        )}
+      </div>
+      <div class="labels-editor-input">
+        <input
+          type="text"
+          value={input}
+          maxLength={256}
+          disabled={disabled || values.length >= MAX_LABELS}
+          placeholder="production, web, critical"
+          onInput={(event) => setInput(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              add();
+            }
+          }}
+        />
+        <button
+          class="button ghost"
+          type="button"
+          disabled={disabled || !input.trim() || values.length >= MAX_LABELS}
+          onClick={add}
+        >
+          Add
+        </button>
+      </div>
+      <span class="field-hint">
+        Add as many labels as you need. Commas separate multiple labels; up to {MAX_LABELS}.
+      </span>
+    </div>
+  );
 }
 
 type EntityLabelsProps = {
@@ -154,14 +321,8 @@ function LabelsDialog({
     setSaving(true);
     setError("");
     try {
-      const updated = await api<EntityLabelsRecord>(
-        `/api/labels/${encodeURIComponent(entityType)}/${encodeURIComponent(entityID)}`,
-        {
-          method: "PUT",
-          body: JSON.stringify({ labels: items }),
-        }
-      );
-      onSaved(Array.isArray(updated.labels) ? updated.labels : []);
+      const next = await saveEntityLabels(entityType, entityID, items);
+      onSaved(next);
       showToast(`Saved labels for ${name}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

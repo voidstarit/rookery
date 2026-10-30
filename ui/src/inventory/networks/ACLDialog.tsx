@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
+import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
 import type { ACL, ACLRule } from "../types";
 import { defaultACLRule, formatACLText } from "./acl";
 
@@ -34,6 +35,7 @@ export function ACLDialog({ acl, vppReady, onClose, onSaved }: ACLDialogProps) {
   const [name, setName] = useState(acl?.name ?? "");
   const [title, setTitle] = useState(acl?.title ?? "");
   const [description, setDescription] = useState(acl?.description ?? "");
+  const [labels, setLabels] = useEntityLabelDraft("acl", acl?.id);
   const [rules, setRules] = useState<ACLRule[]>(() => {
     const initial = acl?.rules?.length ? acl.rules.map((rule) => ({ ...rule })) : [defaultACLRule()];
     return initial;
@@ -87,6 +89,7 @@ export function ACLDialog({ acl, vppReady, onClose, onSaved }: ACLDialogProps) {
         method: editing ? "PUT" : "POST",
         body: JSON.stringify(payload),
       });
+      await saveEntityLabelsWithToast("acl", saved.id, saved.name, labels);
       onSaved(saved);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -167,6 +170,9 @@ export function ACLDialog({ acl, vppReady, onClose, onSaved }: ACLDialogProps) {
               onInput={(event) => setDescription(event.currentTarget.value)}
             />
           </label>
+          <div class="field field-wide">
+            <LabelsInput labels={labels} onChange={setLabels} disabled={saving} />
+          </div>
         </div>
 
         <div class="form-grid">

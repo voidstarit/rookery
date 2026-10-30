@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
+import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
 import type { Network } from "../types";
 
 type NetworkDialogProps = {
@@ -15,6 +16,7 @@ export function NetworkDialog({ network, onClose, onSaved }: NetworkDialogProps)
   const [name, setName] = useState(network?.name || "");
   const [ipv4CIDR, setIpv4CIDR] = useState(network?.ipv4_cidr || "10.0.0.0/16");
   const [ipv6CIDR, setIpv6CIDR] = useState(network?.ipv6_cidr || "fd00:20::/64");
+  const [labels, setLabels] = useEntityLabelDraft("network", network?.id);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDialogElement | null>(null);
@@ -51,6 +53,7 @@ export function NetworkDialog({ network, onClose, onSaved }: NetworkDialogProps)
           ),
         }
       );
+      await saveEntityLabelsWithToast("network", saved.id, saved.name, labels);
       onSaved(saved);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -138,6 +141,10 @@ export function NetworkDialog({ network, onClose, onSaved }: NetworkDialogProps)
             />
             <span class="field-hint">IPv6 range reserved for this network.</span>
           </label>
+
+          <div class="field field-wide">
+            <LabelsInput labels={labels} onChange={setLabels} disabled={saving} />
+          </div>
         </div>
 
         {error ? (

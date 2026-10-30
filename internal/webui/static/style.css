@@ -3372,3 +3372,13 @@ body.route-page-mode #networks-panel .panel-spaced {
 .labels-editor-input input {
   flex: 1;
 }
+
+.labels-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.labels-field .labels-editor-list {
+  margin-top: 0.1rem;
+}

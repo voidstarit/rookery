@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
+import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
 import type { HostTap, Network } from "../types";
 
 type HostTapDialogProps = {
@@ -14,6 +15,7 @@ export function HostTapDialog({ networks, onClose, onSaved }: HostTapDialogProps
   const [networkID, setNetworkID] = useState(networks[0] ? String(networks[0].id) : "");
   const [name, setName] = useState("");
   const [ipv4Address, setIpv4Address] = useState("");
+  const [labels, setLabels] = useEntityLabelDraft("host_tap");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDialogElement | null>(null);
@@ -49,6 +51,7 @@ export function HostTapDialog({ networks, onClose, onSaved }: HostTapDialogProps
           ipv4_address: ipv4Address.trim(),
         }),
       });
+      await saveEntityLabelsWithToast("host_tap", tap.id, tap.name, labels);
       onSaved(tap);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -136,6 +139,9 @@ export function HostTapDialog({ networks, onClose, onSaved }: HostTapDialogProps
               Leave empty to use DHCP or configure the interface manually.
             </span>
           </label>
+          <div class="field field-wide">
+            <LabelsInput labels={labels} onChange={setLabels} disabled={saving} />
+          </div>
         </div>
 
         {error ? (
