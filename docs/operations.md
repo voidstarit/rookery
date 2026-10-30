@@ -31,7 +31,7 @@ network can be attached to VMs and become virtio-net devices when the VM starts.
 An optional NAT44 VNF can give a dedicated network an IPv4 gateway and an
 outside uplink.
 
-The server has two commands:
+The server has three commands:
 
 - `init` — idempotently create the LVM thin pool and verify the FD.io VPP API.
 - `serve` — run the gateway API and UI. It starts even when prerequisites are
@@ -39,6 +39,10 @@ The server has two commands:
   pool; additional storage backends are validated when used. VM creation needs
   the thin pool and VPP, and starts the VM, so QEMU/KVM must be available too. Installation media only registers existing files and
   has no host prerequisites.
+- `create-client-cert <name>` — issue an mTLS client certificate using the
+  server's CA and database. It writes the client certificate, private key, and
+  CA certificate to the selected output directory. The alias
+  `issue-client-cert` is also accepted.
 
 The API intentionally has **no authentication or authorization**, including the
 VNC console proxy. Run it on a trusted network or behind a reverse proxy that
@@ -291,9 +295,9 @@ but one running VM cannot accept the new limits, the API reports that VM.
 
 | Flag              | Environment variable   | Default             | Used by         | Description |
 | ----------------- | ---------------------- | ------------------- | --------------- | ----------- |
-| `-config`         | `ROOKERY_CONFIG`       | —                   | `serve`, `init`, `vnfs` | YAML configuration file |
+| `-config`         | `ROOKERY_CONFIG`       | —                   | `serve`, `init`, `create-client-cert`, `vnfs` | YAML configuration file |
 | `-addr`           | `ROOKERY_ADDR`       | `127.0.0.1:8080`    | `serve`         | HTTP listen address |
-| `-db`             | `ROOKERY_DB`         | `rookery.db`      | `serve`         | SQLite database path |
+| `-db`             | `ROOKERY_DB`         | `rookery.db`      | `serve`, `create-client-cert` | SQLite database path |
 | `-rate-limit`     | `ROOKERY_RATE_LIMIT` | `3`                 | `serve`         | HTTP requests per second for each URL path; `0` disables |
 | `-vg`             | `ROOKERY_VG`         | empty               | `serve`, `init` | Bootstrap LVM volume group; optional for `serve` |
 | `-thin-pool`      | `ROOKERY_THIN_POOL`  | `rookery`         | `serve`, `init` | Bootstrap thin pool name or `<vg>/<name>`; `serve` can use UI backends instead |
@@ -312,8 +316,11 @@ but one running VM cannot accept the new limits, the API reports that VM.
 | `-mtls-addr`      | `ROOKERY_MTLS_ADDR`    | `:8443`             | `serve`         | Public mTLS API listen address; empty disables |
 | `-mtls-sans`      | `ROOKERY_MTLS_SANS`    | —                   | `serve`         | Extra comma-separated DNS/IP SANs for the mTLS server certificate |
 | `-grpc-mtls-addr` | `ROOKERY_GRPC_MTLS_ADDR` | `:9443`            | `serve`         | Public mTLS gRPC listen address; empty disables |
-| `-pki-dir`        | `ROOKERY_PKI_DIR`      | `/var/lib/rookery/pki` | `serve`       | CA and server certificate directory |
+| `-pki-dir`        | `ROOKERY_PKI_DIR`      | `/var/lib/rookery/pki` | `serve`, `create-client-cert` | PKI directory (CA and server certificate; also used for client issuance) |
 | `-grpc-addr`      | `ROOKERY_GRPC_ADDR`  | —                   | `serve`         | Optional gRPC listen address |
+| `-days`           | —                      | `365`               | `create-client-cert` | Client certificate validity in days (maximum 3650) |
+| `-out-dir`        | —                      | `.`                 | `create-client-cert` | Directory for `<name>.crt`, `<name>.key`, and `<name>-ca.crt` |
+| `-force`          | —                      | `false`             | `create-client-cert` | Overwrite existing output files |
 | `-size`           | —                      | `100%FREE`          | `init`          | Thin pool size when creating |
 
 The database directory is created automatically and migrations run on startup.

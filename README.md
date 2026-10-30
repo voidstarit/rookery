@@ -187,7 +187,9 @@ The release also publishes `terraform-provider-rookery_<version>_linux_amd64`
 standalone and inside the archive. For Terraform, put that binary in a
 directory, download a client certificate from **Client certificates** in the
 UI, and configure the provider as shown in
-[docs/api.md#terraform-provider](docs/api.md#terraform-provider).
+[docs/api.md#terraform-provider](docs/api.md#terraform-provider). To issue a
+certificate from the host instead, run
+`rookery create-client-cert -config /etc/rookery/config.yaml -out-dir ./ops-laptop ops-laptop`.
 
 ## Documentation
 
