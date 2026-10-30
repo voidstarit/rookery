@@ -373,3 +373,20 @@ func TestValidateClassCPUHierarchy(t *testing.T) {
 		t.Fatal("child class CPU set outside parent was accepted")
 	}
 }
+
+func TestNormalizeSettingsPreservesClassOrder(t *testing.T) {
+	names := []string{"critical", "critical/core", "critical/service", "critical/application"}
+	classes := make([]Class, 0, len(names))
+	for _, name := range names {
+		classes = append(classes, Class{Name: name})
+	}
+	normalized := normalizeSettings(Settings{Classes: classes})
+	if len(normalized.Classes) != len(names) {
+		t.Fatalf("classes = %+v", normalized.Classes)
+	}
+	for i, name := range names {
+		if normalized.Classes[i].Name != name {
+			t.Fatalf("classes[%d] = %q, want %q", i, normalized.Classes[i].Name, name)
+		}
+	}
+}

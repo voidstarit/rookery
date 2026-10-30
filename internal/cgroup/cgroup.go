@@ -1145,7 +1145,6 @@ func normalizeSettings(settings Settings) Settings {
 			class.IOLimits = normalizeIOLimits(class.IOLimits)
 			classes = append(classes, class)
 		}
-		sort.Slice(classes, func(i, j int) bool { return classes[i].Name < classes[j].Name })
 		settings.Classes = classes
 	}
 	return settings
