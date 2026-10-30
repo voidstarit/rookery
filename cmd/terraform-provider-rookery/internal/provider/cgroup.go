@@ -184,9 +184,9 @@ func cgroupClassesFromProto(ctx context.Context, classes []*rookeryv1.CgroupClas
 }
 
 // cgroupClassesFromProtoOrdered converts API classes to Terraform state while
-// preserving the caller's class order. The API normalizes and sorts classes
-// lexicographically; Terraform lists are order-sensitive, so using API order
-// directly after apply produces "inconsistent result after apply" errors.
+// preserving the caller's class order. Terraform lists are order-sensitive;
+// servers or older API versions may normalize or reorder classes, so using the
+// returned order directly after apply can produce inconsistent-result errors.
 func cgroupClassesFromProtoOrdered(ctx context.Context, classes []*rookeryv1.CgroupClass, order []string) (types.List, diag.Diagnostics) {
 	byName := make(map[string]cgroupClassModel, len(classes))
 	apiOrder := make([]string, 0, len(classes))
