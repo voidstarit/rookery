@@ -43,6 +43,7 @@ type VM struct {
 	ConsoleEnabled bool                   `protobuf:"varint,14,opt,name=console_enabled,json=consoleEnabled,proto3" json:"console_enabled,omitempty"`
 	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Cgroup         *VMCgroup              `protobuf:"bytes,17,opt,name=cgroup,proto3" json:"cgroup,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -189,6 +190,13 @@ func (x *VM) GetUpdatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *VM) GetCgroup() *VMCgroup {
+	if x != nil {
+		return x.Cgroup
+	}
+	return nil
+}
+
 type ListVMsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -325,6 +333,7 @@ type CreateVMRequest struct {
 	InterfaceIds   []int64                `protobuf:"varint,8,rep,packed,name=interface_ids,json=interfaceIds,proto3" json:"interface_ids,omitempty"`
 	DiskIds        []int64                `protobuf:"varint,9,rep,packed,name=disk_ids,json=diskIds,proto3" json:"disk_ids,omitempty"`
 	DiskId         *int64                 `protobuf:"varint,10,opt,name=disk_id,json=diskId,proto3,oneof" json:"disk_id,omitempty"`
+	Cgroup         *VMCgroup              `protobuf:"bytes,11,opt,name=cgroup,proto3" json:"cgroup,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -429,6 +438,13 @@ func (x *CreateVMRequest) GetDiskId() int64 {
 	return 0
 }
 
+func (x *CreateVMRequest) GetCgroup() *VMCgroup {
+	if x != nil {
+		return x.Cgroup
+	}
+	return nil
+}
+
 type UpdateVMRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -443,8 +459,9 @@ type UpdateVMRequest struct {
 	DiskIds        []int64                `protobuf:"varint,10,rep,packed,name=disk_ids,json=diskIds,proto3" json:"disk_ids,omitempty"`
 	// Explicit replacement lets clients clear the interface set. Disks cannot
 	// be cleared because every VM requires at least one disk.
-	ReplaceInterfaceIds *bool `protobuf:"varint,11,opt,name=replace_interface_ids,json=replaceInterfaceIds,proto3,oneof" json:"replace_interface_ids,omitempty"`
-	ReplaceDiskIds      *bool `protobuf:"varint,12,opt,name=replace_disk_ids,json=replaceDiskIds,proto3,oneof" json:"replace_disk_ids,omitempty"`
+	ReplaceInterfaceIds *bool     `protobuf:"varint,11,opt,name=replace_interface_ids,json=replaceInterfaceIds,proto3,oneof" json:"replace_interface_ids,omitempty"`
+	ReplaceDiskIds      *bool     `protobuf:"varint,12,opt,name=replace_disk_ids,json=replaceDiskIds,proto3,oneof" json:"replace_disk_ids,omitempty"`
+	Cgroup              *VMCgroup `protobuf:"bytes,13,opt,name=cgroup,proto3" json:"cgroup,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -561,6 +578,13 @@ func (x *UpdateVMRequest) GetReplaceDiskIds() bool {
 		return *x.ReplaceDiskIds
 	}
 	return false
+}
+
+func (x *UpdateVMRequest) GetCgroup() *VMCgroup {
+	if x != nil {
+		return x.Cgroup
+	}
+	return nil
 }
 
 type DeleteVMRequest struct {
@@ -1004,7 +1028,7 @@ var File_rookery_v1_vm_proto protoreflect.FileDescriptor
 const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\n" +
 	"\x13rookery/v1/vm.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\x1a\x15rookery/v1/disk.proto\x1a\x1arookery/v1/interface.proto\x1a\x16rookery/v1/media.proto\"\xf3\x04\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\x1a\x15rookery/v1/disk.proto\x1a\x1arookery/v1/interface.proto\x1a\x16rookery/v1/media.proto\x1a\x17rookery/v1/cgroup.proto\"\xa1\x05\n" +
 	"\x02VM\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -1027,7 +1051,8 @@ const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAtB\n" +
+	"updated_at\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12,\n" +
+	"\x06cgroup\x18\x11 \x01(\v2\x14.rookery.v1.VMCgroupR\x06cgroupB\n" +
 	"\n" +
 	"\b_disk_idB\x10\n" +
 	"\x0e_boot_media_id\"\x10\n" +
@@ -1035,7 +1060,7 @@ const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\x0fListVMsResponse\x12 \n" +
 	"\x03vms\x18\x01 \x03(\v2\x0e.rookery.v1.VMR\x03vms\"(\n" +
 	"\fGetVMRequest\x12\x18\n" +
-	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\"\x93\x04\n" +
+	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\"\xc1\x04\n" +
 	"\x0fCreateVMRequest\x12;\n" +
 	"\x04name\x18\x01 \x01(\tB'\xfaB$r\"\x10\x01\x18@2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$R\x04name\x12*\n" +
 	"\vdescription\x18\x02 \x01(\tB\b\xfaB\x05r\x03\x18\xd0\x0fR\vdescription\x12$\n" +
@@ -1048,7 +1073,8 @@ const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\rinterface_ids\x18\b \x03(\x03R\finterfaceIds\x12\x19\n" +
 	"\bdisk_ids\x18\t \x03(\x03R\adiskIds\x12%\n" +
 	"\adisk_id\x18\n" +
-	" \x01(\x03B\a\xfaB\x04\"\x02 \x00H\x05R\x06diskId\x88\x01\x01B\t\n" +
+	" \x01(\x03B\a\xfaB\x04\"\x02 \x00H\x05R\x06diskId\x88\x01\x01\x12,\n" +
+	"\x06cgroup\x18\v \x01(\v2\x14.rookery.v1.VMCgroupR\x06cgroupB\t\n" +
 	"\a_statusB\b\n" +
 	"\x06_vcpusB\f\n" +
 	"\n" +
@@ -1056,7 +1082,7 @@ const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\x0e_boot_media_idB\x12\n" +
 	"\x10_console_enabledB\n" +
 	"\n" +
-	"\b_disk_id\"\xb4\x05\n" +
+	"\b_disk_id\"\xe2\x05\n" +
 	"\x0fUpdateVMRequest\x12\x18\n" +
 	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\x12@\n" +
 	"\x04name\x18\x02 \x01(\tB'\xfaB$r\"\x10\x01\x18@2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$H\x00R\x04name\x88\x01\x01\x12/\n" +
@@ -1071,7 +1097,8 @@ const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\bdisk_ids\x18\n" +
 	" \x03(\x03R\adiskIds\x127\n" +
 	"\x15replace_interface_ids\x18\v \x01(\bH\aR\x13replaceInterfaceIds\x88\x01\x01\x12-\n" +
-	"\x10replace_disk_ids\x18\f \x01(\bH\bR\x0ereplaceDiskIds\x88\x01\x01B\a\n" +
+	"\x10replace_disk_ids\x18\f \x01(\bH\bR\x0ereplaceDiskIds\x88\x01\x01\x12,\n" +
+	"\x06cgroup\x18\r \x01(\v2\x14.rookery.v1.VMCgroupR\x06cgroupB\a\n" +
 	"\x05_nameB\x0e\n" +
 	"\f_descriptionB\t\n" +
 	"\a_statusB\b\n" +
@@ -1158,7 +1185,8 @@ var file_rookery_v1_vm_proto_goTypes = []any{
 	(*VMMedia)(nil),               // 14: rookery.v1.VMMedia
 	(*VMInterface)(nil),           // 15: rookery.v1.VMInterface
 	(*timestamppb.Timestamp)(nil), // 16: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),         // 17: google.protobuf.Empty
+	(*VMCgroup)(nil),              // 17: rookery.v1.VMCgroup
+	(*emptypb.Empty)(nil),         // 18: google.protobuf.Empty
 }
 var file_rookery_v1_vm_proto_depIdxs = []int32{
 	13, // 0: rookery.v1.VM.disk:type_name -> rookery.v1.VMDisk
@@ -1167,33 +1195,36 @@ var file_rookery_v1_vm_proto_depIdxs = []int32{
 	15, // 3: rookery.v1.VM.interfaces:type_name -> rookery.v1.VMInterface
 	16, // 4: rookery.v1.VM.created_at:type_name -> google.protobuf.Timestamp
 	16, // 5: rookery.v1.VM.updated_at:type_name -> google.protobuf.Timestamp
-	0,  // 6: rookery.v1.ListVMsResponse.vms:type_name -> rookery.v1.VM
-	16, // 7: rookery.v1.VMMetrics.sampled_at:type_name -> google.protobuf.Timestamp
-	1,  // 8: rookery.v1.VMService.ListVMs:input_type -> rookery.v1.ListVMsRequest
-	3,  // 9: rookery.v1.VMService.GetVM:input_type -> rookery.v1.GetVMRequest
-	4,  // 10: rookery.v1.VMService.CreateVM:input_type -> rookery.v1.CreateVMRequest
-	5,  // 11: rookery.v1.VMService.UpdateVM:input_type -> rookery.v1.UpdateVMRequest
-	6,  // 12: rookery.v1.VMService.DeleteVM:input_type -> rookery.v1.DeleteVMRequest
-	7,  // 13: rookery.v1.VMService.StartVM:input_type -> rookery.v1.StartVMRequest
-	8,  // 14: rookery.v1.VMService.StopVM:input_type -> rookery.v1.StopVMRequest
-	9,  // 15: rookery.v1.VMService.ResetVM:input_type -> rookery.v1.ResetVMRequest
-	10, // 16: rookery.v1.VMService.CtrlAltDel:input_type -> rookery.v1.CtrlAltDelRequest
-	11, // 17: rookery.v1.VMService.GetVMMetrics:input_type -> rookery.v1.GetVMMetricsRequest
-	2,  // 18: rookery.v1.VMService.ListVMs:output_type -> rookery.v1.ListVMsResponse
-	0,  // 19: rookery.v1.VMService.GetVM:output_type -> rookery.v1.VM
-	0,  // 20: rookery.v1.VMService.CreateVM:output_type -> rookery.v1.VM
-	0,  // 21: rookery.v1.VMService.UpdateVM:output_type -> rookery.v1.VM
-	17, // 22: rookery.v1.VMService.DeleteVM:output_type -> google.protobuf.Empty
-	0,  // 23: rookery.v1.VMService.StartVM:output_type -> rookery.v1.VM
-	0,  // 24: rookery.v1.VMService.StopVM:output_type -> rookery.v1.VM
-	0,  // 25: rookery.v1.VMService.ResetVM:output_type -> rookery.v1.VM
-	0,  // 26: rookery.v1.VMService.CtrlAltDel:output_type -> rookery.v1.VM
-	12, // 27: rookery.v1.VMService.GetVMMetrics:output_type -> rookery.v1.VMMetrics
-	18, // [18:28] is the sub-list for method output_type
-	8,  // [8:18] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	17, // 6: rookery.v1.VM.cgroup:type_name -> rookery.v1.VMCgroup
+	0,  // 7: rookery.v1.ListVMsResponse.vms:type_name -> rookery.v1.VM
+	17, // 8: rookery.v1.CreateVMRequest.cgroup:type_name -> rookery.v1.VMCgroup
+	17, // 9: rookery.v1.UpdateVMRequest.cgroup:type_name -> rookery.v1.VMCgroup
+	16, // 10: rookery.v1.VMMetrics.sampled_at:type_name -> google.protobuf.Timestamp
+	1,  // 11: rookery.v1.VMService.ListVMs:input_type -> rookery.v1.ListVMsRequest
+	3,  // 12: rookery.v1.VMService.GetVM:input_type -> rookery.v1.GetVMRequest
+	4,  // 13: rookery.v1.VMService.CreateVM:input_type -> rookery.v1.CreateVMRequest
+	5,  // 14: rookery.v1.VMService.UpdateVM:input_type -> rookery.v1.UpdateVMRequest
+	6,  // 15: rookery.v1.VMService.DeleteVM:input_type -> rookery.v1.DeleteVMRequest
+	7,  // 16: rookery.v1.VMService.StartVM:input_type -> rookery.v1.StartVMRequest
+	8,  // 17: rookery.v1.VMService.StopVM:input_type -> rookery.v1.StopVMRequest
+	9,  // 18: rookery.v1.VMService.ResetVM:input_type -> rookery.v1.ResetVMRequest
+	10, // 19: rookery.v1.VMService.CtrlAltDel:input_type -> rookery.v1.CtrlAltDelRequest
+	11, // 20: rookery.v1.VMService.GetVMMetrics:input_type -> rookery.v1.GetVMMetricsRequest
+	2,  // 21: rookery.v1.VMService.ListVMs:output_type -> rookery.v1.ListVMsResponse
+	0,  // 22: rookery.v1.VMService.GetVM:output_type -> rookery.v1.VM
+	0,  // 23: rookery.v1.VMService.CreateVM:output_type -> rookery.v1.VM
+	0,  // 24: rookery.v1.VMService.UpdateVM:output_type -> rookery.v1.VM
+	18, // 25: rookery.v1.VMService.DeleteVM:output_type -> google.protobuf.Empty
+	0,  // 26: rookery.v1.VMService.StartVM:output_type -> rookery.v1.VM
+	0,  // 27: rookery.v1.VMService.StopVM:output_type -> rookery.v1.VM
+	0,  // 28: rookery.v1.VMService.ResetVM:output_type -> rookery.v1.VM
+	0,  // 29: rookery.v1.VMService.CtrlAltDel:output_type -> rookery.v1.VM
+	12, // 30: rookery.v1.VMService.GetVMMetrics:output_type -> rookery.v1.VMMetrics
+	21, // [21:31] is the sub-list for method output_type
+	11, // [11:21] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_rookery_v1_vm_proto_init() }
@@ -1204,6 +1235,7 @@ func file_rookery_v1_vm_proto_init() {
 	file_rookery_v1_disk_proto_init()
 	file_rookery_v1_interface_proto_init()
 	file_rookery_v1_media_proto_init()
+	file_rookery_v1_cgroup_proto_init()
 	file_rookery_v1_vm_proto_msgTypes[0].OneofWrappers = []any{}
 	file_rookery_v1_vm_proto_msgTypes[4].OneofWrappers = []any{}
 	file_rookery_v1_vm_proto_msgTypes[5].OneofWrappers = []any{}

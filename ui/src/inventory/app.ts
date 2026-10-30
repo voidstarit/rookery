@@ -40,7 +40,7 @@ const tabMeta: Record<TabName, TabMeta> = {
   settings: {
     eyebrow: "Rookery server",
     title: "Settings",
-    lede: "Configure server-wide Rookery behavior and lifecycle hooks.",
+    lede: "Configure cgroup resource limits, server-wide Rookery behavior, and lifecycle hooks.",
   },
 };
 

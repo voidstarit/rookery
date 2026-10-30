@@ -21,6 +21,50 @@ export type StartupScript = {
   updated_at?: string;
 };
 
+export type CgroupIOLimit = {
+  device: string;
+  read_bps?: number;
+  write_bps?: number;
+  read_iops?: number;
+  write_iops?: number;
+  weight?: number;
+};
+
+export type CgroupSettings = {
+  enabled?: boolean;
+  cpus?: string;
+  mems?: string;
+  memory_max_bytes?: number;
+  cpu_weight?: number;
+  io_limits?: CgroupIOLimit[];
+  available?: boolean;
+  configured?: boolean;
+  reason?: string;
+  mount?: string;
+  root?: string;
+  online_cpus?: number[];
+  cpu_model?: string;
+  updated_at?: string;
+};
+
+export type VMCgroup = {
+  enabled?: boolean;
+  cpus?: string;
+  memory_max_bytes?: number;
+  cpu_weight?: number;
+  io_limits?: CgroupIOLimit[];
+};
+
+export type HostBlockDevice = {
+  name: string;
+  path: string;
+  model?: string;
+  size_bytes?: number;
+  major?: number;
+  minor?: number;
+  rotational?: boolean;
+};
+
 export type VPPInterfaceRouteTables = {
   name: string;
   ipv4_table_id: number;
@@ -97,6 +141,7 @@ export type VM = {
   boot_media?: VMMedia;
   interfaces?: VMInterface[];
   console_enabled: boolean;
+  cgroup?: VMCgroup;
   created_at?: string;
   updated_at?: string;
 };

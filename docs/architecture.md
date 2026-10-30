@@ -158,6 +158,12 @@ reconciled, the API starts every VM that should be running but has no live QEMU
 process, which brings VMs back after a host reboot while leaving explicitly
 stopped VMs down.
 
+When cgroup limits are enabled, before QEMU is launched, the cgroup manager
+creates or reuses a child cgroup (`shared` or `vm-<uuid>`) below the configured
+parent and applies host and VM limits. QEMU is started with
+`CLONE_INTO_CGROUP` where available, then its pid is written to `cgroup.procs`
+as a fallback, so every QEMU process is accounted under the hierarchy.
+
 ### Network dataplane
 
 ```mermaid
@@ -231,6 +237,7 @@ internal/gateway/               generated service implementations
 internal/store/                 SQLite, migrations, inventory types
 internal/host/                  LVM, VPP, DHCP/DNS/BGP runtimes, vhost/memif/tap
 internal/qemu/                  QEMU process, monitor, VNC, metrics
+internal/cgroup/                cgroup v2 hierarchy, limits, CPU/device helpers
 internal/vnfd/                  internal VNFDaemon gRPC protocol
 internal/readiness/             cached host prerequisite status
 internal/pki/                   mTLS CA and client certificates

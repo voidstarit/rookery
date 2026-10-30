@@ -257,6 +257,35 @@ func (m *VM) validate(all bool) error {
 		}
 	}
 
+	if all {
+		switch v := interface{}(m.GetCgroup()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, VMValidationError{
+					field:  "Cgroup",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, VMValidationError{
+					field:  "Cgroup",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetCgroup()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return VMValidationError{
+				field:  "Cgroup",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
 	if m.DiskId != nil {
 		// no validation rules for DiskId
 	}
@@ -750,6 +779,35 @@ func (m *CreateVMRequest) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
+	if all {
+		switch v := interface{}(m.GetCgroup()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, CreateVMRequestValidationError{
+					field:  "Cgroup",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, CreateVMRequestValidationError{
+					field:  "Cgroup",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetCgroup()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return CreateVMRequestValidationError{
+				field:  "Cgroup",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
 	if m.Status != nil {
 
 		if utf8.RuneCountInString(m.GetStatus()) > 32 {
@@ -941,6 +999,35 @@ func (m *UpdateVMRequest) validate(all bool) error {
 			return err
 		}
 		errors = append(errors, err)
+	}
+
+	if all {
+		switch v := interface{}(m.GetCgroup()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, UpdateVMRequestValidationError{
+					field:  "Cgroup",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, UpdateVMRequestValidationError{
+					field:  "Cgroup",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetCgroup()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return UpdateVMRequestValidationError{
+				field:  "Cgroup",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
 	}
 
 	if m.Name != nil {

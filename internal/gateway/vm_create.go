@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
+	"github.com/voidstarit/rookery/internal/cgroup"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -194,8 +195,25 @@ func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMReq
 			return nil, status.Errorf(codes.Aborted, "disk %q is already attached to another VM", disk.Name)
 		}
 	}
+	var cgroupUpdater VMCgroupUpdater
+	applyCgroup := request.Cgroup != nil && !vm.Cgroup.Equal(existing.Cgroup) &&
+		s.runtime != nil && s.runtime.Running(existing.ID)
+	if applyCgroup {
+		cgroupUpdater, _ = s.runtime.(VMCgroupUpdater)
+		applyCgroup = cgroupUpdater != nil
+	}
+	if applyCgroup {
+		if err := cgroupUpdater.ApplyCgroup(ctx, vm); err != nil {
+			return nil, status.Error(codes.FailedPrecondition, "could not apply VM cgroup limits: "+err.Error())
+		}
+	}
 	updated, err := s.store.UpdateVM(ctx, vm)
 	if err != nil {
+		if applyCgroup {
+			if revertErr := cgroupUpdater.ApplyCgroup(context.Background(), existing); revertErr != nil {
+				s.logger.Warn().Err(revertErr).Str("vm_id", existing.ID).Msg("could not restore VM cgroup after update failure")
+			}
+		}
 		return nil, vmStoreError(err, "update")
 	}
 	if changeInterfaces {
@@ -239,6 +257,11 @@ func vmFromCreateRequest(request *rookeryv1.CreateVMRequest) (store.VM, error) {
 	vm.BootMediaID = request.BootMediaId
 	if request.ConsoleEnabled != nil {
 		vm.ConsoleEnabled = request.GetConsoleEnabled()
+	}
+	if request.Cgroup != nil {
+		if err := applyVMCgroup(&vm, request.Cgroup); err != nil {
+			return store.VM{}, err
+		}
 	}
 	diskIDs := request.GetDiskIds()
 	if len(diskIDs) == 0 && request.DiskId != nil {
@@ -287,7 +310,30 @@ func vmFromUpdateRequest(existing store.VM, request *rookeryv1.UpdateVMRequest) 
 	if request.ConsoleEnabled != nil {
 		vm.ConsoleEnabled = request.GetConsoleEnabled()
 	}
+	if request.Cgroup != nil {
+		if err := applyVMCgroup(&vm, request.Cgroup); err != nil {
+			return store.VM{}, err
+		}
+	}
 	return vm, nil
+}
+
+func applyVMCgroup(vm *store.VM, value *rookeryv1.VMCgroup) error {
+	limits := cgroup.NormalizeVMLimits(cgroup.VMLimits{
+		Enabled:        value.GetEnabled(),
+		CPUs:           value.GetCpus(),
+		MemoryMaxBytes: value.GetMemoryMaxBytes(),
+		CPUWeight:      int(value.GetCpuWeight()),
+		IOLimits:       cgroupIOLimitsFromProto(value.GetIoLimits()),
+	})
+	if err := cgroup.ValidateVMLimits(limits); err != nil {
+		return err
+	}
+	if limits.Enabled && limits.MemoryMaxBytes > 0 && limits.MemoryMaxBytes < int64(vm.MemoryMB)*1024*1024 {
+		return fmt.Errorf("cgroup memory_max_bytes must be at least the VM memory (%d MB)", vm.MemoryMB)
+	}
+	vm.Cgroup = limits
+	return nil
 }
 
 func applyVMName(vm *store.VM, value string, required bool) error {

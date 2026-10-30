@@ -6,6 +6,7 @@ import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
 import "validate/validate.proto";
+import "rookery/v1/cgroup.proto";
 
 option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
 option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
@@ -45,6 +46,21 @@ service SystemService {
   rpc UpdateVPPStartupScript(UpdateVPPStartupScriptRequest) returns (StartupScript) {
     option (google.api.http) = {
       put: "/api/vpp-startup-script"
+      body: "*"
+    };
+  }
+
+  // GetCgroupSettings returns the host-wide cgroup v2 limits and runtime
+  // status.
+  rpc GetCgroupSettings(GetCgroupSettingsRequest) returns (CgroupSettings) {
+    option (google.api.http) = {get: "/api/cgroup-settings"};
+  }
+
+  // UpdateCgroupSettings stores and applies host-wide cgroup v2 limits. Every
+  // QEMU process runs below the configured parent cgroup.
+  rpc UpdateCgroupSettings(UpdateCgroupSettingsRequest) returns (CgroupSettings) {
+    option (google.api.http) = {
+      put: "/api/cgroup-settings"
       body: "*"
     };
   }
@@ -120,4 +136,15 @@ message GetVPPStartupScriptRequest {}
 message UpdateVPPStartupScriptRequest {
   bool enabled = 1;
   string script = 2 [(validate.rules).string = {max_len: 65536}];
+}
+
+message GetCgroupSettingsRequest {}
+
+message UpdateCgroupSettingsRequest {
+  bool enabled = 1;
+  string cpus = 2 [(validate.rules).string = {max_len: 512}];
+  string mems = 3 [(validate.rules).string = {max_len: 512}];
+  int64 memory_max_bytes = 4 [(validate.rules).int64 = {gte: 0}];
+  int32 cpu_weight = 5 [(validate.rules).int32 = {gte: 0, lte: 10000}];
+  repeated CgroupIOLimit io_limits = 6 [(validate.rules).repeated = {max_items: 64}];
 }

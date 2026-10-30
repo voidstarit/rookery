@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
-import type { Disk, Media, VM, VMDisk, VirtualInterface, VMInterface } from "../types";
+import type {
+  CgroupIOLimit,
+  CgroupSettings,
+  Disk,
+  HostBlockDevice,
+  Media,
+  VM,
+  VMDisk,
+  VirtualInterface,
+  VMInterface,
+} from "../types";
+import { CPUSelector, IOLimitEditor, parseCPUSet } from "../cgroup";
 
 type VMDialogProps = {
   vm: VM | null;
@@ -13,6 +24,31 @@ type VMDialogProps = {
 };
 
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
+const MIB = 1024 * 1024;
+
+function bytesToMB(value: number | undefined): string {
+  if (!value) {
+    return "";
+  }
+  return String(Math.round(value / MIB));
+}
+
+function mbToBytes(value: string): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 0;
+  }
+  return Math.round(parsed * MIB);
+}
+
+function weightValue(value: number | undefined): string {
+  return value ? String(value) : "";
+}
+
+function limitNumber(value: string): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
+}
 
 function vmDisks(vm: VM | null): VMDisk[] {
   if (!vm) {
@@ -50,6 +86,14 @@ export function VMDialog({
   const [vcpus, setVCPUs] = useState(String(vm?.vcpus ?? 1));
   const [memoryMB, setMemoryMB] = useState(String(vm?.memory_mb ?? 512));
   const [consoleEnabled, setConsoleEnabled] = useState(Boolean(vm?.console_enabled));
+  const [cgroupSettings, setCgroupSettings] = useState<CgroupSettings | null>(null);
+  const [cgroupEnabled, setCgroupEnabled] = useState(Boolean(vm?.cgroup?.enabled));
+  const [cgroupCPUs, setCgroupCPUs] = useState(vm?.cgroup?.cpus || "");
+  const [cgroupMemoryMB, setCgroupMemoryMB] = useState(bytesToMB(vm?.cgroup?.memory_max_bytes));
+  const [cgroupCPUWeight, setCgroupCPUWeight] = useState(weightValue(vm?.cgroup?.cpu_weight));
+  const [cgroupIOLimits, setCgroupIOLimits] = useState<CgroupIOLimit[]>(
+    Array.isArray(vm?.cgroup?.io_limits) ? vm?.cgroup?.io_limits ?? [] : []
+  );
   const [bootMediaID, setBootMediaID] = useState(
     vm?.boot_media_id !== undefined ? String(vm.boot_media_id) : ""
   );
@@ -68,6 +112,14 @@ export function VMDialog({
   const running = Boolean(vm && (vm.status === "running" || vm.status === "starting"));
   const selectedDiskIDs = new Set(selectedDisks.map((disk) => disk.id));
   const selectedInterfaceIDs = new Set(selectedInterfaces.map((iface) => iface.id));
+  const cgroupDevices: HostBlockDevice[] = selectedDisks.map((disk) => ({
+    name: disk.name,
+    path: disk.device,
+    model: `${disk.name} · ${disk.size_gb} GB`,
+  }));
+  const onlineCPUs = Array.isArray(cgroupSettings?.online_cpus) ? cgroupSettings.online_cpus : [];
+  const hostCPUList = parseCPUSet(cgroupSettings?.cpus);
+  const allowedCPUs = hostCPUList.length > 0 ? onlineCPUs.filter((cpu) => hostCPUList.includes(cpu)) : onlineCPUs;
 
   const availableDisks = disks.filter((disk) => {
     if (disk.is_template) {
@@ -91,6 +143,11 @@ export function VMDialog({
     nameRef.current?.focus();
   }, []);
 
+  useEffect(() => {
+    api<CgroupSettings>("/api/cgroup-settings")
+      .then(setCgroupSettings)
+      .catch(() => setCgroupSettings(null));
+  }, []);
   useEffect(() => {
     if (running) {
       setDiskHint("Stop the VM before changing its disks.");
@@ -203,6 +260,21 @@ export function VMDialog({
     if (bootMedia) {
       payload.boot_media_id = bootMedia;
     }
+
+    payload.cgroup = {
+      enabled: cgroupEnabled,
+      cpus: cgroupCPUs.trim(),
+      memory_max_bytes: mbToBytes(cgroupMemoryMB),
+      cpu_weight: limitNumber(cgroupCPUWeight),
+      io_limits: cgroupIOLimits.map((limit) => ({
+        device: limit.device,
+        read_bps: limit.read_bps || 0,
+        write_bps: limit.write_bps || 0,
+        read_iops: limit.read_iops || 0,
+        write_iops: limit.write_iops || 0,
+        weight: limit.weight || 0,
+      })),
+    };
 
     setError("");
     setSaving(true);
@@ -377,6 +449,86 @@ export function VMDialog({
             </span>
             <span class="field-hint">When disabled, the console page and VNC WebSocket are blocked.</span>
           </label>
+
+          <div class="field field-wide cgroup-vm-section">
+            <span class="field-label">
+              Resource limits <em>optional</em>
+            </span>
+            <label class="checkbox-field">
+              <span class="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={cgroupEnabled}
+                  onChange={(event) => setCgroupEnabled(event.currentTarget.checked)}
+                />
+                <span>Run this VM in its own cgroup child</span>
+              </span>
+            </label>
+            <span class="field-hint">
+              Leave disabled to run under the shared host cgroup. Changes are applied immediately:
+              Rookery moves a running QEMU process into or out of this VM's child cgroup. The
+              host-wide limits in Settings are always inherited.
+              {cgroupSettings && !cgroupSettings.enabled
+                ? " Host-wide cgroup limits are disabled in Settings; per-VM limits apply when host cgroup limits are enabled."
+                : ""}
+            </span>
+
+            <div class="form-grid cgroup-vm-fields">
+              <div class="field field-wide">
+                <span class="field-label">CPU cores</span>
+                <CPUSelector
+                  value={cgroupCPUs}
+                  options={allowedCPUs}
+                  disabled={!cgroupEnabled}
+                  onChange={setCgroupCPUs}
+                  hint="Empty inherits the host-wide CPU set. Only CPUs allowed by Settings can be selected."
+                />
+              </div>
+
+              <label class="field">
+                <span class="field-label">Memory limit (MB)</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={128}
+                  disabled={!cgroupEnabled}
+                  value={cgroupMemoryMB}
+                  placeholder="inherit host"
+                  onInput={(event) => setCgroupMemoryMB(event.currentTarget.value)}
+                />
+                <span class="field-hint">Must be at least the VM memory when set; allow headroom for QEMU overhead.</span>
+              </label>
+
+              <label class="field">
+                <span class="field-label">CPU weight</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={10000}
+                  step={1}
+                  disabled={!cgroupEnabled}
+                  value={cgroupCPUWeight}
+                  placeholder="inherit host"
+                  onInput={(event) => setCgroupCPUWeight(event.currentTarget.value)}
+                />
+                <span class="field-hint">Leave empty to inherit the host CPU weight.</span>
+              </label>
+
+              <div class="field field-wide">
+                <span class="field-label">Per-disk I/O limits</span>
+                <IOLimitEditor
+                  limits={cgroupIOLimits}
+                  devices={cgroupDevices}
+                  disabled={!cgroupEnabled}
+                  onChange={setCgroupIOLimits}
+                />
+                <span class="field-hint">
+                  Values override the host per-device limits for this VM. Empty values inherit the
+                  host limit.
+                </span>
+              </div>
+            </div>
+          </div>
 
           <div class="field field-wide">
             <span class="field-label">Network interfaces <em>optional</em></span>

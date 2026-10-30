@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/voidstarit/rookery/internal/api"
+	"github.com/voidstarit/rookery/internal/cgroup"
 	"github.com/voidstarit/rookery/internal/config"
 	"github.com/voidstarit/rookery/internal/gateway"
 	"github.com/voidstarit/rookery/internal/host"
@@ -59,6 +60,7 @@ func runServe(args []string) error {
 	checkInterval := fs.Duration("check-interval", checkIntervalDefault, "readiness check interval")
 	qemuBin := fs.String("qemu-bin", config.EnvString(apiCfg.QEMUBin, "ROOKERY_QEMU_BIN", qemu.DefaultBinary), "QEMU system emulator binary")
 	runDir := fs.String("run-dir", config.EnvString(apiCfg.RunDir, "ROOKERY_RUN_DIR", qemu.DefaultRunDir), "directory for QEMU pid files and VNC sockets")
+	cgroupRoot := fs.String("cgroup-root", config.EnvString(apiCfg.CgroupRoot, "ROOKERY_CGROUP_ROOT", cgroup.DefaultRoot), "cgroup v2 parent for QEMU resource limits")
 	memifDir := fs.String("memif-dir", config.EnvString(apiCfg.MemifDir, "ROOKERY_MEMIF_DIR", "/run/rookery/memif"), "directory for VNF memif sockets")
 	vhostDir := fs.String("vhost-dir", config.EnvString(apiCfg.VhostDir, "ROOKERY_VHOST_DIR", host.DefaultVhostDir), "directory for VPP vhost-user sockets")
 	logLevel := fs.String("log-level", config.EnvString(apiCfg.LogLevel, "ROOKERY_LOG_LEVEL", "info"), "log level: trace, debug, info, warn, error")
@@ -132,7 +134,16 @@ func runServe(args []string) error {
 		}
 	}
 
-	qemuRunner, err := qemu.New(*qemuBin, *runDir)
+	cgroupManager := cgroup.New(*cgroupRoot)
+	cgroupSettings, err := st.GetCgroupSettings(context.Background())
+	if err != nil {
+		return fmt.Errorf("load cgroup settings: %w", err)
+	}
+	if err := cgroupManager.Configure(cgroupSettings.Settings); err != nil {
+		logger.Warn().Err(err).Str("cgroup_root", *cgroupRoot).Msg("could not apply cgroup settings")
+	}
+
+	qemuRunner, err := qemu.New(*qemuBin, *runDir, qemu.WithCgroupManager(cgroupManager))
 	if err != nil {
 		return fmt.Errorf("prepare qemu: %w", err)
 	}
@@ -195,6 +206,7 @@ func runServe(args []string) error {
 		gateway.WithVNFRuntime(vnfClient),
 		gateway.WithVNFStatusProvider(apiServer),
 		gateway.WithVNFWriter(lifecycleService),
+		gateway.WithCgroupRuntime(cgroupManager),
 	}
 	var grpcListener net.Listener
 	if *grpcAddr != "" {
@@ -306,6 +318,7 @@ func runServe(args []string) error {
 		Str("vpp_socket", vppSocket).
 		Str("qemu_bin", *qemuBin).
 		Str("run_dir", *runDir).
+		Str("cgroup_root", *cgroupRoot).
 		Str("memif_dir", *memifDir).
 		Str("vhost_dir", *vhostDir).
 		Str("vnf_dir", filepath.Join(*runDir, "vnfs")).

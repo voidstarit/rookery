@@ -32,6 +32,22 @@ type HostTapWriter interface {
 	DeleteNetworkHostTap(ctx context.Context, id int64) error
 }
 
+func (s *hostService) ListHostBlockDevices(_ context.Context, _ *rookeryv1.ListHostBlockDevicesRequest) (*rookeryv1.ListHostBlockDevicesResponse, error) {
+	devices, err := host.ListBlockDevices()
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not list block devices")
+	}
+	response := &rookeryv1.ListHostBlockDevicesResponse{Devices: make([]*rookeryv1.HostBlockDevice, 0, len(devices))}
+	for _, device := range devices {
+		response.Devices = append(response.Devices, &rookeryv1.HostBlockDevice{
+			Name: device.Name, Path: device.Path, Model: device.Model,
+			SizeBytes: device.SizeBytes, Major: device.Major, Minor: device.Minor,
+			Rotational: device.Rotational,
+		})
+	}
+	return response, nil
+}
+
 func (s *hostService) listInterfaces(ctx context.Context) (*rookeryv1.ListHostInterfacesResponse, error) {
 	interfaces, err := host.ListHostInterfaces()
 	if err != nil {

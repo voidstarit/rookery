@@ -19,6 +19,8 @@ import (
 
 	"github.com/google/uuid"
 	"modernc.org/sqlite"
+
+	"github.com/voidstarit/rookery/internal/cgroup"
 )
 
 //go:embed migrations/*.sql
@@ -128,23 +130,24 @@ func ValidDesiredState(s string) bool {
 
 // VM is a virtual machine record.
 type VM struct {
-	ID             string        `json:"id"`
-	Name           string        `json:"name"`
-	Description    string        `json:"description"`
-	Status         string        `json:"status"`
-	DesiredState   string        `json:"desired_state"`
-	VCPUs          int           `json:"vcpus"`
-	MemoryMB       int           `json:"memory_mb"`
-	DiskID         *int64        `json:"disk_id,omitempty"`
-	Disk           *VMDisk       `json:"disk,omitempty"`
-	DiskIDs        []int64       `json:"disk_ids,omitempty"`
-	Disks          []VMDisk      `json:"disks,omitempty"`
-	BootMediaID    *int64        `json:"boot_media_id,omitempty"`
-	BootMedia      *VMMedia      `json:"boot_media,omitempty"`
-	Interfaces     []VMInterface `json:"interfaces,omitempty"`
-	ConsoleEnabled bool          `json:"console_enabled"`
-	CreatedAt      time.Time     `json:"created_at"`
-	UpdatedAt      time.Time     `json:"updated_at"`
+	ID             string          `json:"id"`
+	Name           string          `json:"name"`
+	Description    string          `json:"description"`
+	Status         string          `json:"status"`
+	DesiredState   string          `json:"desired_state"`
+	VCPUs          int             `json:"vcpus"`
+	MemoryMB       int             `json:"memory_mb"`
+	DiskID         *int64          `json:"disk_id,omitempty"`
+	Disk           *VMDisk         `json:"disk,omitempty"`
+	DiskIDs        []int64         `json:"disk_ids,omitempty"`
+	Disks          []VMDisk        `json:"disks,omitempty"`
+	BootMediaID    *int64          `json:"boot_media_id,omitempty"`
+	BootMedia      *VMMedia        `json:"boot_media,omitempty"`
+	Interfaces     []VMInterface   `json:"interfaces,omitempty"`
+	ConsoleEnabled bool            `json:"console_enabled"`
+	Cgroup         cgroup.VMLimits `json:"cgroup,omitempty"`
+	CreatedAt      time.Time       `json:"created_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
 }
 
 // VMDisk is the disk summary returned with a VM.
@@ -632,6 +635,10 @@ func (s *Store) CreateVM(ctx context.Context, vm VM) (VM, error) {
 	if vm.DesiredState == "" {
 		vm.DesiredState = DesiredStopped
 	}
+	cgroupJSON, err := json.Marshal(vm.Cgroup)
+	if err != nil {
+		return VM{}, fmt.Errorf("encode vm cgroup limits: %w", err)
+	}
 
 	now := time.Now().UTC().UnixMilli()
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -640,9 +647,9 @@ func (s *Store) CreateVM(ctx context.Context, vm VM) (VM, error) {
 	}
 	defer tx.Rollback()
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO vms (id, name, description, status, desired_state, vcpus, memory_mb, disk_id, boot_media_id, console_enabled, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		vm.ID, vm.Name, vm.Description, vm.Status, vm.DesiredState, vm.VCPUs, vm.MemoryMB, diskIDs[0], vm.BootMediaID, vm.ConsoleEnabled, now, now,
+		INSERT INTO vms (id, name, description, status, desired_state, vcpus, memory_mb, disk_id, boot_media_id, console_enabled, cgroup, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		vm.ID, vm.Name, vm.Description, vm.Status, vm.DesiredState, vm.VCPUs, vm.MemoryMB, diskIDs[0], vm.BootMediaID, vm.ConsoleEnabled, string(cgroupJSON), now, now,
 	); err != nil {
 		if constraintErr := classifyVMCreateError(err, vm.Name); constraintErr != nil {
 			return VM{}, constraintErr
@@ -790,12 +797,16 @@ func (s *Store) UpdateVM(ctx context.Context, vm VM) (VM, error) {
 	}
 
 	now := time.Now().UTC().UnixMilli()
+	cgroupJSON, err := json.Marshal(vm.Cgroup)
+	if err != nil {
+		return VM{}, fmt.Errorf("encode vm cgroup limits: %w", err)
+	}
 
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE vms
-		SET name = ?, description = ?, status = ?, vcpus = ?, memory_mb = ?, boot_media_id = ?, console_enabled = ?, updated_at = ?
+		SET name = ?, description = ?, status = ?, vcpus = ?, memory_mb = ?, boot_media_id = ?, console_enabled = ?, cgroup = ?, updated_at = ?
 		WHERE id = ?`,
-		vm.Name, vm.Description, vm.Status, vm.VCPUs, vm.MemoryMB, vm.BootMediaID, vm.ConsoleEnabled, now, vm.ID,
+		vm.Name, vm.Description, vm.Status, vm.VCPUs, vm.MemoryMB, vm.BootMediaID, vm.ConsoleEnabled, string(cgroupJSON), now, vm.ID,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -2290,7 +2301,7 @@ const vmSelect = `
 	SELECT v.id, v.name, v.description, v.status, v.desired_state, v.vcpus, v.memory_mb,
 	       v.disk_id, d.name, d.size_gb, d.vg, d.thin_pool,
 	       v.boot_media_id, m.name, m.path, m.size_bytes,
-	       v.console_enabled, v.created_at, v.updated_at
+	       v.console_enabled, v.cgroup, v.created_at, v.updated_at
 	FROM vms AS v
 	LEFT JOIN disks AS d ON d.id = v.disk_id
 	LEFT JOIN media AS m ON m.id = v.boot_media_id`
@@ -2321,6 +2332,7 @@ func scanVM(s scanner) (VM, error) {
 		mediaPath   sql.NullString
 		mediaSize   sql.NullInt64
 		console     int64
+		cgroupJSON  string
 	)
 	if err := s.Scan(
 		&vm.ID,
@@ -2340,6 +2352,7 @@ func scanVM(s scanner) (VM, error) {
 		&mediaPath,
 		&mediaSize,
 		&console,
+		&cgroupJSON,
 		&createdAt,
 		&updatedAt,
 	); err != nil {
@@ -2347,6 +2360,11 @@ func scanVM(s scanner) (VM, error) {
 	}
 
 	vm.ConsoleEnabled = console != 0
+	if strings.TrimSpace(cgroupJSON) != "" {
+		if err := json.Unmarshal([]byte(cgroupJSON), &vm.Cgroup); err != nil {
+			return VM{}, fmt.Errorf("decode vm cgroup limits: %w", err)
+		}
+	}
 
 	if diskID.Valid {
 		id := diskID.Int64

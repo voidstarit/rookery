@@ -118,6 +118,8 @@ static UI.
 | `PUT`    | `/api/startup-script` | Configure the Rookery startup script (`enabled`, `script`) |
 | `GET`    | `/api/vpp-startup-script` | Get the VPP connection startup script and its last execution result |
 | `PUT`    | `/api/vpp-startup-script` | Configure the VPP startup script (`enabled`, `script`) |
+| `GET`    | `/api/cgroup-settings` | Get host-wide cgroup v2 limits and runtime status |
+| `PUT`    | `/api/cgroup-settings` | Apply host-wide cgroup v2 limits |
 | `GET`    | `/api/storage-backends` | List registered storage backends |
 | `POST`   | `/api/storage-backends` | Register an LVM thin-pool backend |
 | `GET`    | `/api/storage-backends/{id}` | Get one storage backend |
@@ -167,6 +169,7 @@ the interface returns to its network VRF (host taps) or the default table
 (host interfaces). Vhost-user interfaces continue to use
 `PUT /api/interfaces/{id}/route-tables`.
 | `GET`    | `/api/host/interfaces` | List physical/external NICs, link state, and VPP host-interface correlation |
+| `GET`    | `/api/host/block-devices` | List whole block devices for cgroup I/O limits |
 | `POST`   | `/api/host/interfaces/{name}/attach` | Take over a wired NIC into VPP and persist the attachment |
 | `DELETE` | `/api/host/interfaces/{name}` | Detach a persisted host NIC from VPP |
 | `GET`    | `/api/host/taps` | List persisted network-to-host taps (`?network_id=<id>` optional) |

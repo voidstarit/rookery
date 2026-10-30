@@ -26,6 +26,12 @@ type VMController interface {
 	Metrics(vmID string) (qemu.Metrics, error)
 }
 
+// VMCgroupUpdater applies cgroup changes to a running VM without restarting
+// QEMU. Implementations move the QEMU process between child cgroups as needed.
+type VMCgroupUpdater interface {
+	ApplyCgroup(ctx context.Context, vm store.VM) error
+}
+
 // InterfaceCounterSource supplies VPP interface counters for VM metrics.
 type InterfaceCounterSource interface {
 	InterfaceCounters(ctx context.Context, names []string) (map[string]host.InterfaceCounters, error)

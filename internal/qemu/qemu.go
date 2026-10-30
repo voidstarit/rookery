@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/voidstarit/rookery/internal/cgroup"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -43,12 +44,25 @@ const (
 
 // QEMU launches and stops QEMU/KVM processes.
 type QEMU struct {
-	binary string
-	runDir string
+	binary  string
+	runDir  string
+	cgroups *cgroup.Manager
+}
+
+// Option customizes the QEMU manager.
+type Option func(*QEMU)
+
+// WithCgroupManager places every QEMU process in the cgroup hierarchy managed
+// by manager. When manager is nil or host limits are disabled, QEMU starts
+// normally.
+func WithCgroupManager(manager *cgroup.Manager) Option {
+	return func(q *QEMU) {
+		q.cgroups = manager
+	}
 }
 
 // New returns a QEMU manager. The runtime directory is created if needed.
-func New(binary, runDir string) (*QEMU, error) {
+func New(binary, runDir string, opts ...Option) (*QEMU, error) {
 	if strings.TrimSpace(binary) == "" {
 		binary = DefaultBinary
 	}
@@ -64,7 +78,11 @@ func New(binary, runDir string) (*QEMU, error) {
 		return nil, fmt.Errorf("create qemu run directory: %w", err)
 	}
 
-	return &QEMU{binary: binary, runDir: abs}, nil
+	q := &QEMU{binary: binary, runDir: abs}
+	for _, option := range opts {
+		option(q)
+	}
+	return q, nil
 }
 
 // Start launches a QEMU/KVM process for the VM.
@@ -105,10 +123,17 @@ func (q *QEMU) Start(ctx context.Context, vm store.VM) error {
 	_ = os.Remove(pidfile)
 	_ = os.Remove(monitor)
 
+	placement, err := q.cgroupPlacement(vm)
+	if err != nil {
+		q.cleanupCgroup(vm.ID)
+		return err
+	}
+
 	args := buildArgs(vm, socket, pidfile, monitor)
-	out, err := exec.CommandContext(ctx, q.binary, args...).CombinedOutput()
+	out, err := q.run(ctx, args, placement)
 	if err != nil {
 		q.cleanup(socket, pidfile, monitor)
+		q.cleanupCgroup(vm.ID)
 		message := strings.TrimSpace(string(out))
 		note := ""
 		if holders := imageLockHolders(disks); len(holders) > 0 {
@@ -125,9 +150,130 @@ func (q *QEMU) Start(ctx context.Context, vm store.VM) error {
 	}
 	if !q.Running(vm.ID) {
 		q.cleanup(socket, pidfile, monitor)
+		q.cleanupCgroup(vm.ID)
 		return errors.New("qemu exited before creating its pid file")
 	}
+	if placement.Enabled {
+		pids := q.processIDs(vm.ID, pidfile)
+		if len(pids) == 0 {
+			_ = q.Stop(context.Background(), vm.ID)
+			return errors.New("could not find QEMU pid for cgroup placement")
+		}
+		for _, pid := range pids {
+			if err := q.cgroups.Assign(placement, pid); err != nil {
+				_ = q.Stop(context.Background(), vm.ID)
+				return fmt.Errorf("place QEMU in cgroup: %w", err)
+			}
+		}
+	}
 	return nil
+}
+
+// ApplyCgroup applies a VM's current cgroup limits to a running QEMU process.
+// It moves the process into the shared or per-VM child cgroup, or releases it
+// from the Rookery hierarchy when host-wide limits are disabled.
+func (q *QEMU) ApplyCgroup(ctx context.Context, vm store.VM) error {
+	if q.cgroups == nil {
+		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	placement, err := q.cgroups.Place(vm.ID, vm.Cgroup)
+	if err != nil {
+		return fmt.Errorf("apply VM cgroup: %w", err)
+	}
+	_, pidfile, _, err := q.paths(vm.ID)
+	if err != nil {
+		return err
+	}
+	pids := q.processIDs(vm.ID, pidfile)
+	if !placement.Enabled {
+		for _, pid := range pids {
+			if err := q.cgroups.Release(pid); err != nil {
+				return fmt.Errorf("remove QEMU from cgroup: %w", err)
+			}
+		}
+		q.cgroups.CleanupVM(vm.ID)
+		return nil
+	}
+	for _, pid := range pids {
+		if err := q.cgroups.Assign(placement, pid); err != nil {
+			if errors.Is(err, syscall.ESRCH) {
+				continue
+			}
+			return fmt.Errorf("move QEMU to cgroup: %w", err)
+		}
+	}
+	if !vm.Cgroup.Enabled {
+		q.cgroups.CleanupVM(vm.ID)
+	}
+	return nil
+}
+
+// cgroupPlacement returns the cgroup for a VM, if cgroup limits are enabled.
+func (q *QEMU) cgroupPlacement(vm store.VM) (cgroup.Placement, error) {
+	if q.cgroups == nil {
+		return cgroup.Placement{}, nil
+	}
+	placement, err := q.cgroups.Place(vm.ID, vm.Cgroup)
+	if err != nil {
+		return cgroup.Placement{}, fmt.Errorf("prepare cgroup for VM: %w", err)
+	}
+	return placement, nil
+}
+
+// run executes QEMU, using clone3's cgroup FD support when available so the
+// daemonized child is constrained from its very first instruction. Kernels
+// without CLONE_INTO_CGROUP fall back to moving the process into the cgroup as
+// soon as its pid file appears.
+func (q *QEMU) run(ctx context.Context, args []string, placement cgroup.Placement) ([]byte, error) {
+	command := func() *exec.Cmd {
+		return exec.CommandContext(ctx, q.binary, args...)
+	}
+	if !placement.Enabled || q.cgroups == nil {
+		return command().CombinedOutput()
+	}
+
+	dir, err := os.Open(placement.Path)
+	if err != nil {
+		return nil, fmt.Errorf("open VM cgroup %s: %w", placement.Path, err)
+	}
+	defer dir.Close()
+	cmd := command()
+	cmd.SysProcAttr = &syscall.SysProcAttr{UseCgroupFD: true, CgroupFD: int(dir.Fd())}
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return out, nil
+	}
+	if !errors.Is(err, syscall.ENOSYS) && !errors.Is(err, syscall.EOPNOTSUPP) && !errors.Is(err, syscall.EINVAL) {
+		return out, err
+	}
+	return command().CombinedOutput()
+}
+
+// processIDs returns every live QEMU pid for a VM, preferring the pid file and
+// falling back to /proc for a process that lost its pid file.
+func (q *QEMU) processIDs(vmID, pidfile string) []int {
+	seen := make(map[int]struct{}, 1)
+	pids := make([]int, 0, 1)
+	add := func(pid int) {
+		if pid < 1 {
+			return
+		}
+		if _, ok := seen[pid]; ok {
+			return
+		}
+		seen[pid] = struct{}{}
+		pids = append(pids, pid)
+	}
+	if pid, ok := readPID(pidfile); ok && processAlive(pid) && processMatches(pid, vmID) {
+		add(pid)
+	}
+	for _, pid := range matchingVMPIDs(vmID) {
+		add(pid)
+	}
+	return pids
 }
 
 // Stop terminates a running QEMU process. It is a no-op when the VM is not
@@ -148,6 +294,7 @@ func (q *QEMU) Stop(ctx context.Context, vmID string) error {
 	}
 	if len(targets) == 0 {
 		q.cleanup(socket, pidfile, monitor)
+		q.cleanupCgroup(vmID)
 		return nil
 	}
 
@@ -168,6 +315,7 @@ func (q *QEMU) Stop(ctx context.Context, vmID string) error {
 		}
 		if !alive {
 			q.cleanup(socket, pidfile, monitor)
+			q.cleanupCgroup(vmID)
 			return nil
 		}
 		select {
@@ -183,7 +331,14 @@ func (q *QEMU) Stop(ctx context.Context, vmID string) error {
 		}
 	}
 	q.cleanup(socket, pidfile, monitor)
+	q.cleanupCgroup(vmID)
 	return nil
+}
+
+func (q *QEMU) cleanupCgroup(vmID string) {
+	if q.cgroups != nil {
+		q.cgroups.CleanupVM(vmID)
+	}
 }
 
 // Running reports whether the VM has a live QEMU process. The pid file is the

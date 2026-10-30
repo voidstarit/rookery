@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// CgroupIOLimit is a per-block-device I/O limit. Zero numeric values mean no
+// limit (or inherit the host value for a VM override).
+message CgroupIOLimit {
+  string device = 1 [(validate.rules).string = {min_len: 1, max_len: 512}];
+  int64 read_bps = 2 [(validate.rules).int64 = {gte: 0}];
+  int64 write_bps = 3 [(validate.rules).int64 = {gte: 0}];
+  int64 read_iops = 4 [(validate.rules).int64 = {gte: 0}];
+  int64 write_iops = 5 [(validate.rules).int64 = {gte: 0}];
+  int32 weight = 6 [(validate.rules).int32 = {gte: 0, lte: 10000}];
+}
+
+// CgroupSettings is the host-wide cgroup v2 configuration plus runtime status.
+message CgroupSettings {
+  bool enabled = 1;
+  string cpus = 2 [(validate.rules).string = {max_len: 512}];
+  string mems = 3 [(validate.rules).string = {max_len: 512}];
+  int64 memory_max_bytes = 4 [(validate.rules).int64 = {gte: 0}];
+  int32 cpu_weight = 5 [(validate.rules).int32 = {gte: 0, lte: 10000}];
+  repeated CgroupIOLimit io_limits = 6 [(validate.rules).repeated = {max_items: 64}];
+  bool available = 7;
+  bool configured = 8;
+  string reason = 9;
+  string mount = 10;
+  string root = 11;
+  repeated int32 online_cpus = 12;
+  string cpu_model = 13;
+  google.protobuf.Timestamp updated_at = 14;
+}
+
+// VMCgroup holds optional per-VM cgroup overrides. When enabled is false the
+// VM runs in the shared cgroup and inherits host-wide limits.
+message VMCgroup {
+  bool enabled = 1;
+  string cpus = 2 [(validate.rules).string = {max_len: 512}];
+  int64 memory_max_bytes = 3 [(validate.rules).int64 = {gte: 0}];
+  int32 cpu_weight = 4 [(validate.rules).int32 = {gte: 0, lte: 10000}];
+  repeated CgroupIOLimit io_limits = 5 [(validate.rules).repeated = {max_items: 64}];
+}
