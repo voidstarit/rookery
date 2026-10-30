@@ -57,8 +57,8 @@ export type CgroupSettings = {
 };
 
 export type CgroupUsageNode = {
-  path: string;
-  name: string;
+  path?: string;
+  name?: string;
   memory_current_bytes: number;
   memory_max_bytes: number;
   cpu_usage_usec: number;

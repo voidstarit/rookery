@@ -121,16 +121,18 @@ export function CgroupSettingsPanel() {
     try {
       const data = await api<CgroupUsage>("/api/cgroup-usage");
       const at = data.sampled_at ? new Date(data.sampled_at).getTime() : Date.now();
+      const nodes = Array.isArray(data.nodes) ? data.nodes : [];
       const previous = usageSample.current;
       const nextRates: UsageRates = {};
       if (previous && Number.isFinite(at) && at > previous.at) {
         const seconds = (at - previous.at) / 1000;
-        for (const node of data.nodes) {
-          const before = previous.nodes[node.path];
+        for (const node of nodes) {
+          const path = node.path || "";
+          const before = previous.nodes[path];
           if (!before) {
             continue;
           }
-          nextRates[node.path] = {
+          nextRates[path] = {
             cpuCores: Math.max(0, (node.cpu_usage_usec - before.cpu) / 1_000_000 / seconds),
             read: Math.max(0, (node.io_read_bytes - before.read) / seconds),
             write: Math.max(0, (node.io_write_bytes - before.write) / seconds),
@@ -140,8 +142,8 @@ export function CgroupSettingsPanel() {
       usageSample.current = {
         at: Number.isFinite(at) ? at : Date.now(),
         nodes: Object.fromEntries(
-          data.nodes.map((node) => [
-            node.path,
+          nodes.map((node) => [
+            node.path || "",
             { cpu: node.cpu_usage_usec, read: node.io_read_bytes, write: node.io_write_bytes },
           ])
         ),
@@ -235,14 +237,21 @@ export function CgroupSettingsPanel() {
     : "Disabled";
 
   const usageNodes = Array.isArray(usage?.nodes) ? usage.nodes : [];
-  const rootUsage = usageNodes.find((node) => node.path === "") || null;
-  const leafUsage = usageNodes.filter(
-    (node) => node.path !== "" && !usageNodes.some((other) => other.path.startsWith(`${node.path}/`))
-  );
+  const rootUsage = usageNodes.find((node) => !(node.path || "")) || null;
+  const leafUsage = usageNodes.filter((node) => {
+    const path = node.path || "";
+    if (!path) {
+      return false;
+    }
+    return !usageNodes.some((other) => {
+      const otherPath = other.path || "";
+      return otherPath !== "" && otherPath.startsWith(`${path}/`);
+    });
+  });
   const summaryUsage = leafUsage.length > 0 ? leafUsage : rootUsage ? [rootUsage] : [];
-  const summaryCPU = summaryUsage.reduce((total, node) => total + (usageRates[node.path]?.cpuCores || 0), 0);
-  const summaryRead = summaryUsage.reduce((total, node) => total + (usageRates[node.path]?.read || 0), 0);
-  const summaryWrite = summaryUsage.reduce((total, node) => total + (usageRates[node.path]?.write || 0), 0);
+  const summaryCPU = summaryUsage.reduce((total, node) => total + (usageRates[node.path || ""]?.cpuCores || 0), 0);
+  const summaryRead = summaryUsage.reduce((total, node) => total + (usageRates[node.path || ""]?.read || 0), 0);
+  const summaryWrite = summaryUsage.reduce((total, node) => total + (usageRates[node.path || ""]?.write || 0), 0);
   const online = usage?.online_cpus || onlineCPUs.length || 0;
   const cpuPercent = online > 0 ? (summaryCPU / online) * 100 : 0;
   const memoryPercent = rootUsage ? usagePercent(rootUsage.memory_current_bytes, rootUsage.memory_max_bytes) : 0;
@@ -366,12 +375,13 @@ export function CgroupSettingsPanel() {
                 </thead>
                 <tbody>
                   {usageNodes.map((node) => {
-                    const rate = usageRates[node.path];
+                    const path = node.path || "";
+                    const rate = usageRates[path];
                     return (
-                      <tr key={node.path || "root"}>
+                      <tr key={path || "root"}>
                         <td>
-                          <span class="vm-name mono">{node.name}</span>
-                          {node.path ? <span class="vm-description mono">{node.path}</span> : null}
+                          <span class="vm-name mono">{node.name || (path || "rookery-cgroup")}</span>
+                          {path ? <span class="vm-description mono">{path}</span> : null}
                         </td>
                         <td class="mono">{usageMemoryText(node)}</td>
                         <td class="mono">
