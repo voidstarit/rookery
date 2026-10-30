@@ -654,3 +654,404 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = CgroupSettingsValidationError{}
+
+// Validate checks the field values on CgroupUsageNode with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *CgroupUsageNode) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on CgroupUsageNode with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// CgroupUsageNodeMultiError, or nil if none found.
+func (m *CgroupUsageNode) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *CgroupUsageNode) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Path
+
+	// no validation rules for Name
+
+	// no validation rules for MemoryCurrentBytes
+
+	// no validation rules for MemoryMaxBytes
+
+	// no validation rules for CpuUsageUsec
+
+	// no validation rules for PidsCurrent
+
+	// no validation rules for PidsMax
+
+	// no validation rules for IoReadBytes
+
+	// no validation rules for IoWriteBytes
+
+	// no validation rules for IoReadOps
+
+	// no validation rules for IoWriteOps
+
+	// no validation rules for Cpus
+
+	if len(errors) > 0 {
+		return CgroupUsageNodeMultiError(errors)
+	}
+
+	return nil
+}
+
+// CgroupUsageNodeMultiError is an error wrapping multiple validation errors
+// returned by CgroupUsageNode.ValidateAll() if the designated constraints
+// aren't met.
+type CgroupUsageNodeMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m CgroupUsageNodeMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m CgroupUsageNodeMultiError) AllErrors() []error { return m }
+
+// CgroupUsageNodeValidationError is the validation error returned by
+// CgroupUsageNode.Validate if the designated constraints aren't met.
+type CgroupUsageNodeValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e CgroupUsageNodeValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e CgroupUsageNodeValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e CgroupUsageNodeValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e CgroupUsageNodeValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e CgroupUsageNodeValidationError) ErrorName() string { return "CgroupUsageNodeValidationError" }
+
+// Error satisfies the builtin error interface
+func (e CgroupUsageNodeValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sCgroupUsageNode.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = CgroupUsageNodeValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = CgroupUsageNodeValidationError{}
+
+// Validate checks the field values on GetCgroupUsageRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *GetCgroupUsageRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetCgroupUsageRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// GetCgroupUsageRequestMultiError, or nil if none found.
+func (m *GetCgroupUsageRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetCgroupUsageRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if len(errors) > 0 {
+		return GetCgroupUsageRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// GetCgroupUsageRequestMultiError is an error wrapping multiple validation
+// errors returned by GetCgroupUsageRequest.ValidateAll() if the designated
+// constraints aren't met.
+type GetCgroupUsageRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetCgroupUsageRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetCgroupUsageRequestMultiError) AllErrors() []error { return m }
+
+// GetCgroupUsageRequestValidationError is the validation error returned by
+// GetCgroupUsageRequest.Validate if the designated constraints aren't met.
+type GetCgroupUsageRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetCgroupUsageRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetCgroupUsageRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetCgroupUsageRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetCgroupUsageRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetCgroupUsageRequestValidationError) ErrorName() string {
+	return "GetCgroupUsageRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e GetCgroupUsageRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetCgroupUsageRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetCgroupUsageRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetCgroupUsageRequestValidationError{}
+
+// Validate checks the field values on CgroupUsageResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *CgroupUsageResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on CgroupUsageResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// CgroupUsageResponseMultiError, or nil if none found.
+func (m *CgroupUsageResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *CgroupUsageResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Available
+
+	// no validation rules for Configured
+
+	// no validation rules for Reason
+
+	// no validation rules for Root
+
+	// no validation rules for OnlineCpus
+
+	if all {
+		switch v := interface{}(m.GetSampledAt()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, CgroupUsageResponseValidationError{
+					field:  "SampledAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, CgroupUsageResponseValidationError{
+					field:  "SampledAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetSampledAt()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return CgroupUsageResponseValidationError{
+				field:  "SampledAt",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	for idx, item := range m.GetNodes() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, CgroupUsageResponseValidationError{
+						field:  fmt.Sprintf("Nodes[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, CgroupUsageResponseValidationError{
+						field:  fmt.Sprintf("Nodes[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return CgroupUsageResponseValidationError{
+					field:  fmt.Sprintf("Nodes[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return CgroupUsageResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// CgroupUsageResponseMultiError is an error wrapping multiple validation
+// errors returned by CgroupUsageResponse.ValidateAll() if the designated
+// constraints aren't met.
+type CgroupUsageResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m CgroupUsageResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m CgroupUsageResponseMultiError) AllErrors() []error { return m }
+
+// CgroupUsageResponseValidationError is the validation error returned by
+// CgroupUsageResponse.Validate if the designated constraints aren't met.
+type CgroupUsageResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e CgroupUsageResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e CgroupUsageResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e CgroupUsageResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e CgroupUsageResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e CgroupUsageResponseValidationError) ErrorName() string {
+	return "CgroupUsageResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e CgroupUsageResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sCgroupUsageResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = CgroupUsageResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = CgroupUsageResponseValidationError{}

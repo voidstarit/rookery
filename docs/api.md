@@ -122,6 +122,7 @@ static UI.
 | `PUT`    | `/api/vpp-startup-script` | Configure the VPP startup script (`enabled`, `script`) |
 | `GET`    | `/api/cgroup-settings` | Get host-wide cgroup v2 limits, classes, and runtime status |
 | `PUT`    | `/api/cgroup-settings` | Apply host-wide cgroup v2 limits and classes |
+| `GET`    | `/api/cgroup-usage` | Live memory, CPU, task, and I/O usage per cgroup node |
 | `GET`    | `/api/storage-backends` | List registered storage backends |
 | `POST`   | `/api/storage-backends` | Register an LVM thin-pool backend |
 | `GET`    | `/api/storage-backends/{id}` | Get one storage backend |

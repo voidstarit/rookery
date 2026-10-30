@@ -345,6 +345,269 @@ func (x *CgroupSettings) GetClasses() []*CgroupClass {
 	return nil
 }
 
+// CgroupUsageNode is live resource usage for one cgroup hierarchy node.
+type CgroupUsageNode struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Path               string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Name               string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	MemoryCurrentBytes int64                  `protobuf:"varint,3,opt,name=memory_current_bytes,json=memoryCurrentBytes,proto3" json:"memory_current_bytes,omitempty"`
+	MemoryMaxBytes     int64                  `protobuf:"varint,4,opt,name=memory_max_bytes,json=memoryMaxBytes,proto3" json:"memory_max_bytes,omitempty"`
+	CpuUsageUsec       int64                  `protobuf:"varint,5,opt,name=cpu_usage_usec,json=cpuUsageUsec,proto3" json:"cpu_usage_usec,omitempty"`
+	PidsCurrent        int64                  `protobuf:"varint,6,opt,name=pids_current,json=pidsCurrent,proto3" json:"pids_current,omitempty"`
+	PidsMax            int64                  `protobuf:"varint,7,opt,name=pids_max,json=pidsMax,proto3" json:"pids_max,omitempty"`
+	IoReadBytes        int64                  `protobuf:"varint,8,opt,name=io_read_bytes,json=ioReadBytes,proto3" json:"io_read_bytes,omitempty"`
+	IoWriteBytes       int64                  `protobuf:"varint,9,opt,name=io_write_bytes,json=ioWriteBytes,proto3" json:"io_write_bytes,omitempty"`
+	IoReadOps          int64                  `protobuf:"varint,10,opt,name=io_read_ops,json=ioReadOps,proto3" json:"io_read_ops,omitempty"`
+	IoWriteOps         int64                  `protobuf:"varint,11,opt,name=io_write_ops,json=ioWriteOps,proto3" json:"io_write_ops,omitempty"`
+	Cpus               string                 `protobuf:"bytes,12,opt,name=cpus,proto3" json:"cpus,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *CgroupUsageNode) Reset() {
+	*x = CgroupUsageNode{}
+	mi := &file_rookery_v1_cgroup_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CgroupUsageNode) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CgroupUsageNode) ProtoMessage() {}
+
+func (x *CgroupUsageNode) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_cgroup_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CgroupUsageNode.ProtoReflect.Descriptor instead.
+func (*CgroupUsageNode) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_cgroup_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *CgroupUsageNode) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *CgroupUsageNode) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CgroupUsageNode) GetMemoryCurrentBytes() int64 {
+	if x != nil {
+		return x.MemoryCurrentBytes
+	}
+	return 0
+}
+
+func (x *CgroupUsageNode) GetMemoryMaxBytes() int64 {
+	if x != nil {
+		return x.MemoryMaxBytes
+	}
+	return 0
+}
+
+func (x *CgroupUsageNode) GetCpuUsageUsec() int64 {
+	if x != nil {
+		return x.CpuUsageUsec
+	}
+	return 0
+}
+
+func (x *CgroupUsageNode) GetPidsCurrent() int64 {
+	if x != nil {
+		return x.PidsCurrent
+	}
+	return 0
+}
+
+func (x *CgroupUsageNode) GetPidsMax() int64 {
+	if x != nil {
+		return x.PidsMax
+	}
+	return 0
+}
+
+func (x *CgroupUsageNode) GetIoReadBytes() int64 {
+	if x != nil {
+		return x.IoReadBytes
+	}
+	return 0
+}
+
+func (x *CgroupUsageNode) GetIoWriteBytes() int64 {
+	if x != nil {
+		return x.IoWriteBytes
+	}
+	return 0
+}
+
+func (x *CgroupUsageNode) GetIoReadOps() int64 {
+	if x != nil {
+		return x.IoReadOps
+	}
+	return 0
+}
+
+func (x *CgroupUsageNode) GetIoWriteOps() int64 {
+	if x != nil {
+		return x.IoWriteOps
+	}
+	return 0
+}
+
+func (x *CgroupUsageNode) GetCpus() string {
+	if x != nil {
+		return x.Cpus
+	}
+	return ""
+}
+
+type GetCgroupUsageRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetCgroupUsageRequest) Reset() {
+	*x = GetCgroupUsageRequest{}
+	mi := &file_rookery_v1_cgroup_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetCgroupUsageRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetCgroupUsageRequest) ProtoMessage() {}
+
+func (x *GetCgroupUsageRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_cgroup_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetCgroupUsageRequest.ProtoReflect.Descriptor instead.
+func (*GetCgroupUsageRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_cgroup_proto_rawDescGZIP(), []int{4}
+}
+
+// CgroupUsageResponse is a point-in-time snapshot. CPU and I/O counters are
+// cumulative; clients derive rates between samples.
+type CgroupUsageResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Available     bool                   `protobuf:"varint,1,opt,name=available,proto3" json:"available,omitempty"`
+	Configured    bool                   `protobuf:"varint,2,opt,name=configured,proto3" json:"configured,omitempty"`
+	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	Root          string                 `protobuf:"bytes,4,opt,name=root,proto3" json:"root,omitempty"`
+	OnlineCpus    int32                  `protobuf:"varint,5,opt,name=online_cpus,json=onlineCpus,proto3" json:"online_cpus,omitempty"`
+	SampledAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=sampled_at,json=sampledAt,proto3" json:"sampled_at,omitempty"`
+	Nodes         []*CgroupUsageNode     `protobuf:"bytes,7,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CgroupUsageResponse) Reset() {
+	*x = CgroupUsageResponse{}
+	mi := &file_rookery_v1_cgroup_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CgroupUsageResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CgroupUsageResponse) ProtoMessage() {}
+
+func (x *CgroupUsageResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_cgroup_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CgroupUsageResponse.ProtoReflect.Descriptor instead.
+func (*CgroupUsageResponse) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_cgroup_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *CgroupUsageResponse) GetAvailable() bool {
+	if x != nil {
+		return x.Available
+	}
+	return false
+}
+
+func (x *CgroupUsageResponse) GetConfigured() bool {
+	if x != nil {
+		return x.Configured
+	}
+	return false
+}
+
+func (x *CgroupUsageResponse) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *CgroupUsageResponse) GetRoot() string {
+	if x != nil {
+		return x.Root
+	}
+	return ""
+}
+
+func (x *CgroupUsageResponse) GetOnlineCpus() int32 {
+	if x != nil {
+		return x.OnlineCpus
+	}
+	return 0
+}
+
+func (x *CgroupUsageResponse) GetSampledAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.SampledAt
+	}
+	return nil
+}
+
+func (x *CgroupUsageResponse) GetNodes() []*CgroupUsageNode {
+	if x != nil {
+		return x.Nodes
+	}
+	return nil
+}
+
 var File_rookery_v1_cgroup_proto protoreflect.FileDescriptor
 
 const file_rookery_v1_cgroup_proto_rawDesc = "" +
@@ -392,7 +655,35 @@ const file_rookery_v1_cgroup_proto_rawDesc = "" +
 	"\tcpu_model\x18\r \x01(\tR\bcpuModel\x129\n" +
 	"\n" +
 	"updated_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x121\n" +
-	"\aclasses\x18\x0f \x03(\v2\x17.rookery.v1.CgroupClassR\aclassesB?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
+	"\aclasses\x18\x0f \x03(\v2\x17.rookery.v1.CgroupClassR\aclasses\"\x99\x03\n" +
+	"\x0fCgroupUsageNode\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x120\n" +
+	"\x14memory_current_bytes\x18\x03 \x01(\x03R\x12memoryCurrentBytes\x12(\n" +
+	"\x10memory_max_bytes\x18\x04 \x01(\x03R\x0ememoryMaxBytes\x12$\n" +
+	"\x0ecpu_usage_usec\x18\x05 \x01(\x03R\fcpuUsageUsec\x12!\n" +
+	"\fpids_current\x18\x06 \x01(\x03R\vpidsCurrent\x12\x19\n" +
+	"\bpids_max\x18\a \x01(\x03R\apidsMax\x12\"\n" +
+	"\rio_read_bytes\x18\b \x01(\x03R\vioReadBytes\x12$\n" +
+	"\x0eio_write_bytes\x18\t \x01(\x03R\fioWriteBytes\x12\x1e\n" +
+	"\vio_read_ops\x18\n" +
+	" \x01(\x03R\tioReadOps\x12 \n" +
+	"\fio_write_ops\x18\v \x01(\x03R\n" +
+	"ioWriteOps\x12\x12\n" +
+	"\x04cpus\x18\f \x01(\tR\x04cpus\"\x17\n" +
+	"\x15GetCgroupUsageRequest\"\x8e\x02\n" +
+	"\x13CgroupUsageResponse\x12\x1c\n" +
+	"\tavailable\x18\x01 \x01(\bR\tavailable\x12\x1e\n" +
+	"\n" +
+	"configured\x18\x02 \x01(\bR\n" +
+	"configured\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x12\n" +
+	"\x04root\x18\x04 \x01(\tR\x04root\x12\x1f\n" +
+	"\vonline_cpus\x18\x05 \x01(\x05R\n" +
+	"onlineCpus\x129\n" +
+	"\n" +
+	"sampled_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tsampledAt\x121\n" +
+	"\x05nodes\x18\a \x03(\v2\x1b.rookery.v1.CgroupUsageNodeR\x05nodesB?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
 
 var (
 	file_rookery_v1_cgroup_proto_rawDescOnce sync.Once
@@ -406,23 +697,28 @@ func file_rookery_v1_cgroup_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_cgroup_proto_rawDescData
 }
 
-var file_rookery_v1_cgroup_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_rookery_v1_cgroup_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_rookery_v1_cgroup_proto_goTypes = []any{
 	(*CgroupIOLimit)(nil),         // 0: rookery.v1.CgroupIOLimit
 	(*CgroupClass)(nil),           // 1: rookery.v1.CgroupClass
 	(*CgroupSettings)(nil),        // 2: rookery.v1.CgroupSettings
-	(*timestamppb.Timestamp)(nil), // 3: google.protobuf.Timestamp
+	(*CgroupUsageNode)(nil),       // 3: rookery.v1.CgroupUsageNode
+	(*GetCgroupUsageRequest)(nil), // 4: rookery.v1.GetCgroupUsageRequest
+	(*CgroupUsageResponse)(nil),   // 5: rookery.v1.CgroupUsageResponse
+	(*timestamppb.Timestamp)(nil), // 6: google.protobuf.Timestamp
 }
 var file_rookery_v1_cgroup_proto_depIdxs = []int32{
 	0, // 0: rookery.v1.CgroupClass.io_limits:type_name -> rookery.v1.CgroupIOLimit
 	0, // 1: rookery.v1.CgroupSettings.io_limits:type_name -> rookery.v1.CgroupIOLimit
-	3, // 2: rookery.v1.CgroupSettings.updated_at:type_name -> google.protobuf.Timestamp
+	6, // 2: rookery.v1.CgroupSettings.updated_at:type_name -> google.protobuf.Timestamp
 	1, // 3: rookery.v1.CgroupSettings.classes:type_name -> rookery.v1.CgroupClass
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	6, // 4: rookery.v1.CgroupUsageResponse.sampled_at:type_name -> google.protobuf.Timestamp
+	3, // 5: rookery.v1.CgroupUsageResponse.nodes:type_name -> rookery.v1.CgroupUsageNode
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_rookery_v1_cgroup_proto_init() }
@@ -436,7 +732,7 @@ func file_rookery_v1_cgroup_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_cgroup_proto_rawDesc), len(file_rookery_v1_cgroup_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

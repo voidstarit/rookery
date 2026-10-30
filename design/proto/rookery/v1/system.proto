@@ -64,6 +64,12 @@ service SystemService {
       body: "*"
     };
   }
+
+  // GetCgroupUsage returns live memory, CPU, task, and I/O usage for the
+  // Rookery cgroup hierarchy.
+  rpc GetCgroupUsage(GetCgroupUsageRequest) returns (CgroupUsageResponse) {
+    option (google.api.http) = {get: "/api/cgroup-usage"};
+  }
 }
 
 message GetHealthRequest {}

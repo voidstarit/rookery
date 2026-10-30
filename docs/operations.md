@@ -284,8 +284,11 @@ the cgroup2 delegation is missing or a CPU set is outside the parent set), the
 API rolls the settings back and reports the kernel error. If the settings save
 but one running VM cannot accept the new limits, the API reports that VM.
 
-`GET`/`PUT /api/cgroup-settings` manage the host configuration and classes, and
-`GET /api/host/block-devices` lists devices for the I/O picker.
+`GET`/`PUT /api/cgroup-settings` manage the host configuration and classes,
+`GET /api/cgroup-usage` returns live memory, CPU, task, and I/O counters for the
+root, shared, and class cgroups, and `GET /api/host/block-devices` lists devices
+for the I/O picker. Settings polls cgroup usage every two seconds while visible
+and derives CPU cores and I/O rates from consecutive samples.
 
 ## Flags and environment variables
 

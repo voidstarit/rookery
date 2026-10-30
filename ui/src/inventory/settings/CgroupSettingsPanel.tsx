@@ -1,8 +1,9 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
 import { showToast } from "../../shared/toast";
-import type { CgroupClass, CgroupIOLimit, CgroupSettings, HostBlockDevice } from "../types";
+import type { CgroupClass, CgroupIOLimit, CgroupSettings, CgroupUsage, HostBlockDevice } from "../types";
 import { CPUSelector, IOLimitEditor } from "../cgroup";
+import { useRoute } from "../router";
 
 const MIB = 1024 * 1024;
 
@@ -30,6 +31,43 @@ function limitNumber(value: string): number {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
 }
 
+type UsageRates = Record<string, { cpuCores: number; read: number; write: number }>;
+
+type UsageSample = {
+  at: number;
+  nodes: Record<string, { cpu: number; read: number; write: number }>;
+};
+
+function formatBytes(value: number | undefined): string {
+  const bytes = Number(value) || 0;
+  if (bytes >= 1024 ** 3) {
+    return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  }
+  if (bytes >= 1024 ** 2) {
+    return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  }
+  if (bytes >= 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${bytes} B`;
+}
+
+function formatRate(value: number | undefined): string {
+  return value === undefined ? "—" : `${formatBytes(value)}/s`;
+}
+
+function usageMemoryText(node: { memory_current_bytes: number; memory_max_bytes: number }): string {
+  const current = formatBytes(node.memory_current_bytes);
+  return node.memory_max_bytes > 0 ? `${current} / ${formatBytes(node.memory_max_bytes)}` : `${current} / unlimited`;
+}
+
+function usagePercent(current: number, maximum: number): number {
+  if (maximum <= 0) {
+    return 0;
+  }
+  return Math.max(0, Math.min(100, (current / maximum) * 100));
+}
+
 export function CgroupSettingsPanel() {
   const [settings, setSettings] = useState<CgroupSettings | null>(null);
   const [devices, setDevices] = useState<HostBlockDevice[]>([]);
@@ -43,6 +81,12 @@ export function CgroupSettingsPanel() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [usage, setUsage] = useState<CgroupUsage | null>(null);
+  const [usageRates, setUsageRates] = useState<UsageRates>({});
+  const [usageError, setUsageError] = useState("");
+  const [usageLoading, setUsageLoading] = useState(false);
+  const usageSample = useRef<UsageSample | null>(null);
+  const route = useRoute();
 
   const apply = (data: CgroupSettings) => {
     setSettings(data);
@@ -72,9 +116,63 @@ export function CgroupSettingsPanel() {
     }
   };
 
+  const loadUsage = async () => {
+    setUsageLoading(true);
+    try {
+      const data = await api<CgroupUsage>("/api/cgroup-usage");
+      const at = data.sampled_at ? new Date(data.sampled_at).getTime() : Date.now();
+      const previous = usageSample.current;
+      const nextRates: UsageRates = {};
+      if (previous && Number.isFinite(at) && at > previous.at) {
+        const seconds = (at - previous.at) / 1000;
+        for (const node of data.nodes) {
+          const before = previous.nodes[node.path];
+          if (!before) {
+            continue;
+          }
+          nextRates[node.path] = {
+            cpuCores: Math.max(0, (node.cpu_usage_usec - before.cpu) / 1_000_000 / seconds),
+            read: Math.max(0, (node.io_read_bytes - before.read) / seconds),
+            write: Math.max(0, (node.io_write_bytes - before.write) / seconds),
+          };
+        }
+      }
+      usageSample.current = {
+        at: Number.isFinite(at) ? at : Date.now(),
+        nodes: Object.fromEntries(
+          data.nodes.map((node) => [
+            node.path,
+            { cpu: node.cpu_usage_usec, read: node.io_read_bytes, write: node.io_write_bytes },
+          ])
+        ),
+      };
+      setUsageRates(nextRates);
+      setUsage(data);
+      setUsageError("");
+    } catch (err) {
+      setUsageError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUsageLoading(false);
+    }
+  };
+
   useEffect(() => {
     void load();
   }, []);
+
+  const settingsVisible = route.segments[0] === "settings";
+  useEffect(() => {
+    if (!settingsVisible) {
+      return;
+    }
+    void loadUsage();
+    const timer = window.setInterval(() => {
+      if (!document.hidden) {
+        void loadUsage();
+      }
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [settingsVisible]);
 
   const save = async (event: Event) => {
     event.preventDefault();
@@ -117,6 +215,7 @@ export function CgroupSettingsPanel() {
         }),
       });
       apply(updated);
+      void loadUsage();
       showToast(enabled ? "Saved cgroup resource settings" : "Cgroup limits disabled");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -135,6 +234,22 @@ export function CgroupSettingsPanel() {
       : "Enabled but not applied yet"
     : "Disabled";
 
+  const usageNodes = Array.isArray(usage?.nodes) ? usage.nodes : [];
+  const rootUsage = usageNodes.find((node) => node.path === "") || null;
+  const leafUsage = usageNodes.filter(
+    (node) => node.path !== "" && !usageNodes.some((other) => other.path.startsWith(`${node.path}/`))
+  );
+  const summaryUsage = leafUsage.length > 0 ? leafUsage : rootUsage ? [rootUsage] : [];
+  const summaryCPU = summaryUsage.reduce((total, node) => total + (usageRates[node.path]?.cpuCores || 0), 0);
+  const summaryRead = summaryUsage.reduce((total, node) => total + (usageRates[node.path]?.read || 0), 0);
+  const summaryWrite = summaryUsage.reduce((total, node) => total + (usageRates[node.path]?.write || 0), 0);
+  const online = usage?.online_cpus || onlineCPUs.length || 0;
+  const cpuPercent = online > 0 ? (summaryCPU / online) * 100 : 0;
+  const memoryPercent = rootUsage ? usagePercent(rootUsage.memory_current_bytes, rootUsage.memory_max_bytes) : 0;
+  const usageStatus = usage?.sampled_at
+    ? `sampled ${new Date(usage.sampled_at).toLocaleTimeString()}`
+    : "waiting for sample";
+
   return (
     <section class="panel panel-spaced" aria-labelledby="cgroup-settings-heading">
       <div class="panel-head">
@@ -142,7 +257,7 @@ export function CgroupSettingsPanel() {
           <h2 id="cgroup-settings-heading">Cgroup v2 resources</h2>
           <p class="panel-subtitle">Host-wide ceilings inherited by every QEMU process</p>
         </div>
-        <button class="button ghost" type="button" disabled={loading || saving} onClick={() => void load()}>
+        <button class="button ghost" type="button" disabled={loading || saving} onClick={() => { void load(); void loadUsage(); }}>
           {loading ? "Refreshing…" : "Refresh"}
         </button>
       </div>
@@ -170,6 +285,114 @@ export function CgroupSettingsPanel() {
           {statusReason}
         </div>
       ) : null}
+
+      <section class="cgroup-telemetry" aria-labelledby="cgroup-usage-heading">
+        <div class="panel-head">
+          <div>
+            <h3 id="cgroup-usage-heading">Live cgroup usage</h3>
+            <p class="panel-subtitle">
+              Memory, CPU, task, and I/O telemetry from the running hierarchy · {usageStatus}
+            </p>
+          </div>
+          <button class="button ghost" type="button" disabled={usageLoading} onClick={() => void loadUsage()}>
+            {usageLoading ? "Sampling…" : "Refresh usage"}
+          </button>
+        </div>
+
+        {usageError ? (
+          <div class="banner" role="alert">
+            {usageError}
+          </div>
+        ) : !usage ? (
+          <p class="field-hint">Waiting for the first cgroup sample…</p>
+        ) : !usage.available ? (
+          <p class="field-hint">cgroup v2 is not available on this host.</p>
+        ) : !usage.configured ? (
+          <p class="field-hint">
+            {usage.reason || "Enable cgroup limits to start collecting resource usage."}
+          </p>
+        ) : usageNodes.length === 0 ? (
+          <p class="field-hint">{usage.reason || "No cgroup nodes are available yet."}</p>
+        ) : (
+          <>
+            <div class="cgroup-metrics">
+              <div class="cgroup-metric">
+                <span class="field-label">Memory</span>
+                <strong>{rootUsage ? formatBytes(rootUsage.memory_current_bytes) : "—"}</strong>
+                <span class="field-hint">
+                  {rootUsage && rootUsage.memory_max_bytes > 0
+                    ? `of ${formatBytes(rootUsage.memory_max_bytes)} · ${memoryPercent.toFixed(1)}%`
+                    : "unlimited"}
+                </span>
+                {rootUsage && rootUsage.memory_max_bytes > 0 ? (
+                  <div class="usage-bar">
+                    <span style={{ width: `${memoryPercent}%` }} />
+                  </div>
+                ) : null}
+              </div>
+              <div class="cgroup-metric">
+                <span class="field-label">CPU</span>
+                <strong>{summaryCPU.toFixed(2)} cores</strong>
+                <span class="field-hint">
+                  {online > 0 ? `${cpuPercent.toFixed(1)}% of ${online} online CPUs` : "online CPU count unavailable"}
+                </span>
+              </div>
+              <div class="cgroup-metric">
+                <span class="field-label">Tasks</span>
+                <strong>{rootUsage?.pids_current ?? "—"}</strong>
+                <span class="field-hint">
+                  {rootUsage && rootUsage.pids_max > 0
+                    ? `of ${rootUsage.pids_max}`
+                    : "no task limit"}
+                </span>
+              </div>
+              <div class="cgroup-metric">
+                <span class="field-label">I/O</span>
+                <strong>{formatRate(summaryRead)}</strong>
+                <span class="field-hint">read · {formatRate(summaryWrite)} write</span>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table class="cgroup-usage-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Scope</th>
+                    <th scope="col">Memory</th>
+                    <th scope="col">CPU</th>
+                    <th scope="col">Tasks</th>
+                    <th scope="col">I/O</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usageNodes.map((node) => {
+                    const rate = usageRates[node.path];
+                    return (
+                      <tr key={node.path || "root"}>
+                        <td>
+                          <span class="vm-name mono">{node.name}</span>
+                          {node.path ? <span class="vm-description mono">{node.path}</span> : null}
+                        </td>
+                        <td class="mono">{usageMemoryText(node)}</td>
+                        <td class="mono">
+                          {rate ? `${rate.cpuCores.toFixed(2)} cores` : "—"}
+                        </td>
+                        <td class="mono">
+                          {node.pids_current}
+                          {node.pids_max > 0 ? ` / ${node.pids_max}` : ""}
+                        </td>
+                        <td class="mono">
+                          {rate ? `↓ ${formatRate(rate.read)} · ↑ ${formatRate(rate.write)}` : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </section>
 
       <form class="form-grid" onSubmit={(event) => void save(event)}>
         <label class="field field-wide checkbox-field">

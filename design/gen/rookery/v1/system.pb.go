@@ -988,7 +988,7 @@ const file_rookery_v1_system_proto_rawDesc = "" +
 	"cpu_weight\x18\x05 \x01(\x05B\n" +
 	"\xfaB\a\x1a\x05\x18\x90N(\x00R\tcpuWeight\x12@\n" +
 	"\tio_limits\x18\x06 \x03(\v2\x19.rookery.v1.CgroupIOLimitB\b\xfaB\x05\x92\x01\x02\x10@R\bioLimits\x12;\n" +
-	"\aclasses\x18\a \x03(\v2\x17.rookery.v1.CgroupClassB\b\xfaB\x05\x92\x01\x02\x10@R\aclasses2\xa6\a\n" +
+	"\aclasses\x18\a \x03(\v2\x17.rookery.v1.CgroupClassB\b\xfaB\x05\x92\x01\x02\x10@R\aclasses2\x97\b\n" +
 	"\rSystemService\x12[\n" +
 	"\tGetHealth\x12\x1c.rookery.v1.GetHealthRequest\x1a\x1a.rookery.v1.HealthResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/api/healthz\x12Z\n" +
 	"\tGetStatus\x12\x1c.rookery.v1.GetStatusRequest\x1a\x1a.rookery.v1.StatusResponse\"\x13\x82\xd3\xe4\x93\x02\r\x12\v/api/status\x12o\n" +
@@ -997,7 +997,8 @@ const file_rookery_v1_system_proto_rawDesc = "" +
 	"\x13GetVPPStartupScript\x12&.rookery.v1.GetVPPStartupScriptRequest\x1a\x19.rookery.v1.StartupScript\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/api/vpp-startup-script\x12\x82\x01\n" +
 	"\x16UpdateVPPStartupScript\x12).rookery.v1.UpdateVPPStartupScriptRequest\x1a\x19.rookery.v1.StartupScript\"\"\x82\xd3\xe4\x93\x02\x1c:\x01*\x1a\x17/api/vpp-startup-script\x12s\n" +
 	"\x11GetCgroupSettings\x12$.rookery.v1.GetCgroupSettingsRequest\x1a\x1a.rookery.v1.CgroupSettings\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/api/cgroup-settings\x12|\n" +
-	"\x14UpdateCgroupSettings\x12'.rookery.v1.UpdateCgroupSettingsRequest\x1a\x1a.rookery.v1.CgroupSettings\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\x1a\x14/api/cgroup-settingsB\x95\x01\x92AS\x12N\n" +
+	"\x14UpdateCgroupSettings\x12'.rookery.v1.UpdateCgroupSettingsRequest\x1a\x1a.rookery.v1.CgroupSettings\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\x1a\x14/api/cgroup-settings\x12o\n" +
+	"\x0eGetCgroupUsage\x12!.rookery.v1.GetCgroupUsageRequest\x1a\x1f.rookery.v1.CgroupUsageResponse\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/api/cgroup-usageB\x95\x01\x92AS\x12N\n" +
 	"\vRookery API\x12:Virtual-machine, storage, network, and VPP management API.2\x031.0*\x01\x01Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
 
 var (
@@ -1032,7 +1033,9 @@ var file_rookery_v1_system_proto_goTypes = []any{
 	(*timestamppb.Timestamp)(nil),         // 15: google.protobuf.Timestamp
 	(*CgroupIOLimit)(nil),                 // 16: rookery.v1.CgroupIOLimit
 	(*CgroupClass)(nil),                   // 17: rookery.v1.CgroupClass
-	(*CgroupSettings)(nil),                // 18: rookery.v1.CgroupSettings
+	(*GetCgroupUsageRequest)(nil),         // 18: rookery.v1.GetCgroupUsageRequest
+	(*CgroupSettings)(nil),                // 19: rookery.v1.CgroupSettings
+	(*CgroupUsageResponse)(nil),           // 20: rookery.v1.CgroupUsageResponse
 }
 var file_rookery_v1_system_proto_depIdxs = []int32{
 	15, // 0: rookery.v1.ComponentStatus.checked_at:type_name -> google.protobuf.Timestamp
@@ -1056,16 +1059,18 @@ var file_rookery_v1_system_proto_depIdxs = []int32{
 	12, // 18: rookery.v1.SystemService.UpdateVPPStartupScript:input_type -> rookery.v1.UpdateVPPStartupScriptRequest
 	13, // 19: rookery.v1.SystemService.GetCgroupSettings:input_type -> rookery.v1.GetCgroupSettingsRequest
 	14, // 20: rookery.v1.SystemService.UpdateCgroupSettings:input_type -> rookery.v1.UpdateCgroupSettingsRequest
-	1,  // 21: rookery.v1.SystemService.GetHealth:output_type -> rookery.v1.HealthResponse
-	6,  // 22: rookery.v1.SystemService.GetStatus:output_type -> rookery.v1.StatusResponse
-	10, // 23: rookery.v1.SystemService.GetStartupScript:output_type -> rookery.v1.StartupScript
-	10, // 24: rookery.v1.SystemService.UpdateStartupScript:output_type -> rookery.v1.StartupScript
-	10, // 25: rookery.v1.SystemService.GetVPPStartupScript:output_type -> rookery.v1.StartupScript
-	10, // 26: rookery.v1.SystemService.UpdateVPPStartupScript:output_type -> rookery.v1.StartupScript
-	18, // 27: rookery.v1.SystemService.GetCgroupSettings:output_type -> rookery.v1.CgroupSettings
-	18, // 28: rookery.v1.SystemService.UpdateCgroupSettings:output_type -> rookery.v1.CgroupSettings
-	21, // [21:29] is the sub-list for method output_type
-	13, // [13:21] is the sub-list for method input_type
+	18, // 21: rookery.v1.SystemService.GetCgroupUsage:input_type -> rookery.v1.GetCgroupUsageRequest
+	1,  // 22: rookery.v1.SystemService.GetHealth:output_type -> rookery.v1.HealthResponse
+	6,  // 23: rookery.v1.SystemService.GetStatus:output_type -> rookery.v1.StatusResponse
+	10, // 24: rookery.v1.SystemService.GetStartupScript:output_type -> rookery.v1.StartupScript
+	10, // 25: rookery.v1.SystemService.UpdateStartupScript:output_type -> rookery.v1.StartupScript
+	10, // 26: rookery.v1.SystemService.GetVPPStartupScript:output_type -> rookery.v1.StartupScript
+	10, // 27: rookery.v1.SystemService.UpdateVPPStartupScript:output_type -> rookery.v1.StartupScript
+	19, // 28: rookery.v1.SystemService.GetCgroupSettings:output_type -> rookery.v1.CgroupSettings
+	19, // 29: rookery.v1.SystemService.UpdateCgroupSettings:output_type -> rookery.v1.CgroupSettings
+	20, // 30: rookery.v1.SystemService.GetCgroupUsage:output_type -> rookery.v1.CgroupUsageResponse
+	22, // [22:31] is the sub-list for method output_type
+	13, // [13:22] is the sub-list for method input_type
 	13, // [13:13] is the sub-list for extension type_name
 	13, // [13:13] is the sub-list for extension extendee
 	0,  // [0:13] is the sub-list for field type_name

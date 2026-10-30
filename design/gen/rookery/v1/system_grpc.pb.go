@@ -27,6 +27,7 @@ const (
 	SystemService_UpdateVPPStartupScript_FullMethodName = "/rookery.v1.SystemService/UpdateVPPStartupScript"
 	SystemService_GetCgroupSettings_FullMethodName      = "/rookery.v1.SystemService/GetCgroupSettings"
 	SystemService_UpdateCgroupSettings_FullMethodName   = "/rookery.v1.SystemService/UpdateCgroupSettings"
+	SystemService_GetCgroupUsage_FullMethodName         = "/rookery.v1.SystemService/GetCgroupUsage"
 )
 
 // SystemServiceClient is the client API for SystemService service.
@@ -47,6 +48,9 @@ type SystemServiceClient interface {
 	// UpdateCgroupSettings stores and applies host-wide cgroup v2 limits. Every
 	// QEMU process runs below the configured parent cgroup.
 	UpdateCgroupSettings(ctx context.Context, in *UpdateCgroupSettingsRequest, opts ...grpc.CallOption) (*CgroupSettings, error)
+	// GetCgroupUsage returns live memory, CPU, task, and I/O usage for the
+	// Rookery cgroup hierarchy.
+	GetCgroupUsage(ctx context.Context, in *GetCgroupUsageRequest, opts ...grpc.CallOption) (*CgroupUsageResponse, error)
 }
 
 type systemServiceClient struct {
@@ -137,6 +141,16 @@ func (c *systemServiceClient) UpdateCgroupSettings(ctx context.Context, in *Upda
 	return out, nil
 }
 
+func (c *systemServiceClient) GetCgroupUsage(ctx context.Context, in *GetCgroupUsageRequest, opts ...grpc.CallOption) (*CgroupUsageResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CgroupUsageResponse)
+	err := c.cc.Invoke(ctx, SystemService_GetCgroupUsage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SystemServiceServer is the server API for SystemService service.
 // All implementations must embed UnimplementedSystemServiceServer
 // for forward compatibility.
@@ -155,6 +169,9 @@ type SystemServiceServer interface {
 	// UpdateCgroupSettings stores and applies host-wide cgroup v2 limits. Every
 	// QEMU process runs below the configured parent cgroup.
 	UpdateCgroupSettings(context.Context, *UpdateCgroupSettingsRequest) (*CgroupSettings, error)
+	// GetCgroupUsage returns live memory, CPU, task, and I/O usage for the
+	// Rookery cgroup hierarchy.
+	GetCgroupUsage(context.Context, *GetCgroupUsageRequest) (*CgroupUsageResponse, error)
 	mustEmbedUnimplementedSystemServiceServer()
 }
 
@@ -188,6 +205,9 @@ func (UnimplementedSystemServiceServer) GetCgroupSettings(context.Context, *GetC
 }
 func (UnimplementedSystemServiceServer) UpdateCgroupSettings(context.Context, *UpdateCgroupSettingsRequest) (*CgroupSettings, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateCgroupSettings not implemented")
+}
+func (UnimplementedSystemServiceServer) GetCgroupUsage(context.Context, *GetCgroupUsageRequest) (*CgroupUsageResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetCgroupUsage not implemented")
 }
 func (UnimplementedSystemServiceServer) mustEmbedUnimplementedSystemServiceServer() {}
 func (UnimplementedSystemServiceServer) testEmbeddedByValue()                       {}
@@ -354,6 +374,24 @@ func _SystemService_UpdateCgroupSettings_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SystemService_GetCgroupUsage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCgroupUsageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemServiceServer).GetCgroupUsage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemService_GetCgroupUsage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemServiceServer).GetCgroupUsage(ctx, req.(*GetCgroupUsageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SystemService_ServiceDesc is the grpc.ServiceDesc for SystemService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -392,6 +430,10 @@ var SystemService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateCgroupSettings",
 			Handler:    _SystemService_UpdateCgroupSettings_Handler,
+		},
+		{
+			MethodName: "GetCgroupUsage",
+			Handler:    _SystemService_GetCgroupUsage_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -56,6 +56,31 @@ export type CgroupSettings = {
   updated_at?: string;
 };
 
+export type CgroupUsageNode = {
+  path: string;
+  name: string;
+  memory_current_bytes: number;
+  memory_max_bytes: number;
+  cpu_usage_usec: number;
+  pids_current: number;
+  pids_max: number;
+  io_read_bytes: number;
+  io_write_bytes: number;
+  io_read_ops: number;
+  io_write_ops: number;
+  cpus?: string;
+};
+
+export type CgroupUsage = {
+  available: boolean;
+  configured: boolean;
+  reason?: string;
+  root: string;
+  online_cpus: number;
+  sampled_at?: string;
+  nodes: CgroupUsageNode[];
+};
+
 export type HostBlockDevice = {
   name: string;
   path: string;

@@ -18,6 +18,7 @@ type CgroupRuntime interface {
 	Configure(settings cgroup.Settings) error
 	Validate(settings cgroup.Settings) error
 	Status() cgroup.Status
+	Usage() cgroup.Usage
 }
 
 // GetCgroupSettings returns the stored host settings together with live cgroup
@@ -32,6 +33,40 @@ func (s *systemService) GetCgroupSettings(ctx context.Context, _ *rookeryv1.GetC
 
 // UpdateCgroupSettings validates, applies, and stores host-wide limits. If the
 // host rejects the settings, the previous configuration is restored.
+// GetCgroupUsage returns live resource usage for the cgroup hierarchy.
+func (s *systemService) GetCgroupUsage(context.Context, *rookeryv1.GetCgroupUsageRequest) (*rookeryv1.CgroupUsageResponse, error) {
+	if s.cgroup == nil {
+		return &rookeryv1.CgroupUsageResponse{Reason: "cgroup manager is not configured"}, nil
+	}
+	usage := s.cgroup.Usage()
+	response := &rookeryv1.CgroupUsageResponse{
+		Available:  usage.Available,
+		Configured: usage.Configured,
+		Reason:     usage.Reason,
+		Root:       usage.Root,
+		OnlineCpus: int32(usage.OnlineCPUs),
+		SampledAt:  timestamp(usage.SampledAt),
+		Nodes:      make([]*rookeryv1.CgroupUsageNode, 0, len(usage.Nodes)),
+	}
+	for _, node := range usage.Nodes {
+		response.Nodes = append(response.Nodes, &rookeryv1.CgroupUsageNode{
+			Path:               node.Path,
+			Name:               node.Name,
+			MemoryCurrentBytes: node.MemoryCurrentBytes,
+			MemoryMaxBytes:     node.MemoryMaxBytes,
+			CpuUsageUsec:       node.CPUUsageUsec,
+			PidsCurrent:        node.PIDsCurrent,
+			PidsMax:            node.PIDsMax,
+			IoReadBytes:        node.IOReadBytes,
+			IoWriteBytes:       node.IOWriteBytes,
+			IoReadOps:          node.IOReadOps,
+			IoWriteOps:         node.IOWriteOps,
+			Cpus:               node.CPUs,
+		})
+	}
+	return response, nil
+}
+
 func (s *systemService) UpdateCgroupSettings(ctx context.Context, request *rookeryv1.UpdateCgroupSettingsRequest) (*rookeryv1.CgroupSettings, error) {
 	settings := cgroup.NormalizeSettings(cgroup.Settings{
 		Enabled:        request.GetEnabled(),

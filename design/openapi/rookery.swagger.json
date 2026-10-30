@@ -16,9 +16,6 @@
       "name": "ACLService"
     },
     {
-      "name": "VMService"
-    },
-    {
       "name": "StorageBackendService"
     },
     {
@@ -29,9 +26,6 @@
     },
     {
       "name": "DiskService"
-    },
-    {
-      "name": "HostService"
     },
     {
       "name": "InterfaceService"
@@ -47,6 +41,12 @@
     },
     {
       "name": "VNFDaemon"
+    },
+    {
+      "name": "HostService"
+    },
+    {
+      "name": "VMService"
     }
   ],
   "schemes": [
@@ -262,6 +262,29 @@
             }
           }
         ],
+        "tags": [
+          "SystemService"
+        ]
+      }
+    },
+    "/api/cgroup-usage": {
+      "get": {
+        "summary": "GetCgroupUsage returns live memory, CPU, task, and I/O usage for the\nRookery cgroup hierarchy.",
+        "operationId": "SystemService_GetCgroupUsage",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CgroupUsageResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
         "tags": [
           "SystemService"
         ]
@@ -3694,6 +3717,90 @@
         }
       },
       "description": "CgroupSettings is the host-wide cgroup v2 configuration plus runtime status."
+    },
+    "v1CgroupUsageNode": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "memory_current_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "memory_max_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "cpu_usage_usec": {
+          "type": "string",
+          "format": "int64"
+        },
+        "pids_current": {
+          "type": "string",
+          "format": "int64"
+        },
+        "pids_max": {
+          "type": "string",
+          "format": "int64"
+        },
+        "io_read_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "io_write_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "io_read_ops": {
+          "type": "string",
+          "format": "int64"
+        },
+        "io_write_ops": {
+          "type": "string",
+          "format": "int64"
+        },
+        "cpus": {
+          "type": "string"
+        }
+      },
+      "description": "CgroupUsageNode is live resource usage for one cgroup hierarchy node."
+    },
+    "v1CgroupUsageResponse": {
+      "type": "object",
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "configured": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string"
+        },
+        "online_cpus": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "sampled_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1CgroupUsageNode"
+          }
+        }
+      },
+      "description": "CgroupUsageResponse is a point-in-time snapshot. CPU and I/O counters are\ncumulative; clients derive rates between samples."
     },
     "v1CreateACLRequest": {
       "type": "object",

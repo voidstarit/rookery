@@ -146,6 +146,8 @@ func (f *fakeHostCgroupRuntime) Configure(settings cgroup.Settings) error {
 
 func (f *fakeHostCgroupRuntime) Validate(cgroup.Settings) error { return nil }
 
+func (f *fakeHostCgroupRuntime) Usage() cgroup.Usage { return cgroup.Usage{} }
+
 func (f *fakeHostCgroupRuntime) Status() cgroup.Status {
 	return cgroup.Status{
 		Available: true, Configured: true, Enabled: f.settings.Enabled,
