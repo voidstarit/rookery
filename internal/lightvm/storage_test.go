@@ -89,6 +89,42 @@ func TestStorageDoesNotRemoveHostPaths(t *testing.T) {
 	}
 }
 
+func TestStorageRemoveDoesNotFollowSymlinksOutsideRoot(t *testing.T) {
+	dir := t.TempDir()
+	storage, err := lightvm.NewStorage(filepath.Join(dir, "managed"), 16)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(storage.Dir(), "kernels"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outsideDir := filepath.Join(dir, "outside")
+	if err := os.Mkdir(outsideDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outsideFile := filepath.Join(outsideDir, "kernel")
+	if err := os.WriteFile(outsideFile, []byte("host"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(storage.Dir(), "kernels")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideDir, filepath.Join(storage.Dir(), "kernels")); err != nil {
+		t.Fatal(err)
+	}
+
+	path := filepath.Join(storage.Dir(), "kernels", "kernel")
+	if !storage.Managed(path) {
+		t.Fatal("symlinked path should be lexically managed")
+	}
+	if err := storage.Remove(path); err == nil {
+		t.Fatal("remove through escaping symlink succeeded")
+	}
+	if _, err := os.Stat(outsideFile); err != nil {
+		t.Fatalf("outside file should remain: %v", err)
+	}
+}
+
 func TestIsManagedRejectsSiblingPrefix(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "lightvm")
 	if lightvm.IsManaged(root, root+"-other/file") {
