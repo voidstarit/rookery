@@ -269,6 +269,8 @@ target VPP table ID, and advertised prefixes matching the session family. Receiv
 when the session or VNF stops; the BGP Status dialog shows the session state,
 advertised prefixes, and received prefixes with next hop and AS path.
 
+The shared DNS stack accepts queries from any source that reaches `.2`; there is no source ACL in the DNS handler. For replies to routed or external clients, the stack uses the network BVI (`.1`) as its IPv4 default gateway. External clients still need a DNAT rule or a route into the network VRF.
+
 ## Host interfaces
 
 The **Host interfaces** section (under **Rookery Networks**) lists the Linux
