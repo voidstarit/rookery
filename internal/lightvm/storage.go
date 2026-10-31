@@ -136,10 +136,24 @@ func (s *Storage) Save(kind, name string, reader io.Reader) (StoredFile, error) 
 // Remove deletes a managed file. Paths outside the managed directory are
 // ignored so records created from host paths never remove host files.
 func (s *Storage) Remove(path string) error {
+	path = strings.TrimSpace(path)
 	if !s.Managed(path) {
 		return nil
 	}
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+	absolutePath, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("resolve managed file path: %w", err)
+	}
+	relativePath, err := filepath.Rel(s.dir, absolutePath)
+	if err != nil {
+		return fmt.Errorf("resolve managed file path: %w", err)
+	}
+	root, err := os.OpenRoot(s.dir)
+	if err != nil {
+		return fmt.Errorf("open managed storage: %w", err)
+	}
+	defer root.Close()
+	if err := root.Remove(relativePath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("remove lightvm file: %w", err)
 	}
 	return nil
