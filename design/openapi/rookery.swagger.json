@@ -46,10 +46,19 @@
       "name": "HostService"
     },
     {
+      "name": "LabelService"
+    },
+    {
       "name": "VMService"
     },
     {
-      "name": "LabelService"
+      "name": "LightVMKernelService"
+    },
+    {
+      "name": "LightVMInitramfsService"
+    },
+    {
+      "name": "LightVMService"
     }
   ],
   "schemes": [
@@ -1083,6 +1092,525 @@
         ],
         "tags": [
           "LabelService"
+        ]
+      }
+    },
+    "/api/lightvm/initramfs": {
+      "get": {
+        "operationId": "LightVMInitramfsService_ListInitramfs",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1LightVMInitramfs"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "LightVMInitramfsService"
+        ]
+      },
+      "post": {
+        "operationId": "LightVMInitramfsService_CreateInitramfs",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMInitramfs"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateInitramfsRequest"
+            }
+          }
+        ],
+        "tags": [
+          "LightVMInitramfsService"
+        ]
+      }
+    },
+    "/api/lightvm/initramfs/{id}": {
+      "get": {
+        "operationId": "LightVMInitramfsService_GetInitramfs",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMInitramfs"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "LightVMInitramfsService"
+        ]
+      },
+      "delete": {
+        "operationId": "LightVMInitramfsService_DeleteInitramfs",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "LightVMInitramfsService"
+        ]
+      },
+      "put": {
+        "operationId": "LightVMInitramfsService_UpdateInitramfs",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMInitramfs"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/LightVMInitramfsServiceUpdateInitramfsBody"
+            }
+          }
+        ],
+        "tags": [
+          "LightVMInitramfsService"
+        ]
+      }
+    },
+    "/api/lightvm/instances": {
+      "get": {
+        "operationId": "LightVMService_ListLightVMs",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1LightVM"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "LightVMService"
+        ]
+      },
+      "post": {
+        "operationId": "LightVMService_CreateLightVM",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVM"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateLightVMRequest"
+            }
+          }
+        ],
+        "tags": [
+          "LightVMService"
+        ]
+      }
+    },
+    "/api/lightvm/instances/{id}": {
+      "get": {
+        "operationId": "LightVMService_GetLightVM",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVM"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "LightVMService"
+        ]
+      },
+      "delete": {
+        "operationId": "LightVMService_DeleteLightVM",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "LightVMService"
+        ]
+      },
+      "put": {
+        "operationId": "LightVMService_UpdateLightVM",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVM"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/LightVMServiceUpdateLightVMBody"
+            }
+          }
+        ],
+        "tags": [
+          "LightVMService"
+        ]
+      }
+    },
+    "/api/lightvm/instances/{id}/start": {
+      "post": {
+        "operationId": "LightVMService_StartLightVM",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVM"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "LightVMService"
+        ]
+      }
+    },
+    "/api/lightvm/instances/{id}/stop": {
+      "post": {
+        "operationId": "LightVMService_StopLightVM",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVM"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "LightVMService"
+        ]
+      }
+    },
+    "/api/lightvm/kernels": {
+      "get": {
+        "operationId": "LightVMKernelService_ListKernels",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1LightVMKernel"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "LightVMKernelService"
+        ]
+      },
+      "post": {
+        "operationId": "LightVMKernelService_CreateKernel",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMKernel"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateKernelRequest"
+            }
+          }
+        ],
+        "tags": [
+          "LightVMKernelService"
+        ]
+      }
+    },
+    "/api/lightvm/kernels/{id}": {
+      "get": {
+        "operationId": "LightVMKernelService_GetKernel",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMKernel"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "LightVMKernelService"
+        ]
+      },
+      "delete": {
+        "operationId": "LightVMKernelService_DeleteKernel",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "LightVMKernelService"
+        ]
+      },
+      "put": {
+        "operationId": "LightVMKernelService_UpdateKernel",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMKernel"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/LightVMKernelServiceUpdateKernelBody"
+            }
+          }
+        ],
+        "tags": [
+          "LightVMKernelService"
         ]
       }
     },
@@ -3275,6 +3803,102 @@
         }
       }
     },
+    "LightVMInitramfsServiceUpdateInitramfsBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "file_name": {
+          "type": "string"
+        }
+      }
+    },
+    "LightVMKernelServiceUpdateKernelBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "file_name": {
+          "type": "string"
+        }
+      }
+    },
+    "LightVMServiceUpdateLightVMBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "vcpus": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "memory_mb": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "console_enabled": {
+          "type": "boolean"
+        },
+        "cgroup_class": {
+          "type": "string"
+        },
+        "kernel_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "initramfs_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "image": {
+          "type": "string"
+        },
+        "env": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMEnvVar"
+          }
+        },
+        "executable_path": {
+          "type": "string"
+        },
+        "executable_args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "interface_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "int64"
+          }
+        },
+        "append": {
+          "type": "string"
+        }
+      }
+    },
     "NetworkServiceUpdateNetworkBody": {
       "type": "object",
       "properties": {
@@ -3928,6 +4552,24 @@
       },
       "description": "CgroupUsageResponse is a point-in-time snapshot. CPU and I/O counters are\ncumulative; clients derive rates between samples."
     },
+    "v1ComponentStatus": {
+      "type": "object",
+      "properties": {
+        "ready": {
+          "type": "boolean"
+        },
+        "state": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "checked_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
     "v1CreateACLRequest": {
       "type": "object",
       "properties": {
@@ -3996,6 +4638,23 @@
         }
       }
     },
+    "v1CreateInitramfsRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "file_name": {
+          "type": "string"
+        }
+      }
+    },
     "v1CreateInterfaceRequest": {
       "type": "object",
       "properties": {
@@ -4007,6 +4666,85 @@
           "format": "int64"
         },
         "attached_vm_id": {
+          "type": "string"
+        }
+      }
+    },
+    "v1CreateKernelRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "file_name": {
+          "type": "string"
+        }
+      }
+    },
+    "v1CreateLightVMRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "vcpus": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "memory_mb": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "console_enabled": {
+          "type": "boolean"
+        },
+        "cgroup_class": {
+          "type": "string"
+        },
+        "kernel_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "initramfs_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "image": {
+          "type": "string"
+        },
+        "env": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMEnvVar"
+          }
+        },
+        "executable_path": {
+          "type": "string"
+        },
+        "executable_args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "interface_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "int64"
+          }
+        },
+        "append": {
           "type": "string"
         }
       }
@@ -4568,6 +5306,184 @@
         }
       }
     },
+    "v1LightVM": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "vcpus": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "memory_mb": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "console_enabled": {
+          "type": "boolean"
+        },
+        "cgroup_class": {
+          "type": "string"
+        },
+        "kernel_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "kernel_name": {
+          "type": "string"
+        },
+        "initramfs_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "initramfs_name": {
+          "type": "string"
+        },
+        "image": {
+          "type": "string"
+        },
+        "env": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMEnvVar"
+          }
+        },
+        "executable_path": {
+          "type": "string"
+        },
+        "executable_args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "interface_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "int64"
+          }
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VMInterface"
+          }
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "append": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "desired_state": {
+          "type": "string"
+        },
+        "console_socket": {
+          "type": "string"
+        }
+      }
+    },
+    "v1LightVMEnvVar": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "v1LightVMInitramfs": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "file_name": {
+          "type": "string"
+        },
+        "size_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "managed": {
+          "type": "boolean"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1LightVMKernel": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "file_name": {
+          "type": "string"
+        },
+        "size_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "managed": {
+          "type": "boolean"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
     "v1ListACLInterfaceCountersResponse": {
       "type": "object",
       "properties": {
@@ -4700,6 +5616,18 @@
         }
       }
     },
+    "v1ListInitramfsResponse": {
+      "type": "object",
+      "properties": {
+        "initramfs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMInitramfs"
+          }
+        }
+      }
+    },
     "v1ListInterfaceCountersResponse": {
       "type": "object",
       "properties": {
@@ -4720,6 +5648,30 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1VirtualInterface"
+          }
+        }
+      }
+    },
+    "v1ListKernelsResponse": {
+      "type": "object",
+      "properties": {
+        "kernels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMKernel"
+          }
+        }
+      }
+    },
+    "v1ListLightVMsResponse": {
+      "type": "object",
+      "properties": {
+        "lightvms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVM"
           }
         }
       }
@@ -5338,6 +6290,9 @@
         },
         "vpp_startup_script": {
           "$ref": "#/definitions/v1StartupScriptStatus"
+        },
+        "lightvm": {
+          "$ref": "#/definitions/v1ComponentStatus"
         }
       }
     },

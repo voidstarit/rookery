@@ -12,6 +12,9 @@
 /ui/node_modules/
 /ui/*.tsbuildinfo
 
+# Downloaded LightVM virtiofsd artifact
+/extra/virtiofsd/virtiofsd
+
 # Terraform provider build output and local state
 /terraform-provider-rookery
 /cmd/terraform-provider-rookery/terraform-provider-rookery

@@ -797,8 +797,8 @@ export function NetworksTab() {
   };
 
   const deleteInterface = async (iface: VirtualInterface) => {
-    if (iface.attached_vm_id) {
-      showToast("Detach the interface from its VM first.", true);
+    if (iface.attached_vm_id || iface.attached_lightvm_id) {
+      showToast("Detach the interface from its VM or LightVM first.", true);
       return;
     }
     const confirmed = window.confirm(
@@ -887,7 +887,9 @@ export function NetworksTab() {
     window.dispatchEvent(new CustomEvent("rookery:add-vnf", { detail: { networkId: network.id } }));
   };
 
-  const attachedCount = interfaces.filter((iface) => iface.attached_vm_id).length;
+  const attachedCount = interfaces.filter(
+    (iface) => iface.attached_vm_id || iface.attached_lightvm_id
+  ).length;
   const assignedACLs = acls.filter((acl) => aclAssignments(acl, interfaces).length > 0).length;
   const networkSummary =
     networks.length === 0
@@ -1640,7 +1642,7 @@ export function NetworksTab() {
                   <th scope="col">Network</th>
                   <th scope="col">MAC</th>
                   <th scope="col">VPP addresses</th>
-                  <th scope="col">Attached VM</th>
+                  <th scope="col">Attached to</th>
                   <th scope="col">TX/RX</th>
                   <th scope="col">Speed</th>
                   <th scope="col">ACLs</th>
@@ -1657,7 +1659,8 @@ export function NetworksTab() {
                   const owner = iface.attached_vm_id
                     ? vms.find((vm) => vm.id === iface.attached_vm_id)
                     : null;
-                  const attached = Boolean(iface.attached_vm_id);
+                  const attachedVM = Boolean(iface.attached_vm_id);
+                  const attached = Boolean(iface.attached_vm_id || iface.attached_lightvm_id);
                   const counter = interfaceCounters[iface.name];
                   const rate = interfaceRates[iface.name];
                   const ownerRunning = Boolean(
@@ -1712,7 +1715,12 @@ export function NetworksTab() {
                           : "—"}
                       </td>
                       <td class={attached ? "mono" : "mono muted"}>
-                        {owner ? owner.name : iface.attached_vm_name || "unattached"}
+                        {owner
+                          ? owner.name
+                          : iface.attached_vm_name ||
+                            (iface.attached_lightvm_name
+                              ? `${iface.attached_lightvm_name} (LightVM)`
+                              : "unattached")}
                       </td>
                       <td class={counter ? "mono traffic-cell" : "mono muted traffic-cell"}>
                         {counter ? (
@@ -1774,10 +1782,20 @@ export function NetworksTab() {
                           >
                             Addresses
                           </button>
-                          <button class="row-action" type="button" onClick={() => navigate(`/interfaces/${iface.id}/attach`)}>
+                          <button
+                            class="row-action"
+                            type="button"
+                            disabled={Boolean(iface.attached_lightvm_id)}
+                            title={
+                              iface.attached_lightvm_id
+                                ? "Remove the interface from its LightVM first."
+                                : ""
+                            }
+                            onClick={() => navigate(`/interfaces/${iface.id}/attach`)}
+                          >
                             Attach
                           </button>
-                          {attached ? (
+                          {attachedVM ? (
                             <button
                               class="row-action"
                               type="button"
@@ -1786,6 +1804,17 @@ export function NetworksTab() {
                               onClick={() => void detachInterface(iface)}
                             >
                               Detach
+                            </button>
+                          ) : null}
+                          {!attachedVM && iface.attached_lightvm_id ? (
+                            <button
+                              class="row-action"
+                              type="button"
+                              onClick={() =>
+                                navigate(`/lightvm/instances/${iface.attached_lightvm_id}/edit`)
+                              }
+                            >
+                              Edit LightVM
                             </button>
                           ) : null}
                           <button
@@ -1812,7 +1841,7 @@ export function NetworksTab() {
                             disabled={attached || !vppReady}
                             title={
                               attached
-                                ? "Detach the interface from its VM first."
+                                ? "Detach the interface from its VM or LightVM first."
                                 : vppReady
                                   ? ""
                                   : "VPP must be ready to delete a vhost-user interface."

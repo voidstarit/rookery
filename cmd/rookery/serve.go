@@ -23,6 +23,7 @@ import (
 	"github.com/voidstarit/rookery/internal/gateway"
 	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/lifecycle"
+	"github.com/voidstarit/rookery/internal/lightvm"
 	"github.com/voidstarit/rookery/internal/logging"
 	"github.com/voidstarit/rookery/internal/pki"
 	"github.com/voidstarit/rookery/internal/qemu"
@@ -60,6 +61,9 @@ func runServe(args []string) error {
 	checkInterval := fs.Duration("check-interval", checkIntervalDefault, "readiness check interval")
 	qemuBin := fs.String("qemu-bin", config.EnvString(apiCfg.QEMUBin, "ROOKERY_QEMU_BIN", qemu.DefaultBinary), "QEMU system emulator binary")
 	runDir := fs.String("run-dir", config.EnvString(apiCfg.RunDir, "ROOKERY_RUN_DIR", qemu.DefaultRunDir), "directory for QEMU pid files and VNC sockets")
+	lightvmDir := fs.String("lightvm-dir", config.EnvString(apiCfg.LightVMDir, "ROOKERY_LIGHTVM_DIR", lightvm.DefaultDir), "directory for uploaded LightVM kernels and initramfs files")
+	buildahBin := fs.String("buildah-bin", config.EnvString(apiCfg.BuildahBin, "ROOKERY_BUILDAH_BIN", "buildah"), "buildah binary for LightVM image management")
+	virtiofsdBin := fs.String("virtiofsd-bin", config.EnvString(apiCfg.VirtiofsdBin, "ROOKERY_VIRTIOFSD_BIN", lightvm.DefaultVirtiofsdBinary()), "virtiofsd binary for LightVM rootfs sharing (defaults next to the rookery binary)")
 	cgroupRoot := fs.String("cgroup-root", config.EnvString(apiCfg.CgroupRoot, "ROOKERY_CGROUP_ROOT", cgroup.DefaultRoot), "cgroup v2 parent for QEMU resource limits")
 	memifDir := fs.String("memif-dir", config.EnvString(apiCfg.MemifDir, "ROOKERY_MEMIF_DIR", "/run/rookery/memif"), "directory for VNF memif sockets")
 	vhostDir := fs.String("vhost-dir", config.EnvString(apiCfg.VhostDir, "ROOKERY_VHOST_DIR", host.DefaultVhostDir), "directory for VPP vhost-user sockets")
@@ -170,6 +174,16 @@ func runServe(args []string) error {
 
 	diskRunner := host.NewLVM()
 	apiServer := api.New(st, manager, diskRunner, qemuRunner, networkRunner, vnfClient, networkRunner, logger)
+	lightvmStorage, err := lightvm.NewStorage(*lightvmDir, lightvm.DefaultMaxUploadBytes)
+	if err != nil {
+		return fmt.Errorf("prepare LightVM storage: %w", err)
+	}
+	apiServer.ConfigureLightVM(lightvmStorage)
+	lightvmRuntime, err := lightvm.NewRuntime(qemuRunner, *buildahBin, *virtiofsdBin, *runDir, logger)
+	if err != nil {
+		return fmt.Errorf("prepare LightVM runtime: %w", err)
+	}
+	apiServer.ConfigureLightVMRuntime(lightvmRuntime)
 	apiServer.ConfigureMemifDHCP(transport == "memif", *memifDir)
 	apiServer.SetVPPSocket(vppSocket)
 	var pkiManager *pki.Manager
@@ -207,6 +221,8 @@ func runServe(args []string) error {
 		gateway.WithVNFStatusProvider(apiServer),
 		gateway.WithVNFWriter(lifecycleService),
 		gateway.WithCgroupRuntime(cgroupManager),
+		gateway.WithLightVMStorageDir(lightvmStorage.Dir()),
+		gateway.WithLightVMRuntime(lightvmRuntime),
 	}
 	var grpcListener net.Listener
 	if *grpcAddr != "" {
@@ -241,6 +257,7 @@ func runServe(args []string) error {
 	}
 	defer gatewayRuntime.Close()
 	gatewayHandler := apiServer.LogRequests(api.SecurityHeaders(gatewayRuntime.Handler))
+	gatewayHandler = api.LightVMStartDeadline(gatewayHandler)
 	rateLimiter := api.NewPathRateLimiter(rateLimit)
 
 	var mtlsHTTP *http.Server

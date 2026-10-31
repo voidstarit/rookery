@@ -39,6 +39,10 @@
           VNFs
           <span class="tab-count" id="vnf-tab-count">0</span>
         </button>
+        <button class="tab" id="tab-lightvm" type="button" role="tab" aria-selected="false" aria-controls="lightvm-panel" tabindex="-1">
+          LightVM
+          <span class="tab-count" id="lightvm-tab-count">0</span>
+        </button>
         <button class="tab" id="tab-settings" type="button" role="tab" aria-selected="false" aria-controls="settings-panel" tabindex="-1">
           Settings
         </button>
@@ -154,6 +158,10 @@
 
       <section class="tab-panel" id="vnfs-panel" role="tabpanel" aria-labelledby="tab-vnfs" tabindex="0" hidden>
         <div id="vnfs-root"></div>
+      </section>
+
+      <section class="tab-panel" id="lightvm-panel" role="tabpanel" aria-labelledby="tab-lightvm" tabindex="0" hidden>
+        <div id="lightvm-root"></div>
       </section>
 
       <section class="tab-panel" id="settings-panel" role="tabpanel" aria-labelledby="tab-settings" tabindex="0" hidden>

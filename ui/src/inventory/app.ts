@@ -2,7 +2,7 @@ import type { StatusResponse } from "./types";
 import { api } from "../shared/api";
 import { currentRoute, navigate, ROUTE_EVENT } from "./router";
 
-const TAB_ORDER = ["vms", "disks", "media", "networks", "vnfs", "settings"] as const;
+const TAB_ORDER = ["vms", "disks", "media", "networks", "vnfs", "lightvm", "settings"] as const;
 type TabName = (typeof TAB_ORDER)[number];
 
 type TabMeta = {
@@ -36,6 +36,11 @@ const tabMeta: Record<TabName, TabMeta> = {
     eyebrow: "Network functions",
     title: "VNFs",
     lede: "Attach DHCPv4 and DHCPv6 functions to Rookery Networks, enable them, and inspect their leases.",
+  },
+  lightvm: {
+    eyebrow: "LightVM inventory",
+    title: "LightVM",
+    lede: "Upload kernels and initramfs images, then define container-backed microVMs.",
   },
   settings: {
     eyebrow: "Rookery server",
@@ -86,6 +91,7 @@ export function startInventory(): void {
     media: required<HTMLButtonElement>("tab-media"),
     networks: required<HTMLButtonElement>("tab-networks"),
     vnfs: required<HTMLButtonElement>("tab-vnfs"),
+    lightvm: required<HTMLButtonElement>("tab-lightvm"),
     settings: required<HTMLButtonElement>("tab-settings"),
   };
   const panelElements: Record<TabName, HTMLElement> = {
@@ -94,6 +100,7 @@ export function startInventory(): void {
     media: required("media-panel"),
     networks: required("networks-panel"),
     vnfs: required("vnfs-panel"),
+    lightvm: required("lightvm-panel"),
     settings: required("settings-panel"),
   };
   const createButtons: Partial<Record<TabName, HTMLButtonElement>> = {

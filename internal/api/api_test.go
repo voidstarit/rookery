@@ -5047,7 +5047,7 @@ func TestHealthAndEmbeddedUI(t *testing.T) {
 		t.Fatal("Content-Security-Policy header is missing")
 	}
 
-	for _, asset := range []string{"/build/app.js", "/style.css", "/icon.png", "/console.html", "/build/console.js", "/console.css", "/novnc/core/rfb.js", "/novnc/LICENSE.txt"} {
+	for _, asset := range []string{"/build/app.js", "/style.css", "/icon.png", "/console.html", "/build/console.js", "/console.css", "/lightvm-console.html", "/build/lightvmConsole.js", "/build/lightvmConsole.css", "/novnc/core/rfb.js", "/novnc/LICENSE.txt"} {
 		recorder = do(t, handler, http.MethodGet, asset, nil)
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("%s status = %d", asset, recorder.Code)
@@ -5055,6 +5055,15 @@ func TestHealthAndEmbeddedUI(t *testing.T) {
 		if recorder.Body.Len() == 0 {
 			t.Fatalf("%s is empty", asset)
 		}
+	}
+
+	recorder = do(t, handler, http.MethodGet, "/lightvm-console.html", nil)
+	if csp := recorder.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "style-src 'self' 'unsafe-inline'") {
+		t.Fatalf("LightVM console CSP does not allow xterm inline styles: %q", csp)
+	}
+	recorder = do(t, handler, http.MethodGet, "/", nil)
+	if csp := recorder.Header().Get("Content-Security-Policy"); strings.Contains(csp, "unsafe-inline") {
+		t.Fatalf("inventory CSP unexpectedly allows inline styles: %q", csp)
 	}
 
 	recorder = do(t, handler, http.MethodPost, "/", nil)

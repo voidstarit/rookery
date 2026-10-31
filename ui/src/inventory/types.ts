@@ -122,6 +122,61 @@ export type Media = {
   updated_at: string;
 };
 
+export type LightVMKernel = {
+  id: number;
+  name: string;
+  description: string;
+  path: string;
+  file_name: string;
+  size_bytes: number;
+  managed: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type LightVMInitramfs = {
+  id: number;
+  name: string;
+  description: string;
+  path: string;
+  file_name: string;
+  size_bytes: number;
+  managed: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type LightVMEnvVar = {
+  name: string;
+  value: string;
+};
+
+export type LightVM = {
+  id: string;
+  name: string;
+  description: string;
+  vcpus: number;
+  memory_mb: number;
+  console_enabled: boolean;
+  cgroup_class?: string;
+  kernel_id: number;
+  kernel_name: string;
+  initramfs_id: number;
+  initramfs_name: string;
+  image: string;
+  env: LightVMEnvVar[];
+  executable_path: string;
+  executable_args: string[];
+  append: string;
+  status: string;
+  desired_state: string;
+  console_socket?: string;
+  interface_ids?: number[];
+  interfaces?: VMInterface[];
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type VMDisk = {
   id: number;
   name: string;
@@ -150,6 +205,10 @@ export type VMInterface = {
   sw_if_index: number;
   ingress_acl_name?: string;
   egress_acl_name?: string;
+  attached_vm_id?: string;
+  attached_vm_name?: string;
+  attached_lightvm_id?: string;
+  attached_lightvm_name?: string;
 };
 
 export type VM = {
@@ -253,6 +312,8 @@ export type VirtualInterface = {
   sw_if_index: number;
   attached_vm_id?: string;
   attached_vm_name?: string;
+  attached_lightvm_id?: string;
+  attached_lightvm_name?: string;
   ingress_acl_id?: number;
   ingress_acl_name?: string;
   egress_acl_id?: number;
@@ -628,5 +689,10 @@ export type StatusResponse = {
     status?: string;
     exit_code?: number;
     ran_at?: string;
+  };
+  lightvm?: {
+    ready: boolean;
+    state?: string;
+    detail?: string;
   };
 };

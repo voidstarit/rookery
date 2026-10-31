@@ -377,27 +377,29 @@ type InterfaceACL struct {
 
 // VirtualInterface is a VPP vhost-user interface belonging to a network.
 type VirtualInterface struct {
-	ID             int64          `json:"id"`
-	Name           string         `json:"name"`
-	NetworkID      int64          `json:"network_id"`
-	NetworkName    string         `json:"network_name"`
-	SocketPath     string         `json:"socket_path"`
-	MAC            string         `json:"mac"`
-	SwIfIndex      uint32         `json:"sw_if_index"`
-	AttachedVMID   *string        `json:"attached_vm_id,omitempty"`
-	AttachedVMName string         `json:"attached_vm_name,omitempty"`
-	IngressACLID   *int64         `json:"ingress_acl_id,omitempty"`
-	IngressACLName string         `json:"ingress_acl_name,omitempty"`
-	EgressACLID    *int64         `json:"egress_acl_id,omitempty"`
-	EgressACLName  string         `json:"egress_acl_name,omitempty"`
-	IngressACLs    []InterfaceACL `json:"-"`
-	EgressACLs     []InterfaceACL `json:"-"`
-	IPv4TableID    uint32         `json:"ipv4_table_id"`
-	IPv6TableID    uint32         `json:"ipv6_table_id"`
-	IPv4TableName  string         `json:"ipv4_table_name,omitempty"`
-	IPv6TableName  string         `json:"ipv6_table_name,omitempty"`
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
+	ID                  int64          `json:"id"`
+	Name                string         `json:"name"`
+	NetworkID           int64          `json:"network_id"`
+	NetworkName         string         `json:"network_name"`
+	SocketPath          string         `json:"socket_path"`
+	MAC                 string         `json:"mac"`
+	SwIfIndex           uint32         `json:"sw_if_index"`
+	AttachedVMID        *string        `json:"attached_vm_id,omitempty"`
+	AttachedVMName      string         `json:"attached_vm_name,omitempty"`
+	AttachedLightVMID   *string        `json:"attached_lightvm_id,omitempty"`
+	AttachedLightVMName string         `json:"attached_lightvm_name,omitempty"`
+	IngressACLID        *int64         `json:"ingress_acl_id,omitempty"`
+	IngressACLName      string         `json:"ingress_acl_name,omitempty"`
+	EgressACLID         *int64         `json:"egress_acl_id,omitempty"`
+	EgressACLName       string         `json:"egress_acl_name,omitempty"`
+	IngressACLs         []InterfaceACL `json:"-"`
+	EgressACLs          []InterfaceACL `json:"-"`
+	IPv4TableID         uint32         `json:"ipv4_table_id"`
+	IPv6TableID         uint32         `json:"ipv6_table_id"`
+	IPv4TableName       string         `json:"ipv4_table_name,omitempty"`
+	IPv6TableName       string         `json:"ipv6_table_name,omitempty"`
+	CreatedAt           time.Time      `json:"created_at"`
+	UpdatedAt           time.Time      `json:"updated_at"`
 }
 
 // VMInterface is the network interface summary returned with a VM.
@@ -1872,6 +1874,9 @@ func (s *Store) SetInterfaceAttachment(ctx context.Context, id int64, vmID *stri
 		if _, err := s.GetVM(ctx, *vmID); err != nil {
 			return VirtualInterface{}, err
 		}
+		if err := s.checkLightVMInterfaceUse(ctx, id, ""); err != nil {
+			return VirtualInterface{}, err
+		}
 	}
 
 	now := time.Now().UTC().UnixMilli()
@@ -1940,6 +1945,9 @@ func (s *Store) SetVMInterfaces(ctx context.Context, vmID string, interfaceIDs [
 		if iface.AttachedVMID != nil && *iface.AttachedVMID != vmID {
 			return VM{}, ErrInterfaceInUse
 		}
+		if err := s.checkLightVMInterfaceUse(ctx, id, ""); err != nil {
+			return VM{}, err
+		}
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -1999,6 +2007,9 @@ func (s *Store) DeleteInterface(ctx context.Context, id int64) error {
 	}
 	if iface.AttachedVMID != nil {
 		return ErrInterfaceInUse
+	}
+	if err := s.checkLightVMInterfaceUse(ctx, id, ""); err != nil {
+		return err
 	}
 
 	res, err := s.db.ExecContext(ctx, `DELETE FROM virtual_interfaces WHERE id = ?`, id)
@@ -2153,7 +2164,7 @@ const vnfSelect = `
 
 const interfaceSelect = `
 	SELECT i.id, i.name, i.network_id, n.name, i.socket_path, i.mac, i.sw_if_index,
-	       i.attached_vm_id, v.name,
+	       i.attached_vm_id, v.name, li.lightvm_id, lv.name,
 	       i.ingress_acl_id, ai.name, i.egress_acl_id, ae.name,
 	       i.ipv4_table_id, COALESCE(r4.name, 'default'),
 	       i.ipv6_table_id, COALESCE(r6.name, 'default'),
@@ -2161,6 +2172,8 @@ const interfaceSelect = `
 	FROM virtual_interfaces AS i
 	JOIN networks AS n ON n.id = i.network_id
 	LEFT JOIN vms AS v ON v.id = i.attached_vm_id
+	LEFT JOIN lightvm_interfaces AS li ON li.interface_id = i.id
+	LEFT JOIN lightvms AS lv ON lv.id = li.lightvm_id
 	LEFT JOIN acls AS ai ON ai.id = i.ingress_acl_id
 	LEFT JOIN acls AS ae ON ae.id = i.egress_acl_id
 	LEFT JOIN route_tables AS r4 ON r4.table_id = i.ipv4_table_id AND r4.is_ipv6 = 0
@@ -2232,22 +2245,25 @@ func scanVNF(s scanner) (VNF, error) {
 
 func scanInterface(s scanner) (VirtualInterface, error) {
 	var (
-		iface     VirtualInterface
-		swIf      int64
-		vmID      sql.NullString
-		vmName    sql.NullString
-		ingressID sql.NullInt64
-		ingress   sql.NullString
-		egressID  sql.NullInt64
-		egress    sql.NullString
-		ipv4Table int64
-		ipv6Table int64
-		createdAt int64
-		updatedAt int64
+		iface       VirtualInterface
+		swIf        int64
+		vmID        sql.NullString
+		vmName      sql.NullString
+		lightVMID   sql.NullString
+		lightVMName sql.NullString
+		ingressID   sql.NullInt64
+		ingress     sql.NullString
+		egressID    sql.NullInt64
+		egress      sql.NullString
+		ipv4Table   int64
+		ipv6Table   int64
+		createdAt   int64
+		updatedAt   int64
 	)
 	if err := s.Scan(
 		&iface.ID, &iface.Name, &iface.NetworkID, &iface.NetworkName,
 		&iface.SocketPath, &iface.MAC, &swIf, &vmID, &vmName,
+		&lightVMID, &lightVMName,
 		&ingressID, &ingress, &egressID, &egress,
 		&ipv4Table, &iface.IPv4TableName, &ipv6Table, &iface.IPv6TableName,
 		&createdAt, &updatedAt,
@@ -2263,6 +2279,13 @@ func scanInterface(s scanner) (VirtualInterface, error) {
 	}
 	if vmName.Valid {
 		iface.AttachedVMName = vmName.String
+	}
+	if lightVMID.Valid {
+		id := lightVMID.String
+		iface.AttachedLightVMID = &id
+	}
+	if lightVMName.Valid {
+		iface.AttachedLightVMName = lightVMName.String
 	}
 	if ingressID.Valid {
 		id := ingressID.Int64

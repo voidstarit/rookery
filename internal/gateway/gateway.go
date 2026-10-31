@@ -69,6 +69,8 @@ type options struct {
 	vnfStatusProvider  VNFStatusProvider
 	vnfWriter          VNFWriter
 	cgroup             CgroupRuntime
+	lightvmDir         string
+	lightvmRuntime     LightVMRuntime
 }
 
 // WithGRPCListener exposes the generated gRPC server on listener instead of an
@@ -197,6 +199,21 @@ func WithCgroupRuntime(runtime CgroupRuntime) Option {
 	}
 }
 
+// WithLightVMStorageDir marks kernel paths inside dir as managed files that
+// Rookery may delete when their inventory record is removed.
+func WithLightVMStorageDir(dir string) Option {
+	return func(opts *options) {
+		opts.lightvmDir = dir
+	}
+}
+
+// WithLightVMRuntime enables LightVM start/stop through QEMU.
+func WithLightVMRuntime(runtime LightVMRuntime) Option {
+	return func(opts *options) {
+		opts.lightvmRuntime = runtime
+	}
+}
+
 // WithLogger sets the gateway logger used by disk preparation scripts.
 func WithLogger(logger zerolog.Logger) Option {
 	return func(opts *options) {
@@ -254,6 +271,9 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 		store: st, readiness: ready, cgroup: options.cgroup,
 		vms: options.vmController, cgroupUpdater: cgroupUpdater,
 	}
+	if provider, ok := options.lightvmRuntime.(LightVMStatusProvider); ok {
+		system.lightvmStatus = provider
+	}
 	vms := &vmService{store: st, runtime: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, mu: options.vmMutex, logger: options.logger}
 	disks := &diskService{store: st, runtime: options.diskProvisioner, readiness: ready, mu: options.diskMutex, logger: options.logger}
 	media := &mediaService{store: st}
@@ -267,6 +287,9 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	troubleshoot := &troubleshootService{runtime: options.diagnostics, readiness: ready}
 	captures := &captureService{runtime: options.diagnostics, readiness: ready}
 	entityLabels := &labelService{store: st}
+	kernels := &lightVMKernelService{store: st, storageDir: options.lightvmDir}
+	initramfs := &lightVMInitramfsService{store: st, storageDir: options.lightvmDir}
+	lightvms := &lightVMService{store: st, runtime: options.lightvmRuntime, mu: options.vmMutex}
 	rookeryv1.RegisterSystemServiceServer(server, system)
 	rookeryv1.RegisterVMServiceServer(server, vms)
 	rookeryv1.RegisterDiskServiceServer(server, disks)
@@ -281,6 +304,9 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	rookeryv1.RegisterTroubleshootServiceServer(server, troubleshoot)
 	rookeryv1.RegisterCaptureServiceServer(server, captures)
 	rookeryv1.RegisterLabelServiceServer(server, entityLabels)
+	rookeryv1.RegisterLightVMKernelServiceServer(server, kernels)
+	rookeryv1.RegisterLightVMInitramfsServiceServer(server, initramfs)
+	rookeryv1.RegisterLightVMServiceServer(server, lightvms)
 	healthServer := health.NewServer()
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 	healthpb.RegisterHealthServer(server, healthServer)
@@ -335,6 +361,9 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 		rookeryv1.RegisterTroubleshootServiceHandler,
 		rookeryv1.RegisterCaptureServiceHandler,
 		rookeryv1.RegisterLabelServiceHandler,
+		rookeryv1.RegisterLightVMKernelServiceHandler,
+		rookeryv1.RegisterLightVMInitramfsServiceHandler,
+		rookeryv1.RegisterLightVMServiceHandler,
 	}
 	for _, register := range registrations {
 		if err := register(ctx, mux, conn); err != nil {
@@ -439,6 +468,12 @@ type systemService struct {
 	cgroup        CgroupRuntime
 	vms           VMController
 	cgroupUpdater CgroupUpdater
+	lightvmStatus LightVMStatusProvider
+}
+
+// LightVMStatusProvider reports whether external LightVM tooling is present.
+type LightVMStatusProvider interface {
+	LightVMStatus() (ready bool, state, detail string)
 }
 
 func (s *systemService) GetHealth(ctx context.Context, _ *rookeryv1.GetHealthRequest) (*rookeryv1.HealthResponse, error) {
@@ -456,6 +491,14 @@ func (s *systemService) GetStatus(ctx context.Context, _ *rookeryv1.GetStatusReq
 	}
 	response.ThinPool = thinPoolStatus(current.ThinPool)
 	response.Vpp = vppStatus(current.VPP)
+	if s.lightvmStatus == nil {
+		response.Lightvm = &rookeryv1.ComponentStatus{
+			State: "unavailable", Detail: "LightVM runtime is not configured",
+		}
+	} else {
+		ready, state, detail := s.lightvmStatus.LightVMStatus()
+		response.Lightvm = &rookeryv1.ComponentStatus{Ready: ready, State: state, Detail: detail}
+	}
 	if script, err := s.store.GetStartupScript(ctx); err != nil {
 		response.RookeryStartupScript = &rookeryv1.StartupScriptStatus{Status: "unavailable"}
 	} else {
