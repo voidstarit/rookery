@@ -1733,3 +1733,344 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = UpdateVPPStartupScriptRequestValidationError{}
+
+// Validate checks the field values on GetCgroupSettingsRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *GetCgroupSettingsRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetCgroupSettingsRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// GetCgroupSettingsRequestMultiError, or nil if none found.
+func (m *GetCgroupSettingsRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetCgroupSettingsRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if len(errors) > 0 {
+		return GetCgroupSettingsRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// GetCgroupSettingsRequestMultiError is an error wrapping multiple validation
+// errors returned by GetCgroupSettingsRequest.ValidateAll() if the designated
+// constraints aren't met.
+type GetCgroupSettingsRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetCgroupSettingsRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetCgroupSettingsRequestMultiError) AllErrors() []error { return m }
+
+// GetCgroupSettingsRequestValidationError is the validation error returned by
+// GetCgroupSettingsRequest.Validate if the designated constraints aren't met.
+type GetCgroupSettingsRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetCgroupSettingsRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetCgroupSettingsRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetCgroupSettingsRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetCgroupSettingsRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetCgroupSettingsRequestValidationError) ErrorName() string {
+	return "GetCgroupSettingsRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e GetCgroupSettingsRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetCgroupSettingsRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetCgroupSettingsRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetCgroupSettingsRequestValidationError{}
+
+// Validate checks the field values on UpdateCgroupSettingsRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *UpdateCgroupSettingsRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on UpdateCgroupSettingsRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// UpdateCgroupSettingsRequestMultiError, or nil if none found.
+func (m *UpdateCgroupSettingsRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *UpdateCgroupSettingsRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Enabled
+
+	if utf8.RuneCountInString(m.GetCpus()) > 512 {
+		err := UpdateCgroupSettingsRequestValidationError{
+			field:  "Cpus",
+			reason: "value length must be at most 512 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetMems()) > 512 {
+		err := UpdateCgroupSettingsRequestValidationError{
+			field:  "Mems",
+			reason: "value length must be at most 512 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if m.GetMemoryMaxBytes() < 0 {
+		err := UpdateCgroupSettingsRequestValidationError{
+			field:  "MemoryMaxBytes",
+			reason: "value must be greater than or equal to 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if val := m.GetCpuWeight(); val < 0 || val > 10000 {
+		err := UpdateCgroupSettingsRequestValidationError{
+			field:  "CpuWeight",
+			reason: "value must be inside range [0, 10000]",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(m.GetIoLimits()) > 64 {
+		err := UpdateCgroupSettingsRequestValidationError{
+			field:  "IoLimits",
+			reason: "value must contain no more than 64 item(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	for idx, item := range m.GetIoLimits() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, UpdateCgroupSettingsRequestValidationError{
+						field:  fmt.Sprintf("IoLimits[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, UpdateCgroupSettingsRequestValidationError{
+						field:  fmt.Sprintf("IoLimits[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return UpdateCgroupSettingsRequestValidationError{
+					field:  fmt.Sprintf("IoLimits[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(m.GetClasses()) > 64 {
+		err := UpdateCgroupSettingsRequestValidationError{
+			field:  "Classes",
+			reason: "value must contain no more than 64 item(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	for idx, item := range m.GetClasses() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, UpdateCgroupSettingsRequestValidationError{
+						field:  fmt.Sprintf("Classes[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, UpdateCgroupSettingsRequestValidationError{
+						field:  fmt.Sprintf("Classes[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return UpdateCgroupSettingsRequestValidationError{
+					field:  fmt.Sprintf("Classes[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return UpdateCgroupSettingsRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// UpdateCgroupSettingsRequestMultiError is an error wrapping multiple
+// validation errors returned by UpdateCgroupSettingsRequest.ValidateAll() if
+// the designated constraints aren't met.
+type UpdateCgroupSettingsRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m UpdateCgroupSettingsRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m UpdateCgroupSettingsRequestMultiError) AllErrors() []error { return m }
+
+// UpdateCgroupSettingsRequestValidationError is the validation error returned
+// by UpdateCgroupSettingsRequest.Validate if the designated constraints
+// aren't met.
+type UpdateCgroupSettingsRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e UpdateCgroupSettingsRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e UpdateCgroupSettingsRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e UpdateCgroupSettingsRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e UpdateCgroupSettingsRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e UpdateCgroupSettingsRequestValidationError) ErrorName() string {
+	return "UpdateCgroupSettingsRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e UpdateCgroupSettingsRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sUpdateCgroupSettingsRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = UpdateCgroupSettingsRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = UpdateCgroupSettingsRequestValidationError{}

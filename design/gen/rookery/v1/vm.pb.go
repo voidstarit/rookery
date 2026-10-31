@@ -43,6 +43,7 @@ type VM struct {
 	ConsoleEnabled bool                   `protobuf:"varint,14,opt,name=console_enabled,json=consoleEnabled,proto3" json:"console_enabled,omitempty"`
 	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	CgroupClass    string                 `protobuf:"bytes,17,opt,name=cgroup_class,json=cgroupClass,proto3" json:"cgroup_class,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -189,6 +190,13 @@ func (x *VM) GetUpdatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *VM) GetCgroupClass() string {
+	if x != nil {
+		return x.CgroupClass
+	}
+	return ""
+}
+
 type ListVMsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -325,6 +333,7 @@ type CreateVMRequest struct {
 	InterfaceIds   []int64                `protobuf:"varint,8,rep,packed,name=interface_ids,json=interfaceIds,proto3" json:"interface_ids,omitempty"`
 	DiskIds        []int64                `protobuf:"varint,9,rep,packed,name=disk_ids,json=diskIds,proto3" json:"disk_ids,omitempty"`
 	DiskId         *int64                 `protobuf:"varint,10,opt,name=disk_id,json=diskId,proto3,oneof" json:"disk_id,omitempty"`
+	CgroupClass    string                 `protobuf:"bytes,11,opt,name=cgroup_class,json=cgroupClass,proto3" json:"cgroup_class,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -429,6 +438,13 @@ func (x *CreateVMRequest) GetDiskId() int64 {
 	return 0
 }
 
+func (x *CreateVMRequest) GetCgroupClass() string {
+	if x != nil {
+		return x.CgroupClass
+	}
+	return ""
+}
+
 type UpdateVMRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -443,8 +459,9 @@ type UpdateVMRequest struct {
 	DiskIds        []int64                `protobuf:"varint,10,rep,packed,name=disk_ids,json=diskIds,proto3" json:"disk_ids,omitempty"`
 	// Explicit replacement lets clients clear the interface set. Disks cannot
 	// be cleared because every VM requires at least one disk.
-	ReplaceInterfaceIds *bool `protobuf:"varint,11,opt,name=replace_interface_ids,json=replaceInterfaceIds,proto3,oneof" json:"replace_interface_ids,omitempty"`
-	ReplaceDiskIds      *bool `protobuf:"varint,12,opt,name=replace_disk_ids,json=replaceDiskIds,proto3,oneof" json:"replace_disk_ids,omitempty"`
+	ReplaceInterfaceIds *bool   `protobuf:"varint,11,opt,name=replace_interface_ids,json=replaceInterfaceIds,proto3,oneof" json:"replace_interface_ids,omitempty"`
+	ReplaceDiskIds      *bool   `protobuf:"varint,12,opt,name=replace_disk_ids,json=replaceDiskIds,proto3,oneof" json:"replace_disk_ids,omitempty"`
+	CgroupClass         *string `protobuf:"bytes,13,opt,name=cgroup_class,json=cgroupClass,proto3,oneof" json:"cgroup_class,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -561,6 +578,13 @@ func (x *UpdateVMRequest) GetReplaceDiskIds() bool {
 		return *x.ReplaceDiskIds
 	}
 	return false
+}
+
+func (x *UpdateVMRequest) GetCgroupClass() string {
+	if x != nil && x.CgroupClass != nil {
+		return *x.CgroupClass
+	}
+	return ""
 }
 
 type DeleteVMRequest struct {
@@ -1004,7 +1028,7 @@ var File_rookery_v1_vm_proto protoreflect.FileDescriptor
 const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\n" +
 	"\x13rookery/v1/vm.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\x1a\x15rookery/v1/disk.proto\x1a\x1arookery/v1/interface.proto\x1a\x16rookery/v1/media.proto\"\xf3\x04\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\x1a\x15rookery/v1/disk.proto\x1a\x1arookery/v1/interface.proto\x1a\x16rookery/v1/media.proto\"\x96\x05\n" +
 	"\x02VM\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -1027,7 +1051,8 @@ const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAtB\n" +
+	"updated_at\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12!\n" +
+	"\fcgroup_class\x18\x11 \x01(\tR\vcgroupClassB\n" +
 	"\n" +
 	"\b_disk_idB\x10\n" +
 	"\x0e_boot_media_id\"\x10\n" +
@@ -1035,7 +1060,7 @@ const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\x0fListVMsResponse\x12 \n" +
 	"\x03vms\x18\x01 \x03(\v2\x0e.rookery.v1.VMR\x03vms\"(\n" +
 	"\fGetVMRequest\x12\x18\n" +
-	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\"\x93\x04\n" +
+	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\"\xc0\x04\n" +
 	"\x0fCreateVMRequest\x12;\n" +
 	"\x04name\x18\x01 \x01(\tB'\xfaB$r\"\x10\x01\x18@2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$R\x04name\x12*\n" +
 	"\vdescription\x18\x02 \x01(\tB\b\xfaB\x05r\x03\x18\xd0\x0fR\vdescription\x12$\n" +
@@ -1048,7 +1073,8 @@ const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\rinterface_ids\x18\b \x03(\x03R\finterfaceIds\x12\x19\n" +
 	"\bdisk_ids\x18\t \x03(\x03R\adiskIds\x12%\n" +
 	"\adisk_id\x18\n" +
-	" \x01(\x03B\a\xfaB\x04\"\x02 \x00H\x05R\x06diskId\x88\x01\x01B\t\n" +
+	" \x01(\x03B\a\xfaB\x04\"\x02 \x00H\x05R\x06diskId\x88\x01\x01\x12+\n" +
+	"\fcgroup_class\x18\v \x01(\tB\b\xfaB\x05r\x03\x18\xc8\x01R\vcgroupClassB\t\n" +
 	"\a_statusB\b\n" +
 	"\x06_vcpusB\f\n" +
 	"\n" +
@@ -1056,7 +1082,7 @@ const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\x0e_boot_media_idB\x12\n" +
 	"\x10_console_enabledB\n" +
 	"\n" +
-	"\b_disk_id\"\xb4\x05\n" +
+	"\b_disk_id\"\xf7\x05\n" +
 	"\x0fUpdateVMRequest\x12\x18\n" +
 	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\x12@\n" +
 	"\x04name\x18\x02 \x01(\tB'\xfaB$r\"\x10\x01\x18@2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$H\x00R\x04name\x88\x01\x01\x12/\n" +
@@ -1071,7 +1097,8 @@ const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\bdisk_ids\x18\n" +
 	" \x03(\x03R\adiskIds\x127\n" +
 	"\x15replace_interface_ids\x18\v \x01(\bH\aR\x13replaceInterfaceIds\x88\x01\x01\x12-\n" +
-	"\x10replace_disk_ids\x18\f \x01(\bH\bR\x0ereplaceDiskIds\x88\x01\x01B\a\n" +
+	"\x10replace_disk_ids\x18\f \x01(\bH\bR\x0ereplaceDiskIds\x88\x01\x01\x120\n" +
+	"\fcgroup_class\x18\r \x01(\tB\b\xfaB\x05r\x03\x18\xc8\x01H\tR\vcgroupClass\x88\x01\x01B\a\n" +
 	"\x05_nameB\x0e\n" +
 	"\f_descriptionB\t\n" +
 	"\a_statusB\b\n" +
@@ -1081,7 +1108,8 @@ const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\x0e_boot_media_idB\x12\n" +
 	"\x10_console_enabledB\x18\n" +
 	"\x16_replace_interface_idsB\x13\n" +
-	"\x11_replace_disk_ids\"+\n" +
+	"\x11_replace_disk_idsB\x0f\n" +
+	"\r_cgroup_class\"+\n" +
 	"\x0fDeleteVMRequest\x12\x18\n" +
 	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\"*\n" +
 	"\x0eStartVMRequest\x12\x18\n" +

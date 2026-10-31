@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -39,6 +40,7 @@ type vmModel struct {
 	InterfaceIDs   types.List   `tfsdk:"interface_ids"`
 	BootMediaID    types.Int64  `tfsdk:"boot_media_id"`
 	ConsoleEnabled types.Bool   `tfsdk:"console_enabled"`
+	CgroupClass    types.String `tfsdk:"cgroup_class"`
 }
 
 func (r *vmResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -71,6 +73,11 @@ func (r *vmResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *r
 				Description: "Optional installation media id used as a read-only CD-ROM. Omit to clear it on update.",
 			},
 			"console_enabled": schema.BoolAttribute{Optional: true, Computed: true, Description: "Allow VNC console access."},
+			"cgroup_class": schema.StringAttribute{
+				Optional:    true,
+				Computed:    true,
+				Description: "Optional leaf cgroup class name defined in rookery_cgroup_settings, such as prod/web/frontend.",
+			},
 		},
 	}
 }
@@ -106,6 +113,10 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 	}
 	callCtx, cancel := context.WithTimeout(ctx, client.Timeout())
 	defer cancel()
+	if err := validateVMCgroupClass(callCtx, client, plan.CgroupClass.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Create VM", err.Error())
+		return
+	}
 	vm, err := client.VMs.CreateVM(callCtx, &rookeryv1.CreateVMRequest{
 		Name:           plan.Name.ValueString(),
 		Description:    plan.Description.ValueString(),
@@ -115,6 +126,7 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		ConsoleEnabled: boolPointer(plan.ConsoleEnabled),
 		InterfaceIds:   interfaces,
 		DiskIds:        diskIDs,
+		CgroupClass:    plan.CgroupClass.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Create VM", err.Error())
@@ -189,6 +201,9 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		BootMediaId:    int64Pointer(plan.BootMediaID),
 		ConsoleEnabled: boolPointer(plan.ConsoleEnabled),
 	}
+	if !plan.CgroupClass.IsUnknown() && !plan.CgroupClass.Equal(state.CgroupClass) {
+		request.CgroupClass = proto.String(strings.TrimSpace(plan.CgroupClass.ValueString()))
+	}
 	if !plan.DiskIDs.Equal(state.DiskIDs) {
 		request.DiskIds = diskIDs
 		request.ReplaceDiskIds = proto.Bool(true)
@@ -199,6 +214,10 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 	}
 	callCtx, cancel := context.WithTimeout(ctx, client.Timeout())
 	defer cancel()
+	if err := validateVMCgroupClass(callCtx, client, plan.CgroupClass.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Update VM", err.Error())
+		return
+	}
 	vm, err := client.VMs.UpdateVM(callCtx, request)
 	if err != nil {
 		resp.Diagnostics.AddError("Update VM", err.Error())
@@ -256,6 +275,7 @@ func setVMState(ctx context.Context, state *vmModel, vm *rookeryv1.VM) diag.Diag
 	interfaceList, interfaceDiags := int64List(ctx, interfaceIDs)
 	diags.Append(interfaceDiags...)
 	state.InterfaceIDs = interfaceList
+	state.CgroupClass = types.StringValue(vm.GetCgroupClass())
 	return diags
 }
 

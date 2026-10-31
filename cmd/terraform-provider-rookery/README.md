@@ -79,9 +79,10 @@ provider "rookery" {
 | `rookery_route_table` | Custom VRF table (IDs 100000+ are reserved) |
 | `rookery_route` | Static route in a route table, including VPP path options |
 | `rookery_vnf` | DHCPv4/DHCPv6/NAT44/BGP network function |
-| `rookery_vm` | VM definition, disks, interfaces, boot media |
+| `rookery_vm` | VM definition, disks, interfaces, boot media, cgroup class |
 | `rookery_host_interface` | Take a physical NIC into VPP |
 | `rookery_startup_script` | Server-level Rookery or VPP reconnect script |
+| `rookery_cgroup_settings` | Host-wide cgroup limits and reusable VM classes |
 
 VM power actions (`start`, `stop`, `reset`, `ctrl-alt-del`) are deliberately
 not part of `rookery_vm`; use the Rookery UI or API for runtime operations.
@@ -137,6 +138,75 @@ endpoints). Vhost-user interfaces use `rookery_interface`'s
 (once per API process) or `kind = "vpp"` (on every VPP connection/reconnect).
 Only one resource of each kind should exist. Destroying the resource disables
 the script but keeps its text for troubleshooting.
+
+`rookery_cgroup_settings` manages the singleton host-wide cgroup v2
+configuration. Set `enabled = true` to place all QEMU processes under the
+Rookery hierarchy and apply `cpus`, `mems`, `memory_max_bytes`, `cpu_weight`,
+and per-block-device `io_limits`. Saving settings applies them to all running
+VMs. Setting `enabled = false` or destroying the resource moves running QEMU
+processes out of the Rookery hierarchy and removes the cgroups.
+
+`classes` defines reusable, hierarchical profiles below `rookery-cgroup`.
+Names are slash-separated paths such as `prod`, `prod/web`, or
+`prod/web/frontend`, up to three levels deep. Define the parent class before its
+children. A class that has child classes is a grouping node; assign VMs only to
+leaf classes. Values inherit from the host or parent class when omitted:
+
+```hcl
+resource "rookery_cgroup_settings" "host" {
+  enabled          = true
+  cpus             = "0-7"
+  memory_max_bytes = 32 * 1024 * 1024 * 1024
+  cpu_weight       = 500
+
+  io_limits = [
+    {
+      device    = "/dev/nvme0n1"
+      read_bps  = 500 * 1024 * 1024
+      write_bps = 500 * 1024 * 1024
+      weight    = 200
+    },
+  ]
+
+  classes = [
+    {
+      name             = "prod"
+      cpus             = "0-3"
+      memory_max_bytes = 16 * 1024 * 1024 * 1024
+      cpu_weight       = 400
+    },
+    {
+      name             = "prod/web"
+      cpus             = "0-1"
+      memory_max_bytes = 6 * 1024 * 1024 * 1024
+      cpu_weight       = 300
+    },
+    {
+      name             = "prod/web/frontend"
+      cpus             = "0"
+      memory_max_bytes = 3 * 1024 * 1024 * 1024
+      cpu_weight       = 200
+    },
+  ]
+}
+```
+
+Assign a class with `cgroup_class`; omit it or set it to an empty string for the
+shared cgroup. Per-class limits require host cgroup limits to be enabled:
+
+```hcl
+resource "rookery_vm" "app" {
+  name         = "app-vm0"
+  vcpus        = 2
+  memory_mb    = 2048
+  disk_ids     = [rookery_disk.root.id]
+  cgroup_class = "prod/web/frontend"
+
+  depends_on = [rookery_cgroup_settings.host]
+}
+```
+
+Use `depends_on` so classes exist before VMs are created or updated.
 
 `rookery_route` exposes the VPP path options `route_count`, `next_hop_table`,
 `weight`, `udp_encap`, `ipv4_lookup_table`, `ipv6_lookup_table`,
@@ -194,6 +264,7 @@ Each resource has a matching data source:
 | `rookery_vm` | `id` or `name` |
 | `rookery_host_interface` | `nic` |
 | `rookery_startup_script` | `kind` (`rookery` or `vpp`) |
+| `rookery_cgroup_settings` | No arguments; host-wide settings and runtime status |
 
 For route tables and routes, `route_table_id = 0` refers to the default table.
 The two default route tables share record id 0, so set `ipv6` when looking one
@@ -213,6 +284,7 @@ terraform import rookery_host_tap.app 4
 terraform import rookery_vpp_interface_addresses.app_vm0 app-vm0
 terraform import rookery_vpp_interface_route_tables.app_tap hostnet1
 terraform import rookery_startup_script.vpp vpp
+terraform import rookery_cgroup_settings.host cgroup
 ```
 
 Routes use a composite import id:
@@ -227,6 +299,6 @@ terraform import rookery_route.app 7/false/42
 ## Example
 
 See `examples/complete/main.tf` for a full network, disk, VM, ACL, route,
-DHCP VNF, host tap, network pipe, address, route-table, startup-script, and
-template-provisioning example. See `examples/data-sources/main.tf` for the
-matching data sources.
+DHCP VNF, host tap, network pipe, address, route-table, startup-script,
+cgroup-settings, and template-provisioning example. See
+`examples/data-sources/main.tf` for the matching data sources.

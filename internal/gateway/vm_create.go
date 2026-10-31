@@ -37,6 +37,9 @@ func (s *vmService) CreateVM(ctx context.Context, request *rookeryv1.CreateVMReq
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
+	if err := s.validateCgroupClass(ctx, vm.CgroupClass); err != nil {
+		return nil, err
+	}
 	interfaceIDs, err := normalizeGatewayIDs(request.GetInterfaceIds(), gatewayMaxVMInterfaces, "interface_ids")
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -139,6 +142,9 @@ func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMReq
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
+	if err := s.validateCgroupClass(ctx, vm.CgroupClass); err != nil {
+		return nil, err
+	}
 	// Empty repeated fields mean "leave the current set unchanged" unless the
 	// caller explicitly requests replacement.
 	changeInterfaces := request.GetReplaceInterfaceIds() || len(request.GetInterfaceIds()) > 0
@@ -194,8 +200,25 @@ func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMReq
 			return nil, status.Errorf(codes.Aborted, "disk %q is already attached to another VM", disk.Name)
 		}
 	}
+	var cgroupUpdater CgroupUpdater
+	applyCgroup := request.CgroupClass != nil && vm.CgroupClass != existing.CgroupClass &&
+		s.runtime != nil && s.runtime.Running(existing.ID)
+	if applyCgroup {
+		cgroupUpdater, _ = s.runtime.(CgroupUpdater)
+		applyCgroup = cgroupUpdater != nil
+	}
+	if applyCgroup {
+		if err := cgroupUpdater.ApplyCgroup(ctx, vm); err != nil {
+			return nil, status.Error(codes.FailedPrecondition, "could not apply VM cgroup limits: "+err.Error())
+		}
+	}
 	updated, err := s.store.UpdateVM(ctx, vm)
 	if err != nil {
+		if applyCgroup {
+			if revertErr := cgroupUpdater.ApplyCgroup(context.Background(), existing); revertErr != nil {
+				s.logger.Warn().Err(revertErr).Str("vm_id", existing.ID).Msg("could not restore VM cgroup after update failure")
+			}
+		}
 		return nil, vmStoreError(err, "update")
 	}
 	if changeInterfaces {
@@ -240,6 +263,7 @@ func vmFromCreateRequest(request *rookeryv1.CreateVMRequest) (store.VM, error) {
 	if request.ConsoleEnabled != nil {
 		vm.ConsoleEnabled = request.GetConsoleEnabled()
 	}
+	vm.CgroupClass = strings.TrimSpace(request.GetCgroupClass())
 	diskIDs := request.GetDiskIds()
 	if len(diskIDs) == 0 && request.DiskId != nil {
 		diskIDs = []int64{request.GetDiskId()}
@@ -287,7 +311,39 @@ func vmFromUpdateRequest(existing store.VM, request *rookeryv1.UpdateVMRequest) 
 	if request.ConsoleEnabled != nil {
 		vm.ConsoleEnabled = request.GetConsoleEnabled()
 	}
+	if request.CgroupClass != nil {
+		vm.CgroupClass = strings.TrimSpace(request.GetCgroupClass())
+	}
 	return vm, nil
+}
+
+func (s *vmService) validateCgroupClass(ctx context.Context, className string) error {
+	className = strings.TrimSpace(className)
+	if className == "" {
+		return nil
+	}
+	settings, err := s.store.GetCgroupSettings(ctx)
+	if err != nil {
+		return status.Error(codes.Internal, "could not read cgroup settings")
+	}
+	found := false
+	for _, class := range settings.Classes {
+		if strings.TrimSpace(class.Name) == className {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return status.Errorf(codes.InvalidArgument, "cgroup class %q not found", className)
+	}
+	prefix := className + "/"
+	for _, class := range settings.Classes {
+		if strings.HasPrefix(strings.TrimSpace(class.Name), prefix) {
+			return status.Errorf(codes.InvalidArgument,
+				"cgroup class %q has child classes; assign the VM to a leaf class", className)
+		}
+	}
+	return nil
 }
 
 func applyVMName(vm *store.VM, value string, required bool) error {

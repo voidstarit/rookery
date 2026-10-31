@@ -399,6 +399,360 @@ var _ interface {
 	ErrorName() string
 } = ListHostInterfacesResponseValidationError{}
 
+// Validate checks the field values on HostBlockDevice with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *HostBlockDevice) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on HostBlockDevice with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// HostBlockDeviceMultiError, or nil if none found.
+func (m *HostBlockDevice) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *HostBlockDevice) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Name
+
+	// no validation rules for Path
+
+	// no validation rules for Model
+
+	// no validation rules for SizeBytes
+
+	// no validation rules for Major
+
+	// no validation rules for Minor
+
+	// no validation rules for Rotational
+
+	if len(errors) > 0 {
+		return HostBlockDeviceMultiError(errors)
+	}
+
+	return nil
+}
+
+// HostBlockDeviceMultiError is an error wrapping multiple validation errors
+// returned by HostBlockDevice.ValidateAll() if the designated constraints
+// aren't met.
+type HostBlockDeviceMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m HostBlockDeviceMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m HostBlockDeviceMultiError) AllErrors() []error { return m }
+
+// HostBlockDeviceValidationError is the validation error returned by
+// HostBlockDevice.Validate if the designated constraints aren't met.
+type HostBlockDeviceValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e HostBlockDeviceValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e HostBlockDeviceValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e HostBlockDeviceValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e HostBlockDeviceValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e HostBlockDeviceValidationError) ErrorName() string { return "HostBlockDeviceValidationError" }
+
+// Error satisfies the builtin error interface
+func (e HostBlockDeviceValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sHostBlockDevice.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = HostBlockDeviceValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = HostBlockDeviceValidationError{}
+
+// Validate checks the field values on ListHostBlockDevicesRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ListHostBlockDevicesRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ListHostBlockDevicesRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ListHostBlockDevicesRequestMultiError, or nil if none found.
+func (m *ListHostBlockDevicesRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ListHostBlockDevicesRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if len(errors) > 0 {
+		return ListHostBlockDevicesRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// ListHostBlockDevicesRequestMultiError is an error wrapping multiple
+// validation errors returned by ListHostBlockDevicesRequest.ValidateAll() if
+// the designated constraints aren't met.
+type ListHostBlockDevicesRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ListHostBlockDevicesRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ListHostBlockDevicesRequestMultiError) AllErrors() []error { return m }
+
+// ListHostBlockDevicesRequestValidationError is the validation error returned
+// by ListHostBlockDevicesRequest.Validate if the designated constraints
+// aren't met.
+type ListHostBlockDevicesRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ListHostBlockDevicesRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ListHostBlockDevicesRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ListHostBlockDevicesRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ListHostBlockDevicesRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ListHostBlockDevicesRequestValidationError) ErrorName() string {
+	return "ListHostBlockDevicesRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ListHostBlockDevicesRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListHostBlockDevicesRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ListHostBlockDevicesRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ListHostBlockDevicesRequestValidationError{}
+
+// Validate checks the field values on ListHostBlockDevicesResponse with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ListHostBlockDevicesResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ListHostBlockDevicesResponse with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ListHostBlockDevicesResponseMultiError, or nil if none found.
+func (m *ListHostBlockDevicesResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ListHostBlockDevicesResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	for idx, item := range m.GetDevices() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ListHostBlockDevicesResponseValidationError{
+						field:  fmt.Sprintf("Devices[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ListHostBlockDevicesResponseValidationError{
+						field:  fmt.Sprintf("Devices[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ListHostBlockDevicesResponseValidationError{
+					field:  fmt.Sprintf("Devices[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return ListHostBlockDevicesResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// ListHostBlockDevicesResponseMultiError is an error wrapping multiple
+// validation errors returned by ListHostBlockDevicesResponse.ValidateAll() if
+// the designated constraints aren't met.
+type ListHostBlockDevicesResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ListHostBlockDevicesResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ListHostBlockDevicesResponseMultiError) AllErrors() []error { return m }
+
+// ListHostBlockDevicesResponseValidationError is the validation error returned
+// by ListHostBlockDevicesResponse.Validate if the designated constraints
+// aren't met.
+type ListHostBlockDevicesResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ListHostBlockDevicesResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ListHostBlockDevicesResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ListHostBlockDevicesResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ListHostBlockDevicesResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ListHostBlockDevicesResponseValidationError) ErrorName() string {
+	return "ListHostBlockDevicesResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ListHostBlockDevicesResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListHostBlockDevicesResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ListHostBlockDevicesResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ListHostBlockDevicesResponseValidationError{}
+
 // Validate checks the field values on AttachHostInterfaceRequest with the
 // rules defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.

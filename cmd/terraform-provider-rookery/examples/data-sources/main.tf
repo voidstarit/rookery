@@ -65,6 +65,8 @@ data "rookery_startup_script" "vpp" {
   kind = "vpp"
 }
 
+data "rookery_cgroup_settings" "host" {}
+
 data "rookery_acl" "app" {
   name = "app"
 }
@@ -97,4 +99,8 @@ output "network_route_table" {
 
 output "vm_status" {
   value = data.rookery_vm.app.status
+}
+
+output "cgroup_status" {
+  value = data.rookery_cgroup_settings.host.configured
 }

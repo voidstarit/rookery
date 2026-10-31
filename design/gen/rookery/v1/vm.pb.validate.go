@@ -257,6 +257,8 @@ func (m *VM) validate(all bool) error {
 		}
 	}
 
+	// no validation rules for CgroupClass
+
 	if m.DiskId != nil {
 		// no validation rules for DiskId
 	}
@@ -750,6 +752,17 @@ func (m *CreateVMRequest) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
+	if utf8.RuneCountInString(m.GetCgroupClass()) > 200 {
+		err := CreateVMRequestValidationError{
+			field:  "CgroupClass",
+			reason: "value length must be at most 200 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
 	if m.Status != nil {
 
 		if utf8.RuneCountInString(m.GetStatus()) > 32 {
@@ -1054,6 +1067,21 @@ func (m *UpdateVMRequest) validate(all bool) error {
 
 	if m.ReplaceDiskIds != nil {
 		// no validation rules for ReplaceDiskIds
+	}
+
+	if m.CgroupClass != nil {
+
+		if utf8.RuneCountInString(m.GetCgroupClass()) > 200 {
+			err := UpdateVMRequestValidationError{
+				field:  "CgroupClass",
+				reason: "value length must be at most 200 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
 	}
 
 	if len(errors) > 0 {

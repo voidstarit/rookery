@@ -68,6 +68,7 @@ type options struct {
 	vnfRuntime         VNFRuntime
 	vnfStatusProvider  VNFStatusProvider
 	vnfWriter          VNFWriter
+	cgroup             CgroupRuntime
 }
 
 // WithGRPCListener exposes the generated gRPC server on listener instead of an
@@ -189,6 +190,13 @@ func WithVNFWriter(writer VNFWriter) Option {
 	}
 }
 
+// WithCgroupRuntime enables host cgroup settings management.
+func WithCgroupRuntime(runtime CgroupRuntime) Option {
+	return func(opts *options) {
+		opts.cgroup = runtime
+	}
+}
+
 // WithLogger sets the gateway logger used by disk preparation scripts.
 func WithLogger(logger zerolog.Logger) Option {
 	return func(opts *options) {
@@ -238,7 +246,14 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 		listener = bufconn.Listen(1 << 20)
 	}
 	server := grpc.NewServer(grpc.ChainUnaryInterceptor(errorLogInterceptor(options.logger), validationInterceptor))
-	system := &systemService{store: st, readiness: ready}
+	var cgroupUpdater CgroupUpdater
+	if updater, ok := options.vmController.(CgroupUpdater); ok {
+		cgroupUpdater = updater
+	}
+	system := &systemService{
+		store: st, readiness: ready, cgroup: options.cgroup,
+		vms: options.vmController, cgroupUpdater: cgroupUpdater,
+	}
 	vms := &vmService{store: st, runtime: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, mu: options.vmMutex, logger: options.logger}
 	disks := &diskService{store: st, runtime: options.diskProvisioner, readiness: ready, mu: options.diskMutex, logger: options.logger}
 	media := &mediaService{store: st}
@@ -416,8 +431,11 @@ func errorHandler(_ context.Context, _ *runtime.ServeMux, _ runtime.Marshaler, w
 
 type systemService struct {
 	rookeryv1.UnimplementedSystemServiceServer
-	store     *store.Store
-	readiness Readiness
+	store         *store.Store
+	readiness     Readiness
+	cgroup        CgroupRuntime
+	vms           VMController
+	cgroupUpdater CgroupUpdater
 }
 
 func (s *systemService) GetHealth(ctx context.Context, _ *rookeryv1.GetHealthRequest) (*rookeryv1.HealthResponse, error) {
@@ -541,6 +559,7 @@ func vmToProto(vm store.VM) *rookeryv1.VM {
 			IngressAclName: iface.IngressACLName, EgressAclName: iface.EgressACLName,
 		})
 	}
+	result.CgroupClass = vm.CgroupClass
 	return result
 }
 

@@ -68,6 +68,10 @@ running VMs.
 - QEMU with KVM support (`qemu-system-x86_64` and `/dev/kvm`)
 - Permission to create `/run/rookery` (or configure another `-run-dir`) and to
   start QEMU processes
+- cgroup v2 mounted at `/sys/fs/cgroup` and write access below `-cgroup-root`
+  (default `/sys/fs/cgroup/rookery-cgroup`) to enable host and class resource limits;
+  Rookery reports cgroup availability in Settings and refuses to start a VM
+  when enabled limits cannot be applied
 
 The socket is VPP's **binary API** socket, not the CLI socket
 (`/run/vpp/cli.sock`) or a QEMU vhost-user socket. The default is
@@ -229,6 +233,63 @@ in the run directory. QEMU is launched with `-nic none` plus explicit
 vhost-user netdevs for interfaces attached through Rookery Networks.
 
 
+## cgroup v2 resource limits
+
+Settings → **Cgroup v2 resources** configures a host-wide parent cgroup and
+reusable **classes** for QEMU. When enabled, every QEMU process is launched
+there, using `clone3(CLONE_INTO_CGROUP)` when the kernel supports it and an
+explicit `cgroup.procs` move otherwise. Rookery creates:
+
+- `<cgroup-root>/shared` for VMs without a class.
+- `<cgroup-root>/<path>` for each class path, for example
+  `<cgroup-root>/prod/web/frontend`.
+
+Class names are slash-separated paths such as `prod`, `prod/web`, or
+`prod/web/frontend`, nested up to three levels below `rookery-cgroup`. Define
+the parent class first; the tree editor shows the hierarchy. VMs are assigned
+only to leaf classes so a class node that has child classes stays free of
+processes while controllers are distributed, satisfying cgroup v2's
+no-internal-process rule. Parent classes group children and can carry inherited
+limits. Class values inherit from the host and parent class when omitted.
+
+Host and class settings map to cgroup v2 attributes:
+
+- CPU cores → `cpuset.cpus`; memory nodes → `cpuset.mems`
+- total/per-class memory → `memory.max`
+- CPU weight → `cpu.weight`
+- per-block-device bandwidth/IOPS → `io.max` (`rbps`, `wbps`, `riops`, `wiops`)
+- per-block-device weight → `io.weight`
+
+The UI lists online CPUs and whole block devices from `/sys/class/block`.
+Devices are resolved to their major/minor numbers when limits are applied.
+`io.weight` requires a kernel with the BFQ I/O scheduler; hosts without it
+return an error when a weight is requested instead of silently ignoring it.
+Class limits require host-wide cgroup limits to be enabled. When host-wide
+limits are disabled, Rookery moves all running QEMU processes out of the
+Rookery cgroups and removes the hierarchy; VMs start without cgroup limits until
+host-wide limits are enabled again. Enabling host-wide limits applies the
+current class assignments to all running VMs.
+
+VMs store only a `cgroup_class` name. A VM without a class runs in the shared
+child cgroup and inherits host ceilings. Assigning a class applies that class's
+CPU, memory, CPU weight, and I/O limits. Saving a VM applies its class change
+immediately (when cgroup limits are enabled): Rookery moves the running QEMU
+process (all of its threads) into the shared or leaf class cgroup as needed,
+without stopping it. Saving host-wide settings also re-places every running VM
+immediately. Shrinking the host CPU or memory-node set clamps running child
+cgroups to the remaining CPUs/nodes so the parent update can succeed. Removing
+a class that is still assigned to a VM is rejected while cgroup limits are
+enabled; reassign the VM first. If the host rejects a limit (for example because
+the cgroup2 delegation is missing or a CPU set is outside the parent set), the
+API rolls the settings back and reports the kernel error. If the settings save
+but one running VM cannot accept the new limits, the API reports that VM.
+
+`GET`/`PUT /api/cgroup-settings` manage the host configuration and classes,
+`GET /api/cgroup-usage` returns live memory, CPU, task, and I/O counters for the
+root, shared, and class cgroups, and `GET /api/host/block-devices` lists devices
+for the I/O picker. Settings polls cgroup usage every two seconds while visible
+and derives CPU cores and I/O rates from consecutive samples.
+
 ## Flags and environment variables
 
 | Flag              | Environment variable   | Default             | Used by         | Description |
@@ -242,6 +303,7 @@ vhost-user netdevs for interfaces attached through Rookery Networks.
 | `-vpp-socket`     | `ROOKERY_VPP_SOCKET` | `/run/vpp/api.sock` | `serve`, `init`, `vnfs` | VPP binary API Unix socket |
 | `-qemu-bin`       | `ROOKERY_QEMU_BIN`   | `qemu-system-x86_64`| `serve`         | QEMU system emulator binary |
 | `-run-dir`        | `ROOKERY_RUN_DIR`    | `/run/rookery`    | `serve`, `vnfs` | QEMU pid/VNC sockets; VNF state and lease files |
+| `-cgroup-root`    | `ROOKERY_CGROUP_ROOT`| `/sys/fs/cgroup/rookery-cgroup` | `serve`   | Parent cgroup v2 for QEMU resource limits |
 | `-memif-dir`      | `ROOKERY_MEMIF_DIR`    | `/run/rookery/memif`| `serve`         | VNF memif socket directory |
 | `-vhost-dir`      | `ROOKERY_VHOST_DIR`  | `/run/vpp`          | `serve`, `vnfs` | VPP vhost-user socket directory |
 | `-vnf-addr`       | `ROOKERY_VNF_ADDR`   | `unix:///run/rookery/vnfs.sock` | `serve` | VNF daemon control address (`unix://` or `tcp://`) |
@@ -293,6 +355,7 @@ api:
   db: /var/lib/rookery/rookery.db
   check_interval: 10s
   rate_limit: 3
+  cgroup_root: /sys/fs/cgroup/rookery-cgroup
   log_level: info
   mtls_addr: ":8443"
 

@@ -108,6 +108,9 @@ resource "rookery_vm" "app" {
   memory_mb     = 2048
   disk_ids      = [rookery_disk.root.id]
   interface_ids = [rookery_interface.app.id]
+  cgroup_class  = "prod/web/frontend"
+
+  depends_on = [rookery_cgroup_settings.host]
 }
 
 resource "rookery_acl" "app" {
@@ -153,6 +156,51 @@ resource "rookery_startup_script" "vpp" {
   kind    = "vpp"
   enabled = true
   script  = "vppctl set nat workers 0"
+}
+
+resource "rookery_cgroup_settings" "host" {
+  enabled          = true
+  cpus             = "0-7"
+  memory_max_bytes = 32 * 1024 * 1024 * 1024
+  cpu_weight       = 500
+
+  io_limits = [
+    {
+      device    = "/dev/nvme0n1"
+      read_bps  = 500 * 1024 * 1024
+      write_bps = 500 * 1024 * 1024
+      weight    = 200
+    },
+  ]
+
+  classes = [
+    {
+      name             = "prod"
+      cpus             = "0-3"
+      memory_max_bytes = 16 * 1024 * 1024 * 1024
+      cpu_weight       = 400
+    },
+    {
+      name             = "prod/web"
+      cpus             = "0-1"
+      memory_max_bytes = 6 * 1024 * 1024 * 1024
+      cpu_weight       = 300
+    },
+    {
+      name             = "prod/web/frontend"
+      cpus             = "0"
+      memory_max_bytes = 3 * 1024 * 1024 * 1024
+      cpu_weight       = 200
+      io_limits = [
+        {
+          device    = "/dev/nvme0n1"
+          read_bps  = 300 * 1024 * 1024
+          write_bps = 300 * 1024 * 1024
+          weight    = 150
+        },
+      ]
+    },
+  ]
 }
 
 resource "rookery_vnf" "dns" {

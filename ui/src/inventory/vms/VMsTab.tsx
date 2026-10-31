@@ -324,6 +324,7 @@ export function VMsTab() {
                   <th scope="col">Status</th>
                   <th scope="col">vCPU</th>
                   <th scope="col">Memory</th>
+                  <th scope="col">Cgroup</th>
                   <th scope="col">Disks</th>
                   <th scope="col">Boot</th>
                   <th scope="col">Console</th>
@@ -359,6 +360,12 @@ export function VMsTab() {
                       </td>
                       <td class="mono">{numberFormat.format(vm.vcpus)}</td>
                       <td class="mono">{formatMemory(vm.memory_mb)}</td>
+                      <td
+                        class={vm.cgroup_class ? "mono" : "mono muted"}
+                        title={vm.cgroup_class ? `Cgroup class: ${vm.cgroup_class}` : "Shared cgroup"}
+                      >
+                        {vm.cgroup_class || "shared"}
+                      </td>
                       <td
                         class={disksForVM.length ? "mono" : "mono muted"}
                         title={

@@ -143,6 +143,7 @@ type VM struct {
 	BootMedia      *VMMedia      `json:"boot_media,omitempty"`
 	Interfaces     []VMInterface `json:"interfaces,omitempty"`
 	ConsoleEnabled bool          `json:"console_enabled"`
+	CgroupClass    string        `json:"cgroup_class,omitempty"`
 	CreatedAt      time.Time     `json:"created_at"`
 	UpdatedAt      time.Time     `json:"updated_at"`
 }
@@ -640,9 +641,9 @@ func (s *Store) CreateVM(ctx context.Context, vm VM) (VM, error) {
 	}
 	defer tx.Rollback()
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO vms (id, name, description, status, desired_state, vcpus, memory_mb, disk_id, boot_media_id, console_enabled, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		vm.ID, vm.Name, vm.Description, vm.Status, vm.DesiredState, vm.VCPUs, vm.MemoryMB, diskIDs[0], vm.BootMediaID, vm.ConsoleEnabled, now, now,
+		INSERT INTO vms (id, name, description, status, desired_state, vcpus, memory_mb, disk_id, boot_media_id, console_enabled, cgroup_class, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		vm.ID, vm.Name, vm.Description, vm.Status, vm.DesiredState, vm.VCPUs, vm.MemoryMB, diskIDs[0], vm.BootMediaID, vm.ConsoleEnabled, vm.CgroupClass, now, now,
 	); err != nil {
 		if constraintErr := classifyVMCreateError(err, vm.Name); constraintErr != nil {
 			return VM{}, constraintErr
@@ -793,9 +794,9 @@ func (s *Store) UpdateVM(ctx context.Context, vm VM) (VM, error) {
 
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE vms
-		SET name = ?, description = ?, status = ?, vcpus = ?, memory_mb = ?, boot_media_id = ?, console_enabled = ?, updated_at = ?
+		SET name = ?, description = ?, status = ?, vcpus = ?, memory_mb = ?, boot_media_id = ?, console_enabled = ?, cgroup_class = ?, updated_at = ?
 		WHERE id = ?`,
-		vm.Name, vm.Description, vm.Status, vm.VCPUs, vm.MemoryMB, vm.BootMediaID, vm.ConsoleEnabled, now, vm.ID,
+		vm.Name, vm.Description, vm.Status, vm.VCPUs, vm.MemoryMB, vm.BootMediaID, vm.ConsoleEnabled, vm.CgroupClass, now, vm.ID,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -2290,7 +2291,7 @@ const vmSelect = `
 	SELECT v.id, v.name, v.description, v.status, v.desired_state, v.vcpus, v.memory_mb,
 	       v.disk_id, d.name, d.size_gb, d.vg, d.thin_pool,
 	       v.boot_media_id, m.name, m.path, m.size_bytes,
-	       v.console_enabled, v.created_at, v.updated_at
+	       v.console_enabled, v.cgroup_class, v.created_at, v.updated_at
 	FROM vms AS v
 	LEFT JOIN disks AS d ON d.id = v.disk_id
 	LEFT JOIN media AS m ON m.id = v.boot_media_id`
@@ -2321,6 +2322,7 @@ func scanVM(s scanner) (VM, error) {
 		mediaPath   sql.NullString
 		mediaSize   sql.NullInt64
 		console     int64
+		cgroupClass string
 	)
 	if err := s.Scan(
 		&vm.ID,
@@ -2340,6 +2342,7 @@ func scanVM(s scanner) (VM, error) {
 		&mediaPath,
 		&mediaSize,
 		&console,
+		&cgroupClass,
 		&createdAt,
 		&updatedAt,
 	); err != nil {
@@ -2347,6 +2350,7 @@ func scanVM(s scanner) (VM, error) {
 	}
 
 	vm.ConsoleEnabled = console != 0
+	vm.CgroupClass = strings.TrimSpace(cgroupClass)
 
 	if diskID.Valid {
 		id := diskID.Int64

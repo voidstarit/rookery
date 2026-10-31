@@ -10,31 +10,13 @@
       "name": "SystemService"
     },
     {
-      "name": "DiskService"
-    },
-    {
       "name": "MediaService"
-    },
-    {
-      "name": "NetworkService"
-    },
-    {
-      "name": "InterfaceService"
     },
     {
       "name": "ACLService"
     },
     {
-      "name": "VNFService"
-    },
-    {
-      "name": "VMService"
-    },
-    {
       "name": "StorageBackendService"
-    },
-    {
-      "name": "HostService"
     },
     {
       "name": "TroubleshootService"
@@ -43,10 +25,28 @@
       "name": "CaptureService"
     },
     {
+      "name": "DiskService"
+    },
+    {
+      "name": "InterfaceService"
+    },
+    {
+      "name": "NetworkService"
+    },
+    {
       "name": "RouteTableService"
     },
     {
+      "name": "VNFService"
+    },
+    {
       "name": "VNFDaemon"
+    },
+    {
+      "name": "HostService"
+    },
+    {
+      "name": "VMService"
     }
   ],
   "schemes": [
@@ -210,6 +210,83 @@
         ],
         "tags": [
           "ACLService"
+        ]
+      }
+    },
+    "/api/cgroup-settings": {
+      "get": {
+        "summary": "GetCgroupSettings returns the host-wide cgroup v2 limits and runtime\nstatus.",
+        "operationId": "SystemService_GetCgroupSettings",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CgroupSettings"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "SystemService"
+        ]
+      },
+      "put": {
+        "summary": "UpdateCgroupSettings stores and applies host-wide cgroup v2 limits. Every\nQEMU process runs below the configured parent cgroup.",
+        "operationId": "SystemService_UpdateCgroupSettings",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CgroupSettings"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1UpdateCgroupSettingsRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SystemService"
+        ]
+      }
+    },
+    "/api/cgroup-usage": {
+      "get": {
+        "summary": "GetCgroupUsage returns live memory, CPU, task, and I/O usage for the\nRookery cgroup hierarchy.",
+        "operationId": "SystemService_GetCgroupUsage",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CgroupUsageResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "SystemService"
         ]
       }
     },
@@ -386,6 +463,33 @@
         },
         "tags": [
           "SystemService"
+        ]
+      }
+    },
+    "/api/host/block-devices": {
+      "get": {
+        "summary": "ListHostBlockDevices lists whole block devices that can be used in cgroup\nI/O limit rules.",
+        "operationId": "HostService_ListHostBlockDevices",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1HostBlockDevice"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "HostService"
         ]
       }
     },
@@ -3294,6 +3398,9 @@
         },
         "replace_disk_ids": {
           "type": "boolean"
+        },
+        "cgroup_class": {
+          "type": "string"
         }
       }
     },
@@ -3488,6 +3595,212 @@
           "format": "uint64"
         }
       }
+    },
+    "v1CgroupClass": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "cpus": {
+          "type": "string"
+        },
+        "memory_max_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "cpu_weight": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "io_limits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1CgroupIOLimit"
+          }
+        }
+      },
+      "description": "CgroupClass is a named, hierarchical cgroup profile. Name uses\nslash-separated segments such as \"production/web\"; parent cgroups are created\nautomatically and zero values inherit the host or parent class setting."
+    },
+    "v1CgroupIOLimit": {
+      "type": "object",
+      "properties": {
+        "device": {
+          "type": "string"
+        },
+        "read_bps": {
+          "type": "string",
+          "format": "int64"
+        },
+        "write_bps": {
+          "type": "string",
+          "format": "int64"
+        },
+        "read_iops": {
+          "type": "string",
+          "format": "int64"
+        },
+        "write_iops": {
+          "type": "string",
+          "format": "int64"
+        },
+        "weight": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "CgroupIOLimit is a per-block-device I/O limit. Zero numeric values mean no\nlimit (or inherit the host value for a VM override)."
+    },
+    "v1CgroupSettings": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "cpus": {
+          "type": "string"
+        },
+        "mems": {
+          "type": "string"
+        },
+        "memory_max_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "cpu_weight": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "io_limits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1CgroupIOLimit"
+          }
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "configured": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "mount": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string"
+        },
+        "online_cpus": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "cpu_model": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "classes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1CgroupClass"
+          }
+        }
+      },
+      "description": "CgroupSettings is the host-wide cgroup v2 configuration plus runtime status."
+    },
+    "v1CgroupUsageNode": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "memory_current_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "memory_max_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "cpu_usage_usec": {
+          "type": "string",
+          "format": "int64"
+        },
+        "pids_current": {
+          "type": "string",
+          "format": "int64"
+        },
+        "pids_max": {
+          "type": "string",
+          "format": "int64"
+        },
+        "io_read_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "io_write_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "io_read_ops": {
+          "type": "string",
+          "format": "int64"
+        },
+        "io_write_ops": {
+          "type": "string",
+          "format": "int64"
+        },
+        "cpus": {
+          "type": "string"
+        }
+      },
+      "description": "CgroupUsageNode is live resource usage for one cgroup hierarchy node."
+    },
+    "v1CgroupUsageResponse": {
+      "type": "object",
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "configured": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string"
+        },
+        "online_cpus": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "sampled_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1CgroupUsageNode"
+          }
+        }
+      },
+      "description": "CgroupUsageResponse is a point-in-time snapshot. CPU and I/O counters are\ncumulative; clients derive rates between samples."
     },
     "v1CreateACLRequest": {
       "type": "object",
@@ -3689,6 +4002,9 @@
         "disk_id": {
           "type": "string",
           "format": "int64"
+        },
+        "cgroup_class": {
+          "type": "string"
         }
       }
     },
@@ -3910,6 +4226,35 @@
       "properties": {
         "status": {
           "type": "string"
+        }
+      }
+    },
+    "v1HostBlockDevice": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "size_bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "major": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "minor": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "rotational": {
+          "type": "boolean"
         }
       }
     },
@@ -4148,6 +4493,18 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1FIBRoute"
+          }
+        }
+      }
+    },
+    "v1ListHostBlockDevicesResponse": {
+      "type": "object",
+      "properties": {
+        "devices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1HostBlockDevice"
           }
         }
       }
@@ -4931,6 +5288,42 @@
         }
       }
     },
+    "v1UpdateCgroupSettingsRequest": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "cpus": {
+          "type": "string"
+        },
+        "mems": {
+          "type": "string"
+        },
+        "memory_max_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "cpu_weight": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "io_limits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1CgroupIOLimit"
+          }
+        },
+        "classes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1CgroupClass"
+          }
+        }
+      }
+    },
     "v1UpdateStartupScriptRequest": {
       "type": "object",
       "properties": {
@@ -5021,6 +5414,9 @@
         "updated_at": {
           "type": "string",
           "format": "date-time"
+        },
+        "cgroup_class": {
+          "type": "string"
         }
       }
     },

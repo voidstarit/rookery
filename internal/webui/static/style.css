@@ -3053,3 +3053,233 @@ body.route-page-mode #networks-panel .panel-spaced {
     grid-column: auto;
   }
 }
+
+.cgroup-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.cgroup-cpu-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.cpu-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.cpu-chip {
+  min-width: 2.3rem;
+  padding: 0.28rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--field);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.cpu-chip:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.cpu-chip.selected {
+  border-color: var(--accent-strong);
+  background: rgba(45, 212, 191, 0.16);
+  color: var(--accent);
+}
+
+.cpu-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.cgroup-io-editor {
+  margin-top: 0.45rem;
+}
+
+.cgroup-io-table {
+  min-width: 860px;
+}
+
+.cgroup-io-table th {
+  white-space: nowrap;
+}
+
+.cgroup-io-table input,
+.cgroup-io-table select {
+  min-width: 6.5rem;
+}
+
+.cgroup-vm-section {
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.014);
+}
+
+.cgroup-vm-fields {
+  margin-top: 0.85rem;
+  padding: 0;
+}
+
+.cgroup-vm-fields .field-wide {
+  grid-column: 1 / -1;
+}
+
+.cgroup-class-grid {
+  margin-top: 0.7rem;
+  padding: 0;
+}
+
+.cgroup-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 0.7rem;
+}
+
+.cgroup-tree-root {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(45, 212, 191, 0.4);
+  border-radius: 10px;
+  background: rgba(45, 212, 191, 0.06);
+}
+
+.cgroup-tree-root-name {
+  display: block;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.cgroup-tree-node {
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.012);
+}
+
+.cgroup-tree-node-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.cgroup-tree-title {
+  display: flex;
+  flex: 1 1 16rem;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.cgroup-tree-name {
+  width: 9rem;
+  max-width: 100%;
+  font-family: var(--font-mono);
+}
+
+.cgroup-tree-path {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  overflow-wrap: anywhere;
+}
+
+.cgroup-tree-limits {
+  margin-top: 0.55rem;
+}
+
+.cgroup-tree-limits summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.cgroup-tree-children {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  margin-left: 0.85rem;
+  padding-left: 0.8rem;
+  border-left: 1px dashed var(--border);
+}
+.cgroup-telemetry {
+  margin: 1rem 0 1.4rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.cgroup-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.cgroup-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(7, 12, 18, 0.35);
+}
+
+.cgroup-metric strong {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+}
+
+.usage-bar {
+  height: 0.3rem;
+  margin-top: 0.35rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(94, 234, 212, 0.1);
+}
+
+.usage-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 300ms ease;
+}
+
+.cgroup-usage-table th,
+.cgroup-usage-table td {
+  padding: 0.55rem 0.7rem;
+  white-space: nowrap;
+}
+
+.cgroup-usage-table td:first-child {
+  white-space: normal;
+}
+
+@media (max-width: 900px) {
+  .cgroup-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

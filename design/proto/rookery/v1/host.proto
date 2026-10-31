@@ -18,6 +18,15 @@ service HostService {
     };
   }
 
+  // ListHostBlockDevices lists whole block devices that can be used in cgroup
+  // I/O limit rules.
+  rpc ListHostBlockDevices(ListHostBlockDevicesRequest) returns (ListHostBlockDevicesResponse) {
+    option (google.api.http) = {
+      get: "/api/host/block-devices"
+      response_body: "devices"
+    };
+  }
+
   // AttachHostInterface takes over a host NIC into VPP and persists it so it
   // is recreated after a VPP restart.
   rpc AttachHostInterface(AttachHostInterfaceRequest) returns (HostInterface) {
@@ -78,6 +87,22 @@ message ListHostInterfacesRequest {}
 
 message ListHostInterfacesResponse {
   repeated HostInterface interfaces = 1;
+}
+
+message HostBlockDevice {
+  string name = 1;
+  string path = 2;
+  string model = 3;
+  uint64 size_bytes = 4;
+  uint32 major = 5;
+  uint32 minor = 6;
+  bool rotational = 7;
+}
+
+message ListHostBlockDevicesRequest {}
+
+message ListHostBlockDevicesResponse {
+  repeated HostBlockDevice devices = 1;
 }
 
 message AttachHostInterfaceRequest {

@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
-import type { Disk, Media, VM, VMDisk, VirtualInterface, VMInterface } from "../types";
+import type {
+  CgroupSettings,
+  Disk,
+  Media,
+  VM,
+  VMDisk,
+  VirtualInterface,
+  VMInterface,
+} from "../types";
 
 type VMDialogProps = {
   vm: VM | null;
@@ -50,6 +58,8 @@ export function VMDialog({
   const [vcpus, setVCPUs] = useState(String(vm?.vcpus ?? 1));
   const [memoryMB, setMemoryMB] = useState(String(vm?.memory_mb ?? 512));
   const [consoleEnabled, setConsoleEnabled] = useState(Boolean(vm?.console_enabled));
+  const [cgroupSettings, setCgroupSettings] = useState<CgroupSettings | null>(null);
+  const [cgroupClass, setCgroupClass] = useState(vm?.cgroup_class || "");
   const [bootMediaID, setBootMediaID] = useState(
     vm?.boot_media_id !== undefined ? String(vm.boot_media_id) : ""
   );
@@ -68,6 +78,10 @@ export function VMDialog({
   const running = Boolean(vm && (vm.status === "running" || vm.status === "starting"));
   const selectedDiskIDs = new Set(selectedDisks.map((disk) => disk.id));
   const selectedInterfaceIDs = new Set(selectedInterfaces.map((iface) => iface.id));
+  const cgroupClasses = Array.isArray(cgroupSettings?.classes) ? cgroupSettings.classes : [];
+  const leafCgroupClasses = cgroupClasses.filter(
+    (item) => !cgroupClasses.some((other) => other.name.startsWith(item.name + "/"))
+  );
 
   const availableDisks = disks.filter((disk) => {
     if (disk.is_template) {
@@ -91,6 +105,11 @@ export function VMDialog({
     nameRef.current?.focus();
   }, []);
 
+  useEffect(() => {
+    api<CgroupSettings>("/api/cgroup-settings")
+      .then(setCgroupSettings)
+      .catch(() => setCgroupSettings(null));
+  }, []);
   useEffect(() => {
     if (running) {
       setDiskHint("Stop the VM before changing its disks.");
@@ -203,6 +222,8 @@ export function VMDialog({
     if (bootMedia) {
       payload.boot_media_id = bootMedia;
     }
+
+    payload.cgroup_class = cgroupClass;
 
     setError("");
     setSaving(true);
@@ -377,6 +398,32 @@ export function VMDialog({
             </span>
             <span class="field-hint">When disabled, the console page and VNC WebSocket are blocked.</span>
           </label>
+
+          <div class="field field-wide cgroup-vm-section">
+            <label class="field">
+              <span class="field-label">
+                Cgroup class <em>optional</em>
+              </span>
+              <select value={cgroupClass} onChange={(event) => setCgroupClass(event.currentTarget.value)}>
+                <option value="">Shared cgroup (host defaults)</option>
+                {!leafCgroupClasses.some((item) => item.name === cgroupClass) && cgroupClass ? (
+                  <option value={cgroupClass}>{cgroupClass} (not a leaf class)</option>
+                ) : null}
+                {leafCgroupClasses.map((item) => (
+                  <option value={item.name} key={item.name}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+              <span class="field-hint">
+                Select a class defined in Settings. Changes are applied immediately to a running VM
+                by moving its QEMU process into the class cgroup.
+                {cgroupSettings && !cgroupSettings.enabled
+                  ? " Host-wide cgroup limits are disabled in Settings; the class applies when host cgroup limits are enabled."
+                  : ""}
+              </span>
+            </label>
+          </div>
 
           <div class="field field-wide">
             <span class="field-label">Network interfaces <em>optional</em></span>

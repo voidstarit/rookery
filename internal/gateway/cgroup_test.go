@@ -1,0 +1,159 @@
+package gateway
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/voidstarit/rookery/internal/cgroup"
+	"github.com/voidstarit/rookery/internal/store"
+)
+
+type recordingCgroupRuntime struct {
+	settings     cgroup.Settings
+	configureErr error
+	usage        cgroup.Usage
+}
+
+func (r *recordingCgroupRuntime) Configure(settings cgroup.Settings) error {
+	if r.configureErr != nil {
+		return r.configureErr
+	}
+	r.settings = settings
+	return nil
+}
+
+func (r *recordingCgroupRuntime) Validate(cgroup.Settings) error { return nil }
+
+func (r *recordingCgroupRuntime) Usage() cgroup.Usage { return r.usage }
+
+func (r *recordingCgroupRuntime) Status() cgroup.Status {
+	return cgroup.Status{
+		Available: true, Configured: true, Enabled: r.settings.Enabled,
+		Mount: "/sys/fs/cgroup", Root: "/sys/fs/cgroup/rookery",
+		OnlineCPUs: []int{0, 1}, CheckedAt: time.Now().UTC(),
+	}
+}
+
+func TestUpdateCgroupSettingsHTTP(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "gateway-cgroup.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	runtime := &recordingCgroupRuntime{}
+	gw, err := New(st, nil, WithCgroupRuntime(runtime))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	server := httptest.NewServer(gw.Handler)
+	t.Cleanup(server.Close)
+
+	body := []byte(`{
+		"enabled": true,
+		"cpus": "0-1",
+		"memory_max_bytes": 1073741824,
+		"cpu_weight": 500,
+		"io_limits": [{"device": "/dev/sda", "read_bps": 1048576, "weight": 200}],
+		"classes": [{"name": "prod", "cpus": "0", "memory_max_bytes": 536870912}]
+	}`)
+	response, err := http.NewRequest(http.MethodPut, server.URL+"/api/cgroup-settings", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Header.Set("Content-Type", "application/json")
+	result, err := http.DefaultClient.Do(response)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer result.Body.Close()
+	if result.StatusCode != http.StatusOK {
+		t.Fatalf("PUT status = %d", result.StatusCode)
+	}
+	if !runtime.settings.Enabled || runtime.settings.MemoryMaxBytes != 1<<30 || len(runtime.settings.IOLimits) != 1 ||
+		len(runtime.settings.Classes) != 1 || runtime.settings.Classes[0].Name != "prod" {
+		t.Fatalf("applied settings = %+v", runtime.settings)
+	}
+	var payload map[string]any
+	if err := json.NewDecoder(result.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["root"] != "/sys/fs/cgroup/rookery" {
+		t.Fatalf("response = %+v", payload)
+	}
+
+	runtime.configureErr = errors.New("controller unavailable")
+	errorBody := []byte(`{"enabled": false}`)
+	request, err := http.NewRequest(http.MethodPut, server.URL+"/api/cgroup-settings", bytes.NewReader(errorBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	errorResult, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = errorResult.Body.Close()
+	if errorResult.StatusCode < 400 {
+		t.Fatalf("failed configure status = %d, want error", errorResult.StatusCode)
+	}
+	stored, err := st.GetCgroupSettings(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !stored.Enabled || stored.MemoryMaxBytes != 1<<30 {
+		t.Fatalf("settings were not rolled back: %+v", stored)
+	}
+}
+
+func TestGetCgroupUsageHTTP(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "gateway-cgroup-usage.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	runtime := &recordingCgroupRuntime{usage: cgroup.Usage{
+		Available: true, Configured: true, Root: "/sys/fs/cgroup/rookery-cgroup",
+		OnlineCPUs: 4, SampledAt: time.Now().UTC(),
+		Nodes: []cgroup.UsageNode{{Path: "shared", Name: "shared", MemoryCurrentBytes: 1024, MemoryMaxBytes: 4096, CPUUsageUsec: 5000, PIDsCurrent: 2}},
+	}}
+	gw, err := New(st, nil, WithCgroupRuntime(runtime))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	server := httptest.NewServer(gw.Handler)
+	t.Cleanup(server.Close)
+
+	response, err := http.Get(server.URL + "/api/cgroup-usage")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", response.StatusCode)
+	}
+	var body struct {
+		Available  bool  `json:"available"`
+		Configured bool  `json:"configured"`
+		OnlineCPUs int32 `json:"online_cpus"`
+		Nodes      []struct {
+			Name               string `json:"name"`
+			MemoryCurrentBytes int64  `json:"memory_current_bytes"`
+			MemoryMaxBytes     int64  `json:"memory_max_bytes"`
+		} `json:"nodes"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if !body.Available || !body.Configured || body.OnlineCPUs != 4 || len(body.Nodes) != 1 ||
+		body.Nodes[0].Name != "shared" || body.Nodes[0].MemoryCurrentBytes != 1024 || body.Nodes[0].MemoryMaxBytes != 4096 {
+		t.Fatalf("body = %+v", body)
+	}
+}

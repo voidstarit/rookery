@@ -18,9 +18,12 @@ import (
 )
 
 type fakeVMController struct {
-	running  bool
-	metrics  qemu.Metrics
-	startErr error
+	running       bool
+	runningIDs    map[string]bool
+	metrics       qemu.Metrics
+	startErr      error
+	cgroupErr     error
+	cgroupApplied []store.VM
 }
 
 func (f *fakeVMController) Start(_ context.Context, _ store.VM) error {
@@ -36,8 +39,13 @@ func (f *fakeVMController) Stop(_ context.Context, _ string) error {
 }
 func (f *fakeVMController) Reset(_ context.Context, _ string) error          { return nil }
 func (f *fakeVMController) SendCtrlAltDel(_ context.Context, _ string) error { return nil }
-func (f *fakeVMController) Running(_ string) bool                            { return f.running }
-func (f *fakeVMController) Metrics(_ string) (qemu.Metrics, error)           { return f.metrics, nil }
+func (f *fakeVMController) Running(vmID string) bool {
+	if f.runningIDs != nil {
+		return f.runningIDs[vmID]
+	}
+	return f.running
+}
+func (f *fakeVMController) Metrics(_ string) (qemu.Metrics, error) { return f.metrics, nil }
 
 func TestVMActionsAndMetrics(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "vm-actions.db"))

@@ -25,6 +25,9 @@ const (
 	SystemService_UpdateStartupScript_FullMethodName    = "/rookery.v1.SystemService/UpdateStartupScript"
 	SystemService_GetVPPStartupScript_FullMethodName    = "/rookery.v1.SystemService/GetVPPStartupScript"
 	SystemService_UpdateVPPStartupScript_FullMethodName = "/rookery.v1.SystemService/UpdateVPPStartupScript"
+	SystemService_GetCgroupSettings_FullMethodName      = "/rookery.v1.SystemService/GetCgroupSettings"
+	SystemService_UpdateCgroupSettings_FullMethodName   = "/rookery.v1.SystemService/UpdateCgroupSettings"
+	SystemService_GetCgroupUsage_FullMethodName         = "/rookery.v1.SystemService/GetCgroupUsage"
 )
 
 // SystemServiceClient is the client API for SystemService service.
@@ -39,6 +42,15 @@ type SystemServiceClient interface {
 	UpdateStartupScript(ctx context.Context, in *UpdateStartupScriptRequest, opts ...grpc.CallOption) (*StartupScript, error)
 	GetVPPStartupScript(ctx context.Context, in *GetVPPStartupScriptRequest, opts ...grpc.CallOption) (*StartupScript, error)
 	UpdateVPPStartupScript(ctx context.Context, in *UpdateVPPStartupScriptRequest, opts ...grpc.CallOption) (*StartupScript, error)
+	// GetCgroupSettings returns the host-wide cgroup v2 limits and runtime
+	// status.
+	GetCgroupSettings(ctx context.Context, in *GetCgroupSettingsRequest, opts ...grpc.CallOption) (*CgroupSettings, error)
+	// UpdateCgroupSettings stores and applies host-wide cgroup v2 limits. Every
+	// QEMU process runs below the configured parent cgroup.
+	UpdateCgroupSettings(ctx context.Context, in *UpdateCgroupSettingsRequest, opts ...grpc.CallOption) (*CgroupSettings, error)
+	// GetCgroupUsage returns live memory, CPU, task, and I/O usage for the
+	// Rookery cgroup hierarchy.
+	GetCgroupUsage(ctx context.Context, in *GetCgroupUsageRequest, opts ...grpc.CallOption) (*CgroupUsageResponse, error)
 }
 
 type systemServiceClient struct {
@@ -109,6 +121,36 @@ func (c *systemServiceClient) UpdateVPPStartupScript(ctx context.Context, in *Up
 	return out, nil
 }
 
+func (c *systemServiceClient) GetCgroupSettings(ctx context.Context, in *GetCgroupSettingsRequest, opts ...grpc.CallOption) (*CgroupSettings, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CgroupSettings)
+	err := c.cc.Invoke(ctx, SystemService_GetCgroupSettings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *systemServiceClient) UpdateCgroupSettings(ctx context.Context, in *UpdateCgroupSettingsRequest, opts ...grpc.CallOption) (*CgroupSettings, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CgroupSettings)
+	err := c.cc.Invoke(ctx, SystemService_UpdateCgroupSettings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *systemServiceClient) GetCgroupUsage(ctx context.Context, in *GetCgroupUsageRequest, opts ...grpc.CallOption) (*CgroupUsageResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CgroupUsageResponse)
+	err := c.cc.Invoke(ctx, SystemService_GetCgroupUsage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SystemServiceServer is the server API for SystemService service.
 // All implementations must embed UnimplementedSystemServiceServer
 // for forward compatibility.
@@ -121,6 +163,15 @@ type SystemServiceServer interface {
 	UpdateStartupScript(context.Context, *UpdateStartupScriptRequest) (*StartupScript, error)
 	GetVPPStartupScript(context.Context, *GetVPPStartupScriptRequest) (*StartupScript, error)
 	UpdateVPPStartupScript(context.Context, *UpdateVPPStartupScriptRequest) (*StartupScript, error)
+	// GetCgroupSettings returns the host-wide cgroup v2 limits and runtime
+	// status.
+	GetCgroupSettings(context.Context, *GetCgroupSettingsRequest) (*CgroupSettings, error)
+	// UpdateCgroupSettings stores and applies host-wide cgroup v2 limits. Every
+	// QEMU process runs below the configured parent cgroup.
+	UpdateCgroupSettings(context.Context, *UpdateCgroupSettingsRequest) (*CgroupSettings, error)
+	// GetCgroupUsage returns live memory, CPU, task, and I/O usage for the
+	// Rookery cgroup hierarchy.
+	GetCgroupUsage(context.Context, *GetCgroupUsageRequest) (*CgroupUsageResponse, error)
 	mustEmbedUnimplementedSystemServiceServer()
 }
 
@@ -148,6 +199,15 @@ func (UnimplementedSystemServiceServer) GetVPPStartupScript(context.Context, *Ge
 }
 func (UnimplementedSystemServiceServer) UpdateVPPStartupScript(context.Context, *UpdateVPPStartupScriptRequest) (*StartupScript, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateVPPStartupScript not implemented")
+}
+func (UnimplementedSystemServiceServer) GetCgroupSettings(context.Context, *GetCgroupSettingsRequest) (*CgroupSettings, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetCgroupSettings not implemented")
+}
+func (UnimplementedSystemServiceServer) UpdateCgroupSettings(context.Context, *UpdateCgroupSettingsRequest) (*CgroupSettings, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateCgroupSettings not implemented")
+}
+func (UnimplementedSystemServiceServer) GetCgroupUsage(context.Context, *GetCgroupUsageRequest) (*CgroupUsageResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetCgroupUsage not implemented")
 }
 func (UnimplementedSystemServiceServer) mustEmbedUnimplementedSystemServiceServer() {}
 func (UnimplementedSystemServiceServer) testEmbeddedByValue()                       {}
@@ -278,6 +338,60 @@ func _SystemService_UpdateVPPStartupScript_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SystemService_GetCgroupSettings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCgroupSettingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemServiceServer).GetCgroupSettings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemService_GetCgroupSettings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemServiceServer).GetCgroupSettings(ctx, req.(*GetCgroupSettingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SystemService_UpdateCgroupSettings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateCgroupSettingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemServiceServer).UpdateCgroupSettings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemService_UpdateCgroupSettings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemServiceServer).UpdateCgroupSettings(ctx, req.(*UpdateCgroupSettingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SystemService_GetCgroupUsage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCgroupUsageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemServiceServer).GetCgroupUsage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemService_GetCgroupUsage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemServiceServer).GetCgroupUsage(ctx, req.(*GetCgroupUsageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SystemService_ServiceDesc is the grpc.ServiceDesc for SystemService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -308,6 +422,18 @@ var SystemService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateVPPStartupScript",
 			Handler:    _SystemService_UpdateVPPStartupScript_Handler,
+		},
+		{
+			MethodName: "GetCgroupSettings",
+			Handler:    _SystemService_GetCgroupSettings_Handler,
+		},
+		{
+			MethodName: "UpdateCgroupSettings",
+			Handler:    _SystemService_UpdateCgroupSettings_Handler,
+		},
+		{
+			MethodName: "GetCgroupUsage",
+			Handler:    _SystemService_GetCgroupUsage_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -21,6 +21,76 @@ export type StartupScript = {
   updated_at?: string;
 };
 
+export type CgroupIOLimit = {
+  device: string;
+  read_bps?: number;
+  write_bps?: number;
+  read_iops?: number;
+  write_iops?: number;
+  weight?: number;
+};
+
+export type CgroupClass = {
+  name: string;
+  cpus?: string;
+  memory_max_bytes?: number;
+  cpu_weight?: number;
+  io_limits?: CgroupIOLimit[];
+};
+
+export type CgroupSettings = {
+  enabled?: boolean;
+  cpus?: string;
+  mems?: string;
+  memory_max_bytes?: number;
+  cpu_weight?: number;
+  io_limits?: CgroupIOLimit[];
+  classes?: CgroupClass[];
+  available?: boolean;
+  configured?: boolean;
+  reason?: string;
+  mount?: string;
+  root?: string;
+  online_cpus?: number[];
+  cpu_model?: string;
+  updated_at?: string;
+};
+
+export type CgroupUsageNode = {
+  path?: string;
+  name?: string;
+  memory_current_bytes: number;
+  memory_max_bytes: number;
+  cpu_usage_usec: number;
+  pids_current: number;
+  pids_max: number;
+  io_read_bytes: number;
+  io_write_bytes: number;
+  io_read_ops: number;
+  io_write_ops: number;
+  cpus?: string;
+};
+
+export type CgroupUsage = {
+  available: boolean;
+  configured: boolean;
+  reason?: string;
+  root: string;
+  online_cpus: number;
+  sampled_at?: string;
+  nodes: CgroupUsageNode[];
+};
+
+export type HostBlockDevice = {
+  name: string;
+  path: string;
+  model?: string;
+  size_bytes?: number;
+  major?: number;
+  minor?: number;
+  rotational?: boolean;
+};
+
 export type VPPInterfaceRouteTables = {
   name: string;
   ipv4_table_id: number;
@@ -97,6 +167,7 @@ export type VM = {
   boot_media?: VMMedia;
   interfaces?: VMInterface[];
   console_enabled: boolean;
+  cgroup_class?: string;
   created_at?: string;
   updated_at?: string;
 };

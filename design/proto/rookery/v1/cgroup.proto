@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// CgroupIOLimit is a per-block-device I/O limit. Zero numeric values mean no
+// limit (or inherit the host value for a VM override).
+message CgroupIOLimit {
+  string device = 1 [(validate.rules).string = {min_len: 1, max_len: 512}];
+  int64 read_bps = 2 [(validate.rules).int64 = {gte: 0}];
+  int64 write_bps = 3 [(validate.rules).int64 = {gte: 0}];
+  int64 read_iops = 4 [(validate.rules).int64 = {gte: 0}];
+  int64 write_iops = 5 [(validate.rules).int64 = {gte: 0}];
+  int32 weight = 6 [(validate.rules).int32 = {gte: 0, lte: 10000}];
+}
+
+// CgroupClass is a named, hierarchical cgroup profile. Name uses
+// slash-separated segments such as "production/web"; parent cgroups are created
+// automatically and zero values inherit the host or parent class setting.
+message CgroupClass {
+  string name = 1 [(validate.rules).string = {min_len: 1, max_len: 200}];
+  string cpus = 2 [(validate.rules).string = {max_len: 512}];
+  int64 memory_max_bytes = 3 [(validate.rules).int64 = {gte: 0}];
+  int32 cpu_weight = 4 [(validate.rules).int32 = {gte: 0, lte: 10000}];
+  repeated CgroupIOLimit io_limits = 5 [(validate.rules).repeated = {max_items: 64}];
+}
+
+// CgroupSettings is the host-wide cgroup v2 configuration plus runtime status.
+message CgroupSettings {
+  bool enabled = 1;
+  string cpus = 2 [(validate.rules).string = {max_len: 512}];
+  string mems = 3 [(validate.rules).string = {max_len: 512}];
+  int64 memory_max_bytes = 4 [(validate.rules).int64 = {gte: 0}];
+  int32 cpu_weight = 5 [(validate.rules).int32 = {gte: 0, lte: 10000}];
+  repeated CgroupIOLimit io_limits = 6 [(validate.rules).repeated = {max_items: 64}];
+  bool available = 7;
+  bool configured = 8;
+  string reason = 9;
+  string mount = 10;
+  string root = 11;
+  repeated int32 online_cpus = 12;
+  string cpu_model = 13;
+  google.protobuf.Timestamp updated_at = 14;
+  repeated CgroupClass classes = 15;
+}
+
+// CgroupUsageNode is live resource usage for one cgroup hierarchy node.
+message CgroupUsageNode {
+  string path = 1;
+  string name = 2;
+  int64 memory_current_bytes = 3;
+  int64 memory_max_bytes = 4;
+  int64 cpu_usage_usec = 5;
+  int64 pids_current = 6;
+  int64 pids_max = 7;
+  int64 io_read_bytes = 8;
+  int64 io_write_bytes = 9;
+  int64 io_read_ops = 10;
+  int64 io_write_ops = 11;
+  string cpus = 12;
+}
+
+message GetCgroupUsageRequest {}
+
+// CgroupUsageResponse is a point-in-time snapshot. CPU and I/O counters are
+// cumulative; clients derive rates between samples.
+message CgroupUsageResponse {
+  bool available = 1;
+  bool configured = 2;
+  string reason = 3;
+  string root = 4;
+  int32 online_cpus = 5;
+  google.protobuf.Timestamp sampled_at = 6;
+  repeated CgroupUsageNode nodes = 7;
+}

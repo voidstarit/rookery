@@ -42,6 +42,7 @@ func (d *vmDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, res
 			"interface_ids":   dschema.ListAttribute{Computed: true, ElementType: types.Int64Type},
 			"boot_media_id":   dschema.Int64Attribute{Computed: true},
 			"console_enabled": dschema.BoolAttribute{Computed: true},
+			"cgroup_class":    dschema.StringAttribute{Computed: true},
 		},
 	}
 }

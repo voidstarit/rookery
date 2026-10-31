@@ -2,6 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import { api } from "../../shared/api";
 import { showToast } from "../../shared/toast";
 import type { StartupScript } from "../types";
+import { CgroupSettingsPanel } from "./CgroupSettingsPanel";
 
 function formatDate(value: string | undefined): string {
   if (!value) {
@@ -196,12 +197,14 @@ function ScriptSection({ kind, title, endpoint, description, placeholder, spaced
 export function SettingsTab() {
   return (
     <>
+      <CgroupSettingsPanel />
       <ScriptSection
         kind="rookery"
         title="Rookery startup script"
         endpoint="/api/startup-script"
         description="Runs once per API process after Rookery starts. It is empty by default. Use it for host-level setup that should happen once when the service starts."
         placeholder={"# Runs once when the Rookery API starts\n# Add host or setup commands here"}
+        spaced
       />
       <ScriptSection
         kind="vpp"

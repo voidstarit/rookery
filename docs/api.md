@@ -53,9 +53,11 @@ localhost or sit behind an access-controlled proxy.
 Rookery resources over the public mTLS gRPC listener. It covers storage
 backends, disks, media, networks and network pipes, vhost and host interfaces,
 host taps, managed VPP addresses and interface route-table bindings, ACLs,
-route tables and routes, VNFs, VMs, startup scripts, and host-interface
-takeover. Matching data sources look
-up existing resources, and `rookery_status` exposes current readiness. Configure
+route tables and routes, VNFs, VMs (with optional cgroup class assignment),
+host-wide cgroup settings and reusable classes, startup scripts, and
+host-interface takeover.
+Matching data sources look up existing resources, and `rookery_status` exposes
+current readiness. Configure
 it with the CA, client certificate, and private key downloaded from the
 **Client certificates** dialog:
 
@@ -118,6 +120,9 @@ static UI.
 | `PUT`    | `/api/startup-script` | Configure the Rookery startup script (`enabled`, `script`) |
 | `GET`    | `/api/vpp-startup-script` | Get the VPP connection startup script and its last execution result |
 | `PUT`    | `/api/vpp-startup-script` | Configure the VPP startup script (`enabled`, `script`) |
+| `GET`    | `/api/cgroup-settings` | Get host-wide cgroup v2 limits, classes, and runtime status |
+| `PUT`    | `/api/cgroup-settings` | Apply host-wide cgroup v2 limits and classes |
+| `GET`    | `/api/cgroup-usage` | Live memory, CPU, task, and I/O usage per cgroup node |
 | `GET`    | `/api/storage-backends` | List registered storage backends |
 | `POST`   | `/api/storage-backends` | Register an LVM thin-pool backend |
 | `GET`    | `/api/storage-backends/{id}` | Get one storage backend |
@@ -167,6 +172,7 @@ the interface returns to its network VRF (host taps) or the default table
 (host interfaces). Vhost-user interfaces continue to use
 `PUT /api/interfaces/{id}/route-tables`.
 | `GET`    | `/api/host/interfaces` | List physical/external NICs, link state, and VPP host-interface correlation |
+| `GET`    | `/api/host/block-devices` | List whole block devices for cgroup I/O limits |
 | `POST`   | `/api/host/interfaces/{name}/attach` | Take over a wired NIC into VPP and persist the attachment |
 | `DELETE` | `/api/host/interfaces/{name}` | Detach a persisted host NIC from VPP |
 | `GET`    | `/api/host/taps` | List persisted network-to-host taps (`?network_id=<id>` optional) |
