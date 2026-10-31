@@ -184,6 +184,26 @@ labels in sync through the same API.
 | `POST`   | `/api/media`       | Register an existing ISO file     |
 | `GET`    | `/api/media/{id}`  | Get one media entry               |
 | `DELETE` | `/api/media/{id}`  | Remove an unused media entry      |
+| `GET`    | `/api/lightvm/kernels` | List LightVM kernels          |
+| `POST`   | `/api/lightvm/kernels` | Register an uploaded kernel file |
+| `GET`    | `/api/lightvm/kernels/{id}` | Get one kernel          |
+| `PUT`    | `/api/lightvm/kernels/{id}` | Update or replace a kernel |
+| `DELETE` | `/api/lightvm/kernels/{id}` | Delete a kernel and its managed file |
+| `GET`    | `/api/lightvm/initramfs` | List LightVM initramfs images |
+| `POST`   | `/api/lightvm/initramfs` | Register an uploaded initramfs file |
+| `GET`    | `/api/lightvm/initramfs/{id}` | Get one initramfs image |
+| `PUT`    | `/api/lightvm/initramfs/{id}` | Update or replace an initramfs |
+| `DELETE` | `/api/lightvm/initramfs/{id}` | Delete an initramfs and its managed file |
+| `GET`    | `/api/lightvm/instances` | List LightVM definitions |
+| `POST`   | `/api/lightvm/instances` | Create an inventory-only LightVM |
+| `GET`    | `/api/lightvm/instances/{id}` | Get one LightVM |
+| `PUT`    | `/api/lightvm/instances/{id}` | Replace a LightVM definition |
+| `DELETE` | `/api/lightvm/instances/{id}` | Delete a LightVM and release its interfaces |
+| `POST`   | `/api/lightvm/instances/{id}/start` | Start the LightVM QEMU process |
+| `POST`   | `/api/lightvm/instances/{id}/stop` | Stop the LightVM QEMU process |
+| `GET`    | `/ws/lightvms/{id}/console` | Native WebSocket proxy to the running LightVM's virtio console socket (local listener only) |
+| `POST`   | `/api/lightvm/uploads` | Native multipart upload (`kind`, `file`); local listener only |
+| `DELETE` | `/api/lightvm/uploads?path=...` | Remove an abandoned managed upload |
 | `GET`    | `/api/networks`    | List Rookery Networks (VPP bridge domains) |
 | `POST`   | `/api/networks`    | Create a VPP bridge domain with IPv4/IPv6 CIDRs |
 | `GET`    | `/api/networks/{id}` | Get one network                 |
@@ -655,6 +675,51 @@ absolute path to an existing regular file). `size_bytes` is read from the file
 and cannot be set by clients. Media entries are read-only: the API never copies
 or modifies the file. `DELETE /api/media/{id}` removes only the inventory entry
 and is rejected while a VM uses the media as boot media.
+
+LightVM kernels use `name`, `description`, `path`, and `file_name`.
+`size_bytes` and `managed` are derived by the server; `managed` is true when
+the path is inside `-lightvm-dir`. Uploads use the native
+`POST /api/lightvm/uploads` multipart endpoint, which accepts `kind=kernel` or
+`kind=initramfs` and a `file` part and returns
+`{path, file_name, size_bytes}`. Create kernel records with
+`POST /api/lightvm/kernels` and initramfs records with
+`POST /api/lightvm/initramfs`, then apply labels to entity type
+`lightvm_kernel` or `lightvm_initramfs`. Deleting an uploaded image removes its
+managed file; `PUT` can point the record at a replacement file and removes the
+previous managed file after the update succeeds. The upload endpoint is
+available on the local HTTP listener only; the mTLS listeners expose the
+generated inventory API.
+
+LightVM records are created at `POST /api/lightvm/instances` with `name`,
+`description`, `vcpus`, `memory_mb`, `console_enabled`, `cgroup_class`,
+`kernel_id`, `initramfs_id`, `image`, `env` (`name`/`value` pairs),
+`executable_path`, `executable_args` (ordered strings), `append`, and
+`interface_ids`. `append` is the kernel command line and defaults to
+`console=hvc0 rdinit=/init` when omitted on create; on update it is stored
+exactly as sent (empty clears it). `PUT` replaces every editable field and the
+full interface set. The ID is a UUID. Kernel and initramfs references are
+required and cannot be deleted while a LightVM uses them. Interfaces attached
+to a VM or another LightVM are rejected. Creating a LightVM stores the
+definition with `status=stopped`; `POST .../start` uses buildah to pull
+`image` if missing, creates an ephemeral writable container named
+`rookery-lightvm-<uuid>`, mounts its rootfs, starts `virtiofsd`, and launches
+QEMU with `-kernel`, `-initrd`, `-append`, no block device, a
+`vhost-user-fs-pci` device tagged `rootfs`, a virtio console socket under the
+QEMU run directory, the cgroup class, and any vhost-user interfaces. The
+initramfs mounts the `rootfs` tag; Rookery does not change `append`.
+`POST .../stop` terminates QEMU, stops virtiofsd, unmounts/removes the buildah
+container, and deleting a running LightVM stops it first. Guest writes live in
+the ephemeral container overlay and are discarded on stop. While running, the
+response includes `console_socket`, the host Unix socket for the virtio
+console; no graphical display or VNC device is created. The native
+`/ws/lightvms/{id}/console` WebSocket proxies that socket and requires
+`console_enabled`; the UI opens it from the **Console** action using
+`/lightvm-console.html?vm=<uuid>`. The environment, executable path, and
+argument fields are not passed over the kernel command line; the initramfs has
+its own workload contract. `virtiofsd` is resolved next to the `rookery`
+binary unless configured with `-virtiofsd-bin`. `/api/status` includes a
+`lightvm` component reporting buildah/virtiofsd availability; the LightVM tab
+shows its error and disables Start when either tool is missing.
 
 Valid statuses are `stopped`, `starting`, `running`, `stopping`, `paused`, and
 `error`. A VM can have multiple disks. At creation, provide `disk_ids` with at

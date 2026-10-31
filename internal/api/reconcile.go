@@ -22,6 +22,9 @@ func (s *Server) RunInfrastructureReconciler(ctx context.Context) {
 	if err := s.reconcileVMStatuses(ctx); err != nil {
 		s.logger.Warn().Err(err).Msg("VM status reconciliation failed")
 	}
+	if err := s.reconcileLightVMStatuses(ctx); err != nil {
+		s.logger.Warn().Err(err).Msg("LightVM status reconciliation failed")
+	}
 
 	wait := time.NewTicker(2 * time.Second)
 	defer wait.Stop()
@@ -84,6 +87,7 @@ func (s *Server) reconcileInfrastructure(ctx context.Context) error {
 		errs = append(errs, err)
 	}
 	s.autostartVMs(ctx)
+	s.autostartLightVMs(ctx)
 	return errors.Join(errs...)
 }
 
@@ -167,6 +171,82 @@ func (s *Server) reconcileVMStatuses(ctx context.Context) error {
 			Msg("VM status reconciled")
 	}
 	return nil
+}
+
+// reconcileLightVMStatuses aligns stored LightVM status with live QEMU
+// processes after an API restart.
+func (s *Server) reconcileLightVMStatuses(ctx context.Context) error {
+	if s.lightvms == nil {
+		return nil
+	}
+	vms, err := s.store.ListLightVMs(ctx)
+	if err != nil {
+		return fmt.Errorf("list LightVMs: %w", err)
+	}
+	for _, vm := range vms {
+		running := s.lightvms.RunningLightVM(vm.ID)
+		target := vm.Status
+		switch {
+		case running && vm.Status != store.StatusRunning:
+			target = store.StatusRunning
+		case !running && vm.Status == store.StatusRunning:
+			target = store.StatusStopped
+		}
+		if target == vm.Status {
+			continue
+		}
+		if _, err := s.store.SetLightVMStatus(ctx, vm.ID, target); err != nil {
+			return fmt.Errorf("update LightVM %s status: %w", vm.ID, err)
+		}
+		s.logger.Info().
+			Str("lightvm_id", vm.ID).
+			Str("lightvm", vm.Name).
+			Str("from", vm.Status).
+			Str("to", target).
+			Msg("LightVM status reconciled")
+	}
+	return nil
+}
+
+// autostartLightVMs applies the persisted desired power state after an API
+// restart or host reboot. It runs after VPP resources are reconciled so
+// attached vhost-user sockets exist before QEMU launches.
+func (s *Server) autostartLightVMs(ctx context.Context) {
+	if s.lightvms == nil {
+		return
+	}
+	s.runMu.Lock()
+	defer s.runMu.Unlock()
+	vms, err := s.store.ListLightVMs(ctx)
+	if err != nil {
+		s.logger.Warn().Err(err).Msg("could not list LightVMs for auto-start")
+		return
+	}
+	for _, vm := range vms {
+		if vm.DesiredState != store.DesiredRunning {
+			continue
+		}
+		if s.lightvms.RunningLightVM(vm.ID) {
+			if vm.Status != store.StatusRunning {
+				if _, err := s.store.SetLightVMStatus(ctx, vm.ID, store.StatusRunning); err != nil {
+					s.logger.Warn().Err(err).Str("lightvm_id", vm.ID).Msg("could not repair auto-start LightVM status")
+				}
+			}
+			continue
+		}
+		if err := s.lightvms.StartLightVM(ctx, vm); err != nil {
+			s.logger.Error().Err(err).Str("lightvm_id", vm.ID).Str("lightvm", vm.Name).Msg("could not auto-start LightVM")
+			if _, statusErr := s.store.SetLightVMStatus(ctx, vm.ID, store.StatusError); statusErr != nil {
+				s.logger.Warn().Err(statusErr).Str("lightvm_id", vm.ID).Msg("could not mark LightVM as failed")
+			}
+			continue
+		}
+		if _, err := s.store.SetLightVMStatus(ctx, vm.ID, store.StatusRunning); err != nil {
+			s.logger.Warn().Err(err).Str("lightvm_id", vm.ID).Msg("could not update auto-started LightVM status")
+			continue
+		}
+		s.logger.Info().Str("lightvm_id", vm.ID).Str("lightvm", vm.Name).Msg("LightVM auto-started from desired state")
+	}
 }
 
 func (s *Server) reconcileInfrastructureWithRetries(ctx context.Context) error {

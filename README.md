@@ -35,6 +35,7 @@ access, and per-VM monitoring.*
 
 - Thin-LVM disks, template clones, and existing-volume import
 - QEMU/KVM virtual machines with virtio disks, ISO boot media, and noVNC console
+- LightVMs that boot an uploaded kernel/initramfs and a buildah-mounted container rootfs through virtiofsd, with an xterm.js serial console
 - cgroup v2 CPU pinning, memory ceilings, and per-device I/O limits with reusable class profiles
 - Live cgroup telemetry for memory, CPU, tasks, and I/O in Settings
 - Free-form labels on inventory entities, with label chips and multi-label editing in the UI and Terraform
@@ -97,6 +98,12 @@ Host:
 - Linux x86_64/amd64
 - LVM2 tools and an existing volume group
 - QEMU/KVM (`qemu-system-x86_64`, `/dev/kvm`)
+- `buildah` and `virtiofsd` for LightVMs; `virtiofsd` defaults to the
+  directory containing the `rookery` binary, and QEMU must include
+  `vhost-user-fs-pci`. If either tool is missing, the LightVM tab shows a
+  runtime-unavailable banner and disables Start. Run `make virtiofsd` to
+  download the static x86_64 binary into `extra/virtiofsd/`; release archives
+  include it next to `rookery`.
 - FD.io VPP with its binary API enabled, normally `/run/vpp/api.sock`
 - VPP `vhost` and `acl` plugins
 - `vppctl`, `ip`, and `ethtool` available to the service user

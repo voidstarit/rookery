@@ -15,6 +15,8 @@ func CutoverHandler(gateway, legacy http.Handler) http.Handler {
 		switch {
 		case strings.HasPrefix(path, "/api/troubleshoot/capture/files/"), strings.HasPrefix(path, "/api/pki/"):
 			legacy.ServeHTTP(w, r)
+		case path == "/api/lightvm/uploads":
+			legacy.ServeHTTP(w, r)
 		case strings.HasPrefix(path, "/ws/"):
 			legacy.ServeHTTP(w, r)
 		case strings.HasPrefix(path, "/api/"), path == "/api":
@@ -31,16 +33,20 @@ func (s *Server) LogRequests(next http.Handler) http.Handler {
 }
 
 // NativeHandler exposes only the protocol-native routes that remain on the
-// API server: VNC, pcap downloads, PKI, and static UI assets.
+// API server: VNC, LightVM console, pcap downloads, PKI, uploads, and static
+// UI assets.
 func (s *Server) NativeHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ws/vms/{id}/vnc", s.handleVNCProxy)
+	mux.HandleFunc("GET /ws/lightvms/{id}/console", s.handleLightVMConsoleProxy)
 	mux.HandleFunc("GET /api/pki/ca", s.handlePKICA)
 	mux.HandleFunc("GET /api/pki/clients", s.handlePKIListClients)
 	mux.HandleFunc("POST /api/pki/clients", s.handlePKIIssueClient)
 	mux.HandleFunc("DELETE /api/pki/clients/{id}", s.handlePKIRevokeClient)
 	mux.HandleFunc("GET /api/troubleshoot/capture/files/{name}", s.handleDownloadPacketCapture)
 	mux.HandleFunc("DELETE /api/troubleshoot/capture/files/{name}", s.handleDeletePacketCapture)
+	mux.HandleFunc("POST /api/lightvm/uploads", s.handleLightVMUpload)
+	mux.HandleFunc("DELETE /api/lightvm/uploads", s.handleDeleteLightVMUpload)
 	mux.Handle("/", webui.Handler())
 
 	var handler http.Handler = mux

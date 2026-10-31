@@ -69,7 +69,13 @@ running VMs.
   UDP 67/547 binding, and NAT44 host-NIC takeover
 - `iproute2` (`ip`) for assigning IPv4/IPv6 gateway addresses to VNF taps and
   flushing an outside NIC before VPP takes it over
-- QEMU with KVM support (`qemu-system-x86_64` and `/dev/kvm`)
+- QEMU with KVM support (`qemu-system-x86_64` and `/dev/kvm`), including
+  `vhost-user-fs-pci` for LightVM image sharing
+- `buildah` for LightVM image pull/mount, with access to its container storage
+- `virtiofsd` next to the `rookery` binary (or set `-virtiofsd-bin` /
+  `ROOKERY_VIRTIOFSD_BIN`); the LightVM tab reports a runtime-unavailable error
+  and disables Start if either tool is missing. Run `make virtiofsd` to download
+  it into `extra/virtiofsd/`; release archives include it next to `rookery`.
 - Permission to create `/run/rookery` (or configure another `-run-dir`) and to
   start QEMU processes
 - cgroup v2 mounted at `/sys/fs/cgroup` and write access below `-cgroup-root`
@@ -167,7 +173,7 @@ logged at `info`; renewals at `debug`.
 ## UI and inventory
 
 The UI has **Virtual machines**, **Disks**, **Installation media**,
-**Rookery Networks**, and **VNFs** tabs. The **Disks** tab manages storage
+**Rookery Networks**, **VNFs**, and **LightVM** tabs. The **Disks** tab manages storage
 backends and creates disks on the selected backend; VM creation additionally
 requires VPP and at least one unattached disk. The VM form uses a
 dropdown-and-Add picker for disks; the first added disk is the boot disk, and
@@ -197,6 +203,50 @@ is disabled, and open consoles are closed shortly after an administrator turns
 it off. Because the API has no authentication, this flag is not a security
 boundary against API access; restrict `PUT /api/vms/*` to administrators behind
 an authenticating proxy if end users can reach the API.
+
+The **LightVM** tab currently provides kernel, initramfs, and LightVM inventory.
+Images are uploaded through the local UI/API, streamed into `-lightvm-dir`
+(`ROOKERY_LIGHTVM_DIR`, default `/var/lib/rookery/lightvm`), and stored under
+`kernels/` or `initramfs/`. Each record has a unique name, an optional
+description, labels, and the original file name. Uploads are limited to 1 GiB.
+Deleting an uploaded image removes the managed file; records registered with an
+existing absolute host path are not allowed to delete that host file.
+
+A LightVM definition includes a name, description, vCPUs, memory, console flag,
+cgroup class, kernel and initramfs, a container image, environment variables,
+an executable path and argument list, a kernel command line, and network
+interfaces. New definitions default the kernel command line to
+`console=hvc0 rdinit=/init`. **Start** launches QEMU with the kernel and
+initramfs (no block device), a virtio console Unix socket in the QEMU run
+directory, the selected cgroup class, and vhost-user interfaces. Rookery uses
+`-display none` rather than `-nographic` because QEMU does not allow
+`-nographic` together with `-daemonize`. **Stop** terminates the process.
+Status and desired state are reconciled after API/VPP restarts, and the
+container image/environment/executable fields are stored for the guest runtime.
+On start, Rookery uses `buildah` to pull `image` only if it is missing, creates
+an **ephemeral writable** container named `rookery-lightvm-<uuid>`, mounts its
+rootfs, starts `virtiofsd` on `<run-dir>/<uuid>.virtiofs.sock`, and passes a
+`vhost-user-fs-pci` device with tag `rootfs` to QEMU. The initramfs is
+responsible for mounting that tag; Rookery does not modify `append`. In this
+mode the guest writes to its own rootfs overlay and those writes are discarded
+when the LightVM stops, because the container is unmounted and removed.
+`virtiofsd` is resolved next to the `rookery`
+executable unless `-virtiofsd-bin` is set. The container image/environment/
+executable fields are not passed over the kernel cmdline; the initramfs
+supplies its own contract. `/api/status` includes a `lightvm` component that
+reports whether `buildah` and `virtiofsd` are available; when either is missing
+the LightVM tab shows the error and disables Start. Run `make virtiofsd` (or
+`make -C extra virtiofsd`) to download the upstream static x86_64 binary into
+`extra/virtiofsd/`; `make release` includes it next to `rookery`.
+While a LightVM is running, the API returns `console_socket`, the Unix socket
+path for its virtio console; there is no graphical display or VNC device. The
+table's **Console** action opens `/lightvm-console.html?vm=<uuid>`, an xterm.js
+terminal connected through `/ws/lightvms/{id}/console`. The page uses bundled
+JetBrains Mono and lets each user choose a persisted color theme
+(green/white/amber/blue on black, solarized dark, or black on white) and font
+size. Console access follows `console_enabled` and is checked by the server;
+disable it to block new and existing console sessions. Interfaces can belong to
+either a VM or a LightVM, not both.
 
 
 ## VM lifecycle and console
@@ -307,6 +357,9 @@ and derives CPU cores and I/O rates from consecutive samples.
 | `-vpp-socket`     | `ROOKERY_VPP_SOCKET` | `/run/vpp/api.sock` | `serve`, `init`, `vnfs` | VPP binary API Unix socket |
 | `-qemu-bin`       | `ROOKERY_QEMU_BIN`   | `qemu-system-x86_64`| `serve`         | QEMU system emulator binary |
 | `-run-dir`        | `ROOKERY_RUN_DIR`    | `/run/rookery`    | `serve`, `vnfs` | QEMU pid/VNC sockets; VNF state and lease files |
+| `-lightvm-dir`    | `ROOKERY_LIGHTVM_DIR`| `/var/lib/rookery/lightvm` | `serve` | Uploaded LightVM kernels and initramfs files |
+| `-buildah-bin`    | `ROOKERY_BUILDAH_BIN`| `buildah`          | `serve` | buildah binary for LightVM image pull/mount |
+| `-virtiofsd-bin`  | `ROOKERY_VIRTIOFSD_BIN` | `virtiofsd` next to `rookery` | `serve` | virtiofsd binary for LightVM rootfs sharing |
 | `-cgroup-root`    | `ROOKERY_CGROUP_ROOT`| `/sys/fs/cgroup/rookery-cgroup` | `serve`   | Parent cgroup v2 for QEMU resource limits |
 | `-memif-dir`      | `ROOKERY_MEMIF_DIR`    | `/run/rookery/memif`| `serve`         | VNF memif socket directory |
 | `-vhost-dir`      | `ROOKERY_VHOST_DIR`  | `/run/vpp`          | `serve`, `vnfs` | VPP vhost-user socket directory |
@@ -362,6 +415,9 @@ api:
   db: /var/lib/rookery/rookery.db
   check_interval: 10s
   rate_limit: 3
+  lightvm_dir: /var/lib/rookery/lightvm
+  buildah_bin: buildah
+  virtiofsd_bin: ""
   cgroup_root: /sys/fs/cgroup/rookery-cgroup
   log_level: info
   mtls_addr: ":8443"

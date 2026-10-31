@@ -5,6 +5,7 @@ BIN_DIR := bin
 API_BIN := $(BIN_DIR)/rookery
 VNF_BIN := $(BIN_DIR)/vnfs
 PROVIDER_BIN := $(BIN_DIR)/terraform-provider-rookery
+VIRTIOFSD_BIN := extra/virtiofsd/virtiofsd
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 PROVIDER_VERSION := $(patsubst v%,%,$(VERSION))
 PROVIDER_RELEASE_NAME := terraform-provider-rookery_$(PROVIDER_VERSION)_linux_amd64
@@ -32,7 +33,7 @@ PROTO_FILES := $(shell find $(PROTO_ROOT) -name '*.proto' -print)
 PROTO_TOOL_PATHS := $(PROTO_PLUGIN_BIN)/protoc-gen-go $(PROTO_PLUGIN_BIN)/protoc-gen-go-grpc $(PROTO_PLUGIN_BIN)/protoc-gen-grpc-gateway $(PROTO_PLUGIN_BIN)/protoc-gen-openapiv2 $(PROTO_PLUGIN_BIN)/protoc-gen-validate
 PROTO_TOOL_VERSIONS := google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12 google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2 github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.28.0 github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@v2.28.0 github.com/envoyproxy/protoc-gen-validate@v1.3.3
 
-.PHONY: all build ui-install ui-build ui-typecheck ui-watch test vet fmt clean release proto-tools proto-check-tools proto-generate proto-compile proto-check
+.PHONY: all build ui-install ui-build ui-typecheck ui-watch test vet fmt clean release proto-tools proto-check-tools proto-generate proto-compile proto-check virtiofsd
 
 all: build
 
@@ -56,15 +57,20 @@ build: ui-build
 	go build -o $(VNF_BIN) ./cmd/vnfs
 	go build -o $(PROVIDER_BIN) ./cmd/terraform-provider-rookery
 
+# Download virtiofsd into extra/virtiofsd for local runs and release packaging.
+virtiofsd:
+	$(MAKE) -C extra virtiofsd
+
 # Build the x86_64 Linux API, VNF daemon, and Terraform provider archive
 # published by the release workflow.
-release: ui-build
+release: ui-build virtiofsd
 	rm -rf $(RELEASE_STAGE) $(RELEASE_ARCHIVE) $(RELEASE_ARCHIVE).sha256
 	mkdir -p $(RELEASE_STAGE)
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o $(RELEASE_STAGE)/rookery ./cmd/rookery
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o $(RELEASE_STAGE)/vnfs ./cmd/vnfs
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$(PROVIDER_VERSION)" -o "$(RELEASE_STAGE)/$(PROVIDER_RELEASE_NAME)" ./cmd/terraform-provider-rookery
 	cd $(RELEASE_STAGE) && sha256sum "$(PROVIDER_RELEASE_NAME)" > "$(PROVIDER_RELEASE_NAME).sha256"
+	install -m 0755 $(VIRTIOFSD_BIN) $(RELEASE_STAGE)/virtiofsd
 	install -m 0644 README.md config.example.yaml LICENSE NOTICE THIRD_PARTY_NOTICES.md $(RELEASE_STAGE)/
 	install -d $(RELEASE_STAGE)/docs/imgs $(RELEASE_STAGE)/scripts
 	install -m 0644 docs/*.md $(RELEASE_STAGE)/docs/

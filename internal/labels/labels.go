@@ -18,19 +18,22 @@ const (
 )
 
 const (
-	EntityVM             = "vm"
-	EntityDisk           = "disk"
-	EntityMedia          = "media"
-	EntityNetwork        = "network"
-	EntityInterface      = "interface"
-	EntityVNF            = "vnf"
-	EntityACL            = "acl"
-	EntityRouteTable     = "route_table"
-	EntityRoute          = "route"
-	EntityNetworkPipe    = "network_pipe"
-	EntityStorageBackend = "storage_backend"
-	EntityHostTap        = "host_tap"
-	EntityHostInterface  = "host_interface"
+	EntityVM               = "vm"
+	EntityDisk             = "disk"
+	EntityMedia            = "media"
+	EntityNetwork          = "network"
+	EntityInterface        = "interface"
+	EntityVNF              = "vnf"
+	EntityACL              = "acl"
+	EntityRouteTable       = "route_table"
+	EntityRoute            = "route"
+	EntityNetworkPipe      = "network_pipe"
+	EntityStorageBackend   = "storage_backend"
+	EntityHostTap          = "host_tap"
+	EntityHostInterface    = "host_interface"
+	EntityLightVMKernel    = "lightvm_kernel"
+	EntityLightVMInitramfs = "lightvm_initramfs"
+	EntityLightVM          = "lightvm"
 )
 
 var entityTypes = []string{
@@ -47,6 +50,9 @@ var entityTypes = []string{
 	EntityStorageBackend,
 	EntityHostTap,
 	EntityHostInterface,
+	EntityLightVMKernel,
+	EntityLightVMInitramfs,
+	EntityLightVM,
 }
 
 // EntityTypes returns every entity type that accepts labels.

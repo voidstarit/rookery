@@ -16,6 +16,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/voidstarit/rookery/internal/host"
+	"github.com/voidstarit/rookery/internal/lightvm"
 	"github.com/voidstarit/rookery/internal/pki"
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/readiness"
@@ -44,6 +45,14 @@ type VMController interface {
 	Running(vmID string) bool
 	VNCSocket(vmID string) string
 	Metrics(vmID string) (qemu.Metrics, error)
+}
+
+// LightVMController starts and stops QEMU processes for LightVM definitions.
+type LightVMController interface {
+	StartLightVM(ctx context.Context, vm store.LightVM) error
+	StopLightVM(ctx context.Context, id string) error
+	RunningLightVM(id string) bool
+	LightVMConsoleSocket(id string) string
 }
 
 // NetworkProvisioner manages VPP bridge domains, vhost-user interfaces, and
@@ -128,10 +137,12 @@ type Server struct {
 	readiness Readiness
 	disks     DiskProvisioner
 	vms       VMController
+	lightvms  LightVMController
 	networks  NetworkProvisioner
 	vnfs      VNFManager
 	nat       NAT44Provisioner
 	pki       *pki.Manager
+	lightvm   *lightvm.Storage
 	logger    zerolog.Logger
 	handler   http.Handler
 
@@ -172,6 +183,19 @@ func (s *Server) ResourceMutex() *sync.Mutex {
 func (s *Server) ConfigureMemifDHCP(enabled bool, dir string) {
 	s.memifDHCP = enabled
 	s.memifDir = dir
+}
+
+// ConfigureLightVM wires managed LightVM file storage into the native upload
+// endpoints. Uploads stay on the local listener; inventory records use the
+// gateway API.
+func (s *Server) ConfigureLightVM(storage *lightvm.Storage) {
+	s.lightvm = storage
+}
+
+// ConfigureLightVMRuntime wires the QEMU LightVM lifecycle into startup and
+// VPP-restart reconciliation.
+func (s *Server) ConfigureLightVMRuntime(controller LightVMController) {
+	s.lightvms = controller
 }
 
 // SetVPPSocket records the VPP binary API socket exposed to network startup
@@ -224,9 +248,17 @@ func SecurityHeaders(next http.Handler) http.Handler {
 
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		styleSource := "'self'"
+		// xterm.js injects its terminal/cursor styles into the document. The
+		// standalone LightVM console page needs inline styles for the cursor
+		// layer and user-selected theme variables; keep the exception scoped to
+		// that page instead of relaxing the inventory UI.
+		if r.URL.Path == "/lightvm-console.html" {
+			styleSource = "'self' 'unsafe-inline'"
+		}
 		w.Header().Set("Content-Security-Policy",
 			"default-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; "+
-				"img-src 'self' data:; style-src 'self'; script-src 'self'; "+
+				"img-src 'self' data:; style-src "+styleSource+"; script-src 'self'; "+
 				"connect-src 'self' ws: wss:; frame-src 'none'")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")

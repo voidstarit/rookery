@@ -1,0 +1,251 @@
+package lightvm_test
+
+import (
+	"context"
+	"errors"
+	"io"
+	"net"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/google/uuid"
+	"github.com/rs/zerolog"
+
+	"github.com/voidstarit/rookery/internal/lightvm"
+	"github.com/voidstarit/rookery/internal/qemu"
+	"github.com/voidstarit/rookery/internal/store"
+)
+
+type fakeLightVMQEMU struct {
+	running  bool
+	fs       qemu.LightVMVirtioFS
+	startErr error
+}
+
+func (f *fakeLightVMQEMU) StartLightVMWithVirtioFS(_ context.Context, _ store.LightVM, rootfs qemu.LightVMVirtioFS) error {
+	if f.startErr != nil {
+		return f.startErr
+	}
+	f.running = true
+	f.fs = rootfs
+	return nil
+}
+func (f *fakeLightVMQEMU) StopLightVM(context.Context, string) error {
+	f.running = false
+	return nil
+}
+func (f *fakeLightVMQEMU) RunningLightVM(string) bool            { return f.running }
+func (f *fakeLightVMQEMU) LightVMConsoleSocket(id string) string { return "/tmp/" + id + ".console" }
+
+// TestFakeVirtiofsdHelper is used as a stand-in virtiofsd process. It creates
+// the requested Unix socket and blocks until killed.
+func TestFakeVirtiofsdHelper(t *testing.T) {
+	if os.Getenv("GO_WANT_FAKE_VIRTIOFSD") != "1" {
+		return
+	}
+	socket := ""
+	for _, arg := range os.Args {
+		if strings.HasPrefix(arg, "--socket-path=") {
+			socket = strings.TrimPrefix(arg, "--socket-path=")
+		}
+	}
+	if socket == "" {
+		os.Exit(2)
+	}
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		os.Exit(3)
+	}
+	defer listener.Close()
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		go func(conn net.Conn) {
+			defer conn.Close()
+			_, _ = io.Copy(io.Discard, conn)
+		}(conn)
+	}
+}
+
+func writeFakeBuildah(t *testing.T, dir string) string {
+	t.Helper()
+	script := filepath.Join(dir, "buildah")
+	content := `#!/bin/sh
+printf '%s\n' "$*" >> "$LIGHTVM_FAKE_BUILDAH_LOG"
+case "$1" in
+  inspect) exit 1 ;;
+  pull) exit 0 ;;
+  from) exit 0 ;;
+  mount) mkdir -p "$LIGHTVM_FAKE_ROOTFS"; printf '%s\n' "$LIGHTVM_FAKE_ROOTFS" ;;
+  umount|rm) exit 0 ;;
+  *) exit 0 ;;
+esac
+`
+	if err := os.WriteFile(script, []byte(content), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return script
+}
+
+func writeFakeVirtiofsd(t *testing.T, dir string) string {
+	t.Helper()
+	script := filepath.Join(dir, "virtiofsd")
+	content := `#!/bin/sh
+exec "$LIGHTVM_TEST_BINARY" -test.run=TestFakeVirtiofsdHelper -- "$@"
+`
+	if err := os.WriteFile(script, []byte(content), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return script
+}
+
+func TestRuntimeStatusReportsMissingTools(t *testing.T) {
+	dir := t.TempDir()
+	runtime, err := lightvm.NewRuntime(
+		&fakeLightVMQEMU{},
+		filepath.Join(dir, "missing-buildah"),
+		filepath.Join(dir, "missing-virtiofsd"),
+		filepath.Join(dir, "run"),
+		zerolog.Nop(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ready, state, detail := runtime.LightVMStatus()
+	if ready || state != "missing" || !strings.Contains(detail, "buildah is required") {
+		t.Fatalf("missing tools status = ready %v, state %q, detail %q", ready, state, detail)
+	}
+
+	runtime, err = lightvm.NewRuntime(
+		&fakeLightVMQEMU{},
+		"/bin/sh",
+		"/bin/sh",
+		filepath.Join(dir, "run"),
+		zerolog.Nop(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ready, state, detail = runtime.LightVMStatus()
+	if !ready || state != "ready" || !strings.Contains(detail, "buildah") || !strings.Contains(detail, "virtiofsd") {
+		t.Fatalf("available tools status = ready %v, state %q, detail %q", ready, state, detail)
+	}
+}
+
+func TestRuntimeBuildsEphemeralRootfs(t *testing.T) {
+	dir := t.TempDir()
+	rootfs := filepath.Join(dir, "rootfs")
+	buildahLog := filepath.Join(dir, "buildah.log")
+	if err := os.WriteFile(buildahLog, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LIGHTVM_FAKE_BUILDAH_LOG", buildahLog)
+	t.Setenv("LIGHTVM_FAKE_ROOTFS", rootfs)
+	t.Setenv("LIGHTVM_TEST_BINARY", os.Args[0])
+	t.Setenv("GO_WANT_FAKE_VIRTIOFSD", "1")
+
+	qemuRunner := &fakeLightVMQEMU{}
+	runtime, err := lightvm.NewRuntime(
+		qemuRunner,
+		writeFakeBuildah(t, dir),
+		writeFakeVirtiofsd(t, dir),
+		filepath.Join(dir, "run"),
+		zerolog.Nop(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm := store.LightVM{
+		ID:    uuid.NewString(),
+		Name:  "runtime-test",
+		Image: "alpine:3.20",
+	}
+	if err := runtime.StartLightVM(context.Background(), vm); err != nil {
+		t.Fatalf("StartLightVM: %v", err)
+	}
+	if !qemuRunner.running {
+		t.Fatal("QEMU was not started")
+	}
+	if qemuRunner.fs.Tag != lightvm.RootfsTag {
+		t.Fatalf("virtiofs tag = %q", qemuRunner.fs.Tag)
+	}
+	if _, err := os.Stat(qemuRunner.fs.SocketPath); err != nil {
+		t.Fatalf("virtiofs socket was not created: %v", err)
+	}
+	logData, err := os.ReadFile(buildahLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logText := string(logData)
+	for _, command := range []string{"inspect --type=image alpine:3.20", "pull alpine:3.20", "from --name rookery-lightvm-" + vm.ID, "mount rookery-lightvm-" + vm.ID} {
+		if !strings.Contains(logText, command) {
+			t.Fatalf("buildah log %q does not contain %q", logText, command)
+		}
+	}
+
+	if err := runtime.StopLightVM(context.Background(), vm.ID); err != nil {
+		t.Fatalf("StopLightVM: %v", err)
+	}
+	if qemuRunner.running {
+		t.Fatal("QEMU is still running")
+	}
+	if _, err := os.Stat(qemuRunner.fs.SocketPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("virtiofs socket still exists: %v", err)
+	}
+	logData, err = os.ReadFile(buildahLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logText = string(logData)
+	for _, command := range []string{"umount rookery-lightvm-" + vm.ID, "rm rookery-lightvm-" + vm.ID} {
+		if !strings.Contains(logText, command) {
+			t.Fatalf("buildah log %q does not contain %q", logText, command)
+		}
+	}
+}
+
+func TestRuntimeCleansUpWhenQEMUFails(t *testing.T) {
+	dir := t.TempDir()
+	rootfs := filepath.Join(dir, "rootfs")
+	buildahLog := filepath.Join(dir, "buildah.log")
+	if err := os.WriteFile(buildahLog, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LIGHTVM_FAKE_BUILDAH_LOG", buildahLog)
+	t.Setenv("LIGHTVM_FAKE_ROOTFS", rootfs)
+	t.Setenv("LIGHTVM_TEST_BINARY", os.Args[0])
+	t.Setenv("GO_WANT_FAKE_VIRTIOFSD", "1")
+
+	qemuRunner := &fakeLightVMQEMU{startErr: errors.New("qemu failed")}
+	runtime, err := lightvm.NewRuntime(
+		qemuRunner,
+		writeFakeBuildah(t, dir),
+		writeFakeVirtiofsd(t, dir),
+		filepath.Join(dir, "run"),
+		zerolog.Nop(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm := store.LightVM{ID: uuid.NewString(), Name: "runtime-test", Image: "alpine:3.20"}
+	if err := runtime.StartLightVM(context.Background(), vm); err == nil {
+		t.Fatal("StartLightVM should fail when QEMU fails")
+	}
+	logData, err := os.ReadFile(buildahLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logText := string(logData)
+	for _, command := range []string{"umount rookery-lightvm-" + vm.ID, "rm rookery-lightvm-" + vm.ID} {
+		if !strings.Contains(logText, command) {
+			t.Fatalf("buildah log %q does not contain %q", logText, command)
+		}
+	}
+	if qemuRunner.running {
+		t.Fatal("QEMU is marked running after a failed start")
+	}
+}

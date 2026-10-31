@@ -23,6 +23,9 @@ api:
   check_interval: 10s
   qemu_bin: qemu-system-x86_64
   run_dir: /run/rookery
+  lightvm_dir: /var/lib/rookery/lightvm
+  buildah_bin: buildah
+  virtiofsd_bin: "" # defaults to virtiofsd next to the rookery binary
   cgroup_root: /sys/fs/cgroup/rookery-cgroup
   memif_dir: /run/rookery/memif
   vhost_dir: /run/vpp
