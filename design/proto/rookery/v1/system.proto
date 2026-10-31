@@ -111,6 +111,7 @@ message StatusResponse {
   VPPStatus vpp = 4;
   StartupScriptStatus rookery_startup_script = 5;
   StartupScriptStatus vpp_startup_script = 6;
+  ComponentStatus lightvm = 7;
 }
 
 message StartupScriptStatus {

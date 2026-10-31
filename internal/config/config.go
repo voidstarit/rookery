@@ -36,6 +36,9 @@ type API struct {
 	CheckInterval *string  `yaml:"check_interval"`
 	QEMUBin       *string  `yaml:"qemu_bin"`
 	RunDir        *string  `yaml:"run_dir"`
+	LightVMDir    *string  `yaml:"lightvm_dir"`
+	BuildahBin    *string  `yaml:"buildah_bin"`
+	VirtiofsdBin  *string  `yaml:"virtiofsd_bin"`
 	CgroupRoot    *string  `yaml:"cgroup_root"`
 	MemifDir      *string  `yaml:"memif_dir"`
 	VhostDir      *string  `yaml:"vhost_dir"`

@@ -26,6 +26,9 @@ var createdMethods = map[string]bool{
 	"/rookery.v1.RouteTableService/CreateRouteTable":         true,
 	"/rookery.v1.RouteTableService/CreateRoute":              true,
 	"/rookery.v1.HostService/CreateHostTap":                  true,
+	"/rookery.v1.LightVMKernelService/CreateKernel":          true,
+	"/rookery.v1.LightVMInitramfsService/CreateInitramfs":    true,
+	"/rookery.v1.LightVMService/CreateLightVM":               true,
 }
 
 var noContentMethods = map[string]bool{
@@ -46,6 +49,9 @@ var noContentMethods = map[string]bool{
 	"/rookery.v1.HostService/DeleteHostTap":                  true,
 	"/rookery.v1.VMService/ResetVM":                          true,
 	"/rookery.v1.VMService/CtrlAltDel":                       true,
+	"/rookery.v1.LightVMKernelService/DeleteKernel":          true,
+	"/rookery.v1.LightVMInitramfsService/DeleteInitramfs":    true,
+	"/rookery.v1.LightVMService/DeleteLightVM":               true,
 }
 
 func setLocationHeader(method string, response proto.Message, writer http.ResponseWriter) {
@@ -74,6 +80,12 @@ func setLocationHeader(method string, response proto.Message, writer http.Respon
 		writer.Header().Set("Location", fmt.Sprintf("/api/routes/%d", value.GetId()))
 	case *rookeryv1.HostTap:
 		writer.Header().Set("Location", fmt.Sprintf("/api/host/taps/%d", value.GetId()))
+	case *rookeryv1.LightVMKernel:
+		writer.Header().Set("Location", fmt.Sprintf("/api/lightvm/kernels/%d", value.GetId()))
+	case *rookeryv1.LightVMInitramfs:
+		writer.Header().Set("Location", fmt.Sprintf("/api/lightvm/initramfs/%d", value.GetId()))
+	case *rookeryv1.LightVM:
+		writer.Header().Set("Location", "/api/lightvm/instances/"+value.GetId())
 	}
 }
 

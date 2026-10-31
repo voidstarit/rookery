@@ -318,11 +318,15 @@ func vmFromUpdateRequest(existing store.VM, request *rookeryv1.UpdateVMRequest) 
 }
 
 func (s *vmService) validateCgroupClass(ctx context.Context, className string) error {
+	return validateCgroupClassFor(ctx, s.store, className, "VM")
+}
+
+func validateCgroupClassFor(ctx context.Context, st *store.Store, className, subject string) error {
 	className = strings.TrimSpace(className)
 	if className == "" {
 		return nil
 	}
-	settings, err := s.store.GetCgroupSettings(ctx)
+	settings, err := st.GetCgroupSettings(ctx)
 	if err != nil {
 		return status.Error(codes.Internal, "could not read cgroup settings")
 	}
@@ -340,7 +344,7 @@ func (s *vmService) validateCgroupClass(ctx context.Context, className string) e
 	for _, class := range settings.Classes {
 		if strings.HasPrefix(strings.TrimSpace(class.Name), prefix) {
 			return status.Errorf(codes.InvalidArgument,
-				"cgroup class %q has child classes; assign the VM to a leaf class", className)
+				"cgroup class %q has child classes; assign the %s to a leaf class", className, subject)
 		}
 	}
 	return nil

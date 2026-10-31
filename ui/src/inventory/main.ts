@@ -3,6 +3,7 @@ import { mountToastHost } from "../shared/toast";
 import { ClientCertificates } from "../settings/ClientCertificates";
 import { startInventory } from "./app";
 import { mountDisksTab } from "./disks/main";
+import { mountLightVMTab } from "./lightvm/main";
 import { mountMediaTab } from "./media/main";
 import { mountNetworksTab } from "./networks/main";
 import { mountSettingsTab } from "./settings/main";
@@ -17,6 +18,7 @@ if (toastRoot) {
 mountVMsTab(document.getElementById("vms-root"));
 mountDisksTab(document.getElementById("disks-root"));
 mountMediaTab(document.getElementById("media-root"));
+mountLightVMTab(document.getElementById("lightvm-root"));
 mountNetworksTab(document.getElementById("networks-root"));
 mountVNFsTab(document.getElementById("vnfs-root"));
 mountSettingsTab(document.getElementById("settings-root"));
