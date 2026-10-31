@@ -2,8 +2,8 @@
 #
 # This directory intentionally contains only this Makefile and Dockerfile.
 # All build state lives in a Docker volume and all artifacts are written to
-# OUT_DIR (default: ../dist/lightvm). Nothing is written back into this
-# directory.
+# OUT_DIR (default: ../../dist/lightvm, i.e. the repository dist directory).
+# Nothing is written back into this directory.
 #
 # The host only needs GNU make and Docker. The kernel, initramfs, and the
 # complete toolchain are built inside a disposable Debian container with a
@@ -48,7 +48,7 @@ KERNEL_MAJOR := $(firstword $(subst ., ,$(KERNEL_VERSION)))
 KERNEL_URL ?= https://cdn.kernel.org/pub/linux/kernel/v$(KERNEL_MAJOR).x
 JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 
-OUT_DIR ?= $(EXTRA_DIR)/../dist/lightvm
+OUT_DIR ?= $(EXTRA_DIR)/../../dist/lightvm
 ifeq ($(strip $(OUT_DIR)),)
 $(error OUT_DIR must not be empty)
 endif
@@ -59,15 +59,6 @@ DOCKER_IMAGE ?= rookery-lightvm-kernel-builder:1
 DOCKER_PLATFORM ?= linux/amd64
 DOCKER_RUN_FLAGS ?=
 BUILD_VOLUME ?= rookery-lightvm-kernel-build-$(HOST_UID)
-
-# virtiofsd is downloaded next to this Makefile. The default source is the
-# upstream virtio-fs publish job for main, which provides a static x86_64
-# musl binary. Override VIRTIOFSD_URL and VIRTIOFSD_SHA256 for a pinned build.
-VIRTIOFSD_REF ?= main
-VIRTIOFSD_URL ?= https://gitlab.com/virtio-fs/virtiofsd/-/jobs/artifacts/$(VIRTIOFSD_REF)/download?job=publish
-VIRTIOFSD_SHA256 ?=
-VIRTIOFSD_DIR := $(EXTRA_DIR)/virtiofsd
-VIRTIOFSD_BIN := $(VIRTIOFSD_DIR)/virtiofsd
 
 # Paths inside the builder container.
 BUILD_DIR := /build
@@ -388,7 +379,7 @@ exit 0
 endef
 
 .PHONY: all kernel initramfs docker-image docker-volume menuconfig reconfigure shell test \
-	virtiofsd clean distclean help _configure _kernel _initramfs _initramfs_rootfs _menuconfig _shell
+	clean distclean help _configure _kernel _initramfs _initramfs_rootfs _menuconfig _shell
 
 $(OBJ_DIR):
 	@mkdir -p "$@"
@@ -545,27 +536,6 @@ _shell:
 # Host-side helpers
 # ---------------------------------------------------------------------------
 
-# Download the upstream static x86_64 virtiofsd artifact into extra/virtiofsd.
-# The file is not committed; release builds include it next to rookery.
-virtiofsd: $(VIRTIOFSD_BIN)
-
-$(VIRTIOFSD_BIN):
-	@command -v curl >/dev/null || { echo "error: curl is required to download virtiofsd" >&2; exit 1; }
-	@command -v unzip >/dev/null || { echo "error: unzip is required to extract virtiofsd" >&2; exit 1; }
-	@mkdir -p "$(VIRTIOFSD_DIR)"
-	@tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
-		echo "downloading virtiofsd from $(VIRTIOFSD_URL)"; \
-		curl -fL --retry 3 --retry-connrefused -o "$$tmp/virtiofsd.zip" "$(VIRTIOFSD_URL)"; \
-		unzip -q "$$tmp/virtiofsd.zip" -d "$$tmp/extract"; \
-		found=$$(find "$$tmp/extract" -type f -name virtiofsd -print -quit); \
-		test -n "$$found" || { echo "error: virtiofsd artifact did not contain a virtiofsd binary" >&2; exit 1; }; \
-		if [ -n "$(VIRTIOFSD_SHA256)" ]; then \
-			echo "$(VIRTIOFSD_SHA256)  $$found" | sha256sum -c - || exit 1; \
-		fi; \
-		install -m 0755 "$$found" "$(VIRTIOFSD_BIN)"; \
-		version=$$("$(VIRTIOFSD_BIN)" --version 2>/dev/null | head -n 1 || true); \
-		echo "virtiofsd: $(VIRTIOFSD_BIN) $${version}"
-
 # Boot both artifacts with virtio-blk and virtio-net attached. The initramfs
 # requests DHCP, prints markers, and powers the VM off, so this checks the
 # virtio devices, networking, and ACPI poweroff at once.
@@ -617,7 +587,6 @@ help:
 	@echo "  make menuconfig   edit the kernel configuration"
 	@echo "  make reconfigure  reset the kernel configuration"
 	@echo "  make test         boot the artifacts in QEMU"
-	@echo "  make virtiofsd    download virtiofsd into extra/virtiofsd"
 	@echo "  make shell        shell inside the builder container"
 	@echo "  make clean        remove the build volume and artifacts"
 	@echo "  make distclean    also remove the builder image"
@@ -625,5 +594,4 @@ help:
 	@echo "  OUT_DIR=$(OUT_DIR)"
 	@echo "  BUILD_VOLUME=$(BUILD_VOLUME)"
 	@echo "  KERNEL_VERSION=$(KERNEL_VERSION)  KERNEL_URL=$(KERNEL_URL)"
-	@echo "  VIRTIOFSD_REF=$(VIRTIOFSD_REF)  VIRTIOFSD_URL=$(VIRTIOFSD_URL)"
 	@echo "  INITRAMFS_OVERLAY=$(INITRAMFS_OVERLAY)"
