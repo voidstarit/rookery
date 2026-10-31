@@ -236,7 +236,7 @@ executable fields are not passed over the kernel cmdline; the initramfs
 supplies its own contract. `/api/status` includes a `lightvm` component that
 reports whether `buildah` and `virtiofsd` are available; when either is missing
 the LightVM tab shows the error and disables Start. Run `make virtiofsd` (or
-`make -C extra virtiofsd`) to download the upstream static x86_64 binary into
+`make -C extra/virtiofsd virtiofsd`) to download the upstream static x86_64 binary into
 `extra/virtiofsd/`; `make release` includes it next to `rookery`.
 While a LightVM is running, the API returns `console_socket`, the Unix socket
 path for its virtio console; there is no graphical display or VNC device. The
@@ -244,8 +244,10 @@ table's **Console** action opens `/lightvm-console.html?vm=<uuid>`, an xterm.js
 terminal connected through `/ws/lightvms/{id}/console`. The page uses bundled
 JetBrains Mono and lets each user choose a persisted color theme
 (green/white/amber/blue on black, solarized dark, or black on white) and font
-size. Console access follows `console_enabled` and is checked by the server;
-disable it to block new and existing console sessions. Interfaces can belong to
+size. It also has buttons for common control chords (Ctrl+C/D/Z/A/E/K/U/W/L/R,
+Esc, Tab); the **Ctrl** button latches for the next key so arbitrary Ctrl+key
+combinations can be sent. Console access follows `console_enabled` and is
+checked by the server; disable it to block new and existing console sessions. Interfaces can belong to
 either a VM or a LightVM, not both.
 
 
