@@ -14,7 +14,7 @@ EXTRA_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 VIRTIOFSD_REF ?= main
 VIRTIOFSD_URL ?= https://gitlab.com/virtio-fs/virtiofsd/-/jobs/artifacts/$(VIRTIOFSD_REF)/download?job=publish
 VIRTIOFSD_SHA256 ?=
-VIRTIOFSD_DIR := $(EXTRA_DIR)/virtiofsd
+VIRTIOFSD_DIR := $(EXTRA_DIR)
 VIRTIOFSD_BIN := $(VIRTIOFSD_DIR)/virtiofsd
 
 .PHONY: all virtiofsd clean
