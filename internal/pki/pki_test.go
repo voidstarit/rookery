@@ -4,9 +4,12 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -85,5 +88,55 @@ func TestMTLSClientCertificateLifecycle(t *testing.T) {
 	client.CloseIdleConnections()
 	if _, err := client.Get(server.URL); err == nil {
 		t.Fatal("revoked client certificate was accepted")
+	}
+}
+
+func TestClientIssuerLoadsExistingCA(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "pki.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	dir := filepath.Join(t.TempDir(), "pki")
+	if _, err := NewClientIssuer(dir, st, zerolog.Nop()); err == nil {
+		t.Fatal("issuer accepted a missing PKI directory")
+	}
+	if _, err := os.Stat(filepath.Join(dir, caCertFile)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing CA created files: %v", err)
+	}
+
+	if _, err := New(dir, st, nil, zerolog.Nop()); err != nil {
+		t.Fatal(err)
+	}
+	issuer, err := NewClientIssuer(dir, st, zerolog.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := issuer.IssueClientCertificate(ctx, "cli-client", 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, _ := pem.Decode(issued.CertificatePEM)
+	if block == nil {
+		t.Fatal("issued certificate is not PEM")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cert.Subject.CommonName != "cli-client" {
+		t.Fatalf("common name = %q", cert.Subject.CommonName)
+	}
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(issued.CAPEM) {
+		t.Fatal("could not load CA")
+	}
+	if _, err := cert.Verify(x509.VerifyOptions{
+		Roots:     roots,
+		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	}); err != nil {
+		t.Fatalf("verify issued certificate: %v", err)
 	}
 }

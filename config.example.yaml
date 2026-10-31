@@ -3,7 +3,8 @@
 # Pass this file with -config /path/to/config.yaml or ROOKERY_CONFIG.
 # Command-line flags override environment variables, which override this file.
 #
-# api configures `rookery serve` and `rookery init`.
+# api configures `rookery serve`, `rookery init`, and
+# `rookery create-client-cert`.
 api:
   # LVM bootstrap (serve and init). For serve, an existing storage backend is
   # used when these are omitted.

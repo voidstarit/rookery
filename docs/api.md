@@ -29,6 +29,25 @@ client certificates:
 - Revoke certificates from the list; revocation is checked on every TLS
   handshake (session tickets are disabled).
 
+Administrators can also issue a certificate from the host without using the UI:
+
+```bash
+sudo rookery create-client-cert \
+  -config /etc/rookery/config.yaml \
+  -out-dir ./ops-laptop \
+  ops-laptop
+```
+
+The command must use the same `-db` and `-pki-dir` as the running server; both
+can come from the YAML file. It requires an existing database and CA and does
+not create either. It writes `ops-laptop.crt`, `ops-laptop.key`, and
+`ops-laptop-ca.crt`; the private key is created with mode `0600` and is never
+stored by Rookery. Use `-days` to change the default 365-day validity (maximum
+3650) and `-force` to overwrite existing files. `issue-client-cert` is an alias
+for the same command. The certificate is recorded in the database, so it
+appears in the UI list and can be revoked there, and it works immediately with
+the running server.
+
 The CA and server keys live under `-pki-dir` (default `/var/lib/rookery/pki`,
 env `ROOKERY_PKI_DIR`) with `0700`/`0600` permissions. Protect and back up that
 directory: losing the CA invalidates every issued client certificate and

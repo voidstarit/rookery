@@ -89,6 +89,27 @@ func New(dir string, st *store.Store, extraSANs []string, logger zerolog.Logger)
 	return m, nil
 }
 
+// NewClientIssuer loads an existing CA so client certificates can be issued by
+// an administrative command. Unlike New, it never creates a CA or server
+// certificate; the server must have initialized dir first.
+func NewClientIssuer(dir string, st *store.Store, logger zerolog.Logger) (*Manager, error) {
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
+		return nil, errors.New("PKI directory is required")
+	}
+	if st == nil {
+		return nil, errors.New("PKI requires a store")
+	}
+	m := &Manager{dir: dir, store: st, logger: logger}
+	if err := m.loadCA(); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("Rookery CA not found in %s; start rookery serve with -pki-dir %s first", dir, dir)
+		}
+		return nil, fmt.Errorf("load PKI CA: %w", err)
+	}
+	return m, nil
+}
+
 // CAPEM returns the PEM encoded CA certificate.
 func (m *Manager) CAPEM() []byte {
 	return append([]byte(nil), m.caPEM...)
@@ -207,17 +228,33 @@ func (m *Manager) IssueClientCertificate(ctx context.Context, name string, days 
 	}, nil
 }
 
+func (m *Manager) loadCA() error {
+	certPEM, certErr := os.ReadFile(filepath.Join(m.dir, caCertFile))
+	keyPEM, keyErr := os.ReadFile(filepath.Join(m.dir, caKeyFile))
+	if certErr != nil || keyErr != nil {
+		return errors.Join(certErr, keyErr)
+	}
+	return m.setCA(certPEM, keyPEM)
+}
+
+func (m *Manager) setCA(certPEM, keyPEM []byte) error {
+	cert, key, parsedPEM, der, err := parseCA(certPEM, keyPEM)
+	if err != nil {
+		return err
+	}
+	m.caCert, m.caKey, m.caPEM, m.caDER = cert, key, parsedPEM, der
+	return nil
+}
+
 func (m *Manager) loadOrCreateCA() error {
 	certPath := filepath.Join(m.dir, caCertFile)
 	keyPath := filepath.Join(m.dir, caKeyFile)
 	certPEM, certErr := os.ReadFile(certPath)
 	keyPEM, keyErr := os.ReadFile(keyPath)
 	if certErr == nil && keyErr == nil {
-		cert, key, parsedPEM, der, err := parseCA(certPEM, keyPEM)
-		if err != nil {
+		if err := m.setCA(certPEM, keyPEM); err != nil {
 			return fmt.Errorf("load PKI CA: %w", err)
 		}
-		m.caCert, m.caKey, m.caPEM, m.caDER = cert, key, parsedPEM, der
 		return nil
 	}
 	if !errors.Is(certErr, os.ErrNotExist) || !errors.Is(keyErr, os.ErrNotExist) {
