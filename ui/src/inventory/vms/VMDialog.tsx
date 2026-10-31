@@ -99,7 +99,10 @@ export function VMDialog({
     if (selectedInterfaceIDs.has(iface.id)) {
       return false;
     }
-    return !iface.attached_vm_id || (vm !== null && iface.attached_vm_id === vm.id);
+    return (
+      (!iface.attached_vm_id && !iface.attached_lightvm_id) ||
+      (vm !== null && iface.attached_vm_id === vm.id)
+    );
   });
 
   useEffect(() => {

@@ -1,0 +1,321 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+import "rookery/v1/interface.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// LightVMKernelService manages kernel images for LightVM instances.
+service LightVMKernelService {
+  rpc ListKernels(ListKernelsRequest) returns (ListKernelsResponse) {
+    option (google.api.http) = {
+      get: "/api/lightvm/kernels"
+      response_body: "kernels"
+    };
+  }
+
+  rpc GetKernel(GetKernelRequest) returns (LightVMKernel) {
+    option (google.api.http) = {get: "/api/lightvm/kernels/{id}"};
+  }
+
+  rpc CreateKernel(CreateKernelRequest) returns (LightVMKernel) {
+    option (google.api.http) = {
+      post: "/api/lightvm/kernels"
+      body: "*"
+    };
+  }
+
+  rpc UpdateKernel(UpdateKernelRequest) returns (LightVMKernel) {
+    option (google.api.http) = {
+      put: "/api/lightvm/kernels/{id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteKernel(DeleteKernelRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/lightvm/kernels/{id}"};
+  }
+}
+
+// LightVMInitramfsService manages initramfs images for LightVM instances.
+service LightVMInitramfsService {
+  rpc ListInitramfs(ListInitramfsRequest) returns (ListInitramfsResponse) {
+    option (google.api.http) = {
+      get: "/api/lightvm/initramfs"
+      response_body: "initramfs"
+    };
+  }
+
+  rpc GetInitramfs(GetInitramfsRequest) returns (LightVMInitramfs) {
+    option (google.api.http) = {get: "/api/lightvm/initramfs/{id}"};
+  }
+
+  rpc CreateInitramfs(CreateInitramfsRequest) returns (LightVMInitramfs) {
+    option (google.api.http) = {
+      post: "/api/lightvm/initramfs"
+      body: "*"
+    };
+  }
+
+  rpc UpdateInitramfs(UpdateInitramfsRequest) returns (LightVMInitramfs) {
+    option (google.api.http) = {
+      put: "/api/lightvm/initramfs/{id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteInitramfs(DeleteInitramfsRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/lightvm/initramfs/{id}"};
+  }
+}
+
+// LightVMService manages container-backed LightVM definitions.
+service LightVMService {
+  rpc ListLightVMs(ListLightVMsRequest) returns (ListLightVMsResponse) {
+    option (google.api.http) = {
+      get: "/api/lightvm/instances"
+      response_body: "lightvms"
+    };
+  }
+
+  rpc GetLightVM(GetLightVMRequest) returns (LightVM) {
+    option (google.api.http) = {get: "/api/lightvm/instances/{id}"};
+  }
+
+  rpc CreateLightVM(CreateLightVMRequest) returns (LightVM) {
+    option (google.api.http) = {
+      post: "/api/lightvm/instances"
+      body: "*"
+    };
+  }
+
+  rpc UpdateLightVM(UpdateLightVMRequest) returns (LightVM) {
+    option (google.api.http) = {
+      put: "/api/lightvm/instances/{id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteLightVM(DeleteLightVMRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/lightvm/instances/{id}"};
+  }
+
+  rpc StartLightVM(StartLightVMRequest) returns (LightVM) {
+    option (google.api.http) = {post: "/api/lightvm/instances/{id}/start"};
+  }
+
+  rpc StopLightVM(StopLightVMRequest) returns (LightVM) {
+    option (google.api.http) = {post: "/api/lightvm/instances/{id}/stop"};
+  }
+}
+
+message LightVMEnvVar {
+  string name = 1 [(validate.rules).string = {min_len: 1, max_len: 128}];
+  string value = 2 [(validate.rules).string = {max_len: 4096}];
+}
+
+message LightVM {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  int32 vcpus = 4;
+  int32 memory_mb = 5;
+  bool console_enabled = 6;
+  string cgroup_class = 7;
+  int64 kernel_id = 8;
+  string kernel_name = 9;
+  int64 initramfs_id = 10;
+  string initramfs_name = 11;
+  string image = 12;
+  repeated LightVMEnvVar env = 13;
+  string executable_path = 14;
+  repeated string executable_args = 15;
+  repeated int64 interface_ids = 16;
+  repeated VMInterface interfaces = 17;
+  google.protobuf.Timestamp created_at = 18;
+  google.protobuf.Timestamp updated_at = 19;
+  string append = 20;
+  string status = 21;
+  string desired_state = 22;
+  string console_socket = 23;
+}
+
+message ListLightVMsRequest {}
+
+message ListLightVMsResponse {
+  repeated LightVM lightvms = 1;
+}
+
+message GetLightVMRequest {
+  string id = 1 [(validate.rules).string.uuid = true];
+}
+
+message CreateLightVMRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  string description = 2 [(validate.rules).string = {max_len: 2000}];
+  optional int32 vcpus = 3 [(validate.rules).int32 = {gte: 1, lte: 128}];
+  optional int32 memory_mb = 4 [(validate.rules).int32 = {gte: 128, lte: 1048576}];
+  optional bool console_enabled = 5;
+  string cgroup_class = 6 [(validate.rules).string = {max_len: 200}];
+  int64 kernel_id = 7 [(validate.rules).int64 = {gt: 0}];
+  int64 initramfs_id = 8 [(validate.rules).int64 = {gt: 0}];
+  string image = 9 [(validate.rules).string = {min_len: 1, max_len: 512}];
+  repeated LightVMEnvVar env = 10 [(validate.rules).repeated = {max_items: 64}];
+  string executable_path = 11 [(validate.rules).string = {min_len: 1, max_len: 4096}];
+  repeated string executable_args = 12 [(validate.rules).repeated = {
+    max_items: 64
+    items: {string: {max_len: 4096}}
+  }];
+  repeated int64 interface_ids = 13 [(validate.rules).repeated = {
+    max_items: 32
+    items: {int64: {gt: 0}}
+  }];
+  optional string append = 14 [(validate.rules).string = {max_len: 4096}];
+}
+
+message UpdateLightVMRequest {
+  string id = 1 [(validate.rules).string.uuid = true];
+  string name = 2 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  string description = 3 [(validate.rules).string = {max_len: 2000}];
+  int32 vcpus = 4 [(validate.rules).int32 = {gte: 1, lte: 128}];
+  int32 memory_mb = 5 [(validate.rules).int32 = {gte: 128, lte: 1048576}];
+  bool console_enabled = 6;
+  string cgroup_class = 7 [(validate.rules).string = {max_len: 200}];
+  int64 kernel_id = 8 [(validate.rules).int64 = {gt: 0}];
+  int64 initramfs_id = 9 [(validate.rules).int64 = {gt: 0}];
+  string image = 10 [(validate.rules).string = {min_len: 1, max_len: 512}];
+  repeated LightVMEnvVar env = 11 [(validate.rules).repeated = {max_items: 64}];
+  string executable_path = 12 [(validate.rules).string = {min_len: 1, max_len: 4096}];
+  repeated string executable_args = 13 [(validate.rules).repeated = {
+    max_items: 64
+    items: {string: {max_len: 4096}}
+  }];
+  repeated int64 interface_ids = 14 [(validate.rules).repeated = {
+    max_items: 32
+    items: {int64: {gt: 0}}
+  }];
+  string append = 15 [(validate.rules).string = {max_len: 4096}];
+}
+
+message DeleteLightVMRequest {
+  string id = 1 [(validate.rules).string.uuid = true];
+}
+
+message StartLightVMRequest {
+  string id = 1 [(validate.rules).string.uuid = true];
+}
+
+message StopLightVMRequest {
+  string id = 1 [(validate.rules).string.uuid = true];
+}
+
+message LightVMKernel {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+  string path = 4;
+  string file_name = 5;
+  int64 size_bytes = 6;
+  bool managed = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+message ListKernelsRequest {}
+
+message ListKernelsResponse {
+  repeated LightVMKernel kernels = 1;
+}
+
+message GetKernelRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateKernelRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 127
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  string description = 2 [(validate.rules).string = {max_len: 2000}];
+  string path = 3 [(validate.rules).string = {min_len: 1, max_len: 4096}];
+  string file_name = 4 [(validate.rules).string = {max_len: 255}];
+}
+
+message UpdateKernelRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  string name = 2 [(validate.rules).string = {
+    min_len: 1
+    max_len: 127
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  string description = 3 [(validate.rules).string = {max_len: 2000}];
+  string path = 4 [(validate.rules).string = {min_len: 1, max_len: 4096}];
+  string file_name = 5 [(validate.rules).string = {max_len: 255}];
+}
+
+message DeleteKernelRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message LightVMInitramfs {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+  string path = 4;
+  string file_name = 5;
+  int64 size_bytes = 6;
+  bool managed = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+message ListInitramfsRequest {}
+
+message ListInitramfsResponse {
+  repeated LightVMInitramfs initramfs = 1;
+}
+
+message GetInitramfsRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateInitramfsRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 127
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  string description = 2 [(validate.rules).string = {max_len: 2000}];
+  string path = 3 [(validate.rules).string = {min_len: 1, max_len: 4096}];
+  string file_name = 4 [(validate.rules).string = {max_len: 255}];
+}
+
+message UpdateInitramfsRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  string name = 2 [(validate.rules).string = {
+    min_len: 1
+    max_len: 127
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  string description = 3 [(validate.rules).string = {max_len: 2000}];
+  string path = 4 [(validate.rules).string = {min_len: 1, max_len: 4096}];
+  string file_name = 5 [(validate.rules).string = {max_len: 255}];
+}
+
+message DeleteInitramfsRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}

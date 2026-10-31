@@ -7,6 +7,7 @@ const options = {
   entryPoints: {
     app: "src/inventory/main.ts",
     console: "src/console/main.tsx",
+    lightvmConsole: "src/lightvm-console/main.tsx",
   },
   bundle: true,
   format: "esm",
@@ -26,6 +27,11 @@ const options = {
   minify: !watch,
   sourcemap: watch ? "inline" : false,
   legalComments: "none",
+  loader: {
+    ".woff": "file",
+    ".woff2": "file",
+  },
+  assetNames: "fonts/[name]-[hash]",
   logLevel: "info",
 };
 

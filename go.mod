@@ -6,7 +6,7 @@ require (
 	github.com/coredhcp/coredhcp v0.0.0-20260217182248-a0841cb3038f
 	github.com/envoyproxy/protoc-gen-validate v1.3.3
 	github.com/google/uuid v1.6.0
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.32.0
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.33.0
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
 	github.com/insomniacslk/dhcp v0.0.0-20241203100832-a481575ed0ef
 	github.com/osrg/gobgp/v3 v3.37.0
@@ -16,8 +16,13 @@ require (
 	// module path moved, but it is the only published module with gomemif).
 	go.fd.io/govpp/extras v0.1.1-0.20261019084134-c02eb51f8588
 	golang.org/x/net v0.61.0
+<<<<<<< HEAD
 	google.golang.org/genproto/googleapis/api v0.0.0-20261012220534-4341edf3f941
 	google.golang.org/grpc v1.85.0
+=======
+	google.golang.org/genproto/googleapis/api v0.0.0-20261026165753-2ffab32bce7e
+	google.golang.org/grpc v1.84.0
+>>>>>>> origin/main
 	google.golang.org/protobuf v1.36.12
 	modernc.org/sqlite v1.61.0
 )
@@ -80,7 +85,7 @@ require (
 	golang.org/x/sys v0.49.0
 	golang.org/x/term v0.47.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20261005182115-fad411399dd8 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20261019180522-ce908d29299b // indirect
 	gvisor.dev/gvisor v0.0.0-20250503011706-39ed1f5ac29c
 	modernc.org/libc v1.79.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

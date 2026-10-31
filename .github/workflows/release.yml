@@ -62,6 +62,7 @@ jobs:
           test -f "dist/rookery-${RELEASE_TAG}-linux-amd64.tar.gz.sha256"
           test -x "dist/rookery-${RELEASE_TAG}-linux-amd64/rookery"
           test -x "dist/rookery-${RELEASE_TAG}-linux-amd64/vnfs"
+          test -x "dist/rookery-${RELEASE_TAG}-linux-amd64/virtiofsd"
           test -x "dist/rookery-${RELEASE_TAG}-linux-amd64/${PROVIDER_ASSET}"
           test -f "dist/rookery-${RELEASE_TAG}-linux-amd64/docs/imgs/vms.png"
           test -f "dist/rookery-${RELEASE_TAG}-linux-amd64/docs/imgs/icon.png"

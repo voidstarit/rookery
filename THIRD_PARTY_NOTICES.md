@@ -11,6 +11,28 @@ under the Mozilla Public License 2.0. The upstream license text is included at
 
 Upstream: <https://github.com/novnc/noVNC>
 
+## xterm.js
+
+The LightVM console uses `@xterm/xterm` and `@xterm/addon-fit` (MIT license),
+installed through npm and bundled into `internal/webui/static/build`.
+
+Upstream: <https://github.com/xtermjs/xterm.js>
+
+## JetBrains Mono
+
+The LightVM console bundles JetBrains Mono (SIL Open Font License 1.1) from
+`@fontsource/jetbrains-mono`.
+
+Upstream: <https://github.com/JetBrains/JetBrainsMono>
+
+## virtiofsd
+
+Release archives include `virtiofsd` from the upstream virtio-fs project
+(Apache License 2.0 and BSD 3-Clause). It is downloaded by `make virtiofsd`
+from the project's published x86_64 Linux CI artifact.
+
+Upstream: <https://gitlab.com/virtio-fs/virtiofsd>
+
 ## Protocol definitions
 
 `design/third_party` contains vendored protobuf definitions and license texts

@@ -109,6 +109,7 @@ func TestMigrationConvertsNetworkDHCPToVNF(t *testing.T) {
 	}
 	dropCgroupSchema(t, db)
 	dropEntityLabelsSchema(t, db)
+	dropLightVMSchema(t, db)
 	if _, err := db.Exec(`
 		INSERT INTO networks
 			(name, bridge_domain_id, dhcp_enabled, dhcp_gateway,
@@ -241,6 +242,7 @@ func TestMigrationBackfillsVMDisks(t *testing.T) {
 	}
 	dropCgroupSchema(t, db)
 	dropEntityLabelsSchema(t, db)
+	dropLightVMSchema(t, db)
 	if _, err := db.Exec(`PRAGMA user_version = 11`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
@@ -338,8 +340,8 @@ func TestMigrationPreservesLegacyVMsWithoutDisks(t *testing.T) {
 	if err := st.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 41 {
-		t.Fatalf("schema version = %d, want 41", version)
+	if version != 46 {
+		t.Fatalf("schema version = %d, want 46", version)
 	}
 }
 
@@ -365,6 +367,7 @@ func TestEnsureStartupScriptSchemaAfterTableDrop(t *testing.T) {
 	}
 	dropCgroupSchema(t, db)
 	dropEntityLabelsSchema(t, db)
+	dropLightVMSchema(t, db)
 	if _, err := db.Exec(`PRAGMA user_version = 37`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
@@ -446,6 +449,7 @@ func TestEnsureVPPInterfaceAddressesSchemaAfterTableDrop(t *testing.T) {
 	}
 	dropCgroupSchema(t, db)
 	dropEntityLabelsSchema(t, db)
+	dropLightVMSchema(t, db)
 	if _, err := db.Exec(`PRAGMA user_version = 30`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
@@ -507,6 +511,7 @@ func TestMigrationBackfillsVMPowerState(t *testing.T) {
 	}
 	dropCgroupSchema(t, db)
 	dropEntityLabelsSchema(t, db)
+	dropLightVMSchema(t, db)
 	if _, err := db.Exec(`PRAGMA user_version = 37`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
@@ -546,6 +551,8 @@ func dropEntityLabelsSchema(t *testing.T, db *sql.DB) {
 		"entity_labels_acl_delete", "entity_labels_route_table_delete", "entity_labels_route_delete",
 		"entity_labels_network_pipe_delete", "entity_labels_storage_backend_delete",
 		"entity_labels_host_tap_delete", "entity_labels_host_interface_delete",
+		"entity_labels_lightvm_kernel_delete", "entity_labels_lightvm_initramfs_delete",
+		"entity_labels_lightvm_delete",
 	} {
 		if _, err := db.Exec(`DROP TRIGGER IF EXISTS ` + trigger); err != nil {
 			t.Fatalf("drop %s trigger: %v", trigger, err)
@@ -568,5 +575,23 @@ func dropCgroupSchema(t *testing.T, db *sql.DB) {
 	}
 	if _, err := db.Exec(`DROP TABLE IF EXISTS cgroup_settings`); err != nil {
 		t.Fatalf("drop cgroup_settings: %v", err)
+	}
+}
+
+// dropLightVMSchema removes the LightVM tables so a test can simulate a
+// database created before the LightVM inventory existed.
+func dropLightVMSchema(t *testing.T, db *sql.DB) {
+	t.Helper()
+	if _, err := db.Exec(`DROP TABLE IF EXISTS lightvm_interfaces`); err != nil {
+		t.Fatalf("drop lightvm_interfaces: %v", err)
+	}
+	if _, err := db.Exec(`DROP TABLE IF EXISTS lightvms`); err != nil {
+		t.Fatalf("drop lightvms: %v", err)
+	}
+	if _, err := db.Exec(`DROP TABLE IF EXISTS lightvm_kernels`); err != nil {
+		t.Fatalf("drop lightvm_kernels: %v", err)
+	}
+	if _, err := db.Exec(`DROP TABLE IF EXISTS lightvm_initramfs`); err != nil {
+		t.Fatalf("drop lightvm_initramfs: %v", err)
 	}
 }
