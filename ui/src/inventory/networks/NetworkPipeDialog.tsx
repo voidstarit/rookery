@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
+import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
 import type { Network, NetworkPipe } from "../types";
 
 type NetworkPipeDialogProps = {
@@ -11,6 +12,7 @@ type NetworkPipeDialogProps = {
 export function NetworkPipeDialog({ networks, onClose, onSaved }: NetworkPipeDialogProps) {
   const [networkA, setNetworkA] = useState(networks[0] ? String(networks[0].id) : "");
   const [networkB, setNetworkB] = useState(networks[1] ? String(networks[1].id) : "");
+  const [labels, setLabels] = useEntityLabelDraft("network_pipe");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDialogElement | null>(null);
@@ -42,6 +44,7 @@ export function NetworkPipeDialog({ networks, onClose, onSaved }: NetworkPipeDia
         method: "POST",
         body: JSON.stringify({ network_a_id: Number(networkA), network_b_id: Number(networkB) }),
       });
+      await saveEntityLabelsWithToast("network_pipe", pipe.id, `pipes for ${pipe.network_a_name} and ${pipe.network_b_name}`, labels);
       onSaved(pipe);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -100,6 +103,9 @@ export function NetworkPipeDialog({ networks, onClose, onSaved }: NetworkPipeDia
               ))}
             </select>
           </label>
+          <div class="field field-wide">
+            <LabelsInput labels={labels} onChange={setLabels} disabled={saving} />
+          </div>
         </div>
 
         {networks.length < 2 ? (

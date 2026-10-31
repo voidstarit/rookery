@@ -2,7 +2,7 @@ package provider
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -38,6 +38,7 @@ type routeTableModel struct {
 	RouteCount     types.Int64  `tfsdk:"route_count"`
 	NetworkID      types.Int64  `tfsdk:"network_id"`
 	Managed        types.Bool   `tfsdk:"managed"`
+	Labels         types.Set    `tfsdk:"labels"`
 }
 
 func (r *routeTableResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -48,7 +49,8 @@ func (r *routeTableResource) Schema(_ context.Context, _ resource.SchemaRequest,
 	resp.Schema = schema.Schema{
 		Description: "A custom VPP route table (VRF). Table 0 is implicit and cannot be created.",
 		Attributes: map[string]schema.Attribute{
-			"id": schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
+			"labels": labelsResourceAttribute(),
+			"id":     schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
 			"name": schema.StringAttribute{
 				Required:      true,
 				Description:   "Route table name.",
@@ -96,6 +98,12 @@ func (r *routeTableResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 	setRouteTableState(&plan, table)
+	entityLabels, err := applyEntityLabels(callCtx, client, "route_table", fmt.Sprintf("%d", table.GetId()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Create route table labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -120,6 +128,12 @@ func (r *routeTableResource) Read(ctx context.Context, req resource.ReadRequest,
 	for _, table := range response.GetRouteTables() {
 		if table.GetId() == state.ID.ValueInt64() {
 			setRouteTableState(&state, table)
+			entityLabels, err := readEntityLabels(callCtx, client, "route_table", fmt.Sprintf("%d", state.ID.ValueInt64()))
+			if err != nil {
+				resp.Diagnostics.AddError("Read route table labels", err.Error())
+				return
+			}
+			state.Labels = entityLabels
 			resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 			return
 		}
@@ -127,8 +141,26 @@ func (r *routeTableResource) Read(ctx context.Context, req resource.ReadRequest,
 	resp.State.RemoveResource(ctx)
 }
 
-func (r *routeTableResource) Update(_ context.Context, _ resource.UpdateRequest, resp *resource.UpdateResponse) {
-	resp.Diagnostics.AddError("Update route table", errors.New("route tables are immutable; replace the resource instead").Error())
+func (r *routeTableResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan routeTableModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	client, err := r.requireClient()
+	if err != nil {
+		resp.Diagnostics.AddError("Update route table labels", err.Error())
+		return
+	}
+	callCtx, cancel := context.WithTimeout(ctx, client.Timeout())
+	defer cancel()
+	entityLabels, err := applyEntityLabels(callCtx, client, "route_table", fmt.Sprintf("%d", plan.ID.ValueInt64()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Update route table labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *routeTableResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

@@ -108,6 +108,7 @@ func TestMigrationConvertsNetworkDHCPToVNF(t *testing.T) {
 		t.Fatalf("drop vms.desired_state: %v", err)
 	}
 	dropCgroupSchema(t, db)
+	dropEntityLabelsSchema(t, db)
 	if _, err := db.Exec(`
 		INSERT INTO networks
 			(name, bridge_domain_id, dhcp_enabled, dhcp_gateway,
@@ -239,6 +240,7 @@ func TestMigrationBackfillsVMDisks(t *testing.T) {
 		t.Fatalf("drop vms.desired_state: %v", err)
 	}
 	dropCgroupSchema(t, db)
+	dropEntityLabelsSchema(t, db)
 	if _, err := db.Exec(`PRAGMA user_version = 11`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
@@ -336,8 +338,8 @@ func TestMigrationPreservesLegacyVMsWithoutDisks(t *testing.T) {
 	if err := st.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 40 {
-		t.Fatalf("schema version = %d, want 40", version)
+	if version != 41 {
+		t.Fatalf("schema version = %d, want 41", version)
 	}
 }
 
@@ -362,6 +364,7 @@ func TestEnsureStartupScriptSchemaAfterTableDrop(t *testing.T) {
 		t.Fatalf("drop vms.desired_state: %v", err)
 	}
 	dropCgroupSchema(t, db)
+	dropEntityLabelsSchema(t, db)
 	if _, err := db.Exec(`PRAGMA user_version = 37`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
@@ -442,6 +445,7 @@ func TestEnsureVPPInterfaceAddressesSchemaAfterTableDrop(t *testing.T) {
 		t.Fatalf("drop vms.desired_state: %v", err)
 	}
 	dropCgroupSchema(t, db)
+	dropEntityLabelsSchema(t, db)
 	if _, err := db.Exec(`PRAGMA user_version = 30`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
@@ -502,6 +506,7 @@ func TestMigrationBackfillsVMPowerState(t *testing.T) {
 		t.Fatalf("drop vms.desired_state: %v", err)
 	}
 	dropCgroupSchema(t, db)
+	dropEntityLabelsSchema(t, db)
 	if _, err := db.Exec(`PRAGMA user_version = 37`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
@@ -528,6 +533,26 @@ func TestMigrationBackfillsVMPowerState(t *testing.T) {
 	}
 	if gotStopped.DesiredState != DesiredStopped {
 		t.Fatalf("stopped vm desired state = %q, want stopped", gotStopped.DesiredState)
+	}
+}
+
+// dropEntityLabelsSchema removes the label table so a test can simulate an
+// older database before running the migrations again.
+func dropEntityLabelsSchema(t *testing.T, db *sql.DB) {
+	t.Helper()
+	for _, trigger := range []string{
+		"entity_labels_vm_delete", "entity_labels_disk_delete", "entity_labels_media_delete",
+		"entity_labels_network_delete", "entity_labels_interface_delete", "entity_labels_vnf_delete",
+		"entity_labels_acl_delete", "entity_labels_route_table_delete", "entity_labels_route_delete",
+		"entity_labels_network_pipe_delete", "entity_labels_storage_backend_delete",
+		"entity_labels_host_tap_delete", "entity_labels_host_interface_delete",
+	} {
+		if _, err := db.Exec(`DROP TRIGGER IF EXISTS ` + trigger); err != nil {
+			t.Fatalf("drop %s trigger: %v", trigger, err)
+		}
+	}
+	if _, err := db.Exec(`DROP TABLE IF EXISTS entity_labels`); err != nil {
+		t.Fatalf("drop entity_labels table: %v", err)
 	}
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
+import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
 import type { Disk, StorageBackend } from "../types";
 
 type DiskDialogProps = {
@@ -22,6 +23,7 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
   const [provisioningScript, setProvisioningScript] = useState("");
   const [provisioningTimeout, setProvisioningTimeout] = useState("5m");
   const [provisioningJSON, setProvisioningJSON] = useState("{}");
+  const [labels, setLabels] = useEntityLabelDraft("disk");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDialogElement | null>(null);
@@ -98,6 +100,7 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
             : {}),
         }),
       });
+      await saveEntityLabelsWithToast("disk", disk.id, disk.name, labels);
       onSaved(disk);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -291,6 +294,9 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
               </span>
             </label>
           ) : null}
+          <div class="field field-wide">
+            <LabelsInput labels={labels} onChange={setLabels} disabled={saving} />
+          </div>
         </div>
 
         {error ? (

@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -35,6 +36,7 @@ type aclModel struct {
 	Description types.String `tfsdk:"description"`
 	Rules       types.List   `tfsdk:"rules"`
 	VPPIndex    types.Int64  `tfsdk:"vpp_index"`
+	Labels      types.Set    `tfsdk:"labels"`
 }
 
 type aclRuleModel struct {
@@ -71,6 +73,7 @@ func (r *aclResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 	resp.Schema = schema.Schema{
 		Description: "A named ordered VPP ACL rule set.",
 		Attributes: map[string]schema.Attribute{
+			"labels":      labelsResourceAttribute(),
 			"id":          schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
 			"name":        schema.StringAttribute{Required: true, Description: "ACL name."},
 			"title":       schema.StringAttribute{Optional: true, Computed: true},
@@ -126,6 +129,12 @@ func (r *aclResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 	resp.Diagnostics.Append(setACLState(ctx, &plan, acl)...)
+	entityLabels, err := applyEntityLabels(callCtx, client, "acl", fmt.Sprintf("%d", acl.GetId()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Create ACL labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -152,6 +161,12 @@ func (r *aclResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 		return
 	}
 	resp.Diagnostics.Append(setACLState(ctx, &state, acl)...)
+	entityLabels, err := readEntityLabels(callCtx, client, "acl", fmt.Sprintf("%d", state.ID.ValueInt64()))
+	if err != nil {
+		resp.Diagnostics.AddError("Read ACL labels", err.Error())
+		return
+	}
+	state.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -185,6 +200,12 @@ func (r *aclResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		return
 	}
 	resp.Diagnostics.Append(setACLState(ctx, &plan, acl)...)
+	entityLabels, err := applyEntityLabels(callCtx, client, "acl", fmt.Sprintf("%d", plan.ID.ValueInt64()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Update ACL labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 

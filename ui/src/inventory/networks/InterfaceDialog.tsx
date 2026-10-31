@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
+import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
 import type { Network, VirtualInterface, VM } from "../types";
 
 type InterfaceDialogProps = {
@@ -15,6 +16,7 @@ export function InterfaceDialog({ networks, vms, onClose, onSaved }: InterfaceDi
   const [name, setName] = useState("");
   const [networkID, setNetworkID] = useState(networks[0] ? String(networks[0].id) : "");
   const [vmID, setVMID] = useState("");
+  const [labels, setLabels] = useEntityLabelDraft("interface");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDialogElement | null>(null);
@@ -48,6 +50,7 @@ export function InterfaceDialog({ networks, vms, onClose, onSaved }: InterfaceDi
           attached_vm_id: vmID || null,
         }),
       });
+      await saveEntityLabelsWithToast("interface", iface.id, iface.name, labels);
       onSaved(iface);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -132,6 +135,10 @@ export function InterfaceDialog({ networks, vms, onClose, onSaved }: InterfaceDi
             </select>
             <span class="field-hint">Stop the VM before attaching or detaching interfaces.</span>
           </label>
+
+          <div class="field field-wide">
+            <LabelsInput labels={labels} onChange={setLabels} disabled={saving} />
+          </div>
         </div>
 
         {error ? (

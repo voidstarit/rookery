@@ -37,6 +37,7 @@ access, and per-VM monitoring.*
 - QEMU/KVM virtual machines with virtio disks, ISO boot media, and noVNC console
 - cgroup v2 CPU pinning, memory ceilings, and per-device I/O limits with reusable class profiles
 - Live cgroup telemetry for memory, CPU, tasks, and I/O in Settings
+- Free-form labels on inventory entities, with label chips and multi-label editing in the UI and Terraform
 - VPP bridge domains, vhost-user interfaces, ACLs, VRFs, and static routes
 - Optional NAT44 with DHCP outside addressing and DNAT rules
 - DHCPv4, DHCPv6, DNS, and BGP VNFs in a separate `vnfs` daemon

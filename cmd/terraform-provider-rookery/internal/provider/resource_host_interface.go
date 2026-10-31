@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"errors"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -42,6 +41,7 @@ type hostInterfaceModel struct {
 	VPPType      types.String `tfsdk:"vpp_type"`
 	Managed      types.Bool   `tfsdk:"managed"`
 	VPPAddresses types.List   `tfsdk:"vpp_addresses"`
+	Labels       types.Set    `tfsdk:"labels"`
 }
 
 func (r *hostInterfaceResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -52,6 +52,7 @@ func (r *hostInterfaceResource) Schema(_ context.Context, _ resource.SchemaReque
 	resp.Schema = schema.Schema{
 		Description: "Takes a physical host NIC into VPP. Destroying the resource detaches it from VPP.",
 		Attributes: map[string]schema.Attribute{
+			"labels": labelsResourceAttribute(),
 			"nic": schema.StringAttribute{
 				Required:      true,
 				Description:   "Host network interface name, for example enp1s0.",
@@ -92,6 +93,12 @@ func (r *hostInterfaceResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 	resp.Diagnostics.Append(setHostInterfaceState(ctx, &plan, iface)...)
+	entityLabels, err := applyEntityLabels(callCtx, client, "host_interface", iface.GetName(), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Attach host interface labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -116,6 +123,12 @@ func (r *hostInterfaceResource) Read(ctx context.Context, req resource.ReadReque
 	for _, iface := range response.GetInterfaces() {
 		if iface.GetName() == state.NIC.ValueString() {
 			resp.Diagnostics.Append(setHostInterfaceState(ctx, &state, iface)...)
+			entityLabels, err := readEntityLabels(callCtx, client, "host_interface", iface.GetName())
+			if err != nil {
+				resp.Diagnostics.AddError("Read host interface labels", err.Error())
+				return
+			}
+			state.Labels = entityLabels
 			resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 			return
 		}
@@ -123,8 +136,26 @@ func (r *hostInterfaceResource) Read(ctx context.Context, req resource.ReadReque
 	resp.State.RemoveResource(ctx)
 }
 
-func (r *hostInterfaceResource) Update(_ context.Context, _ resource.UpdateRequest, resp *resource.UpdateResponse) {
-	resp.Diagnostics.AddError("Update host interface", errors.New("host interface attachments are immutable; replace the resource instead").Error())
+func (r *hostInterfaceResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan hostInterfaceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	client, err := r.requireClient()
+	if err != nil {
+		resp.Diagnostics.AddError("Update host interface labels", err.Error())
+		return
+	}
+	callCtx, cancel := context.WithTimeout(ctx, client.Timeout())
+	defer cancel()
+	entityLabels, err := applyEntityLabels(callCtx, client, "host_interface", plan.NIC.ValueString(), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Update host interface labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *hostInterfaceResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

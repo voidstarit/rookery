@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../../shared/api";
+import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
 import type { RouteTable } from "../types";
 
 type RouteTableCreatePageProps = {
@@ -13,6 +14,7 @@ export function RouteTableCreatePage({ tables, onCancel, onSaved }: RouteTableCr
   const [name, setName] = useState("");
   const [tableID, setTableID] = useState(String(nextID));
   const [ipv6, setIPv6] = useState(false);
+  const [labels, setLabels] = useEntityLabelDraft("route_table");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -36,6 +38,7 @@ export function RouteTableCreatePage({ tables, onCancel, onSaved }: RouteTableCr
           ipv6,
         }),
       });
+      await saveEntityLabelsWithToast("route_table", saved.id, saved.name, labels);
       onSaved(saved);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -90,6 +93,9 @@ export function RouteTableCreatePage({ tables, onCancel, onSaved }: RouteTableCr
             </span>
             <span class="field-hint">The same table ID can be used separately for IPv4 and IPv6.</span>
           </label>
+          <div class="field field-wide">
+            <LabelsInput labels={labels} onChange={setLabels} disabled={saving} />
+          </div>
         </div>
 
         {error ? (

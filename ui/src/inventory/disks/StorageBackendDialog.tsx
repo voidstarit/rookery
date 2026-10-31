@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
+import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
 import type { StorageBackend } from "../types";
 
 type StorageBackendDialogProps = {
@@ -22,6 +23,7 @@ export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBacke
   const [preparationScript, setPreparationScript] = useState(backend?.config?.preparation_script ?? "");
   const [preparationTimeout, setPreparationTimeout] = useState(backend?.config?.preparation_timeout || "5m");
   const [allowTemplateDelete, setAllowTemplateDelete] = useState(Boolean(backend?.config?.allow_template_delete_with_clones));
+  const [labels, setLabels] = useEntityLabelDraft("storage_backend", backend?.id);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDialogElement | null>(null);
@@ -67,6 +69,7 @@ export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBacke
           }),
         }
       );
+      await saveEntityLabelsWithToast("storage_backend", saved.id, saved.name, labels);
       onSaved(saved);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -229,6 +232,9 @@ export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBacke
               </label>
             </>
           ) : null}
+          <div class="field field-wide">
+            <LabelsInput labels={labels} onChange={setLabels} disabled={saving} />
+          </div>
         </div>
 
         {error ? (

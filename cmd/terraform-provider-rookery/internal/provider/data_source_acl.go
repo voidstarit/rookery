@@ -31,6 +31,7 @@ func (d *aclDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, re
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a named ACL and its ordered rules by id or name.",
 		Attributes: map[string]dschema.Attribute{
+			"labels":      labelsDataSourceAttribute(),
 			"id":          dschema.Int64Attribute{Optional: true, Computed: true},
 			"name":        dschema.StringAttribute{Optional: true, Computed: true},
 			"title":       dschema.StringAttribute{Computed: true},
@@ -90,6 +91,12 @@ func (d *aclDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 		return
 	}
 	resp.Diagnostics.Append(setACLState(ctx, &config, acl)...)
+	entityLabels, err := readEntityLabels(callCtx, client, "acl", fmt.Sprintf("%d", acl.GetId()))
+	if err != nil {
+		resp.Diagnostics.AddError("Read ACL labels", err.Error())
+		return
+	}
+	config.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 

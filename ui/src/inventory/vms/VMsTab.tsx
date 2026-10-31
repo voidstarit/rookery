@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../../shared/api";
 import { showToast } from "../../shared/toast";
+import { EntityLabels, useEntityLabels } from "../../shared/labels";
 import type {
   Disk,
   Media,
@@ -43,6 +44,7 @@ export function VMsTab() {
   const [error, setError] = useState("");
   const [dialog, setDialog] = useState<{ vm: VM | null } | null>(null);
   const [monitorVM, setMonitorVM] = useState<VM | null>(null);
+  const entityLabels = useEntityLabels("vm");
   const route = useRoute();
 
   useEffect(() => {
@@ -352,6 +354,13 @@ export function VMsTab() {
                             {vm.description}
                           </span>
                         ) : null}
+                        <EntityLabels
+                          entityType="vm"
+                          entityID={vm.id}
+                          name={vm.name}
+                          labels={entityLabels.labels[vm.id]}
+                          onSaved={(labels) => entityLabels.setEntityLabels(vm.id, labels)}
+                        />
                       </td>
                       <td>
                         <span class="status-badge" data-status={vm.status}>

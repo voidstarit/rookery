@@ -31,6 +31,7 @@ func (d *mediaDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 	resp.Schema = dschema.Schema{
 		Description: "Looks up registered installation media by id or name.",
 		Attributes: map[string]dschema.Attribute{
+			"labels":     labelsDataSourceAttribute(),
 			"id":         dschema.Int64Attribute{Optional: true, Computed: true},
 			"name":       dschema.StringAttribute{Optional: true, Computed: true},
 			"path":       dschema.StringAttribute{Computed: true},
@@ -73,6 +74,12 @@ func (d *mediaDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 	setMediaState(&config, media)
+	entityLabels, err := readEntityLabels(callCtx, client, "media", fmt.Sprintf("%d", media.GetId()))
+	if err != nil {
+		resp.Diagnostics.AddError("Read media labels", err.Error())
+		return
+	}
+	config.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 

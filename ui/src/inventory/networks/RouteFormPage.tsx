@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../../shared/api";
+import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
 import type { HostInterface, HostTap, Route, RouteTable, VirtualInterface } from "../types";
 
 type RouteFormPageProps = {
@@ -48,6 +49,7 @@ export function RouteFormPage({
   const [rxIpv6Interface, setRxIpv6Interface] = useState("");
   const [outLabels, setOutLabels] = useState("");
   const [drop, setDrop] = useState(false);
+  const [labels, setLabels] = useEntityLabelDraft("route", routeID);
 
   useEffect(() => {
     document.title = `${editing ? "Edit" : "Add"} route · ${table.name} · rookery`;
@@ -132,7 +134,7 @@ export function RouteFormPage({
     const selectedEgressName = egress.startsWith("vpp:") ? egress.slice(4) : "";
     const egressName = customEgress.trim() || selectedEgressName;
     const ifaceID = egress && !selectedEgressName && !customEgress.trim() ? Number(egress) : 0;
-    const labels = outLabels
+    const outLabelValues = outLabels
       .split(/[\s,]+/)
       .map((value) => value.trim())
       .filter(Boolean)
@@ -173,24 +175,26 @@ export function RouteFormPage({
       resolve_via_connected: resolveViaConnected,
       rx_ipv4_interface: rxIpv4Interface.trim(),
       rx_ipv6_interface: rxIpv6Interface.trim(),
-      out_labels: labels,
+      out_labels: outLabelValues,
       drop,
     };
     setSaving(true);
     setError("");
     try {
+      let saved: Route;
       if (routeID === undefined) {
-        await api<Route>(`/api/route-tables/${table.id}/routes`, {
+        saved = await api<Route>(`/api/route-tables/${table.id}/routes`, {
           method: "POST",
           body: JSON.stringify(body),
         });
       } else {
         const { ipv6: _ipv6, ...updateFields } = body;
-        await api<Route>(`/api/routes/${routeID}`, {
+        saved = await api<Route>(`/api/routes/${routeID}`, {
           method: "PUT",
           body: JSON.stringify({ id: routeID, ...updateFields }),
         });
       }
+      await saveEntityLabelsWithToast("route", saved.id, saved.prefix, labels);
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -269,6 +273,9 @@ export function RouteFormPage({
             <span class="field-label">Description</span>
             <textarea rows={2} maxlength={1000} value={description} onInput={(event) => setDescription(event.currentTarget.value)} />
           </label>
+          <div class="field field-wide">
+            <LabelsInput labels={labels} onChange={setLabels} disabled={saving} />
+          </div>
         </div>
 
         <section class="route-advanced" aria-labelledby="route-advanced-title">

@@ -129,6 +129,32 @@ exposes direct gRPC with health checks and server reflection. WebSocket VNC and 
 static UI.
 
 
+## Labels
+
+All first-class inventory entities support free-form labels:
+
+```text
+vm, disk, media, network, interface, vnf, acl, route_table, route,
+network_pipe, storage_backend, host_tap, host_interface
+```
+
+Labels are stored separately from the entity records. A `PUT` replaces the
+complete set, so clients always send the labels they want to keep. Labels are
+trimmed, deduplicated, sorted, limited to 64 per entity and 64 characters each,
+and cannot contain commas or control characters.
+
+```bash
+curl -X PUT http://127.0.0.1:8080/api/labels/vm/<uuid> \
+  -H 'Content-Type: application/json' \
+  -d '{"labels":["prod","web","critical"]}'
+
+curl http://127.0.0.1:8080/api/labels/vm
+```
+
+The UI shows label chips on inventory rows and opens the label editor from the
+row. Terraform resources and data sources expose a `labels` set and keep
+labels in sync through the same API.
+
 ## HTTP API reference
 
 | Method   | Path               | Description                       |
@@ -211,6 +237,9 @@ the interface returns to its network VRF (host taps) or the default table
 | `GET`    | `/api/troubleshoot/capture/files/{name}` | Download a pcap file |
 | `DELETE` | `/api/troubleshoot/capture/files/{name}` | Delete a retained pcap file |
 | `GET`    | `/api/pki/ca`      | Download the client CA certificate |
+| `GET`    | `/api/labels/{entity_type}` | List labels for every entity of a type |
+| `GET`    | `/api/labels/{entity_type}/{entity_id}` | Get one entity's labels |
+| `PUT`    | `/api/labels/{entity_type}/{entity_id}` | Replace one entity's labels |
 | `GET`    | `/api/pki/clients` | List issued and revoked client certificates |
 | `POST`   | `/api/pki/clients` | Issue a client certificate (`name`, optional `days`) |
 | `DELETE` | `/api/pki/clients/{id}` | Revoke a client certificate |

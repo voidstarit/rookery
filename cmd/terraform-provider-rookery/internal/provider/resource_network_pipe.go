@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -39,6 +38,7 @@ type networkPipeModel struct {
 	EndpointBSwIfIndex types.Int64  `tfsdk:"endpoint_b_sw_if_index"`
 	EndpointAName      types.String `tfsdk:"endpoint_a_name"`
 	EndpointBName      types.String `tfsdk:"endpoint_b_name"`
+	Labels             types.Set    `tfsdk:"labels"`
 }
 
 func (r *networkPipeResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -49,7 +49,8 @@ func (r *networkPipeResource) Schema(_ context.Context, _ resource.SchemaRequest
 	resp.Schema = schema.Schema{
 		Description: "A VPP pipe pair connecting two Rookery Networks at layer 2.",
 		Attributes: map[string]schema.Attribute{
-			"id": schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
+			"labels": labelsResourceAttribute(),
+			"id":     schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
 			"network_a_id": schema.Int64Attribute{
 				Required:      true,
 				Description:   "First network id.",
@@ -98,6 +99,12 @@ func (r *networkPipeResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	setNetworkPipeState(&plan, pipe, true)
+	entityLabels, err := applyEntityLabels(callCtx, client, "network_pipe", fmt.Sprintf("%d", pipe.GetId()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Create network pipe labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -122,6 +129,12 @@ func (r *networkPipeResource) Read(ctx context.Context, req resource.ReadRequest
 	for _, pipe := range response.GetPipes() {
 		if pipe.GetId() == state.ID.ValueInt64() {
 			setNetworkPipeState(&state, pipe, true)
+			entityLabels, err := readEntityLabels(callCtx, client, "network_pipe", fmt.Sprintf("%d", state.ID.ValueInt64()))
+			if err != nil {
+				resp.Diagnostics.AddError("Read network pipe labels", err.Error())
+				return
+			}
+			state.Labels = entityLabels
 			resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 			return
 		}
@@ -129,8 +142,26 @@ func (r *networkPipeResource) Read(ctx context.Context, req resource.ReadRequest
 	resp.State.RemoveResource(ctx)
 }
 
-func (r *networkPipeResource) Update(_ context.Context, _ resource.UpdateRequest, resp *resource.UpdateResponse) {
-	resp.Diagnostics.AddError("Update network pipe", errors.New("network pipes are immutable; replace the resource instead").Error())
+func (r *networkPipeResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan networkPipeModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	client, err := r.requireClient()
+	if err != nil {
+		resp.Diagnostics.AddError("Update network pipe labels", err.Error())
+		return
+	}
+	callCtx, cancel := context.WithTimeout(ctx, client.Timeout())
+	defer cancel()
+	entityLabels, err := applyEntityLabels(callCtx, client, "network_pipe", fmt.Sprintf("%d", plan.ID.ValueInt64()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Update network pipe labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *networkPipeResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

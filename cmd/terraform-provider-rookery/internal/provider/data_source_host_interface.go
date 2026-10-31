@@ -31,6 +31,7 @@ func (d *hostInterfaceDataSource) Schema(_ context.Context, _ datasource.SchemaR
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a physical host interface by NIC name.",
 		Attributes: map[string]dschema.Attribute{
+			"labels":        labelsDataSourceAttribute(),
 			"nic":           dschema.StringAttribute{Required: true, Description: "Host network interface name."},
 			"up":            dschema.BoolAttribute{Computed: true},
 			"addresses":     dschema.ListAttribute{Computed: true, ElementType: types.StringType},
@@ -78,5 +79,11 @@ func (d *hostInterfaceDataSource) Read(ctx context.Context, req datasource.ReadR
 		return
 	}
 	resp.Diagnostics.Append(setHostInterfaceState(ctx, &config, found)...)
+	entityLabels, err := readEntityLabels(callCtx, client, "host_interface", found.GetName())
+	if err != nil {
+		resp.Diagnostics.AddError("Read host interface labels", err.Error())
+		return
+	}
+	config.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }

@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -31,6 +32,7 @@ func (d *hostTapDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a network host tap by id or name.",
 		Attributes: map[string]dschema.Attribute{
+			"labels":        labelsDataSourceAttribute(),
 			"id":            dschema.Int64Attribute{Optional: true, Computed: true},
 			"network_id":    dschema.Int64Attribute{Computed: true},
 			"network_name":  dschema.StringAttribute{Computed: true},
@@ -84,5 +86,11 @@ func (d *hostTapDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 	resp.Diagnostics.Append(setHostTapState(ctx, &config, found)...)
+	entityLabels, err := readEntityLabels(callCtx, client, "host_tap", fmt.Sprintf("%d", found.GetId()))
+	if err != nil {
+		resp.Diagnostics.AddError("Read host tap labels", err.Error())
+		return
+	}
+	config.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }

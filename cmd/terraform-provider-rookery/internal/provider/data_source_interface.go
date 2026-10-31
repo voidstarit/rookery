@@ -32,6 +32,7 @@ func (d *interfaceDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a vhost-user interface by id or name.",
 		Attributes: map[string]dschema.Attribute{
+			"labels":           labelsDataSourceAttribute(),
 			"id":               dschema.Int64Attribute{Optional: true, Computed: true},
 			"name":             dschema.StringAttribute{Optional: true, Computed: true},
 			"network_id":       dschema.Int64Attribute{Computed: true},
@@ -87,6 +88,12 @@ func (d *interfaceDataSource) Read(ctx context.Context, req datasource.ReadReque
 		return
 	}
 	resp.Diagnostics.Append(setInterfaceState(ctx, &config, iface)...)
+	entityLabels, err := readEntityLabels(callCtx, client, "interface", fmt.Sprintf("%d", iface.GetId()))
+	if err != nil {
+		resp.Diagnostics.AddError("Read interface labels", err.Error())
+		return
+	}
+	config.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 

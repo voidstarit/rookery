@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -37,6 +38,7 @@ type storageBackendModel struct {
 	Driver      types.String `tfsdk:"driver"`
 	Config      types.Object `tfsdk:"config"`
 	DiskCount   types.Int64  `tfsdk:"disk_count"`
+	Labels      types.Set    `tfsdk:"labels"`
 }
 
 type storageBackendConfigModel struct {
@@ -65,6 +67,7 @@ func (r *storageBackendResource) Schema(_ context.Context, _ resource.SchemaRequ
 	resp.Schema = schema.Schema{
 		Description: "A Rookery storage backend. Only the lvm-thin driver is currently supported.",
 		Attributes: map[string]schema.Attribute{
+			"labels": labelsResourceAttribute(),
 			"id": schema.Int64Attribute{
 				Computed:      true,
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
@@ -129,6 +132,12 @@ func (r *storageBackendResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 	resp.Diagnostics.Append(setStorageBackendState(ctx, &plan, backend)...)
+	entityLabels, err := applyEntityLabels(callCtx, client, "storage_backend", fmt.Sprintf("%d", backend.GetId()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Create storage backend labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -155,6 +164,12 @@ func (r *storageBackendResource) Read(ctx context.Context, req resource.ReadRequ
 		return
 	}
 	resp.Diagnostics.Append(setStorageBackendState(ctx, &state, backend)...)
+	entityLabels, err := readEntityLabels(callCtx, client, "storage_backend", fmt.Sprintf("%d", state.ID.ValueInt64()))
+	if err != nil {
+		resp.Diagnostics.AddError("Read storage backend labels", err.Error())
+		return
+	}
+	state.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -189,6 +204,12 @@ func (r *storageBackendResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 	resp.Diagnostics.Append(setStorageBackendState(ctx, &plan, backend)...)
+	entityLabels, err := applyEntityLabels(callCtx, client, "storage_backend", fmt.Sprintf("%d", plan.ID.ValueInt64()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Update storage backend labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 

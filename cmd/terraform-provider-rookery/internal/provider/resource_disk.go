@@ -47,6 +47,7 @@ type diskModel struct {
 	ProvisioningScript  types.String `tfsdk:"provisioning_script"`
 	ProvisioningTimeout types.String `tfsdk:"provisioning_timeout"`
 	ProvisioningJSON    types.String `tfsdk:"provisioning_json"`
+	Labels              types.Set    `tfsdk:"labels"`
 }
 
 func (r *diskResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -57,7 +58,8 @@ func (r *diskResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 	resp.Schema = schema.Schema{
 		Description: "A thin-LVM disk or template clone in Rookery.",
 		Attributes: map[string]schema.Attribute{
-			"id": schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
+			"labels": labelsResourceAttribute(),
+			"id":     schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
 			"name": schema.StringAttribute{
 				Required:      true,
 				Description:   "Disk name.",
@@ -145,6 +147,12 @@ func (r *diskResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 	setDiskState(&plan, disk)
+	entityLabels, err := applyEntityLabels(callCtx, client, "disk", fmt.Sprintf("%d", disk.GetId()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Create disk labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -171,6 +179,12 @@ func (r *diskResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		return
 	}
 	setDiskState(&state, disk)
+	entityLabels, err := readEntityLabels(callCtx, client, "disk", fmt.Sprintf("%d", state.ID.ValueInt64()))
+	if err != nil {
+		resp.Diagnostics.AddError("Read disk labels", err.Error())
+		return
+	}
+	state.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -198,6 +212,12 @@ func (r *diskResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 	setDiskState(&plan, disk)
+	entityLabels, err := applyEntityLabels(callCtx, client, "disk", fmt.Sprintf("%d", plan.ID.ValueInt64()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Update disk labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 

@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -37,6 +38,7 @@ type networkModel struct {
 	BVISwIfIndex   types.Int64  `tfsdk:"bvi_sw_if_index"`
 	IPv4Gateway    types.String `tfsdk:"ipv4_gateway"`
 	RouteTableID   types.Int64  `tfsdk:"route_table_id"`
+	Labels         types.Set    `tfsdk:"labels"`
 }
 
 func (r *networkResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -47,7 +49,8 @@ func (r *networkResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 	resp.Schema = schema.Schema{
 		Description: "A Rookery VPP bridge-domain network with an isolated VRF, IPv4 and IPv6 prefixes, and a gateway BVI.",
 		Attributes: map[string]schema.Attribute{
-			"id": schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
+			"labels": labelsResourceAttribute(),
+			"id":     schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
 			"name": schema.StringAttribute{
 				Required:      true,
 				Description:   "Network name.",
@@ -94,6 +97,12 @@ func (r *networkResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 	setNetworkState(&plan, network)
+	entityLabels, err := applyEntityLabels(callCtx, client, "network", fmt.Sprintf("%d", network.GetId()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Create network labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -120,6 +129,12 @@ func (r *networkResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 	setNetworkState(&state, network)
+	entityLabels, err := readEntityLabels(callCtx, client, "network", fmt.Sprintf("%d", state.ID.ValueInt64()))
+	if err != nil {
+		resp.Diagnostics.AddError("Read network labels", err.Error())
+		return
+	}
+	state.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -146,6 +161,12 @@ func (r *networkResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 	setNetworkState(&plan, network)
+	entityLabels, err := applyEntityLabels(callCtx, client, "network", fmt.Sprintf("%d", plan.ID.ValueInt64()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Update network labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 

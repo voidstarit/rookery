@@ -31,6 +31,7 @@ func (d *routeTableDataSource) Schema(_ context.Context, _ datasource.SchemaRequ
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a route table by id, by table_id plus ipv6, or by name. Use table_id 0 for a default table and set ipv6.",
 		Attributes: map[string]dschema.Attribute{
+			"labels":          labelsDataSourceAttribute(),
 			"id":              dschema.Int64Attribute{Optional: true, Computed: true, Description: "Route table record id. Set ipv6 too for the default tables, which both use id 0."},
 			"name":            dschema.StringAttribute{Optional: true, Computed: true},
 			"table_id":        dschema.Int64Attribute{Optional: true, Computed: true},
@@ -111,5 +112,11 @@ func (d *routeTableDataSource) Read(ctx context.Context, req datasource.ReadRequ
 		return
 	}
 	setRouteTableState(&config, found)
+	entityLabels, err := readEntityLabels(callCtx, client, "route_table", fmt.Sprintf("%d", found.GetId()))
+	if err != nil {
+		resp.Diagnostics.AddError("Read route table labels", err.Error())
+		return
+	}
+	config.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }

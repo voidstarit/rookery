@@ -43,6 +43,7 @@ type vnfModel struct {
 	Status       types.String `tfsdk:"status"`
 	StatusDetail types.String `tfsdk:"status_detail"`
 	LeaseCount   types.Int64  `tfsdk:"lease_count"`
+	Labels       types.Set    `tfsdk:"labels"`
 }
 
 func (r *vnfResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -53,8 +54,9 @@ func (r *vnfResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 	resp.Schema = schema.Schema{
 		Description: "A network function (DHCPv4, DHCPv6, NAT44, BGP, or DNS) attached to a Rookery network.",
 		Attributes: map[string]schema.Attribute{
-			"id":   schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
-			"name": schema.StringAttribute{Required: true, Description: "VNF name."},
+			"labels": labelsResourceAttribute(),
+			"id":     schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
+			"name":   schema.StringAttribute{Required: true, Description: "VNF name."},
 			"network_id": schema.Int64Attribute{
 				Required:      true,
 				Description:   "Network id.",
@@ -112,6 +114,12 @@ func (r *vnfResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 	resp.Diagnostics.Append(setVNFState(&plan, vnf)...)
+	entityLabels, err := applyEntityLabels(callCtx, client, "vnf", fmt.Sprintf("%d", vnf.GetId()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Create VNF labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -138,6 +146,12 @@ func (r *vnfResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 		return
 	}
 	resp.Diagnostics.Append(setVNFState(&state, vnf)...)
+	entityLabels, err := readEntityLabels(callCtx, client, "vnf", fmt.Sprintf("%d", state.ID.ValueInt64()))
+	if err != nil {
+		resp.Diagnostics.AddError("Read VNF labels", err.Error())
+		return
+	}
+	state.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -174,6 +188,12 @@ func (r *vnfResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		return
 	}
 	resp.Diagnostics.Append(setVNFState(&plan, vnf)...)
+	entityLabels, err := applyEntityLabels(callCtx, client, "vnf", fmt.Sprintf("%d", plan.ID.ValueInt64()), plan.Labels)
+	if err != nil {
+		resp.Diagnostics.AddError("Update VNF labels", err.Error())
+		return
+	}
+	plan.Labels = entityLabels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
