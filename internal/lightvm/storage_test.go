@@ -89,6 +89,37 @@ func TestStorageDoesNotRemoveHostPaths(t *testing.T) {
 	}
 }
 
+func TestStorageDoesNotRemoveFilesThroughSymlinks(t *testing.T) {
+	dir := t.TempDir()
+	storage, err := lightvm.NewStorage(filepath.Join(dir, "managed"), 16)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	kindDir := filepath.Join(storage.Dir(), "kernels")
+	if err := os.MkdirAll(kindDir, 0o755); err != nil {
+		t.Fatalf("create managed directory: %v", err)
+	}
+	outsideDir := filepath.Join(dir, "outside")
+	if err := os.Mkdir(outsideDir, 0o755); err != nil {
+		t.Fatalf("create outside directory: %v", err)
+	}
+	hostFile := filepath.Join(outsideDir, "host-kernel")
+	if err := os.WriteFile(hostFile, []byte("host"), 0o644); err != nil {
+		t.Fatalf("create host file: %v", err)
+	}
+	link := filepath.Join(kindDir, "outside")
+	if err := os.Symlink(outsideDir, link); err != nil {
+		t.Fatalf("create symlink: %v", err)
+	}
+
+	if err := storage.Remove(filepath.Join(link, "host-kernel")); err == nil {
+		t.Fatal("remove through symlink succeeded")
+	}
+	if _, err := os.Stat(hostFile); err != nil {
+		t.Fatalf("host file should remain: %v", err)
+	}
+}
+
 func TestIsManagedRejectsSiblingPrefix(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "lightvm")
 	if lightvm.IsManaged(root, root+"-other/file") {

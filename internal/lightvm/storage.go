@@ -139,7 +139,23 @@ func (s *Storage) Remove(path string) error {
 	if !s.Managed(path) {
 		return nil
 	}
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+	target, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("resolve lightvm file path: %w", err)
+	}
+	rel, err := filepath.Rel(s.dir, target)
+	if err != nil {
+		return fmt.Errorf("resolve lightvm file path: %w", err)
+	}
+	root, err := os.OpenRoot(s.dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("open lightvm storage: %w", err)
+	}
+	defer root.Close()
+	if err := root.Remove(rel); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("remove lightvm file: %w", err)
 	}
 	return nil
