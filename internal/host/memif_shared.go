@@ -135,7 +135,15 @@ func startSharedNetwork(ctx context.Context, cfg sharedNetworkConfig) (*sharedNe
 	}, stack.AddressProperties{}); err != nil {
 		return nil, fmt.Errorf("assign shared netstack address %s: %v", ip, err)
 	}
+	// VPP owns the bridge-domain gateway at the first host address (normally
+	// .1). The userspace stack must use it for off-subnet traffic so DNS
+	// replies to routed/external clients do not try to ARP the client on the
+	// memif segment.
+	gateway := firstIPv4Host(ipnet)
 	routes := []tcpip.Route{{Destination: header.IPv4EmptySubnet, NIC: 1}}
+	if gateway != nil && !gateway.Equal(ip) {
+		routes[0].Gateway = tcpip.AddrFromSlice(gateway)
+	}
 	if ipv6Addr != nil {
 		if err := s.AddProtocolAddress(1, tcpip.ProtocolAddress{
 			Protocol:          header.IPv6ProtocolNumber,
@@ -172,6 +180,30 @@ func startSharedNetwork(ctx context.Context, cfg sharedNetworkConfig) (*sharedNe
 	go n.pumpRX(runCtx)
 	go n.pumpTX(runCtx)
 	return n, nil
+}
+
+// firstIPv4Host returns the first host address in an IPv4 network. Rookery
+// uses it as the network BVI gateway for the shared VNF stack.
+func firstIPv4Host(network *net.IPNet) net.IP {
+	if network == nil {
+		return nil
+	}
+	base := network.IP.To4()
+	if base == nil {
+		return nil
+	}
+	ones, bits := network.Mask.Size()
+	if bits != 32 || ones > 30 {
+		return nil
+	}
+	gateway := append(net.IP(nil), base...)
+	for i := len(gateway) - 1; i >= 0; i-- {
+		gateway[i]++
+		if gateway[i] != 0 {
+			break
+		}
+	}
+	return gateway
 }
 
 func (n *sharedNetwork) addDHCPv4(vnf store.VNF, leasePath string, port int) error {
