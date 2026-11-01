@@ -419,7 +419,10 @@ export function LightVMDialog({
               value={argsText}
               onInput={(event) => setArgsText(event.currentTarget.value)}
             />
-            <span class="field-hint">One argument per line. Arguments are passed exactly as written.</span>
+            <span class="field-hint">
+              One argument per line. Rookery writes the executable path and these
+              arguments to an executable <code>entrypoint</code> script at the image root.
+            </span>
           </label>
 
           <label class="field field-wide">

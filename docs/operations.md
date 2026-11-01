@@ -225,16 +225,19 @@ Status and desired state are reconciled after API/VPP restarts, and the
 container image/environment/executable fields are stored for the guest runtime.
 On start, Rookery uses `buildah` to pull `image` only if it is missing, creates
 an **ephemeral writable** container named `rookery-lightvm-<uuid>`, mounts its
-rootfs, writes the environment as `<rootfs>/.env` (one `NAME=value` per line),
-starts `virtiofsd` on `<run-dir>/<uuid>.virtiofs.sock`, and passes a
-`vhost-user-fs-pci` device with tag `rootfs` to QEMU. The initramfs is
-responsible for mounting that tag and can read `/rootfs/.env`; Rookery does not
-modify `append`. In this mode the guest writes to its own rootfs overlay and
-those writes are discarded when the LightVM stops, because the container is
-unmounted and removed. The UI environment editor accepts one `NAME=value` per
-line; blank lines, `export ` prefixes, and `#` comments are ignored, and names
-must match `[A-Za-z_][A-Za-z0-9_]*`. Values are written verbatim on a single
-line.
+rootfs, writes the environment as `<rootfs>/.env` (one `NAME=value` per line)
+and an executable `<rootfs>/entrypoint` script containing the configured
+executable path and arguments, starts `virtiofsd` on
+`<run-dir>/<uuid>.virtiofs.sock`, and passes a `vhost-user-fs-pci` device with
+tag `rootfs` to QEMU. The initramfs is responsible for mounting that tag and can
+read `/rootfs/.env` and execute `/rootfs/entrypoint`; Rookery does not modify
+`append`. In this mode the guest writes to its own rootfs overlay and those
+writes are discarded when the LightVM stops, because the container is unmounted
+and removed. The UI environment editor accepts one `NAME=value` per line; blank
+lines, `export ` prefixes, and `#` comments are ignored, and names must match
+`[A-Za-z_][A-Za-z0-9_]*`. Values are written verbatim on a single line. The
+`entrypoint` script is generated with the executable path and argument list,
+using shell quoting, and is mode `0755`.
 `virtiofsd` is resolved next to the `rookery`
 executable unless `-virtiofsd-bin` is set. The container image/environment/
 executable fields are not passed over the kernel cmdline; the initramfs
