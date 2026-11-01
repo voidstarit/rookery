@@ -719,6 +719,7 @@ export function LightVMTab() {
                   const args = Array.isArray(vm.executable_args) ? vm.executable_args : [];
                   const env = Array.isArray(vm.env) ? vm.env : [];
                   const attached = Array.isArray(vm.interfaces) ? vm.interfaces : [];
+                  const consoles = Array.isArray(vm.consoles) ? vm.consoles : [];
                   const running = vm.status === "running" || vm.status === "starting";
                   const starting = lightVMAction === `start:${vm.id}`;
                   const stopping = lightVMAction === `stop:${vm.id}`;
@@ -752,6 +753,9 @@ export function LightVMTab() {
                       <td class="mono">
                         <span>{vm.vcpus} vCPU · {vm.memory_mb} MB</span>
                         {vm.console_enabled ? <span class="vm-description">console enabled</span> : null}
+                        <span class="vm-description">
+                          {consoles.length} console{consoles.length === 1 ? "" : "s"}
+                        </span>
                         {vm.cgroup_class ? (
                           <span class="vm-description">cgroup {vm.cgroup_class}</span>
                         ) : null}

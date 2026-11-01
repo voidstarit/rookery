@@ -195,13 +195,13 @@ labels in sync through the same API.
 | `PUT`    | `/api/lightvm/initramfs/{id}` | Update or replace an initramfs |
 | `DELETE` | `/api/lightvm/initramfs/{id}` | Delete an initramfs and its managed file |
 | `GET`    | `/api/lightvm/instances` | List LightVM definitions |
-| `POST`   | `/api/lightvm/instances` | Create an inventory-only LightVM |
+| `POST`   | `/api/lightvm/instances` | Create a LightVM definition |
 | `GET`    | `/api/lightvm/instances/{id}` | Get one LightVM |
 | `PUT`    | `/api/lightvm/instances/{id}` | Replace a LightVM definition |
 | `DELETE` | `/api/lightvm/instances/{id}` | Delete a LightVM and release its interfaces |
 | `POST`   | `/api/lightvm/instances/{id}/start` | Start the LightVM QEMU process |
 | `POST`   | `/api/lightvm/instances/{id}/stop` | Stop the LightVM QEMU process |
-| `GET`    | `/ws/lightvms/{id}/console` | Native WebSocket proxy to the running LightVM's virtio console socket (local listener only) |
+| `GET`    | `/ws/lightvms/{id}/console?console=<id>` | Native WebSocket proxy to the selected virtio console socket, first console when omitted (local listener only) |
 | `POST`   | `/api/lightvm/uploads` | Native multipart upload (`kind`, `file`); local listener only |
 | `DELETE` | `/api/lightvm/uploads?path=...` | Remove an abandoned managed upload |
 | `GET`    | `/api/networks`    | List Rookery Networks (VPP bridge domains) |
@@ -693,31 +693,42 @@ generated inventory API.
 LightVM records are created at `POST /api/lightvm/instances` with `name`,
 `description`, `vcpus`, `memory_mb`, `console_enabled`, `cgroup_class`,
 `kernel_id`, `initramfs_id`, `image`, `env` (`name`/`value` pairs),
-`executable_path`, `executable_args` (ordered strings), `append`, and
-`interface_ids`. `append` is the kernel command line and defaults to
+`executable_path`, `executable_args` (ordered strings), `append`,
+`interface_ids`, and `consoles` (an ordered list of `name` entries). Every
+LightVM has at least one console (up to 32); omitting `consoles` creates a
+single console named `console`. The server assigns each console an ID and
+guest port name: the first console is `org.example.console`, additional
+consoles are `org.example.console.<N>`. `append` is the kernel command line and defaults to
 `console=hvc0 rdinit=/init` when omitted on create; on update it is stored
-exactly as sent (empty clears it). `PUT` replaces every editable field and the
-full interface set. The ID is a UUID. Kernel and initramfs references are
-required and cannot be deleted while a LightVM uses them. Interfaces attached
-to a VM or another LightVM are rejected. Creating a LightVM stores the
-definition with `status=stopped`; `POST .../start` uses buildah to pull
-`image` if missing, creates an ephemeral writable container named
-`rookery-lightvm-<uuid>`, mounts its rootfs, starts `virtiofsd`, and launches
-QEMU with `-kernel`, `-initrd`, `-append`, no block device, a
-`vhost-user-fs-pci` device tagged `rootfs`, a virtio console socket under the
-QEMU run directory, the cgroup class, and any vhost-user interfaces. The
-initramfs mounts the `rootfs` tag; Rookery does not change `append`.
+exactly as sent (empty clears it). `PUT` replaces every editable field,
+including the full console and interface sets. The ID is a UUID. Kernel and
+initramfs references are required and cannot be deleted while a LightVM uses
+them. Interfaces attached to a VM or another LightVM are rejected. Creating a
+LightVM stores the definition with `status=stopped`; `POST .../start` uses
+buildah to pull `image` if missing, creates an ephemeral writable container
+named `rookery-lightvm-<uuid>`, mounts its rootfs, writes the environment
+variables to `<rootfs>/.env` as one `NAME=value` line each and an executable
+`<rootfs>/.entrypoint` script containing the executable path and args, starts
+`virtiofsd`, and launches QEMU with `-kernel`, `-initrd`, `-append`, no block
+device, a
+`vhost-user-fs-pci` device tagged `rootfs`, one virtio console socket per
+configured console under the QEMU run directory, the cgroup class, and any
+vhost-user interfaces. The initramfs mounts the `rootfs` tag; Rookery does not
+change `append`.
 `POST .../stop` terminates QEMU, stops virtiofsd, unmounts/removes the buildah
 container, and deleting a running LightVM stops it first. Guest writes live in
 the ephemeral container overlay and are discarded on stop. While running, the
-response includes `console_socket`, the host Unix socket for the virtio
-console; no graphical display or VNC device is created. The native
-`/ws/lightvms/{id}/console` WebSocket proxies that socket and requires
-`console_enabled`; the UI opens it from the **Console** action using
-`/lightvm-console.html?vm=<uuid>`. The environment, executable path, and
-argument fields are not passed over the kernel command line; the initramfs has
-its own workload contract. `virtiofsd` is resolved next to the `rookery`
-binary unless configured with `-virtiofsd-bin`. `/api/status` includes a
+response includes `console_socket` for the first console and a `consoles` list
+with each console's `id`, `name`, `port_name`, and host `socket`. No graphical
+display or VNC device is created. The native
+`/ws/lightvms/{id}/console?console=<id>` WebSocket proxies the selected console
+socket and requires `console_enabled`; without `console`, the first console is
+used. The UI opens it from the **Console** action using
+`/lightvm-console.html?vm=<uuid>` and lets the user choose a console on that
+page. The environment, executable path, and argument fields are not passed
+over the kernel command line; the initramfs has its own workload contract.
+`virtiofsd` is resolved next to the `rookery` binary unless configured with
+`-virtiofsd-bin`. `/api/status` includes a
 `lightvm` component reporting buildah/virtiofsd availability; the LightVM tab
 shows its error and disables Start when either tool is missing.
 

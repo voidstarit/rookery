@@ -204,7 +204,8 @@ it off. Because the API has no authentication, this flag is not a security
 boundary against API access; restrict `PUT /api/vms/*` to administrators behind
 an authenticating proxy if end users can reach the API.
 
-The **LightVM** tab currently provides kernel, initramfs, and LightVM inventory.
+The **LightVM** tab provides kernel, initramfs, and LightVM inventory plus
+start/stop lifecycle and serial-console access.
 Images are uploaded through the local UI/API, streamed into `-lightvm-dir`
 (`ROOKERY_LIGHTVM_DIR`, default `/var/lib/rookery/lightvm`), and stored under
 `kernels/` or `initramfs/`. Each record has a unique name, an optional
@@ -214,39 +215,57 @@ existing absolute host path are not allowed to delete that host file.
 
 A LightVM definition includes a name, description, vCPUs, memory, console flag,
 cgroup class, kernel and initramfs, a container image, environment variables,
-an executable path and argument list, a kernel command line, and network
-interfaces. New definitions default the kernel command line to
-`console=hvc0 rdinit=/init`. **Start** launches QEMU with the kernel and
-initramfs (no block device), a virtio console Unix socket in the QEMU run
-directory, the selected cgroup class, and vhost-user interfaces. Rookery uses
+an executable path and argument list, a kernel command line, network
+interfaces, and an ordered console list. Every definition has at least one
+console (up to 32); the first is exposed to the guest as
+`org.example.console`, and each additional console uses
+`org.example.console.<N>`. New definitions default the
+kernel command line to `console=hvc0 rdinit=/init`. **Start** launches QEMU
+with the kernel and initramfs (no block device), one virtio console Unix socket
+per configured console in the QEMU run directory, the selected cgroup class,
+and vhost-user interfaces. Rookery uses
 `-display none` rather than `-nographic` because QEMU does not allow
 `-nographic` together with `-daemonize`. **Stop** terminates the process.
 Status and desired state are reconciled after API/VPP restarts, and the
 container image/environment/executable fields are stored for the guest runtime.
 On start, Rookery uses `buildah` to pull `image` only if it is missing, creates
 an **ephemeral writable** container named `rookery-lightvm-<uuid>`, mounts its
-rootfs, starts `virtiofsd` on `<run-dir>/<uuid>.virtiofs.sock`, and passes a
-`vhost-user-fs-pci` device with tag `rootfs` to QEMU. The initramfs is
-responsible for mounting that tag; Rookery does not modify `append`. In this
-mode the guest writes to its own rootfs overlay and those writes are discarded
-when the LightVM stops, because the container is unmounted and removed.
+rootfs, writes the environment as `<rootfs>/.env` (one `NAME=value` per line)
+and an executable `<rootfs>/.entrypoint` script containing the configured
+executable path and arguments, starts `virtiofsd` on
+`<run-dir>/<uuid>.virtiofs.sock`, and passes a `vhost-user-fs-pci` device with
+tag `rootfs` to QEMU. The initramfs is responsible for mounting that tag and can
+read `/rootfs/.env` and execute `/rootfs/.entrypoint`; Rookery does not modify
+`append`. In this mode the guest writes to its own rootfs overlay and those
+writes are discarded when the LightVM stops, because the container is unmounted
+and removed. The UI environment editor accepts one `NAME=value` per line; blank
+lines, `export ` prefixes, and `#` comments are ignored, and names must match
+`[A-Za-z_][A-Za-z0-9_]*`. Values are written verbatim on a single line. The
+`.entrypoint` script is generated with the executable path and argument list,
+using shell quoting, and is mode `0755`.
 `virtiofsd` is resolved next to the `rookery`
 executable unless `-virtiofsd-bin` is set. The container image/environment/
 executable fields are not passed over the kernel cmdline; the initramfs
 supplies its own contract. `/api/status` includes a `lightvm` component that
 reports whether `buildah` and `virtiofsd` are available; when either is missing
 the LightVM tab shows the error and disables Start. Run `make virtiofsd` (or
-`make -C extra virtiofsd`) to download the upstream static x86_64 binary into
+`make -C extra/virtiofsd virtiofsd`) to download the upstream static x86_64 binary into
 `extra/virtiofsd/`; `make release` includes it next to `rookery`.
-While a LightVM is running, the API returns `console_socket`, the Unix socket
-path for its virtio console; there is no graphical display or VNC device. The
-table's **Console** action opens `/lightvm-console.html?vm=<uuid>`, an xterm.js
-terminal connected through `/ws/lightvms/{id}/console`. The page uses bundled
-JetBrains Mono and lets each user choose a persisted color theme
-(green/white/amber/blue on black, solarized dark, or black on white) and font
-size. Console access follows `console_enabled` and is checked by the server;
-disable it to block new and existing console sessions. Interfaces can belong to
-either a VM or a LightVM, not both.
+While a LightVM is running, the API returns `console_socket` for the first
+console and a `consoles` list whose entries include the console ID, name,
+guest port name, and host socket path. There is no graphical display or VNC
+device. The table's **Console** action opens
+`/lightvm-console.html?vm=<uuid>`, an xterm.js terminal connected through
+`/ws/lightvms/{id}/console?console=<id>`. The page shows a console selector
+when the LightVM has more than one port, and switching consoles reconnects the
+terminal to that port's socket. The page uses bundled JetBrains Mono and lets
+each user choose a persisted color theme (green/white/amber/blue on black,
+solarized dark, or black on white) and font size. It also has buttons for
+common control chords (Ctrl+C/D/Z/A/E/K/U/W/L/R, Esc, Tab); the **Ctrl** button
+latches for the next key so arbitrary Ctrl+key combinations can be sent.
+Console access follows `console_enabled` and is checked by the server; disable
+it to block new and existing console sessions. Interfaces can belong to either
+a VM or a LightVM, not both.
 
 
 ## VM lifecycle and console

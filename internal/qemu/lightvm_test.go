@@ -30,7 +30,10 @@ func TestBuildLightVMArgs(t *testing.T) {
 	vm := testLightVM()
 	args := strings.Join(buildLightVMArgs(
 		vm,
-		"/run/rookery/"+vm.ID+".console",
+		[]lightVMConsoleArg{{
+			SocketPath: "/run/rookery/" + vm.ID + ".console.1",
+			PortName:   "org.example.console",
+		}},
 		"/run/rookery/"+vm.ID+".lightvm.pid",
 		"/run/rookery/"+vm.ID+".lightvm.monitor",
 		LightVMVirtioFS{SocketPath: "/run/rookery/" + vm.ID + ".virtiofs", Tag: "rootfs"},
@@ -45,10 +48,10 @@ func TestBuildLightVMArgs(t *testing.T) {
 		"-m 1024",
 		"-kernel " + vm.KernelPath,
 		"-initrd " + vm.InitramfsPath,
-		"-append console=hvc0 rdinit=/init",
+		"-append console=hvc0 rdinit=/init APP_HOSTNAME=app-01",
 		"-display none",
 		"-device virtio-serial-pci",
-		"-chardev socket,id=console0,path=/run/rookery/" + vm.ID + ".console,server=on,wait=off",
+		"-chardev socket,id=console0,path=/run/rookery/" + vm.ID + ".console.1,server=on,wait=off",
 		"-device virtconsole,chardev=console0,name=org.example.console",
 		"-pidfile /run/rookery/" + vm.ID + ".lightvm.pid",
 		"-object memory-backend-memfd,id=mem,size=1024M,share=on",
@@ -73,16 +76,66 @@ func TestBuildLightVMArgs(t *testing.T) {
 	}
 }
 
+func TestBuildLightVMArgsWithMultipleConsoles(t *testing.T) {
+	vm := testLightVM()
+	args := strings.Join(buildLightVMArgs(vm, []lightVMConsoleArg{
+		{SocketPath: "/tmp/console-one", PortName: "org.example.console"},
+		{SocketPath: "/tmp/console-two", PortName: "org.example.console.2"},
+	}, "/tmp/pid", "/tmp/monitor", LightVMVirtioFS{}), " ")
+
+	for _, want := range []string{
+		"-chardev socket,id=console0,path=/tmp/console-one,server=on,wait=off",
+		"-device virtconsole,chardev=console0,name=org.example.console",
+		"-chardev socket,id=console1,path=/tmp/console-two,server=on,wait=off",
+		"-device virtconsole,chardev=console1,name=org.example.console.2",
+	} {
+		if !strings.Contains(args, want) {
+			t.Fatalf("args %q do not contain %q", args, want)
+		}
+	}
+	if got := strings.Count(args, "-device virtconsole"); got != 2 {
+		t.Fatalf("virtconsole count = %d, want 2: %q", got, args)
+	}
+}
+
 func TestBuildLightVMArgsWithoutAppendOrInterfaces(t *testing.T) {
 	vm := testLightVM()
 	vm.Append = ""
 	vm.Interfaces = nil
-	args := strings.Join(buildLightVMArgs(vm, "/tmp/console", "/tmp/pid", "/tmp/monitor", LightVMVirtioFS{}), " ")
-	if strings.Contains(args, "-append") {
-		t.Fatalf("args %q should omit an empty append", args)
+	args := strings.Join(buildLightVMArgs(vm, []lightVMConsoleArg{{SocketPath: "/tmp/console", PortName: "org.example.console"}}, "/tmp/pid", "/tmp/monitor", LightVMVirtioFS{}), " ")
+	if !strings.Contains(args, "-append APP_HOSTNAME=app-01") {
+		t.Fatalf("args %q should contain the default APP_HOSTNAME", args)
 	}
 	if strings.Contains(args, "memory-backend-memfd") || strings.Contains(args, "vhost-user") {
 		t.Fatalf("args %q should omit interface devices", args)
+	}
+}
+
+func TestBuildLightVMArgsPreservesAppHostname(t *testing.T) {
+	vm := testLightVM()
+	vm.Append = "console=hvc0 APP_HOSTNAME=web-07 rdinit=/init"
+	args := strings.Join(buildLightVMArgs(vm, []lightVMConsoleArg{{SocketPath: "/tmp/console", PortName: "org.example.console"}}, "/tmp/pid", "/tmp/monitor", LightVMVirtioFS{}), " ")
+	if strings.Count(args, "APP_HOSTNAME=") != 1 {
+		t.Fatalf("args %q should contain exactly one APP_HOSTNAME", args)
+	}
+	if !strings.Contains(args, "-append console=hvc0 APP_HOSTNAME=web-07 rdinit=/init") {
+		t.Fatalf("args %q did not preserve the supplied APP_HOSTNAME", args)
+	}
+}
+
+func TestLightVMHostname(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		want string
+	}{
+		{name: "app-01", want: "app-01"},
+		{name: "My App_01", want: "my-app-01"},
+		{name: "  --  ", want: "lightvm"},
+		{name: strings.Repeat("a", 70), want: strings.Repeat("a", 63)},
+	} {
+		if got := lightVMHostname(testCase.name); got != testCase.want {
+			t.Errorf("lightVMHostname(%q) = %q, want %q", testCase.name, got, testCase.want)
+		}
 	}
 }
 
@@ -93,11 +146,11 @@ func TestLightVMPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := uuid.NewString()
-	socket := q.LightVMConsoleSocket(id)
+	socket := q.LightVMConsoleSocket(id, 0)
 	if socket != filepath.Join(runDir, id+".console") {
 		t.Fatalf("console socket = %q", socket)
 	}
-	if q.LightVMConsoleSocket("not-a-uuid") != "" {
+	if q.LightVMConsoleSocket("not-a-uuid", 0) != "" {
 		t.Fatal("invalid LightVM id should not return a socket")
 	}
 	if q.RunningLightVM(id) {

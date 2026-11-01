@@ -3896,6 +3896,13 @@
         },
         "append": {
           "type": "string"
+        },
+        "consoles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMConsole"
+          }
         }
       }
     },
@@ -4746,6 +4753,13 @@
         },
         "append": {
           "type": "string"
+        },
+        "consoles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMConsole"
+          }
         }
       }
     },
@@ -5397,6 +5411,31 @@
           "type": "string"
         },
         "console_socket": {
+          "type": "string"
+        },
+        "consoles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMConsole"
+          }
+        }
+      }
+    },
+    "v1LightVMConsole": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "port_name": {
+          "type": "string"
+        },
+        "socket": {
           "type": "string"
         }
       }

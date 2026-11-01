@@ -52,7 +52,7 @@ type LightVMController interface {
 	StartLightVM(ctx context.Context, vm store.LightVM) error
 	StopLightVM(ctx context.Context, id string) error
 	RunningLightVM(id string) bool
-	LightVMConsoleSocket(id string) string
+	LightVMConsoleSocket(id string, consoleID int64) string
 }
 
 // NetworkProvisioner manages VPP bridge domains, vhost-user interfaces, and

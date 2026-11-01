@@ -55,6 +55,10 @@ func TestLightVMCRUD(t *testing.T) {
 	if created.Status != store.StatusStopped || created.DesiredState != store.DesiredStopped {
 		t.Fatalf("created lightvm lifecycle = %+v", created)
 	}
+	if len(created.Consoles) != 1 || created.Consoles[0].Name != "console" ||
+		created.Consoles[0].PortName != "org.example.console" {
+		t.Fatalf("created lightvm consoles = %+v", created.Consoles)
+	}
 
 	got, err := st.GetLightVM(ctx, created.ID)
 	if err != nil {
@@ -85,6 +89,7 @@ func TestLightVMCRUD(t *testing.T) {
 		ExecutablePath: "/bin/app",
 		ExecutableArgs: []string{"serve"},
 		Append:         "console=ttyS0 rdinit=/sbin/init",
+		Consoles:       []store.LightVMConsole{{Name: "serial"}, {Name: "logs"}},
 	})
 	if err != nil {
 		t.Fatalf("update lightvm: %v", err)
@@ -92,6 +97,12 @@ func TestLightVMCRUD(t *testing.T) {
 	if updated.Name != "app-02" || updated.VCPUs != 4 || updated.Env[0].Value != "prod" ||
 		updated.ExecutableArgs[0] != "serve" || updated.Append != "console=ttyS0 rdinit=/sbin/init" {
 		t.Fatalf("updated lightvm = %+v", updated)
+	}
+	if len(updated.Consoles) != 2 || updated.Consoles[0].Name != "serial" ||
+		updated.Consoles[0].PortName != "org.example.console" ||
+		updated.Consoles[1].Name != "logs" ||
+		updated.Consoles[1].PortName != "org.example.console.2" {
+		t.Fatalf("updated lightvm consoles = %+v", updated.Consoles)
 	}
 
 	started, err := st.SetLightVMStatus(ctx, created.ID, store.StatusRunning)
