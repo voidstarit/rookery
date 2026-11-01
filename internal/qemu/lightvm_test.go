@@ -45,7 +45,7 @@ func TestBuildLightVMArgs(t *testing.T) {
 		"-m 1024",
 		"-kernel " + vm.KernelPath,
 		"-initrd " + vm.InitramfsPath,
-		"-append console=hvc0 rdinit=/init",
+		"-append console=hvc0 rdinit=/init APP_HOSTNAME=app-01",
 		"-display none",
 		"-device virtio-serial-pci",
 		"-chardev socket,id=console0,path=/run/rookery/" + vm.ID + ".console,server=on,wait=off",
@@ -78,11 +78,39 @@ func TestBuildLightVMArgsWithoutAppendOrInterfaces(t *testing.T) {
 	vm.Append = ""
 	vm.Interfaces = nil
 	args := strings.Join(buildLightVMArgs(vm, "/tmp/console", "/tmp/pid", "/tmp/monitor", LightVMVirtioFS{}), " ")
-	if strings.Contains(args, "-append") {
-		t.Fatalf("args %q should omit an empty append", args)
+	if !strings.Contains(args, "-append APP_HOSTNAME=app-01") {
+		t.Fatalf("args %q should contain the default APP_HOSTNAME", args)
 	}
 	if strings.Contains(args, "memory-backend-memfd") || strings.Contains(args, "vhost-user") {
 		t.Fatalf("args %q should omit interface devices", args)
+	}
+}
+
+func TestBuildLightVMArgsPreservesAppHostname(t *testing.T) {
+	vm := testLightVM()
+	vm.Append = "console=hvc0 APP_HOSTNAME=web-07 rdinit=/init"
+	args := strings.Join(buildLightVMArgs(vm, "/tmp/console", "/tmp/pid", "/tmp/monitor", LightVMVirtioFS{}), " ")
+	if strings.Count(args, "APP_HOSTNAME=") != 1 {
+		t.Fatalf("args %q should contain exactly one APP_HOSTNAME", args)
+	}
+	if !strings.Contains(args, "-append console=hvc0 APP_HOSTNAME=web-07 rdinit=/init") {
+		t.Fatalf("args %q did not preserve the supplied APP_HOSTNAME", args)
+	}
+}
+
+func TestLightVMHostname(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		want string
+	}{
+		{name: "app-01", want: "app-01"},
+		{name: "My App_01", want: "my-app-01"},
+		{name: "  --  ", want: "lightvm"},
+		{name: strings.Repeat("a", 70), want: strings.Repeat("a", 63)},
+	} {
+		if got := lightVMHostname(testCase.name); got != testCase.want {
+			t.Errorf("lightVMHostname(%q) = %q, want %q", testCase.name, got, testCase.want)
+		}
 	}
 }
 

@@ -1,0 +1,210 @@
+#!/bin/sh
+# LightVM initramfs: mount the container rootfs from virtio-fs and hand off
+# to it with switch_root.
+#
+# switch_root is the initramfs-aware way to change root: it moves the new root
+# to /, removes the old initramfs, and executes the workload as PID 1. Unlike
+# pivot_root, it works directly from the kernel's initial rootfs.
+PATH=/bin:/sbin
+export PATH
+
+mount -t proc proc /proc 2>/dev/null || true
+mount -t sysfs sysfs /sys 2>/dev/null || true
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
+mkdir -p /dev/pts /dev/shm /run /tmp
+mount -t devpts devpts /dev/pts 2>/dev/null || true
+mount -t tmpfs -o mode=1777 tmpfs /tmp 2>/dev/null || true
+mount -t tmpfs tmpfs /run 2>/dev/null || true
+
+cmdline=" $(cat /proc/cmdline 2>/dev/null) "
+init_path=
+app_hostname=
+dhcp=1
+dhcp_renew=1
+for arg in $cmdline; do
+	case "$arg" in
+		lightvm.init=*) init_path=${arg#lightvm.init=} ;;
+		APP_HOSTNAME=*) app_hostname=${arg#APP_HOSTNAME=} ;;
+		lightvm.dhcp=0) dhcp=0 ;;
+		lightvm.dhcp=1|ip=dhcp) dhcp=1 ;;
+		lightvm.dhcp_renew=0) dhcp_renew=0 ;;
+		lightvm.dhcp_renew=1) dhcp_renew=1 ;;
+	esac
+done
+
+# APP_HOSTNAME may arrive quoted from the kernel command line and may contain
+# characters that are not valid in a DHCP hostname. Normalize it before using
+# it for the kernel hostname and the DHCP hostname/FQDN options.
+if [ -n "$app_hostname" ]; then
+	app_hostname=$(printf '%s' "$app_hostname" \
+		| tr 'A-Z' 'a-z' \
+		| sed 's/[^a-z0-9-]/-/g; s/--*/-/g; s/^-//; s/-$//' \
+		| cut -c1-63)
+fi
+if [ -z "$app_hostname" ]; then
+	app_hostname=lightvm
+fi
+hostname "$app_hostname" 2>/dev/null || true
+APP_HOSTNAME="$app_hostname"
+HOSTNAME="$app_hostname"
+export APP_HOSTNAME HOSTNAME
+echo "lightvm: hostname $app_hostname"
+
+ip link set lo up 2>/dev/null || true
+
+# Bring up virtio-net interfaces and acquire a DHCP lease before mounting the
+# container root. DHCP is enabled by default; add lightvm.dhcp=0 to skip it.
+# The lease and routes live in the kernel, so they survive switch_root;
+# resolv.conf is copied into the new root below.
+if [ "$dhcp" = 1 ]; then
+	i=0
+	while [ "$i" -lt 25 ]; do
+		found=0
+		for path in /sys/class/net/*; do
+			[ -e "$path" ] || continue
+			[ "$(cat "$path/type" 2>/dev/null)" = 1 ] && found=1
+		done
+		[ "$found" = 1 ] && break
+		sleep 0.2
+		i=$((i + 1))
+	done
+
+	for path in /sys/class/net/*; do
+		[ -e "$path" ] || continue
+		dev=${path##*/}
+		[ "$dev" = lo ] && continue
+		[ "$(cat "$path/type" 2>/dev/null)" = 1 ] || continue
+		echo "lightvm: bringing up $dev"
+		ip link set "$dev" up 2>/dev/null || continue
+		echo "lightvm: DHCP on $dev"
+		# Send the hostname (option 12) and FQDN (option 81) so the
+		# Rookery DHCP/DNS services can create the lease record.
+		set -- -i "$dev" -q -n -t 10 -T 1 \
+			-s /etc/udhcpc/default.script \
+			-x "hostname:$app_hostname" -F "$app_hostname"
+		if udhcpc "$@" 2>/dev/null; then
+			echo "lightvm: DHCP configured $dev"
+		else
+			echo "lightvm: DHCP failed on $dev"
+		fi
+	done
+fi
+
+echo "lightvm: mounting virtiofs tag rootfs"
+mkdir -p /newroot
+if ! mount -t virtiofs rootfs /newroot 2>/dev/null; then
+	echo "lightvm: failed to mount virtiofs tag rootfs"
+	echo "lightvm: dropping to initramfs shell"
+	exec /bin/sh
+fi
+
+mkdir -p /newroot/proc /newroot/sys /newroot/dev /newroot/run /newroot/tmp
+
+# DHCP runs in the initramfs; carry its DNS configuration into the new root.
+mkdir -p /newroot/etc
+if [ -s /etc/resolv.conf ]; then
+	cp /etc/resolv.conf /newroot/etc/resolv.conf 2>/dev/null || true
+fi
+printf '%s\n' "$app_hostname" > /newroot/etc/hostname 2>/dev/null || true
+
+# Rookery writes the LightVM workload contract into the image root as
+# /.env and /.entrypoint. Prefer that entrypoint unless the caller explicitly
+# supplied lightvm.init=.
+if [ -z "$init_path" ] && [ -x /newroot/.entrypoint ]; then
+	init_path=/.entrypoint
+fi
+if [ -z "$init_path" ]; then
+	init_path=/sbin/init
+fi
+
+# Load the workload environment before switch_root. Values may contain spaces
+# and '=', so export each complete NAME=value line without eval.
+if [ -r /newroot/.env ]; then
+	echo "lightvm: loading environment from /.env"
+	while IFS= read -r env_line || [ -n "$env_line" ]; do
+		case "$env_line" in
+			''|'#'*) continue ;;
+		esac
+		export "$env_line"
+	done < /newroot/.env
+fi
+
+# Choose an executable init inside the new root before dropping the old one.
+chosen=
+for candidate in "$init_path" /init /sbin/init /bin/sh; do
+	case "$candidate" in
+		/*) ;;
+		*) continue ;;
+	esac
+	if [ -x "/newroot$candidate" ]; then
+		chosen=$candidate
+		break
+	fi
+done
+if [ -z "$chosen" ]; then
+	echo "lightvm: no executable init found in virtiofs rootfs"
+	echo "lightvm: looked for $init_path, /init, /sbin/init, /bin/sh"
+	echo "lightvm: dropping to initramfs shell"
+	exec /bin/sh
+fi
+
+# Keep a DHCP client alive after switch_root. The initramfs udhcpc exits after
+# the initial lease, so install a static BusyBox and renewal script inside the
+# new root and start one background client per Ethernet interface before
+# exec'ing the workload. Disable this with lightvm.dhcp_renew=0.
+if [ "$dhcp" = 1 ] && [ "$dhcp_renew" = 1 ] && [ -x /bin/busybox ]; then
+	renew_dir=/newroot/.rookery
+	mkdir -p "$renew_dir"
+	if cp /bin/busybox "$renew_dir/busybox" \
+		&& ln -sf /.rookery/busybox "$renew_dir/ip" \
+		&& ln -sf /.rookery/busybox "$renew_dir/hostname" \
+		&& sed '1s|^#!/bin/sh$|#!/.rookery/busybox sh|' \
+			/etc/udhcpc/default.script > "$renew_dir/udhcpc.script" \
+		&& chmod 0755 "$renew_dir/busybox" "$renew_dir/udhcpc.script"; then
+		printf '%s\n' "$chosen" > "$renew_dir/entry"
+		cat > "$renew_dir/start" <<'EOF'
+#!/.rookery/busybox sh
+# Start a persistent DHCP client for every Ethernet interface, then run the
+# LightVM workload. The clients use the static BusyBox copied into this root.
+for path in /sys/class/net/*; do
+	[ -e "$path" ] || continue
+	dev=${path##*/}
+	[ "$dev" = lo ] && continue
+	[ "$(/.rookery/busybox cat "$path/type" 2>/dev/null)" = 1 ] || continue
+	if [ -n "$APP_HOSTNAME" ]; then
+		ROOKERY_DHCP_RENEW=1 PATH="/.rookery:$PATH" \
+			/.rookery/busybox udhcpc -i "$dev" -b \
+			-s /.rookery/udhcpc.script \
+			-x "hostname:$APP_HOSTNAME" -F "$APP_HOSTNAME" \
+			>>"/.rookery/udhcpc-$dev.log" 2>&1 &
+	else
+		ROOKERY_DHCP_RENEW=1 PATH="/.rookery:$PATH" \
+			/.rookery/busybox udhcpc -i "$dev" -b \
+			-s /.rookery/udhcpc.script \
+			>>"/.rookery/udhcpc-$dev.log" 2>&1 &
+	fi
+done
+exec "$(/.rookery/busybox cat /.rookery/entry)"
+EOF
+		chmod 0755 "$renew_dir/start"
+		chosen=/.rookery/start
+		echo "lightvm: DHCP renewal helper at /.rookery"
+	else
+		echo "lightvm: could not install DHCP renewal helper" >&2
+	fi
+fi
+
+# Give the new root fresh pseudo filesystems. Do not move the active /dev
+# mount: some init binaries misbehave when the console mount is moved.
+mount -t proc proc /newroot/proc 2>/dev/null || true
+mount -t sysfs sysfs /newroot/sys 2>/dev/null || true
+mount -t devtmpfs devtmpfs /newroot/dev 2>/dev/null || true
+mkdir -p /newroot/dev/pts /newroot/dev/shm
+mount -t devpts devpts /newroot/dev/pts 2>/dev/null || true
+mount -t tmpfs tmpfs /newroot/dev/shm 2>/dev/null || true
+mount -t tmpfs tmpfs /newroot/run 2>/dev/null || true
+mount -t tmpfs -o mode=1777 tmpfs /newroot/tmp 2>/dev/null || true
+
+echo "lightvm: switch_root /newroot $chosen"
+# Use the absolute initramfs path: loading /.env may replace PATH before this.
+exec /bin/switch_root /newroot "$chosen"

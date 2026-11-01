@@ -1,6 +1,12 @@
 # LightVM minimal kernel + initramfs builder.
 #
-# This directory intentionally contains only this Makefile and Dockerfile.
+# Init scripts and extra initramfs files live in initramfs/ (copied into both
+# images) and initramfs-virtiofs/ (overlay for the virtiofs switch_root image).
+# The virtiofs image brings up Ethernet interfaces, runs DHCP, then mounts the
+# rootfs virtio-fs tag and switch_roots into it. It also leaves a static
+# BusyBox/udhcpc renewal helper in /.rookery inside the guest (disable with
+# lightvm.dhcp_renew=0).
+# Add scripts there instead of editing shell fragments in this Makefile.
 # All build state lives in a Docker volume and all artifacts are written to
 # OUT_DIR (default: ../../dist/lightvm, i.e. the repository dist directory).
 # Nothing is written back into this directory.
@@ -10,12 +16,14 @@
 # read-only root filesystem.
 #
 # Usage:
-#   make                 build kernel and initramfs
+#   make                 build kernel and both initramfs images
 #   make kernel          build only the kernel
-#   make initramfs       build only the initramfs
+#   make initramfs       build the debug/test initramfs
+#   make initramfs-virtiofs  build the initramfs that switch_root's into virtiofs
 #   make menuconfig      edit the kernel config
 #   make reconfigure     reset the kernel config to the built-in fragment
-#   make test            boot the artifacts in QEMU
+#   make test            boot the debug artifacts in QEMU
+#   make test-virtiofs   boot the virtiofs/switch_root initramfs in QEMU
 #   make shell           interactive shell in the builder container
 #   make clean           remove the build volume and current artifacts
 #   make distclean       also remove the builder image
@@ -33,6 +41,7 @@
 # Artifacts:
 #   OUT_DIR/vmlinuz-lightvm-<version>
 #   OUT_DIR/initramfs-lightvm-<version>.cpio.gz
+#   OUT_DIR/initramfs-lightvm-virtiofs-<version>.cpio.gz
 #   plus stable symlinks without the version suffix.
 
 SHELL := /bin/sh
@@ -60,6 +69,12 @@ DOCKER_PLATFORM ?= linux/amd64
 DOCKER_RUN_FLAGS ?=
 BUILD_VOLUME ?= rookery-lightvm-kernel-build-$(HOST_UID)
 
+# Initramfs source trees. The common tree is copied into both images; the
+# virtiofs tree is overlaid on top for the switch_root variant. Add scripts and
+# files here instead of editing shell fragments in this Makefile.
+INITRAMFS_DIR := $(EXTRA_DIR)/initramfs
+INITRAMFS_VIRTIOFS_DIR := $(EXTRA_DIR)/initramfs-virtiofs
+
 # Paths inside the builder container.
 BUILD_DIR := /build
 DIST_DIR := /out
@@ -72,18 +87,28 @@ KERNEL_IMAGE := $(OBJ_DIR)/arch/x86/boot/bzImage
 
 KERNEL_NAME := vmlinuz-lightvm-$(KERNEL_VERSION)
 INITRAMFS_NAME := initramfs-lightvm-$(KERNEL_VERSION).cpio.gz
+INITRAMFS_VIRTIOFS_NAME := initramfs-lightvm-virtiofs-$(KERNEL_VERSION).cpio.gz
 DIST_KERNEL := $(DIST_DIR)/$(KERNEL_NAME)
 DIST_INITRAMFS := $(DIST_DIR)/$(INITRAMFS_NAME)
+DIST_INITRAMFS_VIRTIOFS := $(DIST_DIR)/$(INITRAMFS_VIRTIOFS_NAME)
 DIST_KERNEL_LINK := $(DIST_DIR)/vmlinuz-lightvm
 DIST_INITRAMFS_LINK := $(DIST_DIR)/initramfs-lightvm.cpio.gz
+DIST_INITRAMFS_VIRTIOFS_LINK := $(DIST_DIR)/initramfs-lightvm-virtiofs.cpio.gz
 
 HOST_KERNEL := $(OUT_DIR)/$(KERNEL_NAME)
 HOST_INITRAMFS := $(OUT_DIR)/$(INITRAMFS_NAME)
+HOST_INITRAMFS_VIRTIOFS := $(OUT_DIR)/$(INITRAMFS_VIRTIOFS_NAME)
 HOST_KERNEL_LINK := $(OUT_DIR)/vmlinuz-lightvm
 HOST_INITRAMFS_LINK := $(OUT_DIR)/initramfs-lightvm.cpio.gz
+HOST_INITRAMFS_VIRTIOFS_LINK := $(OUT_DIR)/initramfs-lightvm-virtiofs.cpio.gz
 QEMU_TEST_DIR ?= $(if $(TMPDIR),$(TMPDIR),/tmp)/rookery-lightvm-test-$(HOST_UID)
 QEMU_LOG := $(QEMU_TEST_DIR)/qemu-test.log
 QEMU_DISK := $(QEMU_TEST_DIR)/qemu-test-disk.img
+VIRTIOFSD ?= $(EXTRA_DIR)/../virtiofsd/virtiofsd
+VIRTIOFS_TEST_SHARE := $(QEMU_TEST_DIR)/virtiofs-rootfs
+VIRTIOFS_TEST_SOCKET := $(QEMU_TEST_DIR)/virtiofs.sock
+VIRTIOFSD_LOG := $(QEMU_TEST_DIR)/virtiofsd.log
+VIRTIOFS_TEST_LOG := $(QEMU_TEST_DIR)/qemu-virtiofs-test.log
 
 ifneq ($(ARCH),x86_64)
 $(error this builder currently supports ARCH=x86_64 only)
@@ -101,7 +126,7 @@ DOCKER_RUN_BASE := $(DOCKER) run --rm --platform $(DOCKER_PLATFORM) \
 	--read-only --cap-drop=ALL --security-opt=no-new-privileges \
 	--tmpfs /tmp:rw,exec,nosuid,nodev,mode=1777,size=2g \
 	-e HOME=/tmp \
-	-v "$(EXTRA_DIR)/Makefile:/work/Makefile:ro" \
+	-v "$(EXTRA_DIR):/work:ro" \
 	-v "$(BUILD_VOLUME):/build:rw" \
 	-v "$(OUT_DIR):/out:rw" \
 	$(DOCKER_OVERLAY) \
@@ -186,7 +211,7 @@ CONFIG_VIRTIO_MMIO_CMDLINE_DEVICES=y
 # Deliberately not enabled on this minimal image:
 # - DRM_VIRTIO_GPU: needs DRM; LightVM runs with -display none
 # - SND_VIRTIO: needs SOUND
-# - VIRTIO_INPUT: needs INPUT; no keyboard/tablet
+# - VIRTIO_INPUT: VT enables the input core, but no keyboard/tablet device is needed
 # - I2C_VIRTIO: needs I2C
 # - VIRTIO_DMA_SHARED_BUFFER: only useful with virtio-gpu
 # - VIRTIO_DEBUG: needs debugfs; debug support is disabled
@@ -206,6 +231,20 @@ CONFIG_INET=y
 CONFIG_PACKET=y
 CONFIG_NETDEVICES=y
 
+# Virtual terminals are required by images whose init/getty expects
+# /dev/tty1..N. Keep the VGA console and input devices disabled; LightVM uses
+# the virtio console (hvc0) for I/O.
+CONFIG_VT=y
+CONFIG_VT_CONSOLE=y
+# CONFIG_VGA_CONSOLE is not set
+# CONFIG_INPUT_KEYBOARD is not set
+# CONFIG_INPUT_MOUSE is not set
+# CONFIG_INPUT_MISC is not set
+# CONFIG_INPUT_JOYSTICK is not set
+# CONFIG_INPUT_TABLET is not set
+# CONFIG_INPUT_TOUCHSCREEN is not set
+# CONFIG_INPUT_MOUSEDEV is not set
+
 # Keep the image small: no debug, USB, sound, DRM, or real filesystems
 CONFIG_DEBUG_INFO_NONE=y
 # CONFIG_DEBUG_KERNEL is not set
@@ -219,11 +258,8 @@ CONFIG_DEBUG_INFO_NONE=y
 # CONFIG_USB_SUPPORT is not set
 # CONFIG_WLAN is not set
 # CONFIG_WIRELESS is not set
-# CONFIG_VT is not set
-# CONFIG_INPUT is not set
 # CONFIG_SERIO is not set
 # CONFIG_ACPI_BUTTON is not set
-# CONFIG_INPUT_JOYSTICK is not set
 # CONFIG_HID is not set
 # CONFIG_DRM is not set
 # CONFIG_NFS_FS is not set
@@ -233,158 +269,17 @@ CONFIG_DEBUG_INFO_NONE=y
 # CONFIG_XFS_FS is not set
 endef
 
-define INITRAMFS_INIT
-#!/bin/sh
-# LightVM initramfs PID 1.
-PATH=/bin:/sbin
-export PATH
+# Init scripts and filesystem additions live in initramfs/ (common) and
+# initramfs-virtiofs/ (overlay for the virtiofs switch_root variant).
 
-mount -t proc proc /proc 2>/dev/null || true
-mount -t sysfs sysfs /sys 2>/dev/null || true
-mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
-mkdir -p /dev/pts /dev/shm /run /tmp
-mount -t devpts devpts /dev/pts 2>/dev/null || true
-mount -t tmpfs -o mode=1777 tmpfs /tmp 2>/dev/null || true
-mount -t tmpfs tmpfs /run 2>/dev/null || true
-
-# LightVM attaches the container root filesystem as a virtio-fs device with
-# the tag "rootfs". Mount it when present so the workload/hook can use it.
-virtiofs_present=0
-for dev in /sys/bus/virtio/drivers/virtiofs/* /sys/bus/virtio/drivers/virtio_fs/*; do
-	[ -e "$dev" ] || continue
-	virtiofs_present=1
-	break
-done
-if [ "$virtiofs_present" = 1 ]; then
-	mkdir -p /rootfs
-	if mount -t virtiofs rootfs /rootfs 2>/dev/null; then
-		echo "lightvm: mounted virtiofs tag rootfs at /rootfs"
-	else
-		rmdir /rootfs 2>/dev/null || true
-	fi
-fi
-
-cmdline=" $(cat /proc/cmdline 2>/dev/null) "
-hostname=lightvm
-shell=auto
-test_mode=0
-dhcp=0
-for arg in $cmdline; do
-	case "$arg" in
-		lightvm.hostname=*) hostname=${arg#lightvm.hostname=} ;;
-		lightvm.shell=*) shell=${arg#lightvm.shell=} ;;
-		lightvm.test=1) test_mode=1 ;;
-		lightvm.dhcp=1|ip=dhcp) dhcp=1 ;;
-	esac
-done
-hostname "$hostname" 2>/dev/null || true
-
-if [ "$dhcp" = 1 ]; then
-	for path in /sys/class/net/*; do
-		[ -e "$path" ] || continue
-		dev=${path##*/}
-		[ "$dev" = lo ] && continue
-		[ "$(cat "$path/type" 2>/dev/null)" = 1 ] || continue
-		ip link set "$dev" up 2>/dev/null || continue
-		echo "lightvm: DHCP on $dev"
-		udhcpc -i "$dev" -q -n -t 5 2>/dev/null || echo "lightvm: DHCP failed on $dev"
-	done
-fi
-
-if [ -x /etc/init.d/rcS ]; then
-	/etc/init.d/rcS
-fi
-
-if [ "$test_mode" = 1 ]; then
-	echo "lightvm: uname: $(uname -a)"
-	echo "lightvm: virtio block devices:"
-	found=0
-	for dev in /dev/vd*; do
-		[ -e "$dev" ] || continue
-		echo "  $dev"
-		found=1
-	done
-	[ "$found" = 1 ] || echo "  (none)"
-	echo "lightvm: network interfaces:"
-	ip -o link 2>/dev/null | while read -r line; do echo "  $line"; done
-	echo "lightvm: network addresses:"
-	ip -o addr 2>/dev/null | while read -r line; do echo "  $line"; done
-	echo "lightvm: virtio devices:"
-	for dev in /sys/bus/virtio/devices/*; do
-		[ -e "$dev" ] || continue
-		echo "  ${dev##*/} $(cat "$dev/modalias" 2>/dev/null)"
-	done
-	echo "lightvm: virtio drivers:"
-	echo "  $(ls /sys/bus/virtio/drivers 2>/dev/null | tr '\n' ' ')"
-	if grep -q ' /rootfs virtiofs ' /proc/mounts 2>/dev/null; then
-		echo "lightvm: virtiofs rootfs mounted"
-		if [ -f /rootfs/hello ]; then
-			echo "  /rootfs/hello: $(cat /rootfs/hello)"
-		fi
-	else
-		echo "lightvm: virtiofs rootfs not attached"
-	fi
-	echo "LIGHTVM-INITRAMFS-OK"
-	sync
-	poweroff -f
-fi
-
-start_shell=0
-case "$shell" in
-	0|no|false) ;;
-	1|yes|true) start_shell=1 ;;
-	*)
-		if [ -t 0 ]; then start_shell=1; fi
-		;;
-esac
-
-if [ "$start_shell" = 1 ]; then
-	echo "lightvm: starting shell (exit to power off)"
-	/bin/sh
-	echo "lightvm: shell exited; powering off"
-	sync
-	poweroff -f
-fi
-
-echo "lightvm: initramfs ready; idling (lightvm.shell=1 for a shell)"
-while :; do sleep 3600; done
-endef
-
-define UDHCPC_SCRIPT
-#!/bin/sh
-case "$1" in
-	deconfig)
-		ip link set "$interface" up 2>/dev/null || true
-		ip addr flush dev "$interface" 2>/dev/null || true
-		;;
-	bound|renew)
-		ip link set "$interface" up 2>/dev/null || true
-		ip addr flush dev "$interface" 2>/dev/null || true
-		ip addr add "${ip}/${mask:-24}" dev "$interface"
-		if [ -n "$router" ]; then
-			for gateway in $router; do
-				ip route add default via "$gateway" dev "$interface" 2>/dev/null || true
-				break
-			done
-		fi
-		{
-			echo "# generated by udhcpc"
-			for dns_server in $dns; do
-				echo "nameserver $dns_server"
-			done
-		} > /etc/resolv.conf
-		;;
-esac
-exit 0
-endef
-
-.PHONY: all kernel initramfs docker-image docker-volume menuconfig reconfigure shell test \
-	clean distclean help _configure _kernel _initramfs _initramfs_rootfs _menuconfig _shell
+.PHONY: all kernel initramfs initramfs-virtiofs docker-image docker-volume menuconfig reconfigure shell \
+	test test-virtiofs clean distclean help _configure _kernel _initramfs _initramfs_common \
+	_initramfs_virtiofs _initramfs_rootfs _menuconfig _shell
 
 $(OBJ_DIR):
 	@mkdir -p "$@"
 
-all: kernel initramfs
+all: kernel initramfs initramfs-virtiofs
 
 kernel: docker-image docker-volume
 	@mkdir -p "$(OUT_DIR)"
@@ -399,6 +294,15 @@ initramfs: docker-image docker-volume
 	@mkdir -p "$(OUT_DIR)"
 	$(DOCKER_MAKE) _initramfs
 	@printf 'initramfs: %s\n' "$(HOST_INITRAMFS)"
+
+initramfs-virtiofs: docker-image docker-volume
+	@if [ -n "$(INITRAMFS_OVERLAY)" ] && [ ! -d "$(INITRAMFS_OVERLAY)" ]; then \
+		echo "error: INITRAMFS_OVERLAY is not a directory: $(INITRAMFS_OVERLAY)" >&2; \
+		exit 1; \
+	fi
+	@mkdir -p "$(OUT_DIR)"
+	$(DOCKER_MAKE) _initramfs_virtiofs
+	@printf 'initramfs: %s\n' "$(HOST_INITRAMFS_VIRTIOFS)"
 
 menuconfig: docker-image docker-volume
 	@mkdir -p "$(OUT_DIR)"
@@ -513,10 +417,18 @@ _initramfs_rootfs:
 		ln -sf /bin/busybox "bin/$$app"; \
 	done
 
-_initramfs: _initramfs_rootfs
-	$(file >$(ROOTFS_DIR)/init,$(value INITRAMFS_INIT))
-	$(file >$(ROOTFS_DIR)/etc/udhcpc/default.script,$(value UDHCPC_SCRIPT))
-	@chmod 0755 "$(ROOTFS_DIR)/init" "$(ROOTFS_DIR)/etc/udhcpc/default.script"
+_initramfs_common: _initramfs_rootfs
+	@test -d "$(INITRAMFS_DIR)" || { \
+		echo "error: missing initramfs source directory $(INITRAMFS_DIR)" >&2; \
+		exit 1; \
+	}
+	@cp -a "$(INITRAMFS_DIR)/." "$(ROOTFS_DIR)/"
+	@chmod 0755 "$(ROOTFS_DIR)/init" 2>/dev/null || true
+	@if [ -f "$(ROOTFS_DIR)/etc/udhcpc/default.script" ]; then \
+		chmod 0755 "$(ROOTFS_DIR)/etc/udhcpc/default.script"; \
+	fi
+
+_initramfs: _initramfs_common
 	@if [ -d /overlay ]; then \
 		echo "applying initramfs overlay from $(INITRAMFS_OVERLAY)"; \
 		cp -a /overlay/. "$(ROOTFS_DIR)/"; \
@@ -528,6 +440,25 @@ _initramfs: _initramfs_rootfs
 	@ln -sfn "$(INITRAMFS_NAME)" "$(DIST_INITRAMFS_LINK)"
 	@cd "$(DIST_DIR)" && sha256sum "$(INITRAMFS_NAME)" > "$(INITRAMFS_NAME).sha256"
 	@printf 'initramfs: %s (%s bytes)\n' "$(DIST_INITRAMFS)" "$$(stat -c%s "$(DIST_INITRAMFS)")"
+
+_initramfs_virtiofs: _initramfs_common
+	@test -d "$(INITRAMFS_VIRTIOFS_DIR)" || { \
+		echo "error: missing initramfs source directory $(INITRAMFS_VIRTIOFS_DIR)" >&2; \
+		exit 1; \
+	}
+	@cp -a "$(INITRAMFS_VIRTIOFS_DIR)/." "$(ROOTFS_DIR)/"
+	@chmod 0755 "$(ROOTFS_DIR)/init"
+	@if [ -d /overlay ]; then \
+		echo "applying initramfs overlay from $(INITRAMFS_OVERLAY)"; \
+		cp -a /overlay/. "$(ROOTFS_DIR)/"; \
+	fi
+	@mkdir -p "$(DIST_DIR)"
+	@cd "$(ROOTFS_DIR)" && find . -print0 \
+		| cpio --null --create --format=newc --owner=0:0 --reproducible --quiet \
+		| gzip -9n > "$(DIST_INITRAMFS_VIRTIOFS)"
+	@ln -sfn "$(INITRAMFS_VIRTIOFS_NAME)" "$(DIST_INITRAMFS_VIRTIOFS_LINK)"
+	@cd "$(DIST_DIR)" && sha256sum "$(INITRAMFS_VIRTIOFS_NAME)" > "$(INITRAMFS_VIRTIOFS_NAME).sha256"
+	@printf 'initramfs: %s (%s bytes)\n' "$(DIST_INITRAMFS_VIRTIOFS)" "$$(stat -c%s "$(DIST_INITRAMFS_VIRTIOFS)")"
 
 _shell:
 	@bash
@@ -568,11 +499,90 @@ test: all
 		exit 1; \
 	fi
 
+# Boot the switch_root initramfs against a tiny writable virtiofs rootfs.
+# The test workload prints a marker, reads /hello, and powers the VM off.
+test-virtiofs: kernel initramfs-virtiofs
+	@command -v qemu-system-x86_64 >/dev/null || { \
+		echo "error: qemu-system-x86_64 is required for make test-virtiofs" >&2; \
+		exit 1; \
+	}
+	@test -x "$(VIRTIOFSD)" || { \
+		echo "error: missing virtiofsd at $(VIRTIOFSD)" >&2; \
+		echo "run 'make -C $(abspath $(EXTRA_DIR)/../virtiofsd) virtiofsd' or set VIRTIOFSD=..." >&2; \
+		exit 1; \
+	}
+	@mkdir -p "$(OUT_DIR)" "$(QEMU_TEST_DIR)"
+	@rm -rf "$(VIRTIOFS_TEST_SHARE)"
+	@mkdir -p "$(VIRTIOFS_TEST_SHARE)/bin"
+	@printf '%s\n' 'hello-from-virtiofs' > "$(VIRTIOFS_TEST_SHARE)/hello"
+	@$(DOCKER) run --rm --entrypoint /bin/cat $(DOCKER_IMAGE) /bin/busybox \
+		> "$(VIRTIOFS_TEST_SHARE)/bin/busybox"
+	@chmod 0755 "$(VIRTIOFS_TEST_SHARE)/bin/busybox"
+	@ln -sf /bin/busybox "$(VIRTIOFS_TEST_SHARE)/bin/sh"
+	@printf '%s\n' \
+		'GREETING=hello from env' \
+		'WITH_EQUALS=a=b' \
+		> "$(VIRTIOFS_TEST_SHARE)/.env"
+	@cp "$(EXTRA_DIR)/testdata/switch-root-entrypoint" "$(VIRTIOFS_TEST_SHARE)/.entrypoint"
+	@chmod 0755 "$(VIRTIOFS_TEST_SHARE)/.entrypoint"
+	@rm -f "$(VIRTIOFS_TEST_SOCKET)" "$(VIRTIOFSD_LOG)" "$(VIRTIOFS_TEST_LOG)"
+	@accel="-accel tcg"; cpu=""; \
+	if [ -w /dev/kvm ]; then accel="-accel kvm"; cpu="-cpu host"; fi; \
+	"$(VIRTIOFSD)" --socket-path="$(VIRTIOFS_TEST_SOCKET)" \
+		--shared-dir="$(VIRTIOFS_TEST_SHARE)" --sandbox none --cache never \
+		> "$(VIRTIOFSD_LOG)" 2>&1 & \
+	vfsd=$$!; \
+	trap 'kill $$vfsd 2>/dev/null || true' EXIT; \
+	i=0; \
+	while [ $$i -lt 50 ] && [ ! -S "$(VIRTIOFS_TEST_SOCKET)" ]; do \
+		sleep 0.2; i=$$((i+1)); \
+	done; \
+	if [ ! -S "$(VIRTIOFS_TEST_SOCKET)" ]; then \
+		echo "error: virtiofsd did not create $(VIRTIOFS_TEST_SOCKET)" >&2; \
+		tail -20 "$(VIRTIOFSD_LOG)" >&2; \
+		exit 1; \
+	fi; \
+	echo "booting $(HOST_KERNEL) with virtiofs rootfs"; \
+	timeout 120 qemu-system-x86_64 \
+		-machine q35 -m 256M -smp 2 $$accel $$cpu \
+		-object memory-backend-memfd,id=mem,size=256M,share=on \
+		-numa node,memdev=mem \
+		-chardev socket,id=char0,path="$(VIRTIOFS_TEST_SOCKET)" \
+		-device vhost-user-fs-pci,chardev=char0,tag=rootfs \
+		-kernel "$(HOST_KERNEL)" \
+		-initrd "$(HOST_INITRAMFS_VIRTIOFS)" \
+		-append "console=ttyS0,115200 panic=1 lightvm.dhcp=1 APP_HOSTNAME='My_App-01'" \
+		-netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
+		-display none -serial stdio -monitor none -no-reboot \
+		> "$(VIRTIOFS_TEST_LOG)" 2>&1 || true; \
+	kill $$vfsd 2>/dev/null || true; wait $$vfsd 2>/dev/null || true; \
+	if grep -q 'LIGHTVM-ENTRYPOINT-OK' "$(VIRTIOFS_TEST_LOG)" \
+		&& grep -q 'GREETING=hello from env' "$(VIRTIOFS_TEST_LOG)" \
+		&& grep -q 'WITH_EQUALS=a=b' "$(VIRTIOFS_TEST_LOG)" \
+		&& grep -q 'dhcp renewal helper present' "$(VIRTIOFS_TEST_LOG)" \
+		&& grep -q 'udhcpc renewal running' "$(VIRTIOFS_TEST_LOG)" \
+		&& grep -q 'hello-from-virtiofs' "$(VIRTIOFS_TEST_LOG)" \
+		&& grep -q 'eth0.*inet 10.0.2.15/24' "$(VIRTIOFS_TEST_LOG)" \
+		&& grep -q 'nameserver 10.0.2.3' "$(VIRTIOFS_TEST_LOG)" \
+		&& grep -q 'hostname after switch_root: my-app-01' "$(VIRTIOFS_TEST_LOG)" \
+		&& grep -q 'APP_HOSTNAME after switch_root: my-app-01' "$(VIRTIOFS_TEST_LOG)" \
+		&& grep -q '/etc/hostname after switch_root: my-app-01' "$(VIRTIOFS_TEST_LOG)" \
+		&& grep -q '/dev/tty1 open ok' "$(VIRTIOFS_TEST_LOG)"; then \
+		echo "virtiofs switch_root test passed"; \
+	else \
+		echo "virtiofs switch_root test failed; last 60 lines:" >&2; \
+		tail -60 "$(VIRTIOFS_TEST_LOG)" >&2; \
+		exit 1; \
+	fi
+
 clean:
 	@$(DOCKER) volume rm "$(BUILD_VOLUME)" >/dev/null 2>&1 || true
 	rm -f "$(HOST_KERNEL)" "$(HOST_KERNEL).sha256" "$(HOST_KERNEL_LINK)" \
 		"$(HOST_INITRAMFS)" "$(HOST_INITRAMFS).sha256" "$(HOST_INITRAMFS_LINK)" \
-		"$(QEMU_LOG)" "$(QEMU_DISK)"
+		"$(HOST_INITRAMFS_VIRTIOFS)" "$(HOST_INITRAMFS_VIRTIOFS).sha256" \
+		"$(HOST_INITRAMFS_VIRTIOFS_LINK)" \
+		"$(QEMU_LOG)" "$(QEMU_DISK)" "$(VIRTIOFS_TEST_LOG)" "$(VIRTIOFSD_LOG)"
+	rm -rf "$(VIRTIOFS_TEST_SHARE)" "$(VIRTIOFS_TEST_SOCKET)"
 	@rmdir "$(QEMU_TEST_DIR)" 2>/dev/null || true
 
 distclean: clean
@@ -581,16 +591,20 @@ distclean: clean
 help:
 	@echo "LightVM minimal kernel builder (builds entirely in Docker)"
 	@echo ""
-	@echo "  make              build kernel and initramfs"
-	@echo "  make kernel       build only the kernel"
-	@echo "  make initramfs    build only the initramfs"
-	@echo "  make menuconfig   edit the kernel configuration"
-	@echo "  make reconfigure  reset the kernel configuration"
-	@echo "  make test         boot the artifacts in QEMU"
-	@echo "  make shell        shell inside the builder container"
-	@echo "  make clean        remove the build volume and artifacts"
-	@echo "  make distclean    also remove the builder image"
+	@echo "  make                    build kernel and both initramfs images"
+	@echo "  make kernel             build only the kernel"
+	@echo "  make initramfs          build the debug/test initramfs"
+	@echo "  make initramfs-virtiofs build the virtiofs switch_root initramfs"
+	@echo "  make menuconfig         edit the kernel configuration"
+	@echo "  make reconfigure        reset the kernel configuration"
+	@echo "  make test               boot the debug artifacts in QEMU"
+	@echo "  make test-virtiofs      test DHCP/renewal, virtiofs, and switch_root"
+	@echo "  make shell              shell inside the builder container"
+	@echo "  make clean              remove the build volume and artifacts"
+	@echo "  make distclean          also remove the builder image"
 	@echo ""
+	@echo "  initramfs sources: $(INITRAMFS_DIR)"
+	@echo "                     $(INITRAMFS_VIRTIOFS_DIR)"
 	@echo "  OUT_DIR=$(OUT_DIR)"
 	@echo "  BUILD_VOLUME=$(BUILD_VOLUME)"
 	@echo "  KERNEL_VERSION=$(KERNEL_VERSION)  KERNEL_URL=$(KERNEL_URL)"

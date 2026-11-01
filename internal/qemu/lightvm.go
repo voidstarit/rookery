@@ -193,6 +193,8 @@ func (q *QEMU) lightVMPaths(id string) (console, pidfile, monitor string, err er
 	return base + ".console", base + ".lightvm.pid", base + ".lightvm.monitor", nil
 }
 
+const appHostnameParam = "APP_HOSTNAME="
+
 func buildLightVMArgs(vm store.LightVM, console, pidfile, monitor string, rootfs LightVMVirtioFS) []string {
 	args := []string{
 		"-name", vm.Name,
@@ -204,7 +206,7 @@ func buildLightVMArgs(vm store.LightVM, console, pidfile, monitor string, rootfs
 		"-kernel", vm.KernelPath,
 		"-initrd", vm.InitramfsPath,
 	}
-	if appendValue := strings.TrimSpace(vm.Append); appendValue != "" {
+	if appendValue := lightVMAppend(vm); appendValue != "" {
 		args = append(args, "-append", appendValue)
 	}
 	if len(vm.Interfaces) > 0 || rootfs.SocketPath != "" {
@@ -246,4 +248,52 @@ func buildLightVMArgs(vm store.LightVM, console, pidfile, monitor string, rootfs
 		)
 	}
 	return args
+}
+
+// lightVMAppend returns the kernel command line with APP_HOSTNAME set to the
+// LightVM name unless the caller already supplied one. The guest DHCP client
+// uses it as the DHCP hostname/FQDN option so Rookery's DNS can map the lease.
+func lightVMAppend(vm store.LightVM) string {
+	appendValue := strings.TrimSpace(vm.Append)
+	for _, field := range strings.Fields(appendValue) {
+		if strings.HasPrefix(field, appHostnameParam) {
+			return appendValue
+		}
+	}
+	hostname := lightVMHostname(vm.Name)
+	if hostname == "" {
+		return appendValue
+	}
+	if appendValue == "" {
+		return appHostnameParam + hostname
+	}
+	return appendValue + " " + appHostnameParam + hostname
+}
+
+// lightVMHostname converts an inventory name into a DHCP-safe hostname.
+// Names can contain spaces and other characters that are not valid in a
+// kernel command-line parameter or DHCP option.
+func lightVMHostname(name string) string {
+	var builder strings.Builder
+	lastDash := false
+	for _, char := range strings.ToLower(strings.TrimSpace(name)) {
+		switch {
+		case char >= 'a' && char <= 'z', char >= '0' && char <= '9':
+			builder.WriteRune(char)
+			lastDash = false
+		default:
+			if builder.Len() > 0 && !lastDash {
+				builder.WriteByte('-')
+				lastDash = true
+			}
+		}
+		if builder.Len() >= 63 {
+			break
+		}
+	}
+	hostname := strings.Trim(builder.String(), "-")
+	if hostname == "" {
+		return "lightvm"
+	}
+	return hostname
 }
