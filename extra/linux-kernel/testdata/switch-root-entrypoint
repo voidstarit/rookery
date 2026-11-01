@@ -1,0 +1,44 @@
+#!/bin/sh
+# Test workload used by `make test-virtiofs` after switch_root. It runs as
+# PID 1 from .entrypoint inside the tiny virtiofs rootfs built by the test
+# target, with the variables from .env already exported.
+echo "LIGHTVM-ENTRYPOINT-OK"
+echo "lightvm: GREETING=${GREETING:-}"
+echo "lightvm: WITH_EQUALS=${WITH_EQUALS:-}"
+if [ -x /.rookery/busybox ] && [ -x /.rookery/udhcpc.script ]; then
+	echo "lightvm: dhcp renewal helper present"
+fi
+i=0
+found=0
+while [ "$i" -lt 50 ]; do
+	if /bin/busybox grep -aq 'udhcpc' /proc/[0-9]*/cmdline 2>/dev/null; then
+		found=1
+		break
+	fi
+	/bin/busybox sleep 0.1
+	i=$((i + 1))
+done
+[ "$found" = 1 ] && echo "lightvm: udhcpc renewal running"
+if [ -f /hello ]; then
+	echo "lightvm: /hello follows"
+	/bin/busybox cat /hello
+fi
+echo "lightvm: hostname after switch_root: $(/bin/busybox hostname)"
+echo "lightvm: APP_HOSTNAME after switch_root: ${APP_HOSTNAME:-}"
+echo "lightvm: /etc/hostname after switch_root: $(/bin/busybox cat /etc/hostname)"
+echo "lightvm: network after switch_root"
+/bin/busybox ip -o addr show dev eth0 2>/dev/null
+if [ -f /etc/resolv.conf ]; then
+	echo "lightvm: resolv.conf after switch_root"
+	/bin/busybox cat /etc/resolv.conf
+fi
+if [ -c /dev/tty1 ]; then
+	echo "lightvm: /dev/tty1 present"
+	if exec 3<>/dev/tty1; then
+		echo "lightvm: /dev/tty1 open ok"
+		exec 3>&-
+	fi
+else
+	echo "lightvm: /dev/tty1 missing"
+fi
+/bin/busybox poweroff -f

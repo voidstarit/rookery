@@ -119,6 +119,13 @@ message LightVMEnvVar {
   string value = 2 [(validate.rules).string = {max_len: 4096}];
 }
 
+message LightVMConsole {
+  int64 id = 1;
+  string name = 2 [(validate.rules).string = {min_len: 1, max_len: 64}];
+  string port_name = 3;
+  string socket = 4;
+}
+
 message LightVM {
   string id = 1;
   string name = 2;
@@ -143,6 +150,7 @@ message LightVM {
   string status = 21;
   string desired_state = 22;
   string console_socket = 23;
+  repeated LightVMConsole consoles = 24;
 }
 
 message ListLightVMsRequest {}
@@ -180,6 +188,7 @@ message CreateLightVMRequest {
     items: {int64: {gt: 0}}
   }];
   optional string append = 14 [(validate.rules).string = {max_len: 4096}];
+  repeated LightVMConsole consoles = 15 [(validate.rules).repeated = {max_items: 32}];
 }
 
 message UpdateLightVMRequest {
@@ -208,6 +217,7 @@ message UpdateLightVMRequest {
     items: {int64: {gt: 0}}
   }];
   string append = 15 [(validate.rules).string = {max_len: 4096}];
+  repeated LightVMConsole consoles = 16 [(validate.rules).repeated = {max_items: 32}];
 }
 
 message DeleteLightVMRequest {

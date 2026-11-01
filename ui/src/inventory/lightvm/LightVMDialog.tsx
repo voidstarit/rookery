@@ -20,13 +20,94 @@ type LightVMDialogProps = {
   onSaved: (vm: LightVM) => void;
 };
 
-type EnvRow = LightVMEnvVar;
-
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
+const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const DEFAULT_APPEND = "console=hvc0 rdinit=/init";
 
-function envRows(vm: LightVM | null): EnvRow[] {
-  return Array.isArray(vm?.env) ? vm.env.map((item) => ({ name: item.name, value: item.value })) : [];
+type ConsoleRow = { id: number; name: string };
+
+function consoleRows(vm: LightVM | null): ConsoleRow[] {
+  if (Array.isArray(vm?.consoles) && vm.consoles.length > 0) {
+    return vm.consoles.map((console) => ({ id: console.id, name: console.name }));
+  }
+  return [{ id: 0, name: "console" }];
+}
+
+function nextConsoleName(current: ConsoleRow[]): string {
+  if (current.length === 0) {
+    return "console";
+  }
+  const used = new Set(current.map((console) => console.name.trim().toLowerCase()));
+  let index = current.length + 1;
+  while (used.has(`console-${index}`)) {
+    index += 1;
+  }
+  return `console-${index}`;
+}
+
+function envText(vm: LightVM | null): string {
+  if (!Array.isArray(vm?.env)) {
+    return "";
+  }
+  return vm.env.map((item) => `${item.name}=${item.value}`).join("\n");
+}
+
+function parseEnvText(text: string): { env: LightVMEnvVar[]; error: string } {
+  const env: LightVMEnvVar[] = [];
+  const seen = new Set<string>();
+  const lines = text.split("\n");
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index].replace(/\r$/, "");
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+    const assignment = line.trimStart().startsWith("export ")
+      ? line.trimStart().slice("export ".length)
+      : line;
+    const separator = assignment.indexOf("=");
+    if (separator < 1) {
+      return {
+        env: [],
+        error: `Environment line ${index + 1} must be NAME=value.`,
+      };
+    }
+    const name = assignment.slice(0, separator).trim();
+    const value = assignment.slice(separator + 1);
+    if (!ENV_NAME_PATTERN.test(name)) {
+      return {
+        env: [],
+        error: `Environment variable ${name || "(empty)"} on line ${index + 1} must match [A-Za-z_][A-Za-z0-9_]*.`,
+      };
+    }
+    if (name.length > 128) {
+      return {
+        env: [],
+        error: `Environment variable ${name} on line ${index + 1} is too long.`,
+      };
+    }
+    if (value.length > 4096) {
+      return {
+        env: [],
+        error: `Environment value for ${name} on line ${index + 1} is too long.`,
+      };
+    }
+    if (value.includes("\x00")) {
+      return {
+        env: [],
+        error: `Environment value for ${name} on line ${index + 1} contains a NUL character.`,
+      };
+    }
+    if (seen.has(name)) {
+      return {
+        env: [],
+        error: `Environment variable ${name} is duplicated (line ${index + 1}).`,
+      };
+    }
+    seen.add(name);
+    env.push({ name, value });
+  }
+  return { env, error: "" };
 }
 
 function vmInterfaces(vm: LightVM | null): VMInterface[] {
@@ -54,7 +135,8 @@ export function LightVMDialog({
     vm?.initramfs_id ? String(vm.initramfs_id) : ""
   );
   const [image, setImage] = useState(vm?.image || "");
-  const [environment, setEnvironment] = useState<EnvRow[]>(() => envRows(vm));
+  const [environment, setEnvironment] = useState(() => envText(vm));
+  const [consoles, setConsoles] = useState<ConsoleRow[]>(() => consoleRows(vm));
   const [executablePath, setExecutablePath] = useState(vm?.executable_path || "");
   const [argsText, setArgsText] = useState(
     Array.isArray(vm?.executable_args) ? vm.executable_args.join("\n") : ""
@@ -135,10 +217,21 @@ export function LightVMDialog({
     setSelectedInterfaces((current) => current.filter((iface) => iface.id !== id));
   };
 
-  const updateEnv = (index: number, patch: Partial<EnvRow>) => {
-    setEnvironment((current) =>
-      current.map((item, position) => (position === index ? { ...item, ...patch } : item))
+  const updateConsole = (index: number, name: string) => {
+    setConsoles((current) =>
+      current.map((console, position) => (position === index ? { ...console, name } : console))
     );
+  };
+
+  const removeConsole = (index: number) => {
+    setConsoles((current) => current.filter((_, position) => position !== index));
+  };
+
+  const addConsole = () => {
+    setConsoles((current) => [
+      ...current,
+      { id: 0, name: nextConsoleName(current) },
+    ]);
   };
 
   const submit = async (event: Event) => {
@@ -152,23 +245,30 @@ export function LightVMDialog({
       setError("Select a kernel and an initramfs image.");
       return;
     }
-    const normalizedEnv: EnvRow[] = [];
-    const seenEnv = new Set<string>();
-    for (const item of environment) {
-      const envName = item.name.trim();
-      if (!envName) {
-        if (item.value) {
-          setError("Every environment value needs a name.");
-          return;
-        }
-        continue;
-      }
-      if (seenEnv.has(envName)) {
-        setError(`Environment variable ${envName} is duplicated.`);
+    if (consoles.length === 0) {
+      setError("Add at least one console.");
+      return;
+    }
+    const normalizedConsoles: ConsoleRow[] = [];
+    const seenConsoles = new Set<string>();
+    for (const console of consoles) {
+      const consoleName = console.name.trim();
+      if (!consoleName) {
+        setError("Every console needs a name.");
         return;
       }
-      seenEnv.add(envName);
-      normalizedEnv.push({ name: envName, value: item.value });
+      const key = consoleName.toLowerCase();
+      if (seenConsoles.has(key)) {
+        setError(`Console ${consoleName} is duplicated.`);
+        return;
+      }
+      seenConsoles.add(key);
+      normalizedConsoles.push({ id: console.id, name: consoleName });
+    }
+    const parsedEnv = parseEnvText(environment);
+    if (parsedEnv.error) {
+      setError(parsedEnv.error);
+      return;
     }
     const executableArgs = argsText
       .split("\n")
@@ -185,10 +285,11 @@ export function LightVMDialog({
       kernel_id: selectedKernel,
       initramfs_id: selectedInitramfs,
       image: image.trim(),
-      env: normalizedEnv,
+      env: parsedEnv.env,
       executable_path: executablePath.trim(),
       executable_args: executableArgs,
       append: append.trim(),
+      consoles: normalizedConsoles,
       interface_ids: selectedInterfaces.map((iface) => iface.id),
     };
 
@@ -378,63 +479,73 @@ export function LightVMDialog({
               value={argsText}
               onInput={(event) => setArgsText(event.currentTarget.value)}
             />
-            <span class="field-hint">One argument per line. Arguments are passed exactly as written.</span>
+            <span class="field-hint">
+              One argument per line. Rookery writes the executable path and these
+              arguments to an executable <code>.entrypoint</code> script at the image root.
+            </span>
+          </label>
+
+          <label class="field field-wide">
+            <span class="field-label">Environment variables</span>
+            <textarea
+              rows={6}
+              spellcheck={false}
+              autocomplete="off"
+              placeholder={"APP_ENV=production\nDATABASE_URL=postgres://db/app\nLOG_LEVEL=info"}
+              value={environment}
+              onInput={(event) => setEnvironment(event.currentTarget.value)}
+            />
+            <span class="field-hint">
+              One <code>NAME=value</code> per line. Rookery writes these to{" "}
+              <code>.env</code> at the root of the mounted image before starting the
+              LightVM. Blank lines, <code>export </code> prefixes, and lines beginning
+              with <code>#</code> are ignored.
+            </span>
           </label>
 
           <div class="field field-wide">
-            <span class="field-label">Environment variables</span>
-            <div class="env-editor">
-              {environment.length === 0 ? (
-                <span class="field-hint">No environment variables.</span>
-              ) : (
-                environment.map((item, index) => (
-                  <div class="env-row" key={index}>
-                    <input
-                      type="text"
-                      maxlength={128}
-                      autocomplete="off"
-                      spellcheck={false}
-                      placeholder="NAME"
-                      aria-label={`Environment variable name ${index + 1}`}
-                      value={item.name}
-                      onInput={(event) => updateEnv(index, { name: event.currentTarget.value })}
-                    />
-                    <input
-                      type="text"
-                      maxlength={4096}
-                      autocomplete="off"
-                      spellcheck={false}
-                      placeholder="value"
-                      aria-label={`Environment variable value ${index + 1}`}
-                      value={item.value}
-                      onInput={(event) => updateEnv(index, { value: event.currentTarget.value })}
-                    />
-                    <button
-                      class="row-action danger"
-                      type="button"
-                      onClick={() =>
-                        setEnvironment((current) =>
-                          current.filter((_, position) => position !== index)
-                        )
-                      }
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))
-              )}
+            <span class="field-label">Consoles</span>
+            <div class="console-editor">
+              {consoles.map((console, index) => (
+                <div class="console-row" key={`${console.id}-${index}`}>
+                  <input
+                    type="text"
+                    required
+                    maxlength={64}
+                    autocomplete="off"
+                    spellcheck={false}
+                    placeholder={index === 0 ? "console" : `console-${index + 1}`}
+                    aria-label={`Console name ${index + 1}`}
+                    value={console.name}
+                    onInput={(event) => updateConsole(index, event.currentTarget.value)}
+                  />
+                  <button
+                    class="row-action danger"
+                    type="button"
+                    disabled={consoles.length <= 1}
+                    title={consoles.length <= 1 ? "A LightVM must have at least one console." : ""}
+                    onClick={() => removeConsole(index)}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
               <div>
                 <button
                   class="button ghost"
                   type="button"
-                  onClick={() =>
-                    setEnvironment((current) => [...current, { name: "", value: "" }])
-                  }
+                  disabled={consoles.length >= 32}
+                  onClick={addConsole}
                 >
-                  Add variable
+                  Add console
                 </button>
               </div>
             </div>
+            <span class="field-hint">
+              The first console is exposed as <code>org.example.console</code>; additional ports
+              use <code>org.example.console.N</code>. Open the terminal page to choose which
+              console to use.
+            </span>
           </div>
 
           <label class="field field-wide checkbox-field">
@@ -445,10 +556,10 @@ export function LightVMDialog({
                 checked={consoleEnabled}
                 onChange={(event) => setConsoleEnabled(event.currentTarget.checked)}
               />
-              <span>Allow end users to open this LightVM's console</span>
+              <span>Allow end users to open this LightVM's consoles</span>
             </span>
             <span class="field-hint">
-              Reserved for the LightVM runtime; the inventory flag is stored now.
+              Applies to every console port; disabling it closes existing console sessions.
             </span>
           </label>
 

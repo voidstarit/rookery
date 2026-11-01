@@ -151,6 +151,13 @@ export type LightVMEnvVar = {
   value: string;
 };
 
+export type LightVMConsole = {
+  id: number;
+  name: string;
+  port_name: string;
+  socket?: string;
+};
+
 export type LightVM = {
   id: string;
   name: string;
@@ -164,13 +171,14 @@ export type LightVM = {
   initramfs_id: number;
   initramfs_name: string;
   image: string;
-  env: LightVMEnvVar[];
+  env?: LightVMEnvVar[];
   executable_path: string;
-  executable_args: string[];
+  executable_args?: string[];
   append: string;
   status: string;
   desired_state: string;
   console_socket?: string;
+  consoles?: LightVMConsole[];
   interface_ids?: number[];
   interfaces?: VMInterface[];
   created_at?: string;
