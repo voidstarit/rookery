@@ -132,7 +132,7 @@ func (r *Runtime) StartLightVM(ctx context.Context, vm store.LightVM) error {
 	}
 	if err := writeLightVMEntrypointFile(rootfs, vm.ExecutablePath, vm.ExecutableArgs); err != nil {
 		r.cleanupContainerBackground(vm.ID)
-		return fmt.Errorf("write LightVM entrypoint: %w", err)
+		return fmt.Errorf("write LightVM .entrypoint: %w", err)
 	}
 
 	socket, err := r.startVirtiofsd(ctx, vm.ID, rootfs)
@@ -370,7 +370,7 @@ func validLightVMEnvName(name string) bool {
 	return name != ""
 }
 
-// writeLightVMEntrypointFile writes an executable /entrypoint script at the
+// writeLightVMEntrypointFile writes an executable /.entrypoint script at the
 // root of the mounted image. The LightVM init can execute it directly.
 func writeLightVMEntrypointFile(rootfs, executable string, args []string) error {
 	executable = strings.TrimSpace(executable)
@@ -393,7 +393,7 @@ func writeLightVMEntrypointFile(rootfs, executable string, args []string) error 
 		content.WriteString(shellQuote(arg))
 	}
 	content.WriteByte('\n')
-	path := filepath.Join(rootfs, "entrypoint")
+	path := filepath.Join(rootfs, ".entrypoint")
 	if err := os.WriteFile(path, []byte(content.String()), 0o755); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}

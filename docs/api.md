@@ -704,7 +704,7 @@ definition with `status=stopped`; `POST .../start` uses buildah to pull
 `image` if missing, creates an ephemeral writable container named
 `rookery-lightvm-<uuid>`, mounts its rootfs, writes the environment variables to
 `<rootfs>/.env` as one `NAME=value` line each and an executable
-`<rootfs>/entrypoint` script containing the executable path and args, starts
+`<rootfs>/.entrypoint` script containing the executable path and args, starts
 `virtiofsd`, and launches QEMU with `-kernel`, `-initrd`, `-append`, no block
 device, a
 `vhost-user-fs-pci` device tagged `rootfs`, a virtio console socket under the

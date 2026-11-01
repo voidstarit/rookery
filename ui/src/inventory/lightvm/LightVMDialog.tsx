@@ -421,7 +421,7 @@ export function LightVMDialog({
             />
             <span class="field-hint">
               One argument per line. Rookery writes the executable path and these
-              arguments to an executable <code>entrypoint</code> script at the image root.
+              arguments to an executable <code>.entrypoint</code> script at the image root.
             </span>
           </label>
 
