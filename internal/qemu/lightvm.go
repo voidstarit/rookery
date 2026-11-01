@@ -56,25 +56,23 @@ func (q *QEMU) StartLightVMWithVirtioFS(ctx context.Context, vm store.LightVM, r
 		}
 	}
 
-	console, pidfile, monitor, err := q.lightVMPaths(vm.ID)
+	_, pidfile, monitor, err := q.lightVMPaths(vm.ID)
 	if err != nil {
 		return err
 	}
 	if q.RunningLightVM(vm.ID) {
 		return ErrAlreadyRunning
 	}
-	_ = os.Remove(console)
-	_ = os.Remove(pidfile)
-	_ = os.Remove(monitor)
+	q.cleanupLightVM(vm.ID)
 
 	placement, err := q.lightVMCgroupPlacement(vm)
 	if err != nil {
 		return err
 	}
-	args := buildLightVMArgs(vm, console, pidfile, monitor, rootfs)
+	args := buildLightVMArgs(vm, q.lightVMConsoleArgs(vm), pidfile, monitor, rootfs)
 	out, err := q.run(ctx, args, placement)
 	if err != nil {
-		q.cleanup(console, pidfile, monitor)
+		q.cleanupLightVM(vm.ID)
 		message := strings.TrimSpace(string(out))
 		if message == "" {
 			return fmt.Errorf("start lightvm qemu: %w", err)
@@ -82,7 +80,7 @@ func (q *QEMU) StartLightVMWithVirtioFS(ctx context.Context, vm store.LightVM, r
 		return fmt.Errorf("start lightvm qemu: %w: %s", err, message)
 	}
 	if !q.RunningLightVM(vm.ID) {
-		q.cleanup(console, pidfile, monitor)
+		q.cleanupLightVM(vm.ID)
 		return errors.New("lightvm qemu exited before creating its pid file")
 	}
 	if placement.Enabled && q.cgroups != nil {
@@ -103,7 +101,7 @@ func (q *QEMU) StartLightVMWithVirtioFS(ctx context.Context, vm store.LightVM, r
 
 // StopLightVM terminates a running LightVM QEMU process.
 func (q *QEMU) StopLightVM(ctx context.Context, id string) error {
-	console, pidfile, monitor, err := q.lightVMPaths(id)
+	_, pidfile, _, err := q.lightVMPaths(id)
 	if err != nil {
 		return err
 	}
@@ -115,7 +113,7 @@ func (q *QEMU) StopLightVM(ctx context.Context, id string) error {
 		targets = matchingVMPIDs(id)
 	}
 	if len(targets) == 0 {
-		q.cleanup(console, pidfile, monitor)
+		q.cleanupLightVM(id)
 		return nil
 	}
 	for _, pid := range targets {
@@ -133,7 +131,7 @@ func (q *QEMU) StopLightVM(ctx context.Context, id string) error {
 			}
 		}
 		if !alive {
-			q.cleanup(console, pidfile, monitor)
+			q.cleanupLightVM(id)
 			return nil
 		}
 		select {
@@ -147,7 +145,7 @@ func (q *QEMU) StopLightVM(ctx context.Context, id string) error {
 			return fmt.Errorf("kill lightvm qemu pid %d: %w", pid, err)
 		}
 	}
-	q.cleanup(console, pidfile, monitor)
+	q.cleanupLightVM(id)
 	return nil
 }
 
@@ -164,8 +162,15 @@ func (q *QEMU) RunningLightVM(id string) bool {
 }
 
 // LightVMConsoleSocket returns the virtio console Unix socket for a running
-// LightVM.
-func (q *QEMU) LightVMConsoleSocket(id string) string {
+// LightVM console. Console ID 0 addresses the legacy/default console.
+func (q *QEMU) LightVMConsoleSocket(id string, consoleID int64) string {
+	if consoleID > 0 {
+		base, err := q.lightVMBase(id)
+		if err != nil {
+			return ""
+		}
+		return fmt.Sprintf("%s.console.%d", base, consoleID)
+	}
 	console, _, _, err := q.lightVMPaths(id)
 	if err != nil {
 		return ""
@@ -185,17 +190,65 @@ func (q *QEMU) lightVMCgroupPlacement(vm store.LightVM) (cgroup.Placement, error
 }
 
 func (q *QEMU) lightVMPaths(id string) (console, pidfile, monitor string, err error) {
+	base, err := q.lightVMBase(id)
+	if err != nil {
+		return "", "", "", err
+	}
+	return base + ".console", base + ".lightvm.pid", base + ".lightvm.monitor", nil
+}
+
+func (q *QEMU) lightVMBase(id string) (string, error) {
 	parsed, err := uuid.Parse(id)
 	if err != nil {
-		return "", "", "", errors.New("invalid lightvm id")
+		return "", errors.New("invalid lightvm id")
 	}
-	base := filepath.Join(q.runDir, parsed.String())
-	return base + ".console", base + ".lightvm.pid", base + ".lightvm.monitor", nil
+	return filepath.Join(q.runDir, parsed.String()), nil
+}
+
+func (q *QEMU) cleanupLightVM(id string) {
+	base, err := q.lightVMBase(id)
+	if err != nil {
+		return
+	}
+	_ = os.Remove(base + ".console")
+	_ = os.Remove(base + ".lightvm.pid")
+	_ = os.Remove(base + ".lightvm.monitor")
+	matches, _ := filepath.Glob(base + ".console.*")
+	for _, match := range matches {
+		_ = os.Remove(match)
+	}
+}
+
+type lightVMConsoleArg struct {
+	SocketPath string
+	PortName   string
+}
+
+func (q *QEMU) lightVMConsoleArgs(vm store.LightVM) []lightVMConsoleArg {
+	consoles := vm.Consoles
+	if len(consoles) == 0 {
+		consoles = []store.LightVMConsole{{Name: "console", PortName: "org.example.console"}}
+	}
+	result := make([]lightVMConsoleArg, 0, len(consoles))
+	for index, console := range consoles {
+		portName := strings.TrimSpace(console.PortName)
+		if portName == "" {
+			portName = "org.example.console"
+			if index > 0 {
+				portName = fmt.Sprintf("org.example.console.%d", index+1)
+			}
+		}
+		result = append(result, lightVMConsoleArg{
+			SocketPath: q.LightVMConsoleSocket(vm.ID, console.ID),
+			PortName:   portName,
+		})
+	}
+	return result
 }
 
 const appHostnameParam = "APP_HOSTNAME="
 
-func buildLightVMArgs(vm store.LightVM, console, pidfile, monitor string, rootfs LightVMVirtioFS) []string {
+func buildLightVMArgs(vm store.LightVM, consoles []lightVMConsoleArg, pidfile, monitor string, rootfs LightVMVirtioFS) []string {
 	args := []string{
 		"-name", vm.Name,
 		"-uuid", vm.ID,
@@ -217,9 +270,20 @@ func buildLightVMArgs(vm store.LightVM, console, pidfile, monitor string, rootfs
 	}
 	args = append(args,
 		"-display", "none",
-		"-device", "virtio-serial-pci",
-		"-chardev", fmt.Sprintf("socket,id=console0,path=%s,server=on,wait=off", console),
-		"-device", "virtconsole,chardev=console0,name=org.example.console",
+		"-device", "virtio-serial-pci,max_ports=32",
+	)
+	for index, console := range consoles {
+		portName := strings.TrimSpace(console.PortName)
+		if portName == "" {
+			portName = "org.example.console"
+		}
+		id := "console" + strconv.Itoa(index)
+		args = append(args,
+			"-chardev", fmt.Sprintf("socket,id=%s,path=%s,server=on,wait=off", id, console.SocketPath),
+			"-device", fmt.Sprintf("virtconsole,chardev=%s,name=%s", id, portName),
+		)
+	}
+	args = append(args,
 		"-pidfile", pidfile,
 		"-monitor", "unix:"+monitor+",server,nowait",
 		"-nic", "none",

@@ -36,8 +36,10 @@ func (f *fakeLightVMQEMU) StopLightVM(context.Context, string) error {
 	f.running = false
 	return nil
 }
-func (f *fakeLightVMQEMU) RunningLightVM(string) bool            { return f.running }
-func (f *fakeLightVMQEMU) LightVMConsoleSocket(id string) string { return "/tmp/" + id + ".console" }
+func (f *fakeLightVMQEMU) RunningLightVM(string) bool { return f.running }
+func (f *fakeLightVMQEMU) LightVMConsoleSocket(id string, _ int64) string {
+	return "/tmp/" + id + ".console"
+}
 
 // TestFakeVirtiofsdHelper is used as a stand-in virtiofsd process. It creates
 // the requested Unix socket and blocks until killed.

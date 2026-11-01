@@ -34,7 +34,7 @@ type LightVMRuntime interface {
 	StartLightVM(ctx context.Context, vm store.LightVM) error
 	StopLightVM(ctx context.Context, id string) error
 	RunningLightVM(id string) bool
-	LightVMConsoleSocket(id string) string
+	LightVMConsoleSocket(id string, consoleID int64) string
 }
 
 func (s *lightVMService) runtimeUnavailable() error {
@@ -210,7 +210,7 @@ func lightVMFromCreateRequest(request *rookeryv1.CreateLightVMRequest) (store.Li
 		request.GetConsoleEnabled(), request.GetCgroupClass(),
 		request.GetKernelId(), request.GetInitramfsId(), request.GetImage(),
 		request.GetEnv(), request.GetExecutablePath(), request.GetExecutableArgs(),
-		request.GetInterfaceIds(), appendValue,
+		request.GetInterfaceIds(), appendValue, request.GetConsoles(),
 	)
 }
 
@@ -221,13 +221,14 @@ func lightVMFromUpdateRequest(request *rookeryv1.UpdateLightVMRequest) (store.Li
 		request.GetCgroupClass(), request.GetKernelId(), request.GetInitramfsId(),
 		request.GetImage(), request.GetEnv(), request.GetExecutablePath(),
 		request.GetExecutableArgs(), request.GetInterfaceIds(), request.GetAppend(),
+		request.GetConsoles(),
 	)
 }
 
 func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, console bool,
 	cgroupClass string, kernelID, initramfsID int64, image string,
 	env []*rookeryv1.LightVMEnvVar, executablePath string, executableArgs []string,
-	interfaceIDs []int64, appendValue string,
+	interfaceIDs []int64, appendValue string, consoles []*rookeryv1.LightVMConsole,
 ) (store.LightVM, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -284,6 +285,10 @@ func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, conso
 	if strings.ContainsRune(appendValue, 0) {
 		return store.LightVM{}, errors.New("append cannot contain NUL characters")
 	}
+	normalizedConsoles, err := normalizeLightVMConsoles(consoles)
+	if err != nil {
+		return store.LightVM{}, err
+	}
 
 	return store.LightVM{
 		ID:             id,
@@ -300,8 +305,36 @@ func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, conso
 		ExecutablePath: executablePath,
 		ExecutableArgs: normalizedArgs,
 		Append:         appendValue,
+		Consoles:       normalizedConsoles,
 		InterfaceIDs:   append([]int64(nil), interfaceIDs...),
 	}, nil
+}
+
+func normalizeLightVMConsoles(values []*rookeryv1.LightVMConsole) ([]store.LightVMConsole, error) {
+	if len(values) == 0 {
+		return []store.LightVMConsole{{Name: "console"}}, nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	result := make([]store.LightVMConsole, 0, len(values))
+	for _, item := range values {
+		name := strings.TrimSpace(item.GetName())
+		if name == "" {
+			return nil, errors.New("console name is required")
+		}
+		if utf8.RuneCountInString(name) > 64 {
+			return nil, fmt.Errorf("console name %q is too long", name)
+		}
+		if strings.ContainsAny(name, "\r\n\x00") {
+			return nil, fmt.Errorf("console name %q must be a single line without NUL characters", name)
+		}
+		key := strings.ToLower(name)
+		if _, ok := seen[key]; ok {
+			return nil, fmt.Errorf("console %q is duplicated", name)
+		}
+		seen[key] = struct{}{}
+		result = append(result, store.LightVMConsole{Name: name})
+	}
+	return result, nil
 }
 
 func normalizeLightVMEnv(values []*rookeryv1.LightVMEnvVar) ([]store.LightVMEnvVar, error) {
@@ -381,7 +414,12 @@ func validateLightVMReferences(ctx context.Context, st *store.Store, vm store.Li
 func (s *lightVMService) toProto(vm store.LightVM) *rookeryv1.LightVM {
 	result := lightVMToProto(vm)
 	if s.runtime != nil && s.runtime.RunningLightVM(vm.ID) {
-		result.ConsoleSocket = s.runtime.LightVMConsoleSocket(vm.ID)
+		for _, console := range result.Consoles {
+			console.Socket = s.runtime.LightVMConsoleSocket(vm.ID, console.Id)
+		}
+		if len(result.Consoles) > 0 {
+			result.ConsoleSocket = result.Consoles[0].Socket
+		}
 	}
 	return result
 }
@@ -411,6 +449,13 @@ func lightVMToProto(vm store.LightVM) *rookeryv1.LightVM {
 	}
 	for _, item := range vm.Env {
 		result.Env = append(result.Env, &rookeryv1.LightVMEnvVar{Name: item.Name, Value: item.Value})
+	}
+	for _, console := range vm.Consoles {
+		result.Consoles = append(result.Consoles, &rookeryv1.LightVMConsole{
+			Id:       console.ID,
+			Name:     console.Name,
+			PortName: console.PortName,
+		})
 	}
 	for _, iface := range vm.Interfaces {
 		result.Interfaces = append(result.Interfaces, &rookeryv1.VMInterface{

@@ -77,7 +77,7 @@ func TestStartStopLightVMWithRealQEMU(t *testing.T) {
 		t.Fatal("LightVM QEMU is not running after StartLightVM")
 	}
 
-	console := q.LightVMConsoleSocket(vm.ID)
+	console := q.LightVMConsoleSocket(vm.ID, 0)
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		if _, err := os.Stat(console); err == nil {

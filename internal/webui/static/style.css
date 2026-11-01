@@ -1529,6 +1529,19 @@ dialog form {
   flex: none;
 }
 
+.console-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.console-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .interface-list {
   display: flex;
   flex-direction: column;

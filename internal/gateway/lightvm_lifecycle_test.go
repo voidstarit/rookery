@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -46,8 +47,8 @@ func (f *fakeLightVMRuntime) RunningLightVM(id string) bool {
 	return f.running[id]
 }
 
-func (f *fakeLightVMRuntime) LightVMConsoleSocket(id string) string {
-	return filepath.Join("/tmp", id+".console")
+func (f *fakeLightVMRuntime) LightVMConsoleSocket(id string, consoleID int64) string {
+	return filepath.Join("/tmp", fmt.Sprintf("%s-%d.console", id, consoleID))
 }
 
 func (f *fakeLightVMRuntime) LightVMStatus() (bool, string, string) {
@@ -126,6 +127,7 @@ func TestLightVMLifecycleRoutes(t *testing.T) {
 		"kernel_id": kernel.ID, "initramfs_id": initramfs.ID,
 		"image": "alpine", "executable_path": "/bin/app",
 		"executable_args": []string{"serve"}, "interface_ids": []int64{},
+		"consoles": []map[string]any{{"name": "serial"}, {"name": "logs"}},
 	})
 	if response.StatusCode != http.StatusCreated {
 		t.Fatalf("create status = %d, body = %+v", response.StatusCode, created)
@@ -133,6 +135,15 @@ func TestLightVMLifecycleRoutes(t *testing.T) {
 	id, _ := created["id"].(string)
 	if id == "" || created["status"] != "stopped" || created["desired_state"] != "stopped" {
 		t.Fatalf("created lifecycle = %+v", created)
+	}
+	createdConsoles, _ := created["consoles"].([]any)
+	if len(createdConsoles) != 2 {
+		t.Fatalf("created consoles = %+v", created["consoles"])
+	}
+	firstConsole, _ := createdConsoles[0].(map[string]any)
+	secondConsole, _ := createdConsoles[1].(map[string]any)
+	if firstConsole["port_name"] != "org.example.console" || secondConsole["port_name"] != "org.example.console.2" {
+		t.Fatalf("created console ports = %+v", createdConsoles)
 	}
 
 	response, started := request(http.MethodPost, "/api/lightvm/instances/"+id+"/start", nil)
@@ -142,8 +153,19 @@ func TestLightVMLifecycleRoutes(t *testing.T) {
 	if started["status"] != "running" || started["desired_state"] != "running" {
 		t.Fatalf("started lifecycle = %+v", started)
 	}
-	if started["console_socket"] != "/tmp/"+id+".console" {
+	if started["console_socket"] != "/tmp/"+id+"-1.console" {
 		t.Fatalf("started console socket = %+v", started["console_socket"])
+	}
+	startedConsoles, _ := started["consoles"].([]any)
+	if len(startedConsoles) != 2 {
+		t.Fatalf("started consoles = %+v", started["consoles"])
+	}
+	for index, value := range startedConsoles {
+		console, _ := value.(map[string]any)
+		want := fmt.Sprintf("/tmp/%s-%d.console", id, index+1)
+		if console["socket"] != want {
+			t.Fatalf("started console %d socket = %+v, want %q", index, console["socket"], want)
+		}
 	}
 	if runtime.started.Append != store.DefaultLightVMAppend {
 		t.Fatalf("runtime append = %q, want default", runtime.started.Append)

@@ -9,9 +9,6 @@ import { api } from "../shared/api";
 import type { LightVM } from "../inventory/types";
 
 const VM_ID = (new URLSearchParams(window.location.search).get("vm") || "").trim();
-const WS_URL = VM_ID
-  ? `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws/lightvms/${encodeURIComponent(VM_ID)}/console`
-  : "";
 
 type ConnectionState = "connecting" | "connected" | "closed" | "blocked" | "error";
 
@@ -287,6 +284,10 @@ export function LightVMConsoleApp() {
   const [state, setState] = useState<ConnectionState>("connecting");
   const [message, setMessage] = useState("Connecting to the LightVM console…");
   const [name, setName] = useState("");
+  const [consoles, setConsoles] = useState<NonNullable<LightVM["consoles"]>>([]);
+  const [consoleID, setConsoleID] = useState(
+    () => (new URLSearchParams(window.location.search).get("console") || "").trim()
+  );
   const [themeID, setThemeID] = useState<ThemeID>(storedTheme);
   const [fontSize, setFontSize] = useState<number>(storedFontSize);
   const [ctrlLatch, setCtrlLatch] = useState(false);
@@ -416,6 +417,14 @@ export function LightVMConsoleApp() {
           return;
         }
         setName(vm.name || "");
+        const availableConsoles = Array.isArray(vm.consoles) ? vm.consoles : [];
+        setConsoles(availableConsoles);
+        const selectedConsole =
+          availableConsoles.find((item) => String(item.id) === consoleID) || availableConsoles[0];
+        const selectedConsoleID = selectedConsole ? String(selectedConsole.id) : "";
+        if (selectedConsoleID && selectedConsoleID !== consoleID) {
+          setConsoleID(selectedConsoleID);
+        }
         if (!vm.console_enabled) {
           setState("blocked");
           setMessage("Console access is disabled for this LightVM.");
@@ -429,7 +438,11 @@ export function LightVMConsoleApp() {
           return;
         }
 
-        socket = new WebSocket(WS_URL);
+        socket = new WebSocket(
+          `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}` +
+            `/ws/lightvms/${encodeURIComponent(VM_ID)}/console` +
+            (selectedConsoleID ? `?console=${encodeURIComponent(selectedConsoleID)}` : "")
+        );
         socket.binaryType = "arraybuffer";
         socketRef.current = socket;
         socket.onopen = () => {
@@ -503,6 +516,19 @@ export function LightVMConsoleApp() {
     terminalRef.current?.focus();
   };
 
+  const selectConsole = (id: string) => {
+    setConsoleID(id);
+    terminalRef.current?.reset();
+    setConnectionKey((value) => value + 1);
+    const url = new URL(window.location.href);
+    if (id) {
+      url.searchParams.set("console", id);
+    } else {
+      url.searchParams.delete("console");
+    }
+    window.history.replaceState(null, "", url.toString());
+  };
+
   return (
     <main class="lightvm-console">
       <header class="lightvm-console-head">
@@ -512,6 +538,18 @@ export function LightVMConsoleApp() {
           {name && VM_ID ? <p class="lightvm-console-hint">{VM_ID}</p> : null}
         </div>
         <div class="lightvm-console-actions">
+          {consoles.length > 1 ? (
+            <label class="console-select">
+              <span>Console</span>
+              <select value={consoleID} onChange={(event) => selectConsole(event.currentTarget.value)}>
+                {consoles.map((console) => (
+                  <option value={String(console.id)} key={console.id}>
+                    {console.name} · {console.port_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label class="console-select">
             <span>Theme</span>
             <select

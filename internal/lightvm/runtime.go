@@ -37,7 +37,7 @@ type QEMURunner interface {
 	StartLightVMWithVirtioFS(ctx context.Context, vm store.LightVM, rootfs qemu.LightVMVirtioFS) error
 	StopLightVM(ctx context.Context, id string) error
 	RunningLightVM(id string) bool
-	LightVMConsoleSocket(id string) string
+	LightVMConsoleSocket(id string, consoleID int64) string
 }
 
 // Runtime orchestrates the ephemeral buildah container, virtiofsd, and QEMU
@@ -169,8 +169,8 @@ func (r *Runtime) RunningLightVM(id string) bool {
 }
 
 // LightVMConsoleSocket returns the virtio-console Unix socket path.
-func (r *Runtime) LightVMConsoleSocket(id string) string {
-	return r.qemuRunner.LightVMConsoleSocket(id)
+func (r *Runtime) LightVMConsoleSocket(id string, consoleID int64) string {
+	return r.qemuRunner.LightVMConsoleSocket(id, consoleID)
 }
 
 // LightVMStatus reports whether the external LightVM tools are available.

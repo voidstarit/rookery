@@ -35,7 +35,7 @@ access, and per-VM monitoring.*
 
 - Thin-LVM disks, template clones, and existing-volume import
 - QEMU/KVM virtual machines with virtio disks, ISO boot media, and noVNC console
-- LightVMs that boot an uploaded kernel/initramfs and a buildah-mounted container rootfs through virtiofsd, with an xterm.js serial console
+- LightVMs that boot an uploaded kernel/initramfs and a buildah-mounted container rootfs through virtiofsd, with multiple selectable xterm.js serial consoles
 - cgroup v2 CPU pinning, memory ceilings, and per-device I/O limits with reusable class profiles
 - Live cgroup telemetry for memory, CPU, tasks, and I/O in Settings
 - Free-form labels on inventory entities, with label chips and multi-label editing in the UI and Terraform

@@ -24,6 +24,27 @@ const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const DEFAULT_APPEND = "console=hvc0 rdinit=/init";
 
+type ConsoleRow = { id: number; name: string };
+
+function consoleRows(vm: LightVM | null): ConsoleRow[] {
+  if (Array.isArray(vm?.consoles) && vm.consoles.length > 0) {
+    return vm.consoles.map((console) => ({ id: console.id, name: console.name }));
+  }
+  return [{ id: 0, name: "console" }];
+}
+
+function nextConsoleName(current: ConsoleRow[]): string {
+  if (current.length === 0) {
+    return "console";
+  }
+  const used = new Set(current.map((console) => console.name.trim().toLowerCase()));
+  let index = current.length + 1;
+  while (used.has(`console-${index}`)) {
+    index += 1;
+  }
+  return `console-${index}`;
+}
+
 function envText(vm: LightVM | null): string {
   if (!Array.isArray(vm?.env)) {
     return "";
@@ -115,6 +136,7 @@ export function LightVMDialog({
   );
   const [image, setImage] = useState(vm?.image || "");
   const [environment, setEnvironment] = useState(() => envText(vm));
+  const [consoles, setConsoles] = useState<ConsoleRow[]>(() => consoleRows(vm));
   const [executablePath, setExecutablePath] = useState(vm?.executable_path || "");
   const [argsText, setArgsText] = useState(
     Array.isArray(vm?.executable_args) ? vm.executable_args.join("\n") : ""
@@ -195,6 +217,23 @@ export function LightVMDialog({
     setSelectedInterfaces((current) => current.filter((iface) => iface.id !== id));
   };
 
+  const updateConsole = (index: number, name: string) => {
+    setConsoles((current) =>
+      current.map((console, position) => (position === index ? { ...console, name } : console))
+    );
+  };
+
+  const removeConsole = (index: number) => {
+    setConsoles((current) => current.filter((_, position) => position !== index));
+  };
+
+  const addConsole = () => {
+    setConsoles((current) => [
+      ...current,
+      { id: 0, name: nextConsoleName(current) },
+    ]);
+  };
+
   const submit = async (event: Event) => {
     event.preventDefault();
     if (saving || !formRef.current?.reportValidity()) {
@@ -205,6 +244,26 @@ export function LightVMDialog({
     if (!selectedKernel || !selectedInitramfs) {
       setError("Select a kernel and an initramfs image.");
       return;
+    }
+    if (consoles.length === 0) {
+      setError("Add at least one console.");
+      return;
+    }
+    const normalizedConsoles: ConsoleRow[] = [];
+    const seenConsoles = new Set<string>();
+    for (const console of consoles) {
+      const consoleName = console.name.trim();
+      if (!consoleName) {
+        setError("Every console needs a name.");
+        return;
+      }
+      const key = consoleName.toLowerCase();
+      if (seenConsoles.has(key)) {
+        setError(`Console ${consoleName} is duplicated.`);
+        return;
+      }
+      seenConsoles.add(key);
+      normalizedConsoles.push({ id: console.id, name: consoleName });
     }
     const parsedEnv = parseEnvText(environment);
     if (parsedEnv.error) {
@@ -230,6 +289,7 @@ export function LightVMDialog({
       executable_path: executablePath.trim(),
       executable_args: executableArgs,
       append: append.trim(),
+      consoles: normalizedConsoles,
       interface_ids: selectedInterfaces.map((iface) => iface.id),
     };
 
@@ -443,6 +503,51 @@ export function LightVMDialog({
             </span>
           </label>
 
+          <div class="field field-wide">
+            <span class="field-label">Consoles</span>
+            <div class="console-editor">
+              {consoles.map((console, index) => (
+                <div class="console-row" key={`${console.id}-${index}`}>
+                  <input
+                    type="text"
+                    required
+                    maxlength={64}
+                    autocomplete="off"
+                    spellcheck={false}
+                    placeholder={index === 0 ? "console" : `console-${index + 1}`}
+                    aria-label={`Console name ${index + 1}`}
+                    value={console.name}
+                    onInput={(event) => updateConsole(index, event.currentTarget.value)}
+                  />
+                  <button
+                    class="row-action danger"
+                    type="button"
+                    disabled={consoles.length <= 1}
+                    title={consoles.length <= 1 ? "A LightVM must have at least one console." : ""}
+                    onClick={() => removeConsole(index)}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <div>
+                <button
+                  class="button ghost"
+                  type="button"
+                  disabled={consoles.length >= 32}
+                  onClick={addConsole}
+                >
+                  Add console
+                </button>
+              </div>
+            </div>
+            <span class="field-hint">
+              The first console is exposed as <code>org.example.console</code>; additional ports
+              use <code>org.example.console.N</code>. Open the terminal page to choose which
+              console to use.
+            </span>
+          </div>
+
           <label class="field field-wide checkbox-field">
             <span class="field-label">Console access</span>
             <span class="checkbox-row">
@@ -451,10 +556,10 @@ export function LightVMDialog({
                 checked={consoleEnabled}
                 onChange={(event) => setConsoleEnabled(event.currentTarget.checked)}
               />
-              <span>Allow end users to open this LightVM's console</span>
+              <span>Allow end users to open this LightVM's consoles</span>
             </span>
             <span class="field-hint">
-              Reserved for the LightVM runtime; the inventory flag is stored now.
+              Applies to every console port; disabling it closes existing console sessions.
             </span>
           </label>
 
