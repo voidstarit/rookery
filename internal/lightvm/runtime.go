@@ -126,6 +126,10 @@ func (r *Runtime) StartLightVM(ctx context.Context, vm store.LightVM) error {
 		r.cleanupContainerBackground(vm.ID)
 		return fmt.Errorf("buildah returned an invalid rootfs path %q", rootfs)
 	}
+	if err := writeLightVMEnvFile(rootfs, vm.Env); err != nil {
+		r.cleanupContainerBackground(vm.ID)
+		return fmt.Errorf("write LightVM .env: %w", err)
+	}
 
 	socket, err := r.startVirtiofsd(ctx, vm.ID, rootfs)
 	if err != nil {
@@ -319,6 +323,47 @@ func (r *Runtime) cleanupContainerBackground(id string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	_ = r.cleanupContainer(ctx, id)
+}
+
+func writeLightVMEnvFile(rootfs string, values []store.LightVMEnvVar) error {
+	var content strings.Builder
+	seen := make(map[string]struct{}, len(values))
+	for _, item := range values {
+		name := strings.TrimSpace(item.Name)
+		if !validLightVMEnvName(name) {
+			return fmt.Errorf("environment variable %q must match [A-Za-z_][A-Za-z0-9_]*", name)
+		}
+		if _, ok := seen[name]; ok {
+			return fmt.Errorf("environment variable %q is duplicated", name)
+		}
+		seen[name] = struct{}{}
+		if strings.ContainsAny(item.Value, "\r\n\x00") {
+			return fmt.Errorf("environment variable %q must be a single line without NUL characters", name)
+		}
+		content.WriteString(name)
+		content.WriteByte('=')
+		content.WriteString(item.Value)
+		content.WriteByte('\n')
+	}
+	path := filepath.Join(rootfs, ".env")
+	if err := os.WriteFile(path, []byte(content.String()), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
+
+func validLightVMEnvName(name string) bool {
+	for index, char := range name {
+		switch {
+		case char == '_':
+		case char >= 'A' && char <= 'Z':
+		case char >= 'a' && char <= 'z':
+		case index > 0 && char >= '0' && char <= '9':
+		default:
+			return false
+		}
+	}
+	return name != ""
 }
 
 func (r *Runtime) runCommand(ctx context.Context, timeout time.Duration, binary string, args ...string) (string, error) {

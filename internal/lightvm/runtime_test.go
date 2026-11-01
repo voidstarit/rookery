@@ -163,12 +163,23 @@ func TestRuntimeBuildsEphemeralRootfs(t *testing.T) {
 		ID:    uuid.NewString(),
 		Name:  "runtime-test",
 		Image: "alpine:3.20",
+		Env: []store.LightVMEnvVar{
+			{Name: "APP_ENV", Value: "test"},
+			{Name: "WITH_EQUALS", Value: "a=b"},
+		},
 	}
 	if err := runtime.StartLightVM(context.Background(), vm); err != nil {
 		t.Fatalf("StartLightVM: %v", err)
 	}
 	if !qemuRunner.running {
 		t.Fatal("QEMU was not started")
+	}
+	envData, err := os.ReadFile(filepath.Join(rootfs, ".env"))
+	if err != nil {
+		t.Fatalf("read .env: %v", err)
+	}
+	if got, want := string(envData), "APP_ENV=test\nWITH_EQUALS=a=b\n"; got != want {
+		t.Fatalf(".env = %q, want %q", got, want)
 	}
 	if qemuRunner.fs.Tag != lightvm.RootfsTag {
 		t.Fatalf("virtiofs tag = %q", qemuRunner.fs.Tag)

@@ -315,8 +315,8 @@ func normalizeLightVMEnv(values []*rookeryv1.LightVMEnvVar) ([]store.LightVMEnvV
 		if utf8.RuneCountInString(name) > 128 {
 			return nil, fmt.Errorf("environment variable %q is too long", name)
 		}
-		if strings.ContainsAny(name, "=\x00") {
-			return nil, fmt.Errorf("environment variable %q contains an invalid character", name)
+		if !validLightVMEnvName(name) {
+			return nil, fmt.Errorf("environment variable %q must match [A-Za-z_][A-Za-z0-9_]*", name)
 		}
 		if _, ok := seen[name]; ok {
 			return nil, fmt.Errorf("environment variable %q is duplicated", name)
@@ -326,12 +326,26 @@ func normalizeLightVMEnv(values []*rookeryv1.LightVMEnvVar) ([]store.LightVMEnvV
 		if utf8.RuneCountInString(value) > 4096 {
 			return nil, fmt.Errorf("environment variable %q value is too long", name)
 		}
-		if strings.ContainsRune(value, 0) {
-			return nil, fmt.Errorf("environment variable %q value contains a NUL character", name)
+		if strings.ContainsAny(value, "\r\n\x00") {
+			return nil, fmt.Errorf("environment variable %q must be a single line without NUL characters", name)
 		}
 		result = append(result, store.LightVMEnvVar{Name: name, Value: value})
 	}
 	return result, nil
+}
+
+func validLightVMEnvName(name string) bool {
+	for index, char := range name {
+		switch {
+		case char == '_':
+		case char >= 'A' && char <= 'Z':
+		case char >= 'a' && char <= 'z':
+		case index > 0 && char >= '0' && char <= '9':
+		default:
+			return false
+		}
+	}
+	return name != ""
 }
 
 func normalizeLightVMArgs(values []string) ([]string, error) {

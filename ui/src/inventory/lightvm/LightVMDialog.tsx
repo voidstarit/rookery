@@ -20,13 +20,73 @@ type LightVMDialogProps = {
   onSaved: (vm: LightVM) => void;
 };
 
-type EnvRow = LightVMEnvVar;
-
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
+const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const DEFAULT_APPEND = "console=hvc0 rdinit=/init";
 
-function envRows(vm: LightVM | null): EnvRow[] {
-  return Array.isArray(vm?.env) ? vm.env.map((item) => ({ name: item.name, value: item.value })) : [];
+function envText(vm: LightVM | null): string {
+  if (!Array.isArray(vm?.env)) {
+    return "";
+  }
+  return vm.env.map((item) => `${item.name}=${item.value}`).join("\n");
+}
+
+function parseEnvText(text: string): { env: LightVMEnvVar[]; error: string } {
+  const env: LightVMEnvVar[] = [];
+  const seen = new Set<string>();
+  const lines = text.split("\n");
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index].replace(/\r$/, "");
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+    const assignment = line.trimStart().startsWith("export ")
+      ? line.trimStart().slice("export ".length)
+      : line;
+    const separator = assignment.indexOf("=");
+    if (separator < 1) {
+      return {
+        env: [],
+        error: `Environment line ${index + 1} must be NAME=value.`,
+      };
+    }
+    const name = assignment.slice(0, separator).trim();
+    const value = assignment.slice(separator + 1);
+    if (!ENV_NAME_PATTERN.test(name)) {
+      return {
+        env: [],
+        error: `Environment variable ${name || "(empty)"} on line ${index + 1} must match [A-Za-z_][A-Za-z0-9_]*.`,
+      };
+    }
+    if (name.length > 128) {
+      return {
+        env: [],
+        error: `Environment variable ${name} on line ${index + 1} is too long.`,
+      };
+    }
+    if (value.length > 4096) {
+      return {
+        env: [],
+        error: `Environment value for ${name} on line ${index + 1} is too long.`,
+      };
+    }
+    if (value.includes("\x00")) {
+      return {
+        env: [],
+        error: `Environment value for ${name} on line ${index + 1} contains a NUL character.`,
+      };
+    }
+    if (seen.has(name)) {
+      return {
+        env: [],
+        error: `Environment variable ${name} is duplicated (line ${index + 1}).`,
+      };
+    }
+    seen.add(name);
+    env.push({ name, value });
+  }
+  return { env, error: "" };
 }
 
 function vmInterfaces(vm: LightVM | null): VMInterface[] {
@@ -54,7 +114,7 @@ export function LightVMDialog({
     vm?.initramfs_id ? String(vm.initramfs_id) : ""
   );
   const [image, setImage] = useState(vm?.image || "");
-  const [environment, setEnvironment] = useState<EnvRow[]>(() => envRows(vm));
+  const [environment, setEnvironment] = useState(() => envText(vm));
   const [executablePath, setExecutablePath] = useState(vm?.executable_path || "");
   const [argsText, setArgsText] = useState(
     Array.isArray(vm?.executable_args) ? vm.executable_args.join("\n") : ""
@@ -135,12 +195,6 @@ export function LightVMDialog({
     setSelectedInterfaces((current) => current.filter((iface) => iface.id !== id));
   };
 
-  const updateEnv = (index: number, patch: Partial<EnvRow>) => {
-    setEnvironment((current) =>
-      current.map((item, position) => (position === index ? { ...item, ...patch } : item))
-    );
-  };
-
   const submit = async (event: Event) => {
     event.preventDefault();
     if (saving || !formRef.current?.reportValidity()) {
@@ -152,23 +206,10 @@ export function LightVMDialog({
       setError("Select a kernel and an initramfs image.");
       return;
     }
-    const normalizedEnv: EnvRow[] = [];
-    const seenEnv = new Set<string>();
-    for (const item of environment) {
-      const envName = item.name.trim();
-      if (!envName) {
-        if (item.value) {
-          setError("Every environment value needs a name.");
-          return;
-        }
-        continue;
-      }
-      if (seenEnv.has(envName)) {
-        setError(`Environment variable ${envName} is duplicated.`);
-        return;
-      }
-      seenEnv.add(envName);
-      normalizedEnv.push({ name: envName, value: item.value });
+    const parsedEnv = parseEnvText(environment);
+    if (parsedEnv.error) {
+      setError(parsedEnv.error);
+      return;
     }
     const executableArgs = argsText
       .split("\n")
@@ -185,7 +226,7 @@ export function LightVMDialog({
       kernel_id: selectedKernel,
       initramfs_id: selectedInitramfs,
       image: image.trim(),
-      env: normalizedEnv,
+      env: parsedEnv.env,
       executable_path: executablePath.trim(),
       executable_args: executableArgs,
       append: append.trim(),
@@ -381,61 +422,23 @@ export function LightVMDialog({
             <span class="field-hint">One argument per line. Arguments are passed exactly as written.</span>
           </label>
 
-          <div class="field field-wide">
+          <label class="field field-wide">
             <span class="field-label">Environment variables</span>
-            <div class="env-editor">
-              {environment.length === 0 ? (
-                <span class="field-hint">No environment variables.</span>
-              ) : (
-                environment.map((item, index) => (
-                  <div class="env-row" key={index}>
-                    <input
-                      type="text"
-                      maxlength={128}
-                      autocomplete="off"
-                      spellcheck={false}
-                      placeholder="NAME"
-                      aria-label={`Environment variable name ${index + 1}`}
-                      value={item.name}
-                      onInput={(event) => updateEnv(index, { name: event.currentTarget.value })}
-                    />
-                    <input
-                      type="text"
-                      maxlength={4096}
-                      autocomplete="off"
-                      spellcheck={false}
-                      placeholder="value"
-                      aria-label={`Environment variable value ${index + 1}`}
-                      value={item.value}
-                      onInput={(event) => updateEnv(index, { value: event.currentTarget.value })}
-                    />
-                    <button
-                      class="row-action danger"
-                      type="button"
-                      onClick={() =>
-                        setEnvironment((current) =>
-                          current.filter((_, position) => position !== index)
-                        )
-                      }
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))
-              )}
-              <div>
-                <button
-                  class="button ghost"
-                  type="button"
-                  onClick={() =>
-                    setEnvironment((current) => [...current, { name: "", value: "" }])
-                  }
-                >
-                  Add variable
-                </button>
-              </div>
-            </div>
-          </div>
+            <textarea
+              rows={6}
+              spellcheck={false}
+              autocomplete="off"
+              placeholder={"APP_ENV=production\nDATABASE_URL=postgres://db/app\nLOG_LEVEL=info"}
+              value={environment}
+              onInput={(event) => setEnvironment(event.currentTarget.value)}
+            />
+            <span class="field-hint">
+              One <code>NAME=value</code> per line. Rookery writes these to{" "}
+              <code>.env</code> at the root of the mounted image before starting the
+              LightVM. Blank lines, <code>export </code> prefixes, and lines beginning
+              with <code>#</code> are ignored.
+            </span>
+          </label>
 
           <label class="field field-wide checkbox-field">
             <span class="field-label">Console access</span>
