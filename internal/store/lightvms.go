@@ -31,33 +31,42 @@ type LightVMEnvVar struct {
 	Value string `json:"value"`
 }
 
+// LightVMConsole is one virtio-console port exposed by a LightVM.
+type LightVMConsole struct {
+	ID       int64  `json:"id"`
+	Name     string `json:"name"`
+	PortName string `json:"port_name"`
+	Position int    `json:"position"`
+}
+
 // LightVM is a container-backed microVM definition. It is inventory-only until
 // a runtime is implemented; kernels and initramfs images must exist.
 type LightVM struct {
-	ID             string          `json:"id"`
-	Name           string          `json:"name"`
-	Description    string          `json:"description"`
-	VCPUs          int             `json:"vcpus"`
-	MemoryMB       int             `json:"memory_mb"`
-	ConsoleEnabled bool            `json:"console_enabled"`
-	CgroupClass    string          `json:"cgroup_class,omitempty"`
-	KernelID       int64           `json:"kernel_id"`
-	KernelName     string          `json:"kernel_name"`
-	InitramfsID    int64           `json:"initramfs_id"`
-	InitramfsName  string          `json:"initramfs_name"`
-	Image          string          `json:"image"`
-	Env            []LightVMEnvVar `json:"env"`
-	ExecutablePath string          `json:"executable_path"`
-	ExecutableArgs []string        `json:"executable_args"`
-	Append         string          `json:"append"`
-	Status         string          `json:"status"`
-	DesiredState   string          `json:"desired_state"`
-	KernelPath     string          `json:"-"`
-	InitramfsPath  string          `json:"-"`
-	InterfaceIDs   []int64         `json:"interface_ids,omitempty"`
-	Interfaces     []VMInterface   `json:"interfaces,omitempty"`
-	CreatedAt      time.Time       `json:"created_at"`
-	UpdatedAt      time.Time       `json:"updated_at"`
+	ID             string           `json:"id"`
+	Name           string           `json:"name"`
+	Description    string           `json:"description"`
+	VCPUs          int              `json:"vcpus"`
+	MemoryMB       int              `json:"memory_mb"`
+	ConsoleEnabled bool             `json:"console_enabled"`
+	CgroupClass    string           `json:"cgroup_class,omitempty"`
+	KernelID       int64            `json:"kernel_id"`
+	KernelName     string           `json:"kernel_name"`
+	InitramfsID    int64            `json:"initramfs_id"`
+	InitramfsName  string           `json:"initramfs_name"`
+	Image          string           `json:"image"`
+	Env            []LightVMEnvVar  `json:"env"`
+	ExecutablePath string           `json:"executable_path"`
+	ExecutableArgs []string         `json:"executable_args"`
+	Append         string           `json:"append"`
+	Consoles       []LightVMConsole `json:"consoles"`
+	Status         string           `json:"status"`
+	DesiredState   string           `json:"desired_state"`
+	KernelPath     string           `json:"-"`
+	InitramfsPath  string           `json:"-"`
+	InterfaceIDs   []int64          `json:"interface_ids,omitempty"`
+	Interfaces     []VMInterface    `json:"interfaces,omitempty"`
+	CreatedAt      time.Time        `json:"created_at"`
+	UpdatedAt      time.Time        `json:"updated_at"`
 }
 
 const lightVMSelect = `
@@ -91,6 +100,9 @@ func (s *Store) ListLightVMs(ctx context.Context) ([]LightVM, error) {
 	if err := s.loadLightVMInterfaces(ctx, vms); err != nil {
 		return nil, err
 	}
+	if err := s.loadLightVMConsoles(ctx, vms); err != nil {
+		return nil, err
+	}
 	return vms, nil
 }
 
@@ -106,6 +118,9 @@ func (s *Store) GetLightVM(ctx context.Context, id string) (LightVM, error) {
 	}
 	items := []LightVM{vm}
 	if err := s.loadLightVMInterfaces(ctx, items); err != nil {
+		return LightVM{}, err
+	}
+	if err := s.loadLightVMConsoles(ctx, items); err != nil {
 		return LightVM{}, err
 	}
 	return items[0], nil
@@ -126,6 +141,7 @@ func (s *Store) CreateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 	if strings.TrimSpace(vm.Append) == "" {
 		vm.Append = DefaultLightVMAppend
 	}
+	consoles := normalizeLightVMConsoles(vm.Consoles)
 	if vm.Status == "" {
 		vm.Status = StatusStopped
 	}
@@ -170,6 +186,9 @@ func (s *Store) CreateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 	if err := insertLightVMInterfaces(ctx, tx, vm.ID, interfaceIDs); err != nil {
 		return LightVM{}, err
 	}
+	if err := insertLightVMConsoles(ctx, tx, vm.ID, consoles); err != nil {
+		return LightVM{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return LightVM{}, fmt.Errorf("commit create lightvm: %w", err)
 	}
@@ -185,6 +204,7 @@ func (s *Store) UpdateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 	if _, err := s.GetLightVMInitramfs(ctx, vm.InitramfsID); err != nil {
 		return LightVM{}, err
 	}
+	consoles := normalizeLightVMConsoles(vm.Consoles)
 	interfaceIDs, err := s.normalizeLightVMInterfaceIDs(ctx, vm.ID, vm.InterfaceIDs)
 	if err != nil {
 		return LightVM{}, err
@@ -232,6 +252,12 @@ func (s *Store) UpdateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 		return LightVM{}, fmt.Errorf("clear lightvm interfaces: %w", err)
 	}
 	if err := insertLightVMInterfaces(ctx, tx, vm.ID, interfaceIDs); err != nil {
+		return LightVM{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM lightvm_consoles WHERE lightvm_id = ?`, vm.ID); err != nil {
+		return LightVM{}, fmt.Errorf("clear lightvm consoles: %w", err)
+	}
+	if err := insertLightVMConsoles(ctx, tx, vm.ID, consoles); err != nil {
 		return LightVM{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -340,6 +366,76 @@ func insertLightVMInterfaces(ctx context.Context, tx *sql.Tx, lightVMID string, 
 				return ErrInterfaceInUse
 			}
 			return fmt.Errorf("attach lightvm interface: %w", err)
+		}
+	}
+	return nil
+}
+
+func normalizeLightVMConsoles(values []LightVMConsole) []LightVMConsole {
+	if len(values) == 0 {
+		return []LightVMConsole{{Name: "console"}}
+	}
+	consoles := make([]LightVMConsole, 0, len(values))
+	for _, item := range values {
+		consoles = append(consoles, LightVMConsole{Name: strings.TrimSpace(item.Name)})
+	}
+	return consoles
+}
+
+func insertLightVMConsoles(ctx context.Context, tx *sql.Tx, lightVMID string, consoles []LightVMConsole) error {
+	for position, console := range consoles {
+		name := strings.TrimSpace(console.Name)
+		if name == "" {
+			return errors.New("console name is required")
+		}
+		portName := "org.example.console"
+		if position > 0 {
+			portName = fmt.Sprintf("org.example.console.%d", position+1)
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO lightvm_consoles (lightvm_id, name, port_name, position)
+			VALUES (?, ?, ?, ?)`, lightVMID, name, portName, position); err != nil {
+			if isUniqueViolation(err) {
+				return fmt.Errorf("console %q already exists", name)
+			}
+			return fmt.Errorf("insert lightvm console: %w", err)
+		}
+	}
+	return nil
+}
+
+// loadLightVMConsoles fills LightVM.Consoles for the supplied records.
+func (s *Store) loadLightVMConsoles(ctx context.Context, vms []LightVM) error {
+	if len(vms) == 0 {
+		return nil
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT lightvm_id, id, name, port_name, position
+		FROM lightvm_consoles
+		ORDER BY lightvm_id, position, id`)
+	if err != nil {
+		return fmt.Errorf("query lightvm consoles: %w", err)
+	}
+	defer rows.Close()
+
+	byVM := make(map[string][]LightVMConsole)
+	for rows.Next() {
+		var (
+			lightVMID string
+			console   LightVMConsole
+		)
+		if err := rows.Scan(&lightVMID, &console.ID, &console.Name, &console.PortName, &console.Position); err != nil {
+			return err
+		}
+		byVM[lightVMID] = append(byVM[lightVMID], console)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate lightvm consoles: %w", err)
+	}
+	for i := range vms {
+		vms[i].Consoles = byVM[vms[i].ID]
+		if vms[i].Consoles == nil {
+			vms[i].Consoles = []LightVMConsole{}
 		}
 	}
 	return nil

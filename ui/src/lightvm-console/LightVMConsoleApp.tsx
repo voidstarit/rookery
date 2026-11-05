@@ -9,9 +9,6 @@ import { api } from "../shared/api";
 import type { LightVM } from "../inventory/types";
 
 const VM_ID = (new URLSearchParams(window.location.search).get("vm") || "").trim();
-const WS_URL = VM_ID
-  ? `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws/lightvms/${encodeURIComponent(VM_ID)}/console`
-  : "";
 
 type ConnectionState = "connecting" | "connected" | "closed" | "blocked" | "error";
 
@@ -236,6 +233,27 @@ const THEME_ORDER: ThemeID[] = [
   "light",
 ];
 
+type KeyChord = {
+  label: string;
+  data: string;
+  title: string;
+};
+
+const KEY_CHORDS: KeyChord[] = [
+  { label: "Ctrl+C", data: "\x03", title: "Interrupt (SIGINT)" },
+  { label: "Ctrl+D", data: "\x04", title: "End of file / logout" },
+  { label: "Ctrl+Z", data: "\x1a", title: "Suspend (SIGTSTP)" },
+  { label: "Ctrl+A", data: "\x01", title: "Start of line / tmux prefix" },
+  { label: "Ctrl+E", data: "\x05", title: "End of line" },
+  { label: "Ctrl+K", data: "\x0b", title: "Kill line" },
+  { label: "Ctrl+U", data: "\x15", title: "Clear line" },
+  { label: "Ctrl+W", data: "\x17", title: "Delete previous word" },
+  { label: "Ctrl+L", data: "\x0c", title: "Clear screen" },
+  { label: "Ctrl+R", data: "\x12", title: "Reverse history search" },
+  { label: "Esc", data: "\x1b", title: "Escape" },
+  { label: "Tab", data: "\x09", title: "Tab completion" },
+];
+
 function storedTheme(): ThemeID {
   const value = window.localStorage.getItem(THEME_KEY);
   return value && value in THEMES ? (value as ThemeID) : "green-black";
@@ -266,13 +284,19 @@ export function LightVMConsoleApp() {
   const [state, setState] = useState<ConnectionState>("connecting");
   const [message, setMessage] = useState("Connecting to the LightVM console…");
   const [name, setName] = useState("");
+  const [consoles, setConsoles] = useState<NonNullable<LightVM["consoles"]>>([]);
+  const [consoleID, setConsoleID] = useState(
+    () => (new URLSearchParams(window.location.search).get("console") || "").trim()
+  );
   const [themeID, setThemeID] = useState<ThemeID>(storedTheme);
   const [fontSize, setFontSize] = useState<number>(storedFontSize);
+  const [ctrlLatch, setCtrlLatch] = useState(false);
   const [connectionKey, setConnectionKey] = useState(0);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  const ctrlLatchRef = useRef(false);
 
   useEffect(() => {
     const theme = THEMES[themeID];
@@ -331,9 +355,24 @@ export function LightVMConsoleApp() {
     containerRef.current.addEventListener("pointerdown", focusTerminal);
 
     const input = terminal.onData((data) => {
+      let value = data;
+      if (ctrlLatchRef.current) {
+        ctrlLatchRef.current = false;
+        setCtrlLatch(false);
+        if (data.length === 1) {
+          const code = data.toUpperCase().charCodeAt(0);
+          if (code >= 64 && code <= 95) {
+            value = String.fromCharCode(code & 31);
+          } else if (data === "?") {
+            value = "\x7f";
+          } else if (data === " ") {
+            value = "\x00";
+          }
+        }
+      }
       const socket = socketRef.current;
       if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(data);
+        socket.send(value);
       }
     });
     const onResize = () => {
@@ -378,6 +417,14 @@ export function LightVMConsoleApp() {
           return;
         }
         setName(vm.name || "");
+        const availableConsoles = Array.isArray(vm.consoles) ? vm.consoles : [];
+        setConsoles(availableConsoles);
+        const selectedConsole =
+          availableConsoles.find((item) => String(item.id) === consoleID) || availableConsoles[0];
+        const selectedConsoleID = selectedConsole ? String(selectedConsole.id) : "";
+        if (selectedConsoleID && selectedConsoleID !== consoleID) {
+          setConsoleID(selectedConsoleID);
+        }
         if (!vm.console_enabled) {
           setState("blocked");
           setMessage("Console access is disabled for this LightVM.");
@@ -391,7 +438,11 @@ export function LightVMConsoleApp() {
           return;
         }
 
-        socket = new WebSocket(WS_URL);
+        socket = new WebSocket(
+          `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}` +
+            `/ws/lightvms/${encodeURIComponent(VM_ID)}/console` +
+            (selectedConsoleID ? `?console=${encodeURIComponent(selectedConsoleID)}` : "")
+        );
         socket.binaryType = "arraybuffer";
         socketRef.current = socket;
         socket.onopen = () => {
@@ -448,6 +499,36 @@ export function LightVMConsoleApp() {
     };
   }, [connectionKey]);
 
+  const sendKey = (data: string) => {
+    ctrlLatchRef.current = false;
+    setCtrlLatch(false);
+    const socket = socketRef.current;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(data);
+      terminalRef.current?.focus();
+    }
+  };
+
+  const toggleCtrlLatch = () => {
+    const next = !ctrlLatchRef.current;
+    ctrlLatchRef.current = next;
+    setCtrlLatch(next);
+    terminalRef.current?.focus();
+  };
+
+  const selectConsole = (id: string) => {
+    setConsoleID(id);
+    terminalRef.current?.reset();
+    setConnectionKey((value) => value + 1);
+    const url = new URL(window.location.href);
+    if (id) {
+      url.searchParams.set("console", id);
+    } else {
+      url.searchParams.delete("console");
+    }
+    window.history.replaceState(null, "", url.toString());
+  };
+
   return (
     <main class="lightvm-console">
       <header class="lightvm-console-head">
@@ -457,6 +538,18 @@ export function LightVMConsoleApp() {
           {name && VM_ID ? <p class="lightvm-console-hint">{VM_ID}</p> : null}
         </div>
         <div class="lightvm-console-actions">
+          {consoles.length > 1 ? (
+            <label class="console-select">
+              <span>Console</span>
+              <select value={consoleID} onChange={(event) => selectConsole(event.currentTarget.value)}>
+                {consoles.map((console) => (
+                  <option value={String(console.id)} key={console.id}>
+                    {console.name} · {console.port_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label class="console-select">
             <span>Theme</span>
             <select
@@ -497,6 +590,32 @@ export function LightVMConsoleApp() {
         </div>
       </header>
       <p class="lightvm-console-hint">{message}</p>
+      <div class="console-keybar" role="group" aria-label="Send terminal key combinations">
+        <span class="console-keybar-label">Send</span>
+        <button
+          type="button"
+          class={ctrlLatch ? "console-key active" : "console-key"}
+          aria-pressed={ctrlLatch}
+          disabled={state !== "connected"}
+          title="Latch Ctrl for the next terminal key"
+          onClick={toggleCtrlLatch}
+        >
+          Ctrl
+        </button>
+        {KEY_CHORDS.map((key) => (
+          <button
+            class="console-key"
+            type="button"
+            key={key.label}
+            disabled={state !== "connected"}
+            title={key.title}
+            onClick={() => sendKey(key.data)}
+          >
+            {key.label}
+          </button>
+        ))}
+        <span class="console-keybar-hint">Ctrl latches for the next key; copy/paste still uses your browser shortcuts.</span>
+      </div>
       <div class="terminal-wrap" ref={containerRef} />
     </main>
   );

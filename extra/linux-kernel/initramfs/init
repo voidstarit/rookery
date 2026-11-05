@@ -1,0 +1,114 @@
+#!/bin/sh
+# LightVM initramfs PID 1.
+PATH=/bin:/sbin
+export PATH
+
+mount -t proc proc /proc 2>/dev/null || true
+mount -t sysfs sysfs /sys 2>/dev/null || true
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
+mkdir -p /dev/pts /dev/shm /run /tmp
+mount -t devpts devpts /dev/pts 2>/dev/null || true
+mount -t tmpfs -o mode=1777 tmpfs /tmp 2>/dev/null || true
+mount -t tmpfs tmpfs /run 2>/dev/null || true
+
+# LightVM attaches the container root filesystem as a virtio-fs device with
+# the tag "rootfs". Mount it when present so the workload/hook can use it.
+virtiofs_present=0
+for dev in /sys/bus/virtio/drivers/virtiofs/* /sys/bus/virtio/drivers/virtio_fs/*; do
+	[ -e "$dev" ] || continue
+	virtiofs_present=1
+	break
+done
+if [ "$virtiofs_present" = 1 ]; then
+	mkdir -p /rootfs
+	if mount -t virtiofs rootfs /rootfs 2>/dev/null; then
+		echo "lightvm: mounted virtiofs tag rootfs at /rootfs"
+	else
+		rmdir /rootfs 2>/dev/null || true
+	fi
+fi
+
+cmdline=" $(cat /proc/cmdline 2>/dev/null) "
+hostname=lightvm
+shell=auto
+test_mode=0
+dhcp=0
+for arg in $cmdline; do
+	case "$arg" in
+		lightvm.hostname=*) hostname=${arg#lightvm.hostname=} ;;
+		lightvm.shell=*) shell=${arg#lightvm.shell=} ;;
+		lightvm.test=1) test_mode=1 ;;
+		lightvm.dhcp=1|ip=dhcp) dhcp=1 ;;
+	esac
+done
+hostname "$hostname" 2>/dev/null || true
+
+if [ "$dhcp" = 1 ]; then
+	for path in /sys/class/net/*; do
+		[ -e "$path" ] || continue
+		dev=${path##*/}
+		[ "$dev" = lo ] && continue
+		[ "$(cat "$path/type" 2>/dev/null)" = 1 ] || continue
+		ip link set "$dev" up 2>/dev/null || continue
+		echo "lightvm: DHCP on $dev"
+		udhcpc -i "$dev" -q -n -t 5 2>/dev/null || echo "lightvm: DHCP failed on $dev"
+	done
+fi
+
+if [ -x /etc/init.d/rcS ]; then
+	/etc/init.d/rcS
+fi
+
+if [ "$test_mode" = 1 ]; then
+	echo "lightvm: uname: $(uname -a)"
+	echo "lightvm: virtio block devices:"
+	found=0
+	for dev in /dev/vd*; do
+		[ -e "$dev" ] || continue
+		echo "  $dev"
+		found=1
+	done
+	[ "$found" = 1 ] || echo "  (none)"
+	echo "lightvm: network interfaces:"
+	ip -o link 2>/dev/null | while read -r line; do echo "  $line"; done
+	echo "lightvm: network addresses:"
+	ip -o addr 2>/dev/null | while read -r line; do echo "  $line"; done
+	echo "lightvm: virtio devices:"
+	for dev in /sys/bus/virtio/devices/*; do
+		[ -e "$dev" ] || continue
+		echo "  ${dev##*/} $(cat "$dev/modalias" 2>/dev/null)"
+	done
+	echo "lightvm: virtio drivers:"
+	echo "  $(ls /sys/bus/virtio/drivers 2>/dev/null | tr '\n' ' ')"
+	if grep -q ' /rootfs virtiofs ' /proc/mounts 2>/dev/null; then
+		echo "lightvm: virtiofs rootfs mounted"
+		if [ -f /rootfs/hello ]; then
+			echo "  /rootfs/hello: $(cat /rootfs/hello)"
+		fi
+	else
+		echo "lightvm: virtiofs rootfs not attached"
+	fi
+	echo "LIGHTVM-INITRAMFS-OK"
+	sync
+	poweroff -f
+fi
+
+start_shell=0
+case "$shell" in
+	0|no|false) ;;
+	1|yes|true) start_shell=1 ;;
+	*)
+		if [ -t 0 ]; then start_shell=1; fi
+		;;
+esac
+
+if [ "$start_shell" = 1 ]; then
+	echo "lightvm: starting shell (exit to power off)"
+	/bin/sh
+	echo "lightvm: shell exited; powering off"
+	sync
+	poweroff -f
+fi
+
+echo "lightvm: initramfs ready; idling (lightvm.shell=1 for a shell)"
+while :; do sleep 3600; done

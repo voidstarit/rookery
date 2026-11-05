@@ -59,7 +59,7 @@ build: ui-build
 
 # Download virtiofsd into extra/virtiofsd for local runs and release packaging.
 virtiofsd:
-	$(MAKE) -C extra virtiofsd
+	$(MAKE) -C extra/virtiofsd virtiofsd
 
 # Build the x86_64 Linux API, VNF daemon, and Terraform provider archive
 # published by the release workflow.

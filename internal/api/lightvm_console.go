@@ -3,9 +3,12 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,19 +52,24 @@ func (s *Server) handleLightVMConsoleProxy(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusConflict, "lightvm is not running")
 		return
 	}
+	consoleID, err := lightVMConsoleID(r, vm)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if !sameOrigin(r) {
 		writeError(w, http.StatusForbidden, "websocket origin not allowed")
 		return
 	}
 
-	socket := s.lightvms.LightVMConsoleSocket(id)
+	socket := s.lightvms.LightVMConsoleSocket(id, consoleID)
 	if socket == "" {
 		writeError(w, http.StatusInternalServerError, "LightVM console socket is unavailable")
 		return
 	}
 	conn, err := net.DialTimeout("unix", socket, lightVMConsoleDialTimeout)
 	if err != nil {
-		s.logger.Error().Str("lightvm_id", id).Str("socket", socket).Err(err).Msg("connect LightVM console socket failed")
+		s.logger.Error().Str("lightvm_id", id).Int64("console_id", consoleID).Str("socket", socket).Err(err).Msg("connect LightVM console socket failed")
 		writeError(w, http.StatusBadGateway, "LightVM console endpoint is unavailable")
 		return
 	}
@@ -79,6 +87,26 @@ func (s *Server) handleLightVMConsoleProxy(w http.ResponseWriter, r *http.Reques
 			return nil
 		},
 	}.ServeHTTP(w, r)
+}
+
+func lightVMConsoleID(r *http.Request, vm store.LightVM) (int64, error) {
+	raw := strings.TrimSpace(r.URL.Query().Get("console"))
+	if raw == "" {
+		if len(vm.Consoles) == 0 {
+			return 0, nil
+		}
+		return vm.Consoles[0].ID, nil
+	}
+	consoleID, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || consoleID < 1 {
+		return 0, errors.New("invalid console id")
+	}
+	for _, console := range vm.Consoles {
+		if console.ID == consoleID {
+			return consoleID, nil
+		}
+	}
+	return 0, fmt.Errorf("console %d not found", consoleID)
 }
 
 func (s *Server) proxyLightVMConsole(ws *websocket.Conn, conn net.Conn, lightVMID string) {

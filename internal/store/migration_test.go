@@ -340,8 +340,69 @@ func TestMigrationPreservesLegacyVMsWithoutDisks(t *testing.T) {
 	if err := st.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 46 {
-		t.Fatalf("schema version = %d, want 46", version)
+	if version != 47 {
+		t.Fatalf("schema version = %d, want 47", version)
+	}
+}
+
+func TestMigrationAddsDefaultLightVMConsole(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "lightvm-consoles.db")
+	st, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("create current database: %v", err)
+	}
+	ctx := context.Background()
+	kernel, err := st.CreateLightVMKernel(ctx, LightVMKernel{
+		Name: "vmlinuz", Path: "/tmp/vmlinuz", SizeBytes: 1,
+	})
+	if err != nil {
+		t.Fatalf("create kernel: %v", err)
+	}
+	initramfs, err := st.CreateLightVMInitramfs(ctx, LightVMInitramfs{
+		Name: "initramfs", Path: "/tmp/initramfs", SizeBytes: 1,
+	})
+	if err != nil {
+		t.Fatalf("create initramfs: %v", err)
+	}
+	vm, err := st.CreateLightVM(ctx, LightVM{
+		Name: "app-01", VCPUs: 1, MemoryMB: 128,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+		Image: "alpine", ExecutablePath: "/bin/sh",
+		Consoles: []LightVMConsole{{Name: "serial"}, {Name: "logs"}},
+	})
+	if err != nil {
+		t.Fatalf("create lightvm: %v", err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatalf("close current database: %v", err)
+	}
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open database: %v", err)
+	}
+	if _, err := db.Exec(`DROP TABLE lightvm_consoles`); err != nil {
+		t.Fatalf("drop lightvm_consoles: %v", err)
+	}
+	if _, err := db.Exec(`PRAGMA user_version = 46`); err != nil {
+		t.Fatalf("set schema version: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close database: %v", err)
+	}
+
+	migrated, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("migrate database: %v", err)
+	}
+	defer migrated.Close()
+	updated, err := migrated.GetLightVM(ctx, vm.ID)
+	if err != nil {
+		t.Fatalf("get migrated lightvm: %v", err)
+	}
+	if len(updated.Consoles) != 1 || updated.Consoles[0].Name != "console" ||
+		updated.Consoles[0].PortName != "org.example.console" || updated.Consoles[0].Position != 0 {
+		t.Fatalf("migrated lightvm consoles = %+v", updated.Consoles)
 	}
 }
 
@@ -582,6 +643,9 @@ func dropCgroupSchema(t *testing.T, db *sql.DB) {
 // database created before the LightVM inventory existed.
 func dropLightVMSchema(t *testing.T, db *sql.DB) {
 	t.Helper()
+	if _, err := db.Exec(`DROP TABLE IF EXISTS lightvm_consoles`); err != nil {
+		t.Fatalf("drop lightvm_consoles: %v", err)
+	}
 	if _, err := db.Exec(`DROP TABLE IF EXISTS lightvm_interfaces`); err != nil {
 		t.Fatalf("drop lightvm_interfaces: %v", err)
 	}
