@@ -35,7 +35,7 @@ jobs:
         run: make ui-build
 
       - name: Test with coverage
-        run: go test -coverpkg=./... -covermode=atomic -coverprofile=coverage.out ./...
+        run: go test -count=1 -coverpkg=./... -covermode=atomic -coverprofile=coverage.out ./...
 
       - name: Merge coverage profile
         run: python3 scripts/merge-go-coverprofile.py coverage.out coverage-merged.out
@@ -63,7 +63,7 @@ jobs:
           sed -i 's#filename="github.com/voidstarit/rookery/#filename="#g' coverage.xml
           sed -i "s#<source>.*</source>#<source>$(pwd)</source>#" coverage.xml
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            base="origin/${{ github.base_ref }}"
+            base="${{ github.event.pull_request.base.sha }}"
           else
             base="${{ github.event.before }}"
           fi
