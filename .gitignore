@@ -11,7 +11,7 @@
 # Go test and coverage output
 /coverage.out
 /coverage-merged.out
-/coverage.xml
+/coverage.lcov
 /diff-coverage.txt
 
 # UI dependencies and typecheck cache

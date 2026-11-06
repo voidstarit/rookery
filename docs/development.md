@@ -52,12 +52,13 @@ New behavioral specs use Ginkgo + Gomega (`internal/gateway`, `internal/qemu`,
 and `internal/store` have suites). Existing tests remain in the standard
 `testing` style.
 
-CI runs `go test -coverpkg=./... -covermode=atomic -coverprofile=coverage.out
+CI runs `go test -count=1 -coverpkg=./... -covermode=atomic -coverprofile=coverage.out
 ./...`, merges duplicate cross-package blocks with
-`scripts/merge-go-coverprofile.py`, and enforces 80% coverage on changed Go
+`scripts/merge-go-coverprofile.py`, converts the merged profile to LCOV with
+`scripts/go-coverprofile-to-lcov.py`, and enforces 80% coverage on changed Go
 lines using `diff-cover`. Generated protobuf packages are excluded from the
 changed-code gate. It reports total statement coverage, keeps a 20% global
-floor, and uploads `coverage.out`, `coverage-merged.out`, `coverage.xml`, and
+floor, and uploads `coverage.out`, `coverage-merged.out`, `coverage.lcov`, and
 `diff-coverage.txt` as artifacts. It also runs `golangci-lint` (configuration in
 `.golangci.yml`), `go vet`, `gofmt`, `make proto-check`, and a
 generated-UI-bundle drift check.

@@ -52,22 +52,19 @@ jobs:
 
       - name: Install diff coverage tools
         run: |
-          go install github.com/t-yuki/gocover-cobertura@v0.0.0-20180217150009-aaee18c8195c
           python3 -m pip install --user "diff-cover==11.0.1"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Check changed-code coverage
         run: |
           set -euo pipefail
-          "$(go env GOPATH)/bin/gocover-cobertura" < coverage-merged.out > coverage.xml
-          sed -i 's#filename="github.com/voidstarit/rookery/#filename="#g' coverage.xml
-          sed -i "s#<source>.*</source>#<source>$(pwd)</source>#" coverage.xml
+          python3 scripts/go-coverprofile-to-lcov.py coverage-merged.out coverage.lcov
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             base="${{ github.event.pull_request.base.sha }}"
           else
             base="${{ github.event.before }}"
           fi
-          diff-cover coverage.xml \
+          diff-cover coverage.lcov \
             --compare-branch="$base" \
             --fail-under=80 \
             --exclude 'design/gen/*' | tee diff-coverage.txt
@@ -80,7 +77,7 @@ jobs:
           path: |
             coverage.out
             coverage-merged.out
-            coverage.xml
+            coverage.lcov
             diff-coverage.txt
           if-no-files-found: error
           retention-days: 14

@@ -2,8 +2,8 @@
 """Merge duplicate blocks in a Go coverage profile.
 
 `go test -coverpkg=./...` can emit the same coverage block from several test
-binaries. Summing those entries produces a profile that converters such as
-gocover-cobertura and diff-cover interpret correctly.
+binaries. Summing those entries produces a profile that the LCOV converter and
+diff-cover interpret correctly.
 """
 
 import sys
