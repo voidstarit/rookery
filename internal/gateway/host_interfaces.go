@@ -32,6 +32,10 @@ type HostTapWriter interface {
 	DeleteNetworkHostTap(ctx context.Context, id int64) error
 }
 
+// AttachableBlockDeviceLister lists host block devices available for VM
+// passthrough.
+type AttachableBlockDeviceLister func() ([]host.AttachableBlockDevice, error)
+
 func (s *hostService) ListHostBlockDevices(_ context.Context, _ *rookeryv1.ListHostBlockDevicesRequest) (*rookeryv1.ListHostBlockDevicesResponse, error) {
 	devices, err := host.ListBlockDevices()
 	if err != nil {
@@ -49,7 +53,11 @@ func (s *hostService) ListHostBlockDevices(_ context.Context, _ *rookeryv1.ListH
 }
 
 func (s *hostService) ListAttachableBlockDevices(ctx context.Context, _ *rookeryv1.ListAttachableBlockDevicesRequest) (*rookeryv1.ListAttachableBlockDevicesResponse, error) {
-	devices, err := host.ListAttachableBlockDevices()
+	lister := s.devices
+	if lister == nil {
+		lister = host.ListAttachableBlockDevices
+	}
+	devices, err := lister()
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not list attachable block devices")
 	}

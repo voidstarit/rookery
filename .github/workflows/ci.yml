@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -33,11 +35,14 @@ jobs:
         run: make ui-build
 
       - name: Test with coverage
-        run: go test -covermode=atomic -coverprofile=coverage.out ./...
+        run: go test -coverpkg=./... -covermode=atomic -coverprofile=coverage.out ./...
+
+      - name: Merge coverage profile
+        run: python3 scripts/merge-go-coverprofile.py coverage.out coverage-merged.out
 
       - name: Coverage summary
         run: |
-          total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub("%", "", $3); print $3}')
+          total=$(go tool cover -func=coverage-merged.out | awk '/^total:/ {gsub("%", "", $3); print $3}')
           {
             echo "### Go test coverage"
             echo ""
@@ -45,11 +50,38 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           awk -v total="$total" 'BEGIN { if (total < 20) { printf "coverage %.2f%% is below the 20%% floor\n", total; exit 1 } }'
 
+      - name: Install diff coverage tools
+        run: |
+          go install github.com/t-yuki/gocover-cobertura@v0.0.0-20180217150009-aaee18c8195c
+          python3 -m pip install --user "diff-cover==11.0.1"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Check changed-code coverage
+        run: |
+          set -euo pipefail
+          "$(go env GOPATH)/bin/gocover-cobertura" < coverage-merged.out > coverage.xml
+          sed -i 's#filename="github.com/voidstarit/rookery/#filename="#g' coverage.xml
+          sed -i "s#<source>.*</source>#<source>$(pwd)</source>#" coverage.xml
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="origin/${{ github.base_ref }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          diff-cover coverage.xml \
+            --compare-branch="$base" \
+            --fail-under=80 \
+            --exclude 'design/gen/*' | tee diff-coverage.txt
+          cat diff-coverage.txt >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload coverage
         uses: actions/upload-artifact@v7
         with:
           name: go-coverage
-          path: coverage.out
+          path: |
+            coverage.out
+            coverage-merged.out
+            coverage.xml
+            diff-coverage.txt
           if-no-files-found: error
           retention-days: 14
 

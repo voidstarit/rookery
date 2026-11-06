@@ -95,16 +95,8 @@ func (q *QEMU) Start(ctx context.Context, vm store.VM) error {
 	if _, err := os.Stat(kvmDevice); err != nil {
 		return fmt.Errorf("KVM is not available: %w", err)
 	}
-	for _, disk := range disks {
-		if disk.Source == store.DiskSourceHostDevice {
-			if _, err := host.ValidateAttachableBlockDevice(disk.Device); err != nil {
-				return fmt.Errorf("host device %s is not available: %w", disk.Device, err)
-			}
-			continue
-		}
-		if err := ensureDiskDevice(ctx, disk); err != nil {
-			return err
-		}
+	if err := validateVMDisks(ctx, disks); err != nil {
+		return err
 	}
 	if vm.BootMedia != nil {
 		if _, err := os.Stat(vm.BootMedia.Path); err != nil {
@@ -525,19 +517,42 @@ func processName(pid int) string {
 	return name
 }
 
+func validateVMDisks(ctx context.Context, disks []store.VMDisk) error {
+	for _, disk := range disks {
+		if disk.Source == store.DiskSourceHostDevice {
+			if _, err := host.ValidateAttachableBlockDevice(disk.Device); err != nil {
+				return fmt.Errorf("host device %s is not available: %w", disk.Device, err)
+			}
+			continue
+		}
+		if err := ensureDiskDevice(ctx, disk); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ensureDiskDevice verifies that a disk's block device exists. LVM thin
 // volumes can remain in metadata while inactive (for example after a reboot),
 // leaving no /dev node; activate them before giving QEMU the path.
 func ensureDiskDevice(ctx context.Context, disk store.VMDisk) error {
+	return ensureDiskDeviceWith(ctx, disk, func(ctx context.Context, vg, thinPool, name string) error {
+		return host.NewLVM().ActivateThinVolume(ctx, vg, thinPool, name)
+	}, 2*time.Second)
+}
+
+type thinVolumeActivator func(ctx context.Context, vg, thinPool, name string) error
+
+func ensureDiskDeviceWith(ctx context.Context, disk store.VMDisk, activate thinVolumeActivator, timeout time.Duration) error {
 	_, statErr := os.Stat(disk.Device)
 	if statErr == nil {
 		return nil
 	}
 	if disk.Source != store.DiskSourceHostDevice && disk.VG != "" && disk.Name != "" {
-		if err := host.NewLVM().ActivateThinVolume(ctx, disk.VG, disk.ThinPool, disk.Name); err != nil {
+		if err := activate(ctx, disk.VG, disk.ThinPool, disk.Name); err != nil {
 			return fmt.Errorf("disk device %s is not available: %w", disk.Device, err)
 		}
-		deadline := time.Now().Add(2 * time.Second)
+		deadline := time.Now().Add(timeout)
 		for {
 			_, statErr = os.Stat(disk.Device)
 			if statErr == nil {

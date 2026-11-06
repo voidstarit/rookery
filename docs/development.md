@@ -48,10 +48,19 @@ golangci-lint run ./...
 process and is skipped automatically when `/dev/kvm` or `qemu-system-x86_64`
 is unavailable. Use `go test -short ./...` to skip it explicitly.
 
-CI runs `go test -covermode=atomic -coverprofile=coverage.out ./...`, reports
-total statement coverage, enforces a 20% floor, and uploads `coverage.out` as an
-artifact. It also runs `golangci-lint` (configuration in `.golangci.yml`),
-`go vet`, `gofmt`, `make proto-check`, and a generated-UI-bundle drift check.
+New behavioral specs use Ginkgo + Gomega (`internal/gateway`, `internal/qemu`,
+and `internal/store` have suites). Existing tests remain in the standard
+`testing` style.
+
+CI runs `go test -coverpkg=./... -covermode=atomic -coverprofile=coverage.out
+./...`, merges duplicate cross-package blocks with
+`scripts/merge-go-coverprofile.py`, and enforces 80% coverage on changed Go
+lines using `diff-cover`. Generated protobuf packages are excluded from the
+changed-code gate. It reports total statement coverage, keeps a 20% global
+floor, and uploads `coverage.out`, `coverage-merged.out`, `coverage.xml`, and
+`diff-coverage.txt` as artifacts. It also runs `golangci-lint` (configuration in
+`.golangci.yml`), `go vet`, `gofmt`, `make proto-check`, and a
+generated-UI-bundle drift check.
 
 ## Releases
 

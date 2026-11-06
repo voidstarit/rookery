@@ -422,6 +422,7 @@ type hostService struct {
 	store     *store.Store
 	writer    HostWriter
 	taps      HostTapWriter
+	devices   AttachableBlockDeviceLister
 	addresses InterfaceAddressRuntime
 	readiness Readiness
 }

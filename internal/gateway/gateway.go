@@ -66,6 +66,7 @@ type options struct {
 	hostWriter         HostWriter
 	hostTapWriter      HostTapWriter
 	hostDevices        HostDeviceValidator
+	hostDeviceLister   AttachableBlockDeviceLister
 	vnfRuntime         VNFRuntime
 	vnfStatusProvider  VNFStatusProvider
 	vnfWriter          VNFWriter
@@ -127,6 +128,14 @@ func WithDiskProvisioner(provisioner DiskProvisioner) Option {
 func WithHostDeviceValidator(validator HostDeviceValidator) Option {
 	return func(opts *options) {
 		opts.hostDevices = validator
+	}
+}
+
+// WithAttachableBlockDeviceLister overrides host block-device discovery. Tests
+// use it to exercise the attachable-device response without real devices.
+func WithAttachableBlockDeviceLister(lister AttachableBlockDeviceLister) Option {
+	return func(opts *options) {
+		opts.hostDeviceLister = lister
 	}
 }
 
@@ -292,7 +301,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	routeTables := &routeTableService{store: st, runtime: options.aclRuntime, readiness: ready}
 	vnfs := &vnfService{store: st, runtime: options.vnfRuntime, statusProvider: options.vnfStatusProvider, writer: options.vnfWriter}
 	backends := &storageBackendService{store: st, readiness: ready, disks: options.diskProvisioner, mu: options.diskMutex}
-	hostInterfaces := &hostService{source: options.vppInterfaces, store: st, writer: options.hostWriter, taps: options.hostTapWriter, addresses: options.interfaceAddresses, readiness: ready}
+	hostInterfaces := &hostService{source: options.vppInterfaces, store: st, writer: options.hostWriter, taps: options.hostTapWriter, devices: options.hostDeviceLister, addresses: options.interfaceAddresses, readiness: ready}
 	troubleshoot := &troubleshootService{runtime: options.diagnostics, readiness: ready}
 	captures := &captureService{runtime: options.diagnostics, readiness: ready}
 	entityLabels := &labelService{store: st}

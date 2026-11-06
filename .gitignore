@@ -8,8 +8,11 @@
 /rookery
 /dist/
 
-# Go test output
+# Go test and coverage output
 /coverage.out
+/coverage-merged.out
+/coverage.xml
+/diff-coverage.txt
 
 # UI dependencies and typecheck cache
 /ui/node_modules/
