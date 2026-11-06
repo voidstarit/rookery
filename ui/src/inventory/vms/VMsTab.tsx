@@ -39,7 +39,8 @@ export function VMsTab() {
   const [disks, setDisks] = useState<Disk[]>([]);
   const [media, setMedia] = useState<Media[]>([]);
   const [interfaces, setInterfaces] = useState<VirtualInterface[]>([]);
-  const [ready, setReady] = useState(false);
+  const [thinPoolReady, setThinPoolReady] = useState(false);
+  const [vppReady, setVppReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [dialog, setDialog] = useState<{ vm: VM | null } | null>(null);
@@ -126,9 +127,11 @@ export function VMsTab() {
   const loadStatus = async () => {
     try {
       const status = await api<StatusResponse>("/api/status");
-      setReady(Boolean(status.ready));
+      setThinPoolReady(Boolean(status.thin_pool?.ready));
+      setVppReady(Boolean(status.vpp?.ready));
     } catch {
-      setReady(false);
+      setThinPoolReady(false);
+      setVppReady(false);
     }
   };
 
@@ -160,9 +163,15 @@ export function VMsTab() {
       }
     };
     const onReadiness = (event: Event) => {
-      const detail = (event as CustomEvent<{ ready: boolean }>).detail;
-      if (detail && typeof detail.ready === "boolean") {
-        setReady(detail.ready);
+      const detail = (event as CustomEvent<{ ready: boolean; thinPool?: boolean }>).detail;
+      if (detail && typeof detail.thinPool === "boolean") {
+        setThinPoolReady(detail.thinPool);
+      }
+    };
+    const onVppReady = (event: Event) => {
+      const detail = (event as CustomEvent<boolean>).detail;
+      if (typeof detail === "boolean") {
+        setVppReady(detail);
       }
     };
     const onTabChanged = (event: Event) => {
@@ -178,6 +187,7 @@ export function VMsTab() {
     window.addEventListener("rookery:media-changed", onMediaChanged);
     window.addEventListener("rookery:interfaces-changed", onInterfacesChanged);
     window.addEventListener("rookery:readiness-changed", onReadiness);
+    window.addEventListener("rookery:vpp-ready", onVppReady);
     window.addEventListener("rookery:tab-changed", onTabChanged);
     window.addEventListener("rookery:add-vm", onAddVM);
 
@@ -186,6 +196,7 @@ export function VMsTab() {
       window.removeEventListener("rookery:media-changed", onMediaChanged);
       window.removeEventListener("rookery:interfaces-changed", onInterfacesChanged);
       window.removeEventListener("rookery:readiness-changed", onReadiness);
+      window.removeEventListener("rookery:vpp-ready", onVppReady);
       window.removeEventListener("rookery:tab-changed", onTabChanged);
       window.removeEventListener("rookery:add-vm", onAddVM);
     };
@@ -206,6 +217,7 @@ export function VMsTab() {
   }, [vms.length]);
 
   const freeDisks = disks.filter((disk) => !disk.attached_vm_id && !disk.is_template);
+  const hasHostDisk = freeDisks.some((disk) => disk.source === "host-device");
 
   useEffect(() => {
     const newVM = document.getElementById("new-vm") as HTMLButtonElement | null;
@@ -214,24 +226,30 @@ export function VMsTab() {
       return;
     }
     let message = "";
-    if (!ready) {
-      message = "VM creation is blocked until the thin pool and FD.io VPP are ready.";
+    if (!vppReady) {
+      message = "VM creation is blocked until FD.io VPP is ready.";
     } else if (freeDisks.length === 0) {
       message = "Create an unattached disk on the Disks tab first.";
+    } else if (!thinPoolReady && !hasHostDisk) {
+      message = "VM creation is blocked until the thin pool is ready or a host passthrough disk is available.";
     }
     newVM.disabled = message !== "";
     newVM.title = message;
     hint.textContent = message;
     hint.hidden = message === "";
-  }, [ready, freeDisks.length]);
+  }, [freeDisks.length, hasHostDisk, thinPoolReady, vppReady]);
 
   const openCreate = () => {
-    if (!ready) {
-      showToast("VM creation is blocked until the thin pool and FD.io VPP are ready.", true);
+    if (!vppReady) {
+      showToast("VM creation is blocked until FD.io VPP is ready.", true);
       return;
     }
     if (freeDisks.length === 0) {
       showToast("Create an unattached disk on the Disks tab first.", true);
+      return;
+    }
+    if (!thinPoolReady && !hasHostDisk) {
+      showToast("The thin pool is not ready and no host passthrough disk is available.", true);
       return;
     }
     setDialog({ vm: null });
@@ -458,13 +476,11 @@ export function VMsTab() {
               <button
                 class="button primary"
                 type="button"
-                disabled={!ready || freeDisks.length === 0}
+                disabled={freeDisks.length === 0}
                 title={
-                  !ready
-                    ? "VM creation is blocked until the thin pool and FD.io VPP are ready."
-                    : freeDisks.length === 0
-                      ? "Create an unattached disk on the Disks tab first."
-                      : ""
+                  freeDisks.length === 0
+                    ? "Create an unattached disk on the Disks tab first."
+                    : ""
                 }
                 onClick={openCreate}
               >
@@ -482,7 +498,8 @@ export function VMsTab() {
           disks={disks}
           media={media}
           interfaces={interfaces}
-          ready={ready}
+          thinPoolReady={thinPoolReady}
+          vppReady={vppReady}
           onClose={() => {
             setDialog(null);
             navigate("/vms", true);

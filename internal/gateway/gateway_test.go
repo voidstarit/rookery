@@ -31,6 +31,14 @@ type fakeReadiness struct {
 func (f fakeReadiness) Ready() bool              { return f.status.Ready }
 func (f fakeReadiness) Status() readiness.Status { return f.status }
 
+func readyStatus() readiness.Status {
+	return readiness.Status{
+		Ready:    true,
+		ThinPool: readiness.ThinPoolStatus{ComponentStatus: readiness.ComponentStatus{Ready: true}},
+		VPP:      readiness.VPPStatus{ComponentStatus: readiness.ComponentStatus{Ready: true}},
+	}
+}
+
 func TestSystemAndVMReadOnlyRoutes(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "gateway.db"))
 	if err != nil {
@@ -200,7 +208,7 @@ func TestGatewayWithGRPCListener(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gw, err := gateway.New(st, fakeReadiness{status: readiness.Status{Ready: true}}, gateway.WithGRPCListener(listener))
+	gw, err := gateway.New(st, fakeReadiness{status: readyStatus()}, gateway.WithGRPCListener(listener))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +246,7 @@ func TestSimpleWriteRoutes(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = st.Close() })
 
-	gw, err := gateway.New(st, fakeReadiness{status: readiness.Status{Ready: true}})
+	gw, err := gateway.New(st, fakeReadiness{status: readyStatus()})
 	if err != nil {
 		t.Fatal(err)
 	}

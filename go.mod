@@ -16,6 +16,7 @@ require (
 	// module path moved, but it is the only published module with gomemif).
 	go.fd.io/govpp/extras v0.1.1-0.20261019084134-c02eb51f8588
 	golang.org/x/net v0.61.0
+	golang.org/x/sys v0.49.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20261026165753-2ffab32bce7e
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
@@ -77,7 +78,6 @@ require (
 	github.com/u-root/uio v0.0.0-20240224005618-d2acac8f3701 // indirect
 	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/crypto v0.58.0 // indirect
-	golang.org/x/sys v0.49.0
 	golang.org/x/term v0.47.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261019180522-ce908d29299b // indirect

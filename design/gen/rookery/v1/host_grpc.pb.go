@@ -20,13 +20,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	HostService_ListHostInterfaces_FullMethodName   = "/rookery.v1.HostService/ListHostInterfaces"
-	HostService_ListHostBlockDevices_FullMethodName = "/rookery.v1.HostService/ListHostBlockDevices"
-	HostService_AttachHostInterface_FullMethodName  = "/rookery.v1.HostService/AttachHostInterface"
-	HostService_DetachHostInterface_FullMethodName  = "/rookery.v1.HostService/DetachHostInterface"
-	HostService_ListHostTaps_FullMethodName         = "/rookery.v1.HostService/ListHostTaps"
-	HostService_CreateHostTap_FullMethodName        = "/rookery.v1.HostService/CreateHostTap"
-	HostService_DeleteHostTap_FullMethodName        = "/rookery.v1.HostService/DeleteHostTap"
+	HostService_ListHostInterfaces_FullMethodName         = "/rookery.v1.HostService/ListHostInterfaces"
+	HostService_ListHostBlockDevices_FullMethodName       = "/rookery.v1.HostService/ListHostBlockDevices"
+	HostService_ListAttachableBlockDevices_FullMethodName = "/rookery.v1.HostService/ListAttachableBlockDevices"
+	HostService_AttachHostInterface_FullMethodName        = "/rookery.v1.HostService/AttachHostInterface"
+	HostService_DetachHostInterface_FullMethodName        = "/rookery.v1.HostService/DetachHostInterface"
+	HostService_ListHostTaps_FullMethodName               = "/rookery.v1.HostService/ListHostTaps"
+	HostService_CreateHostTap_FullMethodName              = "/rookery.v1.HostService/CreateHostTap"
+	HostService_DeleteHostTap_FullMethodName              = "/rookery.v1.HostService/DeleteHostTap"
 )
 
 // HostServiceClient is the client API for HostService service.
@@ -39,6 +40,9 @@ type HostServiceClient interface {
 	// ListHostBlockDevices lists whole block devices that can be used in cgroup
 	// I/O limit rules.
 	ListHostBlockDevices(ctx context.Context, in *ListHostBlockDevicesRequest, opts ...grpc.CallOption) (*ListHostBlockDevicesResponse, error)
+	// ListAttachableBlockDevices lists whole disks, partitions, and logical
+	// volumes that can be registered as passthrough disks for VMs.
+	ListAttachableBlockDevices(ctx context.Context, in *ListAttachableBlockDevicesRequest, opts ...grpc.CallOption) (*ListAttachableBlockDevicesResponse, error)
 	// AttachHostInterface takes over a host NIC into VPP and persists it so it
 	// is recreated after a VPP restart.
 	AttachHostInterface(ctx context.Context, in *AttachHostInterfaceRequest, opts ...grpc.CallOption) (*HostInterface, error)
@@ -77,6 +81,16 @@ func (c *hostServiceClient) ListHostBlockDevices(ctx context.Context, in *ListHo
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListHostBlockDevicesResponse)
 	err := c.cc.Invoke(ctx, HostService_ListHostBlockDevices_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) ListAttachableBlockDevices(ctx context.Context, in *ListAttachableBlockDevicesRequest, opts ...grpc.CallOption) (*ListAttachableBlockDevicesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAttachableBlockDevicesResponse)
+	err := c.cc.Invoke(ctx, HostService_ListAttachableBlockDevices_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -143,6 +157,9 @@ type HostServiceServer interface {
 	// ListHostBlockDevices lists whole block devices that can be used in cgroup
 	// I/O limit rules.
 	ListHostBlockDevices(context.Context, *ListHostBlockDevicesRequest) (*ListHostBlockDevicesResponse, error)
+	// ListAttachableBlockDevices lists whole disks, partitions, and logical
+	// volumes that can be registered as passthrough disks for VMs.
+	ListAttachableBlockDevices(context.Context, *ListAttachableBlockDevicesRequest) (*ListAttachableBlockDevicesResponse, error)
 	// AttachHostInterface takes over a host NIC into VPP and persists it so it
 	// is recreated after a VPP restart.
 	AttachHostInterface(context.Context, *AttachHostInterfaceRequest) (*HostInterface, error)
@@ -172,6 +189,9 @@ func (UnimplementedHostServiceServer) ListHostInterfaces(context.Context, *ListH
 }
 func (UnimplementedHostServiceServer) ListHostBlockDevices(context.Context, *ListHostBlockDevicesRequest) (*ListHostBlockDevicesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListHostBlockDevices not implemented")
+}
+func (UnimplementedHostServiceServer) ListAttachableBlockDevices(context.Context, *ListAttachableBlockDevicesRequest) (*ListAttachableBlockDevicesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAttachableBlockDevices not implemented")
 }
 func (UnimplementedHostServiceServer) AttachHostInterface(context.Context, *AttachHostInterfaceRequest) (*HostInterface, error) {
 	return nil, status.Error(codes.Unimplemented, "method AttachHostInterface not implemented")
@@ -241,6 +261,24 @@ func _HostService_ListHostBlockDevices_Handler(srv interface{}, ctx context.Cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(HostServiceServer).ListHostBlockDevices(ctx, req.(*ListHostBlockDevicesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_ListAttachableBlockDevices_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAttachableBlockDevicesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).ListAttachableBlockDevices(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostService_ListAttachableBlockDevices_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).ListAttachableBlockDevices(ctx, req.(*ListAttachableBlockDevicesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -349,6 +387,10 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListHostBlockDevices",
 			Handler:    _HostService_ListHostBlockDevices_Handler,
+		},
+		{
+			MethodName: "ListAttachableBlockDevices",
+			Handler:    _HostService_ListAttachableBlockDevices_Handler,
 		},
 		{
 			MethodName: "AttachHostInterface",

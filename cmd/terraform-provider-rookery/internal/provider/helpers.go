@@ -46,6 +46,13 @@ func int32Pointer(v types.Int64) *int32 {
 	return &value
 }
 
+func optionalInt64FromUint64(v uint64) types.Int64 {
+	if v == 0 {
+		return types.Int64Null()
+	}
+	return types.Int64Value(int64(v))
+}
+
 func stringPointer(v types.String) *string {
 	if v.IsNull() || v.IsUnknown() {
 		return nil

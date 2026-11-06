@@ -67,7 +67,7 @@ provider "rookery" {
 | Resource | Notes |
 | --- | --- |
 | `rookery_storage_backend` | LVM thin-pool backend |
-| `rookery_disk` | Thin volume, template, or provisioned template clone |
+| `rookery_disk` | Thin volume, host passthrough block device, template, or provisioned template clone |
 | `rookery_media` | Read-only ISO/image path |
 | `rookery_network` | VPP bridge domain + isolated VRF |
 | `rookery_network_pipe` | L2 pipe pair between two networks |
@@ -115,6 +115,23 @@ Changing `disk_ids` or `interface_ids` requires the VM to be stopped.
 changed. `rookery_network` names remain immutable, but its `ipv4_cidr` and
 `ipv6_cidr` can be updated while the network has no VNFs, host taps, or BVI.
 `rookery_route` is also immutable.
+
+`rookery_disk` can register an existing host block device (a whole disk,
+partition, logical volume, or RAID array) instead of creating a thin volume:
+
+```hcl
+resource "rookery_disk" "host_data" {
+  name        = "host-data"
+  host_device = "/dev/mapper/vg-data"
+}
+```
+
+The server validates the path, derives `size_gb`/`size_bytes`, and never
+creates, resizes, or deletes the underlying device. Destroying the resource
+removes only the inventory record. Passthrough disks cannot be templates or
+template clones. Use `GET /api/host/block-devices/attachable` (or the UI) to
+see candidate devices and whether they are mounted, in use, or already
+registered.
 
 `rookery_disk` templates can set `provisioning_script` and
 `provisioning_timeout`. Clones created with `template_disk_id` can pass

@@ -48,6 +48,69 @@ func (s *hostService) ListHostBlockDevices(_ context.Context, _ *rookeryv1.ListH
 	return response, nil
 }
 
+func (s *hostService) ListAttachableBlockDevices(ctx context.Context, _ *rookeryv1.ListAttachableBlockDevicesRequest) (*rookeryv1.ListAttachableBlockDevicesResponse, error) {
+	devices, err := host.ListAttachableBlockDevices()
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not list attachable block devices")
+	}
+	disks := make([]store.Disk, 0)
+	if s.store != nil {
+		disks, err = s.store.ListDisks(ctx)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "could not list disks")
+		}
+	}
+	response := &rookeryv1.ListAttachableBlockDevicesResponse{
+		Devices: make([]*rookeryv1.HostAttachableBlockDevice, 0, len(devices)),
+	}
+	for _, device := range devices {
+		item := &rookeryv1.HostAttachableBlockDevice{
+			Name: device.Name, Path: device.Path, Kind: device.Kind, Model: device.Model,
+			SizeBytes: device.SizeBytes, Major: device.Major, Minor: device.Minor,
+			Rotational: device.Rotational, Available: device.Available,
+			UnavailableReason: device.Reason,
+		}
+		for _, disk := range disks {
+			if disk.Source != store.DiskSourceHostDevice || !host.DevicesOverlap(disk.Device, device.Path) {
+				continue
+			}
+			sameDevice := host.SameBlockDevice(disk.Device, device.Path)
+			id := disk.ID
+			item.Registered = sameDevice
+			item.DiskId = &id
+			item.DiskName = disk.Name
+			item.AttachedVmId = disk.AttachedVMID
+			item.AttachedVmName = disk.AttachedVMName
+			item.Available = false
+			prefix := "overlaps registered disk "
+			if sameDevice {
+				prefix = "already registered as disk "
+			}
+			switch {
+			case disk.AttachedVMID != nil && disk.AttachedVMName != "":
+				item.UnavailableReason = prefix + disk.Name + " (attached to " + disk.AttachedVMName + ")"
+			case disk.AttachedVMID != nil:
+				item.UnavailableReason = prefix + disk.Name + " (attached to a VM)"
+			default:
+				item.UnavailableReason = prefix + disk.Name
+			}
+			if !sameDevice {
+				item.DiskId = nil
+				item.DiskName = ""
+			}
+			break
+		}
+		if backend, found, backendErr := hostDeviceStorageBackend(ctx, s.store, device.Path); backendErr != nil {
+			return nil, status.Error(codes.Internal, "could not check storage backends")
+		} else if found {
+			item.Available = false
+			item.UnavailableReason = "thin pool for storage backend " + backend
+		}
+		response.Devices = append(response.Devices, item)
+	}
+	return response, nil
+}
+
 func (s *hostService) listInterfaces(ctx context.Context) (*rookeryv1.ListHostInterfacesResponse, error) {
 	interfaces, err := host.ListHostInterfaces()
 	if err != nil {

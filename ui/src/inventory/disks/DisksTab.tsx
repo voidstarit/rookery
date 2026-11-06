@@ -22,6 +22,23 @@ function formatDate(value: string | undefined): string {
   return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+function formatDiskSize(disk: Disk): string {
+  const bytes = Number(disk.size_bytes) || 0;
+  if (bytes <= 0) {
+    return `${numberFormat.format(disk.size_gb)} GB`;
+  }
+  if (bytes >= 1024 ** 4) {
+    return `${(bytes / 1024 ** 4).toFixed(bytes % 1024 ** 4 === 0 ? 0 : 1)} TB`;
+  }
+  if (bytes >= 1024 ** 3) {
+    return `${(bytes / 1024 ** 3).toFixed(bytes % 1024 ** 3 === 0 ? 0 : 1)} GB`;
+  }
+  if (bytes >= 1024 ** 2) {
+    return `${(bytes / 1024 ** 2).toFixed(bytes % 1024 ** 2 === 0 ? 0 : 1)} MB`;
+  }
+  return `${numberFormat.format(bytes)} B`;
+}
+
 export function DisksTab() {
   const [disks, setDisks] = useState<Disk[]>([]);
   const [backends, setBackends] = useState<StorageBackend[]>([]);
@@ -149,23 +166,15 @@ export function DisksTab() {
     }
   }, [disks.length]);
 
-  useEffect(() => {
-    const newDisk = document.getElementById("new-disk") as HTMLButtonElement | null;
-    if (!newDisk) {
-      return;
-    }
-    const blocked = backends.length === 0;
-    newDisk.disabled = blocked;
-    newDisk.title = blocked ? "Add a storage backend before creating disks" : "";
-  }, [backends.length]);
-
   const deleteDisk = async (disk: Disk) => {
     if (disk.attached_vm_id) {
       showToast(`Detach ${disk.name} from ${disk.attached_vm_name || "its VM"} before deleting it.`, true);
       return;
     }
     const confirmed = window.confirm(
-      `Delete disk "${disk.name}"?\n\nThis removes the LVM thin volume and its inventory record.`
+      disk.source === "host-device"
+        ? `Delete disk "${disk.name}"?\n\nThis removes only the inventory record. The host block device ${disk.device} is not modified.`
+        : `Delete disk "${disk.name}"?\n\nThis removes the LVM thin volume and its inventory record.`
     );
     if (!confirmed) {
       return;
@@ -182,6 +191,10 @@ export function DisksTab() {
   };
 
   const toggleTemplate = async (disk: Disk) => {
+    if (disk.source === "host-device") {
+      showToast("Host block devices cannot be templates.", true);
+      return;
+    }
     if (disk.attached_vm_id) {
       showToast("Detach the disk from its VM before changing template status.", true);
       return;
@@ -403,6 +416,9 @@ export function DisksTab() {
                     <td>
                       <span class="vm-name">{disk.name}</span>
                       {disk.is_template ? <span class="import-disk-badge">template</span> : null}
+                      {disk.source === "host-device" ? (
+                        <span class="import-disk-badge">passthrough</span>
+                      ) : null}
                       {disk.template_disk_name ? (
                         <span class="vm-description">from {disk.template_disk_name}</span>
                       ) : null}
@@ -419,9 +435,9 @@ export function DisksTab() {
                         onSaved={(labels) => diskLabels.setEntityLabels(String(disk.id), labels)}
                       />
                     </td>
-                    <td class="mono">{numberFormat.format(disk.size_gb)} GB</td>
-                    <td class={disk.storage_backend_name ? "mono" : "mono muted"}>
-                      {disk.storage_backend_name || "—"}
+                    <td class="mono">{formatDiskSize(disk)}</td>
+                    <td class={disk.storage_backend_name || disk.source === "host-device" ? "mono" : "mono muted"}>
+                      {disk.source === "host-device" ? "host device" : disk.storage_backend_name || "—"}
                     </td>
                     <td class={disk.is_template ? "mono muted" : disk.attached_vm_id ? "mono" : "mono muted"}>
                       {disk.is_template
@@ -438,15 +454,17 @@ export function DisksTab() {
                             Provisioning
                           </button>
                         ) : null}
-                        <button
-                          class="row-action"
-                          type="button"
-                          disabled={Boolean(disk.attached_vm_id)}
-                          title={disk.is_template ? "Allow this disk to be used as a normal disk again." : "Mark this unattached disk as a template."}
-                          onClick={() => void toggleTemplate(disk)}
-                        >
-                          {disk.is_template ? "Unmark" : "Template"}
-                        </button>
+                        {disk.source === "host-device" ? null : (
+                          <button
+                            class="row-action"
+                            type="button"
+                            disabled={Boolean(disk.attached_vm_id)}
+                            title={disk.is_template ? "Allow this disk to be used as a normal disk again." : "Mark this unattached disk as a template."}
+                            onClick={() => void toggleTemplate(disk)}
+                          >
+                            {disk.is_template ? "Unmark" : "Template"}
+                          </button>
+                        )}
                         <button
                           class="row-action danger"
                           type="button"
@@ -473,16 +491,10 @@ export function DisksTab() {
               </div>
               <h3>No disks yet</h3>
               <p>
-                Create a disk here, or use <strong>Import</strong> on a storage backend to register
-                existing thin volumes.
+                Create an LVM thin disk here, pass through a host block device, or use{" "}
+                <strong>Import</strong> on a storage backend to register existing thin volumes.
               </p>
-              <button
-                class="button primary"
-                type="button"
-                disabled={backends.length === 0}
-                title={backends.length === 0 ? "Add a storage backend before creating disks" : ""}
-                onClick={() => navigate("/disks/new")}
-              >
+              <button class="button primary" type="button" onClick={() => navigate("/disks/new")}>
                 Create a disk
               </button>
             </div>

@@ -176,7 +176,7 @@ labels in sync through the same API.
 | `GET`    | `/api/storage-backends/{id}/importable-disks` | List existing thin volumes and registration state |
 | `POST`   | `/api/storage-backends/{id}/import-disks` | Register existing thin volumes as disks |
 | `GET`    | `/api/disks`       | List all disks                    |
-| `POST`   | `/api/disks`       | Create a thin-LVM disk, template, or provisioned template clone |
+| `POST`   | `/api/disks`       | Create a thin-LVM disk, host passthrough disk, template, or provisioned template clone |
 | `GET`    | `/api/disks/{id}`  | Get one disk                      |
 | `PUT`    | `/api/disks/{id}`  | Update template status or template provisioning settings |
 | `DELETE` | `/api/disks/{id}`  | Delete an unattached disk         |
@@ -238,6 +238,7 @@ the interface returns to its network VRF (host taps) or the default table
 `PUT /api/interfaces/{id}/route-tables`.
 | `GET`    | `/api/host/interfaces` | List physical/external NICs, link state, and VPP host-interface correlation |
 | `GET`    | `/api/host/block-devices` | List whole block devices for cgroup I/O limits |
+| `GET`    | `/api/host/block-devices/attachable` | List disks, partitions, and LVs that can be passed through to VMs, with availability and registration state |
 | `POST`   | `/api/host/interfaces/{name}/attach` | Take over a wired NIC into VPP and persist the attachment |
 | `DELETE` | `/api/host/interfaces/{name}` | Detach a persisted host NIC from VPP |
 | `GET`    | `/api/host/taps` | List persisted network-to-host taps (`?network_id=<id>` optional) |
@@ -349,8 +350,32 @@ Import only adds inventory rows in a transaction; it never creates, copies, or
 resizes an LV. The list marks volumes that are already registered, and the
 reported size is rounded up to whole GB. Deleting an imported disk is still
 destructive: it removes the underlying thin volume.
-The response includes the
-LVM location:
+
+Existing host block devices can also be passed through to a VM without any
+LVM management. List candidates first; the response includes whole disks,
+partitions, logical volumes, and software RAID arrays, plus whether each is
+available and any existing disk registration:
+
+```bash
+curl -sS http://127.0.0.1:8080/api/host/block-devices/attachable
+curl -sS -X POST http://127.0.0.1:8080/api/disks \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"host-data","host_device":"/dev/mapper/vg-data"}'
+```
+
+`host_device` must be an absolute path to an existing block device. The API
+derives `size_gb` and `size_bytes` from the device and rejects non-block paths,
+read-only devices, devices that are mounted or used as swap, devices that back
+another device-mapper or RAID object, and configured LVM thin pools. A whole
+disk also cannot be registered if one of its partitions is already a
+passthrough disk (and vice versa), so two guests cannot write the same sectors.
+Rookery never creates, resizes, or deletes the underlying device; deleting the
+disk record removes only the inventory entry and is blocked while a VM uses it.
+Passthrough disks cannot be templates or template clones. They can be attached
+to one VM at a time like any other disk, and QEMU opens them as raw block
+devices.
+
+The response includes the LVM location:
 
 ```json
 {
@@ -359,7 +384,21 @@ LVM location:
   "size_gb": 40,
   "vg": "vg0",
   "thin_pool": "rookery",
-  "device": "/dev/vg0/web-01-root"
+  "device": "/dev/vg0/web-01-root",
+  "source": "lvm-thin"
+}
+```
+
+A passthrough disk reports the registered path and exact size:
+
+```json
+{
+  "id": 2,
+  "name": "host-data",
+  "size_gb": 100,
+  "size_bytes": 107374182400,
+  "device": "/dev/mapper/vg-data",
+  "source": "host-device"
 }
 ```
 
@@ -625,9 +664,11 @@ WebSocket returns `403` and any already-open console is closed within about a
 second.
 
 Disk fields: `name` (required, unique, max 127 chars), `size_gb` (default `10`,
-1–65536), `storage_backend_id`, `template_disk_id`, and `is_template`. Disk size
-is provisioned as a thin-LVM virtual size in GB. Templates are backend-scoped,
-cannot be attached to a VM, and can be marked or unmarked with
+1–65536), `storage_backend_id`, `template_disk_id`, `is_template`, and
+`host_device`. Disk size is provisioned as a thin-LVM virtual size in GB unless
+`host_device` registers an existing host block device; that device's exact size
+is returned as `size_bytes` and `source` is `host-device`. Templates are
+backend-scoped, cannot be attached to a VM, and can be marked or unmarked with
 `PUT /api/disks/{id}`. Deleting a template with clones is blocked unless the
 backend sets `allow_template_delete_with_clones`.
 

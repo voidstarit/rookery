@@ -70,6 +70,10 @@ func (m *VMDisk) validate(all bool) error {
 
 	// no validation rules for Device
 
+	// no validation rules for Source
+
+	// no validation rules for SizeBytes
+
 	if m.StorageBackendId != nil {
 		// no validation rules for StorageBackendId
 	}
@@ -253,6 +257,10 @@ func (m *Disk) validate(all bool) error {
 	// no validation rules for ProvisioningScript
 
 	// no validation rules for ProvisioningTimeout
+
+	// no validation rules for Source
+
+	// no validation rules for SizeBytes
 
 	if m.StorageBackendId != nil {
 		// no validation rules for StorageBackendId
@@ -909,6 +917,21 @@ func (m *CreateDiskRequest) validate(all bool) error {
 				cause:  err,
 			}
 		}
+	}
+
+	if m.GetHostDevice() != "" {
+
+		if utf8.RuneCountInString(m.GetHostDevice()) > 4096 {
+			err := CreateDiskRequestValidationError{
+				field:  "HostDevice",
+				reason: "value length must be at most 4096 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
 	}
 
 	if m.SizeGb != nil {

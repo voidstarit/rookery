@@ -65,6 +65,7 @@ type options struct {
 	vppInterfaces      VPPInterfaceSource
 	hostWriter         HostWriter
 	hostTapWriter      HostTapWriter
+	hostDevices        HostDeviceValidator
 	vnfRuntime         VNFRuntime
 	vnfStatusProvider  VNFStatusProvider
 	vnfWriter          VNFWriter
@@ -118,6 +119,14 @@ func WithACLRuntime(runtime ACLRuntime) Option {
 func WithDiskProvisioner(provisioner DiskProvisioner) Option {
 	return func(opts *options) {
 		opts.diskProvisioner = provisioner
+	}
+}
+
+// WithHostDeviceValidator overrides host block-device validation. Tests use it
+// to exercise passthrough disk registration without a real block device.
+func WithHostDeviceValidator(validator HostDeviceValidator) Option {
+	return func(opts *options) {
+		opts.hostDevices = validator
 	}
 }
 
@@ -275,7 +284,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 		system.lightvmStatus = provider
 	}
 	vms := &vmService{store: st, runtime: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, mu: options.vmMutex, logger: options.logger}
-	disks := &diskService{store: st, runtime: options.diskProvisioner, readiness: ready, mu: options.diskMutex, logger: options.logger}
+	disks := &diskService{store: st, runtime: options.diskProvisioner, readiness: ready, mu: options.diskMutex, logger: options.logger, hostDevices: options.hostDevices}
 	media := &mediaService{store: st}
 	networks := &networkService{store: st, runtime: options.networkRuntime, readiness: ready, writer: options.networkWriter, mu: options.diskMutex}
 	interfaces := &interfaceService{store: st, runtime: options.aclRuntime, attachments: options.interfaceRuntime, addresses: options.interfaceAddresses, vms: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, runMu: options.vmMutex}
@@ -611,8 +620,8 @@ func vmToProto(vm store.VM) *rookeryv1.VM {
 
 func vmDiskToProto(disk store.VMDisk) *rookeryv1.VMDisk {
 	return &rookeryv1.VMDisk{
-		Id: disk.ID, Name: disk.Name, SizeGb: int32(disk.SizeGB),
+		Id: disk.ID, Name: disk.Name, SizeGb: int32(disk.SizeGB), SizeBytes: disk.SizeBytes,
 		StorageBackendId: disk.StorageBackendID, StorageBackendName: disk.StorageBackendName,
-		Vg: disk.VG, ThinPool: disk.ThinPool, Device: disk.Device,
+		Vg: disk.VG, ThinPool: disk.ThinPool, Device: disk.Device, Source: disk.Source,
 	}
 }

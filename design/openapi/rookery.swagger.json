@@ -505,6 +505,33 @@
         ]
       }
     },
+    "/api/host/block-devices/attachable": {
+      "get": {
+        "summary": "ListAttachableBlockDevices lists whole disks, partitions, and logical\nvolumes that can be registered as passthrough disks for VMs.",
+        "operationId": "HostService_ListAttachableBlockDevices",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1HostAttachableBlockDevice"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "HostService"
+        ]
+      }
+    },
     "/api/host/interfaces": {
       "get": {
         "operationId": "HostService_ListHostInterfaces",
@@ -4627,6 +4654,10 @@
         },
         "provisioning": {
           "type": "object"
+        },
+        "host_device": {
+          "type": "string",
+          "description": "host_device registers an existing host block device (a whole disk,\npartition, or logical volume) for passthrough to one VM. When set,\nstorage_backend_id, size_gb, is_template, template_disk_id, and\nprovisioning settings must be omitted; the size is read from the device."
         }
       }
     },
@@ -5031,6 +5062,15 @@
         },
         "provisioning_timeout": {
           "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "description": "source is \"lvm-thin\" or \"host-device\"."
+        },
+        "size_bytes": {
+          "type": "string",
+          "format": "uint64",
+          "description": "size_bytes is the exact host device size for passthrough disks."
         }
       }
     },
@@ -5120,6 +5160,63 @@
       "type": "object",
       "properties": {
         "status": {
+          "type": "string"
+        }
+      }
+    },
+    "v1HostAttachableBlockDevice": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "description": "kind is \"disk\", \"partition\", \"lv\", or \"raid\"."
+        },
+        "model": {
+          "type": "string"
+        },
+        "size_bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "major": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "minor": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "rotational": {
+          "type": "boolean"
+        },
+        "available": {
+          "type": "boolean",
+          "description": "available is false when the host is using the device, for example\nbecause it is mounted, used as swap, or backs another device."
+        },
+        "unavailable_reason": {
+          "type": "string"
+        },
+        "registered": {
+          "type": "boolean",
+          "description": "registered is set when a passthrough disk record already uses this device."
+        },
+        "disk_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "disk_name": {
+          "type": "string"
+        },
+        "attached_vm_id": {
+          "type": "string"
+        },
+        "attached_vm_name": {
           "type": "string"
         }
       }
@@ -5543,6 +5640,18 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1ACL"
+          }
+        }
+      }
+    },
+    "v1ListAttachableBlockDevicesResponse": {
+      "type": "object",
+      "properties": {
+        "devices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1HostAttachableBlockDevice"
           }
         }
       }
@@ -6598,6 +6707,15 @@
         },
         "device": {
           "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "description": "source is \"lvm-thin\" or \"host-device\"."
+        },
+        "size_bytes": {
+          "type": "string",
+          "format": "uint64",
+          "description": "size_bytes is the exact host device size for passthrough disks."
         }
       }
     },

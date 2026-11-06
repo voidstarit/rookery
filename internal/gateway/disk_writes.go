@@ -25,6 +25,10 @@ type DiskProvisioner interface {
 	ListThinVolumes(ctx context.Context, vg, thinPool string) ([]host.ThinVolume, error)
 }
 
+// HostDeviceValidator inspects and validates a host block device for
+// passthrough registration.
+type HostDeviceValidator func(path string) (host.AttachableBlockDevice, error)
+
 const (
 	defaultGatewayDiskGB = 10
 	maxGatewayDiskGB     = 65_536
@@ -34,6 +38,9 @@ func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateD
 	name := strings.TrimSpace(request.GetName())
 	if name == "" {
 		return nil, status.Error(codes.InvalidArgument, "name is required")
+	}
+	if hostDevice := strings.TrimSpace(request.GetHostDevice()); hostDevice != "" {
+		return s.createHostDeviceDisk(ctx, request, name, hostDevice)
 	}
 	backend, err := s.resolveStorageBackend(ctx, request.StorageBackendId)
 	if err != nil {
@@ -175,10 +182,129 @@ func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateD
 	return diskToProto(created), nil
 }
 
+// createHostDeviceDisk registers an existing host block device as a
+// passthrough disk. Rookery never creates, resizes, or deletes the underlying
+// device; deleting the disk record only removes the inventory entry.
+func (s *diskService) createHostDeviceDisk(ctx context.Context, request *rookeryv1.CreateDiskRequest, name, hostDevice string) (*rookeryv1.Disk, error) {
+	if request.StorageBackendId != nil {
+		return nil, status.Error(codes.InvalidArgument, "storage_backend_id cannot be used with host_device")
+	}
+	if request.GetSizeGb() != 0 {
+		return nil, status.Error(codes.InvalidArgument, "size_gb is derived from the host device and cannot be set")
+	}
+	if request.GetIsTemplate() || request.TemplateDiskId != nil {
+		return nil, status.Error(codes.InvalidArgument, "host devices cannot be templates or template clones")
+	}
+	if strings.TrimSpace(request.GetProvisioningScript()) != "" ||
+		strings.TrimSpace(request.GetProvisioningTimeout()) != "" || request.Provisioning != nil {
+		return nil, status.Error(codes.InvalidArgument, "host devices do not support provisioning settings")
+	}
+
+	validator := s.hostDevices
+	if validator == nil {
+		validator = host.ValidateAttachableBlockDevice
+	}
+	device, err := validator(hostDevice)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, err := s.store.GetDiskByName(ctx, name); err == nil {
+		return nil, status.Error(codes.AlreadyExists, "a disk with that name already exists")
+	} else if !errors.Is(err, store.ErrDiskNotFound) {
+		return nil, status.Error(codes.Internal, "could not check disk name")
+	}
+	if existing, found, err := s.findHostDeviceDisk(ctx, device.Path); err != nil {
+		return nil, status.Error(codes.Internal, "could not check host device")
+	} else if found {
+		if host.SameBlockDevice(existing.Device, device.Path) {
+			return nil, status.Errorf(codes.AlreadyExists, "host device is already registered as disk %q", existing.Name)
+		}
+		return nil, status.Errorf(codes.FailedPrecondition, "host device overlaps disk %q", existing.Name)
+	}
+	if backend, found, err := hostDeviceStorageBackend(ctx, s.store, device.Path); err != nil {
+		return nil, status.Error(codes.Internal, "could not check storage backends")
+	} else if found {
+		return nil, status.Errorf(codes.FailedPrecondition, "host device is the thin pool for storage backend %q", backend)
+	}
+
+	sizeGB := int((device.SizeBytes + (1 << 30) - 1) / (1 << 30))
+	if sizeGB < 1 {
+		sizeGB = 1
+	}
+	disk := store.Disk{
+		Name: name, SizeGB: sizeGB, SizeBytes: device.SizeBytes,
+		Device: device.Path, Source: store.DiskSourceHostDevice,
+	}
+	created, err := s.store.CreateDisk(ctx, disk)
+	if err != nil {
+		switch {
+		case errors.Is(err, store.ErrDiskNameTaken):
+			return nil, status.Error(codes.AlreadyExists, "a disk with that name already exists")
+		case errors.Is(err, store.ErrDiskDeviceTaken):
+			return nil, status.Error(codes.AlreadyExists, "host device is already registered")
+		default:
+			return nil, status.Error(codes.Internal, "could not record disk")
+		}
+	}
+	return diskToProto(created), nil
+}
+
+// findHostDeviceDisk returns the passthrough disk record that already uses the
+// same underlying block device, following device-mapper and by-id symlinks.
+func (s *diskService) findHostDeviceDisk(ctx context.Context, path string) (store.Disk, bool, error) {
+	disks, err := s.store.ListDisks(ctx)
+	if err != nil {
+		return store.Disk{}, false, err
+	}
+	for _, disk := range disks {
+		if disk.Source != store.DiskSourceHostDevice {
+			continue
+		}
+		if host.DevicesOverlap(disk.Device, path) {
+			return disk, true, nil
+		}
+	}
+	return store.Disk{}, false, nil
+}
+
+// hostDeviceStorageBackend reports whether path is a configured LVM thin pool.
+// Handing a thin pool to a guest would corrupt every volume in it.
+func hostDeviceStorageBackend(ctx context.Context, st *store.Store, path string) (string, bool, error) {
+	if st == nil {
+		return "", false, nil
+	}
+	backends, err := st.ListStorageBackends(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	for _, backend := range backends {
+		if backend.Driver != "lvm-thin" || backend.Config.VG == "" || backend.Config.ThinPool == "" {
+			continue
+		}
+		thinPool := filepath.Join("/dev", backend.Config.VG, backend.Config.ThinPool)
+		if host.SameBlockDevice(thinPool, path) {
+			return backend.Name, true, nil
+		}
+	}
+	return "", false, nil
+}
+
 func (s *diskService) UpdateDisk(ctx context.Context, request *rookeryv1.UpdateDiskRequest) (*rookeryv1.Disk, error) {
 	disk, err := s.store.GetDisk(ctx, request.GetId())
 	if err != nil {
 		return nil, storeReadError(err, store.ErrDiskNotFound, "disk not found")
+	}
+	if disk.Source == store.DiskSourceHostDevice {
+		hasProvisioning := (request.ProvisioningScript != nil && strings.TrimSpace(request.GetProvisioningScript()) != "") ||
+			(request.ProvisioningTimeout != nil && strings.TrimSpace(request.GetProvisioningTimeout()) != "")
+		if request.GetIsTemplate() || hasProvisioning {
+			return nil, status.Error(codes.InvalidArgument, "host devices cannot be templates or template clones")
+		}
+		return diskToProto(disk), nil
 	}
 	hasProvisioning := request.ProvisioningScript != nil || request.ProvisioningTimeout != nil
 	if request.IsTemplate == nil && !hasProvisioning {
@@ -260,6 +386,19 @@ func (s *diskService) DeleteDisk(ctx context.Context, request *rookeryv1.DeleteD
 	}
 	if disk.AttachedVMID != nil {
 		return nil, status.Error(codes.Aborted, "disk is attached to a VM; delete the VM first")
+	}
+	if disk.Source == store.DiskSourceHostDevice {
+		if err := s.store.DeleteDisk(ctx, request.GetId()); err != nil {
+			switch {
+			case errors.Is(err, store.ErrDiskNotFound):
+				return nil, status.Error(codes.NotFound, "disk not found")
+			case errors.Is(err, store.ErrDiskInUse):
+				return nil, status.Error(codes.Aborted, "disk is attached to a VM; delete the VM first")
+			default:
+				return nil, status.Error(codes.Internal, "could not delete disk")
+			}
+		}
+		return &emptypb.Empty{}, nil
 	}
 	backend, backendErr := s.resolveStorageBackend(ctx, disk.StorageBackendID)
 	if disk.IsTemplate {

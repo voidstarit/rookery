@@ -13,7 +13,6 @@ import (
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/gateway"
 	"github.com/voidstarit/rookery/internal/qemu"
-	"github.com/voidstarit/rookery/internal/readiness"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -77,7 +76,7 @@ func TestVMActionsAndMetrics(t *testing.T) {
 		Running: true, PID: 1234, UptimeSeconds: 12, CPUSecondsTotal: 2.5,
 		RSSBytes: 1024, VirtualBytes: 2048, ReadBytesTotal: 10, WriteBytesTotal: 20,
 	}}
-	gw, err := gateway.New(st, fakeReadiness{status: readiness.Status{Ready: true}}, gateway.WithVMController(runtime))
+	gw, err := gateway.New(st, fakeReadiness{status: readyStatus()}, gateway.WithVMController(runtime))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +200,7 @@ func TestStartVMRepairsStatusWhenQEMUIsAlreadyRunning(t *testing.T) {
 	}
 
 	runtime := &fakeVMController{running: true}
-	gw, err := gateway.New(st, fakeReadiness{status: readiness.Status{Ready: true}}, gateway.WithVMController(runtime))
+	gw, err := gateway.New(st, fakeReadiness{status: readyStatus()}, gateway.WithVMController(runtime))
 	if err != nil {
 		t.Fatal(err)
 	}

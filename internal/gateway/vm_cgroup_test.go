@@ -10,7 +10,6 @@ import (
 
 	"github.com/voidstarit/rookery/internal/cgroup"
 	"github.com/voidstarit/rookery/internal/gateway"
-	"github.com/voidstarit/rookery/internal/readiness"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -56,7 +55,7 @@ func TestUpdateVMAppliesCgroupClassLive(t *testing.T) {
 	}
 
 	runtime := &fakeVMController{running: true}
-	gw, err := gateway.New(st, fakeReadiness{status: readiness.Status{Ready: true}}, gateway.WithVMController(runtime))
+	gw, err := gateway.New(st, fakeReadiness{status: readyStatus()}, gateway.WithVMController(runtime))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +192,7 @@ func TestUpdateCgroupSettingsAppliesToRunningVMs(t *testing.T) {
 
 	vmRuntime := &fakeVMController{runningIDs: map[string]bool{running.ID: true}}
 	hostRuntime := &fakeHostCgroupRuntime{}
-	gw, err := gateway.New(st, fakeReadiness{status: readiness.Status{Ready: true}},
+	gw, err := gateway.New(st, fakeReadiness{status: readyStatus()},
 		gateway.WithVMController(vmRuntime), gateway.WithCgroupRuntime(hostRuntime))
 	if err != nil {
 		t.Fatal(err)

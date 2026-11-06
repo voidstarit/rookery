@@ -31,11 +31,12 @@ func storeReadError(err error, notFound error, message string) error {
 
 type diskService struct {
 	rookeryv1.UnimplementedDiskServiceServer
-	store     *store.Store
-	runtime   DiskProvisioner
-	readiness Readiness
-	mu        *sync.Mutex
-	logger    zerolog.Logger
+	store       *store.Store
+	runtime     DiskProvisioner
+	readiness   Readiness
+	mu          *sync.Mutex
+	logger      zerolog.Logger
+	hostDevices HostDeviceValidator
 }
 
 func (s *diskService) ListDisks(ctx context.Context, _ *rookeryv1.ListDisksRequest) (*rookeryv1.ListDisksResponse, error) {
@@ -60,9 +61,9 @@ func (s *diskService) GetDisk(ctx context.Context, request *rookeryv1.GetDiskReq
 
 func diskToProto(disk store.Disk) *rookeryv1.Disk {
 	return &rookeryv1.Disk{
-		Id: disk.ID, Name: disk.Name, SizeGb: int32(disk.SizeGB),
+		Id: disk.ID, Name: disk.Name, SizeGb: int32(disk.SizeGB), SizeBytes: disk.SizeBytes,
 		StorageBackendId: disk.StorageBackendID, StorageBackendName: disk.StorageBackendName,
-		Vg: disk.VG, ThinPool: disk.ThinPool, Device: disk.Device,
+		Vg: disk.VG, ThinPool: disk.ThinPool, Device: disk.Device, Source: disk.Source,
 		IsTemplate: disk.IsTemplate, TemplateDiskId: disk.TemplateDiskID, TemplateDiskName: disk.TemplateDiskName,
 		ProvisioningScript: disk.ProvisioningScript, ProvisioningTimeout: disk.ProvisioningTimeout,
 		AttachedVmId: disk.AttachedVMID, AttachedVmName: disk.AttachedVMName,

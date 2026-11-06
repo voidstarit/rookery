@@ -91,6 +91,24 @@ export type HostBlockDevice = {
   rotational?: boolean;
 };
 
+export type HostAttachableBlockDevice = {
+  name: string;
+  path: string;
+  kind?: "disk" | "partition" | "lv" | "raid" | string;
+  model?: string;
+  size_bytes?: number;
+  major?: number;
+  minor?: number;
+  rotational?: boolean;
+  available?: boolean;
+  unavailable_reason?: string;
+  registered?: boolean;
+  disk_id?: number;
+  disk_name?: string;
+  attached_vm_id?: string;
+  attached_vm_name?: string;
+};
+
 export type VPPInterfaceRouteTables = {
   name: string;
   ipv4_table_id: number;
@@ -189,11 +207,13 @@ export type VMDisk = {
   id: number;
   name: string;
   size_gb: number;
+  size_bytes?: number;
   storage_backend_id?: number;
   storage_backend_name?: string;
   vg: string;
   thin_pool: string;
   device: string;
+  source?: string;
 };
 
 export type VMMedia = {
@@ -284,11 +304,13 @@ export type Disk = {
   id: number;
   name: string;
   size_gb: number;
+  size_bytes?: number;
   storage_backend_id?: number;
   storage_backend_name?: string;
   vg: string;
   thin_pool: string;
   device: string;
+  source?: string;
   attached_vm_id?: string;
   attached_vm_name?: string;
   is_template?: boolean;

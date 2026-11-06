@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/voidstarit/rookery/internal/cgroup"
+	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -95,8 +96,14 @@ func (q *QEMU) Start(ctx context.Context, vm store.VM) error {
 		return fmt.Errorf("KVM is not available: %w", err)
 	}
 	for _, disk := range disks {
-		if _, err := os.Stat(disk.Device); err != nil {
-			return fmt.Errorf("disk device %s is not available: %w", disk.Device, err)
+		if disk.Source == store.DiskSourceHostDevice {
+			if _, err := host.ValidateAttachableBlockDevice(disk.Device); err != nil {
+				return fmt.Errorf("host device %s is not available: %w", disk.Device, err)
+			}
+			continue
+		}
+		if err := ensureDiskDevice(ctx, disk); err != nil {
+			return err
 		}
 	}
 	if vm.BootMedia != nil {
@@ -516,6 +523,33 @@ func processName(pid int) string {
 		return "unknown"
 	}
 	return name
+}
+
+// ensureDiskDevice verifies that a disk's block device exists. LVM thin
+// volumes can remain in metadata while inactive (for example after a reboot),
+// leaving no /dev node; activate them before giving QEMU the path.
+func ensureDiskDevice(ctx context.Context, disk store.VMDisk) error {
+	_, statErr := os.Stat(disk.Device)
+	if statErr == nil {
+		return nil
+	}
+	if disk.Source != store.DiskSourceHostDevice && disk.VG != "" && disk.Name != "" {
+		if err := host.NewLVM().ActivateThinVolume(ctx, disk.VG, disk.ThinPool, disk.Name); err != nil {
+			return fmt.Errorf("disk device %s is not available: %w", disk.Device, err)
+		}
+		deadline := time.Now().Add(2 * time.Second)
+		for {
+			_, statErr = os.Stat(disk.Device)
+			if statErr == nil {
+				return nil
+			}
+			if time.Now().After(deadline) {
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+	return fmt.Errorf("disk device %s is not available: %w", disk.Device, statErr)
 }
 
 func vmDisks(vm store.VM) []store.VMDisk {

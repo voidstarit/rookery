@@ -27,12 +27,6 @@ const (
 )
 
 func (s *vmService) CreateVM(ctx context.Context, request *rookeryv1.CreateVMRequest) (*rookeryv1.VM, error) {
-	if s.readiness != nil {
-		current := s.readiness.Status()
-		if !current.Ready {
-			return nil, status.Error(codes.Unavailable, vmCreationBlockedMessage(current))
-		}
-	}
 	vm, err := vmFromCreateRequest(request)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -43,6 +37,9 @@ func (s *vmService) CreateVM(ctx context.Context, request *rookeryv1.CreateVMReq
 	interfaceIDs, err := normalizeGatewayIDs(request.GetInterfaceIds(), gatewayMaxVMInterfaces, "interface_ids")
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	if err := s.checkVMCreatePrerequisites(ctx, vm.DiskIDs); err != nil {
+		return nil, err
 	}
 	s.resourceMu.Lock()
 	defer s.resourceMu.Unlock()
@@ -234,6 +231,41 @@ func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMReq
 		}
 	}
 	return vmToProto(updated), nil
+}
+
+// checkVMCreatePrerequisites only requires the thin pool for disks that
+// actually need it. A VM backed entirely by host passthrough disks can be
+// created while the thin pool is unavailable. VPP remains a global
+// prerequisite because VM networking and console reconciliation assume it.
+func (s *vmService) checkVMCreatePrerequisites(ctx context.Context, diskIDs []int64) error {
+	if s.readiness == nil {
+		return nil
+	}
+	needsStorage := true
+	allHostDevices := true
+	for _, diskID := range diskIDs {
+		disk, err := s.store.GetDisk(ctx, diskID)
+		if err != nil {
+			if errors.Is(err, store.ErrDiskNotFound) {
+				// Leave the conservative requirement in place; the store will
+				// return the authoritative not-found error after readiness.
+				allHostDevices = false
+				continue
+			}
+			return status.Error(codes.Internal, "could not read disk")
+		}
+		if disk.Source != store.DiskSourceHostDevice {
+			allHostDevices = false
+		}
+	}
+	if allHostDevices && len(diskIDs) > 0 {
+		needsStorage = false
+	}
+	current := s.readiness.Status()
+	if (needsStorage && !current.ThinPool.Ready) || !current.VPP.Ready {
+		return status.Error(codes.Unavailable, vmCreationBlockedMessage(current, needsStorage))
+	}
+	return nil
 }
 
 func vmFromCreateRequest(request *rookeryv1.CreateVMRequest) (store.VM, error) {
@@ -440,9 +472,9 @@ func vmStoreError(err error, operation string) error {
 	}
 }
 
-func vmCreationBlockedMessage(status readiness.Status) string {
+func vmCreationBlockedMessage(status readiness.Status, needsStorage bool) string {
 	var problems []string
-	if !status.ThinPool.Ready {
+	if needsStorage && !status.ThinPool.Ready {
 		problems = append(problems, "thin pool: "+componentReason(status.ThinPool.ComponentStatus))
 	}
 	if !status.VPP.Ready {

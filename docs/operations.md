@@ -174,10 +174,15 @@ logged at `info`; renewals at `debug`.
 
 The UI has **Virtual machines**, **Disks**, **Installation media**,
 **Rookery Networks**, **VNFs**, and **LightVM** tabs. The **Disks** tab manages storage
-backends and creates disks on the selected backend; VM creation additionally
-requires VPP and at least one unattached disk. The VM form uses a
-dropdown-and-Add picker for disks; the first added disk is the boot disk, and
-disks can be added or removed while the VM is stopped.
+backends, creates LVM thin disks, and registers host block devices for
+passthrough. The create dialog's **Storage source** selector switches between an
+LVM thin volume and a host disk, partition, or logical volume discovered through
+`/api/host/block-devices/attachable`; unavailable devices are disabled with the
+reason the host is using them. VM creation requires VPP and at least one
+unattached disk, and requires a ready thin pool only when an LVM disk is
+selected. The VM form uses a dropdown-and-Add picker for disks; the first added
+disk is the boot disk, and disks can be added or removed while the VM is
+stopped.
 The `default` backend is bootstrapped from
 the API `-vg`/`-thin-pool` flags when supplied; otherwise `serve` starts with
 the first registered storage backend, and adding a backend in the UI updates
@@ -187,11 +192,15 @@ volumes in its pool and registers selected volumes as disks without modifying
 LVM. Already registered volumes are shown as unavailable. The driver and config
 are stored separately so future drivers (for example Ceph) can be added without
 changing the disk inventory. While blocked, the corresponding create buttons are
-disabled and the API returns `503 Service Unavailable`:
+disabled (except that host passthrough disks remain selectable when only the
+thin pool is missing) and the API returns `503 Service Unavailable`:
 
-- `POST /api/disks` requires a valid selected storage backend; the bootstrapped
-  default backend must have a ready thin pool.
-- `POST /api/vms` requires a ready thin pool, a ready VPP, and an available disk.
+- `POST /api/disks` requires a valid selected storage backend for LVM disks;
+  the bootstrapped default backend must have a ready thin pool. Host passthrough
+  disks bypass LVM and storage-backend readiness.
+- `POST /api/vms` requires a ready VPP and an available disk. A ready thin pool
+  is required only when at least one attached disk is LVM-backed; a VM using
+  only host passthrough disks can start while the thin pool is unavailable.
 
 Media entries are read-only references to existing ISO files on the host. The
 server records the absolute path and file size but never copies or modifies the

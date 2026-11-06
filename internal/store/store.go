@@ -33,6 +33,9 @@ var (
 	ErrDiskNotFound = errors.New("disk not found")
 	// ErrDiskNameTaken is returned when a disk name is already in use.
 	ErrDiskNameTaken = errors.New("disk name already exists")
+	// ErrDiskDeviceTaken is returned when a host block device is already
+	// registered as a passthrough disk.
+	ErrDiskDeviceTaken = errors.New("host block device is already registered")
 	// ErrDiskInUse is returned when a disk is attached to a VM.
 	ErrDiskInUse = errors.New("disk is attached to a vm")
 	// ErrDiskIsTemplate is returned when a template disk is attached to a VM.
@@ -114,6 +117,14 @@ func Statuses() []string {
 }
 
 const (
+	// DiskSourceLVMThin is a disk backed by a Rookery-managed thin-LVM volume.
+	DiskSourceLVMThin = "lvm-thin"
+	// DiskSourceHostDevice passes an existing host block device (a disk,
+	// partition, or logical volume) through to one VM.
+	DiskSourceHostDevice = "host-device"
+)
+
+const (
 	// DesiredRunning means the VM should be running, including after an API or
 	// host restart.
 	DesiredRunning = "running"
@@ -153,11 +164,13 @@ type VMDisk struct {
 	ID                 int64  `json:"id"`
 	Name               string `json:"name"`
 	SizeGB             int    `json:"size_gb"`
+	SizeBytes          uint64 `json:"size_bytes,omitempty"`
 	StorageBackendID   *int64 `json:"storage_backend_id,omitempty"`
 	StorageBackendName string `json:"storage_backend_name,omitempty"`
 	VG                 string `json:"vg"`
 	ThinPool           string `json:"thin_pool"`
 	Device             string `json:"device"`
+	Source             string `json:"source"`
 }
 
 // VMMedia is the boot media summary returned with a VM.
@@ -420,11 +433,13 @@ type Disk struct {
 	ID                  int64     `json:"id"`
 	Name                string    `json:"name"`
 	SizeGB              int       `json:"size_gb"`
+	SizeBytes           uint64    `json:"size_bytes,omitempty"`
 	StorageBackendID    *int64    `json:"storage_backend_id,omitempty"`
 	StorageBackendName  string    `json:"storage_backend_name,omitempty"`
 	VG                  string    `json:"vg"`
 	ThinPool            string    `json:"thin_pool"`
 	Device              string    `json:"device"`
+	Source              string    `json:"source"`
 	IsTemplate          bool      `json:"is_template"`
 	TemplateDiskID      *int64    `json:"template_disk_id,omitempty"`
 	TemplateDiskName    string    `json:"template_disk_name,omitempty"`
@@ -902,21 +917,44 @@ func (s *Store) DeleteVM(ctx context.Context, id string) error {
 
 // CreateDisk inserts a disk record and returns the stored record.
 func (s *Store) CreateDisk(ctx context.Context, disk Disk) (Disk, error) {
+	if disk.Source == "" {
+		disk.Source = DiskSourceLVMThin
+	}
+	switch disk.Source {
+	case DiskSourceLVMThin:
+		disk.Device = ""
+		disk.SizeBytes = 0
+	case DiskSourceHostDevice:
+		if strings.TrimSpace(disk.Device) == "" {
+			return Disk{}, errors.New("host device path is required")
+		}
+		if disk.IsTemplate || disk.TemplateDiskID != nil || disk.PreparedByScript ||
+			disk.ProvisioningScript != "" || disk.ProvisioningTimeout != "" {
+			return Disk{}, errors.New("host devices cannot be templates or template clones")
+		}
+	default:
+		return Disk{}, fmt.Errorf("unsupported disk source %q", disk.Source)
+	}
 	if !disk.IsTemplate && (disk.ProvisioningScript != "" || disk.ProvisioningTimeout != "") {
 		return Disk{}, errors.New("provisioning settings require a template disk")
 	}
 	now := time.Now().UTC().UnixMilli()
 
 	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO disks (name, size_gb, vg, thin_pool, storage_backend_id, is_template, template_disk_id,
-			provisioning_script, provisioning_timeout, prepared_by_script, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		disk.Name, disk.SizeGB, disk.VG, disk.ThinPool, disk.StorageBackendID, disk.IsTemplate, disk.TemplateDiskID,
+		INSERT INTO disks (name, size_gb, vg, thin_pool, storage_backend_id, source, device, size_bytes,
+			is_template, template_disk_id, provisioning_script, provisioning_timeout, prepared_by_script,
+			created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		disk.Name, disk.SizeGB, disk.VG, disk.ThinPool, disk.StorageBackendID, disk.Source,
+		disk.Device, disk.SizeBytes, disk.IsTemplate, disk.TemplateDiskID,
 		disk.ProvisioningScript, disk.ProvisioningTimeout, disk.PreparedByScript, now, now,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return Disk{}, fmt.Errorf("%w: %q", ErrDiskNameTaken, disk.Name)
+			if _, nameErr := s.GetDiskByName(ctx, disk.Name); nameErr == nil {
+				return Disk{}, fmt.Errorf("%w: %q", ErrDiskNameTaken, disk.Name)
+			}
+			return Disk{}, fmt.Errorf("%w: %q", ErrDiskDeviceTaken, disk.Device)
 		}
 		return Disk{}, fmt.Errorf("insert disk: %w", err)
 	}
@@ -1039,6 +1077,9 @@ func (s *Store) SetDiskTemplate(ctx context.Context, id int64, isTemplate bool) 
 	if err != nil {
 		return Disk{}, err
 	}
+	if disk.Source == DiskSourceHostDevice {
+		return Disk{}, errors.New("host devices cannot be templates")
+	}
 	if disk.AttachedVMID != nil {
 		return Disk{}, ErrDiskInUse
 	}
@@ -1054,6 +1095,9 @@ func (s *Store) SetDiskProvisioning(ctx context.Context, id int64, script, timeo
 	disk, err := s.GetDisk(ctx, id)
 	if err != nil {
 		return Disk{}, err
+	}
+	if disk.Source == DiskSourceHostDevice {
+		return Disk{}, errors.New("host devices cannot be templates")
 	}
 	if disk.AttachedVMID != nil {
 		return Disk{}, ErrDiskInUse
@@ -2036,7 +2080,7 @@ func (s *Store) loadVMDisks(ctx context.Context, vms []VM) error {
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT vd.vm_id, d.id, d.name, d.size_gb, d.vg, d.thin_pool,
-		       d.storage_backend_id, sb.name
+		       d.storage_backend_id, sb.name, d.source, d.device, d.size_bytes
 		FROM vm_disks AS vd
 		JOIN disks AS d ON d.id = vd.disk_id
 		LEFT JOIN storage_backends AS sb ON sb.id = d.storage_backend_id
@@ -2054,13 +2098,20 @@ func (s *Store) loadVMDisks(ctx context.Context, vms []VM) error {
 			backendName sql.NullString
 			vg          string
 			pool        string
+			device      string
+			sizeBytes   int64
 		)
-		if err := rows.Scan(&vmID, &disk.ID, &disk.Name, &disk.SizeGB, &vg, &pool, &backend, &backendName); err != nil {
+		if err := rows.Scan(&vmID, &disk.ID, &disk.Name, &disk.SizeGB, &vg, &pool,
+			&backend, &backendName, &disk.Source, &device, &sizeBytes); err != nil {
 			return err
 		}
 		disk.VG = vg
 		disk.ThinPool = pool
-		disk.Device = devicePath(vg, disk.Name)
+		disk.SizeBytes = uint64(sizeBytes)
+		disk.Device = device
+		if disk.Device == "" {
+			disk.Device = devicePath(vg, disk.Name)
+		}
 		if backend.Valid {
 			id := backend.Int64
 			disk.StorageBackendID = &id
@@ -2321,7 +2372,8 @@ const vmSelect = `
 
 const diskSelect = `
 	SELECT d.id, d.name, d.size_gb, d.vg, d.thin_pool,
-	       d.storage_backend_id, sb.name, d.is_template, d.template_disk_id,
+	       d.storage_backend_id, sb.name, d.source, d.device, d.size_bytes,
+	       d.is_template, d.template_disk_id,
 	       d.provisioning_script, d.provisioning_timeout, d.prepared_by_script,
 	       td.name, v.id, v.name, d.created_at, d.updated_at
 	FROM disks AS d
@@ -2412,6 +2464,7 @@ func scanDisk(s scanner) (Disk, error) {
 		disk                Disk
 		backendID           sql.NullInt64
 		backend             sql.NullString
+		sizeBytes           int64
 		isTemplate          int64
 		templateID          sql.NullInt64
 		provisioningScript  string
@@ -2431,6 +2484,9 @@ func scanDisk(s scanner) (Disk, error) {
 		&disk.ThinPool,
 		&backendID,
 		&backend,
+		&disk.Source,
+		&disk.Device,
+		&sizeBytes,
 		&isTemplate,
 		&templateID,
 		&provisioningScript,
@@ -2445,7 +2501,13 @@ func scanDisk(s scanner) (Disk, error) {
 		return Disk{}, err
 	}
 
-	disk.Device = devicePath(disk.VG, disk.Name)
+	disk.SizeBytes = uint64(sizeBytes)
+	if disk.Source == "" {
+		disk.Source = DiskSourceLVMThin
+	}
+	if disk.Device == "" {
+		disk.Device = devicePath(disk.VG, disk.Name)
+	}
 	disk.IsTemplate = isTemplate != 0
 	disk.ProvisioningScript = provisioningScript
 	disk.ProvisioningTimeout = provisioningTimeout

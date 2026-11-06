@@ -16,7 +16,8 @@ type VMDialogProps = {
   disks: Disk[];
   media: Media[];
   interfaces: VirtualInterface[];
-  ready: boolean;
+  thinPoolReady: boolean;
+  vppReady: boolean;
   onClose: () => void;
   onSaved: (vm: VM) => void;
 };
@@ -48,7 +49,8 @@ export function VMDialog({
   disks,
   media,
   interfaces,
-  ready,
+  thinPoolReady,
+  vppReady,
   onClose,
   onSaved,
 }: VMDialogProps) {
@@ -189,16 +191,23 @@ export function VMDialog({
     if (saving) {
       return;
     }
-    if (!editing && !ready) {
-      setError("VM creation is blocked until the thin pool and FD.io VPP are ready.");
-      return;
-    }
     if (!formRef.current?.reportValidity()) {
       return;
     }
     if (selectedDisks.length === 0) {
       setError("Select at least one disk.");
       return;
+    }
+    if (!editing) {
+      const needsThinPool = selectedDisks.some((disk) => disk.source !== "host-device");
+      if (!vppReady) {
+        setError("FD.io VPP is not ready. VM creation is blocked until VPP is reachable.");
+        return;
+      }
+      if (needsThinPool && !thinPoolReady) {
+        setError("The thin pool is not ready. Select a host passthrough disk or fix the thin pool first.");
+        return;
+      }
     }
 
     const payload: Record<string, unknown> = {
@@ -339,7 +348,8 @@ export function VMDialog({
                 <option value="">{availableDisks.length > 0 ? "Select a disk…" : "No disks available"}</option>
                 {availableDisks.map((disk) => (
                   <option value={String(disk.id)} key={disk.id}>
-                    {disk.name} · {disk.size_gb} GB
+                    {disk.name} · {formatBytes(disk.size_bytes || disk.size_gb * 1024 ** 3)}
+                    {disk.source === "host-device" ? " · passthrough" : ""}
                   </option>
                 ))}
               </select>
@@ -361,7 +371,9 @@ export function VMDialog({
                     <span class="interface-list-name">
                       {disk.name}
                       <span class="interface-list-network">
-                        {disk.size_gb} GB{index === 0 ? " · boot" : ""}
+                        {formatBytes(disk.size_bytes || disk.size_gb * 1024 ** 3)}
+                        {disk.source === "host-device" ? " · passthrough" : ""}
+                        {index === 0 ? " · boot" : ""}
                       </span>
                     </span>
                     <button
