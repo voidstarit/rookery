@@ -41,11 +41,17 @@ are returned immediately.
 ```bash
 go test ./...
 go vet ./...
+golangci-lint run ./...
 ```
 
 `internal/qemu` includes an integration test that launches a real QEMU/KVM
 process and is skipped automatically when `/dev/kvm` or `qemu-system-x86_64`
 is unavailable. Use `go test -short ./...` to skip it explicitly.
+
+CI runs `go test -covermode=atomic -coverprofile=coverage.out ./...`, reports
+total statement coverage, enforces a 20% floor, and uploads `coverage.out` as an
+artifact. It also runs `golangci-lint` (configuration in `.golangci.yml`),
+`go vet`, `gofmt`, `make proto-check`, and a generated-UI-bundle drift check.
 
 ## Releases
 

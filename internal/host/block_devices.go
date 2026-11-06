@@ -188,7 +188,7 @@ func InspectAttachableBlockDevice(path string) (AttachableBlockDevice, error) {
 	if !ok {
 		return AttachableBlockDevice{}, fmt.Errorf("read device number for %s", cleaned)
 	}
-	major, minor := unix.Major(uint64(stat.Rdev)), unix.Minor(uint64(stat.Rdev))
+	major, minor := unix.Major(stat.Rdev), unix.Minor(stat.Rdev)
 	devices, err := ListAttachableBlockDevices()
 	if err != nil {
 		return AttachableBlockDevice{}, err
@@ -267,7 +267,7 @@ func blockDeviceSysfsPath(path string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	major, minor := unix.Major(uint64(stat.Rdev)), unix.Minor(uint64(stat.Rdev))
+	major, minor := unix.Major(stat.Rdev), unix.Minor(stat.Rdev)
 	entries, err := os.ReadDir("/sys/class/block")
 	if err != nil {
 		return "", false
@@ -391,7 +391,7 @@ func hostBusyDeviceNumbers() (map[uint64]string, map[uint64]string) {
 			if !ok {
 				continue
 			}
-			swaps[deviceKey(unix.Major(uint64(stat.Rdev)), unix.Minor(uint64(stat.Rdev)))] = fields[0]
+			swaps[deviceKey(unix.Major(stat.Rdev), unix.Minor(stat.Rdev))] = fields[0]
 		}
 	}
 

@@ -144,7 +144,7 @@ func buildVPPACLRules(rules []store.ACLRule) ([]acl_types.ACLRule, error) {
 		proto := ip_types.IP_API_PROTO_HOPOPT
 		switch strings.ToLower(rule.Protocol) {
 		case "", "any":
-			proto = ip_types.IP_API_PROTO_HOPOPT
+			// Keep the default HOPOPT protocol (match any).
 		case "tcp":
 			proto = ip_types.IP_API_PROTO_TCP
 		case "udp":

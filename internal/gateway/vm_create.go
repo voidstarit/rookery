@@ -101,12 +101,11 @@ func (s *vmService) startCreatedVM(ctx context.Context, vm store.VM) (store.VM, 
 		s.rollbackCreatedVM(vm.ID)
 		return store.VM{}, status.Error(codes.Internal, "could not start VM: "+err.Error())
 	}
-	started, err := s.store.SetVMStatus(ctx, vm.ID, store.StatusRunning)
-	if err != nil {
+	if _, err := s.store.SetVMStatus(ctx, vm.ID, store.StatusRunning); err != nil {
 		s.rollbackCreatedVM(vm.ID)
 		return store.VM{}, status.Error(codes.Internal, "could not update VM status")
 	}
-	started, err = s.store.SetVMDesiredState(ctx, vm.ID, store.DesiredRunning)
+	started, err := s.store.SetVMDesiredState(ctx, vm.ID, store.DesiredRunning)
 	if err != nil {
 		s.rollbackCreatedVM(vm.ID)
 		return store.VM{}, status.Error(codes.Internal, "could not update VM desired state")

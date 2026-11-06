@@ -1,0 +1,24 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+    - unconvert
+  settings:
+    staticcheck:
+      # Keep correctness checks (SA*) and simplification checks (S*) while
+      # allowing the project's existing naming and error-string style.
+      checks:
+        - all
+        - -ST1000
+        - -ST1003
+        - -ST1005
+        - -ST1020
+        - -ST1021
+        - -ST1022
+        - -ST1023
+        - -QF*

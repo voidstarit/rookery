@@ -30,13 +30,7 @@ func TestPKIClientCertificateEndpoints(t *testing.T) {
 	if issued.Code != http.StatusCreated {
 		t.Fatalf("issue status = %d, body = %s", issued.Code, issued.Body.String())
 	}
-	var created struct {
-		ID             int64  `json:"id"`
-		Name           string `json:"name"`
-		CertificatePEM string `json:"certificate_pem"`
-		PrivateKeyPEM  string `json:"private_key_pem"`
-	}
-	created = decode[struct {
+	created := decode[struct {
 		ID             int64  `json:"id"`
 		Name           string `json:"name"`
 		CertificatePEM string `json:"certificate_pem"`

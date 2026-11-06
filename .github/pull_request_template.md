@@ -6,6 +6,7 @@ Describe the change and why it is needed.
 
 - [ ] `make test`
 - [ ] `go vet ./...`
+- [ ] `golangci-lint run ./...`
 - [ ] `gofmt -l .`
 
 ## Checklist

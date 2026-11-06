@@ -60,9 +60,7 @@ func newMemifLink(socketPath string, ifID uint32, name string, _ net.HardwareAdd
 				_ = socket.Delete()
 				return nil, fmt.Errorf("connect to memif socket %s: %w", socketPath, err)
 			}
-			select {
-			case <-time.After(50 * time.Millisecond):
-			}
+			time.Sleep(50 * time.Millisecond)
 			continue
 		}
 	}
@@ -83,9 +81,7 @@ func newMemifLink(socketPath string, ifID uint32, name string, _ net.HardwareAdd
 			link.close()
 			return nil, fmt.Errorf("memif interface %s did not connect within 5s", socketPath)
 		}
-		select {
-		case <-time.After(20 * time.Millisecond):
-		}
+		time.Sleep(20 * time.Millisecond)
 	}
 
 	rx, err := iface.GetRxQueue(0)

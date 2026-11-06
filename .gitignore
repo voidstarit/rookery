@@ -8,6 +8,9 @@
 /rookery
 /dist/
 
+# Go test output
+/coverage.out
+
 # UI dependencies and typecheck cache
 /ui/node_modules/
 /ui/*.tsbuildinfo
