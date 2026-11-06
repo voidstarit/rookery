@@ -753,6 +753,386 @@ var _ interface {
 	ErrorName() string
 } = ListHostBlockDevicesResponseValidationError{}
 
+// Validate checks the field values on HostAttachableBlockDevice with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *HostAttachableBlockDevice) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on HostAttachableBlockDevice with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// HostAttachableBlockDeviceMultiError, or nil if none found.
+func (m *HostAttachableBlockDevice) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *HostAttachableBlockDevice) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Name
+
+	// no validation rules for Path
+
+	// no validation rules for Kind
+
+	// no validation rules for Model
+
+	// no validation rules for SizeBytes
+
+	// no validation rules for Major
+
+	// no validation rules for Minor
+
+	// no validation rules for Rotational
+
+	// no validation rules for Available
+
+	// no validation rules for UnavailableReason
+
+	// no validation rules for Registered
+
+	// no validation rules for DiskName
+
+	// no validation rules for AttachedVmName
+
+	if m.DiskId != nil {
+		// no validation rules for DiskId
+	}
+
+	if m.AttachedVmId != nil {
+		// no validation rules for AttachedVmId
+	}
+
+	if len(errors) > 0 {
+		return HostAttachableBlockDeviceMultiError(errors)
+	}
+
+	return nil
+}
+
+// HostAttachableBlockDeviceMultiError is an error wrapping multiple validation
+// errors returned by HostAttachableBlockDevice.ValidateAll() if the
+// designated constraints aren't met.
+type HostAttachableBlockDeviceMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m HostAttachableBlockDeviceMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m HostAttachableBlockDeviceMultiError) AllErrors() []error { return m }
+
+// HostAttachableBlockDeviceValidationError is the validation error returned by
+// HostAttachableBlockDevice.Validate if the designated constraints aren't met.
+type HostAttachableBlockDeviceValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e HostAttachableBlockDeviceValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e HostAttachableBlockDeviceValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e HostAttachableBlockDeviceValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e HostAttachableBlockDeviceValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e HostAttachableBlockDeviceValidationError) ErrorName() string {
+	return "HostAttachableBlockDeviceValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e HostAttachableBlockDeviceValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sHostAttachableBlockDevice.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = HostAttachableBlockDeviceValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = HostAttachableBlockDeviceValidationError{}
+
+// Validate checks the field values on ListAttachableBlockDevicesRequest with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the first error encountered is returned, or nil if there are
+// no violations.
+func (m *ListAttachableBlockDevicesRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ListAttachableBlockDevicesRequest
+// with the rules defined in the proto definition for this message. If any
+// rules are violated, the result is a list of violation errors wrapped in
+// ListAttachableBlockDevicesRequestMultiError, or nil if none found.
+func (m *ListAttachableBlockDevicesRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ListAttachableBlockDevicesRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if len(errors) > 0 {
+		return ListAttachableBlockDevicesRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// ListAttachableBlockDevicesRequestMultiError is an error wrapping multiple
+// validation errors returned by
+// ListAttachableBlockDevicesRequest.ValidateAll() if the designated
+// constraints aren't met.
+type ListAttachableBlockDevicesRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ListAttachableBlockDevicesRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ListAttachableBlockDevicesRequestMultiError) AllErrors() []error { return m }
+
+// ListAttachableBlockDevicesRequestValidationError is the validation error
+// returned by ListAttachableBlockDevicesRequest.Validate if the designated
+// constraints aren't met.
+type ListAttachableBlockDevicesRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ListAttachableBlockDevicesRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ListAttachableBlockDevicesRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ListAttachableBlockDevicesRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ListAttachableBlockDevicesRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ListAttachableBlockDevicesRequestValidationError) ErrorName() string {
+	return "ListAttachableBlockDevicesRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ListAttachableBlockDevicesRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListAttachableBlockDevicesRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ListAttachableBlockDevicesRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ListAttachableBlockDevicesRequestValidationError{}
+
+// Validate checks the field values on ListAttachableBlockDevicesResponse with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the first error encountered is returned, or nil if there are
+// no violations.
+func (m *ListAttachableBlockDevicesResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ListAttachableBlockDevicesResponse
+// with the rules defined in the proto definition for this message. If any
+// rules are violated, the result is a list of violation errors wrapped in
+// ListAttachableBlockDevicesResponseMultiError, or nil if none found.
+func (m *ListAttachableBlockDevicesResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ListAttachableBlockDevicesResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	for idx, item := range m.GetDevices() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ListAttachableBlockDevicesResponseValidationError{
+						field:  fmt.Sprintf("Devices[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ListAttachableBlockDevicesResponseValidationError{
+						field:  fmt.Sprintf("Devices[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ListAttachableBlockDevicesResponseValidationError{
+					field:  fmt.Sprintf("Devices[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return ListAttachableBlockDevicesResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// ListAttachableBlockDevicesResponseMultiError is an error wrapping multiple
+// validation errors returned by
+// ListAttachableBlockDevicesResponse.ValidateAll() if the designated
+// constraints aren't met.
+type ListAttachableBlockDevicesResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ListAttachableBlockDevicesResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ListAttachableBlockDevicesResponseMultiError) AllErrors() []error { return m }
+
+// ListAttachableBlockDevicesResponseValidationError is the validation error
+// returned by ListAttachableBlockDevicesResponse.Validate if the designated
+// constraints aren't met.
+type ListAttachableBlockDevicesResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ListAttachableBlockDevicesResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ListAttachableBlockDevicesResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ListAttachableBlockDevicesResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ListAttachableBlockDevicesResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ListAttachableBlockDevicesResponseValidationError) ErrorName() string {
+	return "ListAttachableBlockDevicesResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ListAttachableBlockDevicesResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListAttachableBlockDevicesResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ListAttachableBlockDevicesResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ListAttachableBlockDevicesResponseValidationError{}
+
 // Validate checks the field values on AttachHostInterfaceRequest with the
 // rules defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.

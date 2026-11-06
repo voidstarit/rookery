@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/voidstarit/rookery/internal/gateway"
-	"github.com/voidstarit/rookery/internal/readiness"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -43,7 +42,7 @@ func TestVMCreateAndUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	gw, err := gateway.New(st, fakeReadiness{status: readiness.Status{Ready: true}}, gateway.WithVMController(&fakeVMController{}))
+	gw, err := gateway.New(st, fakeReadiness{status: readyStatus()}, gateway.WithVMController(&fakeVMController{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +192,7 @@ func TestVMCreateStartFailureRollsBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	runtime := &fakeVMController{startErr: errors.New("KVM is not available")}
-	gw, err := gateway.New(st, fakeReadiness{status: readiness.Status{Ready: true}}, gateway.WithVMController(runtime))
+	gw, err := gateway.New(st, fakeReadiness{status: readyStatus()}, gateway.WithVMController(runtime))
 	if err != nil {
 		t.Fatal(err)
 	}

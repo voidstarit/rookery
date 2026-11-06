@@ -15,6 +15,9 @@ type fakeLVM struct {
 	failCreate       bool
 	failVolumeCreate bool
 	failVolumeRemove bool
+	failLVS          bool
+	failLVChange     bool
+	noopLVChange     bool
 	createCalls      int
 	volumes          map[string]string
 	volumeSizes      map[string]float64
@@ -32,6 +35,9 @@ func (f *fakeLVM) Run(_ context.Context, name string, args ...string) ([]byte, e
 		}
 		return []byte("  other\n"), nil
 	case "lvs":
+		if f.failLVS {
+			return nil, errors.New("lvs failed")
+		}
 		var output strings.Builder
 		if argValue(args, "-o") == "lv_name,lv_attr,lv_size,pool_lv" {
 			for volumeName, attribute := range f.volumes {
@@ -75,6 +81,31 @@ func (f *fakeLVM) Run(_ context.Context, name string, args ...string) ([]byte, e
 		}
 		f.volumes[argValue(args, "--name")] = "Vwi-a-tz--"
 		return nil, nil
+	case "lvchange":
+		if f.failLVChange {
+			return nil, errors.New("lvchange failed")
+		}
+		if f.noopLVChange {
+			return nil, nil
+		}
+		target := args[len(args)-1]
+		_, lvName, ok := strings.Cut(target, "/")
+		if !ok {
+			return nil, errors.New("invalid lvchange target")
+		}
+		if attribute, exists := f.volumes[lvName]; exists {
+			f.volumes[lvName] = lvmSetActive(attribute)
+			return nil, nil
+		}
+		if lvName == "rookery" && f.poolExists {
+			attribute := f.poolAttr
+			if attribute == "" {
+				attribute = "twi-aotz--"
+			}
+			f.poolAttr = lvmSetActive(attribute)
+			return nil, nil
+		}
+		return nil, errors.New("logical volume not found")
 	case "lvremove":
 		if f.failVolumeRemove {
 			return nil, errors.New("lvremove failed")
@@ -92,6 +123,13 @@ func (f *fakeLVM) Run(_ context.Context, name string, args ...string) ([]byte, e
 	default:
 		return nil, errors.New("unexpected command " + name)
 	}
+}
+
+func lvmSetActive(attribute string) string {
+	if len(attribute) < 5 {
+		return attribute
+	}
+	return attribute[:4] + "a" + attribute[5:]
 }
 
 func argValue(args []string, flag string) string {
@@ -372,5 +410,143 @@ func TestDeleteThinVolumeRefusesNonThinLV(t *testing.T) {
 	}
 	if runner.called("lvremove") {
 		t.Fatalf("lvremove was called: %v", runner.calls)
+	}
+}
+
+func TestActivateThinVolumeActivatesPoolAndVolume(t *testing.T) {
+	runner := &fakeLVM{
+		vgExists:   true,
+		poolExists: true,
+		poolAttr:   "twi---tz--",
+		volumes:    map[string]string{"vm03": "Vwi---tz--"},
+	}
+	lvm := &LVM{Runner: runner}
+
+	if err := lvm.ActivateThinVolume(context.Background(), "vg0", "rookery", "vm03"); err != nil {
+		t.Fatalf("ActivateThinVolume: %v", err)
+	}
+	if !runner.called("lvchange -ay -K vg0/rookery") {
+		t.Fatalf("thin pool was not activated: %v", runner.calls)
+	}
+	if !runner.called("lvchange -ay -K vg0/vm03") {
+		t.Fatalf("thin volume was not activated: %v", runner.calls)
+	}
+}
+
+func TestActivateThinVolumeSkipsActiveVolume(t *testing.T) {
+	runner := &fakeLVM{
+		vgExists:   true,
+		poolExists: true,
+		volumes:    map[string]string{"vm03": "Vwi-a-tz--"},
+	}
+	lvm := &LVM{Runner: runner}
+
+	if err := lvm.ActivateThinVolume(context.Background(), "vg0", "rookery", "vm03"); err != nil {
+		t.Fatalf("ActivateThinVolume: %v", err)
+	}
+	if runner.called("lvchange") {
+		t.Fatalf("lvchange was called for an active volume: %v", runner.calls)
+	}
+}
+
+func TestActivateThinVolumeRejectsMissingVolume(t *testing.T) {
+	runner := &fakeLVM{vgExists: true, poolExists: true}
+	lvm := &LVM{Runner: runner}
+
+	err := lvm.ActivateThinVolume(context.Background(), "vg0", "rookery", "missing")
+	if err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("error = %v, want missing-volume error", err)
+	}
+}
+
+func TestActivateThinVolumeValidation(t *testing.T) {
+	lvm := &LVM{Runner: &fakeLVM{}}
+	cases := []struct {
+		name     string
+		vg       string
+		pool     string
+		volume   string
+		contains string
+	}{
+		{name: "volume group", vg: "", pool: "rookery", volume: "vm03", contains: "volume group name is required"},
+		{name: "volume", vg: "vg0", pool: "rookery", volume: "", contains: "logical volume name is required"},
+		{name: "thin pool", vg: "vg0", pool: "bad/pool", volume: "vm03", contains: "thin pool name"},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			err := lvm.ActivateThinVolume(context.Background(), test.vg, test.pool, test.volume)
+			if err == nil || !strings.Contains(err.Error(), test.contains) {
+				t.Fatalf("error = %v, want %q", err, test.contains)
+			}
+		})
+	}
+}
+
+func TestActivateThinVolumeRejectsMissingPool(t *testing.T) {
+	lvm := &LVM{Runner: &fakeLVM{vgExists: true}}
+	err := lvm.ActivateThinVolume(context.Background(), "vg0", "rookery", "vm03")
+	if err == nil || !strings.Contains(err.Error(), "thin pool") {
+		t.Fatalf("error = %v, want missing thin pool", err)
+	}
+}
+
+func TestActivateThinVolumeRejectsNonThinPool(t *testing.T) {
+	lvm := &LVM{Runner: &fakeLVM{
+		vgExists: true, poolExists: true, poolAttr: "-wi-a-----",
+	}}
+	err := lvm.ActivateThinVolume(context.Background(), "vg0", "rookery", "vm03")
+	if err == nil || !strings.Contains(err.Error(), "is not a thin pool") {
+		t.Fatalf("error = %v, want non-thin-pool error", err)
+	}
+}
+
+func TestActivateThinVolumePoolActivationFailure(t *testing.T) {
+	lvm := &LVM{Runner: &fakeLVM{
+		vgExists: true, poolExists: true, poolAttr: "twi---tz--", failLVChange: true,
+	}}
+	err := lvm.ActivateThinVolume(context.Background(), "vg0", "rookery", "vm03")
+	if err == nil || !strings.Contains(err.Error(), "activate thin pool") {
+		t.Fatalf("error = %v, want thin pool activation failure", err)
+	}
+}
+
+func TestActivateThinVolumeRejectsNonThinVolume(t *testing.T) {
+	lvm := &LVM{Runner: &fakeLVM{
+		vgExists: true, poolExists: true,
+		volumes: map[string]string{"vm03": "-wi-a-----"},
+	}}
+	err := lvm.ActivateThinVolume(context.Background(), "vg0", "rookery", "vm03")
+	if err == nil || !strings.Contains(err.Error(), "is not a thin volume") {
+		t.Fatalf("error = %v, want non-thin-volume error", err)
+	}
+}
+
+func TestActivateThinVolumeActivationFailure(t *testing.T) {
+	lvm := &LVM{Runner: &fakeLVM{
+		vgExists: true, poolExists: true,
+		volumes: map[string]string{"vm03": "Vwi---tz--"}, failLVChange: true,
+	}}
+	err := lvm.ActivateThinVolume(context.Background(), "vg0", "rookery", "vm03")
+	if err == nil || !strings.Contains(err.Error(), "activate thin volume") {
+		t.Fatalf("error = %v, want thin volume activation failure", err)
+	}
+}
+
+func TestActivateThinVolumeDidNotBecomeActive(t *testing.T) {
+	lvm := &LVM{Runner: &fakeLVM{
+		vgExists: true, poolExists: true, noopLVChange: true,
+		volumes: map[string]string{"vm03": "Vwi---tz--"},
+	}}
+	err := lvm.ActivateThinVolume(context.Background(), "vg0", "rookery", "vm03")
+	if err == nil || !strings.Contains(err.Error(), "did not become active") {
+		t.Fatalf("error = %v, want activation verification failure", err)
+	}
+}
+
+func TestActivateThinVolumeInspectionFailure(t *testing.T) {
+	lvm := &LVM{Runner: &fakeLVM{vgExists: true, poolExists: true, failLVS: true}}
+	err := lvm.ActivateThinVolume(context.Background(), "vg0", "rookery", "vm03")
+	if err == nil || !strings.Contains(err.Error(), "lvs failed") {
+		t.Fatalf("error = %v, want lvs failure", err)
 	}
 }

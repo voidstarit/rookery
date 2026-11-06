@@ -13,7 +13,9 @@ func TestRateLimiterAllowsBurstThenRefills(t *testing.T) {
 	limiter.now = func() time.Time { return now }
 	limiter.last = now
 
-	if !limiter.Allow() || !limiter.Allow() {
+	first := limiter.Allow()
+	second := limiter.Allow()
+	if !first || !second {
 		t.Fatal("expected the initial burst of two requests to be allowed")
 	}
 	if limiter.Allow() {

@@ -51,6 +51,10 @@ message VMDisk {
   string vg = 6;
   string thin_pool = 7;
   string device = 8;
+  // source is "lvm-thin" or "host-device".
+  string source = 9;
+  // size_bytes is the exact host device size for passthrough disks.
+  uint64 size_bytes = 10;
 }
 
 message Disk {
@@ -71,6 +75,10 @@ message Disk {
   string template_disk_name = 15;
   string provisioning_script = 16;
   string provisioning_timeout = 17;
+  // source is "lvm-thin" or "host-device".
+  string source = 18;
+  // size_bytes is the exact host device size for passthrough disks.
+  uint64 size_bytes = 19;
 }
 
 message ImportableDisk {
@@ -106,6 +114,11 @@ message CreateDiskRequest {
   string provisioning_script = 6 [(validate.rules).string = {ignore_empty: true, max_len: 4096}];
   string provisioning_timeout = 7 [(validate.rules).string = {ignore_empty: true, max_len: 32}];
   google.protobuf.Struct provisioning = 8;
+  // host_device registers an existing host block device (a whole disk,
+  // partition, or logical volume) for passthrough to one VM. When set,
+  // storage_backend_id, size_gb, is_template, template_disk_id, and
+  // provisioning settings must be omitted; the size is read from the device.
+  string host_device = 9 [(validate.rules).string = {ignore_empty: true, max_len: 4096}];
 }
 
 message UpdateDiskRequest {

@@ -36,8 +36,12 @@ type VMDisk struct {
 	Vg                 string                 `protobuf:"bytes,6,opt,name=vg,proto3" json:"vg,omitempty"`
 	ThinPool           string                 `protobuf:"bytes,7,opt,name=thin_pool,json=thinPool,proto3" json:"thin_pool,omitempty"`
 	Device             string                 `protobuf:"bytes,8,opt,name=device,proto3" json:"device,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// source is "lvm-thin" or "host-device".
+	Source string `protobuf:"bytes,9,opt,name=source,proto3" json:"source,omitempty"`
+	// size_bytes is the exact host device size for passthrough disks.
+	SizeBytes     uint64 `protobuf:"varint,10,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *VMDisk) Reset() {
@@ -126,6 +130,20 @@ func (x *VMDisk) GetDevice() string {
 	return ""
 }
 
+func (x *VMDisk) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *VMDisk) GetSizeBytes() uint64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
 type Disk struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	Id                  int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -145,8 +163,12 @@ type Disk struct {
 	TemplateDiskName    string                 `protobuf:"bytes,15,opt,name=template_disk_name,json=templateDiskName,proto3" json:"template_disk_name,omitempty"`
 	ProvisioningScript  string                 `protobuf:"bytes,16,opt,name=provisioning_script,json=provisioningScript,proto3" json:"provisioning_script,omitempty"`
 	ProvisioningTimeout string                 `protobuf:"bytes,17,opt,name=provisioning_timeout,json=provisioningTimeout,proto3" json:"provisioning_timeout,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// source is "lvm-thin" or "host-device".
+	Source string `protobuf:"bytes,18,opt,name=source,proto3" json:"source,omitempty"`
+	// size_bytes is the exact host device size for passthrough disks.
+	SizeBytes     uint64 `protobuf:"varint,19,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Disk) Reset() {
@@ -296,6 +318,20 @@ func (x *Disk) GetProvisioningTimeout() string {
 		return x.ProvisioningTimeout
 	}
 	return ""
+}
+
+func (x *Disk) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *Disk) GetSizeBytes() uint64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
 }
 
 type ImportableDisk struct {
@@ -524,8 +560,13 @@ type CreateDiskRequest struct {
 	ProvisioningScript  string                 `protobuf:"bytes,6,opt,name=provisioning_script,json=provisioningScript,proto3" json:"provisioning_script,omitempty"`
 	ProvisioningTimeout string                 `protobuf:"bytes,7,opt,name=provisioning_timeout,json=provisioningTimeout,proto3" json:"provisioning_timeout,omitempty"`
 	Provisioning        *structpb.Struct       `protobuf:"bytes,8,opt,name=provisioning,proto3" json:"provisioning,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// host_device registers an existing host block device (a whole disk,
+	// partition, or logical volume) for passthrough to one VM. When set,
+	// storage_backend_id, size_gb, is_template, template_disk_id, and
+	// provisioning settings must be omitted; the size is read from the device.
+	HostDevice    string `protobuf:"bytes,9,opt,name=host_device,json=hostDevice,proto3" json:"host_device,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateDiskRequest) Reset() {
@@ -612,6 +653,13 @@ func (x *CreateDiskRequest) GetProvisioning() *structpb.Struct {
 		return x.Provisioning
 	}
 	return nil
+}
+
+func (x *CreateDiskRequest) GetHostDevice() string {
+	if x != nil {
+		return x.HostDevice
+	}
+	return ""
 }
 
 type UpdateDiskRequest struct {
@@ -731,7 +779,7 @@ var File_rookery_v1_disk_proto protoreflect.FileDescriptor
 const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\n" +
 	"\x15rookery/v1/disk.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\x86\x02\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\xbd\x02\n" +
 	"\x06VMDisk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
@@ -740,8 +788,12 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\x14storage_backend_name\x18\x05 \x01(\tR\x12storageBackendName\x12\x0e\n" +
 	"\x02vg\x18\x06 \x01(\tR\x02vg\x12\x1b\n" +
 	"\tthin_pool\x18\a \x01(\tR\bthinPool\x12\x16\n" +
-	"\x06device\x18\b \x01(\tR\x06deviceB\x15\n" +
-	"\x13_storage_backend_id\"\xd9\x05\n" +
+	"\x06device\x18\b \x01(\tR\x06device\x12\x16\n" +
+	"\x06source\x18\t \x01(\tR\x06source\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\n" +
+	" \x01(\x04R\tsizeBytesB\x15\n" +
+	"\x13_storage_backend_id\"\x90\x06\n" +
 	"\x04Disk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
@@ -763,7 +815,10 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\x10template_disk_id\x18\x0e \x01(\x03H\x02R\x0etemplateDiskId\x88\x01\x01\x12,\n" +
 	"\x12template_disk_name\x18\x0f \x01(\tR\x10templateDiskName\x12/\n" +
 	"\x13provisioning_script\x18\x10 \x01(\tR\x12provisioningScript\x121\n" +
-	"\x14provisioning_timeout\x18\x11 \x01(\tR\x13provisioningTimeoutB\x15\n" +
+	"\x14provisioning_timeout\x18\x11 \x01(\tR\x13provisioningTimeout\x12\x16\n" +
+	"\x06source\x18\x12 \x01(\tR\x06source\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x13 \x01(\x04R\tsizeBytesB\x15\n" +
 	"\x13_storage_backend_idB\x11\n" +
 	"\x0f_attached_vm_idB\x13\n" +
 	"\x11_template_disk_id\"\xa1\x02\n" +
@@ -784,7 +839,7 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\x11ListDisksResponse\x12&\n" +
 	"\x05disks\x18\x01 \x03(\v2\x10.rookery.v1.DiskR\x05disks\")\n" +
 	"\x0eGetDiskRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\x97\x04\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\xc5\x04\n" +
 	"\x11CreateDiskRequest\x12;\n" +
 	"\x04name\x18\x01 \x01(\tB'\xfaB$r\"\x10\x01\x18\x7f2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$R\x04name\x12)\n" +
 	"\asize_gb\x18\x02 \x01(\x05B\v\xfaB\b\x1a\x06\x18\x80\x80\x04(\x01H\x00R\x06sizeGb\x88\x01\x01\x12:\n" +
@@ -795,7 +850,9 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\x13provisioning_script\x18\x06 \x01(\tB\v\xfaB\br\x06\x18\x80 \xd0\x01\x01R\x12provisioningScript\x12=\n" +
 	"\x14provisioning_timeout\x18\a \x01(\tB\n" +
 	"\xfaB\ar\x05\x18 \xd0\x01\x01R\x13provisioningTimeout\x12;\n" +
-	"\fprovisioning\x18\b \x01(\v2\x17.google.protobuf.StructR\fprovisioningB\n" +
+	"\fprovisioning\x18\b \x01(\v2\x17.google.protobuf.StructR\fprovisioning\x12,\n" +
+	"\vhost_device\x18\t \x01(\tB\v\xfaB\br\x06\x18\x80 \xd0\x01\x01R\n" +
+	"hostDeviceB\n" +
 	"\n" +
 	"\b_size_gbB\x15\n" +
 	"\x13_storage_backend_idB\x13\n" +

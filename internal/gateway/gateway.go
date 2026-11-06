@@ -65,6 +65,8 @@ type options struct {
 	vppInterfaces      VPPInterfaceSource
 	hostWriter         HostWriter
 	hostTapWriter      HostTapWriter
+	hostDevices        HostDeviceValidator
+	hostDeviceLister   AttachableBlockDeviceLister
 	vnfRuntime         VNFRuntime
 	vnfStatusProvider  VNFStatusProvider
 	vnfWriter          VNFWriter
@@ -118,6 +120,22 @@ func WithACLRuntime(runtime ACLRuntime) Option {
 func WithDiskProvisioner(provisioner DiskProvisioner) Option {
 	return func(opts *options) {
 		opts.diskProvisioner = provisioner
+	}
+}
+
+// WithHostDeviceValidator overrides host block-device validation. Tests use it
+// to exercise passthrough disk registration without a real block device.
+func WithHostDeviceValidator(validator HostDeviceValidator) Option {
+	return func(opts *options) {
+		opts.hostDevices = validator
+	}
+}
+
+// WithAttachableBlockDeviceLister overrides host block-device discovery. Tests
+// use it to exercise the attachable-device response without real devices.
+func WithAttachableBlockDeviceLister(lister AttachableBlockDeviceLister) Option {
+	return func(opts *options) {
+		opts.hostDeviceLister = lister
 	}
 }
 
@@ -275,7 +293,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 		system.lightvmStatus = provider
 	}
 	vms := &vmService{store: st, runtime: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, mu: options.vmMutex, logger: options.logger}
-	disks := &diskService{store: st, runtime: options.diskProvisioner, readiness: ready, mu: options.diskMutex, logger: options.logger}
+	disks := &diskService{store: st, runtime: options.diskProvisioner, readiness: ready, mu: options.diskMutex, logger: options.logger, hostDevices: options.hostDevices}
 	media := &mediaService{store: st}
 	networks := &networkService{store: st, runtime: options.networkRuntime, readiness: ready, writer: options.networkWriter, mu: options.diskMutex}
 	interfaces := &interfaceService{store: st, runtime: options.aclRuntime, attachments: options.interfaceRuntime, addresses: options.interfaceAddresses, vms: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, runMu: options.vmMutex}
@@ -283,7 +301,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	routeTables := &routeTableService{store: st, runtime: options.aclRuntime, readiness: ready}
 	vnfs := &vnfService{store: st, runtime: options.vnfRuntime, statusProvider: options.vnfStatusProvider, writer: options.vnfWriter}
 	backends := &storageBackendService{store: st, readiness: ready, disks: options.diskProvisioner, mu: options.diskMutex}
-	hostInterfaces := &hostService{source: options.vppInterfaces, store: st, writer: options.hostWriter, taps: options.hostTapWriter, addresses: options.interfaceAddresses, readiness: ready}
+	hostInterfaces := &hostService{source: options.vppInterfaces, store: st, writer: options.hostWriter, taps: options.hostTapWriter, devices: options.hostDeviceLister, addresses: options.interfaceAddresses, readiness: ready}
 	troubleshoot := &troubleshootService{runtime: options.diagnostics, readiness: ready}
 	captures := &captureService{runtime: options.diagnostics, readiness: ready}
 	entityLabels := &labelService{store: st}
@@ -611,8 +629,8 @@ func vmToProto(vm store.VM) *rookeryv1.VM {
 
 func vmDiskToProto(disk store.VMDisk) *rookeryv1.VMDisk {
 	return &rookeryv1.VMDisk{
-		Id: disk.ID, Name: disk.Name, SizeGb: int32(disk.SizeGB),
+		Id: disk.ID, Name: disk.Name, SizeGb: int32(disk.SizeGB), SizeBytes: disk.SizeBytes,
 		StorageBackendId: disk.StorageBackendID, StorageBackendName: disk.StorageBackendName,
-		Vg: disk.VG, ThinPool: disk.ThinPool, Device: disk.Device,
+		Vg: disk.VG, ThinPool: disk.ThinPool, Device: disk.Device, Source: disk.Source,
 	}
 }

@@ -34,11 +34,14 @@ type diskModel struct {
 	ID                  types.Int64  `tfsdk:"id"`
 	Name                types.String `tfsdk:"name"`
 	SizeGB              types.Int64  `tfsdk:"size_gb"`
+	SizeBytes           types.Int64  `tfsdk:"size_bytes"`
 	StorageBackendID    types.Int64  `tfsdk:"storage_backend_id"`
 	StorageBackendName  types.String `tfsdk:"storage_backend_name"`
 	VG                  types.String `tfsdk:"vg"`
 	ThinPool            types.String `tfsdk:"thin_pool"`
 	Device              types.String `tfsdk:"device"`
+	Source              types.String `tfsdk:"source"`
+	HostDevice          types.String `tfsdk:"host_device"`
 	AttachedVMID        types.String `tfsdk:"attached_vm_id"`
 	AttachedVMName      types.String `tfsdk:"attached_vm_name"`
 	IsTemplate          types.Bool   `tfsdk:"is_template"`
@@ -68,8 +71,21 @@ func (r *diskResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 			"size_gb": schema.Int64Attribute{
 				Optional:      true,
 				Computed:      true,
-				Description:   "Disk size in GiB. Required when not cloning a template.",
+				Description:   "Disk size in GiB. Required when not cloning a template. Derived from host_device for passthrough disks.",
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace(), int64planmodifier.UseStateForUnknown()},
+			},
+			"size_bytes": schema.Int64Attribute{
+				Computed:    true,
+				Description: "Exact size in bytes for a host passthrough disk.",
+			},
+			"host_device": schema.StringAttribute{
+				Optional:      true,
+				Description:   "Absolute path to an existing host block device (disk, partition, or logical volume) to pass through to one VM.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+			},
+			"source": schema.StringAttribute{
+				Computed:    true,
+				Description: "Disk source: lvm-thin or host-device.",
 			},
 			"storage_backend_id": schema.Int64Attribute{
 				Optional:      true,
@@ -141,6 +157,7 @@ func (r *diskResource) Create(ctx context.Context, req resource.CreateRequest, r
 		ProvisioningScript:  plan.ProvisioningScript.ValueString(),
 		ProvisioningTimeout: plan.ProvisioningTimeout.ValueString(),
 		Provisioning:        provisioning,
+		HostDevice:          plan.HostDevice.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Create disk", err.Error())
@@ -247,11 +264,18 @@ func setDiskState(state *diskModel, disk *rookeryv1.Disk) {
 	state.ID = types.Int64Value(disk.GetId())
 	state.Name = types.StringValue(disk.GetName())
 	state.SizeGB = types.Int64Value(int64(disk.GetSizeGb()))
+	state.SizeBytes = optionalInt64FromUint64(disk.GetSizeBytes())
 	state.StorageBackendID = optionalInt64Value(disk.StorageBackendId)
 	state.StorageBackendName = optionalStringValue(disk.GetStorageBackendName())
 	state.VG = types.StringValue(disk.GetVg())
 	state.ThinPool = types.StringValue(disk.GetThinPool())
 	state.Device = types.StringValue(disk.GetDevice())
+	state.Source = types.StringValue(disk.GetSource())
+	if disk.GetSource() == "host-device" {
+		state.HostDevice = types.StringValue(disk.GetDevice())
+	} else {
+		state.HostDevice = types.StringNull()
+	}
 	state.AttachedVMID = optionalStringValue(disk.GetAttachedVmId())
 	state.AttachedVMName = optionalStringValue(disk.GetAttachedVmName())
 	state.IsTemplate = types.BoolValue(disk.GetIsTemplate())

@@ -939,7 +939,7 @@ func DeviceNumber(path string) (uint32, uint32, error) {
 	if !ok {
 		return 0, 0, fmt.Errorf("%s is not a device", path)
 	}
-	device := uint64(stat.Rdev)
+	device := stat.Rdev
 	if device == 0 {
 		return 0, 0, fmt.Errorf("%s is not a block device", path)
 	}

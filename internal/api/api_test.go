@@ -1771,14 +1771,7 @@ func TestStorageBackendImportDisks(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("list importable status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
-	var importable []struct {
-		Name               string `json:"name"`
-		SizeGB             int    `json:"size_gb"`
-		Registered         bool   `json:"registered"`
-		DiskID             *int64 `json:"disk_id"`
-		StorageBackendName string `json:"storage_backend_name"`
-	}
-	importable = decode[[]struct {
+	importable := decode[[]struct {
 		Name               string `json:"name"`
 		SizeGB             int    `json:"size_gb"`
 		Registered         bool   `json:"registered"`
@@ -4026,14 +4019,7 @@ func TestNetworkVRFsAppearInRouteTables(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("list route tables status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
-	var tables []struct {
-		Name      string `json:"name"`
-		TableID   uint32 `json:"table_id"`
-		IPv6      bool   `json:"ipv6"`
-		NetworkID int64  `json:"network_id"`
-		Managed   bool   `json:"managed"`
-	}
-	tables = decode[[]struct {
+	tables := decode[[]struct {
 		Name      string `json:"name"`
 		TableID   uint32 `json:"table_id"`
 		IPv6      bool   `json:"ipv6"`

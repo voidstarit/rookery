@@ -27,6 +27,15 @@ service HostService {
     };
   }
 
+  // ListAttachableBlockDevices lists whole disks, partitions, and logical
+  // volumes that can be registered as passthrough disks for VMs.
+  rpc ListAttachableBlockDevices(ListAttachableBlockDevicesRequest) returns (ListAttachableBlockDevicesResponse) {
+    option (google.api.http) = {
+      get: "/api/host/block-devices/attachable"
+      response_body: "devices"
+    };
+  }
+
   // AttachHostInterface takes over a host NIC into VPP and persists it so it
   // is recreated after a VPP restart.
   rpc AttachHostInterface(AttachHostInterfaceRequest) returns (HostInterface) {
@@ -103,6 +112,34 @@ message ListHostBlockDevicesRequest {}
 
 message ListHostBlockDevicesResponse {
   repeated HostBlockDevice devices = 1;
+}
+
+message HostAttachableBlockDevice {
+  string name = 1;
+  string path = 2;
+  // kind is "disk", "partition", "lv", or "raid".
+  string kind = 3;
+  string model = 4;
+  uint64 size_bytes = 5;
+  uint32 major = 6;
+  uint32 minor = 7;
+  bool rotational = 8;
+  // available is false when the host is using the device, for example
+  // because it is mounted, used as swap, or backs another device.
+  bool available = 9;
+  string unavailable_reason = 10;
+  // registered is set when a passthrough disk record already uses this device.
+  bool registered = 11;
+  optional int64 disk_id = 12;
+  string disk_name = 13;
+  optional string attached_vm_id = 14;
+  string attached_vm_name = 15;
+}
+
+message ListAttachableBlockDevicesRequest {}
+
+message ListAttachableBlockDevicesResponse {
+  repeated HostAttachableBlockDevice devices = 1;
 }
 
 message AttachHostInterfaceRequest {

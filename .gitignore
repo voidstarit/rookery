@@ -8,6 +8,12 @@
 /rookery
 /dist/
 
+# Go test and coverage output
+/coverage.out
+/coverage-merged.out
+/coverage.lcov
+/diff-coverage.txt
+
 # UI dependencies and typecheck cache
 /ui/node_modules/
 /ui/*.tsbuildinfo

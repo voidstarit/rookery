@@ -155,11 +155,10 @@ func (s *lightVMService) StartLightVM(ctx context.Context, request *rookeryv1.St
 		_, _ = s.store.SetLightVMStatus(ctx, vm.ID, store.StatusError)
 		return nil, status.Error(codes.Internal, "could not start LightVM: "+err.Error())
 	}
-	updated, err := s.store.SetLightVMStatus(ctx, vm.ID, store.StatusRunning)
-	if err != nil {
+	if _, err := s.store.SetLightVMStatus(ctx, vm.ID, store.StatusRunning); err != nil {
 		return nil, status.Error(codes.Internal, "could not update LightVM status")
 	}
-	updated, err = s.store.SetLightVMDesiredState(ctx, vm.ID, store.DesiredRunning)
+	updated, err := s.store.SetLightVMDesiredState(ctx, vm.ID, store.DesiredRunning)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not update LightVM desired state")
 	}
@@ -181,11 +180,10 @@ func (s *lightVMService) StopLightVM(ctx context.Context, request *rookeryv1.Sto
 			return nil, status.Error(codes.Internal, "could not stop LightVM: "+err.Error())
 		}
 	}
-	updated, err := s.store.SetLightVMStatus(ctx, request.GetId(), store.StatusStopped)
-	if err != nil {
+	if _, err := s.store.SetLightVMStatus(ctx, request.GetId(), store.StatusStopped); err != nil {
 		return nil, status.Error(codes.Internal, "could not update LightVM status")
 	}
-	updated, err = s.store.SetLightVMDesiredState(ctx, request.GetId(), store.DesiredStopped)
+	updated, err := s.store.SetLightVMDesiredState(ctx, request.GetId(), store.DesiredStopped)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not update LightVM desired state")
 	}

@@ -197,6 +197,70 @@ func (l *LVM) CreateThinVolume(ctx context.Context, vg, thinPool, name string, s
 	return nil
 }
 
+// ActivateThinVolume ensures a thin pool and one of its thin volumes are
+// active. LVs can exist in LVM metadata but have no /dev node after a reboot or
+// an external deactivation; activating them is safe and only affects state.
+func (l *LVM) ActivateThinVolume(ctx context.Context, vg, thinPool, name string) error {
+	if err := ValidateLVMName("volume group", vg); err != nil {
+		return err
+	}
+	if err := ValidateLVMName("logical volume", name); err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(thinPool) != "" {
+		if err := ValidateLVMName("thin pool", thinPool); err != nil {
+			return err
+		}
+		attribute, exists, err := l.lvAttribute(ctx, vg, thinPool)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return fmt.Errorf("thin pool %s/%s does not exist", vg, thinPool)
+		}
+		if !strings.HasPrefix(attribute, "t") {
+			return fmt.Errorf("logical volume %s/%s is not a thin pool", vg, thinPool)
+		}
+		if !lvmActive(attribute) {
+			if _, err := l.Runner.Run(ctx, "lvchange", "-ay", "-K", vg+"/"+thinPool); err != nil {
+				return fmt.Errorf("activate thin pool %s/%s: %w", vg, thinPool, err)
+			}
+		}
+	}
+
+	attribute, exists, err := l.lvAttribute(ctx, vg, name)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("thin volume %s/%s does not exist", vg, name)
+	}
+	if !strings.HasPrefix(attribute, "V") {
+		return fmt.Errorf("logical volume %s/%s is not a thin volume", vg, name)
+	}
+	if lvmActive(attribute) {
+		return nil
+	}
+	if _, err := l.Runner.Run(ctx, "lvchange", "-ay", "-K", vg+"/"+name); err != nil {
+		return fmt.Errorf("activate thin volume %s/%s: %w", vg, name, err)
+	}
+	attribute, exists, err = l.lvAttribute(ctx, vg, name)
+	if err != nil {
+		return err
+	}
+	if !exists || !lvmActive(attribute) {
+		return fmt.Errorf("thin volume %s/%s did not become active", vg, name)
+	}
+	return nil
+}
+
+// lvmActive reports whether the LVM attribute string marks an LV active. The
+// fifth character is the state field (a=active, i=inactive, s=suspended).
+func lvmActive(attribute string) bool {
+	return len(attribute) >= 5 && attribute[4] == 'a'
+}
+
 // DeleteThinVolume removes a thin logical volume. A missing LV is treated as
 // already removed; non-thin LVs are never removed.
 func (l *LVM) DeleteThinVolume(ctx context.Context, vg, name string) error {

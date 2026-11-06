@@ -425,6 +425,246 @@ func (x *ListHostBlockDevicesResponse) GetDevices() []*HostBlockDevice {
 	return nil
 }
 
+type HostAttachableBlockDevice struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Path  string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
+	// kind is "disk", "partition", "lv", or "raid".
+	Kind       string `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
+	Model      string `protobuf:"bytes,4,opt,name=model,proto3" json:"model,omitempty"`
+	SizeBytes  uint64 `protobuf:"varint,5,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	Major      uint32 `protobuf:"varint,6,opt,name=major,proto3" json:"major,omitempty"`
+	Minor      uint32 `protobuf:"varint,7,opt,name=minor,proto3" json:"minor,omitempty"`
+	Rotational bool   `protobuf:"varint,8,opt,name=rotational,proto3" json:"rotational,omitempty"`
+	// available is false when the host is using the device, for example
+	// because it is mounted, used as swap, or backs another device.
+	Available         bool   `protobuf:"varint,9,opt,name=available,proto3" json:"available,omitempty"`
+	UnavailableReason string `protobuf:"bytes,10,opt,name=unavailable_reason,json=unavailableReason,proto3" json:"unavailable_reason,omitempty"`
+	// registered is set when a passthrough disk record already uses this device.
+	Registered     bool    `protobuf:"varint,11,opt,name=registered,proto3" json:"registered,omitempty"`
+	DiskId         *int64  `protobuf:"varint,12,opt,name=disk_id,json=diskId,proto3,oneof" json:"disk_id,omitempty"`
+	DiskName       string  `protobuf:"bytes,13,opt,name=disk_name,json=diskName,proto3" json:"disk_name,omitempty"`
+	AttachedVmId   *string `protobuf:"bytes,14,opt,name=attached_vm_id,json=attachedVmId,proto3,oneof" json:"attached_vm_id,omitempty"`
+	AttachedVmName string  `protobuf:"bytes,15,opt,name=attached_vm_name,json=attachedVmName,proto3" json:"attached_vm_name,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *HostAttachableBlockDevice) Reset() {
+	*x = HostAttachableBlockDevice{}
+	mi := &file_rookery_v1_host_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HostAttachableBlockDevice) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostAttachableBlockDevice) ProtoMessage() {}
+
+func (x *HostAttachableBlockDevice) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_host_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostAttachableBlockDevice.ProtoReflect.Descriptor instead.
+func (*HostAttachableBlockDevice) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_host_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *HostAttachableBlockDevice) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *HostAttachableBlockDevice) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *HostAttachableBlockDevice) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *HostAttachableBlockDevice) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *HostAttachableBlockDevice) GetSizeBytes() uint64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
+func (x *HostAttachableBlockDevice) GetMajor() uint32 {
+	if x != nil {
+		return x.Major
+	}
+	return 0
+}
+
+func (x *HostAttachableBlockDevice) GetMinor() uint32 {
+	if x != nil {
+		return x.Minor
+	}
+	return 0
+}
+
+func (x *HostAttachableBlockDevice) GetRotational() bool {
+	if x != nil {
+		return x.Rotational
+	}
+	return false
+}
+
+func (x *HostAttachableBlockDevice) GetAvailable() bool {
+	if x != nil {
+		return x.Available
+	}
+	return false
+}
+
+func (x *HostAttachableBlockDevice) GetUnavailableReason() string {
+	if x != nil {
+		return x.UnavailableReason
+	}
+	return ""
+}
+
+func (x *HostAttachableBlockDevice) GetRegistered() bool {
+	if x != nil {
+		return x.Registered
+	}
+	return false
+}
+
+func (x *HostAttachableBlockDevice) GetDiskId() int64 {
+	if x != nil && x.DiskId != nil {
+		return *x.DiskId
+	}
+	return 0
+}
+
+func (x *HostAttachableBlockDevice) GetDiskName() string {
+	if x != nil {
+		return x.DiskName
+	}
+	return ""
+}
+
+func (x *HostAttachableBlockDevice) GetAttachedVmId() string {
+	if x != nil && x.AttachedVmId != nil {
+		return *x.AttachedVmId
+	}
+	return ""
+}
+
+func (x *HostAttachableBlockDevice) GetAttachedVmName() string {
+	if x != nil {
+		return x.AttachedVmName
+	}
+	return ""
+}
+
+type ListAttachableBlockDevicesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAttachableBlockDevicesRequest) Reset() {
+	*x = ListAttachableBlockDevicesRequest{}
+	mi := &file_rookery_v1_host_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAttachableBlockDevicesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAttachableBlockDevicesRequest) ProtoMessage() {}
+
+func (x *ListAttachableBlockDevicesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_host_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAttachableBlockDevicesRequest.ProtoReflect.Descriptor instead.
+func (*ListAttachableBlockDevicesRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_host_proto_rawDescGZIP(), []int{7}
+}
+
+type ListAttachableBlockDevicesResponse struct {
+	state         protoimpl.MessageState       `protogen:"open.v1"`
+	Devices       []*HostAttachableBlockDevice `protobuf:"bytes,1,rep,name=devices,proto3" json:"devices,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAttachableBlockDevicesResponse) Reset() {
+	*x = ListAttachableBlockDevicesResponse{}
+	mi := &file_rookery_v1_host_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAttachableBlockDevicesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAttachableBlockDevicesResponse) ProtoMessage() {}
+
+func (x *ListAttachableBlockDevicesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_host_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAttachableBlockDevicesResponse.ProtoReflect.Descriptor instead.
+func (*ListAttachableBlockDevicesResponse) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_host_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ListAttachableBlockDevicesResponse) GetDevices() []*HostAttachableBlockDevice {
+	if x != nil {
+		return x.Devices
+	}
+	return nil
+}
+
 type AttachHostInterfaceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -434,7 +674,7 @@ type AttachHostInterfaceRequest struct {
 
 func (x *AttachHostInterfaceRequest) Reset() {
 	*x = AttachHostInterfaceRequest{}
-	mi := &file_rookery_v1_host_proto_msgTypes[6]
+	mi := &file_rookery_v1_host_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -446,7 +686,7 @@ func (x *AttachHostInterfaceRequest) String() string {
 func (*AttachHostInterfaceRequest) ProtoMessage() {}
 
 func (x *AttachHostInterfaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_host_proto_msgTypes[6]
+	mi := &file_rookery_v1_host_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -459,7 +699,7 @@ func (x *AttachHostInterfaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttachHostInterfaceRequest.ProtoReflect.Descriptor instead.
 func (*AttachHostInterfaceRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_host_proto_rawDescGZIP(), []int{6}
+	return file_rookery_v1_host_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *AttachHostInterfaceRequest) GetName() string {
@@ -478,7 +718,7 @@ type DetachHostInterfaceRequest struct {
 
 func (x *DetachHostInterfaceRequest) Reset() {
 	*x = DetachHostInterfaceRequest{}
-	mi := &file_rookery_v1_host_proto_msgTypes[7]
+	mi := &file_rookery_v1_host_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -490,7 +730,7 @@ func (x *DetachHostInterfaceRequest) String() string {
 func (*DetachHostInterfaceRequest) ProtoMessage() {}
 
 func (x *DetachHostInterfaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_host_proto_msgTypes[7]
+	mi := &file_rookery_v1_host_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -503,7 +743,7 @@ func (x *DetachHostInterfaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DetachHostInterfaceRequest.ProtoReflect.Descriptor instead.
 func (*DetachHostInterfaceRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_host_proto_rawDescGZIP(), []int{7}
+	return file_rookery_v1_host_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *DetachHostInterfaceRequest) GetName() string {
@@ -533,7 +773,7 @@ type HostTap struct {
 
 func (x *HostTap) Reset() {
 	*x = HostTap{}
-	mi := &file_rookery_v1_host_proto_msgTypes[8]
+	mi := &file_rookery_v1_host_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -545,7 +785,7 @@ func (x *HostTap) String() string {
 func (*HostTap) ProtoMessage() {}
 
 func (x *HostTap) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_host_proto_msgTypes[8]
+	mi := &file_rookery_v1_host_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -558,7 +798,7 @@ func (x *HostTap) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostTap.ProtoReflect.Descriptor instead.
 func (*HostTap) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_host_proto_rawDescGZIP(), []int{8}
+	return file_rookery_v1_host_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *HostTap) GetId() int64 {
@@ -633,7 +873,7 @@ type ListHostTapsRequest struct {
 
 func (x *ListHostTapsRequest) Reset() {
 	*x = ListHostTapsRequest{}
-	mi := &file_rookery_v1_host_proto_msgTypes[9]
+	mi := &file_rookery_v1_host_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -645,7 +885,7 @@ func (x *ListHostTapsRequest) String() string {
 func (*ListHostTapsRequest) ProtoMessage() {}
 
 func (x *ListHostTapsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_host_proto_msgTypes[9]
+	mi := &file_rookery_v1_host_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -658,7 +898,7 @@ func (x *ListHostTapsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListHostTapsRequest.ProtoReflect.Descriptor instead.
 func (*ListHostTapsRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_host_proto_rawDescGZIP(), []int{9}
+	return file_rookery_v1_host_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ListHostTapsRequest) GetNetworkId() int64 {
@@ -677,7 +917,7 @@ type ListHostTapsResponse struct {
 
 func (x *ListHostTapsResponse) Reset() {
 	*x = ListHostTapsResponse{}
-	mi := &file_rookery_v1_host_proto_msgTypes[10]
+	mi := &file_rookery_v1_host_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -689,7 +929,7 @@ func (x *ListHostTapsResponse) String() string {
 func (*ListHostTapsResponse) ProtoMessage() {}
 
 func (x *ListHostTapsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_host_proto_msgTypes[10]
+	mi := &file_rookery_v1_host_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -702,7 +942,7 @@ func (x *ListHostTapsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListHostTapsResponse.ProtoReflect.Descriptor instead.
 func (*ListHostTapsResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_host_proto_rawDescGZIP(), []int{10}
+	return file_rookery_v1_host_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ListHostTapsResponse) GetTaps() []*HostTap {
@@ -723,7 +963,7 @@ type CreateHostTapRequest struct {
 
 func (x *CreateHostTapRequest) Reset() {
 	*x = CreateHostTapRequest{}
-	mi := &file_rookery_v1_host_proto_msgTypes[11]
+	mi := &file_rookery_v1_host_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -735,7 +975,7 @@ func (x *CreateHostTapRequest) String() string {
 func (*CreateHostTapRequest) ProtoMessage() {}
 
 func (x *CreateHostTapRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_host_proto_msgTypes[11]
+	mi := &file_rookery_v1_host_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -748,7 +988,7 @@ func (x *CreateHostTapRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateHostTapRequest.ProtoReflect.Descriptor instead.
 func (*CreateHostTapRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_host_proto_rawDescGZIP(), []int{11}
+	return file_rookery_v1_host_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *CreateHostTapRequest) GetNetworkId() int64 {
@@ -781,7 +1021,7 @@ type DeleteHostTapRequest struct {
 
 func (x *DeleteHostTapRequest) Reset() {
 	*x = DeleteHostTapRequest{}
-	mi := &file_rookery_v1_host_proto_msgTypes[12]
+	mi := &file_rookery_v1_host_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -793,7 +1033,7 @@ func (x *DeleteHostTapRequest) String() string {
 func (*DeleteHostTapRequest) ProtoMessage() {}
 
 func (x *DeleteHostTapRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_host_proto_msgTypes[12]
+	mi := &file_rookery_v1_host_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -806,7 +1046,7 @@ func (x *DeleteHostTapRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteHostTapRequest.ProtoReflect.Descriptor instead.
 func (*DeleteHostTapRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_host_proto_rawDescGZIP(), []int{12}
+	return file_rookery_v1_host_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *DeleteHostTapRequest) GetId() int64 {
@@ -858,7 +1098,35 @@ const file_rookery_v1_host_proto_rawDesc = "" +
 	"rotational\"\x1d\n" +
 	"\x1bListHostBlockDevicesRequest\"U\n" +
 	"\x1cListHostBlockDevicesResponse\x125\n" +
-	"\adevices\x18\x01 \x03(\v2\x1b.rookery.v1.HostBlockDeviceR\adevices\"9\n" +
+	"\adevices\x18\x01 \x03(\v2\x1b.rookery.v1.HostBlockDeviceR\adevices\"\xf4\x03\n" +
+	"\x19HostAttachableBlockDevice\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
+	"\x04path\x18\x02 \x01(\tR\x04path\x12\x12\n" +
+	"\x04kind\x18\x03 \x01(\tR\x04kind\x12\x14\n" +
+	"\x05model\x18\x04 \x01(\tR\x05model\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x05 \x01(\x04R\tsizeBytes\x12\x14\n" +
+	"\x05major\x18\x06 \x01(\rR\x05major\x12\x14\n" +
+	"\x05minor\x18\a \x01(\rR\x05minor\x12\x1e\n" +
+	"\n" +
+	"rotational\x18\b \x01(\bR\n" +
+	"rotational\x12\x1c\n" +
+	"\tavailable\x18\t \x01(\bR\tavailable\x12-\n" +
+	"\x12unavailable_reason\x18\n" +
+	" \x01(\tR\x11unavailableReason\x12\x1e\n" +
+	"\n" +
+	"registered\x18\v \x01(\bR\n" +
+	"registered\x12\x1c\n" +
+	"\adisk_id\x18\f \x01(\x03H\x00R\x06diskId\x88\x01\x01\x12\x1b\n" +
+	"\tdisk_name\x18\r \x01(\tR\bdiskName\x12)\n" +
+	"\x0eattached_vm_id\x18\x0e \x01(\tH\x01R\fattachedVmId\x88\x01\x01\x12(\n" +
+	"\x10attached_vm_name\x18\x0f \x01(\tR\x0eattachedVmNameB\n" +
+	"\n" +
+	"\b_disk_idB\x11\n" +
+	"\x0f_attached_vm_id\"#\n" +
+	"!ListAttachableBlockDevicesRequest\"e\n" +
+	"\"ListAttachableBlockDevicesResponse\x12?\n" +
+	"\adevices\x18\x01 \x03(\v2%.rookery.v1.HostAttachableBlockDeviceR\adevices\"9\n" +
 	"\x1aAttachHostInterfaceRequest\x12\x1b\n" +
 	"\x04name\x18\x01 \x01(\tB\a\xfaB\x04r\x02\x10\x01R\x04name\"9\n" +
 	"\x1aDetachHostInterfaceRequest\x12\x1b\n" +
@@ -888,11 +1156,12 @@ const file_rookery_v1_host_proto_rawDesc = "" +
 	"\fipv4_address\x18\x03 \x01(\tB\n" +
 	"\xfaB\ar\x05\x18@\xd0\x01\x01R\vipv4Address\"/\n" +
 	"\x14DeleteHostTapRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id2\xf5\x06\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id2\xa8\b\n" +
 	"\vHostService\x12\x8d\x01\n" +
 	"\x12ListHostInterfaces\x12%.rookery.v1.ListHostInterfacesRequest\x1a&.rookery.v1.ListHostInterfacesResponse\"(\x82\xd3\xe4\x93\x02\"b\n" +
 	"interfaces\x12\x14/api/host/interfaces\x12\x93\x01\n" +
-	"\x14ListHostBlockDevices\x12'.rookery.v1.ListHostBlockDevicesRequest\x1a(.rookery.v1.ListHostBlockDevicesResponse\"(\x82\xd3\xe4\x93\x02\"b\adevices\x12\x17/api/host/block-devices\x12\x87\x01\n" +
+	"\x14ListHostBlockDevices\x12'.rookery.v1.ListHostBlockDevicesRequest\x1a(.rookery.v1.ListHostBlockDevicesResponse\"(\x82\xd3\xe4\x93\x02\"b\adevices\x12\x17/api/host/block-devices\x12\xb0\x01\n" +
+	"\x1aListAttachableBlockDevices\x12-.rookery.v1.ListAttachableBlockDevicesRequest\x1a..rookery.v1.ListAttachableBlockDevicesResponse\"3\x82\xd3\xe4\x93\x02-b\adevices\x12\"/api/host/block-devices/attachable\x12\x87\x01\n" +
 	"\x13AttachHostInterface\x12&.rookery.v1.AttachHostInterfaceRequest\x1a\x19.rookery.v1.HostInterface\"-\x82\xd3\xe4\x93\x02':\x01*\"\"/api/host/interfaces/{name}/attach\x12z\n" +
 	"\x13DetachHostInterface\x12&.rookery.v1.DetachHostInterfaceRequest\x1a\x16.google.protobuf.Empty\"#\x82\xd3\xe4\x93\x02\x1d*\x1b/api/host/interfaces/{name}\x12o\n" +
 	"\fListHostTaps\x12\x1f.rookery.v1.ListHostTapsRequest\x1a .rookery.v1.ListHostTapsResponse\"\x1c\x82\xd3\xe4\x93\x02\x16b\x04taps\x12\x0e/api/host/taps\x12a\n" +
@@ -911,49 +1180,55 @@ func file_rookery_v1_host_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_host_proto_rawDescData
 }
 
-var file_rookery_v1_host_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_rookery_v1_host_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_rookery_v1_host_proto_goTypes = []any{
-	(*HostInterface)(nil),                // 0: rookery.v1.HostInterface
-	(*ListHostInterfacesRequest)(nil),    // 1: rookery.v1.ListHostInterfacesRequest
-	(*ListHostInterfacesResponse)(nil),   // 2: rookery.v1.ListHostInterfacesResponse
-	(*HostBlockDevice)(nil),              // 3: rookery.v1.HostBlockDevice
-	(*ListHostBlockDevicesRequest)(nil),  // 4: rookery.v1.ListHostBlockDevicesRequest
-	(*ListHostBlockDevicesResponse)(nil), // 5: rookery.v1.ListHostBlockDevicesResponse
-	(*AttachHostInterfaceRequest)(nil),   // 6: rookery.v1.AttachHostInterfaceRequest
-	(*DetachHostInterfaceRequest)(nil),   // 7: rookery.v1.DetachHostInterfaceRequest
-	(*HostTap)(nil),                      // 8: rookery.v1.HostTap
-	(*ListHostTapsRequest)(nil),          // 9: rookery.v1.ListHostTapsRequest
-	(*ListHostTapsResponse)(nil),         // 10: rookery.v1.ListHostTapsResponse
-	(*CreateHostTapRequest)(nil),         // 11: rookery.v1.CreateHostTapRequest
-	(*DeleteHostTapRequest)(nil),         // 12: rookery.v1.DeleteHostTapRequest
-	(*timestamppb.Timestamp)(nil),        // 13: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),                // 14: google.protobuf.Empty
+	(*HostInterface)(nil),                      // 0: rookery.v1.HostInterface
+	(*ListHostInterfacesRequest)(nil),          // 1: rookery.v1.ListHostInterfacesRequest
+	(*ListHostInterfacesResponse)(nil),         // 2: rookery.v1.ListHostInterfacesResponse
+	(*HostBlockDevice)(nil),                    // 3: rookery.v1.HostBlockDevice
+	(*ListHostBlockDevicesRequest)(nil),        // 4: rookery.v1.ListHostBlockDevicesRequest
+	(*ListHostBlockDevicesResponse)(nil),       // 5: rookery.v1.ListHostBlockDevicesResponse
+	(*HostAttachableBlockDevice)(nil),          // 6: rookery.v1.HostAttachableBlockDevice
+	(*ListAttachableBlockDevicesRequest)(nil),  // 7: rookery.v1.ListAttachableBlockDevicesRequest
+	(*ListAttachableBlockDevicesResponse)(nil), // 8: rookery.v1.ListAttachableBlockDevicesResponse
+	(*AttachHostInterfaceRequest)(nil),         // 9: rookery.v1.AttachHostInterfaceRequest
+	(*DetachHostInterfaceRequest)(nil),         // 10: rookery.v1.DetachHostInterfaceRequest
+	(*HostTap)(nil),                            // 11: rookery.v1.HostTap
+	(*ListHostTapsRequest)(nil),                // 12: rookery.v1.ListHostTapsRequest
+	(*ListHostTapsResponse)(nil),               // 13: rookery.v1.ListHostTapsResponse
+	(*CreateHostTapRequest)(nil),               // 14: rookery.v1.CreateHostTapRequest
+	(*DeleteHostTapRequest)(nil),               // 15: rookery.v1.DeleteHostTapRequest
+	(*timestamppb.Timestamp)(nil),              // 16: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),                      // 17: google.protobuf.Empty
 }
 var file_rookery_v1_host_proto_depIdxs = []int32{
 	0,  // 0: rookery.v1.ListHostInterfacesResponse.interfaces:type_name -> rookery.v1.HostInterface
 	3,  // 1: rookery.v1.ListHostBlockDevicesResponse.devices:type_name -> rookery.v1.HostBlockDevice
-	13, // 2: rookery.v1.HostTap.created_at:type_name -> google.protobuf.Timestamp
-	13, // 3: rookery.v1.HostTap.updated_at:type_name -> google.protobuf.Timestamp
-	8,  // 4: rookery.v1.ListHostTapsResponse.taps:type_name -> rookery.v1.HostTap
-	1,  // 5: rookery.v1.HostService.ListHostInterfaces:input_type -> rookery.v1.ListHostInterfacesRequest
-	4,  // 6: rookery.v1.HostService.ListHostBlockDevices:input_type -> rookery.v1.ListHostBlockDevicesRequest
-	6,  // 7: rookery.v1.HostService.AttachHostInterface:input_type -> rookery.v1.AttachHostInterfaceRequest
-	7,  // 8: rookery.v1.HostService.DetachHostInterface:input_type -> rookery.v1.DetachHostInterfaceRequest
-	9,  // 9: rookery.v1.HostService.ListHostTaps:input_type -> rookery.v1.ListHostTapsRequest
-	11, // 10: rookery.v1.HostService.CreateHostTap:input_type -> rookery.v1.CreateHostTapRequest
-	12, // 11: rookery.v1.HostService.DeleteHostTap:input_type -> rookery.v1.DeleteHostTapRequest
-	2,  // 12: rookery.v1.HostService.ListHostInterfaces:output_type -> rookery.v1.ListHostInterfacesResponse
-	5,  // 13: rookery.v1.HostService.ListHostBlockDevices:output_type -> rookery.v1.ListHostBlockDevicesResponse
-	0,  // 14: rookery.v1.HostService.AttachHostInterface:output_type -> rookery.v1.HostInterface
-	14, // 15: rookery.v1.HostService.DetachHostInterface:output_type -> google.protobuf.Empty
-	10, // 16: rookery.v1.HostService.ListHostTaps:output_type -> rookery.v1.ListHostTapsResponse
-	8,  // 17: rookery.v1.HostService.CreateHostTap:output_type -> rookery.v1.HostTap
-	14, // 18: rookery.v1.HostService.DeleteHostTap:output_type -> google.protobuf.Empty
-	12, // [12:19] is the sub-list for method output_type
-	5,  // [5:12] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	6,  // 2: rookery.v1.ListAttachableBlockDevicesResponse.devices:type_name -> rookery.v1.HostAttachableBlockDevice
+	16, // 3: rookery.v1.HostTap.created_at:type_name -> google.protobuf.Timestamp
+	16, // 4: rookery.v1.HostTap.updated_at:type_name -> google.protobuf.Timestamp
+	11, // 5: rookery.v1.ListHostTapsResponse.taps:type_name -> rookery.v1.HostTap
+	1,  // 6: rookery.v1.HostService.ListHostInterfaces:input_type -> rookery.v1.ListHostInterfacesRequest
+	4,  // 7: rookery.v1.HostService.ListHostBlockDevices:input_type -> rookery.v1.ListHostBlockDevicesRequest
+	7,  // 8: rookery.v1.HostService.ListAttachableBlockDevices:input_type -> rookery.v1.ListAttachableBlockDevicesRequest
+	9,  // 9: rookery.v1.HostService.AttachHostInterface:input_type -> rookery.v1.AttachHostInterfaceRequest
+	10, // 10: rookery.v1.HostService.DetachHostInterface:input_type -> rookery.v1.DetachHostInterfaceRequest
+	12, // 11: rookery.v1.HostService.ListHostTaps:input_type -> rookery.v1.ListHostTapsRequest
+	14, // 12: rookery.v1.HostService.CreateHostTap:input_type -> rookery.v1.CreateHostTapRequest
+	15, // 13: rookery.v1.HostService.DeleteHostTap:input_type -> rookery.v1.DeleteHostTapRequest
+	2,  // 14: rookery.v1.HostService.ListHostInterfaces:output_type -> rookery.v1.ListHostInterfacesResponse
+	5,  // 15: rookery.v1.HostService.ListHostBlockDevices:output_type -> rookery.v1.ListHostBlockDevicesResponse
+	8,  // 16: rookery.v1.HostService.ListAttachableBlockDevices:output_type -> rookery.v1.ListAttachableBlockDevicesResponse
+	0,  // 17: rookery.v1.HostService.AttachHostInterface:output_type -> rookery.v1.HostInterface
+	17, // 18: rookery.v1.HostService.DetachHostInterface:output_type -> google.protobuf.Empty
+	13, // 19: rookery.v1.HostService.ListHostTaps:output_type -> rookery.v1.ListHostTapsResponse
+	11, // 20: rookery.v1.HostService.CreateHostTap:output_type -> rookery.v1.HostTap
+	17, // 21: rookery.v1.HostService.DeleteHostTap:output_type -> google.protobuf.Empty
+	14, // [14:22] is the sub-list for method output_type
+	6,  // [6:14] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_rookery_v1_host_proto_init() }
@@ -962,13 +1237,14 @@ func file_rookery_v1_host_proto_init() {
 		return
 	}
 	file_rookery_v1_host_proto_msgTypes[0].OneofWrappers = []any{}
+	file_rookery_v1_host_proto_msgTypes[6].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_host_proto_rawDesc), len(file_rookery_v1_host_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
