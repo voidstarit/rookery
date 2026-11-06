@@ -10,16 +10,7 @@
       "name": "SystemService"
     },
     {
-      "name": "MediaService"
-    },
-    {
       "name": "ACLService"
-    },
-    {
-      "name": "StorageBackendService"
-    },
-    {
-      "name": "TroubleshootService"
     },
     {
       "name": "CaptureService"
@@ -28,28 +19,13 @@
       "name": "DiskService"
     },
     {
-      "name": "InterfaceService"
-    },
-    {
-      "name": "NetworkService"
-    },
-    {
-      "name": "RouteTableService"
-    },
-    {
-      "name": "VNFService"
-    },
-    {
-      "name": "VNFDaemon"
-    },
-    {
       "name": "HostService"
     },
     {
-      "name": "LabelService"
+      "name": "InterfaceService"
     },
     {
-      "name": "VMService"
+      "name": "LabelService"
     },
     {
       "name": "LightVMKernelService"
@@ -59,6 +35,30 @@
     },
     {
       "name": "LightVMService"
+    },
+    {
+      "name": "MediaService"
+    },
+    {
+      "name": "NetworkService"
+    },
+    {
+      "name": "RouteTableService"
+    },
+    {
+      "name": "StorageBackendService"
+    },
+    {
+      "name": "TroubleshootService"
+    },
+    {
+      "name": "VMService"
+    },
+    {
+      "name": "VNFService"
+    },
+    {
+      "name": "VNFDaemon"
     }
   ],
   "schemes": [

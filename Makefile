@@ -29,7 +29,7 @@ PROTO_OPENAPI := design/openapi
 PROTO_INCLUDE ?= /usr/include
 PROTO_INCLUDES := -I $(PROTO_ROOT) -I design/third_party -I $(PROTO_INCLUDE)
 PROTO_PLUGIN_BIN := $(shell go env GOPATH)/bin
-PROTO_FILES := $(shell find $(PROTO_ROOT) -name '*.proto' -print)
+PROTO_FILES := $(sort $(shell find $(PROTO_ROOT) -name '*.proto' -print))
 PROTO_TOOL_PATHS := $(PROTO_PLUGIN_BIN)/protoc-gen-go $(PROTO_PLUGIN_BIN)/protoc-gen-go-grpc $(PROTO_PLUGIN_BIN)/protoc-gen-grpc-gateway $(PROTO_PLUGIN_BIN)/protoc-gen-openapiv2 $(PROTO_PLUGIN_BIN)/protoc-gen-validate
 PROTO_TOOL_VERSIONS := google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12 google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2 github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.28.0 github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@v2.28.0 github.com/envoyproxy/protoc-gen-validate@v1.3.3
 
