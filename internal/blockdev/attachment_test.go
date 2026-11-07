@@ -108,6 +108,110 @@ func TestAttachmentReferenceStripsSecrets(t *testing.T) {
 	}
 }
 
+func TestAttachmentReferenceVariants(t *testing.T) {
+	nvme := Attachment{
+		Protocol: ProtocolNVMeTCP,
+		NVMeTCP: &NVMeTCPAttachment{
+			NVMeTCPReference: NVMeTCPReference{
+				Address: "10.0.0.1:4420", NQN: "nqn.x", HostNQN: "nqn.host", NSID: 1,
+			},
+			PSK: "secret",
+		},
+	}
+	ref := nvme.Reference()
+	if ref.NVMeTCP == nil || ref.NVMeTCP.NQN != "nqn.x" {
+		t.Fatalf("nvme reference = %+v", ref)
+	}
+	rbd := Attachment{
+		Protocol: ProtocolRBD,
+		RBD: &RBDAttachment{RBDReference: RBDReference{
+			Monitors: []string{"mon1:6789"}, Pool: "rbd", Image: "disk", Keyring: "/keyring",
+		}},
+	}
+	ref = rbd.Reference()
+	if ref.RBD == nil || ref.RBD.Pool != "rbd" {
+		t.Fatalf("rbd reference = %+v", ref)
+	}
+}
+
+func TestProtocolNormalize(t *testing.T) {
+	if Protocol("").Normalize() != ProtocolLocal {
+		t.Fatal("empty protocol did not normalize to local")
+	}
+	if ProtocolISCSI.Normalize() != ProtocolISCSI {
+		t.Fatal("iSCSI protocol changed")
+	}
+}
+
+func TestReferenceValidationBranches(t *testing.T) {
+	tests := []Reference{
+		{Protocol: ProtocolLocal, ISCSI: &ISCSIReference{}},
+		{Protocol: ProtocolNVMeTCP, ISCSI: &ISCSIReference{}},
+		{Protocol: ProtocolRBD, ISCSI: &ISCSIReference{}},
+		{Protocol: ProtocolISCSI, ISCSI: &ISCSIReference{Portal: "p:3260"}},
+		{Protocol: ProtocolISCSI, ISCSI: &ISCSIReference{Portal: "p:3260", Target: "t", LUN: -1}},
+		{Protocol: ProtocolNVMeTCP, NVMeTCP: &NVMeTCPReference{NQN: "nqn.x"}},
+		{Protocol: ProtocolNVMeTCP, NVMeTCP: &NVMeTCPReference{Address: "a:4420"}},
+		{Protocol: ProtocolNVMeTCP, NVMeTCP: &NVMeTCPReference{Address: "a:4420", NQN: "nqn.x", NSID: -1}},
+		{Protocol: ProtocolRBD, RBD: &RBDReference{Image: "disk"}},
+		{Protocol: ProtocolRBD, RBD: &RBDReference{Pool: "rbd"}},
+	}
+	for _, ref := range tests {
+		if err := ref.Validate(); err == nil {
+			t.Fatalf("Validate() accepted %+v", ref)
+		}
+	}
+}
+
+func TestReferenceValidateCompleteMissingBodies(t *testing.T) {
+	for _, protocol := range []Protocol{ProtocolISCSI, ProtocolNVMeTCP, ProtocolRBD} {
+		if err := (Reference{Protocol: protocol}).ValidateComplete(); err == nil {
+			t.Fatalf("ValidateComplete() accepted missing %s body", protocol)
+		}
+	}
+	if err := (Reference{Protocol: ProtocolLocal}).ValidateComplete(); err != nil {
+		t.Fatalf("local ValidateComplete() = %v", err)
+	}
+}
+
+func TestLocatorMissingBodies(t *testing.T) {
+	for _, protocol := range []Protocol{ProtocolISCSI, ProtocolNVMeTCP, ProtocolRBD} {
+		if got := (Reference{Protocol: protocol}).Locator(); got != "" {
+			t.Fatalf("Locator() = %q for missing %s body", got, protocol)
+		}
+	}
+}
+
+func TestAttachmentValidateCompleteBranches(t *testing.T) {
+	tests := []Attachment{
+		{Protocol: ProtocolISCSI},
+		{Protocol: ProtocolISCSI, ISCSI: &ISCSIAttachment{
+			ISCSIReference: ISCSIReference{Portal: "p", Target: "t"}, Credential: "secret",
+		}},
+		{Protocol: ProtocolISCSI, ISCSI: &ISCSIAttachment{
+			ISCSIReference: ISCSIReference{Portal: "p", Target: "t"}, Username: "user",
+		}},
+		{Protocol: ProtocolNVMeTCP},
+		{Protocol: ProtocolRBD},
+		{Protocol: "fc"},
+	}
+	for _, attachment := range tests {
+		if err := attachment.ValidateComplete(); err == nil {
+			t.Fatalf("ValidateComplete() accepted %+v", attachment)
+		}
+	}
+	if err := (Attachment{Protocol: ProtocolNVMeTCP, NVMeTCP: &NVMeTCPAttachment{
+		NVMeTCPReference: NVMeTCPReference{Address: "a", NQN: "nqn"},
+	}}).ValidateComplete(); err != nil {
+		t.Fatalf("valid NVMe ValidateComplete() = %v", err)
+	}
+	if err := (Attachment{Protocol: ProtocolRBD, RBD: &RBDAttachment{
+		RBDReference: RBDReference{Pool: "rbd", Image: "disk"},
+	}}).ValidateComplete(); err != nil {
+		t.Fatalf("valid RBD ValidateComplete() = %v", err)
+	}
+}
+
 func TestReferenceJSONRoundTrip(t *testing.T) {
 	original := Reference{
 		Protocol: ProtocolRBD,
