@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -59,7 +60,7 @@ func newReclaimerStore(t *testing.T) (*store.Store, store.StorageBackend) {
 func newDueDisk(t *testing.T, st *store.Store, backend store.StorageBackend, state string) store.Disk {
 	t.Helper()
 	disk, err := st.CreateDisk(context.Background(), store.Disk{
-		Name: "due-" + state, SizeGB: 5, StorageBackendID: &backend.ID,
+		Name: fmt.Sprintf("due-%s-%d", state, time.Now().UnixNano()), SizeGB: 5, StorageBackendID: &backend.ID,
 		Source: store.DiskSourceKouja, Protocol: string(blockdev.ProtocolISCSI),
 		BackendMetadata: store.DiskBackendMetadata{
 			Driver: store.DiskSourceKouja,
@@ -159,5 +160,90 @@ func TestReclaimerSkipsAttached(t *testing.T) {
 	reclaimer := NewReclaimer(st, NewRegistry(driver), zerolog.Nop())
 	if _, err := reclaimer.Tick(ctx); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestReclaimerConfigAndFailurePaths(t *testing.T) {
+	ctx := context.Background()
+	if _, err := (&Reclaimer{}).Tick(ctx); err == nil {
+		t.Fatal("Tick accepted unconfigured reclaimer")
+	}
+	st, backend := newReclaimerStore(t)
+	_ = newDueDisk(t, st, backend, store.DiskDeletionDeleting)
+	missing := &Reclaimer{store: st, registry: NewRegistry(), logger: zerolog.Nop(), now: time.Now}
+	if _, err := missing.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// A due row whose backend disappears is terminal.
+	orphan, err := st.CreateDisk(ctx, store.Disk{Name: "orphan", SizeGB: 5, Source: store.DiskSourceKouja,
+		Protocol: string(blockdev.ProtocolISCSI), DeletionState: store.DiskDeletionDeleting,
+		DeletionNextAttemptAt: time.Now().UTC().Add(-time.Minute),
+		BackendMetadata:       store.DiskBackendMetadata{Volume: store.VolumeMetadata{VolumeID: "orphan"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	driver := &fakeDriver{kind: "fake"}
+	reclaimer := NewReclaimer(st, NewRegistry(driver), zerolog.Nop())
+	if _, err := reclaimer.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	failed, err := st.GetDisk(ctx, orphan.ID)
+	if err != nil || failed.DeletionState != store.DiskDeletionFailed {
+		t.Fatalf("orphan = %+v, %v", failed, err)
+	}
+
+	// Retry cap.
+	capDisk := newDueDisk(t, st, backend, store.DiskDeletionDeleting)
+	if err := st.RecordDiskDeletionFailure(ctx, capDisk.ID, reclaimerMaxTries-1, time.Now().Add(-time.Second), "retry"); err != nil {
+		t.Fatal(err)
+	}
+	driver.deleteErr = status.Error(codes.Unavailable, "down")
+	reclaimer.now = time.Now
+	if _, err := reclaimer.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	capped, err := st.GetDisk(ctx, capDisk.ID)
+	if err != nil || capped.DeletionState != store.DiskDeletionFailed {
+		t.Fatalf("capped = %+v, %v", capped, err)
+	}
+
+	runCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() { reclaimer.Run(runCtx); close(done) }()
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Run did not stop")
+	}
+}
+
+func TestRegistryAndBackoff(t *testing.T) {
+	driver := &fakeDriver{kind: "fake"}
+	registry := NewRegistry(nil, driver)
+	if got, ok := registry.Driver(" FAKE "); !ok || got != driver {
+		t.Fatal("Driver lookup failed")
+	}
+	if _, ok := registry.Driver("missing"); ok {
+		t.Fatal("Driver found a missing kind")
+	}
+	var nilRegistry *Registry
+	if _, ok := nilRegistry.Driver("fake"); ok {
+		t.Fatal("nil Registry found a driver")
+	}
+	nilRegistry.Register(driver)
+	registry.Register(nil)
+	registry.Register(&fakeDriver{kind: "other"})
+	if _, ok := registry.Driver("other"); !ok {
+		t.Fatal("Register failed")
+	}
+	if NewDefaultRegistry() == nil {
+		t.Fatal("NewDefaultRegistry returned nil")
+	}
+	want := []time.Duration{30 * time.Second, time.Minute, 5 * time.Minute, 15 * time.Minute, 30 * time.Minute, time.Hour}
+	for i, duration := range want {
+		if got := deletionBackoff(i + 1); got != duration {
+			t.Fatalf("backoff(%d) = %v, want %v", i+1, got, duration)
+		}
 	}
 }
