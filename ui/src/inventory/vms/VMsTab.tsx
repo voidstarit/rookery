@@ -217,6 +217,20 @@ export function VMsTab() {
     }
   }, [vms.length]);
 
+  useEffect(() => {
+    if (route.segments[0] !== "vms") {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      if (!document.hidden) {
+        void loadVMs(false);
+      }
+    }, 5000);
+    return () => window.clearInterval(timer);
+    // The poll only needs the current route; loadVMs uses current state and the shared API helper.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.path]);
+
   const freeDisks = disks.filter((disk) => !disk.attached_vm_id && !disk.is_template && !disk.deletion_state);
   const hasProvisionableDisk = freeDisks.some((disk) => !diskNeedsThinPool(disk));
 
@@ -297,6 +311,18 @@ export function VMsTab() {
     }
   };
 
+  const resumeVM = async (vm: VM) => {
+    try {
+      const updated = await api<VM>(`/api/vms/${vm.id}/resume`, { method: "POST" });
+      publishVMs(vms.map((item) => (item.id === updated.id ? updated : item)));
+      setError("");
+      showToast(`Resumed ${vm.name}`);
+    } catch (err) {
+      setError(`Could not resume ${vm.name}: ${err instanceof Error ? err.message : String(err)}`);
+      void loadVMs();
+    }
+  };
+
   const openConsole = (vm: VM) => {
     if (!vm.console_enabled) {
       showToast("Console access is disabled. Edit the VM to enable it.", true);
@@ -364,6 +390,7 @@ export function VMsTab() {
                   const bootMedia = media.find((item) => item.id === vm.boot_media_id) || vm.boot_media;
                   const vmInterfaces = Array.isArray(vm.interfaces) ? vm.interfaces : [];
                   const active = vm.status === "running" || vm.status === "starting";
+                  const paused = Boolean(vm.run_state?.startsWith("paused"));
                   return (
                     <tr key={vm.id}>
                       <td>
@@ -382,8 +409,8 @@ export function VMsTab() {
                         />
                       </td>
                       <td>
-                        <span class="status-badge" data-status={vm.status}>
-                          {vm.status}
+                        <span class="status-badge" data-status={paused ? "paused" : vm.status}>
+                          {paused ? vm.run_state : vm.status}
                         </span>
                       </td>
                       <td class="mono">{numberFormat.format(vm.vcpus)}</td>
@@ -436,6 +463,11 @@ export function VMsTab() {
                           >
                             {active ? "Stop" : "Start"}
                           </button>
+                          {paused ? (
+                            <button class="row-action" type="button" onClick={() => void resumeVM(vm)}>
+                              Resume
+                            </button>
+                          ) : null}
                           <button
                             class="row-action"
                             type="button"

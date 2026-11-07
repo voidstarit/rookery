@@ -604,7 +604,7 @@ func (s *vmService) ListVMs(ctx context.Context, _ *rookeryv1.ListVMsRequest) (*
 	}
 	response := &rookeryv1.ListVMsResponse{Vms: make([]*rookeryv1.VM, 0, len(vms))}
 	for _, vm := range vms {
-		response.Vms = append(response.Vms, vmToProto(vm))
+		response.Vms = append(response.Vms, s.vmToProto(ctx, vm))
 	}
 	return response, nil
 }
@@ -617,7 +617,7 @@ func (s *vmService) GetVM(ctx context.Context, request *rookeryv1.GetVMRequest) 
 	case err != nil:
 		return nil, status.Error(codes.Internal, "could not read VM")
 	default:
-		return vmToProto(vm), nil
+		return s.vmToProto(ctx, vm), nil
 	}
 }
 

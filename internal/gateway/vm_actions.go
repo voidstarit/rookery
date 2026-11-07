@@ -27,6 +27,12 @@ type VMController interface {
 	Metrics(vmID string) (qemu.Metrics, error)
 }
 
+// VMStateMonitor exposes the live QEMU monitor state and pause recovery.
+type VMStateMonitor interface {
+	RunState(ctx context.Context, vmID string) (string, error)
+	Resume(ctx context.Context, vmID string) (string, error)
+}
+
 // CgroupUpdater applies cgroup changes to a running VM without restarting
 // QEMU. Implementations move the QEMU process between child cgroups as needed.
 type CgroupUpdater interface {
@@ -44,6 +50,18 @@ func vmStartStatusError(err error) error {
 		return status.Error(codes.Unavailable, "could not start VM: "+err.Error()+" (retrying after the previous iSCSI session closes usually succeeds)")
 	}
 	return status.Error(codes.Internal, "could not start VM: "+err.Error())
+}
+
+func (s *vmService) vmToProto(ctx context.Context, vm store.VM) *rookeryv1.VM {
+	result := vmToProto(vm)
+	if vm.Status == store.StatusRunning && s.runtime != nil {
+		if monitor, ok := s.runtime.(VMStateMonitor); ok {
+			if state, err := monitor.RunState(ctx, vm.ID); err == nil {
+				result.RunState = state
+			}
+		}
+	}
+	return result
 }
 
 func (s *vmService) startVM(ctx context.Context, vm store.VM) error {
@@ -108,7 +126,7 @@ func (s *vmService) StartVM(ctx context.Context, request *rookeryv1.StartVMReque
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not update VM desired state")
 	}
-	return vmToProto(updated), nil
+	return s.vmToProto(ctx, updated), nil
 }
 
 func (s *vmService) StopVM(ctx context.Context, request *rookeryv1.StopVMRequest) (*rookeryv1.VM, error) {
@@ -135,7 +153,39 @@ func (s *vmService) StopVM(ctx context.Context, request *rookeryv1.StopVMRequest
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not update VM desired state")
 	}
-	return vmToProto(updated), nil
+	return s.vmToProto(ctx, updated), nil
+}
+
+func (s *vmService) ResumeVM(ctx context.Context, request *rookeryv1.ResumeVMRequest) (*rookeryv1.VM, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.runtimeUnavailable(); err != nil {
+		return nil, err
+	}
+	vm, err := s.store.GetVM(ctx, request.GetId())
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		return nil, status.Error(codes.NotFound, "vm not found")
+	case err != nil:
+		return nil, status.Error(codes.Internal, "could not read VM")
+	}
+	if !s.runtime.Running(vm.ID) {
+		return nil, status.Error(codes.FailedPrecondition, "VM is not running")
+	}
+	monitor, ok := s.runtime.(VMStateMonitor)
+	if !ok {
+		return nil, status.Error(codes.Unimplemented, "VM runtime does not expose monitor state")
+	}
+	state, err := monitor.Resume(ctx, vm.ID)
+	if err != nil {
+		if errors.Is(err, qemu.ErrNotPaused) {
+			return nil, status.Error(codes.FailedPrecondition, "VM is not paused")
+		}
+		return nil, status.Error(codes.Internal, "could not resume VM: "+err.Error())
+	}
+	result := vmToProto(vm)
+	result.RunState = state
+	return result, nil
 }
 
 func (s *vmService) ResetVM(ctx context.Context, request *rookeryv1.ResetVMRequest) (*rookeryv1.VM, error) {
@@ -248,7 +298,7 @@ func (s *vmService) getVM(ctx context.Context, id string) (*rookeryv1.VM, error)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not read VM")
 	}
-	return vmToProto(vm), nil
+	return s.vmToProto(ctx, vm), nil
 }
 
 func (s *vmService) DeleteVM(ctx context.Context, request *rookeryv1.DeleteVMRequest) (*emptypb.Empty, error) {

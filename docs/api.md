@@ -313,6 +313,7 @@ VPP command.
 | `DELETE` | `/api/vms/{id}`    | Delete a VM, freeing its disks     |
 | `POST`   | `/api/vms/{id}/start` | Start the VM with QEMU/KVM      |
 | `POST`   | `/api/vms/{id}/stop`  | Stop the VM                     |
+| `POST`   | `/api/vms/{id}/resume` | Resume a QEMU VM paused by an I/O error |
 | `POST`   | `/api/vms/{id}/ctrl-alt-del` | Send Ctrl+Alt+Del via QEMU's monitor |
 | `POST`   | `/api/vms/{id}/reset` | Force a VM reset; power-cycles legacy VMs without a monitor |
 | `GET`    | `/ws/vms/{id}/vnc`    | WebSocket proxy to the VM's VNC Unix socket |
@@ -345,6 +346,12 @@ create and update (`0` means unlimited). Rookery passes them to QEMU as
 `throttling.bps-read` and `throttling.bps-write`; limits take effect the next
 time the VM starts. The Disks tab shows current limits and provides a **Limits**
 action.
+
+VM responses include `run_state` for running VMs. QEMU uses
+`rerror=stop,werror=stop` for remote iSCSI drives, so a transport error pauses
+the VM as `paused (io-error)` instead of silently dropping I/O. Use
+`POST /api/vms/{id}/resume` (or the UI **Resume** action) after the storage path
+recovers.
 
 A `kouja` backend's `config.kouja` accepts `ca_pem`, `client_cert_pem`, and
 `client_key_pem` as PEM content; the older `ca_file`, `client_cert_file`, and

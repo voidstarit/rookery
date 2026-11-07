@@ -24,6 +24,8 @@ type fakeVMController struct {
 	cgroupErr     error
 	cgroupApplied []store.VM
 	plan          qemu.StartPlan
+	runState      string
+	resumeErr     error
 }
 
 func (f *fakeVMController) Start(_ context.Context, _ store.VM) error {
@@ -36,6 +38,16 @@ func (f *fakeVMController) Start(_ context.Context, _ store.VM) error {
 func (f *fakeVMController) StartWithPlan(ctx context.Context, vm store.VM, plan qemu.StartPlan) error {
 	f.plan = plan
 	return f.Start(ctx, vm)
+}
+func (f *fakeVMController) RunState(context.Context, string) (string, error) {
+	return f.runState, nil
+}
+func (f *fakeVMController) Resume(_ context.Context, _ string) (string, error) {
+	if f.resumeErr != nil {
+		return "", f.resumeErr
+	}
+	f.runState = "running"
+	return f.runState, nil
 }
 func (f *fakeVMController) Stop(_ context.Context, _ string) error {
 	f.running = false
@@ -228,4 +240,68 @@ func TestStartVMRepairsStatusWhenQEMUIsAlreadyRunning(t *testing.T) {
 	if loaded.Status != store.StatusRunning {
 		t.Fatalf("stored status = %q, want running", loaded.Status)
 	}
+}
+
+func TestVMResumeAndRunStateRoutes(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "vm-resume.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	disk, err := st.CreateDisk(ctx, store.Disk{Name: "root", SizeGB: 5, VG: "vg0", ThinPool: "pool"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm, err := st.CreateVM(ctx, store.VM{Name: "paused-vm", VCPUs: 1, MemoryMB: 512, DiskIDs: []int64{disk.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SetVMStatus(ctx, vm.ID, store.StatusRunning); err != nil {
+		t.Fatal(err)
+	}
+	runtime := &fakeVMController{running: true, runState: "paused (io-error)"}
+	gw, err := gateway.New(st, fakeReadiness{status: readyStatus()}, gateway.WithVMController(runtime))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	server := httptest.NewServer(gw.Handler)
+	t.Cleanup(server.Close)
+
+	response, err := http.Get(server.URL + "/api/vms/" + vm.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("get vm = %d, %s", response.StatusCode, readBody(t, response))
+	}
+	var body map[string]any
+	decodeBody(t, response, &body)
+	if body["run_state"] != "paused (io-error)" {
+		t.Fatalf("vm body = %+v", body)
+	}
+
+	resume, err := http.Post(server.URL+"/api/vms/"+vm.ID+"/resume", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resume.StatusCode != http.StatusOK {
+		t.Fatalf("resume = %d, %s", resume.StatusCode, readBody(t, resume))
+	}
+	decodeBody(t, resume, &body)
+	if body["run_state"] != "running" {
+		t.Fatalf("resumed body = %+v", body)
+	}
+
+	runtime.resumeErr = qemu.ErrNotPaused
+	runtime.runState = "running"
+	failed, err := http.Post(server.URL+"/api/vms/"+vm.ID+"/resume", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failed.StatusCode != http.StatusBadRequest {
+		t.Fatalf("resume not paused = %d, %s", failed.StatusCode, readBody(t, failed))
+	}
+	_ = failed.Body.Close()
 }

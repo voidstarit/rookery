@@ -59,6 +59,10 @@ service VMService {
     option (google.api.http) = {post: "/api/vms/{id}/ctrl-alt-del"};
   }
 
+  rpc ResumeVM(ResumeVMRequest) returns (VM) {
+    option (google.api.http) = {post: "/api/vms/{id}/resume"};
+  }
+
   rpc GetVMMetrics(GetVMMetricsRequest) returns (VMMetrics) {
     option (google.api.http) = {get: "/api/vms/{id}/metrics"};
   }
@@ -141,6 +145,10 @@ message DeleteVMRequest {
 }
 
 message StartVMRequest {
+  string id = 1 [(validate.rules).string.uuid = true];
+}
+
+message ResumeVMRequest {
   string id = 1 [(validate.rules).string.uuid = true];
 }
 

@@ -1414,6 +1414,126 @@ var _ interface {
 	ErrorName() string
 } = StartVMRequestValidationError{}
 
+// Validate checks the field values on ResumeVMRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *ResumeVMRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ResumeVMRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ResumeVMRequestMultiError, or nil if none found.
+func (m *ResumeVMRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ResumeVMRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if err := m._validateUuid(m.GetId()); err != nil {
+		err = ResumeVMRequestValidationError{
+			field:  "Id",
+			reason: "value must be a valid UUID",
+			cause:  err,
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return ResumeVMRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+func (m *ResumeVMRequest) _validateUuid(uuid string) error {
+	if matched := _vm_uuidPattern.MatchString(uuid); !matched {
+		return errors.New("invalid uuid format")
+	}
+
+	return nil
+}
+
+// ResumeVMRequestMultiError is an error wrapping multiple validation errors
+// returned by ResumeVMRequest.ValidateAll() if the designated constraints
+// aren't met.
+type ResumeVMRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ResumeVMRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ResumeVMRequestMultiError) AllErrors() []error { return m }
+
+// ResumeVMRequestValidationError is the validation error returned by
+// ResumeVMRequest.Validate if the designated constraints aren't met.
+type ResumeVMRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ResumeVMRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ResumeVMRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ResumeVMRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ResumeVMRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ResumeVMRequestValidationError) ErrorName() string { return "ResumeVMRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e ResumeVMRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sResumeVMRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ResumeVMRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ResumeVMRequestValidationError{}
+
 // Validate checks the field values on StopVMRequest with the rules defined in
 // the proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.

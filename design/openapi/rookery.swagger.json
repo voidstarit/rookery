@@ -3227,6 +3227,36 @@
         ]
       }
     },
+    "/api/vms/{id}/resume": {
+      "post": {
+        "operationId": "VMService_ResumeVM",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VM"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VMService"
+        ]
+      }
+    },
     "/api/vms/{id}/start": {
       "post": {
         "operationId": "VMService_StartVM",

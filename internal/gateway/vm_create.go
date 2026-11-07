@@ -83,7 +83,7 @@ func (s *vmService) CreateVM(ctx context.Context, request *rookeryv1.CreateVMReq
 	if err != nil {
 		return nil, err
 	}
-	return vmToProto(created), nil
+	return s.vmToProto(ctx, created), nil
 }
 
 // startCreatedVM starts a freshly created VM. Rookery creates VMs running;
@@ -229,7 +229,7 @@ func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMReq
 			return nil, vmStoreError(err, "update disks")
 		}
 	}
-	return vmToProto(updated), nil
+	return s.vmToProto(ctx, updated), nil
 }
 
 // checkVMCreatePrerequisites only requires the thin pool for disks that
