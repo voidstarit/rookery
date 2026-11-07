@@ -51,10 +51,14 @@ message VMDisk {
   string vg = 6;
   string thin_pool = 7;
   string device = 8;
-  // source is "lvm-thin" or "host-device".
+  // source is the backend driver ("lvm-thin", "host-device", "kouja", ...).
   string source = 9;
   // size_bytes is the exact host device size for passthrough disks.
   uint64 size_bytes = 10;
+  // locator is a display-only description of a remote attachment.
+  string locator = 11;
+  // protocol distinguishes local, iscsi, nvme-tcp, and rbd attachments.
+  string protocol = 12;
 }
 
 message Disk {
@@ -75,10 +79,18 @@ message Disk {
   string template_disk_name = 15;
   string provisioning_script = 16;
   string provisioning_timeout = 17;
-  // source is "lvm-thin" or "host-device".
+  // source is the backend driver ("lvm-thin", "host-device", "kouja", ...).
   string source = 18;
   // size_bytes is the exact host device size for passthrough disks.
   uint64 size_bytes = 19;
+  // locator is a display-only description of a remote attachment.
+  string locator = 20;
+  // deletion_state is empty for a ready disk, or provisioning/deleting/delete_failed.
+  string deletion_state = 21;
+  // deletion_error is the last asynchronous deletion error.
+  string deletion_error = 22;
+  // protocol distinguishes local, iscsi, nvme-tcp, and rbd attachments.
+  string protocol = 23;
 }
 
 message ImportableDisk {

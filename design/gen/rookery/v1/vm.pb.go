@@ -44,8 +44,10 @@ type VM struct {
 	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	CgroupClass    string                 `protobuf:"bytes,17,opt,name=cgroup_class,json=cgroupClass,proto3" json:"cgroup_class,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// run_state is the live QEMU monitor state for a running VM.
+	RunState      string `protobuf:"bytes,18,opt,name=run_state,json=runState,proto3" json:"run_state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *VM) Reset() {
@@ -193,6 +195,13 @@ func (x *VM) GetUpdatedAt() *timestamppb.Timestamp {
 func (x *VM) GetCgroupClass() string {
 	if x != nil {
 		return x.CgroupClass
+	}
+	return ""
+}
+
+func (x *VM) GetRunState() string {
+	if x != nil {
+		return x.RunState
 	}
 	return ""
 }
@@ -1028,7 +1037,7 @@ var File_rookery_v1_vm_proto protoreflect.FileDescriptor
 const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\n" +
 	"\x13rookery/v1/vm.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\x1a\x15rookery/v1/disk.proto\x1a\x1arookery/v1/interface.proto\x1a\x16rookery/v1/media.proto\"\x96\x05\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\x1a\x15rookery/v1/disk.proto\x1a\x1arookery/v1/interface.proto\x1a\x16rookery/v1/media.proto\"\xb3\x05\n" +
 	"\x02VM\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -1052,7 +1061,8 @@ const file_rookery_v1_vm_proto_rawDesc = "" +
 	"created_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
 	"updated_at\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12!\n" +
-	"\fcgroup_class\x18\x11 \x01(\tR\vcgroupClassB\n" +
+	"\fcgroup_class\x18\x11 \x01(\tR\vcgroupClass\x12\x1b\n" +
+	"\trun_state\x18\x12 \x01(\tR\brunStateB\n" +
 	"\n" +
 	"\b_disk_idB\x10\n" +
 	"\x0e_boot_media_id\"\x10\n" +
