@@ -2,6 +2,7 @@ package qemu
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -172,5 +173,127 @@ func TestValidateVMDisksRemoteSkipsDevice(t *testing.T) {
 		{Device: filepath.Join(t.TempDir(), "missing")},
 	}); err == nil {
 		t.Fatal("validateVMDisks accepted a missing local device")
+	}
+}
+
+func TestStartWithoutDiskAndMonitorStubs(t *testing.T) {
+	ctx := context.Background()
+	q, err := New(DefaultBinary, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := q.Start(ctx, store.VM{}); err == nil || !strings.Contains(err.Error(), "no disk") {
+		t.Fatalf("Start(no disk) = %v", err)
+	}
+	vmID := uuid.NewString()
+	if state, err := q.RunState(ctx, vmID); err != nil || state != "" {
+		t.Fatalf("RunState(stopped) = %q, %v", state, err)
+	}
+	if paused, err := q.Paused(ctx, vmID); err != nil || paused {
+		t.Fatalf("Paused(stopped) = %t, %v", paused, err)
+	}
+	if _, err := q.Resume(ctx, vmID); !errors.Is(err, ErrNotPaused) {
+		t.Fatalf("Resume(stopped) = %v", err)
+	}
+	if _, err := q.monitorQuery(ctx, vmID, "info status"); !errors.Is(err, ErrNotRunning) {
+		t.Fatalf("monitorQuery(stopped) = %v", err)
+	}
+}
+
+func TestPrepareSecretBranches(t *testing.T) {
+	q, err := New(DefaultBinary, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm := store.VM{ID: uuid.NewString(), Disks: []store.VMDisk{{ID: 1}, {ID: 2}, {ID: 3}, {ID: 4}}}
+	plan := StartPlan{Attachments: map[int64]blockdev.Attachment{
+		1: {Protocol: blockdev.ProtocolISCSI},
+	}}
+	if _, err := q.prepareSecrets(vm, plan); err == nil {
+		t.Fatal("prepareSecrets accepted an iSCSI attachment without a credential")
+	}
+	plan = StartPlan{Attachments: map[int64]blockdev.Attachment{
+		2: {Protocol: blockdev.ProtocolNVMeTCP},
+	}}
+	if _, err := q.prepareSecrets(vm, plan); err == nil {
+		t.Fatal("prepareSecrets accepted NVMe/TCP without a PSK")
+	}
+	plan = StartPlan{Attachments: map[int64]blockdev.Attachment{
+		3: {Protocol: blockdev.ProtocolRBD},
+		4: {Protocol: "unknown"},
+	}}
+	if paths, err := q.prepareSecrets(vm, plan); err != nil || len(paths) != 0 {
+		t.Fatalf("prepareSecrets(non-secret) = %+v, %v", paths, err)
+	}
+	// A non-empty directory cannot be removed, so writeSecret reports the
+	// cleanup failure before trying to create the secret file.
+	dir := filepath.Join(t.TempDir(), "secret-dir")
+	if err := os.MkdirAll(filepath.Join(dir, "child"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.writeSecret(dir, "secret"); err == nil {
+		t.Fatal("writeSecret accepted a directory path")
+	}
+
+	// Fresh and stale secret cleanup plus an unreadable run directory.
+	fresh := filepath.Join(q.runDir, "fresh.secret")
+	if err := os.WriteFile(fresh, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(q.runDir, "secret-dir"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	q.cleanupStaleSecrets()
+	if _, err := os.Stat(fresh); err != nil {
+		t.Fatalf("fresh secret was removed: %v", err)
+	}
+	q.cleanupSecrets("[")
+	if err := os.RemoveAll(q.runDir); err != nil {
+		t.Fatal(err)
+	}
+	q.cleanupStaleSecrets()
+}
+
+func TestBuildDiskArgsReservedProtocols(t *testing.T) {
+	nvme := blockdev.Attachment{Protocol: blockdev.ProtocolNVMeTCP, NVMeTCP: &blockdev.NVMeTCPAttachment{
+		NVMeTCPReference: blockdev.NVMeTCPReference{Address: "10.0.0.1:4420", NQN: "nqn", NSID: 1},
+	}}
+	if _, err := buildDiskArgs(store.VMDisk{ID: 1, Source: store.DiskSourceKouja, Protocol: "nvme-tcp"},
+		StartPlan{Attachments: map[int64]blockdev.Attachment{1: nvme}}, nil); err == nil {
+		t.Fatal("buildDiskArgs accepted NVMe/TCP")
+	}
+	rbd := blockdev.Attachment{Protocol: blockdev.ProtocolRBD, RBD: &blockdev.RBDAttachment{
+		RBDReference: blockdev.RBDReference{Pool: "pool", Image: "image"},
+	}}
+	if _, err := buildDiskArgs(store.VMDisk{ID: 2, Source: store.DiskSourceCeph, Protocol: "rbd"},
+		StartPlan{Attachments: map[int64]blockdev.Attachment{2: rbd}}, nil); err == nil {
+		t.Fatal("buildDiskArgs accepted RBD")
+	}
+}
+
+func TestPrepareSecretsWriteAndBuildErrors(t *testing.T) {
+	q, err := New(DefaultBinary, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm := store.VM{ID: uuid.NewString(), Disks: []store.VMDisk{{ID: 1}}}
+	plan := testISCSIPlan()
+	// A run directory that is a regular file makes the secret path unwritable.
+	file := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	q.runDir = file
+	if _, err := q.prepareSecrets(vm, plan); err == nil {
+		t.Fatal("prepareSecrets accepted an unwritable run directory")
+	}
+	q.runDir = t.TempDir()
+	if err := q.writeSecret(filepath.Join(q.runDir, "missing", "secret"), "x"); err == nil {
+		t.Fatal("writeSecret accepted a missing parent directory")
+	}
+	remote := testRemoteDisk()
+	vm = store.VM{ID: uuid.NewString(), Disks: []store.VMDisk{remote}}
+	if _, err := buildArgsWithPlan(vm, "/tmp/vm.vnc", "/tmp/vm.pid", "/tmp/vm.monitor", StartPlan{}, nil); err == nil {
+		t.Fatal("buildArgsWithPlan accepted a remote disk without an attachment")
 	}
 }
