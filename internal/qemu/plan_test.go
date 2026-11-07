@@ -276,7 +276,7 @@ func TestPrepareSecretsWriteAndBuildErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	vm := store.VM{ID: uuid.NewString(), Disks: []store.VMDisk{{ID: 1}}}
+	vm := store.VM{ID: uuid.NewString(), Disks: []store.VMDisk{{ID: 7}}}
 	plan := testISCSIPlan()
 	// A run directory that is a regular file makes the secret path unwritable.
 	file := filepath.Join(t.TempDir(), "not-a-dir")
