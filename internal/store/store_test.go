@@ -1067,6 +1067,9 @@ func TestDiskBandwidthLimits(t *testing.T) {
 	if _, err := st.SetDiskBandwidth(ctx, disk.ID, -1, 0); err == nil {
 		t.Fatal("SetDiskBandwidth accepted a negative limit")
 	}
+	if _, err := st.CreateDisk(ctx, store.Disk{Name: "negative", SizeGB: 5, ReadBPS: -1}); err == nil {
+		t.Fatal("CreateDisk accepted a negative bandwidth limit")
+	}
 	if _, err := st.SetDiskBandwidth(ctx, 999999, 1, 1); !errors.Is(err, store.ErrDiskNotFound) {
 		t.Fatalf("SetDiskBandwidth(missing) = %v", err)
 	}

@@ -944,6 +944,9 @@ func (s *Store) DeleteVM(ctx context.Context, id string) error {
 
 // CreateDisk inserts a disk record and returns the stored record.
 func (s *Store) CreateDisk(ctx context.Context, disk Disk) (Disk, error) {
+	if disk.ReadBPS < 0 || disk.WriteBPS < 0 {
+		return Disk{}, errors.New("disk bandwidth limits must not be negative")
+	}
 	if disk.Source == "" {
 		disk.Source = DiskSourceLVMThin
 	}
