@@ -454,3 +454,48 @@ func TestBuildDiskArgsThrottling(t *testing.T) {
 		t.Fatalf("remote args = %q", remoteArgs)
 	}
 }
+
+func TestBlockStats(t *testing.T) {
+	ctx := context.Background()
+	q, err := New(DefaultBinary, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats, err := q.BlockStats(ctx, uuid.NewString()); err != nil || stats != nil {
+		t.Fatalf("BlockStats(stopped) = %+v, %v", stats, err)
+	}
+	vmID := uuid.NewString()
+	startMonitorProcess(t, q, vmID)
+	socket := qmpPathFromSocket(q.VNCSocket(vmID))
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		reader := bufio.NewReader(conn)
+		_, _ = conn.Write([]byte(`{"QMP":{"version":{"qemu":{"major":10,"minor":0,"micro":0}}}}` + "\n"))
+		for _, response := range []string{
+			`{"return":{}}`,
+			`{"return":[{"device":"rookery-disk-7","stats":{"rd_bytes":1024,"wr_bytes":2048,"rd_operations":10,"wr_operations":20,"failed_rd_operations":1,"failed_wr_operations":2,"invalid_rd_operations":3,"invalid_wr_operations":4}}]}`,
+		} {
+			if _, err := reader.ReadString('\n'); err != nil {
+				return
+			}
+			_, _ = conn.Write([]byte(response + "\n"))
+		}
+	}()
+	stats, err := q.BlockStats(ctx, vmID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stats) != 1 || stats[0].Device != "rookery-disk-7" || stats[0].ReadBytes != 1024 ||
+		stats[0].FailedReadOps != 1 || stats[0].InvalidWriteOps != 4 {
+		t.Fatalf("stats = %+v", stats)
+	}
+}

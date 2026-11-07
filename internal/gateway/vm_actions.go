@@ -3,6 +3,8 @@ package gateway
 import (
 	"context"
 	"errors"
+	"strconv"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -31,6 +33,11 @@ type VMController interface {
 type VMStateMonitor interface {
 	RunState(ctx context.Context, vmID string) (string, error)
 	Resume(ctx context.Context, vmID string) (string, error)
+}
+
+// VMBlockStats exposes per-drive QEMU block counters.
+type VMBlockStats interface {
+	BlockStats(ctx context.Context, vmID string) ([]qemu.BlockDeviceStats, error)
 }
 
 // CgroupUpdater applies cgroup changes to a running VM without restarting
@@ -246,6 +253,29 @@ func (s *vmService) CtrlAltDel(ctx context.Context, request *rookeryv1.CtrlAltDe
 	return s.getVM(ctx, request.GetId())
 }
 
+func blockDeviceToProto(vm store.VM, stat qemu.BlockDeviceStats) *rookeryv1.BlockDeviceMetrics {
+	result := &rookeryv1.BlockDeviceMetrics{
+		Device:    stat.Device,
+		ReadBytes: stat.ReadBytes, WriteBytes: stat.WriteBytes,
+		ReadOperations: stat.ReadOperations, WriteOperations: stat.WriteOperations,
+		FailedReadOperations: stat.FailedReadOps, FailedWriteOperations: stat.FailedWriteOps,
+		InvalidReadOperations: stat.InvalidReadOps, InvalidWriteOperations: stat.InvalidWriteOps,
+	}
+	const prefix = "rookery-disk-"
+	if strings.HasPrefix(stat.Device, prefix) {
+		if id, err := strconv.ParseInt(strings.TrimPrefix(stat.Device, prefix), 10, 64); err == nil {
+			result.DiskId = id
+			for _, disk := range vm.Disks {
+				if disk.ID == id {
+					result.Name = disk.Name
+					break
+				}
+			}
+		}
+	}
+	return result
+}
+
 func (s *vmService) GetVMMetrics(ctx context.Context, request *rookeryv1.GetVMMetricsRequest) (*rookeryv1.VMMetrics, error) {
 	if err := s.runtimeUnavailable(); err != nil {
 		return nil, err
@@ -275,6 +305,15 @@ func (s *vmService) GetVMMetrics(ctx context.Context, request *rookeryv1.GetVMMe
 		Vcpus:               int32(vm.VCPUs),
 		MemoryMb:            int32(vm.MemoryMB),
 		SampledAt:           timestamppb.New(time.Now().UTC()),
+	}
+	if metrics.Running {
+		if blockSource, ok := s.runtime.(VMBlockStats); ok {
+			if blockStats, blockErr := blockSource.BlockStats(ctx, vm.ID); blockErr == nil {
+				for _, stat := range blockStats {
+					result.BlockDevices = append(result.BlockDevices, blockDeviceToProto(vm, stat))
+				}
+			}
+		}
 	}
 	if metrics.Running && s.counters != nil && len(vm.Interfaces) > 0 {
 		names := make([]string, 0, len(vm.Interfaces))

@@ -14,6 +14,11 @@ type VMMonitorDialogProps = {
   onClose: () => void;
 };
 
+type BlockRate = {
+  read: number;
+  write: number;
+};
+
 type LastSample = {
   at: number;
   cpu: number;
@@ -31,6 +36,8 @@ export function VMMonitorDialog({ vm, onClose }: VMMonitorDialogProps) {
   const loadingRef = useRef(false);
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const lastRef = useRef<LastSample | null>(null);
+  const lastBlocksRef = useRef<Record<string, { at: number; read: number; write: number }>>({});
+  const [blockRates, setBlockRates] = useState<Record<string, BlockRate>>({});
   const cpuCanvas = useRef<HTMLCanvasElement | null>(null);
   const memoryCanvas = useRef<HTMLCanvasElement | null>(null);
   const ioCanvas = useRef<HTMLCanvasElement | null>(null);
@@ -78,7 +85,9 @@ export function VMMonitorDialog({ vm, onClose }: VMMonitorDialogProps) {
 
       if (!next.running) {
         lastRef.current = null;
+        lastBlocksRef.current = {};
         setSamples([]);
+        setBlockRates({});
       } else {
         lastRef.current = {
           at: now,
@@ -88,6 +97,24 @@ export function VMMonitorDialog({ vm, onClose }: VMMonitorDialogProps) {
           netRead: netReadTotal,
           netWrite: netWriteTotal,
         };
+        const nextBlockRates: Record<string, BlockRate> = {};
+        const nextBlockLast: Record<string, { at: number; read: number; write: number }> = {};
+        for (const device of next.block_devices ?? []) {
+          const key = device.device;
+          const readBytes = Number(device.read_bytes) || 0;
+          const writeBytes = Number(device.write_bytes) || 0;
+          const previous = lastBlocksRef.current[key];
+          if (previous && now > previous.at) {
+            const seconds = (now - previous.at) / 1000;
+            nextBlockRates[key] = {
+              read: Math.max(0, (readBytes - previous.read) / seconds),
+              write: Math.max(0, (writeBytes - previous.write) / seconds),
+            };
+          }
+          nextBlockLast[key] = { at: now, read: readBytes, write: writeBytes };
+        }
+        lastBlocksRef.current = nextBlockLast;
+        setBlockRates(nextBlockRates);
         setSamples((current) => {
           const updated = [
             ...current,
@@ -350,6 +377,68 @@ export function VMMonitorDialog({ vm, onClose }: VMMonitorDialogProps) {
           ></canvas>
         </section>
       </div>
+
+      <section class="monitor-block-devices">
+        <div class="chart-head">
+          <span>Block devices</span>
+          <span class="chart-note">QEMU blockstats · cumulative totals and current rates</span>
+        </div>
+        {current?.block_devices?.length ? (
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Device</th>
+                  <th scope="col">Read</th>
+                  <th scope="col">Write</th>
+                  <th scope="col">Operations</th>
+                  <th scope="col">Errors</th>
+                </tr>
+              </thead>
+              <tbody>
+                {current.block_devices.map((device) => {
+                  const rate = blockRates[device.device];
+                  const read = Number(device.read_bytes) || 0;
+                  const write = Number(device.write_bytes) || 0;
+                  const errors =
+                    (Number(device.failed_read_operations) || 0) +
+                    (Number(device.failed_write_operations) || 0);
+                  return (
+                    <tr key={device.device}>
+                      <td>
+                        <span class="vm-name">{device.name || device.device}</span>
+                        <span class="vm-description mono">{device.device}</span>
+                      </td>
+                      <td class="mono">
+                        {formatBytes(read)} total
+                        {rate ? <span class="vm-description">{formatBytes(rate.read)}/s</span> : null}
+                      </td>
+                      <td class="mono">
+                        {formatBytes(write)} total
+                        {rate ? <span class="vm-description">{formatBytes(rate.write)}/s</span> : null}
+                      </td>
+                      <td class="mono">
+                        <span class="vm-description">
+                          read {Number(device.read_operations) || 0} · write {Number(device.write_operations) || 0}
+                        </span>
+                      </td>
+                      <td class={errors ? "mono" : "mono muted"}>
+                        {errors}
+                        <span class="vm-description">
+                          failed read {Number(device.failed_read_operations) || 0} · failed write{" "}
+                          {Number(device.failed_write_operations) || 0}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p class="field-hint">No block devices reported by QEMU.</p>
+        )}
+      </section>
 
       <p class="field-hint">
         {current && running

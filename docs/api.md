@@ -308,7 +308,7 @@ VPP command.
 | `GET`    | `/api/vms`         | List all VMs                       |
 | `POST`   | `/api/vms`         | Create a VM with an existing disk and start it |
 | `GET`    | `/api/vms/{id}`    | Get one VM                         |
-| `GET`    | `/api/vms/{id}/metrics` | QEMU process CPU/memory/I/O and VPP vhost RX/TX telemetry |
+| `GET`    | `/api/vms/{id}/metrics` | QEMU process CPU/memory/I/O, per-drive blockstats, and VPP vhost RX/TX telemetry |
 | `PUT`    | `/api/vms/{id}`    | Update VM settings                 |
 | `DELETE` | `/api/vms/{id}`    | Delete a VM, freeing its disks     |
 | `POST`   | `/api/vms/{id}/start` | Start the VM with QEMU/KVM      |

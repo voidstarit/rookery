@@ -1917,6 +1917,14 @@ textarea:disabled {
 }
 
 
+.monitor-block-devices {
+  margin-top: 1.25rem;
+}
+
+.monitor-block-devices .vm-description {
+  display: block;
+}
+
 .monitor-charts {
   display: grid;
   grid-template-columns: 1fr;

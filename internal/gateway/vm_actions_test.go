@@ -2,6 +2,7 @@ package gateway_test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -26,6 +27,8 @@ type fakeVMController struct {
 	plan          qemu.StartPlan
 	runState      string
 	resumeErr     error
+	blockStats    []qemu.BlockDeviceStats
+	blockErr      error
 }
 
 func (f *fakeVMController) Start(_ context.Context, _ store.VM) error {
@@ -41,6 +44,9 @@ func (f *fakeVMController) StartWithPlan(ctx context.Context, vm store.VM, plan 
 }
 func (f *fakeVMController) RunState(context.Context, string) (string, error) {
 	return f.runState, nil
+}
+func (f *fakeVMController) BlockStats(context.Context, string) ([]qemu.BlockDeviceStats, error) {
+	return f.blockStats, f.blockErr
 }
 func (f *fakeVMController) Resume(_ context.Context, _ string) (string, error) {
 	if f.resumeErr != nil {
@@ -89,10 +95,16 @@ func TestVMActionsAndMetrics(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	runtime := &fakeVMController{metrics: qemu.Metrics{
-		Running: true, PID: 1234, UptimeSeconds: 12, CPUSecondsTotal: 2.5,
-		RSSBytes: 1024, VirtualBytes: 2048, ReadBytesTotal: 10, WriteBytesTotal: 20,
-	}}
+	runtime := &fakeVMController{
+		metrics: qemu.Metrics{
+			Running: true, PID: 1234, UptimeSeconds: 12, CPUSecondsTotal: 2.5,
+			RSSBytes: 1024, VirtualBytes: 2048, ReadBytesTotal: 10, WriteBytesTotal: 20,
+		},
+		blockStats: []qemu.BlockDeviceStats{{
+			Device: fmt.Sprintf("rookery-disk-%d", disk.ID), ReadBytes: 100, WriteBytes: 200,
+			FailedReadOps: 1, FailedWriteOps: 2,
+		}},
+	}
 	gw, err := gateway.New(st, fakeReadiness{status: readyStatus()}, gateway.WithVMController(runtime))
 	if err != nil {
 		t.Fatal(err)
@@ -138,6 +150,10 @@ func TestVMActionsAndMetrics(t *testing.T) {
 	}
 	if !metrics.GetRunning() || metrics.GetVmId() != vm.ID || metrics.GetPid() != 1234 || metrics.GetCpuSecondsTotal() != 2.5 {
 		t.Fatalf("metrics = running=%v vm_id=%q pid=%d cpu=%v", metrics.GetRunning(), metrics.GetVmId(), metrics.GetPid(), metrics.GetCpuSecondsTotal())
+	}
+	if len(metrics.GetBlockDevices()) != 1 || metrics.GetBlockDevices()[0].GetName() != "vm-disk" ||
+		metrics.GetBlockDevices()[0].GetFailedWriteOperations() != 2 {
+		t.Fatalf("block devices = %+v", metrics.GetBlockDevices())
 	}
 
 	ctrlAltDel := post("/api/vms/" + vm.ID + "/ctrl-alt-del")

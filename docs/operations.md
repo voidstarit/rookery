@@ -316,7 +316,8 @@ restored, and failures are logged without stopping the API.
 
 The **Monitor** action opens a live telemetry dialog that samples the QEMU
 process every two seconds and shows CPU usage, RSS/virtual memory, disk read
-and write rates, network RX/TX rates, uptime, and PID. It also keeps 60 samples
+and write rates, per-block-device read/write totals and failed-operation
+counters, network RX/TX rates, uptime, and PID. It also keeps 60 samples
 (about two minutes) and draws CPU, memory RSS, disk I/O, and network I/O history
 on embedded canvas charts. Network counters are read from the VM's VPP vhost
 interfaces. It reports process- and vhost-level metrics, not guest OS metrics.

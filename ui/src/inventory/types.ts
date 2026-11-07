@@ -264,6 +264,20 @@ export type VM = {
   updated_at?: string;
 };
 
+export type BlockDeviceMetrics = {
+  disk_id?: number;
+  name?: string;
+  device: string;
+  read_bytes: number;
+  write_bytes: number;
+  read_operations: number;
+  write_operations: number;
+  failed_read_operations: number;
+  failed_write_operations: number;
+  invalid_read_operations: number;
+  invalid_write_operations: number;
+};
+
 export type VMMetrics = {
   running: boolean;
   pid?: number;
@@ -282,6 +296,7 @@ export type VMMetrics = {
   network_rx_packets_total: number;
   network_tx_packets_total: number;
   sampled_at: string;
+  block_devices?: BlockDeviceMetrics[];
 };
 
 export type KoujaConfig = {

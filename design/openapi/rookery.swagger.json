@@ -4522,6 +4522,53 @@
         }
       }
     },
+    "v1BlockDeviceMetrics": {
+      "type": "object",
+      "properties": {
+        "disk_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "device": {
+          "type": "string"
+        },
+        "read_bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "write_bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "read_operations": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "write_operations": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "failed_read_operations": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "failed_write_operations": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "invalid_read_operations": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "invalid_write_operations": {
+          "type": "string",
+          "format": "uint64"
+        }
+      }
+    },
     "v1CgroupClass": {
       "type": "object",
       "properties": {
@@ -7215,6 +7262,13 @@
         "sampled_at": {
           "type": "string",
           "format": "date-time"
+        },
+        "block_devices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1BlockDeviceMetrics"
+          }
         }
       }
     },

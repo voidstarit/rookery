@@ -151,6 +151,7 @@ func (q *QEMU) StartWithPlan(ctx context.Context, vm store.VM, plan StartPlan) e
 	_ = os.Remove(socket)
 	_ = os.Remove(pidfile)
 	_ = os.Remove(monitor)
+	_ = os.Remove(qmpPathFromSocket(socket))
 
 	placement, err := q.cgroupPlacement(vm)
 	if err != nil {
@@ -528,6 +529,11 @@ func (q *QEMU) cleanup(socket, pidfile, monitor string) {
 	_ = os.Remove(socket)
 	_ = os.Remove(pidfile)
 	_ = os.Remove(monitor)
+	_ = os.Remove(qmpPathFromSocket(socket))
+}
+
+func qmpPathFromSocket(socket string) string {
+	return strings.TrimSuffix(socket, ".vnc") + ".qmp"
 }
 
 func (q *QEMU) prepareSecrets(vm store.VM, plan StartPlan) (map[int64]string, error) {
@@ -840,6 +846,7 @@ func buildArgsWithPlan(vm store.VM, socket, pidfile, monitor string, plan StartP
 		"-vnc", "unix:"+socket,
 		"-pidfile", pidfile,
 		"-monitor", "unix:"+monitor+",server,nowait",
+		"-qmp", "unix:"+qmpPathFromSocket(socket)+",server,nowait",
 		"-nic", "none",
 		"-daemonize",
 	)
@@ -873,7 +880,7 @@ func buildDiskArgs(disk store.VMDisk, plan StartPlan, secretPaths map[int64]stri
 	protocol := blockdev.Protocol(disk.Protocol).Normalize()
 	if disk.Source != store.DiskSourceKouja && disk.Source != store.DiskSourceCeph &&
 		(disk.Protocol == "" || protocol == blockdev.ProtocolLocal) {
-		return []string{"-drive", fmt.Sprintf("file=%s,format=raw,if=virtio,cache=none,aio=native%s", disk.Device, diskThrottleArgs(disk))}, nil
+		return []string{"-drive", fmt.Sprintf("file=%s,format=raw,if=virtio,id=rookery-disk-%d,cache=none,aio=native%s", disk.Device, disk.ID, diskThrottleArgs(disk))}, nil
 	}
 	attachment, ok := plan.Attachments[disk.ID]
 	if !ok {
@@ -891,9 +898,9 @@ func buildDiskArgs(disk store.VMDisk, plan StartPlan, secretPaths map[int64]stri
 		secretID := fmt.Sprintf("rookery-iscsi-%d", disk.ID)
 		return []string{
 			"-object", fmt.Sprintf("secret,id=%s,file=%s,format=raw", secretID, secretPath),
-			"-drive", fmt.Sprintf("file.driver=iscsi,file.transport=tcp,file.portal=%s,file.target=%s,file.lun=%d,file.user=%s,file.password-secret=%s,file.initiator-name=%s,file.timeout=30,if=virtio,format=raw,cache=none,werror=stop,rerror=stop%s",
+			"-drive", fmt.Sprintf("file.driver=iscsi,file.transport=tcp,file.portal=%s,file.target=%s,file.lun=%d,file.user=%s,file.password-secret=%s,file.initiator-name=%s,file.timeout=30,if=virtio,id=rookery-disk-%d,format=raw,cache=none,werror=stop,rerror=stop%s",
 				attachment.ISCSI.Portal, attachment.ISCSI.Target, attachment.ISCSI.LUN,
-				attachment.ISCSI.Username, secretID, attachment.ISCSI.Initiator, diskThrottleArgs(disk)),
+				attachment.ISCSI.Username, secretID, attachment.ISCSI.Initiator, disk.ID, diskThrottleArgs(disk)),
 		}, nil
 	case blockdev.ProtocolNVMeTCP:
 		return nil, fmt.Errorf("NVMe/TCP attachments are not implemented")
