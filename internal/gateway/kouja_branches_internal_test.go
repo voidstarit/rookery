@@ -3,7 +3,9 @@ package gateway
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -13,6 +15,7 @@ import (
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/blockdev"
+	"github.com/voidstarit/rookery/internal/kouja"
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/readiness"
 	"github.com/voidstarit/rookery/internal/storage"
@@ -240,3 +243,10 @@ func (r *legacyRuntime) Reset(context.Context, string) error          { return n
 func (r *legacyRuntime) SendCtrlAltDel(context.Context, string) error { return nil }
 func (r *legacyRuntime) Running(string) bool                          { return false }
 func (r *legacyRuntime) Metrics(string) (qemu.Metrics, error)         { return qemu.Metrics{}, nil }
+
+func TestVMStartStatusErrorSessionActive(t *testing.T) {
+	err := vmStartStatusError(fmt.Errorf("prepare disk: %w", kouja.ErrSessionActive))
+	if status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "previous iSCSI session") {
+		t.Fatalf("vmStartStatusError = %v", err)
+	}
+}

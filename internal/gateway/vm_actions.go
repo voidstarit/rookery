@@ -12,6 +12,7 @@ import (
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/host"
+	"github.com/voidstarit/rookery/internal/kouja"
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/store"
 )
@@ -36,6 +37,13 @@ type CgroupUpdater interface {
 type InterfaceCounterSource interface {
 	InterfaceCounters(ctx context.Context, names []string) (map[string]host.InterfaceCounters, error)
 	ResetInterfaceCounters(ctx context.Context) error
+}
+
+func vmStartStatusError(err error) error {
+	if errors.Is(err, kouja.ErrSessionActive) {
+		return status.Error(codes.Unavailable, "could not start VM: "+err.Error()+" (retrying after the previous iSCSI session closes usually succeeds)")
+	}
+	return status.Error(codes.Internal, "could not start VM: "+err.Error())
 }
 
 func (s *vmService) startVM(ctx context.Context, vm store.VM) error {
@@ -91,7 +99,7 @@ func (s *vmService) StartVM(ctx context.Context, request *rookeryv1.StartVMReque
 	}
 	if err := s.startVM(ctx, vm); err != nil {
 		_, _ = s.store.SetVMStatus(ctx, vm.ID, store.StatusError)
-		return nil, status.Error(codes.Internal, "could not start VM: "+err.Error())
+		return nil, vmStartStatusError(err)
 	}
 	if _, err := s.store.SetVMStatus(ctx, vm.ID, store.StatusRunning); err != nil {
 		return nil, status.Error(codes.Internal, "could not update VM status")

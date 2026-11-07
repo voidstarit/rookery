@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -308,5 +309,55 @@ func TestKoujaDriverErrorBranches(t *testing.T) {
 	}
 	if _, err := badClient.Health(ctx, valid, nil); err == nil {
 		t.Fatal("Health accepted client error")
+	}
+}
+
+func TestKoujaDriverWaitsForSession(t *testing.T) {
+	ctx := context.Background()
+	calls := 0
+	api := &fakeAPI{
+		getVolume: func(context.Context, *koujav1.GetVolumeRequest) (*koujav1.GetVolumeResponse, error) {
+			calls++
+			state := koujav1.SessionState_SESSION_STATE_ACTIVE
+			if calls > 1 {
+				state = koujav1.SessionState_SESSION_STATE_NONE
+			}
+			return &koujav1.GetVolumeResponse{
+				Desired: &koujav1.Volume{Owner: "spiffe://kouja/caller/rookery", State: koujav1.VolumeState_VOLUME_STATE_EXPORTED},
+				Export: &koujav1.Export{Protocol: koujav1.Protocol_PROTOCOL_ISCSI, TargetName: "iqn.2026-11.io.example:disk",
+					Portal: "10.0.0.1:3260", Lun: 0, State: koujav1.ExportState_EXPORT_STATE_EXPORTED, SessionState: state},
+			}, nil
+		},
+		getCredential: func(context.Context, *koujav1.GetCredentialRequest) (*koujav1.GetCredentialResponse, error) {
+			return &koujav1.GetCredentialResponse{Protocol: koujav1.Protocol_PROTOCOL_ISCSI, Credential: "secret"}, nil
+		},
+	}
+	driver := storageKoujaDriver(api)
+	driver.sessionWait = time.Second
+	driver.sessionPoll = time.Millisecond
+	disk := store.Disk{Protocol: string(blockdev.ProtocolISCSI), BackendMetadata: store.DiskBackendMetadata{
+		Volume:     store.VolumeMetadata{VolumeID: "volume-1", ResourceID: "resource-1", Owner: "spiffe://kouja/caller/rookery"},
+		Attachment: storageReference(),
+	}}
+	attachment, err := driver.PrepareStart(ctx, storageKoujaBackend(t), disk)
+	if err != nil || attachment.ISCSI == nil || calls < 2 {
+		t.Fatalf("PrepareStart() = %+v, %v, calls=%d", attachment, err, calls)
+	}
+
+	alwaysActive := &fakeAPI{
+		getVolume: func(context.Context, *koujav1.GetVolumeRequest) (*koujav1.GetVolumeResponse, error) {
+			return &koujav1.GetVolumeResponse{
+				Desired: &koujav1.Volume{Owner: "spiffe://kouja/caller/rookery", State: koujav1.VolumeState_VOLUME_STATE_EXPORTED},
+				Export: &koujav1.Export{Protocol: koujav1.Protocol_PROTOCOL_ISCSI, TargetName: "iqn.2026-11.io.example:disk",
+					Portal: "10.0.0.1:3260", Lun: 0, State: koujav1.ExportState_EXPORT_STATE_EXPORTED,
+					SessionState: koujav1.SessionState_SESSION_STATE_ACTIVE},
+			}, nil
+		},
+	}
+	driver = storageKoujaDriver(alwaysActive)
+	driver.sessionWait = 5 * time.Millisecond
+	driver.sessionPoll = time.Millisecond
+	if _, err := driver.PrepareStart(ctx, storageKoujaBackend(t), disk); err == nil || !strings.Contains(err.Error(), "after waiting") {
+		t.Fatalf("PrepareStart(active) = %v", err)
 	}
 }

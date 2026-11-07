@@ -2,8 +2,10 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	koujav1 "github.com/voidstarit/kouja/gen/kouja/v1"
 
@@ -14,12 +16,23 @@ import (
 
 // KoujaDriver provisions disks through a kouja agent.
 type KoujaDriver struct {
-	newClient func(kouja.Config) (*kouja.Client, error)
+	newClient   func(kouja.Config) (*kouja.Client, error)
+	sessionWait time.Duration
+	sessionPoll time.Duration
 }
+
+const (
+	defaultKoujaSessionWait = 2 * time.Second
+	defaultKoujaSessionPoll = 250 * time.Millisecond
+)
 
 // NewKoujaDriver creates a kouja driver.
 func NewKoujaDriver() *KoujaDriver {
-	return &KoujaDriver{newClient: kouja.NewClient}
+	return &KoujaDriver{
+		newClient:   kouja.NewClient,
+		sessionWait: defaultKoujaSessionWait,
+		sessionPoll: defaultKoujaSessionPoll,
+	}
 }
 
 // Kind identifies the kouja driver.
@@ -140,7 +153,29 @@ func (d *KoujaDriver) PrepareStart(ctx context.Context, backend store.StorageBac
 	}
 	defer client.Close()
 	preparer := &kouja.Preparer{API: client}
-	return preparer.Prepare(ctx, cfg, disk)
+	wait := d.sessionWait
+	if wait <= 0 {
+		wait = defaultKoujaSessionWait
+	}
+	poll := d.sessionPoll
+	if poll <= 0 {
+		poll = defaultKoujaSessionPoll
+	}
+	deadline := time.Now().Add(wait)
+	for {
+		attachment, err := preparer.Prepare(ctx, cfg, disk)
+		if !errors.Is(err, kouja.ErrSessionActive) {
+			return attachment, err
+		}
+		if !time.Now().Before(deadline) {
+			return blockdev.Attachment{}, fmt.Errorf("%w after waiting %s; disconnect the other iSCSI initiator or wait for the session to expire", err, wait)
+		}
+		select {
+		case <-ctx.Done():
+			return blockdev.Attachment{}, fmt.Errorf("%w: %v", err, ctx.Err())
+		case <-time.After(poll):
+		}
+	}
 }
 
 // Health checks the kouja endpoint and optionally an existing disk.

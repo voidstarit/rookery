@@ -99,7 +99,7 @@ func (s *vmService) startCreatedVM(ctx context.Context, vm store.VM) (store.VM, 
 	defer s.mu.Unlock()
 	if err := s.startVM(ctx, vm); err != nil {
 		s.rollbackCreatedVM(vm.ID)
-		return store.VM{}, status.Error(codes.Internal, "could not start VM: "+err.Error())
+		return store.VM{}, vmStartStatusError(err)
 	}
 	if _, err := s.store.SetVMStatus(ctx, vm.ID, store.StatusRunning); err != nil {
 		s.rollbackCreatedVM(vm.ID)
