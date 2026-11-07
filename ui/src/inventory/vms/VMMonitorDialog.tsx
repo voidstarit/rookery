@@ -402,7 +402,9 @@ export function VMMonitorDialog({ vm, onClose }: VMMonitorDialogProps) {
                   const write = Number(device.write_bytes) || 0;
                   const errors =
                     (Number(device.failed_read_operations) || 0) +
-                    (Number(device.failed_write_operations) || 0);
+                    (Number(device.failed_write_operations) || 0) +
+                    (Number(device.invalid_read_operations) || 0) +
+                    (Number(device.invalid_write_operations) || 0);
                   return (
                     <tr key={device.device}>
                       <td>
@@ -426,7 +428,9 @@ export function VMMonitorDialog({ vm, onClose }: VMMonitorDialogProps) {
                         {errors}
                         <span class="vm-description">
                           failed read {Number(device.failed_read_operations) || 0} · failed write{" "}
-                          {Number(device.failed_write_operations) || 0}
+                          {Number(device.failed_write_operations) || 0} · invalid{" "}
+                          {Number(device.invalid_read_operations) || 0}/
+                          {Number(device.invalid_write_operations) || 0}
                         </span>
                       </td>
                     </tr>

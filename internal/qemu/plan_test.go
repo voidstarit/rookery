@@ -482,7 +482,7 @@ func TestBlockStats(t *testing.T) {
 		_, _ = conn.Write([]byte(`{"QMP":{"version":{"qemu":{"major":10,"minor":0,"micro":0}}}}` + "\n"))
 		for _, response := range []string{
 			`{"return":{}}`,
-			`{"return":[{"device":"rookery-disk-7","stats":{"rd_bytes":1024,"wr_bytes":2048,"rd_operations":10,"wr_operations":20,"failed_rd_operations":1,"failed_wr_operations":2,"invalid_rd_operations":3,"invalid_wr_operations":4}}]}`,
+			`{"return":[{"device":"rookery-disk-7","stats":{"rd_bytes":1024,"wr_bytes":2048,"rd_operations":10,"wr_operations":20,"failed_rd_operations":1,"failed_wr_operations":2,"invalid_rd_operations":3,"invalid_wr_operations":4}},{"node-name":"node-x","stats":{"rd_bytes":1}},{"device":"no-stats"}]}`,
 		} {
 			if _, err := reader.ReadString('\n'); err != nil {
 				return
@@ -494,8 +494,37 @@ func TestBlockStats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(stats) != 1 || stats[0].Device != "rookery-disk-7" || stats[0].ReadBytes != 1024 ||
-		stats[0].FailedReadOps != 1 || stats[0].InvalidWriteOps != 4 {
+	if len(stats) != 2 || stats[0].Device != "rookery-disk-7" || stats[0].ReadBytes != 1024 ||
+		stats[0].FailedReadOps != 1 || stats[0].InvalidWriteOps != 4 || stats[1].Device != "node-x" {
 		t.Fatalf("stats = %+v", stats)
+	}
+}
+
+func TestBlockStatsErrors(t *testing.T) {
+	ctx := context.Background()
+	q, err := New(DefaultBinary, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	vmID := uuid.NewString()
+	startMonitorProcess(t, q, vmID)
+	if _, err := q.BlockStats(ctx, vmID); err == nil {
+		t.Fatal("BlockStats accepted a missing QMP socket")
+	}
+	socket := qmpPathFromSocket(q.VNCSocket(vmID))
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		_ = conn.Close()
+	}()
+	if _, err := q.BlockStats(ctx, vmID); err == nil {
+		t.Fatal("BlockStats accepted a closed QMP socket")
 	}
 }
