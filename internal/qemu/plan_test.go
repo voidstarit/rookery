@@ -1,10 +1,14 @@
 package qemu
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -295,5 +299,132 @@ func TestPrepareSecretsWriteAndBuildErrors(t *testing.T) {
 	vm = store.VM{ID: uuid.NewString(), Disks: []store.VMDisk{remote}}
 	if _, err := buildArgsWithPlan(vm, "/tmp/vm.vnc", "/tmp/vm.pid", "/tmp/vm.monitor", StartPlan{}, nil); err == nil {
 		t.Fatal("buildArgsWithPlan accepted a remote disk without an attachment")
+	}
+}
+
+func startMonitorProcess(t *testing.T, q *QEMU, vmID string) *exec.Cmd {
+	t.Helper()
+	cmd := exec.Command("sh", "-c", "while :; do sleep 1; done", vmID)
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	})
+	_, pidfile, _, err := q.paths(vmID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(pidfile, []byte(strconv.Itoa(cmd.Process.Pid)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Give /proc a moment to expose the child's command line.
+	deadline := time.Now().Add(time.Second)
+	for !q.Running(vmID) && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !q.Running(vmID) {
+		t.Fatal("test qemu process was not detected")
+	}
+	return cmd
+}
+
+func startFakeMonitor(t *testing.T, q *QEMU, vmID string, responses []string) {
+	t.Helper()
+	_, _, socket, err := q.paths(vmID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go func(conn net.Conn) {
+				defer conn.Close()
+				reader := bufio.NewReader(conn)
+				_, _ = reader.ReadString('\n')
+				if len(responses) == 0 {
+					return
+				}
+				response := responses[0]
+				responses = responses[1:]
+				if response != "" {
+					_, _ = conn.Write([]byte(response))
+				}
+			}(conn)
+		}
+	}()
+}
+
+func TestRunStateAndResumeWithMonitor(t *testing.T) {
+	ctx := context.Background()
+	q, err := New(DefaultBinary, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	vmID := uuid.NewString()
+	startMonitorProcess(t, q, vmID)
+	startFakeMonitor(t, q, vmID, []string{
+		"VM status: running\n",
+		"VM status: paused (io-error)\n",
+		"VM status: paused\n",
+		"VM status: unknown\n",
+		"VM status: paused\n",
+		"VM status: paused\n",
+		"",
+		"VM status: running\n",
+	})
+	for _, want := range []string{"running", "paused (io-error)", "paused", ""} {
+		state, err := q.RunState(ctx, vmID)
+		if err != nil || state != want {
+			t.Fatalf("RunState() = %q, %v; want %q", state, err, want)
+		}
+	}
+	paused, err := q.Paused(ctx, vmID)
+	if err != nil || !paused {
+		t.Fatalf("Paused() = %t, %v", paused, err)
+	}
+	state, err := q.Resume(ctx, vmID)
+	if err != nil || state != "running" {
+		t.Fatalf("Resume() = %q, %v", state, err)
+	}
+	if err := q.Reset(ctx, vmID); err != nil {
+		t.Fatalf("Reset() = %v", err)
+	}
+	if err := q.SendCtrlAltDel(ctx, vmID); err != nil {
+		t.Fatalf("SendCtrlAltDel() = %v", err)
+	}
+}
+
+func TestRunStateMonitorErrors(t *testing.T) {
+	ctx := context.Background()
+	q, err := New(DefaultBinary, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	vmID := uuid.NewString()
+	startMonitorProcess(t, q, vmID)
+	if _, err := q.RunState(ctx, vmID); !errors.Is(err, ErrMonitorUnavailable) {
+		t.Fatalf("RunState(missing monitor) = %v", err)
+	}
+	if _, err := q.Paused(ctx, vmID); !errors.Is(err, ErrMonitorUnavailable) {
+		t.Fatalf("Paused(missing monitor) = %v", err)
+	}
+	if _, err := q.Resume(ctx, vmID); !errors.Is(err, ErrMonitorUnavailable) {
+		t.Fatalf("Resume(missing monitor) = %v", err)
+	}
+	if err := q.Reset(ctx, vmID); !errors.Is(err, ErrMonitorUnavailable) {
+		t.Fatalf("Reset(missing monitor) = %v", err)
+	}
+	if _, err := q.monitorQuery(ctx, vmID, "info status"); !errors.Is(err, ErrMonitorUnavailable) {
+		t.Fatalf("monitorQuery(missing monitor) = %v", err)
 	}
 }
