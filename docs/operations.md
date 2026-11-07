@@ -186,7 +186,13 @@ stopped.
 The `default` backend is bootstrapped from
 the API `-vg`/`-thin-pool` flags when supplied; otherwise `serve` starts with
 the first registered storage backend, and adding a backend in the UI updates
-readiness. LVM thin-pool backends can be registered and selected from the UI.
+readiness. LVM thin-pool backends can be registered and selected from the UI. Kouja
+backends are registered with the driver `kouja`, an endpoint, storage class,
+iSCSI initiator IQN, and mTLS certificate paths. The client certificate must
+contain exactly one `spiffe://kouja/caller/<name>` URI SAN; keep that identity
+stable across certificate rotation. Kouja disks are exported directly to QEMU;
+the host does not create an `iscsiadm` session. Queue a kouja disk delete and
+let the reclaimer finish it; `delete_failed` rows can be retried.
 Each configured LVM backend has an **Import** action that lists existing thin
 volumes in its pool and registers selected volumes as disks without modifying
 LVM. Already registered volumes are shown as unavailable. The driver and config

@@ -174,16 +174,23 @@ export function DisksTab() {
     const confirmed = window.confirm(
       disk.source === "host-device"
         ? `Delete disk "${disk.name}"?\n\nThis removes only the inventory record. The host block device ${disk.device} is not modified.`
-        : `Delete disk "${disk.name}"?\n\nThis removes the LVM thin volume and its inventory record.`
+        : disk.source === "kouja"
+          ? `Delete disk "${disk.name}"?\n\nThis queues the kouja volume for unexport and deletion. The disk stays visible until cleanup finishes.`
+          : `Delete disk "${disk.name}"?\n\nThis removes the LVM thin volume and its inventory record.`
     );
     if (!confirmed) {
       return;
     }
     try {
       await api(`/api/disks/${disk.id}`, { method: "DELETE" });
-      publishDisks(disks.filter((item) => item.id !== disk.id));
+      if (disk.source === "kouja") {
+        await loadDisks();
+        showToast(`Deletion queued for ${disk.name}`);
+      } else {
+        publishDisks(disks.filter((item) => item.id !== disk.id));
+        showToast(`Deleted disk ${disk.name}`);
+      }
       setDiskError("");
-      showToast(`Deleted disk ${disk.name}`);
       void loadBackends(false);
     } catch (err) {
       setDiskError(`Could not delete ${disk.name}: ${err instanceof Error ? err.message : String(err)}`);
@@ -191,8 +198,8 @@ export function DisksTab() {
   };
 
   const toggleTemplate = async (disk: Disk) => {
-    if (disk.source === "host-device") {
-      showToast("Host block devices cannot be templates.", true);
+    if (disk.source !== "lvm-thin" && disk.source) {
+      showToast("Only LVM thin disks can be templates.", true);
       return;
     }
     if (disk.attached_vm_id) {
@@ -314,9 +321,11 @@ export function DisksTab() {
                           onSaved={(labels) => backendLabels.setEntityLabels(String(backend.id), labels)}
                         />
                       </td>
-                      <td class="mono">{backend.driver === "lvm-thin" ? "LVM thin" : backend.driver}</td>
+                      <td class="mono">{backend.driver === "lvm-thin" ? "LVM thin" : backend.driver === "kouja" ? "Kouja" : backend.driver}</td>
                       <td class="mono">
-                        {backend.config?.vg || "—"}/{backend.config?.thin_pool || "—"}
+                        {backend.driver === "kouja"
+                          ? `${backend.config?.kouja?.endpoint || "—"} · ${backend.config?.kouja?.storage_class || "—"}`
+                          : `${backend.config?.vg || "—"}/${backend.config?.thin_pool || "—"}`}
                         {backend.config?.supports_templates ? (
                           <span class="import-disk-badge template-backend-badge">templates</span>
                         ) : null}
@@ -419,10 +428,20 @@ export function DisksTab() {
                       {disk.source === "host-device" ? (
                         <span class="import-disk-badge">passthrough</span>
                       ) : null}
+                      {disk.source === "kouja" ? <span class="import-disk-badge">kouja</span> : null}
+                      {disk.deletion_state ? (
+                        <span class="import-disk-badge" title={disk.deletion_error || disk.deletion_state}>
+                          {disk.deletion_state === "delete_failed" ? "delete failed" : disk.deletion_state}
+                        </span>
+                      ) : null}
                       {disk.template_disk_name ? (
                         <span class="vm-description">from {disk.template_disk_name}</span>
                       ) : null}
-                      {disk.device ? (
+                      {disk.locator ? (
+                        <span class="vm-description" title={disk.locator}>
+                          {disk.locator}
+                        </span>
+                      ) : disk.device ? (
                         <span class="vm-description" title={disk.device}>
                           {disk.device}
                         </span>
@@ -454,7 +473,7 @@ export function DisksTab() {
                             Provisioning
                           </button>
                         ) : null}
-                        {disk.source === "host-device" ? null : (
+                        {disk.source === "host-device" || (disk.source && disk.source !== "lvm-thin") ? null : (
                           <button
                             class="row-action"
                             type="button"

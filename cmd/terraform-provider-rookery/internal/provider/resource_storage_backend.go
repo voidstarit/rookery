@@ -48,6 +48,33 @@ type storageBackendConfigModel struct {
 	PreparationScript             types.String `tfsdk:"preparation_script"`
 	PreparationTimeout            types.String `tfsdk:"preparation_timeout"`
 	AllowTemplateDeleteWithClones types.Bool   `tfsdk:"allow_template_delete_with_clones"`
+	Kouja                         types.Object `tfsdk:"kouja"`
+}
+
+type koujaConfigModel struct {
+	Endpoint       types.String `tfsdk:"endpoint"`
+	Protocol       types.String `tfsdk:"protocol"`
+	StorageClass   types.String `tfsdk:"storage_class"`
+	Initiator      types.String `tfsdk:"initiator"`
+	HostNQN        types.String `tfsdk:"host_nqn"`
+	CAFile         types.String `tfsdk:"ca_file"`
+	ClientCertFile types.String `tfsdk:"client_cert_file"`
+	ClientKeyFile  types.String `tfsdk:"client_key_file"`
+	ServerName     types.String `tfsdk:"server_name"`
+	Portal         types.String `tfsdk:"portal"`
+}
+
+var koujaConfigAttrTypes = map[string]attr.Type{
+	"endpoint":         types.StringType,
+	"protocol":         types.StringType,
+	"storage_class":    types.StringType,
+	"initiator":        types.StringType,
+	"host_nqn":         types.StringType,
+	"ca_file":          types.StringType,
+	"client_cert_file": types.StringType,
+	"client_key_file":  types.StringType,
+	"server_name":      types.StringType,
+	"portal":           types.StringType,
 }
 
 var storageBackendConfigAttrTypes = map[string]attr.Type{
@@ -57,6 +84,7 @@ var storageBackendConfigAttrTypes = map[string]attr.Type{
 	"preparation_script":                types.StringType,
 	"preparation_timeout":               types.StringType,
 	"allow_template_delete_with_clones": types.BoolType,
+	"kouja":                             types.ObjectType{AttrTypes: koujaConfigAttrTypes},
 }
 
 func (r *storageBackendResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -65,7 +93,7 @@ func (r *storageBackendResource) Metadata(_ context.Context, req resource.Metada
 
 func (r *storageBackendResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A Rookery storage backend. Only the lvm-thin driver is currently supported.",
+		Description: "A Rookery storage backend. Supports lvm-thin and kouja drivers.",
 		Attributes: map[string]schema.Attribute{
 			"labels": labelsResourceAttribute(),
 			"id": schema.Int64Attribute{
@@ -78,15 +106,15 @@ func (r *storageBackendResource) Schema(_ context.Context, _ resource.SchemaRequ
 			"driver": schema.StringAttribute{
 				Optional:      true,
 				Computed:      true,
-				Description:   "Storage driver. Defaults to lvm-thin.",
+				Description:   "Storage driver: lvm-thin or kouja. Defaults to lvm-thin.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"config": schema.SingleNestedAttribute{
 				Required:    true,
-				Description: "LVM thin-pool and template configuration.",
+				Description: "Driver-specific configuration. Use vg/thin_pool for LVM or kouja for a kouja backend.",
 				Attributes: map[string]schema.Attribute{
-					"vg":                  schema.StringAttribute{Required: true, Description: "Volume group."},
-					"thin_pool":           schema.StringAttribute{Required: true, Description: "Thin pool name."},
+					"vg":                  schema.StringAttribute{Optional: true, Computed: true, Description: "Volume group for lvm-thin."},
+					"thin_pool":           schema.StringAttribute{Optional: true, Computed: true, Description: "Thin pool for lvm-thin."},
 					"supports_templates":  schema.BoolAttribute{Optional: true, Computed: true, Description: "Allow template disks on this backend."},
 					"preparation_script":  schema.StringAttribute{Optional: true, Computed: true, Description: "Script used to clone template disks."},
 					"preparation_timeout": schema.StringAttribute{Optional: true, Computed: true, Description: "Preparation script timeout."},
@@ -94,6 +122,22 @@ func (r *storageBackendResource) Schema(_ context.Context, _ resource.SchemaRequ
 						Optional:    true,
 						Computed:    true,
 						Description: "Allow deleting a template while clones exist.",
+					},
+					"kouja": schema.SingleNestedAttribute{
+						Optional:    true,
+						Description: "Kouja endpoint, storage class, and mTLS client configuration.",
+						Attributes: map[string]schema.Attribute{
+							"endpoint":         schema.StringAttribute{Optional: true, Computed: true},
+							"protocol":         schema.StringAttribute{Optional: true, Computed: true},
+							"storage_class":    schema.StringAttribute{Optional: true, Computed: true},
+							"initiator":        schema.StringAttribute{Optional: true, Computed: true},
+							"host_nqn":         schema.StringAttribute{Optional: true, Computed: true},
+							"ca_file":          schema.StringAttribute{Optional: true, Computed: true},
+							"client_cert_file": schema.StringAttribute{Optional: true, Computed: true},
+							"client_key_file":  schema.StringAttribute{Optional: true, Computed: true},
+							"server_name":      schema.StringAttribute{Optional: true, Computed: true},
+							"portal":           schema.StringAttribute{Optional: true, Computed: true},
+						},
 					},
 				},
 			},
@@ -244,6 +288,19 @@ func setStorageBackendState(ctx context.Context, state *storageBackendModel, bac
 	state.Driver = types.StringValue(backend.GetDriver())
 	state.DiskCount = types.Int64Value(int64(backend.GetDiskCount()))
 	cfg := backend.GetConfig()
+	kouja := types.ObjectNull(koujaConfigAttrTypes)
+	if cfg.GetKouja() != nil {
+		value := koujaConfigModel{
+			Endpoint: types.StringValue(cfg.GetKouja().GetEndpoint()), Protocol: optionalStringValue(cfg.GetKouja().GetProtocol()),
+			StorageClass: types.StringValue(cfg.GetKouja().GetStorageClass()), Initiator: optionalStringValue(cfg.GetKouja().GetInitiator()),
+			HostNQN: optionalStringValue(cfg.GetKouja().GetHostNqn()), CAFile: types.StringValue(cfg.GetKouja().GetCaFile()),
+			ClientCertFile: types.StringValue(cfg.GetKouja().GetClientCertFile()), ClientKeyFile: types.StringValue(cfg.GetKouja().GetClientKeyFile()),
+			ServerName: optionalStringValue(cfg.GetKouja().GetServerName()), Portal: optionalStringValue(cfg.GetKouja().GetPortal()),
+		}
+		object, objectDiags := types.ObjectValueFrom(ctx, koujaConfigAttrTypes, value)
+		diags.Append(objectDiags...)
+		kouja = object
+	}
 	config := storageBackendConfigModel{
 		VG:                            types.StringValue(cfg.GetVg()),
 		ThinPool:                      types.StringValue(cfg.GetThinPool()),
@@ -251,6 +308,7 @@ func setStorageBackendState(ctx context.Context, state *storageBackendModel, bac
 		PreparationScript:             optionalStringValue(cfg.GetPreparationScript()),
 		PreparationTimeout:            optionalStringValue(cfg.GetPreparationTimeout()),
 		AllowTemplateDeleteWithClones: types.BoolValue(cfg.GetAllowTemplateDeleteWithClones()),
+		Kouja:                         kouja,
 	}
 	object, objectDiags := types.ObjectValueFrom(ctx, storageBackendConfigAttrTypes, config)
 	diags.Append(objectDiags...)
@@ -264,12 +322,27 @@ func storageBackendConfigFromObject(ctx context.Context, object types.Object) (*
 	if diags.HasError() {
 		return nil, diags
 	}
-	return &rookeryv1.StorageBackendConfig{
+	result := &rookeryv1.StorageBackendConfig{
 		Vg:                            config.VG.ValueString(),
 		ThinPool:                      config.ThinPool.ValueString(),
 		SupportsTemplates:             config.SupportsTemplates.ValueBool(),
 		PreparationScript:             config.PreparationScript.ValueString(),
 		PreparationTimeout:            config.PreparationTimeout.ValueString(),
 		AllowTemplateDeleteWithClones: config.AllowTemplateDeleteWithClones.ValueBool(),
-	}, diags
+	}
+	if !config.Kouja.IsNull() && !config.Kouja.IsUnknown() {
+		var kouja koujaConfigModel
+		diags.Append(config.Kouja.As(ctx, &kouja, basetypes.ObjectAsOptions{})...)
+		if diags.HasError() {
+			return nil, diags
+		}
+		result.DriverConfig = &rookeryv1.StorageBackendConfig_Kouja{Kouja: &rookeryv1.KoujaConfig{
+			Endpoint: kouja.Endpoint.ValueString(), Protocol: kouja.Protocol.ValueString(),
+			StorageClass: kouja.StorageClass.ValueString(), Initiator: kouja.Initiator.ValueString(),
+			HostNqn: kouja.HostNQN.ValueString(), CaFile: kouja.CAFile.ValueString(),
+			ClientCertFile: kouja.ClientCertFile.ValueString(), ClientKeyFile: kouja.ClientKeyFile.ValueString(),
+			ServerName: kouja.ServerName.ValueString(), Portal: kouja.Portal.ValueString(),
+		}}
+	}
+	return result, diags
 }

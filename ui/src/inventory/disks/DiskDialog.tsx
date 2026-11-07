@@ -205,13 +205,14 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
               onChange={(event) => setStorageKind(event.currentTarget.value as "lvm" | "host")}
             >
               <option value="lvm" disabled={backends.length === 0}>
-                LVM thin volume
+                Provisioned storage (LVM thin or kouja)
               </option>
               <option value="host">Host block device (passthrough)</option>
             </select>
             <span class="field-hint">
-              Passthrough disks hand an existing host disk, partition, or logical volume to one VM.
-              Rookery never deletes or resizes the underlying device.
+              Provisioned disks use the selected storage backend. Passthrough disks hand an
+              existing host disk, partition, or logical volume to one VM; Rookery never deletes
+              or resizes the underlying device.
             </span>
           </label>
 
@@ -244,14 +245,16 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
                 >
                   {backends.map((backend) => (
                     <option value={String(backend.id)} key={backend.id}>
-                      {backend.name} · {backend.driver === "lvm-thin" ? "LVM thin" : backend.driver}
+                      {backend.name} · {backend.driver === "lvm-thin" ? "LVM thin" : backend.driver === "kouja" ? "Kouja" : backend.driver}
                     </option>
                   ))}
                 </select>
                 <span class="field-hint">
-                  {supportsTemplates
-                    ? "Template cloning is available on this backend."
-                    : "Template cloning is disabled for this backend; enable it in Storage backends."}
+                  {backend?.driver === "kouja"
+                    ? "Kouja provisions a remote volume and exports it over the selected protocol."
+                    : supportsTemplates
+                      ? "Template cloning is available on this backend."
+                      : "Template cloning is disabled for this backend; enable it in Storage backends."}
                 </span>
               </label>
               {supportsTemplates ? (

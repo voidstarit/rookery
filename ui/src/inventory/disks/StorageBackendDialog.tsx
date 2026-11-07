@@ -23,6 +23,16 @@ export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBacke
   const [preparationScript, setPreparationScript] = useState(backend?.config?.preparation_script ?? "");
   const [preparationTimeout, setPreparationTimeout] = useState(backend?.config?.preparation_timeout || "5m");
   const [allowTemplateDelete, setAllowTemplateDelete] = useState(Boolean(backend?.config?.allow_template_delete_with_clones));
+  const [endpoint, setEndpoint] = useState(backend?.config?.kouja?.endpoint ?? "");
+  const [protocol, setProtocol] = useState(backend?.config?.kouja?.protocol ?? "iscsi");
+  const [storageClass, setStorageClass] = useState(backend?.config?.kouja?.storage_class ?? "");
+  const [initiator, setInitiator] = useState(backend?.config?.kouja?.initiator ?? "");
+  const [hostNQN, setHostNQN] = useState(backend?.config?.kouja?.host_nqn ?? "");
+  const [caFile, setCAFile] = useState(backend?.config?.kouja?.ca_file ?? "");
+  const [clientCertFile, setClientCertFile] = useState(backend?.config?.kouja?.client_cert_file ?? "");
+  const [clientKeyFile, setClientKeyFile] = useState(backend?.config?.kouja?.client_key_file ?? "");
+  const [serverName, setServerName] = useState(backend?.config?.kouja?.server_name ?? "");
+  const [portal, setPortal] = useState(backend?.config?.kouja?.portal ?? "");
   const [labels, setLabels] = useEntityLabelDraft("storage_backend", backend?.id);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -58,14 +68,30 @@ export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBacke
             title: title.trim(),
             description: description.trim(),
             driver,
-            config: {
-              vg: vg.trim(),
-              thin_pool: thinPool.trim(),
-              supports_templates: supportsTemplates,
-              preparation_script: supportsTemplates ? preparationScript.trim() : "",
-              preparation_timeout: supportsTemplates ? preparationTimeout.trim() || "5m" : "",
-              allow_template_delete_with_clones: supportsTemplates && allowTemplateDelete,
-            },
+            config:
+              driver === "kouja"
+                ? {
+                    kouja: {
+                      endpoint: endpoint.trim(),
+                      protocol,
+                      storage_class: storageClass.trim(),
+                      initiator: initiator.trim(),
+                      host_nqn: hostNQN.trim(),
+                      ca_file: caFile.trim(),
+                      client_cert_file: clientCertFile.trim(),
+                      client_key_file: clientKeyFile.trim(),
+                      server_name: serverName.trim(),
+                      portal: portal.trim(),
+                    },
+                  }
+                : {
+                    vg: vg.trim(),
+                    thin_pool: thinPool.trim(),
+                    supports_templates: supportsTemplates,
+                    preparation_script: supportsTemplates ? preparationScript.trim() : "",
+                    preparation_timeout: supportsTemplates ? preparationTimeout.trim() || "5m" : "",
+                    allow_template_delete_with_clones: supportsTemplates && allowTemplateDelete,
+                  },
           }),
         }
       );
@@ -150,14 +176,62 @@ export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBacke
             <span class="field-label">Driver</span>
             <select required value={driver} onChange={(event) => setDriver(event.currentTarget.value)}>
               <option value="lvm-thin">LVM thin pool</option>
+              <option value="kouja">Kouja</option>
             </select>
-            <span class="field-hint">Additional drivers can be added later.</span>
+            <span class="field-hint">Kouja provisions remote volumes over its agent API.</span>
           </label>
-          <label class="field">
+          {driver === "kouja" ? (
+            <>
+              <label class="field">
+                <span class="field-label">Endpoint</span>
+                <input type="text" required autocomplete="off" spellcheck={false} placeholder="10.10.0.1:9443" value={endpoint} onInput={(event) => setEndpoint(event.currentTarget.value)} />
+              </label>
+              <label class="field">
+                <span class="field-label">Protocol</span>
+                <select value={protocol} onChange={(event) => setProtocol(event.currentTarget.value)}>
+                  <option value="iscsi">iSCSI</option>
+                  <option value="nvme-tcp" disabled>NVMe/TCP (coming soon)</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="field-label">Storage class</span>
+                <input type="text" required autocomplete="off" spellcheck={false} placeholder="nvme" value={storageClass} onInput={(event) => setStorageClass(event.currentTarget.value)} />
+              </label>
+              <label class="field">
+                <span class="field-label">iSCSI initiator IQN</span>
+                <input type="text" required autocomplete="off" spellcheck={false} placeholder="iqn.2026-11.io.example:rookery" value={initiator} onInput={(event) => setInitiator(event.currentTarget.value)} />
+              </label>
+              <label class="field">
+                <span class="field-label">NVMe host NQN <em>optional</em></span>
+                <input type="text" autocomplete="off" spellcheck={false} placeholder="nqn.2026-11.io.example:rookery" value={hostNQN} onInput={(event) => setHostNQN(event.currentTarget.value)} />
+              </label>
+              <label class="field">
+                <span class="field-label">CA file</span>
+                <input type="text" required autocomplete="off" spellcheck={false} placeholder="/etc/rookery/kouja/ca.crt" value={caFile} onInput={(event) => setCAFile(event.currentTarget.value)} />
+              </label>
+              <label class="field">
+                <span class="field-label">Client certificate</span>
+                <input type="text" required autocomplete="off" spellcheck={false} placeholder="/etc/rookery/kouja/rookery.crt" value={clientCertFile} onInput={(event) => setClientCertFile(event.currentTarget.value)} />
+              </label>
+              <label class="field">
+                <span class="field-label">Client key</span>
+                <input type="text" required autocomplete="off" spellcheck={false} placeholder="/etc/rookery/kouja/rookery.key" value={clientKeyFile} onInput={(event) => setClientKeyFile(event.currentTarget.value)} />
+              </label>
+              <label class="field">
+                <span class="field-label">TLS server name <em>optional</em></span>
+                <input type="text" autocomplete="off" spellcheck={false} placeholder="kouja-storage-1" value={serverName} onInput={(event) => setServerName(event.currentTarget.value)} />
+              </label>
+              <label class="field">
+                <span class="field-label">iSCSI portal <em>optional</em></span>
+                <input type="text" autocomplete="off" spellcheck={false} placeholder="10.10.0.1:3260" value={portal} onInput={(event) => setPortal(event.currentTarget.value)} />
+              </label>
+            </>
+          ) : null}
+          <label class="field" hidden={driver === "kouja"}>
             <span class="field-label">Volume group</span>
             <input
               type="text"
-              required
+              required={driver !== "kouja"}
               autocomplete="off"
               spellcheck={false}
               placeholder="vg0"
@@ -165,11 +239,11 @@ export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBacke
               onInput={(event) => setVG(event.currentTarget.value)}
             />
           </label>
-          <label class="field">
+          <label class="field" hidden={driver === "kouja"}>
             <span class="field-label">Thin pool</span>
             <input
               type="text"
-              required
+              required={driver !== "kouja"}
               autocomplete="off"
               spellcheck={false}
               placeholder="rookery"
@@ -177,7 +251,7 @@ export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBacke
               onInput={(event) => setThinPool(event.currentTarget.value)}
             />
           </label>
-          <label class="field field-wide checkbox-field">
+          <label class="field field-wide checkbox-field" hidden={driver === "kouja"}>
             <span class="field-label">Templates</span>
             <span class="checkbox-row">
               <input
@@ -191,7 +265,7 @@ export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBacke
               Clone existing template disks with the backend preparation script.
             </span>
           </label>
-          {supportsTemplates ? (
+          {supportsTemplates && driver !== "kouja" ? (
             <>
               <label class="field field-wide">
                 <span class="field-label">Preparation script</span>

@@ -12,6 +12,7 @@ import type {
 import { formatMemory } from "./monitor";
 import { VMDialog } from "./VMDialog";
 import { VMMonitorDialog } from "./VMMonitorDialog";
+import { diskNeedsThinPool } from "./disk-predicates";
 import { navigate, useRoute } from "../router";
 
 const numberFormat = new Intl.NumberFormat();
@@ -216,8 +217,8 @@ export function VMsTab() {
     }
   }, [vms.length]);
 
-  const freeDisks = disks.filter((disk) => !disk.attached_vm_id && !disk.is_template);
-  const hasHostDisk = freeDisks.some((disk) => disk.source === "host-device");
+  const freeDisks = disks.filter((disk) => !disk.attached_vm_id && !disk.is_template && !disk.deletion_state);
+  const hasProvisionableDisk = freeDisks.some((disk) => !diskNeedsThinPool(disk));
 
   useEffect(() => {
     const newVM = document.getElementById("new-vm") as HTMLButtonElement | null;
@@ -230,14 +231,14 @@ export function VMsTab() {
       message = "VM creation is blocked until FD.io VPP is ready.";
     } else if (freeDisks.length === 0) {
       message = "Create an unattached disk on the Disks tab first.";
-    } else if (!thinPoolReady && !hasHostDisk) {
-      message = "VM creation is blocked until the thin pool is ready or a host passthrough disk is available.";
+    } else if (!thinPoolReady && !hasProvisionableDisk) {
+      message = "VM creation is blocked until the thin pool is ready or a non-LVM disk is available.";
     }
     newVM.disabled = message !== "";
     newVM.title = message;
     hint.textContent = message;
     hint.hidden = message === "";
-  }, [freeDisks.length, hasHostDisk, thinPoolReady, vppReady]);
+  }, [freeDisks.length, hasProvisionableDisk, thinPoolReady, vppReady]);
 
   const openCreate = () => {
     if (!vppReady) {
@@ -248,8 +249,8 @@ export function VMsTab() {
       showToast("Create an unattached disk on the Disks tab first.", true);
       return;
     }
-    if (!thinPoolReady && !hasHostDisk) {
-      showToast("The thin pool is not ready and no host passthrough disk is available.", true);
+    if (!thinPoolReady && !hasProvisionableDisk) {
+      showToast("The thin pool is not ready and no non-LVM disk is available.", true);
       return;
     }
     setDialog({ vm: null });

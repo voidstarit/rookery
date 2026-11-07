@@ -169,7 +169,7 @@ labels in sync through the same API.
 | `PUT`    | `/api/cgroup-settings` | Apply host-wide cgroup v2 limits and classes |
 | `GET`    | `/api/cgroup-usage` | Live memory, CPU, task, and I/O usage per cgroup node |
 | `GET`    | `/api/storage-backends` | List registered storage backends |
-| `POST`   | `/api/storage-backends` | Register an LVM thin-pool backend |
+| `POST`   | `/api/storage-backends` | Register an LVM thin-pool or kouja backend |
 | `GET`    | `/api/storage-backends/{id}` | Get one storage backend |
 | `PUT`    | `/api/storage-backends/{id}` | Update an unused backend |
 | `DELETE` | `/api/storage-backends/{id}` | Delete a backend with no disks |
@@ -179,7 +179,7 @@ labels in sync through the same API.
 | `POST`   | `/api/disks`       | Create a thin-LVM disk, host passthrough disk, template, or provisioned template clone |
 | `GET`    | `/api/disks/{id}`  | Get one disk                      |
 | `PUT`    | `/api/disks/{id}`  | Update template status or template provisioning settings |
-| `DELETE` | `/api/disks/{id}`  | Delete an unattached disk         |
+| `DELETE` | `/api/disks/{id}`  | Delete an unattached disk; remote kouja deletes return `202` and finish asynchronously |
 | `GET`    | `/api/media`       | List installation media           |
 | `POST`   | `/api/media`       | Register an existing ISO file     |
 | `GET`    | `/api/media/{id}`  | Get one media entry               |
@@ -332,8 +332,12 @@ curl -sS -X POST http://127.0.0.1:8080/api/disks \
 ```
 
 `POST /api/disks` accepts an optional `storage_backend_id`; omit it for the
-default backend. Empty disks run `lvcreate` against the selected backend's thin
-pool. A backend with `supports_templates` can also create a disk from another
+default backend. LVM disks run `lvcreate` against the selected backend's thin
+pool. kouja disks are created and exported by the kouja agent; their response
+includes `source=kouja`, `protocol=iscsi`, a display-only `locator`, and empty
+`device`. Delete a kouja disk with `DELETE /api/disks/{id}`; the API returns
+`202 Accepted` and the reclaimer unexports and deletes the volume. A
+`delete_failed` disk can be retried with the same DELETE call. A backend with `supports_templates` can also create a disk from another
 disk marked as a template using `template_disk_id`; the backend's
 `preparation_script` creates the clone LV/device. The clone size defaults to the
 template size and may only be increased.

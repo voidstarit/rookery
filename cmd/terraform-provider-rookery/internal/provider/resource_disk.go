@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -41,6 +42,10 @@ type diskModel struct {
 	ThinPool            types.String `tfsdk:"thin_pool"`
 	Device              types.String `tfsdk:"device"`
 	Source              types.String `tfsdk:"source"`
+	Protocol            types.String `tfsdk:"protocol"`
+	Locator             types.String `tfsdk:"locator"`
+	DeletionState       types.String `tfsdk:"deletion_state"`
+	DeletionError       types.String `tfsdk:"deletion_error"`
 	HostDevice          types.String `tfsdk:"host_device"`
 	AttachedVMID        types.String `tfsdk:"attached_vm_id"`
 	AttachedVMName      types.String `tfsdk:"attached_vm_name"`
@@ -59,7 +64,7 @@ func (r *diskResource) Metadata(_ context.Context, req resource.MetadataRequest,
 
 func (r *diskResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A thin-LVM disk or template clone in Rookery.",
+		Description: "A provisioned, remote, or passthrough disk in Rookery.",
 		Attributes: map[string]schema.Attribute{
 			"labels": labelsResourceAttribute(),
 			"id":     schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
@@ -85,8 +90,12 @@ func (r *diskResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 			},
 			"source": schema.StringAttribute{
 				Computed:    true,
-				Description: "Disk source: lvm-thin or host-device.",
+				Description: "Disk source (lvm-thin, host-device, kouja, ...).",
 			},
+			"protocol":       schema.StringAttribute{Computed: true, Description: "Attachment protocol."},
+			"locator":        schema.StringAttribute{Computed: true, Description: "Display locator for remote disks."},
+			"deletion_state": schema.StringAttribute{Computed: true, Description: "Asynchronous deletion state."},
+			"deletion_error": schema.StringAttribute{Computed: true, Description: "Last asynchronous deletion error."},
 			"storage_backend_id": schema.Int64Attribute{
 				Optional:      true,
 				Computed:      true,
@@ -249,11 +258,33 @@ func (r *diskResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 		resp.Diagnostics.AddError("Delete disk", err.Error())
 		return
 	}
-	callCtx, cancel := context.WithTimeout(ctx, client.Timeout())
+	callCtx, cancel := context.WithTimeout(ctx, 4*time.Hour)
 	defer cancel()
-	if _, err := client.Disks.DeleteDisk(callCtx, &rookeryv1.DeleteDiskRequest{Id: state.ID.ValueInt64()}); err != nil && !isNotFound(err) {
+	deleted, err := client.Disks.DeleteDisk(callCtx, &rookeryv1.DeleteDiskRequest{Id: state.ID.ValueInt64()})
+	if err != nil && !isNotFound(err) {
 		resp.Diagnostics.AddError("Delete disk", err.Error())
+		return
 	}
+	if deleted == nil || !deleted.GetAccepted() {
+		return
+	}
+	deadline := time.Now().Add(4 * time.Hour)
+	for time.Now().Before(deadline) {
+		time.Sleep(2 * time.Second)
+		disk, readErr := client.Disks.GetDisk(callCtx, &rookeryv1.GetDiskRequest{Id: state.ID.ValueInt64()})
+		if isNotFound(readErr) {
+			return
+		}
+		if readErr != nil {
+			resp.Diagnostics.AddError("Delete disk", readErr.Error())
+			return
+		}
+		if disk.GetDeletionState() == "delete_failed" {
+			resp.Diagnostics.AddError("Delete disk", disk.GetDeletionError())
+			return
+		}
+	}
+	resp.Diagnostics.AddError("Delete disk", "timed out waiting for asynchronous disk deletion")
 }
 
 func (r *diskResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -271,6 +302,10 @@ func setDiskState(state *diskModel, disk *rookeryv1.Disk) {
 	state.ThinPool = types.StringValue(disk.GetThinPool())
 	state.Device = types.StringValue(disk.GetDevice())
 	state.Source = types.StringValue(disk.GetSource())
+	state.Protocol = optionalStringValue(disk.GetProtocol())
+	state.Locator = optionalStringValue(disk.GetLocator())
+	state.DeletionState = optionalStringValue(disk.GetDeletionState())
+	state.DeletionError = optionalStringValue(disk.GetDeletionError())
 	if disk.GetSource() == "host-device" {
 		state.HostDevice = types.StringValue(disk.GetDevice())
 	} else {

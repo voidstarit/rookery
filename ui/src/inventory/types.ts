@@ -214,6 +214,8 @@ export type VMDisk = {
   thin_pool: string;
   device: string;
   source?: string;
+  protocol?: string;
+  locator?: string;
 };
 
 export type VMMedia = {
@@ -255,6 +257,7 @@ export type VM = {
   interfaces?: VMInterface[];
   console_enabled: boolean;
   cgroup_class?: string;
+  run_state?: string;
   created_at?: string;
   updated_at?: string;
 };
@@ -279,13 +282,27 @@ export type VMMetrics = {
   sampled_at: string;
 };
 
+export type KoujaConfig = {
+  endpoint: string;
+  protocol?: string;
+  storage_class: string;
+  initiator?: string;
+  host_nqn?: string;
+  ca_file: string;
+  client_cert_file: string;
+  client_key_file: string;
+  server_name?: string;
+  portal?: string;
+};
+
 export type StorageBackendConfig = {
-  vg: string;
-  thin_pool: string;
+  vg?: string;
+  thin_pool?: string;
   supports_templates?: boolean;
   preparation_script?: string;
   preparation_timeout?: string;
   allow_template_delete_with_clones?: boolean;
+  kouja?: KoujaConfig;
 };
 
 export type StorageBackend = {
@@ -311,6 +328,10 @@ export type Disk = {
   thin_pool: string;
   device: string;
   source?: string;
+  protocol?: string;
+  locator?: string;
+  deletion_state?: string;
+  deletion_error?: string;
   attached_vm_id?: string;
   attached_vm_name?: string;
   is_template?: boolean;
