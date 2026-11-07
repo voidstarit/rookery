@@ -12,6 +12,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
+	"github.com/voidstarit/rookery/internal/kouja"
 	"github.com/voidstarit/rookery/internal/storage"
 	"github.com/voidstarit/rookery/internal/store"
 )
@@ -378,11 +379,12 @@ func vnfToProto(vnf store.VNF) *rookeryv1.VNF {
 
 type storageBackendService struct {
 	rookeryv1.UnimplementedStorageBackendServiceServer
-	store     *store.Store
-	readiness Readiness
-	disks     DiskProvisioner
-	mu        *sync.Mutex
-	registry  *storage.Registry
+	store          *store.Store
+	readiness      Readiness
+	disks          DiskProvisioner
+	mu             *sync.Mutex
+	registry       *storage.Registry
+	newKoujaClient func(kouja.Config) (*kouja.Client, error)
 }
 
 func (s *storageBackendService) ListStorageBackends(ctx context.Context, _ *rookeryv1.ListStorageBackendsRequest) (*rookeryv1.ListStorageBackendsResponse, error) {
@@ -419,7 +421,9 @@ func backendConfigToProto(config store.StorageBackendConfig) *rookeryv1.StorageB
 			StorageClass: config.Kouja.StorageClass, Initiator: config.Kouja.Initiator,
 			HostNqn: config.Kouja.HostNQN, CaFile: config.Kouja.CAFile,
 			ClientCertFile: config.Kouja.ClientCertFile, ClientKeyFile: config.Kouja.ClientKeyFile,
-			ServerName: config.Kouja.ServerName, Portal: config.Kouja.Portal,
+			CaPem: config.Kouja.CAPEM, ClientCertPem: config.Kouja.ClientCertPEM,
+			ClientKeyPem: config.Kouja.ClientKeyPEM,
+			ServerName:   config.Kouja.ServerName, Portal: config.Kouja.Portal,
 		}}
 	}
 	return result

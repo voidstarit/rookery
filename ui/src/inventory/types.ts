@@ -288,11 +288,23 @@ export type KoujaConfig = {
   storage_class: string;
   initiator?: string;
   host_nqn?: string;
-  ca_file: string;
-  client_cert_file: string;
-  client_key_file: string;
+  ca_file?: string;
+  client_cert_file?: string;
+  client_key_file?: string;
+  ca_pem?: string;
+  client_cert_pem?: string;
+  client_key_pem?: string;
   server_name?: string;
   portal?: string;
+};
+
+export type KoujaProbeResult = {
+  reachable: boolean;
+  ready: boolean;
+  detail?: string;
+  owner?: string;
+  protocols?: string[];
+  storage_classes?: string[];
 };
 
 export type StorageBackendConfig = {

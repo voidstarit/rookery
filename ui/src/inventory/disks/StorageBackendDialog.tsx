@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
 import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
-import type { StorageBackend } from "../types";
+import type { KoujaProbeResult, StorageBackend } from "../types";
 
 type StorageBackendDialogProps = {
   backend: StorageBackend | null;
@@ -26,11 +26,20 @@ export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBacke
   const [endpoint, setEndpoint] = useState(backend?.config?.kouja?.endpoint ?? "");
   const [protocol, setProtocol] = useState(backend?.config?.kouja?.protocol ?? "iscsi");
   const [storageClass, setStorageClass] = useState(backend?.config?.kouja?.storage_class ?? "");
+  const [storageClasses, setStorageClasses] = useState<string[]>(
+    backend?.config?.kouja?.storage_class ? [backend.config.kouja.storage_class] : []
+  );
+  const [connecting, setConnecting] = useState(false);
+  const [connectionMessage, setConnectionMessage] = useState("");
+  const [connectionError, setConnectionError] = useState("");
   const [initiator, setInitiator] = useState(backend?.config?.kouja?.initiator ?? "");
   const [hostNQN, setHostNQN] = useState(backend?.config?.kouja?.host_nqn ?? "");
-  const [caFile, setCAFile] = useState(backend?.config?.kouja?.ca_file ?? "");
-  const [clientCertFile, setClientCertFile] = useState(backend?.config?.kouja?.client_cert_file ?? "");
-  const [clientKeyFile, setClientKeyFile] = useState(backend?.config?.kouja?.client_key_file ?? "");
+  const [caFile] = useState(backend?.config?.kouja?.ca_file ?? "");
+  const [clientCertFile] = useState(backend?.config?.kouja?.client_cert_file ?? "");
+  const [clientKeyFile] = useState(backend?.config?.kouja?.client_key_file ?? "");
+  const [caPEM, setCAPEM] = useState(backend?.config?.kouja?.ca_pem ?? "");
+  const [clientCertPEM, setClientCertPEM] = useState(backend?.config?.kouja?.client_cert_pem ?? "");
+  const [clientKeyPEM, setClientKeyPEM] = useState(backend?.config?.kouja?.client_key_pem ?? "");
   const [serverName, setServerName] = useState(backend?.config?.kouja?.server_name ?? "");
   const [portal, setPortal] = useState(backend?.config?.kouja?.portal ?? "");
   const [labels, setLabels] = useEntityLabelDraft("storage_backend", backend?.id);
@@ -50,6 +59,61 @@ export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBacke
       dialogRef.current?.close();
     }
   };
+
+  const loadTextFile = (event: Event, setter: (value: string) => void) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (file) {
+      void file.text().then(setter);
+    }
+  };
+
+  const koujaConfigBody = () => ({
+    endpoint: endpoint.trim(),
+    protocol,
+    storage_class: storageClass.trim(),
+    initiator: initiator.trim(),
+    host_nqn: hostNQN.trim(),
+    ca_file: caFile.trim(),
+    client_cert_file: clientCertFile.trim(),
+    client_key_file: clientKeyFile.trim(),
+    ca_pem: caPEM.trim(),
+    client_cert_pem: clientCertPEM.trim(),
+    client_key_pem: clientKeyPEM.trim(),
+    server_name: serverName.trim(),
+    portal: portal.trim(),
+  });
+
+  const connectKouja = async () => {
+    if (connecting) {
+      return;
+    }
+    setConnecting(true);
+    setConnectionMessage("");
+    setConnectionError("");
+    try {
+      const result = await api<KoujaProbeResult>("/api/storage-backends/kouja/probe", {
+        method: "POST",
+        body: JSON.stringify({ config: koujaConfigBody() }),
+      });
+      const classes = Array.from(new Set(result.storage_classes ?? []));
+      setStorageClasses(classes);
+      if (classes.length > 0 && (!storageClass || !classes.includes(storageClass))) {
+        setStorageClass(classes[0]);
+      }
+      const protocols = result.protocols?.length ? ` · protocols: ${result.protocols.join(", ")}` : "";
+      const owner = result.owner ? ` · ${result.owner}` : "";
+      setConnectionMessage(`${result.detail || "connected"}${owner}${protocols}`);
+      if (classes.length === 0) {
+        setConnectionError("Connected, but kouja returned no storage classes.");
+      }
+    } catch (err) {
+      setConnectionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setConnecting(false);
+    }
+  };
+
 
   const submit = async (event: Event) => {
     event.preventDefault();
@@ -71,18 +135,7 @@ export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBacke
             config:
               driver === "kouja"
                 ? {
-                    kouja: {
-                      endpoint: endpoint.trim(),
-                      protocol,
-                      storage_class: storageClass.trim(),
-                      initiator: initiator.trim(),
-                      host_nqn: hostNQN.trim(),
-                      ca_file: caFile.trim(),
-                      client_cert_file: clientCertFile.trim(),
-                      client_key_file: clientKeyFile.trim(),
-                      server_name: serverName.trim(),
-                      portal: portal.trim(),
-                    },
+                    kouja: koujaConfigBody(),
                   }
                 : {
                     vg: vg.trim(),
@@ -182,49 +235,124 @@ export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBacke
           </label>
           {driver === "kouja" ? (
             <>
-              <label class="field">
-                <span class="field-label">Endpoint</span>
-                <input type="text" required autocomplete="off" spellcheck={false} placeholder="10.10.0.1:9443" value={endpoint} onInput={(event) => setEndpoint(event.currentTarget.value)} />
-              </label>
-              <label class="field">
-                <span class="field-label">Protocol</span>
-                <select value={protocol} onChange={(event) => setProtocol(event.currentTarget.value)}>
-                  <option value="iscsi">iSCSI</option>
-                  <option value="nvme-tcp" disabled>NVMe/TCP (coming soon)</option>
-                </select>
-              </label>
-              <label class="field">
-                <span class="field-label">Storage class</span>
-                <input type="text" required autocomplete="off" spellcheck={false} placeholder="nvme" value={storageClass} onInput={(event) => setStorageClass(event.currentTarget.value)} />
-              </label>
-              <label class="field">
-                <span class="field-label">iSCSI initiator IQN</span>
-                <input type="text" required autocomplete="off" spellcheck={false} placeholder="iqn.2026-11.io.example:rookery" value={initiator} onInput={(event) => setInitiator(event.currentTarget.value)} />
-              </label>
-              <label class="field">
-                <span class="field-label">NVMe host NQN <em>optional</em></span>
-                <input type="text" autocomplete="off" spellcheck={false} placeholder="nqn.2026-11.io.example:rookery" value={hostNQN} onInput={(event) => setHostNQN(event.currentTarget.value)} />
-              </label>
-              <label class="field">
-                <span class="field-label">CA file</span>
-                <input type="text" required autocomplete="off" spellcheck={false} placeholder="/etc/rookery/kouja/ca.crt" value={caFile} onInput={(event) => setCAFile(event.currentTarget.value)} />
-              </label>
-              <label class="field">
-                <span class="field-label">Client certificate</span>
-                <input type="text" required autocomplete="off" spellcheck={false} placeholder="/etc/rookery/kouja/rookery.crt" value={clientCertFile} onInput={(event) => setClientCertFile(event.currentTarget.value)} />
-              </label>
-              <label class="field">
-                <span class="field-label">Client key</span>
-                <input type="text" required autocomplete="off" spellcheck={false} placeholder="/etc/rookery/kouja/rookery.key" value={clientKeyFile} onInput={(event) => setClientKeyFile(event.currentTarget.value)} />
-              </label>
-              <label class="field">
-                <span class="field-label">TLS server name <em>optional</em></span>
-                <input type="text" autocomplete="off" spellcheck={false} placeholder="kouja-storage-1" value={serverName} onInput={(event) => setServerName(event.currentTarget.value)} />
-              </label>
-              <label class="field">
-                <span class="field-label">iSCSI portal <em>optional</em></span>
-                <input type="text" autocomplete="off" spellcheck={false} placeholder="10.10.0.1:3260" value={portal} onInput={(event) => setPortal(event.currentTarget.value)} />
-              </label>
+              <fieldset class="connection-section">
+                <legend>Endpoint</legend>
+                <div class="form-grid">
+                  <label class="field">
+                    <span class="field-label">Kouja endpoint</span>
+                    <input type="text" required autocomplete="off" spellcheck={false} placeholder="10.10.0.1:9443" value={endpoint} onInput={(event) => setEndpoint(event.currentTarget.value)} />
+                    <span class="field-hint">TLS endpoint of the kouja agent.</span>
+                  </label>
+                  <label class="field">
+                    <span class="field-label">Protocol</span>
+                    <select value={protocol} onChange={(event) => setProtocol(event.currentTarget.value)}>
+                      <option value="iscsi">iSCSI</option>
+                      <option value="nvme-tcp" disabled>NVMe/TCP (coming soon)</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="connection-actions">
+                  <button class="button primary" type="button" disabled={connecting} onClick={() => void connectKouja()}>
+                    {connecting ? "Connecting…" : "Connect and fetch storage classes"}
+                  </button>
+                  {connectionMessage ? <span class="connection-status">{connectionMessage}</span> : null}
+                  {connectionError ? <span class="connection-status error">{connectionError}</span> : null}
+                </div>
+              </fieldset>
+
+              <fieldset class="connection-section">
+                <legend>TLS server name</legend>
+                <label class="field">
+                  <span class="field-label">TLS server name <em>optional</em></span>
+                  <input type="text" autocomplete="off" spellcheck={false} placeholder="kouja-storage-1" value={serverName} onInput={(event) => setServerName(event.currentTarget.value)} />
+                  <span class="field-hint">Override the certificate hostname when the endpoint is an address.</span>
+                </label>
+              </fieldset>
+
+              <fieldset class="connection-section">
+                <legend>CA certificate</legend>
+                <label class="field">
+                  <span class="field-label">CA certificate (PEM)</span>
+                  <textarea
+                    class="mono"
+                    rows={5}
+                    required={caFile === ""}
+                    spellcheck={false}
+                    placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                    value={caPEM}
+                    onInput={(event) => setCAPEM(event.currentTarget.value)}
+                  />
+                  <input type="file" accept=".pem,.crt,.cer" onChange={(event) => loadTextFile(event, setCAPEM)} />
+                  <span class="field-hint">Paste the CA PEM or load it from a file. The content is stored with the backend.</span>
+                </label>
+              </fieldset>
+
+              <fieldset class="connection-section">
+                <legend>Client certificate</legend>
+                <label class="field">
+                  <span class="field-label">Client certificate (PEM)</span>
+                  <textarea
+                    class="mono"
+                    rows={5}
+                    required={clientCertFile === ""}
+                    spellcheck={false}
+                    placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                    value={clientCertPEM}
+                    onInput={(event) => setClientCertPEM(event.currentTarget.value)}
+                  />
+                  <input type="file" accept=".pem,.crt,.cer" onChange={(event) => loadTextFile(event, setClientCertPEM)} />
+                  <span class="field-hint">The certificate must contain one spiffe://kouja/caller/&lt;name&gt; URI SAN.</span>
+                </label>
+              </fieldset>
+
+              <fieldset class="connection-section">
+                <legend>Client private key</legend>
+                <label class="field">
+                  <span class="field-label">Client private key (PEM)</span>
+                  <textarea
+                    class="mono"
+                    rows={5}
+                    required={clientKeyFile === ""}
+                    spellcheck={false}
+                    placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
+                    value={clientKeyPEM}
+                    onInput={(event) => setClientKeyPEM(event.currentTarget.value)}
+                  />
+                  <input type="file" accept=".pem,.key" onChange={(event) => loadTextFile(event, setClientKeyPEM)} />
+                  <span class="field-hint">The private key is stored in the Rookery database; protect the database and backups.</span>
+                </label>
+              </fieldset>
+
+              <fieldset class="connection-section">
+                <legend>Storage class</legend>
+                <label class="field">
+                  <span class="field-label">Storage class</span>
+                  <select required value={storageClass} onChange={(event) => setStorageClass(event.currentTarget.value)}>
+                    {storageClasses.length === 0 && storageClass === "" ? <option value="" disabled>Connect to load storage classes</option> : null}
+                    {storageClasses.map((name) => <option key={name} value={name}>{name}</option>)}
+                    {storageClass !== "" && !storageClasses.includes(storageClass) ? <option value={storageClass}>{storageClass} (saved)</option> : null}
+                  </select>
+                  <span class="field-hint">Fetched from the kouja service after a successful connection.</span>
+                </label>
+              </fieldset>
+
+              <fieldset class="connection-section">
+                <legend>iSCSI target</legend>
+                <div class="form-grid">
+                  <label class="field">
+                    <span class="field-label">Initiator IQN</span>
+                    <input type="text" required autocomplete="off" spellcheck={false} placeholder="iqn.2026-11.io.example:rookery" value={initiator} onInput={(event) => setInitiator(event.currentTarget.value)} />
+                  </label>
+                  <label class="field">
+                    <span class="field-label">Portal <em>optional</em></span>
+                    <input type="text" autocomplete="off" spellcheck={false} placeholder="10.10.0.1:3260" value={portal} onInput={(event) => setPortal(event.currentTarget.value)} />
+                  </label>
+                  <label class="field field-wide">
+                    <span class="field-label">NVMe host NQN <em>optional</em></span>
+                    <input type="text" autocomplete="off" spellcheck={false} placeholder="nqn.2026-11.io.example:rookery" value={hostNQN} onInput={(event) => setHostNQN(event.currentTarget.value)} />
+                  </label>
+                </div>
+              </fieldset>
             </>
           ) : null}
           <label class="field" hidden={driver === "kouja"}>

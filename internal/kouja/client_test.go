@@ -63,3 +63,14 @@ func TestNewClientInvalidTLS(t *testing.T) {
 		t.Fatal("NewClient() accepted missing TLS files")
 	}
 }
+
+func TestTLSConfigFromPEM(t *testing.T) {
+	cfg := Config{
+		CAPEM:         "-----BEGIN CERTIFICATE-----\nnot-a-cert\n-----END CERTIFICATE-----\n",
+		ClientCertPEM: "-----BEGIN CERTIFICATE-----\nnot-a-cert\n-----END CERTIFICATE-----\n",
+		ClientKeyPEM:  "-----BEGIN PRIVATE KEY-----\nnot-a-key\n-----END PRIVATE KEY-----\n",
+	}
+	if _, err := tlsConfigForConfig(cfg); err == nil {
+		t.Fatal("tlsConfigForConfig accepted invalid PEM content")
+	}
+}

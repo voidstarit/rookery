@@ -66,6 +66,13 @@ service StorageBackendService {
       body: "*"
     };
   }
+
+  rpc ProbeKoujaBackend(ProbeKoujaBackendRequest) returns (ProbeKoujaBackendResponse) {
+    option (google.api.http) = {
+      post: "/api/storage-backends/kouja/probe"
+      body: "*"
+    };
+  }
 }
 
 message StorageBackendConfig {
@@ -93,6 +100,11 @@ message KoujaConfig {
   string server_name = 8 [(validate.rules).string = {max_len: 255}];
   string portal = 9 [(validate.rules).string = {max_len: 255}];
   string host_nqn = 10 [(validate.rules).string = {max_len: 223}];
+  // PEM content is preferred when set. ca_file/client_cert_file/client_key_file
+  // remain for existing backends and CLI/Terraform configurations.
+  string ca_pem = 11 [(validate.rules).string = {max_len: 65536}];
+  string client_cert_pem = 12 [(validate.rules).string = {max_len: 65536}];
+  string client_key_pem = 13 [(validate.rules).string = {max_len: 65536}];
 }
 
 message StorageBackend {
@@ -194,4 +206,17 @@ message StorageClassCapacity {
   int64 free_bytes = 5;
   int64 allocatable_bytes = 6;
   int64 max_volume_bytes = 7;
+}
+
+message ProbeKoujaBackendRequest {
+  KoujaConfig config = 1 [(validate.rules).message = {required: true}];
+}
+
+message ProbeKoujaBackendResponse {
+  bool reachable = 1;
+  bool ready = 2;
+  string detail = 3;
+  string owner = 4;
+  repeated string protocols = 5;
+  repeated string storage_classes = 6;
 }

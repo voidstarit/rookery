@@ -175,6 +175,7 @@ labels in sync through the same API.
 | `DELETE` | `/api/storage-backends/{id}` | Delete a backend with no disks |
 | `GET`    | `/api/storage-backends/{id}/importable-disks` | List existing thin volumes and registration state |
 | `POST`   | `/api/storage-backends/{id}/import-disks` | Register existing thin volumes as disks |
+| `POST`   | `/api/storage-backends/kouja/probe` | Validate unsaved kouja connection fields and list storage classes |
 | `GET`    | `/api/disks`       | List all disks                    |
 | `POST`   | `/api/disks`       | Create a thin-LVM disk, host passthrough disk, template, or provisioned template clone |
 | `GET`    | `/api/disks/{id}`  | Get one disk                      |
@@ -337,7 +338,12 @@ pool. kouja disks are created and exported by the kouja agent; their response
 includes `source=kouja`, `protocol=iscsi`, a display-only `locator`, and empty
 `device`. Delete a kouja disk with `DELETE /api/disks/{id}`; the API returns
 `202 Accepted` and the reclaimer unexports and deletes the volume. A
-`delete_failed` disk can be retried with the same DELETE call. A backend with `supports_templates` can also create a disk from another
+`delete_failed` disk can be retried with the same DELETE call.
+
+A `kouja` backend's `config.kouja` accepts `ca_pem`, `client_cert_pem`, and
+`client_key_pem` as PEM content; the older `ca_file`, `client_cert_file`, and
+`client_key_file` paths are still accepted when the PEM fields are empty. The
+UI stores the content with the backend. A backend with `supports_templates` can also create a disk from another
 disk marked as a template using `template_disk_id`; the backend's
 `preparation_script` creates the clone LV/device. The clone size defaults to the
 template size and may only be increased.

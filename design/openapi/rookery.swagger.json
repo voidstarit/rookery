@@ -2405,6 +2405,38 @@
         ]
       }
     },
+    "/api/storage-backends/kouja/probe": {
+      "post": {
+        "operationId": "StorageBackendService_ProbeKoujaBackend",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ProbeKoujaBackendResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1ProbeKoujaBackendRequest"
+            }
+          }
+        ],
+        "tags": [
+          "StorageBackendService"
+        ]
+      }
+    },
     "/api/storage-backends/{id}": {
       "get": {
         "operationId": "StorageBackendService_GetStorageBackend",
@@ -5548,6 +5580,16 @@
         },
         "host_nqn": {
           "type": "string"
+        },
+        "ca_pem": {
+          "type": "string",
+          "description": "PEM content is preferred when set. ca_file/client_cert_file/client_key_file\nremain for existing backends and CLI/Terraform configurations."
+        },
+        "client_cert_pem": {
+          "type": "string"
+        },
+        "client_key_pem": {
+          "type": "string"
         }
       },
       "description": "KoujaConfig configures a kouja storage backend. Protocol defaults to iscsi."
@@ -6327,6 +6369,43 @@
         },
         "raw": {
           "type": "string"
+        }
+      }
+    },
+    "v1ProbeKoujaBackendRequest": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "$ref": "#/definitions/v1KoujaConfig"
+        }
+      }
+    },
+    "v1ProbeKoujaBackendResponse": {
+      "type": "object",
+      "properties": {
+        "reachable": {
+          "type": "boolean"
+        },
+        "ready": {
+          "type": "boolean"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "protocols": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "storage_classes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
