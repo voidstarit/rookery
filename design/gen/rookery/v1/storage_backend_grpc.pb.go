@@ -20,13 +20,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	StorageBackendService_ListStorageBackends_FullMethodName  = "/rookery.v1.StorageBackendService/ListStorageBackends"
-	StorageBackendService_GetStorageBackend_FullMethodName    = "/rookery.v1.StorageBackendService/GetStorageBackend"
-	StorageBackendService_CreateStorageBackend_FullMethodName = "/rookery.v1.StorageBackendService/CreateStorageBackend"
-	StorageBackendService_UpdateStorageBackend_FullMethodName = "/rookery.v1.StorageBackendService/UpdateStorageBackend"
-	StorageBackendService_DeleteStorageBackend_FullMethodName = "/rookery.v1.StorageBackendService/DeleteStorageBackend"
-	StorageBackendService_ListImportableDisks_FullMethodName  = "/rookery.v1.StorageBackendService/ListImportableDisks"
-	StorageBackendService_ImportDisks_FullMethodName          = "/rookery.v1.StorageBackendService/ImportDisks"
+	StorageBackendService_ListStorageBackends_FullMethodName        = "/rookery.v1.StorageBackendService/ListStorageBackends"
+	StorageBackendService_GetStorageBackend_FullMethodName          = "/rookery.v1.StorageBackendService/GetStorageBackend"
+	StorageBackendService_CreateStorageBackend_FullMethodName       = "/rookery.v1.StorageBackendService/CreateStorageBackend"
+	StorageBackendService_UpdateStorageBackend_FullMethodName       = "/rookery.v1.StorageBackendService/UpdateStorageBackend"
+	StorageBackendService_DeleteStorageBackend_FullMethodName       = "/rookery.v1.StorageBackendService/DeleteStorageBackend"
+	StorageBackendService_ListImportableDisks_FullMethodName        = "/rookery.v1.StorageBackendService/ListImportableDisks"
+	StorageBackendService_ImportDisks_FullMethodName                = "/rookery.v1.StorageBackendService/ImportDisks"
+	StorageBackendService_GetStorageBackendHealth_FullMethodName    = "/rookery.v1.StorageBackendService/GetStorageBackendHealth"
+	StorageBackendService_TestStorageBackendDataPath_FullMethodName = "/rookery.v1.StorageBackendService/TestStorageBackendDataPath"
 )
 
 // StorageBackendServiceClient is the client API for StorageBackendService service.
@@ -42,6 +44,8 @@ type StorageBackendServiceClient interface {
 	DeleteStorageBackend(ctx context.Context, in *DeleteStorageBackendRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	ListImportableDisks(ctx context.Context, in *ListImportableDisksRequest, opts ...grpc.CallOption) (*ListImportableDisksResponse, error)
 	ImportDisks(ctx context.Context, in *ImportDisksRequest, opts ...grpc.CallOption) (*ImportDisksResponse, error)
+	GetStorageBackendHealth(ctx context.Context, in *GetStorageBackendHealthRequest, opts ...grpc.CallOption) (*StorageBackendHealth, error)
+	TestStorageBackendDataPath(ctx context.Context, in *TestStorageBackendDataPathRequest, opts ...grpc.CallOption) (*StorageBackendHealth, error)
 }
 
 type storageBackendServiceClient struct {
@@ -122,6 +126,26 @@ func (c *storageBackendServiceClient) ImportDisks(ctx context.Context, in *Impor
 	return out, nil
 }
 
+func (c *storageBackendServiceClient) GetStorageBackendHealth(ctx context.Context, in *GetStorageBackendHealthRequest, opts ...grpc.CallOption) (*StorageBackendHealth, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StorageBackendHealth)
+	err := c.cc.Invoke(ctx, StorageBackendService_GetStorageBackendHealth_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *storageBackendServiceClient) TestStorageBackendDataPath(ctx context.Context, in *TestStorageBackendDataPathRequest, opts ...grpc.CallOption) (*StorageBackendHealth, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StorageBackendHealth)
+	err := c.cc.Invoke(ctx, StorageBackendService_TestStorageBackendDataPath_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // StorageBackendServiceServer is the server API for StorageBackendService service.
 // All implementations must embed UnimplementedStorageBackendServiceServer
 // for forward compatibility.
@@ -135,6 +159,8 @@ type StorageBackendServiceServer interface {
 	DeleteStorageBackend(context.Context, *DeleteStorageBackendRequest) (*emptypb.Empty, error)
 	ListImportableDisks(context.Context, *ListImportableDisksRequest) (*ListImportableDisksResponse, error)
 	ImportDisks(context.Context, *ImportDisksRequest) (*ImportDisksResponse, error)
+	GetStorageBackendHealth(context.Context, *GetStorageBackendHealthRequest) (*StorageBackendHealth, error)
+	TestStorageBackendDataPath(context.Context, *TestStorageBackendDataPathRequest) (*StorageBackendHealth, error)
 	mustEmbedUnimplementedStorageBackendServiceServer()
 }
 
@@ -165,6 +191,12 @@ func (UnimplementedStorageBackendServiceServer) ListImportableDisks(context.Cont
 }
 func (UnimplementedStorageBackendServiceServer) ImportDisks(context.Context, *ImportDisksRequest) (*ImportDisksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ImportDisks not implemented")
+}
+func (UnimplementedStorageBackendServiceServer) GetStorageBackendHealth(context.Context, *GetStorageBackendHealthRequest) (*StorageBackendHealth, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetStorageBackendHealth not implemented")
+}
+func (UnimplementedStorageBackendServiceServer) TestStorageBackendDataPath(context.Context, *TestStorageBackendDataPathRequest) (*StorageBackendHealth, error) {
+	return nil, status.Error(codes.Unimplemented, "method TestStorageBackendDataPath not implemented")
 }
 func (UnimplementedStorageBackendServiceServer) mustEmbedUnimplementedStorageBackendServiceServer() {}
 func (UnimplementedStorageBackendServiceServer) testEmbeddedByValue()                               {}
@@ -313,6 +345,42 @@ func _StorageBackendService_ImportDisks_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StorageBackendService_GetStorageBackendHealth_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetStorageBackendHealthRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StorageBackendServiceServer).GetStorageBackendHealth(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StorageBackendService_GetStorageBackendHealth_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StorageBackendServiceServer).GetStorageBackendHealth(ctx, req.(*GetStorageBackendHealthRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StorageBackendService_TestStorageBackendDataPath_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TestStorageBackendDataPathRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StorageBackendServiceServer).TestStorageBackendDataPath(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StorageBackendService_TestStorageBackendDataPath_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StorageBackendServiceServer).TestStorageBackendDataPath(ctx, req.(*TestStorageBackendDataPathRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // StorageBackendService_ServiceDesc is the grpc.ServiceDesc for StorageBackendService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -347,6 +415,14 @@ var StorageBackendService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ImportDisks",
 			Handler:    _StorageBackendService_ImportDisks_Handler,
+		},
+		{
+			MethodName: "GetStorageBackendHealth",
+			Handler:    _StorageBackendService_GetStorageBackendHealth_Handler,
+		},
+		{
+			MethodName: "TestStorageBackendDataPath",
+			Handler:    _StorageBackendService_TestStorageBackendDataPath_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

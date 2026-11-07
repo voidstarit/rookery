@@ -23,6 +23,7 @@ type fakeVMController struct {
 	startErr      error
 	cgroupErr     error
 	cgroupApplied []store.VM
+	plan          qemu.StartPlan
 }
 
 func (f *fakeVMController) Start(_ context.Context, _ store.VM) error {
@@ -31,6 +32,10 @@ func (f *fakeVMController) Start(_ context.Context, _ store.VM) error {
 	}
 	f.running = true
 	return nil
+}
+func (f *fakeVMController) StartWithPlan(ctx context.Context, vm store.VM, plan qemu.StartPlan) error {
+	f.plan = plan
+	return f.Start(ctx, vm)
 }
 func (f *fakeVMController) Stop(_ context.Context, _ string) error {
 	f.running = false

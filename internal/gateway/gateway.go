@@ -25,7 +25,9 @@ import (
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/readiness"
+	"github.com/voidstarit/rookery/internal/storage"
 	"github.com/voidstarit/rookery/internal/store"
+	"github.com/voidstarit/rookery/internal/vmstart"
 )
 
 // Readiness supplies the current host readiness state.
@@ -73,6 +75,8 @@ type options struct {
 	cgroup             CgroupRuntime
 	lightvmDir         string
 	lightvmRuntime     LightVMRuntime
+	storageRegistry    *storage.Registry
+	startPlanner       *vmstart.Planner
 }
 
 // WithGRPCListener exposes the generated gRPC server on listener instead of an
@@ -120,6 +124,20 @@ func WithACLRuntime(runtime ACLRuntime) Option {
 func WithDiskProvisioner(provisioner DiskProvisioner) Option {
 	return func(opts *options) {
 		opts.diskProvisioner = provisioner
+	}
+}
+
+// WithStorageRegistry sets the storage driver registry used for remote disks.
+func WithStorageRegistry(registry *storage.Registry) Option {
+	return func(opts *options) {
+		opts.storageRegistry = registry
+	}
+}
+
+// WithStartPlanner sets the VM start planner used for remote attachments.
+func WithStartPlanner(planner *vmstart.Planner) Option {
+	return func(opts *options) {
+		opts.startPlanner = planner
 	}
 }
 
@@ -275,6 +293,12 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	if options.vmMutex == nil {
 		options.vmMutex = &sync.Mutex{}
 	}
+	if options.storageRegistry == nil {
+		options.storageRegistry = storage.NewDefaultRegistry()
+	}
+	if options.startPlanner == nil {
+		options.startPlanner = vmstart.NewPlanner(st, options.storageRegistry)
+	}
 	listener := options.grpcListener
 	useBufconn := listener == nil
 	if useBufconn {
@@ -292,15 +316,15 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	if provider, ok := options.lightvmRuntime.(LightVMStatusProvider); ok {
 		system.lightvmStatus = provider
 	}
-	vms := &vmService{store: st, runtime: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, mu: options.vmMutex, logger: options.logger}
-	disks := &diskService{store: st, runtime: options.diskProvisioner, readiness: ready, mu: options.diskMutex, logger: options.logger, hostDevices: options.hostDevices}
+	vms := &vmService{store: st, runtime: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, mu: options.vmMutex, logger: options.logger, planner: options.startPlanner}
+	disks := &diskService{store: st, runtime: options.diskProvisioner, readiness: ready, mu: options.diskMutex, logger: options.logger, hostDevices: options.hostDevices, registry: options.storageRegistry}
 	media := &mediaService{store: st}
 	networks := &networkService{store: st, runtime: options.networkRuntime, readiness: ready, writer: options.networkWriter, mu: options.diskMutex}
 	interfaces := &interfaceService{store: st, runtime: options.aclRuntime, attachments: options.interfaceRuntime, addresses: options.interfaceAddresses, vms: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, runMu: options.vmMutex}
 	acls := &aclService{store: st, runtime: options.aclRuntime, readiness: ready}
 	routeTables := &routeTableService{store: st, runtime: options.aclRuntime, readiness: ready}
 	vnfs := &vnfService{store: st, runtime: options.vnfRuntime, statusProvider: options.vnfStatusProvider, writer: options.vnfWriter}
-	backends := &storageBackendService{store: st, readiness: ready, disks: options.diskProvisioner, mu: options.diskMutex}
+	backends := &storageBackendService{store: st, readiness: ready, disks: options.diskProvisioner, mu: options.diskMutex, registry: options.storageRegistry}
 	hostInterfaces := &hostService{source: options.vppInterfaces, store: st, writer: options.hostWriter, taps: options.hostTapWriter, devices: options.hostDeviceLister, addresses: options.interfaceAddresses, readiness: ready}
 	troubleshoot := &troubleshootService{runtime: options.diagnostics, readiness: ready}
 	captures := &captureService{runtime: options.diagnostics, readiness: ready}
@@ -560,6 +584,7 @@ type vmService struct {
 	resourceMu *sync.Mutex
 	mu         *sync.Mutex
 	logger     zerolog.Logger
+	planner    *vmstart.Planner
 }
 
 func (s *vmService) ListVMs(ctx context.Context, _ *rookeryv1.ListVMsRequest) (*rookeryv1.ListVMsResponse, error) {
@@ -632,5 +657,6 @@ func vmDiskToProto(disk store.VMDisk) *rookeryv1.VMDisk {
 		Id: disk.ID, Name: disk.Name, SizeGb: int32(disk.SizeGB), SizeBytes: disk.SizeBytes,
 		StorageBackendId: disk.StorageBackendID, StorageBackendName: disk.StorageBackendName,
 		Vg: disk.VG, ThinPool: disk.ThinPool, Device: disk.Device, Source: disk.Source,
+		Protocol: disk.Protocol,
 	}
 }

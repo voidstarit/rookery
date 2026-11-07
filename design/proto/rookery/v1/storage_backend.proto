@@ -55,6 +55,17 @@ service StorageBackendService {
       response_body: "disks"
     };
   }
+
+  rpc GetStorageBackendHealth(GetStorageBackendHealthRequest) returns (StorageBackendHealth) {
+    option (google.api.http) = {get: "/api/storage-backends/{id}/health"};
+  }
+
+  rpc TestStorageBackendDataPath(TestStorageBackendDataPathRequest) returns (StorageBackendHealth) {
+    option (google.api.http) = {
+      post: "/api/storage-backends/{id}/test"
+      body: "*"
+    };
+  }
 }
 
 message StorageBackendConfig {
@@ -150,4 +161,37 @@ message ImportDisksRequest {
 
 message ImportDisksResponse {
   repeated Disk disks = 1;
+}
+
+message GetStorageBackendHealthRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message TestStorageBackendDataPathRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message StorageBackendHealth {
+  int64 id = 1;
+  bool reachable = 2;
+  bool ready = 3;
+  string driver = 4;
+  string storage_class = 5;
+  repeated string protocols = 6;
+  bool qemu_ready = 7;
+  string detail = 8;
+  google.protobuf.Timestamp checked_at = 9;
+  repeated StorageClassCapacity classes = 10;
+  int64 pending_deletions = 11;
+  int64 oldest_pending_deletion_age_seconds = 12;
+}
+
+message StorageClassCapacity {
+  string name = 1;
+  string vg_name = 2;
+  string state = 3;
+  int64 total_bytes = 4;
+  int64 free_bytes = 5;
+  int64 allocatable_bytes = 6;
+  int64 max_volume_bytes = 7;
 }

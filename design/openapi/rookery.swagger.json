@@ -394,8 +394,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "type": "object",
-              "properties": {}
+              "$ref": "#/definitions/v1DeleteDiskResponse"
             }
           },
           "default": {
@@ -2504,6 +2503,37 @@
         ]
       }
     },
+    "/api/storage-backends/{id}/health": {
+      "get": {
+        "operationId": "StorageBackendService_GetStorageBackendHealth",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1StorageBackendHealth"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "StorageBackendService"
+        ]
+      }
+    },
     "/api/storage-backends/{id}/import-disks": {
       "post": {
         "operationId": "StorageBackendService_ImportDisks",
@@ -2575,6 +2605,45 @@
             "required": true,
             "type": "string",
             "format": "int64"
+          }
+        ],
+        "tags": [
+          "StorageBackendService"
+        ]
+      }
+    },
+    "/api/storage-backends/{id}/test": {
+      "post": {
+        "operationId": "StorageBackendService_TestStorageBackendDataPath",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1StorageBackendHealth"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/StorageBackendServiceTestStorageBackendDataPathBody"
+            }
           }
         ],
         "tags": [
@@ -4115,6 +4184,9 @@
         }
       }
     },
+    "StorageBackendServiceTestStorageBackendDataPathBody": {
+      "type": "object"
+    },
     "StorageBackendServiceUpdateStorageBackendBody": {
       "type": "object",
       "properties": {
@@ -5002,6 +5074,17 @@
         }
       },
       "description": "DNSRecord is one local record served by a DNS VNF. Name is a fully qualified\ndomain name; wildcard names such as *.lab1.test are supported. Type is A,\nAAAA, CNAME, TXT, or PTR."
+    },
+    "v1DeleteDiskResponse": {
+      "type": "object",
+      "properties": {
+        "accepted": {
+          "type": "boolean"
+        },
+        "state": {
+          "type": "string"
+        }
+      }
     },
     "v1Disk": {
       "type": "object",
@@ -6555,6 +6638,88 @@
         },
         "kouja": {
           "$ref": "#/definitions/v1KoujaConfig"
+        }
+      }
+    },
+    "v1StorageBackendHealth": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "reachable": {
+          "type": "boolean"
+        },
+        "ready": {
+          "type": "boolean"
+        },
+        "driver": {
+          "type": "string"
+        },
+        "storage_class": {
+          "type": "string"
+        },
+        "protocols": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "qemu_ready": {
+          "type": "boolean"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "checked_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "classes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1StorageClassCapacity"
+          }
+        },
+        "pending_deletions": {
+          "type": "string",
+          "format": "int64"
+        },
+        "oldest_pending_deletion_age_seconds": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1StorageClassCapacity": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "vg_name": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "total_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "free_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "allocatable_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "max_volume_bytes": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },

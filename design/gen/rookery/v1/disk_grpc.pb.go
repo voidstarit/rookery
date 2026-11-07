@@ -11,7 +11,6 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -37,7 +36,7 @@ type DiskServiceClient interface {
 	GetDisk(ctx context.Context, in *GetDiskRequest, opts ...grpc.CallOption) (*Disk, error)
 	CreateDisk(ctx context.Context, in *CreateDiskRequest, opts ...grpc.CallOption) (*Disk, error)
 	UpdateDisk(ctx context.Context, in *UpdateDiskRequest, opts ...grpc.CallOption) (*Disk, error)
-	DeleteDisk(ctx context.Context, in *DeleteDiskRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	DeleteDisk(ctx context.Context, in *DeleteDiskRequest, opts ...grpc.CallOption) (*DeleteDiskResponse, error)
 }
 
 type diskServiceClient struct {
@@ -88,9 +87,9 @@ func (c *diskServiceClient) UpdateDisk(ctx context.Context, in *UpdateDiskReques
 	return out, nil
 }
 
-func (c *diskServiceClient) DeleteDisk(ctx context.Context, in *DeleteDiskRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+func (c *diskServiceClient) DeleteDisk(ctx context.Context, in *DeleteDiskRequest, opts ...grpc.CallOption) (*DeleteDiskResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(emptypb.Empty)
+	out := new(DeleteDiskResponse)
 	err := c.cc.Invoke(ctx, DiskService_DeleteDisk_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -108,7 +107,7 @@ type DiskServiceServer interface {
 	GetDisk(context.Context, *GetDiskRequest) (*Disk, error)
 	CreateDisk(context.Context, *CreateDiskRequest) (*Disk, error)
 	UpdateDisk(context.Context, *UpdateDiskRequest) (*Disk, error)
-	DeleteDisk(context.Context, *DeleteDiskRequest) (*emptypb.Empty, error)
+	DeleteDisk(context.Context, *DeleteDiskRequest) (*DeleteDiskResponse, error)
 	mustEmbedUnimplementedDiskServiceServer()
 }
 
@@ -131,7 +130,7 @@ func (UnimplementedDiskServiceServer) CreateDisk(context.Context, *CreateDiskReq
 func (UnimplementedDiskServiceServer) UpdateDisk(context.Context, *UpdateDiskRequest) (*Disk, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateDisk not implemented")
 }
-func (UnimplementedDiskServiceServer) DeleteDisk(context.Context, *DeleteDiskRequest) (*emptypb.Empty, error) {
+func (UnimplementedDiskServiceServer) DeleteDisk(context.Context, *DeleteDiskRequest) (*DeleteDiskResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteDisk not implemented")
 }
 func (UnimplementedDiskServiceServer) mustEmbedUnimplementedDiskServiceServer() {}

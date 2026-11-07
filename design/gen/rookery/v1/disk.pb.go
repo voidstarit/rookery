@@ -11,7 +11,6 @@ import (
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	structpb "google.golang.org/protobuf/types/known/structpb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
@@ -716,6 +715,58 @@ func (x *CreateDiskRequest) GetHostDevice() string {
 	return ""
 }
 
+type DeleteDiskResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Accepted      bool                   `protobuf:"varint,1,opt,name=accepted,proto3" json:"accepted,omitempty"`
+	State         string                 `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteDiskResponse) Reset() {
+	*x = DeleteDiskResponse{}
+	mi := &file_rookery_v1_disk_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteDiskResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteDiskResponse) ProtoMessage() {}
+
+func (x *DeleteDiskResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_disk_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteDiskResponse.ProtoReflect.Descriptor instead.
+func (*DeleteDiskResponse) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *DeleteDiskResponse) GetAccepted() bool {
+	if x != nil {
+		return x.Accepted
+	}
+	return false
+}
+
+func (x *DeleteDiskResponse) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
 type UpdateDiskRequest struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	Id                  int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -728,7 +779,7 @@ type UpdateDiskRequest struct {
 
 func (x *UpdateDiskRequest) Reset() {
 	*x = UpdateDiskRequest{}
-	mi := &file_rookery_v1_disk_proto_msgTypes[7]
+	mi := &file_rookery_v1_disk_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -740,7 +791,7 @@ func (x *UpdateDiskRequest) String() string {
 func (*UpdateDiskRequest) ProtoMessage() {}
 
 func (x *UpdateDiskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_disk_proto_msgTypes[7]
+	mi := &file_rookery_v1_disk_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -753,7 +804,7 @@ func (x *UpdateDiskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateDiskRequest.ProtoReflect.Descriptor instead.
 func (*UpdateDiskRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{7}
+	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *UpdateDiskRequest) GetId() int64 {
@@ -793,7 +844,7 @@ type DeleteDiskRequest struct {
 
 func (x *DeleteDiskRequest) Reset() {
 	*x = DeleteDiskRequest{}
-	mi := &file_rookery_v1_disk_proto_msgTypes[8]
+	mi := &file_rookery_v1_disk_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -805,7 +856,7 @@ func (x *DeleteDiskRequest) String() string {
 func (*DeleteDiskRequest) ProtoMessage() {}
 
 func (x *DeleteDiskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_disk_proto_msgTypes[8]
+	mi := &file_rookery_v1_disk_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -818,7 +869,7 @@ func (x *DeleteDiskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteDiskRequest.ProtoReflect.Descriptor instead.
 func (*DeleteDiskRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{8}
+	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *DeleteDiskRequest) GetId() int64 {
@@ -833,7 +884,7 @@ var File_rookery_v1_disk_proto protoreflect.FileDescriptor
 const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\n" +
 	"\x15rookery/v1/disk.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\xf3\x02\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\xf3\x02\n" +
 	"\x06VMDisk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
@@ -917,7 +968,10 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\b_size_gbB\x15\n" +
 	"\x13_storage_backend_idB\x13\n" +
 	"\x11_template_disk_idB\x0e\n" +
-	"\f_is_template\"\x94\x02\n" +
+	"\f_is_template\"F\n" +
+	"\x12DeleteDiskResponse\x12\x1a\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\x12\x14\n" +
+	"\x05state\x18\x02 \x01(\tR\x05state\"\x94\x02\n" +
 	"\x11UpdateDiskRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x12$\n" +
 	"\vis_template\x18\x02 \x01(\bH\x00R\n" +
@@ -928,7 +982,7 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\x14_provisioning_scriptB\x17\n" +
 	"\x15_provisioning_timeout\",\n" +
 	"\x11DeleteDiskRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id2\xd3\x03\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id2\xdb\x03\n" +
 	"\vDiskService\x12c\n" +
 	"\tListDisks\x12\x1c.rookery.v1.ListDisksRequest\x1a\x1d.rookery.v1.ListDisksResponse\"\x19\x82\xd3\xe4\x93\x02\x13b\x05disks\x12\n" +
 	"/api/disks\x12P\n" +
@@ -937,9 +991,9 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"CreateDisk\x12\x1d.rookery.v1.CreateDiskRequest\x1a\x10.rookery.v1.Disk\"\x15\x82\xd3\xe4\x93\x02\x0f:\x01*\"\n" +
 	"/api/disks\x12Y\n" +
 	"\n" +
-	"UpdateDisk\x12\x1d.rookery.v1.UpdateDiskRequest\x1a\x10.rookery.v1.Disk\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\x1a\x0f/api/disks/{id}\x12\\\n" +
+	"UpdateDisk\x12\x1d.rookery.v1.UpdateDiskRequest\x1a\x10.rookery.v1.Disk\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\x1a\x0f/api/disks/{id}\x12d\n" +
 	"\n" +
-	"DeleteDisk\x12\x1d.rookery.v1.DeleteDiskRequest\x1a\x16.google.protobuf.Empty\"\x17\x82\xd3\xe4\x93\x02\x11*\x0f/api/disks/{id}B?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
+	"DeleteDisk\x12\x1d.rookery.v1.DeleteDiskRequest\x1a\x1e.rookery.v1.DeleteDiskResponse\"\x17\x82\xd3\xe4\x93\x02\x11*\x0f/api/disks/{id}B?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
 
 var (
 	file_rookery_v1_disk_proto_rawDescOnce sync.Once
@@ -953,7 +1007,7 @@ func file_rookery_v1_disk_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_disk_proto_rawDescData
 }
 
-var file_rookery_v1_disk_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_rookery_v1_disk_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_rookery_v1_disk_proto_goTypes = []any{
 	(*VMDisk)(nil),                // 0: rookery.v1.VMDisk
 	(*Disk)(nil),                  // 1: rookery.v1.Disk
@@ -962,27 +1016,27 @@ var file_rookery_v1_disk_proto_goTypes = []any{
 	(*ListDisksResponse)(nil),     // 4: rookery.v1.ListDisksResponse
 	(*GetDiskRequest)(nil),        // 5: rookery.v1.GetDiskRequest
 	(*CreateDiskRequest)(nil),     // 6: rookery.v1.CreateDiskRequest
-	(*UpdateDiskRequest)(nil),     // 7: rookery.v1.UpdateDiskRequest
-	(*DeleteDiskRequest)(nil),     // 8: rookery.v1.DeleteDiskRequest
-	(*timestamppb.Timestamp)(nil), // 9: google.protobuf.Timestamp
-	(*structpb.Struct)(nil),       // 10: google.protobuf.Struct
-	(*emptypb.Empty)(nil),         // 11: google.protobuf.Empty
+	(*DeleteDiskResponse)(nil),    // 7: rookery.v1.DeleteDiskResponse
+	(*UpdateDiskRequest)(nil),     // 8: rookery.v1.UpdateDiskRequest
+	(*DeleteDiskRequest)(nil),     // 9: rookery.v1.DeleteDiskRequest
+	(*timestamppb.Timestamp)(nil), // 10: google.protobuf.Timestamp
+	(*structpb.Struct)(nil),       // 11: google.protobuf.Struct
 }
 var file_rookery_v1_disk_proto_depIdxs = []int32{
-	9,  // 0: rookery.v1.Disk.created_at:type_name -> google.protobuf.Timestamp
-	9,  // 1: rookery.v1.Disk.updated_at:type_name -> google.protobuf.Timestamp
+	10, // 0: rookery.v1.Disk.created_at:type_name -> google.protobuf.Timestamp
+	10, // 1: rookery.v1.Disk.updated_at:type_name -> google.protobuf.Timestamp
 	1,  // 2: rookery.v1.ListDisksResponse.disks:type_name -> rookery.v1.Disk
-	10, // 3: rookery.v1.CreateDiskRequest.provisioning:type_name -> google.protobuf.Struct
+	11, // 3: rookery.v1.CreateDiskRequest.provisioning:type_name -> google.protobuf.Struct
 	3,  // 4: rookery.v1.DiskService.ListDisks:input_type -> rookery.v1.ListDisksRequest
 	5,  // 5: rookery.v1.DiskService.GetDisk:input_type -> rookery.v1.GetDiskRequest
 	6,  // 6: rookery.v1.DiskService.CreateDisk:input_type -> rookery.v1.CreateDiskRequest
-	7,  // 7: rookery.v1.DiskService.UpdateDisk:input_type -> rookery.v1.UpdateDiskRequest
-	8,  // 8: rookery.v1.DiskService.DeleteDisk:input_type -> rookery.v1.DeleteDiskRequest
+	8,  // 7: rookery.v1.DiskService.UpdateDisk:input_type -> rookery.v1.UpdateDiskRequest
+	9,  // 8: rookery.v1.DiskService.DeleteDisk:input_type -> rookery.v1.DeleteDiskRequest
 	4,  // 9: rookery.v1.DiskService.ListDisks:output_type -> rookery.v1.ListDisksResponse
 	1,  // 10: rookery.v1.DiskService.GetDisk:output_type -> rookery.v1.Disk
 	1,  // 11: rookery.v1.DiskService.CreateDisk:output_type -> rookery.v1.Disk
 	1,  // 12: rookery.v1.DiskService.UpdateDisk:output_type -> rookery.v1.Disk
-	11, // 13: rookery.v1.DiskService.DeleteDisk:output_type -> google.protobuf.Empty
+	7,  // 13: rookery.v1.DiskService.DeleteDisk:output_type -> rookery.v1.DeleteDiskResponse
 	9,  // [9:14] is the sub-list for method output_type
 	4,  // [4:9] is the sub-list for method input_type
 	4,  // [4:4] is the sub-list for extension type_name
@@ -999,14 +1053,14 @@ func file_rookery_v1_disk_proto_init() {
 	file_rookery_v1_disk_proto_msgTypes[1].OneofWrappers = []any{}
 	file_rookery_v1_disk_proto_msgTypes[2].OneofWrappers = []any{}
 	file_rookery_v1_disk_proto_msgTypes[6].OneofWrappers = []any{}
-	file_rookery_v1_disk_proto_msgTypes[7].OneofWrappers = []any{}
+	file_rookery_v1_disk_proto_msgTypes[8].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_disk_proto_rawDesc), len(file_rookery_v1_disk_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

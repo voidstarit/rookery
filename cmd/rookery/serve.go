@@ -28,7 +28,9 @@ import (
 	"github.com/voidstarit/rookery/internal/pki"
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/readiness"
+	"github.com/voidstarit/rookery/internal/storage"
 	"github.com/voidstarit/rookery/internal/store"
+	"github.com/voidstarit/rookery/internal/vmstart"
 	"github.com/voidstarit/rookery/internal/vnfd"
 )
 
@@ -173,7 +175,11 @@ func runServe(args []string) error {
 	)
 
 	diskRunner := host.NewLVM()
+	storageRegistry := storage.NewDefaultRegistry()
+	startPlanner := vmstart.NewPlanner(st, storageRegistry)
+	diskReclaimer := storage.NewReclaimer(st, storageRegistry, logger)
 	apiServer := api.New(st, manager, diskRunner, qemuRunner, networkRunner, vnfClient, networkRunner, logger)
+	apiServer.ConfigureStartPlanner(startPlanner)
 	lightvmStorage, err := lightvm.NewStorage(*lightvmDir, lightvm.DefaultMaxUploadBytes)
 	if err != nil {
 		return fmt.Errorf("prepare LightVM storage: %w", err)
@@ -209,6 +215,8 @@ func runServe(args []string) error {
 		gateway.WithInterfaceCounters(networkRunner),
 		gateway.WithACLRuntime(networkRunner),
 		gateway.WithDiskProvisioner(diskRunner),
+		gateway.WithStorageRegistry(storageRegistry),
+		gateway.WithStartPlanner(startPlanner),
 		gateway.WithDiskMutex(apiServer.ResourceMutex()),
 		gateway.WithVMMutex(apiServer.RunMutex()),
 		gateway.WithInterfaceRuntime(networkRunner),
@@ -298,6 +306,7 @@ func runServe(args []string) error {
 	defer stop()
 
 	go manager.Run(ctx)
+	go diskReclaimer.Run(ctx)
 	go apiServer.RunInfrastructureReconciler(ctx)
 
 	servers := []*http.Server{srv}

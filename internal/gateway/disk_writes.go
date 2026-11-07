@@ -11,7 +11,6 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/emptypb"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/host"
@@ -45,6 +44,16 @@ func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateD
 	backend, err := s.resolveStorageBackend(ctx, request.StorageBackendId)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	if backend.Driver == store.DiskSourceKouja {
+		sizeGB := int(request.GetSizeGb())
+		if sizeGB == 0 {
+			sizeGB = defaultGatewayDiskGB
+		}
+		if sizeGB < 1 || sizeGB > maxGatewayDiskGB {
+			return nil, status.Error(codes.InvalidArgument, "size_gb is out of range")
+		}
+		return s.createKoujaDisk(ctx, request, name, backend, sizeGB)
 	}
 	if backend.Driver != "lvm-thin" || backend.Config.VG == "" || backend.Config.ThinPool == "" {
 		return nil, status.Error(codes.FailedPrecondition, "selected storage backend is not a configured LVM thin backend")
@@ -377,7 +386,7 @@ func diskUpdateError(err error) error {
 	}
 }
 
-func (s *diskService) DeleteDisk(ctx context.Context, request *rookeryv1.DeleteDiskRequest) (*emptypb.Empty, error) {
+func (s *diskService) DeleteDisk(ctx context.Context, request *rookeryv1.DeleteDiskRequest) (*rookeryv1.DeleteDiskResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	disk, err := s.store.GetDisk(ctx, request.GetId())
@@ -386,6 +395,15 @@ func (s *diskService) DeleteDisk(ctx context.Context, request *rookeryv1.DeleteD
 	}
 	if disk.AttachedVMID != nil {
 		return nil, status.Error(codes.Aborted, "disk is attached to a VM; delete the VM first")
+	}
+	if disk.Source == store.DiskSourceKouja {
+		if s.registry == nil {
+			return nil, status.Error(codes.Unavailable, "storage registry is not configured")
+		}
+		if err := s.store.MarkDiskDeleting(ctx, disk.ID); err != nil {
+			return nil, status.Error(codes.Internal, "could not queue disk deletion")
+		}
+		return &rookeryv1.DeleteDiskResponse{Accepted: true, State: store.DiskDeletionDeleting}, nil
 	}
 	if disk.Source == store.DiskSourceHostDevice {
 		if err := s.store.DeleteDisk(ctx, request.GetId()); err != nil {
@@ -398,7 +416,7 @@ func (s *diskService) DeleteDisk(ctx context.Context, request *rookeryv1.DeleteD
 				return nil, status.Error(codes.Internal, "could not delete disk")
 			}
 		}
-		return &emptypb.Empty{}, nil
+		return &rookeryv1.DeleteDiskResponse{}, nil
 	}
 	backend, backendErr := s.resolveStorageBackend(ctx, disk.StorageBackendID)
 	if disk.IsTemplate {
@@ -432,7 +450,7 @@ func (s *diskService) DeleteDisk(ctx context.Context, request *rookeryv1.DeleteD
 			return nil, status.Error(codes.Internal, "could not delete disk")
 		}
 	}
-	return &emptypb.Empty{}, nil
+	return &rookeryv1.DeleteDiskResponse{}, nil
 }
 
 func (s *diskService) resolveStorageBackend(ctx context.Context, id *int64) (store.StorageBackend, error) {
@@ -461,6 +479,9 @@ func (s *diskService) resolveStorageBackend(ctx context.Context, id *int64) (sto
 		if candidate.Driver == "lvm-thin" && candidate.Config.VG != "" && candidate.Config.ThinPool != "" {
 			return candidate, nil
 		}
+	}
+	if len(backends) == 1 {
+		return backends[0], nil
 	}
 	if s.readiness == nil {
 		return store.StorageBackend{}, errors.New("no storage backend selected")
