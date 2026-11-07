@@ -71,6 +71,7 @@ func diskToProto(disk store.Disk) *rookeryv1.Disk {
 		ProvisioningScript: disk.ProvisioningScript, ProvisioningTimeout: disk.ProvisioningTimeout,
 		AttachedVmId: disk.AttachedVMID, AttachedVmName: disk.AttachedVMName,
 		Locator: disk.BackendMetadata.Attachment.Locator(), Protocol: disk.Protocol,
+		ReadBps: disk.ReadBPS, WriteBps: disk.WriteBPS,
 		DeletionState: disk.DeletionState, DeletionError: disk.DeletionError,
 		CreatedAt: timestamp(disk.CreatedAt), UpdatedAt: timestamp(disk.UpdatedAt),
 	}

@@ -196,7 +196,9 @@ existing backends. The client certificate must contain exactly one
 `spiffe://kouja/caller/<name>` URI SAN; keep that identity stable across
 certificate rotation. Kouja disks are exported directly to QEMU;
 the host does not create an `iscsiadm` session. Queue a kouja disk delete and
-let the reclaimer finish it; `delete_failed` rows can be retried.
+let the reclaimer finish it; `delete_failed` rows can be retried. Per-disk
+read/write bandwidth limits are set in the Disks UI and applied by QEMU at the
+next VM start.
 Each configured LVM backend has an **Import** action that lists existing thin
 volumes in its pool and registers selected volumes as disks without modifying
 LVM. Already registered volumes are shown as unavailable. The driver and config

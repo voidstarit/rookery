@@ -216,6 +216,8 @@ export type VMDisk = {
   source?: string;
   protocol?: string;
   locator?: string;
+  read_bps?: number;
+  write_bps?: number;
 };
 
 export type VMMedia = {
@@ -342,6 +344,8 @@ export type Disk = {
   source?: string;
   protocol?: string;
   locator?: string;
+  read_bps?: number;
+  write_bps?: number;
   deletion_state?: string;
   deletion_error?: string;
   attached_vm_id?: string;

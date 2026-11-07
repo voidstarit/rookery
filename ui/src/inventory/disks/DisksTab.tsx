@@ -4,6 +4,7 @@ import { showToast } from "../../shared/toast";
 import { EntityLabels, useEntityLabels } from "../../shared/labels";
 import type { Disk, StorageBackend } from "../types";
 import { DiskDialog } from "./DiskDialog";
+import { DiskBandwidthDialog } from "./DiskBandwidthDialog";
 import { ImportDisksDialog } from "./ImportDisksDialog";
 import { StorageBackendDialog } from "./StorageBackendDialog";
 import { TemplateProvisioningDialog } from "./TemplateProvisioningDialog";
@@ -20,6 +21,23 @@ function formatDate(value: string | undefined): string {
     return "—";
   }
   return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function formatRate(bytes: number | undefined): string {
+  const value = Number(bytes) || 0;
+  if (value <= 0) {
+    return "unlimited";
+  }
+  if (value >= 1024 ** 3) {
+    return `${(value / 1024 ** 3).toFixed(1)} GiB/s`;
+  }
+  if (value >= 1024 ** 2) {
+    return `${(value / 1024 ** 2).toFixed(1)} MiB/s`;
+  }
+  if (value >= 1024) {
+    return `${(value / 1024).toFixed(1)} KiB/s`;
+  }
+  return `${value} B/s`;
 }
 
 function formatDiskSize(disk: Disk): string {
@@ -49,12 +67,14 @@ export function DisksTab() {
   const [backendDialog, setBackendDialog] = useState<{ backend: StorageBackend | null } | null>(null);
   const [importBackend, setImportBackend] = useState<StorageBackend | null>(null);
   const [provisioningDisk, setProvisioningDisk] = useState<Disk | null>(null);
+  const [bandwidthDisk, setBandwidthDisk] = useState<Disk | null>(null);
   const diskLabels = useEntityLabels("disk");
   const backendLabels = useEntityLabels("storage_backend");
   const route = useRoute();
 
   useEffect(() => {
     setProvisioningDisk(null);
+    setBandwidthDisk(null);
   }, [route.path, route.search]);
 
   useEffect(() => {
@@ -454,7 +474,14 @@ export function DisksTab() {
                         onSaved={(labels) => diskLabels.setEntityLabels(String(disk.id), labels)}
                       />
                     </td>
-                    <td class="mono">{formatDiskSize(disk)}</td>
+                    <td class="mono">
+                      {formatDiskSize(disk)}
+                      {disk.read_bps || disk.write_bps ? (
+                        <span class="vm-description">
+                          {formatRate(disk.read_bps)} read · {formatRate(disk.write_bps)} write
+                        </span>
+                      ) : null}
+                    </td>
                     <td class={disk.storage_backend_name || disk.source === "host-device" ? "mono" : "mono muted"}>
                       {disk.source === "host-device" ? "host device" : disk.storage_backend_name || "—"}
                     </td>
@@ -473,6 +500,19 @@ export function DisksTab() {
                             Provisioning
                           </button>
                         ) : null}
+                        <button
+                          class="row-action"
+                          type="button"
+                          disabled={Boolean(disk.deletion_state)}
+                          title={
+                            disk.deletion_state
+                              ? "This disk is being deleted."
+                              : "Set QEMU read/write bandwidth limits; restart the VM to apply them."
+                          }
+                          onClick={() => setBandwidthDisk(disk)}
+                        >
+                          Limits
+                        </button>
                         {disk.source === "host-device" || (disk.source && disk.source !== "lvm-thin") ? null : (
                           <button
                             class="row-action"
@@ -529,6 +569,18 @@ export function DisksTab() {
             setProvisioningDisk(null);
             publishDisks(disks.map((item) => (item.id === disk.id ? disk : item)));
             showToast(`Saved provisioning for ${disk.name}`);
+          }}
+        />
+      ) : null}
+
+      {bandwidthDisk ? (
+        <DiskBandwidthDialog
+          disk={bandwidthDisk}
+          onClose={() => setBandwidthDisk(null)}
+          onSaved={(disk) => {
+            setBandwidthDisk(null);
+            publishDisks(disks.map((item) => (item.id === disk.id ? disk : item)));
+            showToast(`Saved bandwidth limits for ${disk.name}`);
           }}
         />
       ) : null}

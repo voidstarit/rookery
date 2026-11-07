@@ -179,7 +179,7 @@ labels in sync through the same API.
 | `GET`    | `/api/disks`       | List all disks                    |
 | `POST`   | `/api/disks`       | Create a thin-LVM disk, host passthrough disk, template, or provisioned template clone |
 | `GET`    | `/api/disks/{id}`  | Get one disk                      |
-| `PUT`    | `/api/disks/{id}`  | Update template status or template provisioning settings |
+| `PUT`    | `/api/disks/{id}`  | Update template/provisioning settings or per-disk `read_bps`/`write_bps` limits |
 | `DELETE` | `/api/disks/{id}`  | Delete an unattached disk; remote kouja deletes return `202` and finish asynchronously |
 | `GET`    | `/api/media`       | List installation media           |
 | `POST`   | `/api/media`       | Register an existing ISO file     |
@@ -339,6 +339,12 @@ includes `source=kouja`, `protocol=iscsi`, a display-only `locator`, and empty
 `device`. Delete a kouja disk with `DELETE /api/disks/{id}`; the API returns
 `202 Accepted` and the reclaimer unexports and deletes the volume. A
 `delete_failed` disk can be retried with the same DELETE call.
+
+Disks accept optional `read_bps` and `write_bps` limits in bytes per second on
+create and update (`0` means unlimited). Rookery passes them to QEMU as
+`throttling.bps-read` and `throttling.bps-write`; limits take effect the next
+time the VM starts. The Disks tab shows current limits and provides a **Limits**
+action.
 
 A `kouja` backend's `config.kouja` accepts `ca_pem`, `client_cert_pem`, and
 `client_key_pem` as PEM content; the older `ca_file`, `client_cert_file`, and

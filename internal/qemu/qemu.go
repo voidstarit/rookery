@@ -873,7 +873,7 @@ func buildDiskArgs(disk store.VMDisk, plan StartPlan, secretPaths map[int64]stri
 	protocol := blockdev.Protocol(disk.Protocol).Normalize()
 	if disk.Source != store.DiskSourceKouja && disk.Source != store.DiskSourceCeph &&
 		(disk.Protocol == "" || protocol == blockdev.ProtocolLocal) {
-		return []string{"-drive", fmt.Sprintf("file=%s,format=raw,if=virtio,cache=none,aio=native", disk.Device)}, nil
+		return []string{"-drive", fmt.Sprintf("file=%s,format=raw,if=virtio,cache=none,aio=native%s", disk.Device, diskThrottleArgs(disk))}, nil
 	}
 	attachment, ok := plan.Attachments[disk.ID]
 	if !ok {
@@ -891,9 +891,9 @@ func buildDiskArgs(disk store.VMDisk, plan StartPlan, secretPaths map[int64]stri
 		secretID := fmt.Sprintf("rookery-iscsi-%d", disk.ID)
 		return []string{
 			"-object", fmt.Sprintf("secret,id=%s,file=%s,format=raw", secretID, secretPath),
-			"-drive", fmt.Sprintf("file.driver=iscsi,file.transport=tcp,file.portal=%s,file.target=%s,file.lun=%d,file.user=%s,file.password-secret=%s,file.initiator-name=%s,file.timeout=30,if=virtio,format=raw,cache=none,werror=stop,rerror=stop",
+			"-drive", fmt.Sprintf("file.driver=iscsi,file.transport=tcp,file.portal=%s,file.target=%s,file.lun=%d,file.user=%s,file.password-secret=%s,file.initiator-name=%s,file.timeout=30,if=virtio,format=raw,cache=none,werror=stop,rerror=stop%s",
 				attachment.ISCSI.Portal, attachment.ISCSI.Target, attachment.ISCSI.LUN,
-				attachment.ISCSI.Username, secretID, attachment.ISCSI.Initiator),
+				attachment.ISCSI.Username, secretID, attachment.ISCSI.Initiator, diskThrottleArgs(disk)),
 		}, nil
 	case blockdev.ProtocolNVMeTCP:
 		return nil, fmt.Errorf("NVMe/TCP attachments are not implemented")
@@ -902,4 +902,15 @@ func buildDiskArgs(disk store.VMDisk, plan StartPlan, secretPaths map[int64]stri
 	default:
 		return nil, fmt.Errorf("unknown attachment protocol %q", attachment.Protocol)
 	}
+}
+
+func diskThrottleArgs(disk store.VMDisk) string {
+	var args string
+	if disk.ReadBPS > 0 {
+		args += fmt.Sprintf(",throttling.bps-read=%d", disk.ReadBPS)
+	}
+	if disk.WriteBPS > 0 {
+		args += fmt.Sprintf(",throttling.bps-write=%d", disk.WriteBPS)
+	}
+	return args
 }

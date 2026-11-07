@@ -3856,6 +3856,14 @@
         },
         "provisioning_timeout": {
           "type": "string"
+        },
+        "read_bps": {
+          "type": "string",
+          "format": "int64"
+        },
+        "write_bps": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },
@@ -4762,6 +4770,14 @@
         "host_device": {
           "type": "string",
           "description": "host_device registers an existing host block device (a whole disk,\npartition, or logical volume) for passthrough to one VM. When set,\nstorage_backend_id, size_gb, is_template, template_disk_id, and\nprovisioning settings must be omitted; the size is read from the device."
+        },
+        "read_bps": {
+          "type": "string",
+          "format": "int64"
+        },
+        "write_bps": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },
@@ -5202,6 +5218,15 @@
         "protocol": {
           "type": "string",
           "description": "protocol distinguishes local, iscsi, nvme-tcp, and rbd attachments."
+        },
+        "read_bps": {
+          "type": "string",
+          "format": "int64",
+          "description": "read_bps and write_bps are QEMU block throttling limits in bytes per\nsecond. Zero means unlimited."
+        },
+        "write_bps": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },
@@ -7027,6 +7052,15 @@
         "protocol": {
           "type": "string",
           "description": "protocol distinguishes local, iscsi, nvme-tcp, and rbd attachments."
+        },
+        "read_bps": {
+          "type": "string",
+          "format": "int64",
+          "description": "read_bps and write_bps are QEMU block throttling limits in bytes per\nsecond. Zero means unlimited."
+        },
+        "write_bps": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },

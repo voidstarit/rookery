@@ -344,8 +344,8 @@ func TestMigrationPreservesLegacyVMsWithoutDisks(t *testing.T) {
 	if err := st.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 49 {
-		t.Fatalf("schema version = %d, want 49", version)
+	if version != 50 {
+		t.Fatalf("schema version = %d, want 50", version)
 	}
 }
 
@@ -643,7 +643,7 @@ func dropDiskSourceSchema(t *testing.T, db *sql.DB) {
 	if _, err := db.Exec(`DROP INDEX IF EXISTS idx_disks_host_device`); err != nil {
 		t.Fatalf("drop host device index: %v", err)
 	}
-	for _, column := range []string{"source", "device", "size_bytes"} {
+	for _, column := range []string{"source", "device", "size_bytes", "read_bps", "write_bps"} {
 		if _, err := db.Exec(`ALTER TABLE disks DROP COLUMN ` + column); err != nil {
 			t.Fatalf("drop disks.%s: %v", column, err)
 		}

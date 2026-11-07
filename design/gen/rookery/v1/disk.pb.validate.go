@@ -78,6 +78,10 @@ func (m *VMDisk) validate(all bool) error {
 
 	// no validation rules for Protocol
 
+	// no validation rules for ReadBps
+
+	// no validation rules for WriteBps
+
 	if m.StorageBackendId != nil {
 		// no validation rules for StorageBackendId
 	}
@@ -273,6 +277,10 @@ func (m *Disk) validate(all bool) error {
 	// no validation rules for DeletionError
 
 	// no validation rules for Protocol
+
+	// no validation rules for ReadBps
+
+	// no validation rules for WriteBps
 
 	if m.StorageBackendId != nil {
 		// no validation rules for StorageBackendId
@@ -995,6 +1003,36 @@ func (m *CreateDiskRequest) validate(all bool) error {
 		// no validation rules for IsTemplate
 	}
 
+	if m.ReadBps != nil {
+
+		if m.GetReadBps() < 0 {
+			err := CreateDiskRequestValidationError{
+				field:  "ReadBps",
+				reason: "value must be greater than or equal to 0",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.WriteBps != nil {
+
+		if m.GetWriteBps() < 0 {
+			err := CreateDiskRequestValidationError{
+				field:  "WriteBps",
+				reason: "value must be greater than or equal to 0",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
 	if len(errors) > 0 {
 		return CreateDiskRequestMultiError(errors)
 	}
@@ -1241,6 +1279,36 @@ func (m *UpdateDiskRequest) validate(all bool) error {
 			err := UpdateDiskRequestValidationError{
 				field:  "ProvisioningTimeout",
 				reason: "value length must be at most 32 runes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.ReadBps != nil {
+
+		if m.GetReadBps() < 0 {
+			err := UpdateDiskRequestValidationError{
+				field:  "ReadBps",
+				reason: "value must be greater than or equal to 0",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.WriteBps != nil {
+
+		if m.GetWriteBps() < 0 {
+			err := UpdateDiskRequestValidationError{
+				field:  "WriteBps",
+				reason: "value must be greater than or equal to 0",
 			}
 			if !all {
 				return err

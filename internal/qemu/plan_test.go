@@ -428,3 +428,29 @@ func TestRunStateMonitorErrors(t *testing.T) {
 		t.Fatalf("monitorQuery(missing monitor) = %v", err)
 	}
 }
+
+func TestBuildDiskArgsThrottling(t *testing.T) {
+	local, err := buildDiskArgs(store.VMDisk{
+		Device: "/dev/vg0/data", ReadBPS: 10 * 1024 * 1024, WriteBPS: 5 * 1024 * 1024,
+	}, StartPlan{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	localArgs := strings.Join(local, " ")
+	if !strings.Contains(localArgs, "throttling.bps-read=10485760") ||
+		!strings.Contains(localArgs, "throttling.bps-write=5242880") {
+		t.Fatalf("local args = %q", localArgs)
+	}
+	disk := testRemoteDisk()
+	disk.ReadBPS = 10 * 1024 * 1024
+	disk.WriteBPS = 5 * 1024 * 1024
+	remote, err := buildDiskArgs(disk, testISCSIPlan(), map[int64]string{7: "/run/rookery/secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	remoteArgs := strings.Join(remote, " ")
+	if !strings.Contains(remoteArgs, "throttling.bps-read=10485760") ||
+		!strings.Contains(remoteArgs, "throttling.bps-write=5242880") {
+		t.Fatalf("remote args = %q", remoteArgs)
+	}
+}

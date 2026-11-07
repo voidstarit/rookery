@@ -58,6 +58,10 @@ message VMDisk {
   string locator = 11;
   // protocol distinguishes local, iscsi, nvme-tcp, and rbd attachments.
   string protocol = 12;
+  // read_bps and write_bps are QEMU block throttling limits in bytes per
+  // second. Zero means unlimited.
+  int64 read_bps = 13;
+  int64 write_bps = 14;
 }
 
 message Disk {
@@ -90,6 +94,10 @@ message Disk {
   string deletion_error = 22;
   // protocol distinguishes local, iscsi, nvme-tcp, and rbd attachments.
   string protocol = 23;
+  // read_bps and write_bps are QEMU block throttling limits in bytes per
+  // second. Zero means unlimited.
+  int64 read_bps = 24;
+  int64 write_bps = 25;
 }
 
 message ImportableDisk {
@@ -130,6 +138,8 @@ message CreateDiskRequest {
   // storage_backend_id, size_gb, is_template, template_disk_id, and
   // provisioning settings must be omitted; the size is read from the device.
   string host_device = 9 [(validate.rules).string = {ignore_empty: true, max_len: 4096}];
+  optional int64 read_bps = 10 [(validate.rules).int64 = {gte: 0}];
+  optional int64 write_bps = 11 [(validate.rules).int64 = {gte: 0}];
 }
 
 message DeleteDiskResponse {
@@ -142,6 +152,8 @@ message UpdateDiskRequest {
   optional bool is_template = 2;
   optional string provisioning_script = 3 [(validate.rules).string = {max_len: 4096}];
   optional string provisioning_timeout = 4 [(validate.rules).string = {max_len: 32}];
+  optional int64 read_bps = 5 [(validate.rules).int64 = {gte: 0}];
+  optional int64 write_bps = 6 [(validate.rules).int64 = {gte: 0}];
 }
 
 message DeleteDiskRequest {
