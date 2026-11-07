@@ -2,6 +2,7 @@ package vmstart
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/voidstarit/rookery/internal/blockdev"
@@ -95,3 +96,81 @@ func TestPlannerLocalPlanIsEmpty(t *testing.T) {
 		t.Fatalf("Plan() = %+v, %v", plan, err)
 	}
 }
+
+type plainPlannerDriver struct{ kind string }
+
+func (d *plainPlannerDriver) Kind() string { return d.kind }
+func (d *plainPlannerDriver) CreateDisk(context.Context, store.StorageBackend, storage.CreateDiskRequest) (storage.CreatedDisk, error) {
+	return storage.CreatedDisk{}, nil
+}
+func (d *plainPlannerDriver) DeleteDisk(context.Context, store.StorageBackend, store.Disk) error {
+	return nil
+}
+func (d *plainPlannerDriver) Health(context.Context, store.StorageBackend, *store.Disk) (storage.Health, error) {
+	return storage.Health{}, nil
+}
+
+type errorPlannerDriver struct{ plainPlannerDriver }
+
+func (d *errorPlannerDriver) PrepareStart(context.Context, store.StorageBackend, store.Disk) (blockdev.Attachment, error) {
+	return blockdev.Attachment{}, errors.New("prepare failed")
+}
+
+func TestPlannerErrorBranches(t *testing.T) {
+	ctx := context.Background()
+	if plan, err := NewPlanner(nil, nil).Plan(ctx, store.VM{}); err != nil || len(plan.Attachments) != 0 {
+		t.Fatalf("nil planner = %+v, %v", plan, err)
+	}
+	if _, err := NewPlanner(nil, nil).Plan(ctx, store.VM{Disks: []store.VMDisk{{
+		ID: 1, Name: "remote", Source: store.DiskSourceKouja, Protocol: string(blockdev.ProtocolISCSI),
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	remote := store.VM{Disks: []store.VMDisk{{ID: 1, Name: "remote", Source: store.DiskSourceKouja, Protocol: string(blockdev.ProtocolISCSI)}}}
+	// A non-nil planner with a real store but a remote disk lacking a backend.
+	st, err := store.Open(t.TempDir() + "/planner-errors.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	planner := NewPlanner(st, storage.NewRegistry())
+	if _, err := planner.Plan(ctx, remote); err == nil {
+		t.Fatal("Plan accepted a remote disk without a backend")
+	}
+	remote.Disks[0].StorageBackendID = int64Ptr(999)
+	if _, err := planner.Plan(ctx, remote); err == nil {
+		t.Fatal("Plan accepted a missing backend")
+	}
+	backend, err := st.CreateStorageBackend(ctx, store.StorageBackend{Name: "plain", Driver: "plain"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote.Disks[0].StorageBackendID = &backend.ID
+	if _, err := planner.Plan(ctx, remote); err == nil {
+		t.Fatal("Plan accepted a missing driver")
+	}
+	planner = NewPlanner(st, storage.NewRegistry(&plainPlannerDriver{kind: "plain"}))
+	if _, err := planner.Plan(ctx, remote); err == nil {
+		t.Fatal("Plan accepted a driver without StartPreparer")
+	}
+	// The disk record is missing even though the VM carries an ID.
+	if _, err := planner.Plan(ctx, remote); err == nil {
+		t.Fatal("Plan accepted a missing disk record")
+	}
+	disk, err := st.CreateDisk(ctx, store.Disk{Name: "remote", SizeGB: 5, StorageBackendID: &backend.ID,
+		Source: store.DiskSourceKouja, Protocol: string(blockdev.ProtocolISCSI),
+		BackendMetadata: store.DiskBackendMetadata{Volume: store.VolumeMetadata{VolumeID: "v"},
+			Attachment: blockdev.Reference{Protocol: blockdev.ProtocolISCSI, ISCSI: &blockdev.ISCSIReference{
+				Portal: "10.0.0.1:3260", Target: "iqn.x", LUN: 0,
+			}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote.Disks[0].ID = disk.ID
+	planner = NewPlanner(st, storage.NewRegistry(&errorPlannerDriver{plainPlannerDriver{kind: "plain"}}))
+	if _, err := planner.Plan(ctx, remote); err == nil {
+		t.Fatal("Plan accepted a PrepareStart error")
+	}
+}
+
+func int64Ptr(value int64) *int64 { return &value }

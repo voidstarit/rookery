@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"math/big"
 	"net/url"
 	"os"
@@ -221,5 +222,91 @@ func TestKoujaDriverPrepareAndHealth(t *testing.T) {
 	health, err := driver.Health(context.Background(), storageKoujaBackend(t), nil)
 	if err != nil || !health.Ready || len(health.Classes) != 1 {
 		t.Fatalf("Health = %+v, %v", health, err)
+	}
+}
+
+func TestKoujaDriverErrorBranches(t *testing.T) {
+	ctx := context.Background()
+	badBackend := store.StorageBackend{Config: store.StorageBackendConfig{}}
+	valid := storageKoujaBackend(t)
+	if NewKoujaDriver().Kind() != store.DiskSourceKouja {
+		t.Fatal("NewKoujaDriver kind mismatch")
+	}
+	driver := storageKoujaDriver(&fakeAPI{})
+	disk := store.Disk{SizeGB: 5, BackendMetadata: store.DiskBackendMetadata{Volume: store.VolumeMetadata{VolumeID: "volume-1"}}}
+	if _, err := driver.CreateDisk(ctx, badBackend, CreateDiskRequest{Disk: disk}); err == nil {
+		t.Fatal("CreateDisk accepted bad config")
+	}
+	badClient := &KoujaDriver{newClient: func(kouja.Config) (*kouja.Client, error) { return nil, errors.New("boom") }}
+	if _, err := badClient.CreateDisk(ctx, valid, CreateDiskRequest{Disk: disk}); err == nil {
+		t.Fatal("CreateDisk accepted client error")
+	}
+	missing := store.Disk{}
+	if _, err := driver.CreateDisk(ctx, valid, CreateDiskRequest{Disk: missing}); err == nil {
+		t.Fatal("CreateDisk accepted missing volume ID")
+	}
+	// Size and request-ID defaults.
+	api := &fakeAPI{create: func(context.Context, *koujav1.CreateVolumeRequest) (*koujav1.CreateVolumeResponse, error) {
+		return &koujav1.CreateVolumeResponse{
+			Volume: &koujav1.Volume{Owner: "spiffe://kouja/caller/rookery", VolumeId: "volume-1",
+				ResourceUuid: "resource-1", ActualSizeBytes: 0, State: koujav1.VolumeState_VOLUME_STATE_EXPORTED},
+			Export: &koujav1.Export{Protocol: koujav1.Protocol_PROTOCOL_ISCSI, TargetName: "iqn.x",
+				Portal: "10.0.0.1:3260", Lun: 0, State: koujav1.ExportState_EXPORT_STATE_EXPORTED},
+		}, nil
+	}}
+	created, err := storageKoujaDriver(api).CreateDisk(ctx, valid, CreateDiskRequest{Disk: disk})
+	if err != nil || created.SizeBytes != 5<<30 || created.Metadata.Volume.RequestID != "create-volume-1" {
+		t.Fatalf("created = %+v, %v", created, err)
+	}
+
+	if err := driver.DeleteDisk(ctx, badBackend, disk); err == nil {
+		t.Fatal("DeleteDisk accepted bad config")
+	}
+	if err := badClient.DeleteDisk(ctx, valid, disk); err == nil {
+		t.Fatal("DeleteDisk accepted client error")
+	}
+	if err := driver.DeleteDisk(ctx, valid, store.Disk{}); err == nil {
+		t.Fatal("DeleteDisk accepted missing volume ID")
+	}
+	if err := driver.DeleteDisk(ctx, valid, disk); err != nil {
+		t.Fatalf("DeleteDisk() = %v", err)
+	}
+	unexportErr := &fakeAPI{unexport: func(context.Context, *koujav1.UnexportVolumeRequest) (*koujav1.UnexportVolumeResponse, error) {
+		return nil, errors.New("boom")
+	}}
+	if err := storageKoujaDriver(unexportErr).DeleteDisk(ctx, valid, disk); err == nil {
+		t.Fatal("DeleteDisk accepted unexport error")
+	}
+	deleteErr := &fakeAPI{delete: func(context.Context, *koujav1.DeleteVolumeRequest) (*koujav1.DeleteVolumeResponse, error) {
+		return nil, errors.New("boom")
+	}}
+	if err := storageKoujaDriver(deleteErr).DeleteDisk(ctx, valid, disk); err == nil {
+		t.Fatal("DeleteDisk accepted delete error")
+	}
+
+	if err := driver.DeleteOrphanVolume(ctx, badBackend, disk); err == nil {
+		t.Fatal("DeleteOrphanVolume accepted bad config")
+	}
+	if err := badClient.DeleteOrphanVolume(ctx, valid, disk); err == nil {
+		t.Fatal("DeleteOrphanVolume accepted client error")
+	}
+	if err := driver.DeleteOrphanVolume(ctx, valid, store.Disk{}); err != nil {
+		t.Fatalf("DeleteOrphanVolume(empty) = %v", err)
+	}
+	if err := storageKoujaDriver(deleteErr).DeleteOrphanVolume(ctx, valid, disk); err == nil {
+		t.Fatal("DeleteOrphanVolume accepted delete error")
+	}
+
+	if _, err := driver.PrepareStart(ctx, badBackend, disk); err == nil {
+		t.Fatal("PrepareStart accepted bad config")
+	}
+	if _, err := badClient.PrepareStart(ctx, valid, disk); err == nil {
+		t.Fatal("PrepareStart accepted client error")
+	}
+	if _, err := driver.Health(ctx, badBackend, nil); err == nil {
+		t.Fatal("Health accepted bad config")
+	}
+	if _, err := badClient.Health(ctx, valid, nil); err == nil {
+		t.Fatal("Health accepted client error")
 	}
 }
