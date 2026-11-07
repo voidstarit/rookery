@@ -33,8 +33,12 @@ type StorageBackendConfig struct {
 	PreparationScript             string                 `protobuf:"bytes,4,opt,name=preparation_script,json=preparationScript,proto3" json:"preparation_script,omitempty"`
 	PreparationTimeout            string                 `protobuf:"bytes,5,opt,name=preparation_timeout,json=preparationTimeout,proto3" json:"preparation_timeout,omitempty"`
 	AllowTemplateDeleteWithClones bool                   `protobuf:"varint,6,opt,name=allow_template_delete_with_clones,json=allowTemplateDeleteWithClones,proto3" json:"allow_template_delete_with_clones,omitempty"`
-	unknownFields                 protoimpl.UnknownFields
-	sizeCache                     protoimpl.SizeCache
+	// Types that are valid to be assigned to DriverConfig:
+	//
+	//	*StorageBackendConfig_Kouja
+	DriverConfig  isStorageBackendConfig_DriverConfig `protobuf_oneof:"driver_config"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *StorageBackendConfig) Reset() {
@@ -109,6 +113,149 @@ func (x *StorageBackendConfig) GetAllowTemplateDeleteWithClones() bool {
 	return false
 }
 
+func (x *StorageBackendConfig) GetDriverConfig() isStorageBackendConfig_DriverConfig {
+	if x != nil {
+		return x.DriverConfig
+	}
+	return nil
+}
+
+func (x *StorageBackendConfig) GetKouja() *KoujaConfig {
+	if x != nil {
+		if x, ok := x.DriverConfig.(*StorageBackendConfig_Kouja); ok {
+			return x.Kouja
+		}
+	}
+	return nil
+}
+
+type isStorageBackendConfig_DriverConfig interface {
+	isStorageBackendConfig_DriverConfig()
+}
+
+type StorageBackendConfig_Kouja struct {
+	Kouja *KoujaConfig `protobuf:"bytes,7,opt,name=kouja,proto3,oneof"`
+}
+
+func (*StorageBackendConfig_Kouja) isStorageBackendConfig_DriverConfig() {}
+
+// KoujaConfig configures a kouja storage backend. Protocol defaults to iscsi.
+type KoujaConfig struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Endpoint       string                 `protobuf:"bytes,1,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
+	Protocol       string                 `protobuf:"bytes,2,opt,name=protocol,proto3" json:"protocol,omitempty"`
+	StorageClass   string                 `protobuf:"bytes,3,opt,name=storage_class,json=storageClass,proto3" json:"storage_class,omitempty"`
+	Initiator      string                 `protobuf:"bytes,4,opt,name=initiator,proto3" json:"initiator,omitempty"`
+	CaFile         string                 `protobuf:"bytes,5,opt,name=ca_file,json=caFile,proto3" json:"ca_file,omitempty"`
+	ClientCertFile string                 `protobuf:"bytes,6,opt,name=client_cert_file,json=clientCertFile,proto3" json:"client_cert_file,omitempty"`
+	ClientKeyFile  string                 `protobuf:"bytes,7,opt,name=client_key_file,json=clientKeyFile,proto3" json:"client_key_file,omitempty"`
+	ServerName     string                 `protobuf:"bytes,8,opt,name=server_name,json=serverName,proto3" json:"server_name,omitempty"`
+	Portal         string                 `protobuf:"bytes,9,opt,name=portal,proto3" json:"portal,omitempty"`
+	HostNqn        string                 `protobuf:"bytes,10,opt,name=host_nqn,json=hostNqn,proto3" json:"host_nqn,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *KoujaConfig) Reset() {
+	*x = KoujaConfig{}
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KoujaConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KoujaConfig) ProtoMessage() {}
+
+func (x *KoujaConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KoujaConfig.ProtoReflect.Descriptor instead.
+func (*KoujaConfig) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *KoujaConfig) GetEndpoint() string {
+	if x != nil {
+		return x.Endpoint
+	}
+	return ""
+}
+
+func (x *KoujaConfig) GetProtocol() string {
+	if x != nil {
+		return x.Protocol
+	}
+	return ""
+}
+
+func (x *KoujaConfig) GetStorageClass() string {
+	if x != nil {
+		return x.StorageClass
+	}
+	return ""
+}
+
+func (x *KoujaConfig) GetInitiator() string {
+	if x != nil {
+		return x.Initiator
+	}
+	return ""
+}
+
+func (x *KoujaConfig) GetCaFile() string {
+	if x != nil {
+		return x.CaFile
+	}
+	return ""
+}
+
+func (x *KoujaConfig) GetClientCertFile() string {
+	if x != nil {
+		return x.ClientCertFile
+	}
+	return ""
+}
+
+func (x *KoujaConfig) GetClientKeyFile() string {
+	if x != nil {
+		return x.ClientKeyFile
+	}
+	return ""
+}
+
+func (x *KoujaConfig) GetServerName() string {
+	if x != nil {
+		return x.ServerName
+	}
+	return ""
+}
+
+func (x *KoujaConfig) GetPortal() string {
+	if x != nil {
+		return x.Portal
+	}
+	return ""
+}
+
+func (x *KoujaConfig) GetHostNqn() string {
+	if x != nil {
+		return x.HostNqn
+	}
+	return ""
+}
+
 type StorageBackend struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -126,7 +273,7 @@ type StorageBackend struct {
 
 func (x *StorageBackend) Reset() {
 	*x = StorageBackend{}
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[1]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -138,7 +285,7 @@ func (x *StorageBackend) String() string {
 func (*StorageBackend) ProtoMessage() {}
 
 func (x *StorageBackend) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[1]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -151,7 +298,7 @@ func (x *StorageBackend) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StorageBackend.ProtoReflect.Descriptor instead.
 func (*StorageBackend) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{1}
+	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *StorageBackend) GetId() int64 {
@@ -225,7 +372,7 @@ type ListStorageBackendsRequest struct {
 
 func (x *ListStorageBackendsRequest) Reset() {
 	*x = ListStorageBackendsRequest{}
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[2]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -237,7 +384,7 @@ func (x *ListStorageBackendsRequest) String() string {
 func (*ListStorageBackendsRequest) ProtoMessage() {}
 
 func (x *ListStorageBackendsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[2]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -250,7 +397,7 @@ func (x *ListStorageBackendsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListStorageBackendsRequest.ProtoReflect.Descriptor instead.
 func (*ListStorageBackendsRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{2}
+	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{3}
 }
 
 type ListStorageBackendsResponse struct {
@@ -262,7 +409,7 @@ type ListStorageBackendsResponse struct {
 
 func (x *ListStorageBackendsResponse) Reset() {
 	*x = ListStorageBackendsResponse{}
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[3]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -274,7 +421,7 @@ func (x *ListStorageBackendsResponse) String() string {
 func (*ListStorageBackendsResponse) ProtoMessage() {}
 
 func (x *ListStorageBackendsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[3]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -287,7 +434,7 @@ func (x *ListStorageBackendsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListStorageBackendsResponse.ProtoReflect.Descriptor instead.
 func (*ListStorageBackendsResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{3}
+	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ListStorageBackendsResponse) GetBackends() []*StorageBackend {
@@ -306,7 +453,7 @@ type GetStorageBackendRequest struct {
 
 func (x *GetStorageBackendRequest) Reset() {
 	*x = GetStorageBackendRequest{}
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[4]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -318,7 +465,7 @@ func (x *GetStorageBackendRequest) String() string {
 func (*GetStorageBackendRequest) ProtoMessage() {}
 
 func (x *GetStorageBackendRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[4]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -331,7 +478,7 @@ func (x *GetStorageBackendRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetStorageBackendRequest.ProtoReflect.Descriptor instead.
 func (*GetStorageBackendRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{4}
+	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *GetStorageBackendRequest) GetId() int64 {
@@ -354,7 +501,7 @@ type CreateStorageBackendRequest struct {
 
 func (x *CreateStorageBackendRequest) Reset() {
 	*x = CreateStorageBackendRequest{}
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[5]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -366,7 +513,7 @@ func (x *CreateStorageBackendRequest) String() string {
 func (*CreateStorageBackendRequest) ProtoMessage() {}
 
 func (x *CreateStorageBackendRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[5]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -379,7 +526,7 @@ func (x *CreateStorageBackendRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateStorageBackendRequest.ProtoReflect.Descriptor instead.
 func (*CreateStorageBackendRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{5}
+	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *CreateStorageBackendRequest) GetName() string {
@@ -431,7 +578,7 @@ type UpdateStorageBackendRequest struct {
 
 func (x *UpdateStorageBackendRequest) Reset() {
 	*x = UpdateStorageBackendRequest{}
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[6]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -443,7 +590,7 @@ func (x *UpdateStorageBackendRequest) String() string {
 func (*UpdateStorageBackendRequest) ProtoMessage() {}
 
 func (x *UpdateStorageBackendRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[6]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -456,7 +603,7 @@ func (x *UpdateStorageBackendRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateStorageBackendRequest.ProtoReflect.Descriptor instead.
 func (*UpdateStorageBackendRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{6}
+	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *UpdateStorageBackendRequest) GetId() int64 {
@@ -510,7 +657,7 @@ type DeleteStorageBackendRequest struct {
 
 func (x *DeleteStorageBackendRequest) Reset() {
 	*x = DeleteStorageBackendRequest{}
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[7]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -522,7 +669,7 @@ func (x *DeleteStorageBackendRequest) String() string {
 func (*DeleteStorageBackendRequest) ProtoMessage() {}
 
 func (x *DeleteStorageBackendRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[7]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -535,7 +682,7 @@ func (x *DeleteStorageBackendRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteStorageBackendRequest.ProtoReflect.Descriptor instead.
 func (*DeleteStorageBackendRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{7}
+	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *DeleteStorageBackendRequest) GetId() int64 {
@@ -554,7 +701,7 @@ type ListImportableDisksRequest struct {
 
 func (x *ListImportableDisksRequest) Reset() {
 	*x = ListImportableDisksRequest{}
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[8]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -566,7 +713,7 @@ func (x *ListImportableDisksRequest) String() string {
 func (*ListImportableDisksRequest) ProtoMessage() {}
 
 func (x *ListImportableDisksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[8]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -579,7 +726,7 @@ func (x *ListImportableDisksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListImportableDisksRequest.ProtoReflect.Descriptor instead.
 func (*ListImportableDisksRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{8}
+	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListImportableDisksRequest) GetId() int64 {
@@ -598,7 +745,7 @@ type ListImportableDisksResponse struct {
 
 func (x *ListImportableDisksResponse) Reset() {
 	*x = ListImportableDisksResponse{}
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[9]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -610,7 +757,7 @@ func (x *ListImportableDisksResponse) String() string {
 func (*ListImportableDisksResponse) ProtoMessage() {}
 
 func (x *ListImportableDisksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[9]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -623,7 +770,7 @@ func (x *ListImportableDisksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListImportableDisksResponse.ProtoReflect.Descriptor instead.
 func (*ListImportableDisksResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{9}
+	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ListImportableDisksResponse) GetDisks() []*ImportableDisk {
@@ -643,7 +790,7 @@ type ImportDisksRequest struct {
 
 func (x *ImportDisksRequest) Reset() {
 	*x = ImportDisksRequest{}
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[10]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -655,7 +802,7 @@ func (x *ImportDisksRequest) String() string {
 func (*ImportDisksRequest) ProtoMessage() {}
 
 func (x *ImportDisksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[10]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -668,7 +815,7 @@ func (x *ImportDisksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportDisksRequest.ProtoReflect.Descriptor instead.
 func (*ImportDisksRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{10}
+	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ImportDisksRequest) GetId() int64 {
@@ -694,7 +841,7 @@ type ImportDisksResponse struct {
 
 func (x *ImportDisksResponse) Reset() {
 	*x = ImportDisksResponse{}
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[11]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -706,7 +853,7 @@ func (x *ImportDisksResponse) String() string {
 func (*ImportDisksResponse) ProtoMessage() {}
 
 func (x *ImportDisksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_storage_backend_proto_msgTypes[11]
+	mi := &file_rookery_v1_storage_backend_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -719,7 +866,7 @@ func (x *ImportDisksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportDisksResponse.ProtoReflect.Descriptor instead.
 func (*ImportDisksResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{11}
+	return file_rookery_v1_storage_backend_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ImportDisksResponse) GetDisks() []*Disk {
@@ -734,14 +881,29 @@ var File_rookery_v1_storage_backend_proto protoreflect.FileDescriptor
 const file_rookery_v1_storage_backend_proto_rawDesc = "" +
 	"\n" +
 	" rookery/v1/storage_backend.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\x1a\x15rookery/v1/disk.proto\"\xc3\x02\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\x1a\x15rookery/v1/disk.proto\"\x85\x03\n" +
 	"\x14StorageBackendConfig\x12\x18\n" +
 	"\x02vg\x18\x01 \x01(\tB\b\xfaB\x05r\x03\x18\x80\x01R\x02vg\x12%\n" +
 	"\tthin_pool\x18\x02 \x01(\tB\b\xfaB\x05r\x03\x18\x80\x01R\bthinPool\x12-\n" +
 	"\x12supports_templates\x18\x03 \x01(\bR\x11supportsTemplates\x127\n" +
 	"\x12preparation_script\x18\x04 \x01(\tB\b\xfaB\x05r\x03\x18\x80\bR\x11preparationScript\x128\n" +
 	"\x13preparation_timeout\x18\x05 \x01(\tB\a\xfaB\x04r\x02\x18 R\x12preparationTimeout\x12H\n" +
-	"!allow_template_delete_with_clones\x18\x06 \x01(\bR\x1dallowTemplateDeleteWithClones\"\xd3\x02\n" +
+	"!allow_template_delete_with_clones\x18\x06 \x01(\bR\x1dallowTemplateDeleteWithClones\x12/\n" +
+	"\x05kouja\x18\a \x01(\v2\x17.rookery.v1.KoujaConfigH\x00R\x05koujaB\x0f\n" +
+	"\rdriver_config\"\xbb\x03\n" +
+	"\vKoujaConfig\x12$\n" +
+	"\bendpoint\x18\x01 \x01(\tB\b\xfaB\x05r\x03\x18\x80\x04R\bendpoint\x125\n" +
+	"\bprotocol\x18\x02 \x01(\tB\x19\xfaB\x16r\x14R\x05iscsiR\bnvme-tcp\xd0\x01\x01R\bprotocol\x12,\n" +
+	"\rstorage_class\x18\x03 \x01(\tB\a\xfaB\x04r\x02\x18\x7fR\fstorageClass\x12&\n" +
+	"\tinitiator\x18\x04 \x01(\tB\b\xfaB\x05r\x03\x18\xdf\x01R\tinitiator\x12!\n" +
+	"\aca_file\x18\x05 \x01(\tB\b\xfaB\x05r\x03\x18\x80\bR\x06caFile\x122\n" +
+	"\x10client_cert_file\x18\x06 \x01(\tB\b\xfaB\x05r\x03\x18\x80\bR\x0eclientCertFile\x120\n" +
+	"\x0fclient_key_file\x18\a \x01(\tB\b\xfaB\x05r\x03\x18\x80\bR\rclientKeyFile\x12)\n" +
+	"\vserver_name\x18\b \x01(\tB\b\xfaB\x05r\x03\x18\xff\x01R\n" +
+	"serverName\x12 \n" +
+	"\x06portal\x18\t \x01(\tB\b\xfaB\x05r\x03\x18\xff\x01R\x06portal\x12#\n" +
+	"\bhost_nqn\x18\n" +
+	" \x01(\tB\b\xfaB\x05r\x03\x18\xdf\x01R\ahostNqn\"\xd3\x02\n" +
 	"\x0eStorageBackend\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
@@ -759,19 +921,19 @@ const file_rookery_v1_storage_backend_proto_rawDesc = "" +
 	"\x1bListStorageBackendsResponse\x126\n" +
 	"\bbackends\x18\x01 \x03(\v2\x1a.rookery.v1.StorageBackendR\bbackends\"3\n" +
 	"\x18GetStorageBackendRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\x8c\x02\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\x93\x02\n" +
 	"\x1bCreateStorageBackendRequest\x12;\n" +
 	"\x04name\x18\x01 \x01(\tB'\xfaB$r\"\x10\x01\x18@2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$R\x04name\x12\x1e\n" +
 	"\x05title\x18\x02 \x01(\tB\b\xfaB\x05r\x03\x18\x80\x01R\x05title\x12*\n" +
-	"\vdescription\x18\x03 \x01(\tB\b\xfaB\x05r\x03\x18\xd0\x0fR\vdescription\x12*\n" +
-	"\x06driver\x18\x04 \x01(\tB\x12\xfaB\x0fr\rR\blvm-thin\xd0\x01\x01R\x06driver\x128\n" +
-	"\x06config\x18\x05 \x01(\v2 .rookery.v1.StorageBackendConfigR\x06config\"\xa5\x02\n" +
+	"\vdescription\x18\x03 \x01(\tB\b\xfaB\x05r\x03\x18\xd0\x0fR\vdescription\x121\n" +
+	"\x06driver\x18\x04 \x01(\tB\x19\xfaB\x16r\x14R\blvm-thinR\x05kouja\xd0\x01\x01R\x06driver\x128\n" +
+	"\x06config\x18\x05 \x01(\v2 .rookery.v1.StorageBackendConfigR\x06config\"\xac\x02\n" +
 	"\x1bUpdateStorageBackendRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x12;\n" +
 	"\x04name\x18\x02 \x01(\tB'\xfaB$r\"\x10\x01\x18@2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$R\x04name\x12\x1e\n" +
 	"\x05title\x18\x03 \x01(\tB\b\xfaB\x05r\x03\x18\x80\x01R\x05title\x12*\n" +
-	"\vdescription\x18\x04 \x01(\tB\b\xfaB\x05r\x03\x18\xd0\x0fR\vdescription\x12*\n" +
-	"\x06driver\x18\x05 \x01(\tB\x12\xfaB\x0fr\rR\blvm-thin\xd0\x01\x01R\x06driver\x128\n" +
+	"\vdescription\x18\x04 \x01(\tB\b\xfaB\x05r\x03\x18\xd0\x0fR\vdescription\x121\n" +
+	"\x06driver\x18\x05 \x01(\tB\x19\xfaB\x16r\x14R\blvm-thinR\x05kouja\xd0\x01\x01R\x06driver\x128\n" +
 	"\x06config\x18\x06 \x01(\v2 .rookery.v1.StorageBackendConfigR\x06config\"6\n" +
 	"\x1bDeleteStorageBackendRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"5\n" +
@@ -805,53 +967,55 @@ func file_rookery_v1_storage_backend_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_storage_backend_proto_rawDescData
 }
 
-var file_rookery_v1_storage_backend_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_rookery_v1_storage_backend_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_rookery_v1_storage_backend_proto_goTypes = []any{
 	(*StorageBackendConfig)(nil),        // 0: rookery.v1.StorageBackendConfig
-	(*StorageBackend)(nil),              // 1: rookery.v1.StorageBackend
-	(*ListStorageBackendsRequest)(nil),  // 2: rookery.v1.ListStorageBackendsRequest
-	(*ListStorageBackendsResponse)(nil), // 3: rookery.v1.ListStorageBackendsResponse
-	(*GetStorageBackendRequest)(nil),    // 4: rookery.v1.GetStorageBackendRequest
-	(*CreateStorageBackendRequest)(nil), // 5: rookery.v1.CreateStorageBackendRequest
-	(*UpdateStorageBackendRequest)(nil), // 6: rookery.v1.UpdateStorageBackendRequest
-	(*DeleteStorageBackendRequest)(nil), // 7: rookery.v1.DeleteStorageBackendRequest
-	(*ListImportableDisksRequest)(nil),  // 8: rookery.v1.ListImportableDisksRequest
-	(*ListImportableDisksResponse)(nil), // 9: rookery.v1.ListImportableDisksResponse
-	(*ImportDisksRequest)(nil),          // 10: rookery.v1.ImportDisksRequest
-	(*ImportDisksResponse)(nil),         // 11: rookery.v1.ImportDisksResponse
-	(*timestamppb.Timestamp)(nil),       // 12: google.protobuf.Timestamp
-	(*ImportableDisk)(nil),              // 13: rookery.v1.ImportableDisk
-	(*Disk)(nil),                        // 14: rookery.v1.Disk
-	(*emptypb.Empty)(nil),               // 15: google.protobuf.Empty
+	(*KoujaConfig)(nil),                 // 1: rookery.v1.KoujaConfig
+	(*StorageBackend)(nil),              // 2: rookery.v1.StorageBackend
+	(*ListStorageBackendsRequest)(nil),  // 3: rookery.v1.ListStorageBackendsRequest
+	(*ListStorageBackendsResponse)(nil), // 4: rookery.v1.ListStorageBackendsResponse
+	(*GetStorageBackendRequest)(nil),    // 5: rookery.v1.GetStorageBackendRequest
+	(*CreateStorageBackendRequest)(nil), // 6: rookery.v1.CreateStorageBackendRequest
+	(*UpdateStorageBackendRequest)(nil), // 7: rookery.v1.UpdateStorageBackendRequest
+	(*DeleteStorageBackendRequest)(nil), // 8: rookery.v1.DeleteStorageBackendRequest
+	(*ListImportableDisksRequest)(nil),  // 9: rookery.v1.ListImportableDisksRequest
+	(*ListImportableDisksResponse)(nil), // 10: rookery.v1.ListImportableDisksResponse
+	(*ImportDisksRequest)(nil),          // 11: rookery.v1.ImportDisksRequest
+	(*ImportDisksResponse)(nil),         // 12: rookery.v1.ImportDisksResponse
+	(*timestamppb.Timestamp)(nil),       // 13: google.protobuf.Timestamp
+	(*ImportableDisk)(nil),              // 14: rookery.v1.ImportableDisk
+	(*Disk)(nil),                        // 15: rookery.v1.Disk
+	(*emptypb.Empty)(nil),               // 16: google.protobuf.Empty
 }
 var file_rookery_v1_storage_backend_proto_depIdxs = []int32{
-	0,  // 0: rookery.v1.StorageBackend.config:type_name -> rookery.v1.StorageBackendConfig
-	12, // 1: rookery.v1.StorageBackend.created_at:type_name -> google.protobuf.Timestamp
-	12, // 2: rookery.v1.StorageBackend.updated_at:type_name -> google.protobuf.Timestamp
-	1,  // 3: rookery.v1.ListStorageBackendsResponse.backends:type_name -> rookery.v1.StorageBackend
-	0,  // 4: rookery.v1.CreateStorageBackendRequest.config:type_name -> rookery.v1.StorageBackendConfig
-	0,  // 5: rookery.v1.UpdateStorageBackendRequest.config:type_name -> rookery.v1.StorageBackendConfig
-	13, // 6: rookery.v1.ListImportableDisksResponse.disks:type_name -> rookery.v1.ImportableDisk
-	14, // 7: rookery.v1.ImportDisksResponse.disks:type_name -> rookery.v1.Disk
-	2,  // 8: rookery.v1.StorageBackendService.ListStorageBackends:input_type -> rookery.v1.ListStorageBackendsRequest
-	4,  // 9: rookery.v1.StorageBackendService.GetStorageBackend:input_type -> rookery.v1.GetStorageBackendRequest
-	5,  // 10: rookery.v1.StorageBackendService.CreateStorageBackend:input_type -> rookery.v1.CreateStorageBackendRequest
-	6,  // 11: rookery.v1.StorageBackendService.UpdateStorageBackend:input_type -> rookery.v1.UpdateStorageBackendRequest
-	7,  // 12: rookery.v1.StorageBackendService.DeleteStorageBackend:input_type -> rookery.v1.DeleteStorageBackendRequest
-	8,  // 13: rookery.v1.StorageBackendService.ListImportableDisks:input_type -> rookery.v1.ListImportableDisksRequest
-	10, // 14: rookery.v1.StorageBackendService.ImportDisks:input_type -> rookery.v1.ImportDisksRequest
-	3,  // 15: rookery.v1.StorageBackendService.ListStorageBackends:output_type -> rookery.v1.ListStorageBackendsResponse
-	1,  // 16: rookery.v1.StorageBackendService.GetStorageBackend:output_type -> rookery.v1.StorageBackend
-	1,  // 17: rookery.v1.StorageBackendService.CreateStorageBackend:output_type -> rookery.v1.StorageBackend
-	1,  // 18: rookery.v1.StorageBackendService.UpdateStorageBackend:output_type -> rookery.v1.StorageBackend
-	15, // 19: rookery.v1.StorageBackendService.DeleteStorageBackend:output_type -> google.protobuf.Empty
-	9,  // 20: rookery.v1.StorageBackendService.ListImportableDisks:output_type -> rookery.v1.ListImportableDisksResponse
-	11, // 21: rookery.v1.StorageBackendService.ImportDisks:output_type -> rookery.v1.ImportDisksResponse
-	15, // [15:22] is the sub-list for method output_type
-	8,  // [8:15] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	1,  // 0: rookery.v1.StorageBackendConfig.kouja:type_name -> rookery.v1.KoujaConfig
+	0,  // 1: rookery.v1.StorageBackend.config:type_name -> rookery.v1.StorageBackendConfig
+	13, // 2: rookery.v1.StorageBackend.created_at:type_name -> google.protobuf.Timestamp
+	13, // 3: rookery.v1.StorageBackend.updated_at:type_name -> google.protobuf.Timestamp
+	2,  // 4: rookery.v1.ListStorageBackendsResponse.backends:type_name -> rookery.v1.StorageBackend
+	0,  // 5: rookery.v1.CreateStorageBackendRequest.config:type_name -> rookery.v1.StorageBackendConfig
+	0,  // 6: rookery.v1.UpdateStorageBackendRequest.config:type_name -> rookery.v1.StorageBackendConfig
+	14, // 7: rookery.v1.ListImportableDisksResponse.disks:type_name -> rookery.v1.ImportableDisk
+	15, // 8: rookery.v1.ImportDisksResponse.disks:type_name -> rookery.v1.Disk
+	3,  // 9: rookery.v1.StorageBackendService.ListStorageBackends:input_type -> rookery.v1.ListStorageBackendsRequest
+	5,  // 10: rookery.v1.StorageBackendService.GetStorageBackend:input_type -> rookery.v1.GetStorageBackendRequest
+	6,  // 11: rookery.v1.StorageBackendService.CreateStorageBackend:input_type -> rookery.v1.CreateStorageBackendRequest
+	7,  // 12: rookery.v1.StorageBackendService.UpdateStorageBackend:input_type -> rookery.v1.UpdateStorageBackendRequest
+	8,  // 13: rookery.v1.StorageBackendService.DeleteStorageBackend:input_type -> rookery.v1.DeleteStorageBackendRequest
+	9,  // 14: rookery.v1.StorageBackendService.ListImportableDisks:input_type -> rookery.v1.ListImportableDisksRequest
+	11, // 15: rookery.v1.StorageBackendService.ImportDisks:input_type -> rookery.v1.ImportDisksRequest
+	4,  // 16: rookery.v1.StorageBackendService.ListStorageBackends:output_type -> rookery.v1.ListStorageBackendsResponse
+	2,  // 17: rookery.v1.StorageBackendService.GetStorageBackend:output_type -> rookery.v1.StorageBackend
+	2,  // 18: rookery.v1.StorageBackendService.CreateStorageBackend:output_type -> rookery.v1.StorageBackend
+	2,  // 19: rookery.v1.StorageBackendService.UpdateStorageBackend:output_type -> rookery.v1.StorageBackend
+	16, // 20: rookery.v1.StorageBackendService.DeleteStorageBackend:output_type -> google.protobuf.Empty
+	10, // 21: rookery.v1.StorageBackendService.ListImportableDisks:output_type -> rookery.v1.ListImportableDisksResponse
+	12, // 22: rookery.v1.StorageBackendService.ImportDisks:output_type -> rookery.v1.ImportDisksResponse
+	16, // [16:23] is the sub-list for method output_type
+	9,  // [9:16] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_rookery_v1_storage_backend_proto_init() }
@@ -860,13 +1024,16 @@ func file_rookery_v1_storage_backend_proto_init() {
 		return
 	}
 	file_rookery_v1_disk_proto_init()
+	file_rookery_v1_storage_backend_proto_msgTypes[0].OneofWrappers = []any{
+		(*StorageBackendConfig_Kouja)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_storage_backend_proto_rawDesc), len(file_rookery_v1_storage_backend_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

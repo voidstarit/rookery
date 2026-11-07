@@ -64,6 +64,24 @@ message StorageBackendConfig {
   string preparation_script = 4 [(validate.rules).string = {max_len: 1024}];
   string preparation_timeout = 5 [(validate.rules).string = {max_len: 32}];
   bool allow_template_delete_with_clones = 6;
+
+  oneof driver_config {
+    KoujaConfig kouja = 7;
+  }
+}
+
+// KoujaConfig configures a kouja storage backend. Protocol defaults to iscsi.
+message KoujaConfig {
+  string endpoint = 1 [(validate.rules).string = {max_len: 512}];
+  string protocol = 2 [(validate.rules).string = {ignore_empty: true, in: ["iscsi", "nvme-tcp"]}];
+  string storage_class = 3 [(validate.rules).string = {max_len: 127}];
+  string initiator = 4 [(validate.rules).string = {max_len: 223}];
+  string ca_file = 5 [(validate.rules).string = {max_len: 1024}];
+  string client_cert_file = 6 [(validate.rules).string = {max_len: 1024}];
+  string client_key_file = 7 [(validate.rules).string = {max_len: 1024}];
+  string server_name = 8 [(validate.rules).string = {max_len: 255}];
+  string portal = 9 [(validate.rules).string = {max_len: 255}];
+  string host_nqn = 10 [(validate.rules).string = {max_len: 223}];
 }
 
 message StorageBackend {
@@ -96,7 +114,7 @@ message CreateStorageBackendRequest {
   }];
   string title = 2 [(validate.rules).string = {max_len: 128}];
   string description = 3 [(validate.rules).string = {max_len: 2000}];
-  string driver = 4 [(validate.rules).string = {ignore_empty: true, in: ["lvm-thin"]}];
+  string driver = 4 [(validate.rules).string = {ignore_empty: true, in: ["lvm-thin", "kouja"]}];
   StorageBackendConfig config = 5;
 }
 
@@ -109,7 +127,7 @@ message UpdateStorageBackendRequest {
   }];
   string title = 3 [(validate.rules).string = {max_len: 128}];
   string description = 4 [(validate.rules).string = {max_len: 2000}];
-  string driver = 5 [(validate.rules).string = {ignore_empty: true, in: ["lvm-thin"]}];
+  string driver = 5 [(validate.rules).string = {ignore_empty: true, in: ["lvm-thin", "kouja"]}];
   StorageBackendConfig config = 6;
 }
 

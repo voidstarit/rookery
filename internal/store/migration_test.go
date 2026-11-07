@@ -120,6 +120,7 @@ func TestMigrationConvertsNetworkDHCPToVNF(t *testing.T) {
 		t.Fatalf("insert legacy network: %v", err)
 	}
 	dropDiskSourceSchema(t, db)
+	dropKoujaSchema(t, db)
 	if _, err := db.Exec(`PRAGMA user_version = 7`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
@@ -245,6 +246,7 @@ func TestMigrationBackfillsVMDisks(t *testing.T) {
 	dropEntityLabelsSchema(t, db)
 	dropLightVMSchema(t, db)
 	dropDiskSourceSchema(t, db)
+	dropKoujaSchema(t, db)
 	if _, err := db.Exec(`PRAGMA user_version = 11`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
@@ -342,8 +344,8 @@ func TestMigrationPreservesLegacyVMsWithoutDisks(t *testing.T) {
 	if err := st.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 48 {
-		t.Fatalf("schema version = %d, want 48", version)
+	if version != 49 {
+		t.Fatalf("schema version = %d, want 49", version)
 	}
 }
 
@@ -387,6 +389,7 @@ func TestMigrationAddsDefaultLightVMConsole(t *testing.T) {
 		t.Fatalf("drop lightvm_consoles: %v", err)
 	}
 	dropDiskSourceSchema(t, db)
+	dropKoujaSchema(t, db)
 	if _, err := db.Exec(`PRAGMA user_version = 46`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
@@ -433,6 +436,7 @@ func TestEnsureStartupScriptSchemaAfterTableDrop(t *testing.T) {
 	dropEntityLabelsSchema(t, db)
 	dropLightVMSchema(t, db)
 	dropDiskSourceSchema(t, db)
+	dropKoujaSchema(t, db)
 	if _, err := db.Exec(`PRAGMA user_version = 37`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
@@ -516,6 +520,7 @@ func TestEnsureVPPInterfaceAddressesSchemaAfterTableDrop(t *testing.T) {
 	dropEntityLabelsSchema(t, db)
 	dropLightVMSchema(t, db)
 	dropDiskSourceSchema(t, db)
+	dropKoujaSchema(t, db)
 	if _, err := db.Exec(`PRAGMA user_version = 30`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
@@ -579,6 +584,7 @@ func TestMigrationBackfillsVMPowerState(t *testing.T) {
 	dropEntityLabelsSchema(t, db)
 	dropLightVMSchema(t, db)
 	dropDiskSourceSchema(t, db)
+	dropKoujaSchema(t, db)
 	if _, err := db.Exec(`PRAGMA user_version = 37`); err != nil {
 		t.Fatalf("set schema version: %v", err)
 	}
@@ -638,6 +644,24 @@ func dropDiskSourceSchema(t *testing.T, db *sql.DB) {
 		t.Fatalf("drop host device index: %v", err)
 	}
 	for _, column := range []string{"source", "device", "size_bytes"} {
+		if _, err := db.Exec(`ALTER TABLE disks DROP COLUMN ` + column); err != nil {
+			t.Fatalf("drop disks.%s: %v", column, err)
+		}
+	}
+}
+
+// dropKoujaSchema removes the kouja metadata and deletion-state columns so a
+// test can simulate a database created before migration 49.
+func dropKoujaSchema(t *testing.T, db *sql.DB) {
+	t.Helper()
+	if _, err := db.Exec(`DROP INDEX IF EXISTS idx_disks_deletion_due`); err != nil {
+		t.Fatalf("drop disk deletion index: %v", err)
+	}
+	for _, column := range []string{
+		"backend_metadata", "attachment_protocol", "deletion_state",
+		"deletion_error", "deletion_attempts", "deletion_next_attempt_at",
+		"deletion_claimed_at",
+	} {
 		if _, err := db.Exec(`ALTER TABLE disks DROP COLUMN ` + column); err != nil {
 			t.Fatalf("drop disks.%s: %v", column, err)
 		}

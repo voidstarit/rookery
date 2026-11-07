@@ -259,6 +259,8 @@ func (m *VM) validate(all bool) error {
 
 	// no validation rules for CgroupClass
 
+	// no validation rules for RunState
+
 	if m.DiskId != nil {
 		// no validation rules for DiskId
 	}
