@@ -260,31 +260,44 @@ func (r *diskResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	}
 	callCtx, cancel := context.WithTimeout(ctx, 4*time.Hour)
 	defer cancel()
-	deleted, err := client.Disks.DeleteDisk(callCtx, &rookeryv1.DeleteDiskRequest{Id: state.ID.ValueInt64()})
-	if err != nil && !isNotFound(err) {
+	if err := deleteDiskAsync(callCtx, client.Disks, state.ID.ValueInt64(), 4*time.Hour, 2*time.Second); err != nil {
 		resp.Diagnostics.AddError("Delete disk", err.Error())
-		return
+	}
+}
+
+func deleteDiskAsync(ctx context.Context, client rookeryv1.DiskServiceClient, id int64, timeout, poll time.Duration) error {
+	deleted, err := client.DeleteDisk(ctx, &rookeryv1.DeleteDiskRequest{Id: id})
+	if err != nil {
+		if isNotFound(err) {
+			return nil
+		}
+		return err
 	}
 	if deleted == nil || !deleted.GetAccepted() {
-		return
+		return nil
 	}
-	deadline := time.Now().Add(4 * time.Hour)
+	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		time.Sleep(2 * time.Second)
-		disk, readErr := client.Disks.GetDisk(callCtx, &rookeryv1.GetDiskRequest{Id: state.ID.ValueInt64()})
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(poll):
+		}
+		disk, readErr := client.GetDisk(ctx, &rookeryv1.GetDiskRequest{Id: id})
 		if isNotFound(readErr) {
-			return
+			return nil
 		}
 		if readErr != nil {
-			resp.Diagnostics.AddError("Delete disk", readErr.Error())
-			return
+			return readErr
 		}
 		if disk.GetDeletionState() == "delete_failed" {
-			resp.Diagnostics.AddError("Delete disk", disk.GetDeletionError())
-			return
+			return fmt.Errorf("%s", disk.GetDeletionError())
+		}
+		if disk.GetDeletionState() == "" {
+			return nil
 		}
 	}
-	resp.Diagnostics.AddError("Delete disk", "timed out waiting for asynchronous disk deletion")
+	return fmt.Errorf("timed out waiting for asynchronous disk deletion")
 }
 
 func (r *diskResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
