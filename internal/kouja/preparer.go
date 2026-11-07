@@ -27,6 +27,12 @@ var (
 // ObservationFreshness is the maximum age for an observation to be trusted.
 const ObservationFreshness = 2 * time.Minute
 
+// SessionObservationFreshness is the maximum age for an active-session count
+// to be trusted. kouja stores observations at its reconcile interval, so a
+// stale ACTIVE value can remain after QEMU has already logged out. QEMU and
+// the target still enforce the real session state at login.
+const SessionObservationFreshness = 10 * time.Second
+
 // Preparer fetches the live export and credential for a VM start.
 type Preparer struct {
 	API API
@@ -126,15 +132,16 @@ func (p *Preparer) validateLiveExport(cfg Config, protocol blockdev.Protocol, di
 			return ErrStaleObservation
 		}
 	}
-	if export.GetSessionState() == koujav1.SessionState_SESSION_STATE_ACTIVE {
-		return ErrSessionActive
-	}
 	activeSessions := int32(0)
 	if observed != nil {
 		activeSessions = observed.GetActiveSessions()
 	}
-	if (export.GetSessionState() == koujav1.SessionState_SESSION_STATE_UNKNOWN ||
-		export.GetSessionState() == koujav1.SessionState_SESSION_STATE_UNSPECIFIED) && activeSessions > 0 {
+	sessionFresh := !observeAt.IsZero() && now.Sub(observeAt) <= SessionObservationFreshness
+	// Session fields in GetVolume come from kouja's last reconciliation. A
+	// stale ACTIVE value must not wedge a start after QEMU has logged out;
+	// only a fresh non-zero active-session count is authoritative here. The
+	// target still refuses a second login if a real session exists.
+	if sessionFresh && activeSessions > 0 {
 		return ErrSessionActive
 	}
 	if owner := strings.TrimSpace(disk.BackendMetadata.Volume.Owner); owner != "" &&

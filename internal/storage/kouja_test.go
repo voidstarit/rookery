@@ -18,6 +18,7 @@ import (
 
 	koujav1 "github.com/voidstarit/kouja/gen/kouja/v1"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/voidstarit/rookery/internal/blockdev"
 	"github.com/voidstarit/rookery/internal/kouja"
@@ -322,8 +323,13 @@ func TestKoujaDriverWaitsForSession(t *testing.T) {
 			if calls > 1 {
 				state = koujav1.SessionState_SESSION_STATE_NONE
 			}
+			active := int32(0)
+			if state == koujav1.SessionState_SESSION_STATE_ACTIVE {
+				active = 1
+			}
 			return &koujav1.GetVolumeResponse{
-				Desired: &koujav1.Volume{Owner: "spiffe://kouja/caller/rookery", State: koujav1.VolumeState_VOLUME_STATE_EXPORTED},
+				Desired:  &koujav1.Volume{Owner: "spiffe://kouja/caller/rookery", State: koujav1.VolumeState_VOLUME_STATE_EXPORTED},
+				Observed: &koujav1.Observation{TargetPresent: true, AclPresent: true, ActiveSessions: active, ObservedAt: timestamppb.Now()},
 				Export: &koujav1.Export{Protocol: koujav1.Protocol_PROTOCOL_ISCSI, TargetName: "iqn.2026-11.io.example:disk",
 					Portal: "10.0.0.1:3260", Lun: 0, State: koujav1.ExportState_EXPORT_STATE_EXPORTED, SessionState: state},
 			}, nil
@@ -347,7 +353,8 @@ func TestKoujaDriverWaitsForSession(t *testing.T) {
 	alwaysActive := &fakeAPI{
 		getVolume: func(context.Context, *koujav1.GetVolumeRequest) (*koujav1.GetVolumeResponse, error) {
 			return &koujav1.GetVolumeResponse{
-				Desired: &koujav1.Volume{Owner: "spiffe://kouja/caller/rookery", State: koujav1.VolumeState_VOLUME_STATE_EXPORTED},
+				Desired:  &koujav1.Volume{Owner: "spiffe://kouja/caller/rookery", State: koujav1.VolumeState_VOLUME_STATE_EXPORTED},
+				Observed: &koujav1.Observation{TargetPresent: true, AclPresent: true, ActiveSessions: 1, ObservedAt: timestamppb.Now()},
 				Export: &koujav1.Export{Protocol: koujav1.Protocol_PROTOCOL_ISCSI, TargetName: "iqn.2026-11.io.example:disk",
 					Portal: "10.0.0.1:3260", Lun: 0, State: koujav1.ExportState_EXPORT_STATE_EXPORTED,
 					SessionState: koujav1.SessionState_SESSION_STATE_ACTIVE},

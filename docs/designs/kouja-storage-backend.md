@@ -883,8 +883,11 @@ kouja RPC. The lock order is `resourceMu` (disk mutex) → `s.mu` (VM run mutex)
      `TargetPresent=false` or `ACLPresent=false`, fail before starting. If the
      observation is older, proceed and let QEMU's connection error be
      authoritative; do not assume a fixed 10-second reconcile window;
-   * reject `SessionState=ACTIVE`. Allow `NONE`; allow `UNKNOWN` or
-     `UNSPECIFIED` only when `ActiveSessions=0`, and log it;
+   * treat `Observation.ActiveSessions` as authoritative only when
+     `ObservedAt` is at most ten seconds old. Reject a fresh non-zero active
+     count and retry briefly; a stale `SessionState=ACTIVE` must not block a
+     start after QEMU has logged out. The target still refuses a second login
+     if a real session remains;
    * call `GetCredential` with no owner and derive the attachment from the live
      export;
    * compare the live export's raw `export_portal` plus

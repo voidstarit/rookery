@@ -138,6 +138,7 @@ func TestPreparerErrors(t *testing.T) {
 		{name: "active session", api: &fakeAPI{getVolume: func(context.Context, *koujav1.GetVolumeRequest) (*koujav1.GetVolumeResponse, error) {
 			value := testGetVolumeResponse(blockdev.ProtocolISCSI, testObserved(now))
 			value.Export.SessionState = koujav1.SessionState_SESSION_STATE_ACTIVE
+			value.Observed.ActiveSessions = 1
 			return value, nil
 		}}, disk: disk, cfg: cfg},
 		{name: "unknown active session", api: &fakeAPI{getVolume: func(context.Context, *koujav1.GetVolumeRequest) (*koujav1.GetVolumeResponse, error) {
@@ -210,5 +211,47 @@ func TestPreparerErrors(t *testing.T) {
 				t.Fatal("Prepare() accepted invalid input")
 			}
 		})
+	}
+}
+
+func TestPreparerAllowsStaleActiveSessionObservation(t *testing.T) {
+	now := time.Now().UTC()
+	api := &fakeAPI{
+		getVolume: func(context.Context, *koujav1.GetVolumeRequest) (*koujav1.GetVolumeResponse, error) {
+			observed := testObserved(now.Add(-time.Minute))
+			observed.ActiveSessions = 1
+			observed.SessionState = koujav1.SessionState_SESSION_STATE_ACTIVE
+			value := testGetVolumeResponse(blockdev.ProtocolISCSI, observed)
+			value.Export.SessionState = koujav1.SessionState_SESSION_STATE_ACTIVE
+			return value, nil
+		},
+		getCredential: func(context.Context, *koujav1.GetCredentialRequest) (*koujav1.GetCredentialResponse, error) {
+			return &koujav1.GetCredentialResponse{Protocol: koujav1.Protocol_PROTOCOL_ISCSI, Credential: "secret"}, nil
+		},
+	}
+	preparer := &Preparer{API: api, Now: func() time.Time { return now }}
+	if _, err := preparer.Prepare(context.Background(), provisionerConfig(blockdev.ProtocolISCSI), testDisk(blockdev.ProtocolISCSI)); err != nil {
+		t.Fatalf("Prepare(stale active) = %v", err)
+	}
+}
+
+func TestPreparerAllowsActiveStateWithZeroSessions(t *testing.T) {
+	now := time.Now().UTC()
+	api := &fakeAPI{
+		getVolume: func(context.Context, *koujav1.GetVolumeRequest) (*koujav1.GetVolumeResponse, error) {
+			observed := testObserved(now)
+			observed.ActiveSessions = 0
+			observed.SessionState = koujav1.SessionState_SESSION_STATE_NONE
+			value := testGetVolumeResponse(blockdev.ProtocolISCSI, observed)
+			value.Export.SessionState = koujav1.SessionState_SESSION_STATE_ACTIVE
+			return value, nil
+		},
+		getCredential: func(context.Context, *koujav1.GetCredentialRequest) (*koujav1.GetCredentialResponse, error) {
+			return &koujav1.GetCredentialResponse{Protocol: koujav1.Protocol_PROTOCOL_ISCSI, Credential: "secret"}, nil
+		},
+	}
+	preparer := &Preparer{API: api, Now: func() time.Time { return now }}
+	if _, err := preparer.Prepare(context.Background(), provisionerConfig(blockdev.ProtocolISCSI), testDisk(blockdev.ProtocolISCSI)); err != nil {
+		t.Fatalf("Prepare(active state, zero sessions) = %v", err)
 	}
 }
