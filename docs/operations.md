@@ -192,7 +192,9 @@ iSCSI initiator IQN, and PEM-encoded CA, client certificate, and client key
 content. The UI accepts pasted PEM or files loaded in the browser and stores the
 content with the backend; protect the SQLite database and backups accordingly.
 Legacy `ca_file`/`client_cert_file`/`client_key_file` paths remain accepted for
-existing backends. The client certificate must contain exactly one
+existing backends. If a VM start reports an active iSCSI session, Rookery waits
+briefly and rechecks; the UI retries the start automatically after a previous
+QEMU session drains. The client certificate must contain exactly one
 `spiffe://kouja/caller/<name>` URI SAN; keep that identity stable across
 certificate rotation. Kouja disks are exported directly to QEMU;
 the host does not create an `iscsiadm` session. Queue a kouja disk delete and
