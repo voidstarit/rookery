@@ -5065,12 +5065,28 @@
         },
         "source": {
           "type": "string",
-          "description": "source is \"lvm-thin\" or \"host-device\"."
+          "description": "source is the backend driver (\"lvm-thin\", \"host-device\", \"kouja\", ...)."
         },
         "size_bytes": {
           "type": "string",
           "format": "uint64",
           "description": "size_bytes is the exact host device size for passthrough disks."
+        },
+        "locator": {
+          "type": "string",
+          "description": "locator is a display-only description of a remote attachment."
+        },
+        "deletion_state": {
+          "type": "string",
+          "description": "deletion_state is empty for a ready disk, or provisioning/deleting/delete_failed."
+        },
+        "deletion_error": {
+          "type": "string",
+          "description": "deletion_error is the last asynchronous deletion error."
+        },
+        "protocol": {
+          "type": "string",
+          "description": "protocol distinguishes local, iscsi, nvme-tcp, and rbd attachments."
         }
       }
     },
@@ -5416,6 +5432,42 @@
           "format": "date-time"
         }
       }
+    },
+    "v1KoujaConfig": {
+      "type": "object",
+      "properties": {
+        "endpoint": {
+          "type": "string"
+        },
+        "protocol": {
+          "type": "string"
+        },
+        "storage_class": {
+          "type": "string"
+        },
+        "initiator": {
+          "type": "string"
+        },
+        "ca_file": {
+          "type": "string"
+        },
+        "client_cert_file": {
+          "type": "string"
+        },
+        "client_key_file": {
+          "type": "string"
+        },
+        "server_name": {
+          "type": "string"
+        },
+        "portal": {
+          "type": "string"
+        },
+        "host_nqn": {
+          "type": "string"
+        }
+      },
+      "description": "KoujaConfig configures a kouja storage backend. Protocol defaults to iscsi."
     },
     "v1LightVM": {
       "type": "object",
@@ -6500,6 +6552,9 @@
         },
         "allow_template_delete_with_clones": {
           "type": "boolean"
+        },
+        "kouja": {
+          "$ref": "#/definitions/v1KoujaConfig"
         }
       }
     },
@@ -6675,6 +6730,10 @@
         },
         "cgroup_class": {
           "type": "string"
+        },
+        "run_state": {
+          "type": "string",
+          "description": "run_state is the live QEMU monitor state for a running VM."
         }
       }
     },
@@ -6710,12 +6769,20 @@
         },
         "source": {
           "type": "string",
-          "description": "source is \"lvm-thin\" or \"host-device\"."
+          "description": "source is the backend driver (\"lvm-thin\", \"host-device\", \"kouja\", ...)."
         },
         "size_bytes": {
           "type": "string",
           "format": "uint64",
           "description": "size_bytes is the exact host device size for passthrough disks."
+        },
+        "locator": {
+          "type": "string",
+          "description": "locator is a display-only description of a remote attachment."
+        },
+        "protocol": {
+          "type": "string",
+          "description": "protocol distinguishes local, iscsi, nvme-tcp, and rbd attachments."
         }
       }
     },

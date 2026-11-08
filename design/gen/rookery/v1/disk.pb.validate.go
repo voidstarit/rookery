@@ -74,6 +74,10 @@ func (m *VMDisk) validate(all bool) error {
 
 	// no validation rules for SizeBytes
 
+	// no validation rules for Locator
+
+	// no validation rules for Protocol
+
 	if m.StorageBackendId != nil {
 		// no validation rules for StorageBackendId
 	}
@@ -261,6 +265,14 @@ func (m *Disk) validate(all bool) error {
 	// no validation rules for Source
 
 	// no validation rules for SizeBytes
+
+	// no validation rules for Locator
+
+	// no validation rules for DeletionState
+
+	// no validation rules for DeletionError
+
+	// no validation rules for Protocol
 
 	if m.StorageBackendId != nil {
 		// no validation rules for StorageBackendId

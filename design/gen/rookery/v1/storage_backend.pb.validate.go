@@ -105,6 +105,52 @@ func (m *StorageBackendConfig) validate(all bool) error {
 
 	// no validation rules for AllowTemplateDeleteWithClones
 
+	switch v := m.DriverConfig.(type) {
+	case *StorageBackendConfig_Kouja:
+		if v == nil {
+			err := StorageBackendConfigValidationError{
+				field:  "DriverConfig",
+				reason: "oneof value cannot be a typed-nil",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+		if all {
+			switch v := interface{}(m.GetKouja()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, StorageBackendConfigValidationError{
+						field:  "Kouja",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, StorageBackendConfigValidationError{
+						field:  "Kouja",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetKouja()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return StorageBackendConfigValidationError{
+					field:  "Kouja",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	default:
+		_ = v // ensures v is used
+	}
+
 	if len(errors) > 0 {
 		return StorageBackendConfigMultiError(errors)
 	}
@@ -184,6 +230,224 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = StorageBackendConfigValidationError{}
+
+// Validate checks the field values on KoujaConfig with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *KoujaConfig) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on KoujaConfig with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in KoujaConfigMultiError, or
+// nil if none found.
+func (m *KoujaConfig) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *KoujaConfig) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if utf8.RuneCountInString(m.GetEndpoint()) > 512 {
+		err := KoujaConfigValidationError{
+			field:  "Endpoint",
+			reason: "value length must be at most 512 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if m.GetProtocol() != "" {
+
+		if _, ok := _KoujaConfig_Protocol_InLookup[m.GetProtocol()]; !ok {
+			err := KoujaConfigValidationError{
+				field:  "Protocol",
+				reason: "value must be in list [iscsi nvme-tcp]",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if utf8.RuneCountInString(m.GetStorageClass()) > 127 {
+		err := KoujaConfigValidationError{
+			field:  "StorageClass",
+			reason: "value length must be at most 127 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetInitiator()) > 223 {
+		err := KoujaConfigValidationError{
+			field:  "Initiator",
+			reason: "value length must be at most 223 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetCaFile()) > 1024 {
+		err := KoujaConfigValidationError{
+			field:  "CaFile",
+			reason: "value length must be at most 1024 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetClientCertFile()) > 1024 {
+		err := KoujaConfigValidationError{
+			field:  "ClientCertFile",
+			reason: "value length must be at most 1024 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetClientKeyFile()) > 1024 {
+		err := KoujaConfigValidationError{
+			field:  "ClientKeyFile",
+			reason: "value length must be at most 1024 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetServerName()) > 255 {
+		err := KoujaConfigValidationError{
+			field:  "ServerName",
+			reason: "value length must be at most 255 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetPortal()) > 255 {
+		err := KoujaConfigValidationError{
+			field:  "Portal",
+			reason: "value length must be at most 255 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetHostNqn()) > 223 {
+		err := KoujaConfigValidationError{
+			field:  "HostNqn",
+			reason: "value length must be at most 223 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return KoujaConfigMultiError(errors)
+	}
+
+	return nil
+}
+
+// KoujaConfigMultiError is an error wrapping multiple validation errors
+// returned by KoujaConfig.ValidateAll() if the designated constraints aren't met.
+type KoujaConfigMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m KoujaConfigMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m KoujaConfigMultiError) AllErrors() []error { return m }
+
+// KoujaConfigValidationError is the validation error returned by
+// KoujaConfig.Validate if the designated constraints aren't met.
+type KoujaConfigValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e KoujaConfigValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e KoujaConfigValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e KoujaConfigValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e KoujaConfigValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e KoujaConfigValidationError) ErrorName() string { return "KoujaConfigValidationError" }
+
+// Error satisfies the builtin error interface
+func (e KoujaConfigValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sKoujaConfig.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = KoujaConfigValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = KoujaConfigValidationError{}
+
+var _KoujaConfig_Protocol_InLookup = map[string]struct{}{
+	"iscsi":    {},
+	"nvme-tcp": {},
+}
 
 // Validate checks the field values on StorageBackend with the rules defined in
 // the proto definition for this message. If any rules are violated, the first
@@ -807,7 +1071,7 @@ func (m *CreateStorageBackendRequest) validate(all bool) error {
 		if _, ok := _CreateStorageBackendRequest_Driver_InLookup[m.GetDriver()]; !ok {
 			err := CreateStorageBackendRequestValidationError{
 				field:  "Driver",
-				reason: "value must be in list [lvm-thin]",
+				reason: "value must be in list [lvm-thin kouja]",
 			}
 			if !all {
 				return err
@@ -931,6 +1195,7 @@ var _CreateStorageBackendRequest_Name_Pattern = regexp.MustCompile("^[A-Za-z0-9]
 
 var _CreateStorageBackendRequest_Driver_InLookup = map[string]struct{}{
 	"lvm-thin": {},
+	"kouja":    {},
 }
 
 // Validate checks the field values on UpdateStorageBackendRequest with the
@@ -1015,7 +1280,7 @@ func (m *UpdateStorageBackendRequest) validate(all bool) error {
 		if _, ok := _UpdateStorageBackendRequest_Driver_InLookup[m.GetDriver()]; !ok {
 			err := UpdateStorageBackendRequestValidationError{
 				field:  "Driver",
-				reason: "value must be in list [lvm-thin]",
+				reason: "value must be in list [lvm-thin kouja]",
 			}
 			if !all {
 				return err
@@ -1139,6 +1404,7 @@ var _UpdateStorageBackendRequest_Name_Pattern = regexp.MustCompile("^[A-Za-z0-9]
 
 var _UpdateStorageBackendRequest_Driver_InLookup = map[string]struct{}{
 	"lvm-thin": {},
+	"kouja":    {},
 }
 
 // Validate checks the field values on DeleteStorageBackendRequest with the

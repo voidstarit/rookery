@@ -82,6 +82,8 @@ message VM {
   google.protobuf.Timestamp created_at = 15;
   google.protobuf.Timestamp updated_at = 16;
   string cgroup_class = 17;
+  // run_state is the live QEMU monitor state for a running VM.
+  string run_state = 18;
 }
 
 message ListVMsRequest {}

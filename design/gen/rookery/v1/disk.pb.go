@@ -36,10 +36,14 @@ type VMDisk struct {
 	Vg                 string                 `protobuf:"bytes,6,opt,name=vg,proto3" json:"vg,omitempty"`
 	ThinPool           string                 `protobuf:"bytes,7,opt,name=thin_pool,json=thinPool,proto3" json:"thin_pool,omitempty"`
 	Device             string                 `protobuf:"bytes,8,opt,name=device,proto3" json:"device,omitempty"`
-	// source is "lvm-thin" or "host-device".
+	// source is the backend driver ("lvm-thin", "host-device", "kouja", ...).
 	Source string `protobuf:"bytes,9,opt,name=source,proto3" json:"source,omitempty"`
 	// size_bytes is the exact host device size for passthrough disks.
-	SizeBytes     uint64 `protobuf:"varint,10,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	SizeBytes uint64 `protobuf:"varint,10,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	// locator is a display-only description of a remote attachment.
+	Locator string `protobuf:"bytes,11,opt,name=locator,proto3" json:"locator,omitempty"`
+	// protocol distinguishes local, iscsi, nvme-tcp, and rbd attachments.
+	Protocol      string `protobuf:"bytes,12,opt,name=protocol,proto3" json:"protocol,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -144,6 +148,20 @@ func (x *VMDisk) GetSizeBytes() uint64 {
 	return 0
 }
 
+func (x *VMDisk) GetLocator() string {
+	if x != nil {
+		return x.Locator
+	}
+	return ""
+}
+
+func (x *VMDisk) GetProtocol() string {
+	if x != nil {
+		return x.Protocol
+	}
+	return ""
+}
+
 type Disk struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	Id                  int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -163,10 +181,18 @@ type Disk struct {
 	TemplateDiskName    string                 `protobuf:"bytes,15,opt,name=template_disk_name,json=templateDiskName,proto3" json:"template_disk_name,omitempty"`
 	ProvisioningScript  string                 `protobuf:"bytes,16,opt,name=provisioning_script,json=provisioningScript,proto3" json:"provisioning_script,omitempty"`
 	ProvisioningTimeout string                 `protobuf:"bytes,17,opt,name=provisioning_timeout,json=provisioningTimeout,proto3" json:"provisioning_timeout,omitempty"`
-	// source is "lvm-thin" or "host-device".
+	// source is the backend driver ("lvm-thin", "host-device", "kouja", ...).
 	Source string `protobuf:"bytes,18,opt,name=source,proto3" json:"source,omitempty"`
 	// size_bytes is the exact host device size for passthrough disks.
-	SizeBytes     uint64 `protobuf:"varint,19,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	SizeBytes uint64 `protobuf:"varint,19,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	// locator is a display-only description of a remote attachment.
+	Locator string `protobuf:"bytes,20,opt,name=locator,proto3" json:"locator,omitempty"`
+	// deletion_state is empty for a ready disk, or provisioning/deleting/delete_failed.
+	DeletionState string `protobuf:"bytes,21,opt,name=deletion_state,json=deletionState,proto3" json:"deletion_state,omitempty"`
+	// deletion_error is the last asynchronous deletion error.
+	DeletionError string `protobuf:"bytes,22,opt,name=deletion_error,json=deletionError,proto3" json:"deletion_error,omitempty"`
+	// protocol distinguishes local, iscsi, nvme-tcp, and rbd attachments.
+	Protocol      string `protobuf:"bytes,23,opt,name=protocol,proto3" json:"protocol,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -332,6 +358,34 @@ func (x *Disk) GetSizeBytes() uint64 {
 		return x.SizeBytes
 	}
 	return 0
+}
+
+func (x *Disk) GetLocator() string {
+	if x != nil {
+		return x.Locator
+	}
+	return ""
+}
+
+func (x *Disk) GetDeletionState() string {
+	if x != nil {
+		return x.DeletionState
+	}
+	return ""
+}
+
+func (x *Disk) GetDeletionError() string {
+	if x != nil {
+		return x.DeletionError
+	}
+	return ""
+}
+
+func (x *Disk) GetProtocol() string {
+	if x != nil {
+		return x.Protocol
+	}
+	return ""
 }
 
 type ImportableDisk struct {
@@ -779,7 +833,7 @@ var File_rookery_v1_disk_proto protoreflect.FileDescriptor
 const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\n" +
 	"\x15rookery/v1/disk.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\xbd\x02\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\xf3\x02\n" +
 	"\x06VMDisk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
@@ -792,8 +846,10 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\x06source\x18\t \x01(\tR\x06source\x12\x1d\n" +
 	"\n" +
 	"size_bytes\x18\n" +
-	" \x01(\x04R\tsizeBytesB\x15\n" +
-	"\x13_storage_backend_id\"\x90\x06\n" +
+	" \x01(\x04R\tsizeBytes\x12\x18\n" +
+	"\alocator\x18\v \x01(\tR\alocator\x12\x1a\n" +
+	"\bprotocol\x18\f \x01(\tR\bprotocolB\x15\n" +
+	"\x13_storage_backend_id\"\x94\a\n" +
 	"\x04Disk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
@@ -818,7 +874,11 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\x14provisioning_timeout\x18\x11 \x01(\tR\x13provisioningTimeout\x12\x16\n" +
 	"\x06source\x18\x12 \x01(\tR\x06source\x12\x1d\n" +
 	"\n" +
-	"size_bytes\x18\x13 \x01(\x04R\tsizeBytesB\x15\n" +
+	"size_bytes\x18\x13 \x01(\x04R\tsizeBytes\x12\x18\n" +
+	"\alocator\x18\x14 \x01(\tR\alocator\x12%\n" +
+	"\x0edeletion_state\x18\x15 \x01(\tR\rdeletionState\x12%\n" +
+	"\x0edeletion_error\x18\x16 \x01(\tR\rdeletionError\x12\x1a\n" +
+	"\bprotocol\x18\x17 \x01(\tR\bprotocolB\x15\n" +
 	"\x13_storage_backend_idB\x11\n" +
 	"\x0f_attached_vm_idB\x13\n" +
 	"\x11_template_disk_id\"\xa1\x02\n" +

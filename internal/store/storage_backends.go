@@ -11,12 +11,27 @@ import (
 
 // StorageBackendConfig contains driver-specific settings.
 type StorageBackendConfig struct {
-	VG                            string `json:"vg,omitempty"`
-	ThinPool                      string `json:"thin_pool,omitempty"`
-	SupportsTemplates             bool   `json:"supports_templates,omitempty"`
-	PreparationScript             string `json:"preparation_script,omitempty"`
-	PreparationTimeout            string `json:"preparation_timeout,omitempty"`
-	AllowTemplateDeleteWithClones bool   `json:"allow_template_delete_with_clones,omitempty"`
+	VG                            string       `json:"vg,omitempty"`
+	ThinPool                      string       `json:"thin_pool,omitempty"`
+	SupportsTemplates             bool         `json:"supports_templates,omitempty"`
+	PreparationScript             string       `json:"preparation_script,omitempty"`
+	PreparationTimeout            string       `json:"preparation_timeout,omitempty"`
+	AllowTemplateDeleteWithClones bool         `json:"allow_template_delete_with_clones,omitempty"`
+	Kouja                         *KoujaConfig `json:"kouja,omitempty"`
+}
+
+// KoujaConfig configures a kouja storage backend. Protocol defaults to iscsi.
+type KoujaConfig struct {
+	Endpoint       string `json:"endpoint"`
+	Protocol       string `json:"protocol,omitempty"`
+	StorageClass   string `json:"storage_class"`
+	Initiator      string `json:"initiator,omitempty"`
+	HostNQN        string `json:"host_nqn,omitempty"`
+	CAFile         string `json:"ca_file"`
+	ClientCertFile string `json:"client_cert_file"`
+	ClientKeyFile  string `json:"client_key_file"`
+	ServerName     string `json:"server_name,omitempty"`
+	Portal         string `json:"portal,omitempty"`
 }
 
 // StorageBackend is a registered disk provisioning backend.

@@ -19,6 +19,8 @@ import (
 
 	"github.com/google/uuid"
 	"modernc.org/sqlite"
+
+	"github.com/voidstarit/rookery/internal/blockdev"
 )
 
 //go:embed migrations/*.sql
@@ -40,6 +42,8 @@ var (
 	ErrDiskInUse = errors.New("disk is attached to a vm")
 	// ErrDiskIsTemplate is returned when a template disk is attached to a VM.
 	ErrDiskIsTemplate = errors.New("template disks cannot be attached to a vm")
+	// ErrDiskDeleting is returned when a disk is provisioning or being deleted.
+	ErrDiskDeleting = errors.New("disk is provisioning or being deleted")
 	// ErrStorageBackendNotFound is returned when a storage backend does not exist.
 	ErrStorageBackendNotFound = errors.New("storage backend not found")
 	// ErrStorageBackendNameTaken is returned when a backend name is already in use.
@@ -122,6 +126,17 @@ const (
 	// DiskSourceHostDevice passes an existing host block device (a disk,
 	// partition, or logical volume) through to one VM.
 	DiskSourceHostDevice = "host-device"
+	// DiskSourceKouja is a disk provisioned by a kouja storage backend.
+	DiskSourceKouja = "kouja"
+	// DiskSourceCeph is reserved for the future Ceph RBD driver.
+	DiskSourceCeph = "ceph"
+)
+
+// Disk deletion lifecycle states. An empty state is a ready disk.
+const (
+	DiskDeletionProvisioning = "provisioning"
+	DiskDeletionDeleting     = "deleting"
+	DiskDeletionFailed       = "delete_failed"
 )
 
 const (
@@ -171,6 +186,7 @@ type VMDisk struct {
 	ThinPool           string `json:"thin_pool"`
 	Device             string `json:"device"`
 	Source             string `json:"source"`
+	Protocol           string `json:"protocol"`
 }
 
 // VMMedia is the boot media summary returned with a VM.
@@ -428,28 +444,35 @@ type VMInterface struct {
 	EgressACLName  string `json:"egress_acl_name,omitempty"`
 }
 
-// Disk is a pre-created thin-LVM disk that can be attached to a VM.
+// Disk is a provisioned or passthrough disk that can be attached to a VM.
 type Disk struct {
-	ID                  int64     `json:"id"`
-	Name                string    `json:"name"`
-	SizeGB              int       `json:"size_gb"`
-	SizeBytes           uint64    `json:"size_bytes,omitempty"`
-	StorageBackendID    *int64    `json:"storage_backend_id,omitempty"`
-	StorageBackendName  string    `json:"storage_backend_name,omitempty"`
-	VG                  string    `json:"vg"`
-	ThinPool            string    `json:"thin_pool"`
-	Device              string    `json:"device"`
-	Source              string    `json:"source"`
-	IsTemplate          bool      `json:"is_template"`
-	TemplateDiskID      *int64    `json:"template_disk_id,omitempty"`
-	TemplateDiskName    string    `json:"template_disk_name,omitempty"`
-	ProvisioningScript  string    `json:"provisioning_script,omitempty"`
-	ProvisioningTimeout string    `json:"provisioning_timeout,omitempty"`
-	PreparedByScript    bool      `json:"-"`
-	AttachedVMID        *string   `json:"attached_vm_id,omitempty"`
-	AttachedVMName      string    `json:"attached_vm_name,omitempty"`
-	CreatedAt           time.Time `json:"created_at"`
-	UpdatedAt           time.Time `json:"updated_at"`
+	ID                    int64               `json:"id"`
+	Name                  string              `json:"name"`
+	SizeGB                int                 `json:"size_gb"`
+	SizeBytes             uint64              `json:"size_bytes,omitempty"`
+	StorageBackendID      *int64              `json:"storage_backend_id,omitempty"`
+	StorageBackendName    string              `json:"storage_backend_name,omitempty"`
+	VG                    string              `json:"vg"`
+	ThinPool              string              `json:"thin_pool"`
+	Device                string              `json:"device"`
+	Source                string              `json:"source"`
+	Protocol              string              `json:"protocol"`
+	BackendMetadata       DiskBackendMetadata `json:"backend_metadata,omitempty"`
+	IsTemplate            bool                `json:"is_template"`
+	TemplateDiskID        *int64              `json:"template_disk_id,omitempty"`
+	TemplateDiskName      string              `json:"template_disk_name,omitempty"`
+	ProvisioningScript    string              `json:"provisioning_script,omitempty"`
+	ProvisioningTimeout   string              `json:"provisioning_timeout,omitempty"`
+	PreparedByScript      bool                `json:"-"`
+	AttachedVMID          *string             `json:"attached_vm_id,omitempty"`
+	AttachedVMName        string              `json:"attached_vm_name,omitempty"`
+	DeletionState         string              `json:"deletion_state,omitempty"`
+	DeletionError         string              `json:"deletion_error,omitempty"`
+	DeletionAttempts      int                 `json:"deletion_attempts,omitempty"`
+	DeletionNextAttemptAt time.Time           `json:"deletion_next_attempt_at,omitempty"`
+	DeletionClaimedAt     time.Time           `json:"deletion_claimed_at,omitempty"`
+	CreatedAt             time.Time           `json:"created_at"`
+	UpdatedAt             time.Time           `json:"updated_at"`
 }
 
 // ImportDisk describes an existing volume that should be added to inventory.
@@ -920,10 +943,21 @@ func (s *Store) CreateDisk(ctx context.Context, disk Disk) (Disk, error) {
 	if disk.Source == "" {
 		disk.Source = DiskSourceLVMThin
 	}
+	if disk.Protocol == "" {
+		switch disk.Source {
+		case DiskSourceKouja:
+			disk.Protocol = string(blockdev.ProtocolISCSI)
+		case DiskSourceCeph:
+			disk.Protocol = string(blockdev.ProtocolRBD)
+		default:
+			disk.Protocol = string(blockdev.ProtocolLocal)
+		}
+	}
 	switch disk.Source {
 	case DiskSourceLVMThin:
 		disk.Device = ""
 		disk.SizeBytes = 0
+		disk.Protocol = string(blockdev.ProtocolLocal)
 	case DiskSourceHostDevice:
 		if strings.TrimSpace(disk.Device) == "" {
 			return Disk{}, errors.New("host device path is required")
@@ -932,21 +966,63 @@ func (s *Store) CreateDisk(ctx context.Context, disk Disk) (Disk, error) {
 			disk.ProvisioningScript != "" || disk.ProvisioningTimeout != "" {
 			return Disk{}, errors.New("host devices cannot be templates or template clones")
 		}
+		disk.Protocol = string(blockdev.ProtocolLocal)
+	case DiskSourceKouja, DiskSourceCeph:
+		if disk.Device != "" || disk.VG != "" || disk.ThinPool != "" {
+			return Disk{}, fmt.Errorf("%s disks cannot have a local device, VG, or thin pool", disk.Source)
+		}
+		if disk.IsTemplate || disk.TemplateDiskID != nil || disk.PreparedByScript ||
+			disk.ProvisioningScript != "" || disk.ProvisioningTimeout != "" {
+			return Disk{}, fmt.Errorf("%s disks cannot be templates or template clones", disk.Source)
+		}
 	default:
 		return Disk{}, fmt.Errorf("unsupported disk source %q", disk.Source)
+	}
+	if disk.Source == DiskSourceKouja && blockdev.Protocol(disk.Protocol).Normalize() == blockdev.ProtocolLocal {
+		return Disk{}, errors.New("kouja disks require a remote attachment protocol")
+	}
+	if disk.Source == DiskSourceCeph && blockdev.Protocol(disk.Protocol) != blockdev.ProtocolRBD {
+		return Disk{}, errors.New("ceph disks require the rbd attachment protocol")
 	}
 	if !disk.IsTemplate && (disk.ProvisioningScript != "" || disk.ProvisioningTimeout != "") {
 		return Disk{}, errors.New("provisioning settings require a template disk")
 	}
+	backendMetadata, err := EncodeDiskBackendMetadata(disk.BackendMetadata)
+	if err != nil {
+		return Disk{}, err
+	}
+	if disk.DeletionState == "" {
+		attachment := disk.BackendMetadata.Attachment
+		if attachment.Protocol == "" {
+			attachment.Protocol = blockdev.Protocol(disk.Protocol)
+		}
+		if attachment.Protocol.Normalize() != blockdev.ProtocolLocal {
+			if err := attachment.ValidateComplete(); err != nil {
+				return Disk{}, fmt.Errorf("create disk attachment: %w", err)
+			}
+		}
+	}
 	now := time.Now().UTC().UnixMilli()
+	nextAttempt := int64(0)
+	if !disk.DeletionNextAttemptAt.IsZero() {
+		nextAttempt = disk.DeletionNextAttemptAt.UTC().UnixMilli()
+	}
+	claimedAt := int64(0)
+	if !disk.DeletionClaimedAt.IsZero() {
+		claimedAt = disk.DeletionClaimedAt.UTC().UnixMilli()
+	}
 
 	res, err := s.db.ExecContext(ctx, `
 		INSERT INTO disks (name, size_gb, vg, thin_pool, storage_backend_id, source, device, size_bytes,
+			attachment_protocol, backend_metadata,
+			deletion_state, deletion_error, deletion_attempts, deletion_next_attempt_at, deletion_claimed_at,
 			is_template, template_disk_id, provisioning_script, provisioning_timeout, prepared_by_script,
 			created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		disk.Name, disk.SizeGB, disk.VG, disk.ThinPool, disk.StorageBackendID, disk.Source,
-		disk.Device, disk.SizeBytes, disk.IsTemplate, disk.TemplateDiskID,
+		disk.Device, disk.SizeBytes, disk.Protocol, backendMetadata,
+		disk.DeletionState, disk.DeletionError, disk.DeletionAttempts, nextAttempt, claimedAt,
+		disk.IsTemplate, disk.TemplateDiskID,
 		disk.ProvisioningScript, disk.ProvisioningTimeout, disk.PreparedByScript, now, now,
 	)
 	if err != nil {
@@ -1077,8 +1153,8 @@ func (s *Store) SetDiskTemplate(ctx context.Context, id int64, isTemplate bool) 
 	if err != nil {
 		return Disk{}, err
 	}
-	if disk.Source == DiskSourceHostDevice {
-		return Disk{}, errors.New("host devices cannot be templates")
+	if disk.Source != DiskSourceLVMThin {
+		return Disk{}, errors.New("only LVM thin disks can be templates")
 	}
 	if disk.AttachedVMID != nil {
 		return Disk{}, ErrDiskInUse
@@ -1096,8 +1172,8 @@ func (s *Store) SetDiskProvisioning(ctx context.Context, id int64, script, timeo
 	if err != nil {
 		return Disk{}, err
 	}
-	if disk.Source == DiskSourceHostDevice {
-		return Disk{}, errors.New("host devices cannot be templates")
+	if disk.Source != DiskSourceLVMThin {
+		return Disk{}, errors.New("only LVM thin disks can be templates")
 	}
 	if disk.AttachedVMID != nil {
 		return Disk{}, ErrDiskInUse
@@ -1158,6 +1234,9 @@ func (s *Store) checkDiskAvailable(ctx context.Context, diskID int64, exceptVMID
 	}
 	if disk.IsTemplate {
 		return ErrDiskIsTemplate
+	}
+	if disk.DeletionState != "" {
+		return ErrDiskDeleting
 	}
 	if disk.AttachedVMID != nil && *disk.AttachedVMID != exceptVMID {
 		return ErrDiskInUse
@@ -2080,7 +2159,8 @@ func (s *Store) loadVMDisks(ctx context.Context, vms []VM) error {
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT vd.vm_id, d.id, d.name, d.size_gb, d.vg, d.thin_pool,
-		       d.storage_backend_id, sb.name, d.source, d.device, d.size_bytes
+		       d.storage_backend_id, sb.name, d.source, d.device, d.size_bytes,
+		       d.attachment_protocol
 		FROM vm_disks AS vd
 		JOIN disks AS d ON d.id = vd.disk_id
 		LEFT JOIN storage_backends AS sb ON sb.id = d.storage_backend_id
@@ -2102,14 +2182,17 @@ func (s *Store) loadVMDisks(ctx context.Context, vms []VM) error {
 			sizeBytes   int64
 		)
 		if err := rows.Scan(&vmID, &disk.ID, &disk.Name, &disk.SizeGB, &vg, &pool,
-			&backend, &backendName, &disk.Source, &device, &sizeBytes); err != nil {
+			&backend, &backendName, &disk.Source, &device, &sizeBytes, &disk.Protocol); err != nil {
 			return err
 		}
 		disk.VG = vg
 		disk.ThinPool = pool
 		disk.SizeBytes = uint64(sizeBytes)
 		disk.Device = device
-		if disk.Device == "" {
+		if disk.Protocol == "" {
+			disk.Protocol = string(blockdev.ProtocolLocal)
+		}
+		if disk.Source == DiskSourceLVMThin && disk.Device == "" {
 			disk.Device = devicePath(vg, disk.Name)
 		}
 		if backend.Valid {
@@ -2364,6 +2447,7 @@ type scanner interface {
 const vmSelect = `
 	SELECT v.id, v.name, v.description, v.status, v.desired_state, v.vcpus, v.memory_mb,
 	       v.disk_id, d.name, d.size_gb, d.vg, d.thin_pool,
+	       d.source, d.device, d.size_bytes, d.attachment_protocol,
 	       v.boot_media_id, m.name, m.path, m.size_bytes,
 	       v.console_enabled, v.cgroup_class, v.created_at, v.updated_at
 	FROM vms AS v
@@ -2373,6 +2457,9 @@ const vmSelect = `
 const diskSelect = `
 	SELECT d.id, d.name, d.size_gb, d.vg, d.thin_pool,
 	       d.storage_backend_id, sb.name, d.source, d.device, d.size_bytes,
+	       d.attachment_protocol, d.backend_metadata,
+	       d.deletion_state, d.deletion_error, d.deletion_attempts,
+	       d.deletion_next_attempt_at, d.deletion_claimed_at,
 	       d.is_template, d.template_disk_id,
 	       d.provisioning_script, d.provisioning_timeout, d.prepared_by_script,
 	       td.name, v.id, v.name, d.created_at, d.updated_at
@@ -2384,20 +2471,24 @@ const diskSelect = `
 
 func scanVM(s scanner) (VM, error) {
 	var (
-		vm          VM
-		createdAt   int64
-		updatedAt   int64
-		diskID      sql.NullInt64
-		diskName    sql.NullString
-		diskSize    sql.NullInt64
-		diskVG      sql.NullString
-		diskPool    sql.NullString
-		bootMediaID sql.NullInt64
-		mediaName   sql.NullString
-		mediaPath   sql.NullString
-		mediaSize   sql.NullInt64
-		console     int64
-		cgroupClass string
+		vm           VM
+		createdAt    int64
+		updatedAt    int64
+		diskID       sql.NullInt64
+		diskName     sql.NullString
+		diskSize     sql.NullInt64
+		diskVG       sql.NullString
+		diskPool     sql.NullString
+		diskSource   sql.NullString
+		diskDevice   sql.NullString
+		diskSizeByte sql.NullInt64
+		diskProtocol sql.NullString
+		bootMediaID  sql.NullInt64
+		mediaName    sql.NullString
+		mediaPath    sql.NullString
+		mediaSize    sql.NullInt64
+		console      int64
+		cgroupClass  string
 	)
 	if err := s.Scan(
 		&vm.ID,
@@ -2412,6 +2503,10 @@ func scanVM(s scanner) (VM, error) {
 		&diskSize,
 		&diskVG,
 		&diskPool,
+		&diskSource,
+		&diskDevice,
+		&diskSizeByte,
+		&diskProtocol,
 		&bootMediaID,
 		&mediaName,
 		&mediaPath,
@@ -2432,13 +2527,28 @@ func scanVM(s scanner) (VM, error) {
 		vm.DiskID = &id
 	}
 	if diskID.Valid && diskName.Valid && diskVG.Valid && diskPool.Valid {
+		source := diskSource.String
+		if source == "" {
+			source = DiskSourceLVMThin
+		}
+		protocol := diskProtocol.String
+		if protocol == "" {
+			protocol = string(blockdev.ProtocolLocal)
+		}
+		device := diskDevice.String
+		if source == DiskSourceLVMThin && device == "" {
+			device = devicePath(diskVG.String, diskName.String)
+		}
 		vm.Disk = &VMDisk{
-			ID:       diskID.Int64,
-			Name:     diskName.String,
-			SizeGB:   int(diskSize.Int64),
-			VG:       diskVG.String,
-			ThinPool: diskPool.String,
-			Device:   devicePath(diskVG.String, diskName.String),
+			ID:        diskID.Int64,
+			Name:      diskName.String,
+			SizeGB:    int(diskSize.Int64),
+			SizeBytes: uint64(diskSizeByte.Int64),
+			VG:        diskVG.String,
+			ThinPool:  diskPool.String,
+			Device:    device,
+			Source:    source,
+			Protocol:  protocol,
 		}
 	}
 	if bootMediaID.Valid {
@@ -2461,20 +2571,23 @@ func scanVM(s scanner) (VM, error) {
 
 func scanDisk(s scanner) (Disk, error) {
 	var (
-		disk                Disk
-		backendID           sql.NullInt64
-		backend             sql.NullString
-		sizeBytes           int64
-		isTemplate          int64
-		templateID          sql.NullInt64
-		provisioningScript  string
-		provisioningTimeout string
-		preparedByScript    int64
-		templateName        sql.NullString
-		vmID                sql.NullString
-		vmName              sql.NullString
-		createdAt           int64
-		updatedAt           int64
+		disk                  Disk
+		backendID             sql.NullInt64
+		backend               sql.NullString
+		sizeBytes             int64
+		backendMetadata       string
+		deletionNextAttemptAt int64
+		deletionClaimedAt     int64
+		isTemplate            int64
+		templateID            sql.NullInt64
+		provisioningScript    string
+		provisioningTimeout   string
+		preparedByScript      int64
+		templateName          sql.NullString
+		vmID                  sql.NullString
+		vmName                sql.NullString
+		createdAt             int64
+		updatedAt             int64
 	)
 	if err := s.Scan(
 		&disk.ID,
@@ -2487,6 +2600,13 @@ func scanDisk(s scanner) (Disk, error) {
 		&disk.Source,
 		&disk.Device,
 		&sizeBytes,
+		&disk.Protocol,
+		&backendMetadata,
+		&disk.DeletionState,
+		&disk.DeletionError,
+		&disk.DeletionAttempts,
+		&deletionNextAttemptAt,
+		&deletionClaimedAt,
 		&isTemplate,
 		&templateID,
 		&provisioningScript,
@@ -2505,8 +2625,28 @@ func scanDisk(s scanner) (Disk, error) {
 	if disk.Source == "" {
 		disk.Source = DiskSourceLVMThin
 	}
-	if disk.Device == "" {
-		disk.Device = devicePath(disk.VG, disk.Name)
+	if disk.Source == DiskSourceLVMThin {
+		if disk.Device == "" {
+			disk.Device = devicePath(disk.VG, disk.Name)
+		}
+	}
+	metadata, err := DecodeDiskBackendMetadata(backendMetadata)
+	if err != nil {
+		return Disk{}, err
+	}
+	disk.BackendMetadata = metadata
+	if disk.Protocol == "" {
+		if metadata.Attachment.Protocol != "" {
+			disk.Protocol = string(metadata.Attachment.Protocol)
+		} else {
+			disk.Protocol = string(blockdev.ProtocolLocal)
+		}
+	}
+	if deletionNextAttemptAt > 0 {
+		disk.DeletionNextAttemptAt = time.UnixMilli(deletionNextAttemptAt).UTC()
+	}
+	if deletionClaimedAt > 0 {
+		disk.DeletionClaimedAt = time.UnixMilli(deletionClaimedAt).UTC()
 	}
 	disk.IsTemplate = isTemplate != 0
 	disk.ProvisioningScript = provisioningScript
