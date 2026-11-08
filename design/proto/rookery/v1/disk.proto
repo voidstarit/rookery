@@ -3,7 +3,6 @@ syntax = "proto3";
 package rookery.v1;
 
 import "google/api/annotations.proto";
-import "google/protobuf/empty.proto";
 import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
 import "validate/validate.proto";
@@ -37,7 +36,7 @@ service DiskService {
     };
   }
 
-  rpc DeleteDisk(DeleteDiskRequest) returns (google.protobuf.Empty) {
+  rpc DeleteDisk(DeleteDiskRequest) returns (DeleteDiskResponse) {
     option (google.api.http) = {delete: "/api/disks/{id}"};
   }
 }
@@ -131,6 +130,11 @@ message CreateDiskRequest {
   // storage_backend_id, size_gb, is_template, template_disk_id, and
   // provisioning settings must be omitted; the size is read from the device.
   string host_device = 9 [(validate.rules).string = {ignore_empty: true, max_len: 4096}];
+}
+
+message DeleteDiskResponse {
+  bool accepted = 1;
+  string state = 2;
 }
 
 message UpdateDiskRequest {

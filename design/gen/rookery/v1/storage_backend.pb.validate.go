@@ -2046,3 +2046,532 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = ImportDisksResponseValidationError{}
+
+// Validate checks the field values on GetStorageBackendHealthRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *GetStorageBackendHealthRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetStorageBackendHealthRequest with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the result is a list of violation errors wrapped in
+// GetStorageBackendHealthRequestMultiError, or nil if none found.
+func (m *GetStorageBackendHealthRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetStorageBackendHealthRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetId() <= 0 {
+		err := GetStorageBackendHealthRequestValidationError{
+			field:  "Id",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return GetStorageBackendHealthRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// GetStorageBackendHealthRequestMultiError is an error wrapping multiple
+// validation errors returned by GetStorageBackendHealthRequest.ValidateAll()
+// if the designated constraints aren't met.
+type GetStorageBackendHealthRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetStorageBackendHealthRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetStorageBackendHealthRequestMultiError) AllErrors() []error { return m }
+
+// GetStorageBackendHealthRequestValidationError is the validation error
+// returned by GetStorageBackendHealthRequest.Validate if the designated
+// constraints aren't met.
+type GetStorageBackendHealthRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetStorageBackendHealthRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetStorageBackendHealthRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetStorageBackendHealthRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetStorageBackendHealthRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetStorageBackendHealthRequestValidationError) ErrorName() string {
+	return "GetStorageBackendHealthRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e GetStorageBackendHealthRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetStorageBackendHealthRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetStorageBackendHealthRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetStorageBackendHealthRequestValidationError{}
+
+// Validate checks the field values on TestStorageBackendDataPathRequest with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the first error encountered is returned, or nil if there are
+// no violations.
+func (m *TestStorageBackendDataPathRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on TestStorageBackendDataPathRequest
+// with the rules defined in the proto definition for this message. If any
+// rules are violated, the result is a list of violation errors wrapped in
+// TestStorageBackendDataPathRequestMultiError, or nil if none found.
+func (m *TestStorageBackendDataPathRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *TestStorageBackendDataPathRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetId() <= 0 {
+		err := TestStorageBackendDataPathRequestValidationError{
+			field:  "Id",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return TestStorageBackendDataPathRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// TestStorageBackendDataPathRequestMultiError is an error wrapping multiple
+// validation errors returned by
+// TestStorageBackendDataPathRequest.ValidateAll() if the designated
+// constraints aren't met.
+type TestStorageBackendDataPathRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m TestStorageBackendDataPathRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m TestStorageBackendDataPathRequestMultiError) AllErrors() []error { return m }
+
+// TestStorageBackendDataPathRequestValidationError is the validation error
+// returned by TestStorageBackendDataPathRequest.Validate if the designated
+// constraints aren't met.
+type TestStorageBackendDataPathRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e TestStorageBackendDataPathRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e TestStorageBackendDataPathRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e TestStorageBackendDataPathRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e TestStorageBackendDataPathRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e TestStorageBackendDataPathRequestValidationError) ErrorName() string {
+	return "TestStorageBackendDataPathRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e TestStorageBackendDataPathRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sTestStorageBackendDataPathRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = TestStorageBackendDataPathRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = TestStorageBackendDataPathRequestValidationError{}
+
+// Validate checks the field values on StorageBackendHealth with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *StorageBackendHealth) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on StorageBackendHealth with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// StorageBackendHealthMultiError, or nil if none found.
+func (m *StorageBackendHealth) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *StorageBackendHealth) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Id
+
+	// no validation rules for Reachable
+
+	// no validation rules for Ready
+
+	// no validation rules for Driver
+
+	// no validation rules for StorageClass
+
+	// no validation rules for QemuReady
+
+	// no validation rules for Detail
+
+	if all {
+		switch v := interface{}(m.GetCheckedAt()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, StorageBackendHealthValidationError{
+					field:  "CheckedAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, StorageBackendHealthValidationError{
+					field:  "CheckedAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetCheckedAt()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return StorageBackendHealthValidationError{
+				field:  "CheckedAt",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	for idx, item := range m.GetClasses() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, StorageBackendHealthValidationError{
+						field:  fmt.Sprintf("Classes[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, StorageBackendHealthValidationError{
+						field:  fmt.Sprintf("Classes[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return StorageBackendHealthValidationError{
+					field:  fmt.Sprintf("Classes[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	// no validation rules for PendingDeletions
+
+	// no validation rules for OldestPendingDeletionAgeSeconds
+
+	if len(errors) > 0 {
+		return StorageBackendHealthMultiError(errors)
+	}
+
+	return nil
+}
+
+// StorageBackendHealthMultiError is an error wrapping multiple validation
+// errors returned by StorageBackendHealth.ValidateAll() if the designated
+// constraints aren't met.
+type StorageBackendHealthMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m StorageBackendHealthMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m StorageBackendHealthMultiError) AllErrors() []error { return m }
+
+// StorageBackendHealthValidationError is the validation error returned by
+// StorageBackendHealth.Validate if the designated constraints aren't met.
+type StorageBackendHealthValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e StorageBackendHealthValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e StorageBackendHealthValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e StorageBackendHealthValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e StorageBackendHealthValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e StorageBackendHealthValidationError) ErrorName() string {
+	return "StorageBackendHealthValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e StorageBackendHealthValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sStorageBackendHealth.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = StorageBackendHealthValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = StorageBackendHealthValidationError{}
+
+// Validate checks the field values on StorageClassCapacity with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *StorageClassCapacity) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on StorageClassCapacity with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// StorageClassCapacityMultiError, or nil if none found.
+func (m *StorageClassCapacity) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *StorageClassCapacity) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Name
+
+	// no validation rules for VgName
+
+	// no validation rules for State
+
+	// no validation rules for TotalBytes
+
+	// no validation rules for FreeBytes
+
+	// no validation rules for AllocatableBytes
+
+	// no validation rules for MaxVolumeBytes
+
+	if len(errors) > 0 {
+		return StorageClassCapacityMultiError(errors)
+	}
+
+	return nil
+}
+
+// StorageClassCapacityMultiError is an error wrapping multiple validation
+// errors returned by StorageClassCapacity.ValidateAll() if the designated
+// constraints aren't met.
+type StorageClassCapacityMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m StorageClassCapacityMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m StorageClassCapacityMultiError) AllErrors() []error { return m }
+
+// StorageClassCapacityValidationError is the validation error returned by
+// StorageClassCapacity.Validate if the designated constraints aren't met.
+type StorageClassCapacityValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e StorageClassCapacityValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e StorageClassCapacityValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e StorageClassCapacityValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e StorageClassCapacityValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e StorageClassCapacityValidationError) ErrorName() string {
+	return "StorageClassCapacityValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e StorageClassCapacityValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sStorageClassCapacity.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = StorageClassCapacityValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = StorageClassCapacityValidationError{}

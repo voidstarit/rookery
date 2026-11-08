@@ -290,6 +290,90 @@ func local_request_StorageBackendService_ImportDisks_0(ctx context.Context, mars
 	return msg, metadata, err
 }
 
+func request_StorageBackendService_GetStorageBackendHealth_0(ctx context.Context, marshaler runtime.Marshaler, client StorageBackendServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetStorageBackendHealthRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
+	}
+	protoReq.Id, err = runtime.Int64(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
+	}
+	msg, err := client.GetStorageBackendHealth(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_StorageBackendService_GetStorageBackendHealth_0(ctx context.Context, marshaler runtime.Marshaler, server StorageBackendServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetStorageBackendHealthRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	val, ok := pathParams["id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
+	}
+	protoReq.Id, err = runtime.Int64(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
+	}
+	msg, err := server.GetStorageBackendHealth(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_StorageBackendService_TestStorageBackendDataPath_0(ctx context.Context, marshaler runtime.Marshaler, client StorageBackendServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq TestStorageBackendDataPathRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
+	}
+	protoReq.Id, err = runtime.Int64(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
+	}
+	msg, err := client.TestStorageBackendDataPath(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_StorageBackendService_TestStorageBackendDataPath_0(ctx context.Context, marshaler runtime.Marshaler, server StorageBackendServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq TestStorageBackendDataPathRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
+	}
+	protoReq.Id, err = runtime.Int64(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
+	}
+	msg, err := server.TestStorageBackendDataPath(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 // RegisterStorageBackendServiceHandlerServer registers the http handlers for service StorageBackendService to "mux".
 // UnaryRPC     :call StorageBackendServiceServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
@@ -435,6 +519,46 @@ func RegisterStorageBackendServiceHandlerServer(ctx context.Context, mux *runtim
 			return
 		}
 		forward_StorageBackendService_ImportDisks_0(annotatedContext, mux, outboundMarshaler, w, req, response_StorageBackendService_ImportDisks_0{resp.(*ImportDisksResponse)}, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_StorageBackendService_GetStorageBackendHealth_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rookery.v1.StorageBackendService/GetStorageBackendHealth", runtime.WithHTTPPathPattern("/api/storage-backends/{id}/health"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_StorageBackendService_GetStorageBackendHealth_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_StorageBackendService_GetStorageBackendHealth_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_StorageBackendService_TestStorageBackendDataPath_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rookery.v1.StorageBackendService/TestStorageBackendDataPath", runtime.WithHTTPPathPattern("/api/storage-backends/{id}/test"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_StorageBackendService_TestStorageBackendDataPath_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_StorageBackendService_TestStorageBackendDataPath_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 
 	return nil
@@ -595,6 +719,40 @@ func RegisterStorageBackendServiceHandlerClient(ctx context.Context, mux *runtim
 		}
 		forward_StorageBackendService_ImportDisks_0(annotatedContext, mux, outboundMarshaler, w, req, response_StorageBackendService_ImportDisks_0{resp.(*ImportDisksResponse)}, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodGet, pattern_StorageBackendService_GetStorageBackendHealth_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/rookery.v1.StorageBackendService/GetStorageBackendHealth", runtime.WithHTTPPathPattern("/api/storage-backends/{id}/health"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_StorageBackendService_GetStorageBackendHealth_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_StorageBackendService_GetStorageBackendHealth_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_StorageBackendService_TestStorageBackendDataPath_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/rookery.v1.StorageBackendService/TestStorageBackendDataPath", runtime.WithHTTPPathPattern("/api/storage-backends/{id}/test"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_StorageBackendService_TestStorageBackendDataPath_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_StorageBackendService_TestStorageBackendDataPath_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	return nil
 }
 
@@ -626,21 +784,25 @@ func (m response_StorageBackendService_ImportDisks_0) XXX_ResponseBody() interfa
 }
 
 var (
-	pattern_StorageBackendService_ListStorageBackends_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "storage-backends"}, ""))
-	pattern_StorageBackendService_GetStorageBackend_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "storage-backends", "id"}, ""))
-	pattern_StorageBackendService_CreateStorageBackend_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "storage-backends"}, ""))
-	pattern_StorageBackendService_UpdateStorageBackend_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "storage-backends", "id"}, ""))
-	pattern_StorageBackendService_DeleteStorageBackend_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "storage-backends", "id"}, ""))
-	pattern_StorageBackendService_ListImportableDisks_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"api", "storage-backends", "id", "importable-disks"}, ""))
-	pattern_StorageBackendService_ImportDisks_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"api", "storage-backends", "id", "import-disks"}, ""))
+	pattern_StorageBackendService_ListStorageBackends_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "storage-backends"}, ""))
+	pattern_StorageBackendService_GetStorageBackend_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "storage-backends", "id"}, ""))
+	pattern_StorageBackendService_CreateStorageBackend_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "storage-backends"}, ""))
+	pattern_StorageBackendService_UpdateStorageBackend_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "storage-backends", "id"}, ""))
+	pattern_StorageBackendService_DeleteStorageBackend_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api", "storage-backends", "id"}, ""))
+	pattern_StorageBackendService_ListImportableDisks_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"api", "storage-backends", "id", "importable-disks"}, ""))
+	pattern_StorageBackendService_ImportDisks_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"api", "storage-backends", "id", "import-disks"}, ""))
+	pattern_StorageBackendService_GetStorageBackendHealth_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"api", "storage-backends", "id", "health"}, ""))
+	pattern_StorageBackendService_TestStorageBackendDataPath_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"api", "storage-backends", "id", "test"}, ""))
 )
 
 var (
-	forward_StorageBackendService_ListStorageBackends_0  = runtime.ForwardResponseMessage
-	forward_StorageBackendService_GetStorageBackend_0    = runtime.ForwardResponseMessage
-	forward_StorageBackendService_CreateStorageBackend_0 = runtime.ForwardResponseMessage
-	forward_StorageBackendService_UpdateStorageBackend_0 = runtime.ForwardResponseMessage
-	forward_StorageBackendService_DeleteStorageBackend_0 = runtime.ForwardResponseMessage
-	forward_StorageBackendService_ListImportableDisks_0  = runtime.ForwardResponseMessage
-	forward_StorageBackendService_ImportDisks_0          = runtime.ForwardResponseMessage
+	forward_StorageBackendService_ListStorageBackends_0        = runtime.ForwardResponseMessage
+	forward_StorageBackendService_GetStorageBackend_0          = runtime.ForwardResponseMessage
+	forward_StorageBackendService_CreateStorageBackend_0       = runtime.ForwardResponseMessage
+	forward_StorageBackendService_UpdateStorageBackend_0       = runtime.ForwardResponseMessage
+	forward_StorageBackendService_DeleteStorageBackend_0       = runtime.ForwardResponseMessage
+	forward_StorageBackendService_ListImportableDisks_0        = runtime.ForwardResponseMessage
+	forward_StorageBackendService_ImportDisks_0                = runtime.ForwardResponseMessage
+	forward_StorageBackendService_GetStorageBackendHealth_0    = runtime.ForwardResponseMessage
+	forward_StorageBackendService_TestStorageBackendDataPath_0 = runtime.ForwardResponseMessage
 )

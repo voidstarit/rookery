@@ -16,6 +16,7 @@ import (
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/host"
+	"github.com/voidstarit/rookery/internal/kouja"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -110,6 +111,24 @@ func normalizeStorageBackendFields(name, title, description, driver string, conf
 	driver = strings.ToLower(strings.TrimSpace(driver))
 	if driver == "" {
 		driver = "lvm-thin"
+	}
+	if driver == "kouja" {
+		if config == nil || config.GetKouja() == nil {
+			return store.StorageBackend{}, errors.New("kouja configuration is required")
+		}
+		raw := config.GetKouja()
+		cfg := &store.KoujaConfig{
+			Endpoint: strings.TrimSpace(raw.GetEndpoint()), Protocol: strings.TrimSpace(raw.GetProtocol()),
+			StorageClass: strings.TrimSpace(raw.GetStorageClass()), Initiator: strings.TrimSpace(raw.GetInitiator()),
+			HostNQN: strings.TrimSpace(raw.GetHostNqn()), CAFile: strings.TrimSpace(raw.GetCaFile()),
+			ClientCertFile: strings.TrimSpace(raw.GetClientCertFile()), ClientKeyFile: strings.TrimSpace(raw.GetClientKeyFile()),
+			ServerName: strings.TrimSpace(raw.GetServerName()), Portal: strings.TrimSpace(raw.GetPortal()),
+		}
+		if _, err := kouja.ParseConfig(store.StorageBackendConfig{Kouja: cfg}); err != nil {
+			return store.StorageBackend{}, err
+		}
+		return store.StorageBackend{Name: name, Title: title, Description: description, Driver: driver,
+			Config: store.StorageBackendConfig{Kouja: cfg}}, nil
 	}
 	if driver != "lvm-thin" {
 		return store.StorageBackend{}, fmt.Errorf("unsupported storage driver %q", driver)

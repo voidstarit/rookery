@@ -1571,8 +1571,8 @@ func TestVMCRUD(t *testing.T) {
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("delete status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
-	if recorder.Body.Len() != 0 {
-		t.Fatalf("delete body = %q, want empty", recorder.Body.String())
+	if body := strings.TrimSpace(recorder.Body.String()); body != "" && body != "{}" {
+		t.Fatalf("delete body = %q, want empty or {}", body)
 	}
 
 	recorder = do(t, handler, http.MethodGet, "/api/vms/"+created.ID, nil)
@@ -1893,8 +1893,8 @@ func TestDiskCRUD(t *testing.T) {
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("delete status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
-	if recorder.Body.Len() != 0 {
-		t.Fatalf("delete body = %q, want empty", recorder.Body.String())
+	if body := strings.TrimSpace(recorder.Body.String()); body != "" && body != "{}" {
+		t.Fatalf("delete body = %q, want empty or {}", body)
 	}
 	if len(env.provisioner.deleted) != 1 || env.provisioner.deleted[0].Name != "vm01-root" {
 		t.Fatalf("provisioner deleted = %+v", env.provisioner.deleted)

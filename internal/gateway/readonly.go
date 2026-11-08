@@ -12,6 +12,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
+	"github.com/voidstarit/rookery/internal/storage"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -37,6 +38,7 @@ type diskService struct {
 	mu          *sync.Mutex
 	logger      zerolog.Logger
 	hostDevices HostDeviceValidator
+	registry    *storage.Registry
 }
 
 func (s *diskService) ListDisks(ctx context.Context, _ *rookeryv1.ListDisksRequest) (*rookeryv1.ListDisksResponse, error) {
@@ -67,6 +69,8 @@ func diskToProto(disk store.Disk) *rookeryv1.Disk {
 		IsTemplate: disk.IsTemplate, TemplateDiskId: disk.TemplateDiskID, TemplateDiskName: disk.TemplateDiskName,
 		ProvisioningScript: disk.ProvisioningScript, ProvisioningTimeout: disk.ProvisioningTimeout,
 		AttachedVmId: disk.AttachedVMID, AttachedVmName: disk.AttachedVMName,
+		Locator: disk.BackendMetadata.Attachment.Locator(), Protocol: disk.Protocol,
+		DeletionState: disk.DeletionState, DeletionError: disk.DeletionError,
 		CreatedAt: timestamp(disk.CreatedAt), UpdatedAt: timestamp(disk.UpdatedAt),
 	}
 }
@@ -378,6 +382,7 @@ type storageBackendService struct {
 	readiness Readiness
 	disks     DiskProvisioner
 	mu        *sync.Mutex
+	registry  *storage.Registry
 }
 
 func (s *storageBackendService) ListStorageBackends(ctx context.Context, _ *rookeryv1.ListStorageBackendsRequest) (*rookeryv1.ListStorageBackendsResponse, error) {
@@ -400,17 +405,30 @@ func (s *storageBackendService) GetStorageBackend(ctx context.Context, request *
 	return storageBackendToProto(backend), nil
 }
 
+func backendConfigToProto(config store.StorageBackendConfig) *rookeryv1.StorageBackendConfig {
+	result := &rookeryv1.StorageBackendConfig{
+		Vg: config.VG, ThinPool: config.ThinPool,
+		SupportsTemplates:             config.SupportsTemplates,
+		PreparationScript:             config.PreparationScript,
+		PreparationTimeout:            config.PreparationTimeout,
+		AllowTemplateDeleteWithClones: config.AllowTemplateDeleteWithClones,
+	}
+	if config.Kouja != nil {
+		result.DriverConfig = &rookeryv1.StorageBackendConfig_Kouja{Kouja: &rookeryv1.KoujaConfig{
+			Endpoint: config.Kouja.Endpoint, Protocol: config.Kouja.Protocol,
+			StorageClass: config.Kouja.StorageClass, Initiator: config.Kouja.Initiator,
+			HostNqn: config.Kouja.HostNQN, CaFile: config.Kouja.CAFile,
+			ClientCertFile: config.Kouja.ClientCertFile, ClientKeyFile: config.Kouja.ClientKeyFile,
+			ServerName: config.Kouja.ServerName, Portal: config.Kouja.Portal,
+		}}
+	}
+	return result
+}
 func storageBackendToProto(backend store.StorageBackend) *rookeryv1.StorageBackend {
 	return &rookeryv1.StorageBackend{
 		Id: backend.ID, Name: backend.Name, Title: backend.Title, Description: backend.Description,
-		Driver: backend.Driver,
-		Config: &rookeryv1.StorageBackendConfig{
-			Vg: backend.Config.VG, ThinPool: backend.Config.ThinPool,
-			SupportsTemplates:             backend.Config.SupportsTemplates,
-			PreparationScript:             backend.Config.PreparationScript,
-			PreparationTimeout:            backend.Config.PreparationTimeout,
-			AllowTemplateDeleteWithClones: backend.Config.AllowTemplateDeleteWithClones,
-		},
+		Driver:    backend.Driver,
+		Config:    backendConfigToProto(backend.Config),
 		DiskCount: int32(backend.DiskCount),
 		CreatedAt: timestamp(backend.CreatedAt), UpdatedAt: timestamp(backend.UpdatedAt),
 	}

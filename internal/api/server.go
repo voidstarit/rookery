@@ -47,6 +47,11 @@ type VMController interface {
 	Metrics(vmID string) (qemu.Metrics, error)
 }
 
+// StartPlanner prepares remote attachments for a VM start.
+type StartPlanner interface {
+	Plan(ctx context.Context, vm store.VM) (qemu.StartPlan, error)
+}
+
 // LightVMController starts and stops QEMU processes for LightVM definitions.
 type LightVMController interface {
 	StartLightVM(ctx context.Context, vm store.LightVM) error
@@ -158,6 +163,7 @@ type Server struct {
 	vppSocket          string
 	rookeryStartupOnce sync.Once
 	vppStartupMu       sync.Mutex
+	startPlanner       StartPlanner
 
 	// resourceMu serializes host provisioning (disks, bridge domains, vhost
 	// interfaces) with VM attachment so resources cannot be removed mid-operation.
@@ -196,6 +202,11 @@ func (s *Server) ConfigureLightVM(storage *lightvm.Storage) {
 // VPP-restart reconciliation.
 func (s *Server) ConfigureLightVMRuntime(controller LightVMController) {
 	s.lightvms = controller
+}
+
+// ConfigureStartPlanner wires remote disk preparation into autostart.
+func (s *Server) ConfigureStartPlanner(planner StartPlanner) {
+	s.startPlanner = planner
 }
 
 // SetVPPSocket records the VPP binary API socket exposed to network startup

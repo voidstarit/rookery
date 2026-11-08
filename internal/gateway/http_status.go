@@ -33,7 +33,6 @@ var createdMethods = map[string]bool{
 
 var noContentMethods = map[string]bool{
 	"/rookery.v1.VMService/DeleteVM":                         true,
-	"/rookery.v1.DiskService/DeleteDisk":                     true,
 	"/rookery.v1.MediaService/DeleteMedia":                   true,
 	"/rookery.v1.NetworkService/DeleteNetwork":               true,
 	"/rookery.v1.NetworkService/DeleteNetworkPipe":           true,
@@ -95,6 +94,15 @@ func httpResponseStatus(ctx context.Context, writer http.ResponseWriter, respons
 	}
 	method, ok := runtime.RPCMethod(ctx)
 	if !ok {
+		return nil
+	}
+	switch value := response.(type) {
+	case *rookeryv1.DeleteDiskResponse:
+		if value.GetAccepted() {
+			writer.WriteHeader(http.StatusAccepted)
+		} else {
+			writer.WriteHeader(http.StatusNoContent)
+		}
 		return nil
 	}
 	switch {

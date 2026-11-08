@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -95,6 +96,22 @@ func (s *Server) reconcileInfrastructure(ctx context.Context) error {
 // or a host reboot. VMs the user started come back even when QEMU died with
 // the host; VMs the user stopped stay down. It runs after the VPP resources are
 // reconciled so attached vhost-user sockets exist before QEMU launches.
+func (s *Server) startVM(ctx context.Context, vm store.VM) error {
+	if s.startPlanner != nil {
+		plan, err := s.startPlanner.Plan(ctx, vm)
+		if err != nil {
+			return err
+		}
+		if starter, ok := s.vms.(qemu.PreparedStarter); ok {
+			return starter.StartWithPlan(ctx, vm, plan)
+		}
+		if len(plan.Attachments) > 0 {
+			return errors.New("VM runtime does not support prepared remote starts")
+		}
+	}
+	return s.vms.Start(ctx, vm)
+}
+
 func (s *Server) autostartVMs(ctx context.Context) {
 	if s.vms == nil {
 		return
@@ -122,7 +139,7 @@ func (s *Server) autostartVMs(ctx context.Context) {
 			s.logger.Warn().Str("vm_id", vm.ID).Str("vm", vm.Name).Msg("cannot auto-start VM without a disk")
 			continue
 		}
-		if err := s.vms.Start(ctx, vm); err != nil {
+		if err := s.startVM(ctx, vm); err != nil {
 			s.logger.Error().Err(err).Str("vm_id", vm.ID).Str("vm", vm.Name).Msg("could not auto-start VM")
 			if _, statusErr := s.store.SetVMStatus(ctx, vm.ID, store.StatusError); statusErr != nil {
 				s.logger.Warn().Err(statusErr).Str("vm_id", vm.ID).Msg("could not mark VM as failed")

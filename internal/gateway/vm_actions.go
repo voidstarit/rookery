@@ -38,6 +38,22 @@ type InterfaceCounterSource interface {
 	ResetInterfaceCounters(ctx context.Context) error
 }
 
+func (s *vmService) startVM(ctx context.Context, vm store.VM) error {
+	if s.planner != nil {
+		plan, err := s.planner.Plan(ctx, vm)
+		if err != nil {
+			return err
+		}
+		if starter, ok := s.runtime.(qemu.PreparedStarter); ok {
+			return starter.StartWithPlan(ctx, vm, plan)
+		}
+		if len(plan.Attachments) > 0 {
+			return errors.New("VM runtime does not support prepared remote starts")
+		}
+	}
+	return s.runtime.Start(ctx, vm)
+}
+
 func (s *vmService) runtimeUnavailable() error {
 	if s.runtime == nil {
 		return status.Error(codes.Unavailable, "VM runtime is not configured")
@@ -73,7 +89,7 @@ func (s *vmService) StartVM(ctx context.Context, request *rookeryv1.StartVMReque
 		}
 		return nil, status.Error(codes.AlreadyExists, "vm is already running")
 	}
-	if err := s.runtime.Start(ctx, vm); err != nil {
+	if err := s.startVM(ctx, vm); err != nil {
 		_, _ = s.store.SetVMStatus(ctx, vm.ID, store.StatusError)
 		return nil, status.Error(codes.Internal, "could not start VM: "+err.Error())
 	}
@@ -137,7 +153,7 @@ func (s *vmService) ResetVM(ctx context.Context, request *rookeryv1.ResetVMReque
 		if stopErr := s.runtime.Stop(ctx, vm.ID); stopErr != nil {
 			return nil, status.Error(codes.Internal, "could not stop VM for reset: "+stopErr.Error())
 		}
-		if startErr := s.runtime.Start(ctx, vm); startErr != nil {
+		if startErr := s.startVM(ctx, vm); startErr != nil {
 			_, _ = s.store.SetVMStatus(ctx, vm.ID, store.StatusError)
 			return nil, status.Error(codes.Internal, "could not restart VM: "+startErr.Error())
 		}
