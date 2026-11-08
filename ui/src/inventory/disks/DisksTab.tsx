@@ -4,6 +4,7 @@ import { showToast } from "../../shared/toast";
 import { EntityLabels, useEntityLabels } from "../../shared/labels";
 import type { Disk, StorageBackend } from "../types";
 import { DiskDialog } from "./DiskDialog";
+import { DiskBandwidthDialog } from "./DiskBandwidthDialog";
 import { ImportDisksDialog } from "./ImportDisksDialog";
 import { StorageBackendDialog } from "./StorageBackendDialog";
 import { TemplateProvisioningDialog } from "./TemplateProvisioningDialog";
@@ -20,6 +21,23 @@ function formatDate(value: string | undefined): string {
     return "—";
   }
   return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function formatRate(bytes: number | undefined): string {
+  const value = Number(bytes) || 0;
+  if (value <= 0) {
+    return "unlimited";
+  }
+  if (value >= 1024 ** 3) {
+    return `${(value / 1024 ** 3).toFixed(1)} GiB/s`;
+  }
+  if (value >= 1024 ** 2) {
+    return `${(value / 1024 ** 2).toFixed(1)} MiB/s`;
+  }
+  if (value >= 1024) {
+    return `${(value / 1024).toFixed(1)} KiB/s`;
+  }
+  return `${value} B/s`;
 }
 
 function formatDiskSize(disk: Disk): string {
@@ -49,12 +67,14 @@ export function DisksTab() {
   const [backendDialog, setBackendDialog] = useState<{ backend: StorageBackend | null } | null>(null);
   const [importBackend, setImportBackend] = useState<StorageBackend | null>(null);
   const [provisioningDisk, setProvisioningDisk] = useState<Disk | null>(null);
+  const [bandwidthDisk, setBandwidthDisk] = useState<Disk | null>(null);
   const diskLabels = useEntityLabels("disk");
   const backendLabels = useEntityLabels("storage_backend");
   const route = useRoute();
 
   useEffect(() => {
     setProvisioningDisk(null);
+    setBandwidthDisk(null);
   }, [route.path, route.search]);
 
   useEffect(() => {
@@ -174,16 +194,23 @@ export function DisksTab() {
     const confirmed = window.confirm(
       disk.source === "host-device"
         ? `Delete disk "${disk.name}"?\n\nThis removes only the inventory record. The host block device ${disk.device} is not modified.`
-        : `Delete disk "${disk.name}"?\n\nThis removes the LVM thin volume and its inventory record.`
+        : disk.source === "kouja"
+          ? `Delete disk "${disk.name}"?\n\nThis queues the kouja volume for unexport and deletion. The disk stays visible until cleanup finishes.`
+          : `Delete disk "${disk.name}"?\n\nThis removes the LVM thin volume and its inventory record.`
     );
     if (!confirmed) {
       return;
     }
     try {
       await api(`/api/disks/${disk.id}`, { method: "DELETE" });
-      publishDisks(disks.filter((item) => item.id !== disk.id));
+      if (disk.source === "kouja") {
+        await loadDisks();
+        showToast(`Deletion queued for ${disk.name}`);
+      } else {
+        publishDisks(disks.filter((item) => item.id !== disk.id));
+        showToast(`Deleted disk ${disk.name}`);
+      }
       setDiskError("");
-      showToast(`Deleted disk ${disk.name}`);
       void loadBackends(false);
     } catch (err) {
       setDiskError(`Could not delete ${disk.name}: ${err instanceof Error ? err.message : String(err)}`);
@@ -191,8 +218,8 @@ export function DisksTab() {
   };
 
   const toggleTemplate = async (disk: Disk) => {
-    if (disk.source === "host-device") {
-      showToast("Host block devices cannot be templates.", true);
+    if (disk.source !== "lvm-thin" && disk.source) {
+      showToast("Only LVM thin disks can be templates.", true);
       return;
     }
     if (disk.attached_vm_id) {
@@ -314,9 +341,11 @@ export function DisksTab() {
                           onSaved={(labels) => backendLabels.setEntityLabels(String(backend.id), labels)}
                         />
                       </td>
-                      <td class="mono">{backend.driver === "lvm-thin" ? "LVM thin" : backend.driver}</td>
+                      <td class="mono">{backend.driver === "lvm-thin" ? "LVM thin" : backend.driver === "kouja" ? "Kouja" : backend.driver}</td>
                       <td class="mono">
-                        {backend.config?.vg || "—"}/{backend.config?.thin_pool || "—"}
+                        {backend.driver === "kouja"
+                          ? `${backend.config?.kouja?.endpoint || "—"} · ${backend.config?.kouja?.storage_class || "—"}`
+                          : `${backend.config?.vg || "—"}/${backend.config?.thin_pool || "—"}`}
                         {backend.config?.supports_templates ? (
                           <span class="import-disk-badge template-backend-badge">templates</span>
                         ) : null}
@@ -419,10 +448,20 @@ export function DisksTab() {
                       {disk.source === "host-device" ? (
                         <span class="import-disk-badge">passthrough</span>
                       ) : null}
+                      {disk.source === "kouja" ? <span class="import-disk-badge">kouja</span> : null}
+                      {disk.deletion_state ? (
+                        <span class="import-disk-badge" title={disk.deletion_error || disk.deletion_state}>
+                          {disk.deletion_state === "delete_failed" ? "delete failed" : disk.deletion_state}
+                        </span>
+                      ) : null}
                       {disk.template_disk_name ? (
                         <span class="vm-description">from {disk.template_disk_name}</span>
                       ) : null}
-                      {disk.device ? (
+                      {disk.locator ? (
+                        <span class="vm-description" title={disk.locator}>
+                          {disk.locator}
+                        </span>
+                      ) : disk.device ? (
                         <span class="vm-description" title={disk.device}>
                           {disk.device}
                         </span>
@@ -435,7 +474,14 @@ export function DisksTab() {
                         onSaved={(labels) => diskLabels.setEntityLabels(String(disk.id), labels)}
                       />
                     </td>
-                    <td class="mono">{formatDiskSize(disk)}</td>
+                    <td class="mono">
+                      {formatDiskSize(disk)}
+                      {disk.read_bps || disk.write_bps ? (
+                        <span class="vm-description">
+                          {formatRate(disk.read_bps)} read · {formatRate(disk.write_bps)} write
+                        </span>
+                      ) : null}
+                    </td>
                     <td class={disk.storage_backend_name || disk.source === "host-device" ? "mono" : "mono muted"}>
                       {disk.source === "host-device" ? "host device" : disk.storage_backend_name || "—"}
                     </td>
@@ -454,7 +500,20 @@ export function DisksTab() {
                             Provisioning
                           </button>
                         ) : null}
-                        {disk.source === "host-device" ? null : (
+                        <button
+                          class="row-action"
+                          type="button"
+                          disabled={Boolean(disk.deletion_state)}
+                          title={
+                            disk.deletion_state
+                              ? "This disk is being deleted."
+                              : "Set QEMU read/write bandwidth limits; restart the VM to apply them."
+                          }
+                          onClick={() => setBandwidthDisk(disk)}
+                        >
+                          Limits
+                        </button>
+                        {disk.source === "host-device" || (disk.source && disk.source !== "lvm-thin") ? null : (
                           <button
                             class="row-action"
                             type="button"
@@ -510,6 +569,18 @@ export function DisksTab() {
             setProvisioningDisk(null);
             publishDisks(disks.map((item) => (item.id === disk.id ? disk : item)));
             showToast(`Saved provisioning for ${disk.name}`);
+          }}
+        />
+      ) : null}
+
+      {bandwidthDisk ? (
+        <DiskBandwidthDialog
+          disk={bandwidthDisk}
+          onClose={() => setBandwidthDisk(null)}
+          onSaved={(disk) => {
+            setBandwidthDisk(null);
+            publishDisks(disks.map((item) => (item.id === disk.id ? disk : item)));
+            showToast(`Saved bandwidth limits for ${disk.name}`);
           }}
         />
       ) : null}

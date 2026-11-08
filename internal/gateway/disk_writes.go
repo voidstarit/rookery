@@ -143,8 +143,9 @@ func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateD
 	} else if !errors.Is(err, store.ErrDiskNotFound) {
 		return nil, status.Error(codes.Internal, "could not check disk name")
 	}
+	readBPS, writeBPS := requestDiskBandwidth(request)
 	disk := store.Disk{
-		Name: name, SizeGB: sizeGB,
+		Name: name, SizeGB: sizeGB, ReadBPS: readBPS, WriteBPS: writeBPS,
 		StorageBackendID: &backend.ID, StorageBackendName: backend.Name,
 		VG: backend.Config.VG, ThinPool: backend.Config.ThinPool,
 		Device:              "/dev/" + backend.Config.VG + "/" + name,
@@ -244,8 +245,10 @@ func (s *diskService) createHostDeviceDisk(ctx context.Context, request *rookery
 	if sizeGB < 1 {
 		sizeGB = 1
 	}
+	readBPS, writeBPS := requestDiskBandwidth(request)
 	disk := store.Disk{
 		Name: name, SizeGB: sizeGB, SizeBytes: device.SizeBytes,
+		ReadBPS: readBPS, WriteBPS: writeBPS,
 		Device: device.Path, Source: store.DiskSourceHostDevice,
 	}
 	created, err := s.store.CreateDisk(ctx, disk)
@@ -313,10 +316,18 @@ func (s *diskService) UpdateDisk(ctx context.Context, request *rookeryv1.UpdateD
 		if request.GetIsTemplate() || hasProvisioning {
 			return nil, status.Error(codes.InvalidArgument, "host devices cannot be templates or template clones")
 		}
+		if readBPS, writeBPS, update := applyUpdateBandwidth(request, disk); update {
+			updated, err := s.store.SetDiskBandwidth(ctx, disk.ID, readBPS, writeBPS)
+			if err != nil {
+				return nil, diskUpdateError(err)
+			}
+			return diskToProto(updated), nil
+		}
 		return diskToProto(disk), nil
 	}
 	hasProvisioning := request.ProvisioningScript != nil || request.ProvisioningTimeout != nil
-	if request.IsTemplate == nil && !hasProvisioning {
+	hasBandwidth := request.ReadBps != nil || request.WriteBps != nil
+	if request.IsTemplate == nil && !hasProvisioning && !hasBandwidth {
 		return diskToProto(disk), nil
 	}
 	targetTemplate := disk.IsTemplate
@@ -355,6 +366,12 @@ func (s *diskService) UpdateDisk(ctx context.Context, request *rookeryv1.UpdateD
 	}
 	if hasProvisioning {
 		updated, err = s.store.SetDiskProvisioning(ctx, disk.ID, script, timeout)
+		if err != nil {
+			return nil, diskUpdateError(err)
+		}
+	}
+	if readBPS, writeBPS, update := applyUpdateBandwidth(request, updated); update {
+		updated, err = s.store.SetDiskBandwidth(ctx, updated.ID, readBPS, writeBPS)
 		if err != nil {
 			return nil, diskUpdateError(err)
 		}
@@ -619,4 +636,29 @@ func normalizeImportNames(names []string) ([]string, error) {
 		out = append(out, name)
 	}
 	return out, nil
+}
+
+func requestDiskBandwidth(request *rookeryv1.CreateDiskRequest) (int64, int64) {
+	var readBPS, writeBPS int64
+	if request.ReadBps != nil {
+		readBPS = request.GetReadBps()
+	}
+	if request.WriteBps != nil {
+		writeBPS = request.GetWriteBps()
+	}
+	return readBPS, writeBPS
+}
+
+func applyUpdateBandwidth(request *rookeryv1.UpdateDiskRequest, disk store.Disk) (int64, int64, bool) {
+	if request.ReadBps == nil && request.WriteBps == nil {
+		return disk.ReadBPS, disk.WriteBPS, false
+	}
+	readBPS, writeBPS := disk.ReadBPS, disk.WriteBPS
+	if request.ReadBps != nil {
+		readBPS = request.GetReadBps()
+	}
+	if request.WriteBps != nil {
+		writeBPS = request.GetWriteBps()
+	}
+	return readBPS, writeBPS, true
 }

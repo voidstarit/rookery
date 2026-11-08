@@ -27,9 +27,12 @@ type KoujaConfig struct {
 	StorageClass   string `json:"storage_class"`
 	Initiator      string `json:"initiator,omitempty"`
 	HostNQN        string `json:"host_nqn,omitempty"`
-	CAFile         string `json:"ca_file"`
-	ClientCertFile string `json:"client_cert_file"`
-	ClientKeyFile  string `json:"client_key_file"`
+	CAFile         string `json:"ca_file,omitempty"`
+	ClientCertFile string `json:"client_cert_file,omitempty"`
+	ClientKeyFile  string `json:"client_key_file,omitempty"`
+	CAPEM          string `json:"ca_pem,omitempty"`
+	ClientCertPEM  string `json:"client_cert_pem,omitempty"`
+	ClientKeyPEM   string `json:"client_key_pem,omitempty"`
 	ServerName     string `json:"server_name,omitempty"`
 	Portal         string `json:"portal,omitempty"`
 }

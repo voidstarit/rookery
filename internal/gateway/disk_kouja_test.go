@@ -19,8 +19,12 @@ import (
 	"testing"
 	"time"
 
+	koujav1 "github.com/voidstarit/kouja/gen/kouja/v1"
+	"google.golang.org/grpc"
+
 	"github.com/voidstarit/rookery/internal/blockdev"
 	"github.com/voidstarit/rookery/internal/gateway"
+	"github.com/voidstarit/rookery/internal/kouja"
 	"github.com/voidstarit/rookery/internal/storage"
 	"github.com/voidstarit/rookery/internal/store"
 )
@@ -207,13 +211,34 @@ func gatewayCert(t *testing.T) (string, string, string) {
 	return certFile, keyFile, caFile
 }
 
-func koujaBackendBody(t *testing.T, name string) string {
+func koujaBackendPEMBody(t *testing.T, name string) string {
 	t.Helper()
 	certFile, keyFile, caFile := gatewayCert(t)
-	return `{"name":"` + name + `","driver":"kouja","config":{"kouja":{` +
-		`"endpoint":"10.0.0.1:9443","protocol":"iscsi","storage_class":"nvme",` +
-		`"initiator":"iqn.2026-11.io.example:rookery","ca_file":"` + caFile + `",` +
-		`"client_cert_file":"` + certFile + `","client_key_file":"` + keyFile + `"}}}`
+	certPEM, err := os.ReadFile(certFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPEM, err := os.ReadFile(keyFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caPEM, err := os.ReadFile(caFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := map[string]any{
+		"name": name, "driver": "kouja",
+		"config": map[string]any{"kouja": map[string]any{
+			"endpoint": "10.0.0.1:9443", "protocol": "iscsi", "storage_class": "nvme",
+			"initiator": "iqn.2026-11.io.example:rookery",
+			"ca_pem":    string(caPEM), "client_cert_pem": string(certPEM), "client_key_pem": string(keyPEM),
+		}},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }
 
 func TestKoujaBackendConfigAndHealthRoutes(t *testing.T) {
@@ -233,7 +258,7 @@ func TestKoujaBackendConfigAndHealthRoutes(t *testing.T) {
 	server := httptest.NewServer(gw.Handler)
 	t.Cleanup(server.Close)
 
-	response, err := http.Post(server.URL+"/api/storage-backends", "application/json", strings.NewReader(koujaBackendBody(t, "kouja-backend")))
+	response, err := http.Post(server.URL+"/api/storage-backends", "application/json", strings.NewReader(koujaBackendPEMBody(t, "kouja-backend")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -338,4 +363,176 @@ func TestKoujaOnlyBackendSelection(t *testing.T) {
 		t.Fatalf("implicit backend = %d, %s", response.StatusCode, readBody(t, response))
 	}
 	_ = response.Body.Close()
+}
+
+type probeKoujaAPI struct{}
+
+func (probeKoujaAPI) CreateVolume(context.Context, *koujav1.CreateVolumeRequest, ...grpc.CallOption) (*koujav1.CreateVolumeResponse, error) {
+	return nil, nil
+}
+func (probeKoujaAPI) GetVolume(context.Context, *koujav1.GetVolumeRequest, ...grpc.CallOption) (*koujav1.GetVolumeResponse, error) {
+	return nil, nil
+}
+func (probeKoujaAPI) GetCredential(context.Context, *koujav1.GetCredentialRequest, ...grpc.CallOption) (*koujav1.GetCredentialResponse, error) {
+	return nil, nil
+}
+func (probeKoujaAPI) UnexportVolume(context.Context, *koujav1.UnexportVolumeRequest, ...grpc.CallOption) (*koujav1.UnexportVolumeResponse, error) {
+	return nil, nil
+}
+func (probeKoujaAPI) DeleteVolume(context.Context, *koujav1.DeleteVolumeRequest, ...grpc.CallOption) (*koujav1.DeleteVolumeResponse, error) {
+	return nil, nil
+}
+func (probeKoujaAPI) GetInfo(context.Context, *koujav1.GetInfoRequest, ...grpc.CallOption) (*koujav1.GetInfoResponse, error) {
+	return &koujav1.GetInfoResponse{Ready: true, Protocols: []koujav1.Protocol{
+		koujav1.Protocol_PROTOCOL_ISCSI, koujav1.Protocol_PROTOCOL_UNSPECIFIED,
+	}}, nil
+}
+func (probeKoujaAPI) ListStorageClasses(context.Context, *koujav1.ListStorageClassesRequest, ...grpc.CallOption) (*koujav1.ListStorageClassesResponse, error) {
+	return &koujav1.ListStorageClassesResponse{Classes: []*koujav1.StorageClass{{Name: "nvme"}, {Name: "archive"}}}, nil
+}
+
+func koujaProbePEMBody(t *testing.T) string {
+	t.Helper()
+	certFile, keyFile, caFile := gatewayCert(t)
+	certPEM, err := os.ReadFile(certFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPEM, err := os.ReadFile(keyFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caPEM, err := os.ReadFile(caFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := map[string]any{"config": map[string]any{
+		"endpoint": "10.0.0.1:9443", "protocol": "iscsi",
+		"initiator": "iqn.2026-11.io.example:rookery",
+		"ca_pem":    string(caPEM), "client_cert_pem": string(certPEM), "client_key_pem": string(keyPEM),
+	}}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func TestKoujaProbeRoute(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "kouja-probe.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	gw, err := gateway.New(st, fakeReadiness{status: readyStatus()}, gateway.WithKoujaClientFactory(func(kouja.Config) (*kouja.Client, error) {
+		return kouja.NewClientFromService(probeKoujaAPI{}), nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	server := httptest.NewServer(gw.Handler)
+	t.Cleanup(server.Close)
+	response, err := http.Post(server.URL+"/api/storage-backends/kouja/probe", "application/json", strings.NewReader(koujaProbePEMBody(t)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("probe status = %d, body = %s", response.StatusCode, readBody(t, response))
+	}
+	var body map[string]any
+	decodeBody(t, response, &body)
+	classes, _ := body["storage_classes"].([]any)
+	if body["reachable"] != true || len(classes) != 2 || body["owner"] != "spiffe://kouja/caller/rookery" {
+		t.Fatalf("probe body = %+v", body)
+	}
+	// Invalid connection fields are rejected before a client is constructed.
+	bad, err := http.Post(server.URL+"/api/storage-backends/kouja/probe", "application/json", strings.NewReader(`{"config":{"endpoint":"10.0.0.1:9443"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bad.StatusCode != http.StatusBadRequest {
+		t.Fatalf("bad probe status = %d, body = %s", bad.StatusCode, readBody(t, bad))
+	}
+	_ = bad.Body.Close()
+}
+
+type probeKoujaErrorAPI struct {
+	probeKoujaAPI
+	infoErr    error
+	classesErr error
+}
+
+func (a probeKoujaErrorAPI) GetInfo(context.Context, *koujav1.GetInfoRequest, ...grpc.CallOption) (*koujav1.GetInfoResponse, error) {
+	if a.infoErr != nil {
+		return nil, a.infoErr
+	}
+	return a.probeKoujaAPI.GetInfo(context.Background(), nil)
+}
+
+func (a probeKoujaErrorAPI) ListStorageClasses(context.Context, *koujav1.ListStorageClassesRequest, ...grpc.CallOption) (*koujav1.ListStorageClassesResponse, error) {
+	if a.classesErr != nil {
+		return nil, a.classesErr
+	}
+	return a.probeKoujaAPI.ListStorageClasses(context.Background(), nil)
+}
+
+type probeKoujaNotReadyAPI struct{ probeKoujaAPI }
+
+func (a probeKoujaNotReadyAPI) GetInfo(context.Context, *koujav1.GetInfoRequest, ...grpc.CallOption) (*koujav1.GetInfoResponse, error) {
+	return &koujav1.GetInfoResponse{Ready: false, Protocols: []koujav1.Protocol{koujav1.Protocol_PROTOCOL_ISCSI}}, nil
+}
+
+func TestKoujaProbeErrors(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "kouja-probe-errors.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	tests := []struct {
+		name    string
+		factory func(kouja.Config) (*kouja.Client, error)
+		status  int
+	}{
+		{name: "factory", factory: func(kouja.Config) (*kouja.Client, error) { return nil, errors.New("boom") }, status: http.StatusServiceUnavailable},
+		{name: "info", factory: func(kouja.Config) (*kouja.Client, error) {
+			return kouja.NewClientFromService(probeKoujaErrorAPI{infoErr: errors.New("info failed")}), nil
+		}, status: http.StatusServiceUnavailable},
+		{name: "classes", factory: func(kouja.Config) (*kouja.Client, error) {
+			return kouja.NewClientFromService(probeKoujaErrorAPI{classesErr: errors.New("classes failed")}), nil
+		}, status: http.StatusServiceUnavailable},
+		{name: "not-ready", factory: func(kouja.Config) (*kouja.Client, error) {
+			return kouja.NewClientFromService(probeKoujaNotReadyAPI{}), nil
+		}, status: http.StatusOK},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			gw, err := gateway.New(st, fakeReadiness{status: readyStatus()}, gateway.WithKoujaClientFactory(test.factory))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(gw.Close)
+			server := httptest.NewServer(gw.Handler)
+			t.Cleanup(server.Close)
+			response, err := http.Post(server.URL+"/api/storage-backends/kouja/probe", "application/json", strings.NewReader(koujaProbePEMBody(t)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if response.StatusCode != test.status {
+				t.Fatalf("status = %d, body = %s", response.StatusCode, readBody(t, response))
+			}
+			if test.status == http.StatusOK {
+				var body map[string]any
+				decodeBody(t, response, &body)
+				if ready, ok := body["ready"]; ok && ready != false {
+					t.Fatalf("not-ready body = %+v", body)
+				}
+				if !strings.Contains(body["detail"].(string), "not ready") {
+					t.Fatalf("not-ready body = %+v", body)
+				}
+			} else {
+				_ = response.Body.Close()
+			}
+		})
+	}
 }

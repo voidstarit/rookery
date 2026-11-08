@@ -367,6 +367,39 @@ func (m *KoujaConfig) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
+	if utf8.RuneCountInString(m.GetCaPem()) > 65536 {
+		err := KoujaConfigValidationError{
+			field:  "CaPem",
+			reason: "value length must be at most 65536 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetClientCertPem()) > 65536 {
+		err := KoujaConfigValidationError{
+			field:  "ClientCertPem",
+			reason: "value length must be at most 65536 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetClientKeyPem()) > 65536 {
+		err := KoujaConfigValidationError{
+			field:  "ClientKeyPem",
+			reason: "value length must be at most 65536 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
 	if len(errors) > 0 {
 		return KoujaConfigMultiError(errors)
 	}
@@ -2575,3 +2608,255 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = StorageClassCapacityValidationError{}
+
+// Validate checks the field values on ProbeKoujaBackendRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ProbeKoujaBackendRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ProbeKoujaBackendRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ProbeKoujaBackendRequestMultiError, or nil if none found.
+func (m *ProbeKoujaBackendRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ProbeKoujaBackendRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetConfig() == nil {
+		err := ProbeKoujaBackendRequestValidationError{
+			field:  "Config",
+			reason: "value is required",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if all {
+		switch v := interface{}(m.GetConfig()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, ProbeKoujaBackendRequestValidationError{
+					field:  "Config",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, ProbeKoujaBackendRequestValidationError{
+					field:  "Config",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetConfig()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return ProbeKoujaBackendRequestValidationError{
+				field:  "Config",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return ProbeKoujaBackendRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// ProbeKoujaBackendRequestMultiError is an error wrapping multiple validation
+// errors returned by ProbeKoujaBackendRequest.ValidateAll() if the designated
+// constraints aren't met.
+type ProbeKoujaBackendRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ProbeKoujaBackendRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ProbeKoujaBackendRequestMultiError) AllErrors() []error { return m }
+
+// ProbeKoujaBackendRequestValidationError is the validation error returned by
+// ProbeKoujaBackendRequest.Validate if the designated constraints aren't met.
+type ProbeKoujaBackendRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ProbeKoujaBackendRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ProbeKoujaBackendRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ProbeKoujaBackendRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ProbeKoujaBackendRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ProbeKoujaBackendRequestValidationError) ErrorName() string {
+	return "ProbeKoujaBackendRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ProbeKoujaBackendRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sProbeKoujaBackendRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ProbeKoujaBackendRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ProbeKoujaBackendRequestValidationError{}
+
+// Validate checks the field values on ProbeKoujaBackendResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ProbeKoujaBackendResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ProbeKoujaBackendResponse with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ProbeKoujaBackendResponseMultiError, or nil if none found.
+func (m *ProbeKoujaBackendResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ProbeKoujaBackendResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Reachable
+
+	// no validation rules for Ready
+
+	// no validation rules for Detail
+
+	// no validation rules for Owner
+
+	if len(errors) > 0 {
+		return ProbeKoujaBackendResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// ProbeKoujaBackendResponseMultiError is an error wrapping multiple validation
+// errors returned by ProbeKoujaBackendResponse.ValidateAll() if the
+// designated constraints aren't met.
+type ProbeKoujaBackendResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ProbeKoujaBackendResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ProbeKoujaBackendResponseMultiError) AllErrors() []error { return m }
+
+// ProbeKoujaBackendResponseValidationError is the validation error returned by
+// ProbeKoujaBackendResponse.Validate if the designated constraints aren't met.
+type ProbeKoujaBackendResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ProbeKoujaBackendResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ProbeKoujaBackendResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ProbeKoujaBackendResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ProbeKoujaBackendResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ProbeKoujaBackendResponseValidationError) ErrorName() string {
+	return "ProbeKoujaBackendResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ProbeKoujaBackendResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sProbeKoujaBackendResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ProbeKoujaBackendResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ProbeKoujaBackendResponseValidationError{}

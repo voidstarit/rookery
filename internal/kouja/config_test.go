@@ -205,3 +205,58 @@ func cloneKouja(value *store.KoujaConfig) *store.KoujaConfig {
 	copy := *value
 	return &copy
 }
+
+func TestParseConfigPEMContent(t *testing.T) {
+	uri, _ := url.Parse("spiffe://kouja/caller/rookery")
+	certFile, keyFile, caFile := writeTestClientCert(t, []*url.URL{uri})
+	certPEM, err := os.ReadFile(certFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPEM, err := os.ReadFile(keyFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caPEM, err := os.ReadFile(caFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := store.StorageBackendConfig{Kouja: &store.KoujaConfig{
+		Endpoint: "10.0.0.1:9443", StorageClass: "nvme",
+		Initiator: "iqn.2026-11.io.example:rookery",
+		CAPEM:     string(caPEM), ClientCertPEM: string(certPEM), ClientKeyPEM: string(keyPEM),
+	}}
+	parsed, err := ParseConfig(cfg)
+	if err != nil {
+		t.Fatalf("ParseConfig(PEM) = %v", err)
+	}
+	if parsed.Owner != "spiffe://kouja/caller/rookery" || parsed.CAPEM == "" {
+		t.Fatalf("parsed PEM config = %+v", parsed)
+	}
+	partial := store.StorageBackendConfig{Kouja: cloneKouja(cfg.Kouja)}
+	partial.Kouja.ClientKeyPEM = ""
+	if _, err := ParseConfig(partial); err == nil || !strings.Contains(err.Error(), "together") {
+		t.Fatalf("partial PEM config = %v", err)
+	}
+	badCA := store.StorageBackendConfig{Kouja: cloneKouja(cfg.Kouja)}
+	badCA.Kouja.CAPEM = "not a certificate"
+	if _, err := ParseConfig(badCA); err == nil {
+		t.Fatal("ParseConfig accepted a bad CA PEM")
+	}
+	badKey := store.StorageBackendConfig{Kouja: cloneKouja(cfg.Kouja)}
+	badKey.Kouja.ClientKeyPEM = "not a key"
+	if _, err := ParseConfig(badKey); err == nil {
+		t.Fatal("ParseConfig accepted a bad client key PEM")
+	}
+}
+
+func TestParseConnectionConfigAllowsEmptyClass(t *testing.T) {
+	base := testKoujaConfig(t)
+	base.Kouja.StorageClass = ""
+	if _, err := ParseConnectionConfig(base); err != nil {
+		t.Fatalf("ParseConnectionConfig() = %v", err)
+	}
+	if _, err := ParseConfig(base); err == nil {
+		t.Fatal("ParseConfig accepted an empty storage class")
+	}
+}

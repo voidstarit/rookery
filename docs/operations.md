@@ -186,7 +186,22 @@ stopped.
 The `default` backend is bootstrapped from
 the API `-vg`/`-thin-pool` flags when supplied; otherwise `serve` starts with
 the first registered storage backend, and adding a backend in the UI updates
-readiness. LVM thin-pool backends can be registered and selected from the UI.
+readiness. LVM thin-pool backends can be registered and selected from the UI. Kouja
+backends are registered with the driver `kouja`, an endpoint, storage class,
+iSCSI initiator IQN, and PEM-encoded CA, client certificate, and client key
+content. The UI accepts pasted PEM or files loaded in the browser and stores the
+content with the backend; protect the SQLite database and backups accordingly.
+Legacy `ca_file`/`client_cert_file`/`client_key_file` paths remain accepted for
+existing backends. Kouja's session observation is refreshed on its reconcile interval, so a stale
+`SESSION_ACTIVE` is ignored; only a fresh non-zero active-session count blocks a
+start. If that happens, Rookery waits briefly and rechecks, and the UI retries
+the start automatically after the previous QEMU session drains. The client certificate must contain exactly one
+`spiffe://kouja/caller/<name>` URI SAN; keep that identity stable across
+certificate rotation. Kouja disks are exported directly to QEMU;
+the host does not create an `iscsiadm` session. Queue a kouja disk delete and
+let the reclaimer finish it; `delete_failed` rows can be retried. Per-disk
+read/write bandwidth limits are set in the Disks UI and applied by QEMU at the
+next VM start.
 Each configured LVM backend has an **Import** action that lists existing thin
 volumes in its pool and registers selected volumes as disks without modifying
 LVM. Already registered volumes are shown as unavailable. The driver and config
@@ -301,7 +316,8 @@ restored, and failures are logged without stopping the API.
 
 The **Monitor** action opens a live telemetry dialog that samples the QEMU
 process every two seconds and shows CPU usage, RSS/virtual memory, disk read
-and write rates, network RX/TX rates, uptime, and PID. It also keeps 60 samples
+and write rates, per-block-device read/write totals and failed-operation
+counters, network RX/TX rates, uptime, and PID. It also keeps 60 samples
 (about two minutes) and draws CPU, memory RSS, disk I/O, and network I/O history
 on embedded canvas charts. Network counters are read from the VM's VPP vhost
 interfaces. It reports process- and vhost-level metrics, not guest OS metrics.

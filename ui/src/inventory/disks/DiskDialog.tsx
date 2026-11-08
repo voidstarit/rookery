@@ -17,6 +17,8 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
   const [storageKind, setStorageKind] = useState<"lvm" | "host">(backends.length === 0 ? "host" : "lvm");
   const [name, setName] = useState("");
   const [sizeGB, setSizeGB] = useState("10");
+  const [readBPS, setReadBPS] = useState("0");
+  const [writeBPS, setWriteBPS] = useState("0");
   const [backendID, setBackendID] = useState(defaultBackend ? String(defaultBackend.id) : "");
   const [hostDevices, setHostDevices] = useState<HostAttachableBlockDevice[]>([]);
   const [hostDevicePath, setHostDevicePath] = useState("");
@@ -118,11 +120,13 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
     try {
       const body =
         storageKind === "host"
-          ? { name: name.trim(), host_device: hostDevice?.path }
+          ? { name: name.trim(), host_device: hostDevice?.path, read_bps: Number(readBPS) || 0, write_bps: Number(writeBPS) || 0 }
           : {
               name: name.trim(),
               size_gb: Number(sizeGB),
               storage_backend_id: Number(backendID),
+              read_bps: Number(readBPS) || 0,
+              write_bps: Number(writeBPS) || 0,
               ...(source === "template" && template ? { template_disk_id: template.id } : {}),
               ...(source === "template" && template?.provisioning_script && provisioning !== undefined
                 ? { provisioning }
@@ -205,16 +209,40 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
               onChange={(event) => setStorageKind(event.currentTarget.value as "lvm" | "host")}
             >
               <option value="lvm" disabled={backends.length === 0}>
-                LVM thin volume
+                Provisioned storage (LVM thin or kouja)
               </option>
               <option value="host">Host block device (passthrough)</option>
             </select>
             <span class="field-hint">
-              Passthrough disks hand an existing host disk, partition, or logical volume to one VM.
-              Rookery never deletes or resizes the underlying device.
+              Provisioned disks use the selected storage backend. Passthrough disks hand an
+              existing host disk, partition, or logical volume to one VM; Rookery never deletes
+              or resizes the underlying device.
             </span>
           </label>
 
+          <label class="field">
+            <span class="field-label">Read bandwidth limit (bytes/s)</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              placeholder="0 (unlimited)"
+              value={readBPS}
+              onInput={(event) => setReadBPS(event.currentTarget.value)}
+            />
+          </label>
+          <label class="field">
+            <span class="field-label">Write bandwidth limit (bytes/s)</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              placeholder="0 (unlimited)"
+              value={writeBPS}
+              onInput={(event) => setWriteBPS(event.currentTarget.value)}
+            />
+            <span class="field-hint">QEMU block throttling; 0 means unlimited. Applies when the VM starts.</span>
+          </label>
           {storageKind === "lvm" ? (
             <>
               <label class="field">
@@ -244,14 +272,16 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
                 >
                   {backends.map((backend) => (
                     <option value={String(backend.id)} key={backend.id}>
-                      {backend.name} · {backend.driver === "lvm-thin" ? "LVM thin" : backend.driver}
+                      {backend.name} · {backend.driver === "lvm-thin" ? "LVM thin" : backend.driver === "kouja" ? "Kouja" : backend.driver}
                     </option>
                   ))}
                 </select>
                 <span class="field-hint">
-                  {supportsTemplates
-                    ? "Template cloning is available on this backend."
-                    : "Template cloning is disabled for this backend; enable it in Storage backends."}
+                  {backend?.driver === "kouja"
+                    ? "Kouja provisions a remote volume and exports it over the selected protocol."
+                    : supportsTemplates
+                      ? "Template cloning is available on this backend."
+                      : "Template cloning is disabled for this backend; enable it in Storage backends."}
                 </span>
               </label>
               {supportsTemplates ? (

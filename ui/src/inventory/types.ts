@@ -214,6 +214,10 @@ export type VMDisk = {
   thin_pool: string;
   device: string;
   source?: string;
+  protocol?: string;
+  locator?: string;
+  read_bps?: number;
+  write_bps?: number;
 };
 
 export type VMMedia = {
@@ -255,8 +259,23 @@ export type VM = {
   interfaces?: VMInterface[];
   console_enabled: boolean;
   cgroup_class?: string;
+  run_state?: string;
   created_at?: string;
   updated_at?: string;
+};
+
+export type BlockDeviceMetrics = {
+  disk_id?: number;
+  name?: string;
+  device: string;
+  read_bytes: number;
+  write_bytes: number;
+  read_operations: number;
+  write_operations: number;
+  failed_read_operations: number;
+  failed_write_operations: number;
+  invalid_read_operations: number;
+  invalid_write_operations: number;
 };
 
 export type VMMetrics = {
@@ -277,15 +296,42 @@ export type VMMetrics = {
   network_rx_packets_total: number;
   network_tx_packets_total: number;
   sampled_at: string;
+  block_devices?: BlockDeviceMetrics[];
+};
+
+export type KoujaConfig = {
+  endpoint: string;
+  protocol?: string;
+  storage_class: string;
+  initiator?: string;
+  host_nqn?: string;
+  ca_file?: string;
+  client_cert_file?: string;
+  client_key_file?: string;
+  ca_pem?: string;
+  client_cert_pem?: string;
+  client_key_pem?: string;
+  server_name?: string;
+  portal?: string;
+};
+
+export type KoujaProbeResult = {
+  reachable: boolean;
+  ready: boolean;
+  detail?: string;
+  owner?: string;
+  protocols?: string[];
+  storage_classes?: string[];
 };
 
 export type StorageBackendConfig = {
-  vg: string;
-  thin_pool: string;
+  vg?: string;
+  thin_pool?: string;
   supports_templates?: boolean;
   preparation_script?: string;
   preparation_timeout?: string;
   allow_template_delete_with_clones?: boolean;
+  kouja?: KoujaConfig;
 };
 
 export type StorageBackend = {
@@ -311,6 +357,12 @@ export type Disk = {
   thin_pool: string;
   device: string;
   source?: string;
+  protocol?: string;
+  locator?: string;
+  read_bps?: number;
+  write_bps?: number;
+  deletion_state?: string;
+  deletion_error?: string;
   attached_vm_id?: string;
   attached_vm_name?: string;
   is_template?: boolean;

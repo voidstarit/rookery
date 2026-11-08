@@ -10,6 +10,7 @@ import type {
   VirtualInterface,
   VMInterface,
 } from "../types";
+import { diskNeedsThinPool } from "./disk-predicates";
 
 type VMDialogProps = {
   vm: VM | null;
@@ -92,6 +93,9 @@ export function VMDialog({
       return false;
     }
     if (selectedDiskIDs.has(disk.id)) {
+      return false;
+    }
+    if (disk.deletion_state) {
       return false;
     }
     return !disk.attached_vm_id || (vm !== null && disk.attached_vm_id === vm.id);
@@ -199,13 +203,13 @@ export function VMDialog({
       return;
     }
     if (!editing) {
-      const needsThinPool = selectedDisks.some((disk) => disk.source !== "host-device");
+      const needsThinPool = selectedDisks.some((disk) => diskNeedsThinPool(disk));
       if (!vppReady) {
         setError("FD.io VPP is not ready. VM creation is blocked until VPP is reachable.");
         return;
       }
       if (needsThinPool && !thinPoolReady) {
-        setError("The thin pool is not ready. Select a host passthrough disk or fix the thin pool first.");
+        setError("The thin pool is not ready. Select a non-LVM disk or fix the thin pool first.");
         return;
       }
     }
@@ -349,7 +353,7 @@ export function VMDialog({
                 {availableDisks.map((disk) => (
                   <option value={String(disk.id)} key={disk.id}>
                     {disk.name} · {formatBytes(disk.size_bytes || disk.size_gb * 1024 ** 3)}
-                    {disk.source === "host-device" ? " · passthrough" : ""}
+                    {disk.source === "host-device" ? " · passthrough" : disk.source === "kouja" ? " · kouja" : ""}
                   </option>
                 ))}
               </select>
@@ -372,7 +376,7 @@ export function VMDialog({
                       {disk.name}
                       <span class="interface-list-network">
                         {formatBytes(disk.size_bytes || disk.size_gb * 1024 ** 3)}
-                        {disk.source === "host-device" ? " · passthrough" : ""}
+                        {disk.source === "host-device" ? " · passthrough" : disk.source === "kouja" ? " · kouja" : ""}
                         {index === 0 ? " · boot" : ""}
                       </span>
                     </span>

@@ -29,6 +29,7 @@ const (
 	VMService_StopVM_FullMethodName       = "/rookery.v1.VMService/StopVM"
 	VMService_ResetVM_FullMethodName      = "/rookery.v1.VMService/ResetVM"
 	VMService_CtrlAltDel_FullMethodName   = "/rookery.v1.VMService/CtrlAltDel"
+	VMService_ResumeVM_FullMethodName     = "/rookery.v1.VMService/ResumeVM"
 	VMService_GetVMMetrics_FullMethodName = "/rookery.v1.VMService/GetVMMetrics"
 )
 
@@ -47,6 +48,7 @@ type VMServiceClient interface {
 	StopVM(ctx context.Context, in *StopVMRequest, opts ...grpc.CallOption) (*VM, error)
 	ResetVM(ctx context.Context, in *ResetVMRequest, opts ...grpc.CallOption) (*VM, error)
 	CtrlAltDel(ctx context.Context, in *CtrlAltDelRequest, opts ...grpc.CallOption) (*VM, error)
+	ResumeVM(ctx context.Context, in *ResumeVMRequest, opts ...grpc.CallOption) (*VM, error)
 	GetVMMetrics(ctx context.Context, in *GetVMMetricsRequest, opts ...grpc.CallOption) (*VMMetrics, error)
 }
 
@@ -148,6 +150,16 @@ func (c *vMServiceClient) CtrlAltDel(ctx context.Context, in *CtrlAltDelRequest,
 	return out, nil
 }
 
+func (c *vMServiceClient) ResumeVM(ctx context.Context, in *ResumeVMRequest, opts ...grpc.CallOption) (*VM, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VM)
+	err := c.cc.Invoke(ctx, VMService_ResumeVM_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vMServiceClient) GetVMMetrics(ctx context.Context, in *GetVMMetricsRequest, opts ...grpc.CallOption) (*VMMetrics, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(VMMetrics)
@@ -173,6 +185,7 @@ type VMServiceServer interface {
 	StopVM(context.Context, *StopVMRequest) (*VM, error)
 	ResetVM(context.Context, *ResetVMRequest) (*VM, error)
 	CtrlAltDel(context.Context, *CtrlAltDelRequest) (*VM, error)
+	ResumeVM(context.Context, *ResumeVMRequest) (*VM, error)
 	GetVMMetrics(context.Context, *GetVMMetricsRequest) (*VMMetrics, error)
 	mustEmbedUnimplementedVMServiceServer()
 }
@@ -210,6 +223,9 @@ func (UnimplementedVMServiceServer) ResetVM(context.Context, *ResetVMRequest) (*
 }
 func (UnimplementedVMServiceServer) CtrlAltDel(context.Context, *CtrlAltDelRequest) (*VM, error) {
 	return nil, status.Error(codes.Unimplemented, "method CtrlAltDel not implemented")
+}
+func (UnimplementedVMServiceServer) ResumeVM(context.Context, *ResumeVMRequest) (*VM, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResumeVM not implemented")
 }
 func (UnimplementedVMServiceServer) GetVMMetrics(context.Context, *GetVMMetricsRequest) (*VMMetrics, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetVMMetrics not implemented")
@@ -397,6 +413,24 @@ func _VMService_CtrlAltDel_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VMService_ResumeVM_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResumeVMRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VMServiceServer).ResumeVM(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VMService_ResumeVM_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VMServiceServer).ResumeVM(ctx, req.(*ResumeVMRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VMService_GetVMMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetVMMetricsRequest)
 	if err := dec(in); err != nil {
@@ -457,6 +491,10 @@ var VMService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CtrlAltDel",
 			Handler:    _VMService_CtrlAltDel_Handler,
+		},
+		{
+			MethodName: "ResumeVM",
+			Handler:    _VMService_ResumeVM_Handler,
 		},
 		{
 			MethodName: "GetVMMetrics",

@@ -2,6 +2,7 @@ package kouja
 
 import (
 	"context"
+	"crypto/tls"
 
 	koujacli "github.com/voidstarit/kouja/gen/client"
 	koujav1 "github.com/voidstarit/kouja/gen/kouja/v1"
@@ -29,7 +30,7 @@ type Client struct {
 
 // NewClient creates a kouja mTLS client for cfg.
 func NewClient(cfg Config) (*Client, error) {
-	tlsConfig, err := koujacli.LoadTLSConfig(cfg.ClientCertFile, cfg.ClientKeyFile, cfg.CAFile)
+	tlsConfig, err := tlsConfigForConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -41,6 +42,13 @@ func NewClient(cfg Config) (*Client, error) {
 		return nil, err
 	}
 	return &Client{API: grpcClient, close: grpcClient.Close}, nil
+}
+
+func tlsConfigForConfig(cfg Config) (*tls.Config, error) {
+	if cfg.CAPEM != "" || cfg.ClientCertPEM != "" || cfg.ClientKeyPEM != "" {
+		return tlsConfigFromPEM(cfg.CAPEM, cfg.ClientCertPEM, cfg.ClientKeyPEM)
+	}
+	return koujacli.LoadTLSConfig(cfg.ClientCertFile, cfg.ClientKeyFile, cfg.CAFile)
 }
 
 // NewClientFromService wraps an existing service client. It is intended for

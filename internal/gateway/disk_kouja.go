@@ -41,8 +41,9 @@ func (s *diskService) createKoujaDisk(ctx context.Context, request *rookeryv1.Cr
 		}
 		storageClass = backend.Config.Kouja.StorageClass
 	}
+	readBPS, writeBPS := requestDiskBandwidth(request)
 	disk := store.Disk{
-		Name: name, SizeGB: sizeGB,
+		Name: name, SizeGB: sizeGB, ReadBPS: readBPS, WriteBPS: writeBPS,
 		StorageBackendID: &backend.ID, StorageBackendName: backend.Name,
 		Source: store.DiskSourceKouja, Protocol: string(protocol),
 		BackendMetadata: store.DiskBackendMetadata{

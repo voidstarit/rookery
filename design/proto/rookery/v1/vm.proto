@@ -59,6 +59,10 @@ service VMService {
     option (google.api.http) = {post: "/api/vms/{id}/ctrl-alt-del"};
   }
 
+  rpc ResumeVM(ResumeVMRequest) returns (VM) {
+    option (google.api.http) = {post: "/api/vms/{id}/resume"};
+  }
+
   rpc GetVMMetrics(GetVMMetricsRequest) returns (VMMetrics) {
     option (google.api.http) = {get: "/api/vms/{id}/metrics"};
   }
@@ -144,6 +148,10 @@ message StartVMRequest {
   string id = 1 [(validate.rules).string.uuid = true];
 }
 
+message ResumeVMRequest {
+  string id = 1 [(validate.rules).string.uuid = true];
+}
+
 message StopVMRequest {
   string id = 1 [(validate.rules).string.uuid = true];
 }
@@ -178,4 +186,19 @@ message VMMetrics {
   uint64 network_rx_packets_total = 15;
   uint64 network_tx_packets_total = 16;
   google.protobuf.Timestamp sampled_at = 17;
+  repeated BlockDeviceMetrics block_devices = 18;
+}
+
+message BlockDeviceMetrics {
+  int64 disk_id = 1;
+  string name = 2;
+  string device = 3;
+  uint64 read_bytes = 4;
+  uint64 write_bytes = 5;
+  uint64 read_operations = 6;
+  uint64 write_operations = 7;
+  uint64 failed_read_operations = 8;
+  uint64 failed_write_operations = 9;
+  uint64 invalid_read_operations = 10;
+  uint64 invalid_write_operations = 11;
 }

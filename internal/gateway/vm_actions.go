@@ -3,6 +3,8 @@ package gateway
 import (
 	"context"
 	"errors"
+	"strconv"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -12,6 +14,7 @@ import (
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/host"
+	"github.com/voidstarit/rookery/internal/kouja"
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/store"
 )
@@ -26,6 +29,17 @@ type VMController interface {
 	Metrics(vmID string) (qemu.Metrics, error)
 }
 
+// VMStateMonitor exposes the live QEMU monitor state and pause recovery.
+type VMStateMonitor interface {
+	RunState(ctx context.Context, vmID string) (string, error)
+	Resume(ctx context.Context, vmID string) (string, error)
+}
+
+// VMBlockStats exposes per-drive QEMU block counters.
+type VMBlockStats interface {
+	BlockStats(ctx context.Context, vmID string) ([]qemu.BlockDeviceStats, error)
+}
+
 // CgroupUpdater applies cgroup changes to a running VM without restarting
 // QEMU. Implementations move the QEMU process between child cgroups as needed.
 type CgroupUpdater interface {
@@ -36,6 +50,25 @@ type CgroupUpdater interface {
 type InterfaceCounterSource interface {
 	InterfaceCounters(ctx context.Context, names []string) (map[string]host.InterfaceCounters, error)
 	ResetInterfaceCounters(ctx context.Context) error
+}
+
+func vmStartStatusError(err error) error {
+	if errors.Is(err, kouja.ErrSessionActive) {
+		return status.Error(codes.Unavailable, "could not start VM: "+err.Error()+" (retrying after the previous iSCSI session closes usually succeeds)")
+	}
+	return status.Error(codes.Internal, "could not start VM: "+err.Error())
+}
+
+func (s *vmService) vmToProto(ctx context.Context, vm store.VM) *rookeryv1.VM {
+	result := vmToProto(vm)
+	if vm.Status == store.StatusRunning && s.runtime != nil {
+		if monitor, ok := s.runtime.(VMStateMonitor); ok {
+			if state, err := monitor.RunState(ctx, vm.ID); err == nil {
+				result.RunState = state
+			}
+		}
+	}
+	return result
 }
 
 func (s *vmService) startVM(ctx context.Context, vm store.VM) error {
@@ -91,7 +124,7 @@ func (s *vmService) StartVM(ctx context.Context, request *rookeryv1.StartVMReque
 	}
 	if err := s.startVM(ctx, vm); err != nil {
 		_, _ = s.store.SetVMStatus(ctx, vm.ID, store.StatusError)
-		return nil, status.Error(codes.Internal, "could not start VM: "+err.Error())
+		return nil, vmStartStatusError(err)
 	}
 	if _, err := s.store.SetVMStatus(ctx, vm.ID, store.StatusRunning); err != nil {
 		return nil, status.Error(codes.Internal, "could not update VM status")
@@ -100,7 +133,7 @@ func (s *vmService) StartVM(ctx context.Context, request *rookeryv1.StartVMReque
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not update VM desired state")
 	}
-	return vmToProto(updated), nil
+	return s.vmToProto(ctx, updated), nil
 }
 
 func (s *vmService) StopVM(ctx context.Context, request *rookeryv1.StopVMRequest) (*rookeryv1.VM, error) {
@@ -127,7 +160,39 @@ func (s *vmService) StopVM(ctx context.Context, request *rookeryv1.StopVMRequest
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not update VM desired state")
 	}
-	return vmToProto(updated), nil
+	return s.vmToProto(ctx, updated), nil
+}
+
+func (s *vmService) ResumeVM(ctx context.Context, request *rookeryv1.ResumeVMRequest) (*rookeryv1.VM, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.runtimeUnavailable(); err != nil {
+		return nil, err
+	}
+	vm, err := s.store.GetVM(ctx, request.GetId())
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		return nil, status.Error(codes.NotFound, "vm not found")
+	case err != nil:
+		return nil, status.Error(codes.Internal, "could not read VM")
+	}
+	if !s.runtime.Running(vm.ID) {
+		return nil, status.Error(codes.FailedPrecondition, "VM is not running")
+	}
+	monitor, ok := s.runtime.(VMStateMonitor)
+	if !ok {
+		return nil, status.Error(codes.Unimplemented, "VM runtime does not expose monitor state")
+	}
+	state, err := monitor.Resume(ctx, vm.ID)
+	if err != nil {
+		if errors.Is(err, qemu.ErrNotPaused) {
+			return nil, status.Error(codes.FailedPrecondition, "VM is not paused")
+		}
+		return nil, status.Error(codes.Internal, "could not resume VM: "+err.Error())
+	}
+	result := vmToProto(vm)
+	result.RunState = state
+	return result, nil
 }
 
 func (s *vmService) ResetVM(ctx context.Context, request *rookeryv1.ResetVMRequest) (*rookeryv1.VM, error) {
@@ -188,6 +253,29 @@ func (s *vmService) CtrlAltDel(ctx context.Context, request *rookeryv1.CtrlAltDe
 	return s.getVM(ctx, request.GetId())
 }
 
+func blockDeviceToProto(vm store.VM, stat qemu.BlockDeviceStats) *rookeryv1.BlockDeviceMetrics {
+	result := &rookeryv1.BlockDeviceMetrics{
+		Device:    stat.Device,
+		ReadBytes: stat.ReadBytes, WriteBytes: stat.WriteBytes,
+		ReadOperations: stat.ReadOperations, WriteOperations: stat.WriteOperations,
+		FailedReadOperations: stat.FailedReadOps, FailedWriteOperations: stat.FailedWriteOps,
+		InvalidReadOperations: stat.InvalidReadOps, InvalidWriteOperations: stat.InvalidWriteOps,
+	}
+	const prefix = "rookery-disk-"
+	if strings.HasPrefix(stat.Device, prefix) {
+		if id, err := strconv.ParseInt(strings.TrimPrefix(stat.Device, prefix), 10, 64); err == nil {
+			result.DiskId = id
+			for _, disk := range vm.Disks {
+				if disk.ID == id {
+					result.Name = disk.Name
+					break
+				}
+			}
+		}
+	}
+	return result
+}
+
 func (s *vmService) GetVMMetrics(ctx context.Context, request *rookeryv1.GetVMMetricsRequest) (*rookeryv1.VMMetrics, error) {
 	if err := s.runtimeUnavailable(); err != nil {
 		return nil, err
@@ -218,6 +306,15 @@ func (s *vmService) GetVMMetrics(ctx context.Context, request *rookeryv1.GetVMMe
 		MemoryMb:            int32(vm.MemoryMB),
 		SampledAt:           timestamppb.New(time.Now().UTC()),
 	}
+	if metrics.Running {
+		if blockSource, ok := s.runtime.(VMBlockStats); ok {
+			if blockStats, blockErr := blockSource.BlockStats(ctx, vm.ID); blockErr == nil {
+				for _, stat := range blockStats {
+					result.BlockDevices = append(result.BlockDevices, blockDeviceToProto(vm, stat))
+				}
+			}
+		}
+	}
 	if metrics.Running && s.counters != nil && len(vm.Interfaces) > 0 {
 		names := make([]string, 0, len(vm.Interfaces))
 		for _, iface := range vm.Interfaces {
@@ -240,7 +337,7 @@ func (s *vmService) getVM(ctx context.Context, id string) (*rookeryv1.VM, error)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not read VM")
 	}
-	return vmToProto(vm), nil
+	return s.vmToProto(ctx, vm), nil
 }
 
 func (s *vmService) DeleteVM(ctx context.Context, request *rookeryv1.DeleteVMRequest) (*emptypb.Empty, error) {

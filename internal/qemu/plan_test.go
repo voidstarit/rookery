@@ -428,3 +428,103 @@ func TestRunStateMonitorErrors(t *testing.T) {
 		t.Fatalf("monitorQuery(missing monitor) = %v", err)
 	}
 }
+
+func TestBuildDiskArgsThrottling(t *testing.T) {
+	local, err := buildDiskArgs(store.VMDisk{
+		Device: "/dev/vg0/data", ReadBPS: 10 * 1024 * 1024, WriteBPS: 5 * 1024 * 1024,
+	}, StartPlan{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	localArgs := strings.Join(local, " ")
+	if !strings.Contains(localArgs, "throttling.bps-read=10485760") ||
+		!strings.Contains(localArgs, "throttling.bps-write=5242880") {
+		t.Fatalf("local args = %q", localArgs)
+	}
+	disk := testRemoteDisk()
+	disk.ReadBPS = 10 * 1024 * 1024
+	disk.WriteBPS = 5 * 1024 * 1024
+	remote, err := buildDiskArgs(disk, testISCSIPlan(), map[int64]string{7: "/run/rookery/secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	remoteArgs := strings.Join(remote, " ")
+	if !strings.Contains(remoteArgs, "throttling.bps-read=10485760") ||
+		!strings.Contains(remoteArgs, "throttling.bps-write=5242880") {
+		t.Fatalf("remote args = %q", remoteArgs)
+	}
+}
+
+func TestBlockStats(t *testing.T) {
+	ctx := context.Background()
+	q, err := New(DefaultBinary, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats, err := q.BlockStats(ctx, uuid.NewString()); err != nil || stats != nil {
+		t.Fatalf("BlockStats(stopped) = %+v, %v", stats, err)
+	}
+	vmID := uuid.NewString()
+	startMonitorProcess(t, q, vmID)
+	socket := qmpPathFromSocket(q.VNCSocket(vmID))
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		reader := bufio.NewReader(conn)
+		_, _ = conn.Write([]byte(`{"QMP":{"version":{"qemu":{"major":10,"minor":0,"micro":0}}}}` + "\n"))
+		for _, response := range []string{
+			`{"return":{}}`,
+			`{"return":[{"device":"rookery-disk-7","stats":{"rd_bytes":1024,"wr_bytes":2048,"rd_operations":10,"wr_operations":20,"failed_rd_operations":1,"failed_wr_operations":2,"invalid_rd_operations":3,"invalid_wr_operations":4}},{"node-name":"node-x","stats":{"rd_bytes":1}},{"device":"no-stats"}]}`,
+		} {
+			if _, err := reader.ReadString('\n'); err != nil {
+				return
+			}
+			_, _ = conn.Write([]byte(response + "\n"))
+		}
+	}()
+	stats, err := q.BlockStats(ctx, vmID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stats) != 2 || stats[0].Device != "rookery-disk-7" || stats[0].ReadBytes != 1024 ||
+		stats[0].FailedReadOps != 1 || stats[0].InvalidWriteOps != 4 || stats[1].Device != "node-x" {
+		t.Fatalf("stats = %+v", stats)
+	}
+}
+
+func TestBlockStatsErrors(t *testing.T) {
+	ctx := context.Background()
+	q, err := New(DefaultBinary, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	vmID := uuid.NewString()
+	startMonitorProcess(t, q, vmID)
+	if _, err := q.BlockStats(ctx, vmID); err == nil {
+		t.Fatal("BlockStats accepted a missing QMP socket")
+	}
+	socket := qmpPathFromSocket(q.VNCSocket(vmID))
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		_ = conn.Close()
+	}()
+	if _, err := q.BlockStats(ctx, vmID); err == nil {
+		t.Fatal("BlockStats accepted a closed QMP socket")
+	}
+}

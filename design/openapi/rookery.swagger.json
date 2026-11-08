@@ -2405,6 +2405,38 @@
         ]
       }
     },
+    "/api/storage-backends/kouja/probe": {
+      "post": {
+        "operationId": "StorageBackendService_ProbeKoujaBackend",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ProbeKoujaBackendResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1ProbeKoujaBackendRequest"
+            }
+          }
+        ],
+        "tags": [
+          "StorageBackendService"
+        ]
+      }
+    },
     "/api/storage-backends/{id}": {
       "get": {
         "operationId": "StorageBackendService_GetStorageBackend",
@@ -3195,6 +3227,36 @@
         ]
       }
     },
+    "/api/vms/{id}/resume": {
+      "post": {
+        "operationId": "VMService_ResumeVM",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VM"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VMService"
+        ]
+      }
+    },
     "/api/vms/{id}/start": {
       "post": {
         "operationId": "VMService_StartVM",
@@ -3824,6 +3886,14 @@
         },
         "provisioning_timeout": {
           "type": "string"
+        },
+        "read_bps": {
+          "type": "string",
+          "format": "int64"
+        },
+        "write_bps": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },
@@ -4452,6 +4522,53 @@
         }
       }
     },
+    "v1BlockDeviceMetrics": {
+      "type": "object",
+      "properties": {
+        "disk_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "device": {
+          "type": "string"
+        },
+        "read_bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "write_bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "read_operations": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "write_operations": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "failed_read_operations": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "failed_write_operations": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "invalid_read_operations": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "invalid_write_operations": {
+          "type": "string",
+          "format": "uint64"
+        }
+      }
+    },
     "v1CgroupClass": {
       "type": "object",
       "properties": {
@@ -4730,6 +4847,14 @@
         "host_device": {
           "type": "string",
           "description": "host_device registers an existing host block device (a whole disk,\npartition, or logical volume) for passthrough to one VM. When set,\nstorage_backend_id, size_gb, is_template, template_disk_id, and\nprovisioning settings must be omitted; the size is read from the device."
+        },
+        "read_bps": {
+          "type": "string",
+          "format": "int64"
+        },
+        "write_bps": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },
@@ -5170,6 +5295,15 @@
         "protocol": {
           "type": "string",
           "description": "protocol distinguishes local, iscsi, nvme-tcp, and rbd attachments."
+        },
+        "read_bps": {
+          "type": "string",
+          "format": "int64",
+          "description": "read_bps and write_bps are QEMU block throttling limits in bytes per\nsecond. Zero means unlimited."
+        },
+        "write_bps": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },
@@ -5547,6 +5681,16 @@
           "type": "string"
         },
         "host_nqn": {
+          "type": "string"
+        },
+        "ca_pem": {
+          "type": "string",
+          "description": "PEM content is preferred when set. ca_file/client_cert_file/client_key_file\nremain for existing backends and CLI/Terraform configurations."
+        },
+        "client_cert_pem": {
+          "type": "string"
+        },
+        "client_key_pem": {
           "type": "string"
         }
       },
@@ -6330,6 +6474,43 @@
         }
       }
     },
+    "v1ProbeKoujaBackendRequest": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "$ref": "#/definitions/v1KoujaConfig"
+        }
+      }
+    },
+    "v1ProbeKoujaBackendResponse": {
+      "type": "object",
+      "properties": {
+        "reachable": {
+          "type": "boolean"
+        },
+        "ready": {
+          "type": "boolean"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "protocols": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "storage_classes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "v1Route": {
       "type": "object",
       "properties": {
@@ -6948,6 +7129,15 @@
         "protocol": {
           "type": "string",
           "description": "protocol distinguishes local, iscsi, nvme-tcp, and rbd attachments."
+        },
+        "read_bps": {
+          "type": "string",
+          "format": "int64",
+          "description": "read_bps and write_bps are QEMU block throttling limits in bytes per\nsecond. Zero means unlimited."
+        },
+        "write_bps": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },
@@ -7072,6 +7262,13 @@
         "sampled_at": {
           "type": "string",
           "format": "date-time"
+        },
+        "block_devices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1BlockDeviceMetrics"
+          }
         }
       }
     },

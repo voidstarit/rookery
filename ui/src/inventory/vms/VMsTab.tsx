@@ -12,6 +12,7 @@ import type {
 import { formatMemory } from "./monitor";
 import { VMDialog } from "./VMDialog";
 import { VMMonitorDialog } from "./VMMonitorDialog";
+import { diskNeedsThinPool } from "./disk-predicates";
 import { navigate, useRoute } from "../router";
 
 const numberFormat = new Intl.NumberFormat();
@@ -216,8 +217,22 @@ export function VMsTab() {
     }
   }, [vms.length]);
 
-  const freeDisks = disks.filter((disk) => !disk.attached_vm_id && !disk.is_template);
-  const hasHostDisk = freeDisks.some((disk) => disk.source === "host-device");
+  useEffect(() => {
+    if (route.segments[0] !== "vms") {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      if (!document.hidden) {
+        void loadVMs(false);
+      }
+    }, 5000);
+    return () => window.clearInterval(timer);
+    // The poll only needs the current route; loadVMs uses current state and the shared API helper.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.path]);
+
+  const freeDisks = disks.filter((disk) => !disk.attached_vm_id && !disk.is_template && !disk.deletion_state);
+  const hasProvisionableDisk = freeDisks.some((disk) => !diskNeedsThinPool(disk));
 
   useEffect(() => {
     const newVM = document.getElementById("new-vm") as HTMLButtonElement | null;
@@ -230,14 +245,14 @@ export function VMsTab() {
       message = "VM creation is blocked until FD.io VPP is ready.";
     } else if (freeDisks.length === 0) {
       message = "Create an unattached disk on the Disks tab first.";
-    } else if (!thinPoolReady && !hasHostDisk) {
-      message = "VM creation is blocked until the thin pool is ready or a host passthrough disk is available.";
+    } else if (!thinPoolReady && !hasProvisionableDisk) {
+      message = "VM creation is blocked until the thin pool is ready or a non-LVM disk is available.";
     }
     newVM.disabled = message !== "";
     newVM.title = message;
     hint.textContent = message;
     hint.hidden = message === "";
-  }, [freeDisks.length, hasHostDisk, thinPoolReady, vppReady]);
+  }, [freeDisks.length, hasProvisionableDisk, thinPoolReady, vppReady]);
 
   const openCreate = () => {
     if (!vppReady) {
@@ -248,8 +263,8 @@ export function VMsTab() {
       showToast("Create an unattached disk on the Disks tab first.", true);
       return;
     }
-    if (!thinPoolReady && !hasHostDisk) {
-      showToast("The thin pool is not ready and no host passthrough disk is available.", true);
+    if (!thinPoolReady && !hasProvisionableDisk) {
+      showToast("The thin pool is not ready and no non-LVM disk is available.", true);
       return;
     }
     setDialog({ vm: null });
@@ -292,6 +307,18 @@ export function VMsTab() {
       void loadDisks();
     } catch (err) {
       setError(`Could not stop ${vm.name}: ${err instanceof Error ? err.message : String(err)}`);
+      void loadVMs();
+    }
+  };
+
+  const resumeVM = async (vm: VM) => {
+    try {
+      const updated = await api<VM>(`/api/vms/${vm.id}/resume`, { method: "POST" });
+      publishVMs(vms.map((item) => (item.id === updated.id ? updated : item)));
+      setError("");
+      showToast(`Resumed ${vm.name}`);
+    } catch (err) {
+      setError(`Could not resume ${vm.name}: ${err instanceof Error ? err.message : String(err)}`);
       void loadVMs();
     }
   };
@@ -363,6 +390,7 @@ export function VMsTab() {
                   const bootMedia = media.find((item) => item.id === vm.boot_media_id) || vm.boot_media;
                   const vmInterfaces = Array.isArray(vm.interfaces) ? vm.interfaces : [];
                   const active = vm.status === "running" || vm.status === "starting";
+                  const paused = Boolean(vm.run_state?.startsWith("paused"));
                   return (
                     <tr key={vm.id}>
                       <td>
@@ -381,8 +409,8 @@ export function VMsTab() {
                         />
                       </td>
                       <td>
-                        <span class="status-badge" data-status={vm.status}>
-                          {vm.status}
+                        <span class="status-badge" data-status={paused ? "paused" : vm.status}>
+                          {paused ? vm.run_state : vm.status}
                         </span>
                       </td>
                       <td class="mono">{numberFormat.format(vm.vcpus)}</td>
@@ -435,6 +463,11 @@ export function VMsTab() {
                           >
                             {active ? "Stop" : "Start"}
                           </button>
+                          {paused ? (
+                            <button class="row-action" type="button" onClick={() => void resumeVM(vm)}>
+                              Resume
+                            </button>
+                          ) : null}
                           <button
                             class="row-action"
                             type="button"

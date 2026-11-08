@@ -684,6 +684,50 @@ func (x *StartVMRequest) GetId() string {
 	return ""
 }
 
+type ResumeVMRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResumeVMRequest) Reset() {
+	*x = ResumeVMRequest{}
+	mi := &file_rookery_v1_vm_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResumeVMRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResumeVMRequest) ProtoMessage() {}
+
+func (x *ResumeVMRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vm_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResumeVMRequest.ProtoReflect.Descriptor instead.
+func (*ResumeVMRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vm_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ResumeVMRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
 type StopVMRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -693,7 +737,7 @@ type StopVMRequest struct {
 
 func (x *StopVMRequest) Reset() {
 	*x = StopVMRequest{}
-	mi := &file_rookery_v1_vm_proto_msgTypes[8]
+	mi := &file_rookery_v1_vm_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -705,7 +749,7 @@ func (x *StopVMRequest) String() string {
 func (*StopVMRequest) ProtoMessage() {}
 
 func (x *StopVMRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vm_proto_msgTypes[8]
+	mi := &file_rookery_v1_vm_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -718,7 +762,7 @@ func (x *StopVMRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopVMRequest.ProtoReflect.Descriptor instead.
 func (*StopVMRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vm_proto_rawDescGZIP(), []int{8}
+	return file_rookery_v1_vm_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *StopVMRequest) GetId() string {
@@ -737,7 +781,7 @@ type ResetVMRequest struct {
 
 func (x *ResetVMRequest) Reset() {
 	*x = ResetVMRequest{}
-	mi := &file_rookery_v1_vm_proto_msgTypes[9]
+	mi := &file_rookery_v1_vm_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -749,7 +793,7 @@ func (x *ResetVMRequest) String() string {
 func (*ResetVMRequest) ProtoMessage() {}
 
 func (x *ResetVMRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vm_proto_msgTypes[9]
+	mi := &file_rookery_v1_vm_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -762,7 +806,7 @@ func (x *ResetVMRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetVMRequest.ProtoReflect.Descriptor instead.
 func (*ResetVMRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vm_proto_rawDescGZIP(), []int{9}
+	return file_rookery_v1_vm_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ResetVMRequest) GetId() string {
@@ -781,7 +825,7 @@ type CtrlAltDelRequest struct {
 
 func (x *CtrlAltDelRequest) Reset() {
 	*x = CtrlAltDelRequest{}
-	mi := &file_rookery_v1_vm_proto_msgTypes[10]
+	mi := &file_rookery_v1_vm_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -793,7 +837,7 @@ func (x *CtrlAltDelRequest) String() string {
 func (*CtrlAltDelRequest) ProtoMessage() {}
 
 func (x *CtrlAltDelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vm_proto_msgTypes[10]
+	mi := &file_rookery_v1_vm_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -806,7 +850,7 @@ func (x *CtrlAltDelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CtrlAltDelRequest.ProtoReflect.Descriptor instead.
 func (*CtrlAltDelRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vm_proto_rawDescGZIP(), []int{10}
+	return file_rookery_v1_vm_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *CtrlAltDelRequest) GetId() string {
@@ -825,7 +869,7 @@ type GetVMMetricsRequest struct {
 
 func (x *GetVMMetricsRequest) Reset() {
 	*x = GetVMMetricsRequest{}
-	mi := &file_rookery_v1_vm_proto_msgTypes[11]
+	mi := &file_rookery_v1_vm_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -837,7 +881,7 @@ func (x *GetVMMetricsRequest) String() string {
 func (*GetVMMetricsRequest) ProtoMessage() {}
 
 func (x *GetVMMetricsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vm_proto_msgTypes[11]
+	mi := &file_rookery_v1_vm_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -850,7 +894,7 @@ func (x *GetVMMetricsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVMMetricsRequest.ProtoReflect.Descriptor instead.
 func (*GetVMMetricsRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vm_proto_rawDescGZIP(), []int{11}
+	return file_rookery_v1_vm_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetVMMetricsRequest) GetId() string {
@@ -879,13 +923,14 @@ type VMMetrics struct {
 	NetworkRxPacketsTotal uint64                 `protobuf:"varint,15,opt,name=network_rx_packets_total,json=networkRxPacketsTotal,proto3" json:"network_rx_packets_total,omitempty"`
 	NetworkTxPacketsTotal uint64                 `protobuf:"varint,16,opt,name=network_tx_packets_total,json=networkTxPacketsTotal,proto3" json:"network_tx_packets_total,omitempty"`
 	SampledAt             *timestamppb.Timestamp `protobuf:"bytes,17,opt,name=sampled_at,json=sampledAt,proto3" json:"sampled_at,omitempty"`
+	BlockDevices          []*BlockDeviceMetrics  `protobuf:"bytes,18,rep,name=block_devices,json=blockDevices,proto3" json:"block_devices,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
 
 func (x *VMMetrics) Reset() {
 	*x = VMMetrics{}
-	mi := &file_rookery_v1_vm_proto_msgTypes[12]
+	mi := &file_rookery_v1_vm_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -897,7 +942,7 @@ func (x *VMMetrics) String() string {
 func (*VMMetrics) ProtoMessage() {}
 
 func (x *VMMetrics) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vm_proto_msgTypes[12]
+	mi := &file_rookery_v1_vm_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -910,7 +955,7 @@ func (x *VMMetrics) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VMMetrics.ProtoReflect.Descriptor instead.
 func (*VMMetrics) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vm_proto_rawDescGZIP(), []int{12}
+	return file_rookery_v1_vm_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *VMMetrics) GetRunning() bool {
@@ -1032,6 +1077,137 @@ func (x *VMMetrics) GetSampledAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *VMMetrics) GetBlockDevices() []*BlockDeviceMetrics {
+	if x != nil {
+		return x.BlockDevices
+	}
+	return nil
+}
+
+type BlockDeviceMetrics struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	DiskId                 int64                  `protobuf:"varint,1,opt,name=disk_id,json=diskId,proto3" json:"disk_id,omitempty"`
+	Name                   string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Device                 string                 `protobuf:"bytes,3,opt,name=device,proto3" json:"device,omitempty"`
+	ReadBytes              uint64                 `protobuf:"varint,4,opt,name=read_bytes,json=readBytes,proto3" json:"read_bytes,omitempty"`
+	WriteBytes             uint64                 `protobuf:"varint,5,opt,name=write_bytes,json=writeBytes,proto3" json:"write_bytes,omitempty"`
+	ReadOperations         uint64                 `protobuf:"varint,6,opt,name=read_operations,json=readOperations,proto3" json:"read_operations,omitempty"`
+	WriteOperations        uint64                 `protobuf:"varint,7,opt,name=write_operations,json=writeOperations,proto3" json:"write_operations,omitempty"`
+	FailedReadOperations   uint64                 `protobuf:"varint,8,opt,name=failed_read_operations,json=failedReadOperations,proto3" json:"failed_read_operations,omitempty"`
+	FailedWriteOperations  uint64                 `protobuf:"varint,9,opt,name=failed_write_operations,json=failedWriteOperations,proto3" json:"failed_write_operations,omitempty"`
+	InvalidReadOperations  uint64                 `protobuf:"varint,10,opt,name=invalid_read_operations,json=invalidReadOperations,proto3" json:"invalid_read_operations,omitempty"`
+	InvalidWriteOperations uint64                 `protobuf:"varint,11,opt,name=invalid_write_operations,json=invalidWriteOperations,proto3" json:"invalid_write_operations,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *BlockDeviceMetrics) Reset() {
+	*x = BlockDeviceMetrics{}
+	mi := &file_rookery_v1_vm_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BlockDeviceMetrics) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BlockDeviceMetrics) ProtoMessage() {}
+
+func (x *BlockDeviceMetrics) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vm_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BlockDeviceMetrics.ProtoReflect.Descriptor instead.
+func (*BlockDeviceMetrics) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vm_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *BlockDeviceMetrics) GetDiskId() int64 {
+	if x != nil {
+		return x.DiskId
+	}
+	return 0
+}
+
+func (x *BlockDeviceMetrics) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *BlockDeviceMetrics) GetDevice() string {
+	if x != nil {
+		return x.Device
+	}
+	return ""
+}
+
+func (x *BlockDeviceMetrics) GetReadBytes() uint64 {
+	if x != nil {
+		return x.ReadBytes
+	}
+	return 0
+}
+
+func (x *BlockDeviceMetrics) GetWriteBytes() uint64 {
+	if x != nil {
+		return x.WriteBytes
+	}
+	return 0
+}
+
+func (x *BlockDeviceMetrics) GetReadOperations() uint64 {
+	if x != nil {
+		return x.ReadOperations
+	}
+	return 0
+}
+
+func (x *BlockDeviceMetrics) GetWriteOperations() uint64 {
+	if x != nil {
+		return x.WriteOperations
+	}
+	return 0
+}
+
+func (x *BlockDeviceMetrics) GetFailedReadOperations() uint64 {
+	if x != nil {
+		return x.FailedReadOperations
+	}
+	return 0
+}
+
+func (x *BlockDeviceMetrics) GetFailedWriteOperations() uint64 {
+	if x != nil {
+		return x.FailedWriteOperations
+	}
+	return 0
+}
+
+func (x *BlockDeviceMetrics) GetInvalidReadOperations() uint64 {
+	if x != nil {
+		return x.InvalidReadOperations
+	}
+	return 0
+}
+
+func (x *BlockDeviceMetrics) GetInvalidWriteOperations() uint64 {
+	if x != nil {
+		return x.InvalidWriteOperations
+	}
+	return 0
+}
+
 var File_rookery_v1_vm_proto protoreflect.FileDescriptor
 
 const file_rookery_v1_vm_proto_rawDesc = "" +
@@ -1123,6 +1299,8 @@ const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\x0fDeleteVMRequest\x12\x18\n" +
 	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\"*\n" +
 	"\x0eStartVMRequest\x12\x18\n" +
+	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\"+\n" +
+	"\x0fResumeVMRequest\x12\x18\n" +
 	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\")\n" +
 	"\rStopVMRequest\x12\x18\n" +
 	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\"*\n" +
@@ -1131,7 +1309,7 @@ const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\x11CtrlAltDelRequest\x12\x18\n" +
 	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\"/\n" +
 	"\x13GetVMMetricsRequest\x12\x18\n" +
-	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\"\xc1\x05\n" +
+	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\"\x86\x06\n" +
 	"\tVMMetrics\x12\x18\n" +
 	"\arunning\x18\x01 \x01(\bR\arunning\x12\x10\n" +
 	"\x03pid\x18\x02 \x01(\x05R\x03pid\x12%\n" +
@@ -1151,7 +1329,23 @@ const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\x18network_rx_packets_total\x18\x0f \x01(\x04R\x15networkRxPacketsTotal\x127\n" +
 	"\x18network_tx_packets_total\x18\x10 \x01(\x04R\x15networkTxPacketsTotal\x129\n" +
 	"\n" +
-	"sampled_at\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\tsampledAt2\xea\x06\n" +
+	"sampled_at\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\tsampledAt\x12C\n" +
+	"\rblock_devices\x18\x12 \x03(\v2\x1e.rookery.v1.BlockDeviceMetricsR\fblockDevices\"\xcd\x03\n" +
+	"\x12BlockDeviceMetrics\x12\x17\n" +
+	"\adisk_id\x18\x01 \x01(\x03R\x06diskId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
+	"\x06device\x18\x03 \x01(\tR\x06device\x12\x1d\n" +
+	"\n" +
+	"read_bytes\x18\x04 \x01(\x04R\treadBytes\x12\x1f\n" +
+	"\vwrite_bytes\x18\x05 \x01(\x04R\n" +
+	"writeBytes\x12'\n" +
+	"\x0fread_operations\x18\x06 \x01(\x04R\x0ereadOperations\x12)\n" +
+	"\x10write_operations\x18\a \x01(\x04R\x0fwriteOperations\x124\n" +
+	"\x16failed_read_operations\x18\b \x01(\x04R\x14failedReadOperations\x126\n" +
+	"\x17failed_write_operations\x18\t \x01(\x04R\x15failedWriteOperations\x126\n" +
+	"\x17invalid_read_operations\x18\n" +
+	" \x01(\x04R\x15invalidReadOperations\x128\n" +
+	"\x18invalid_write_operations\x18\v \x01(\x04R\x16invalidWriteOperations2\xc1\a\n" +
 	"\tVMService\x12Y\n" +
 	"\aListVMs\x12\x1a.rookery.v1.ListVMsRequest\x1a\x1b.rookery.v1.ListVMsResponse\"\x15\x82\xd3\xe4\x93\x02\x0fb\x03vms\x12\b/api/vms\x12H\n" +
 	"\x05GetVM\x12\x18.rookery.v1.GetVMRequest\x1a\x0e.rookery.v1.VM\"\x15\x82\xd3\xe4\x93\x02\x0f\x12\r/api/vms/{id}\x12L\n" +
@@ -1162,7 +1356,8 @@ const file_rookery_v1_vm_proto_rawDesc = "" +
 	"\x06StopVM\x12\x19.rookery.v1.StopVMRequest\x1a\x0e.rookery.v1.VM\"\x1a\x82\xd3\xe4\x93\x02\x14\"\x12/api/vms/{id}/stop\x12R\n" +
 	"\aResetVM\x12\x1a.rookery.v1.ResetVMRequest\x1a\x0e.rookery.v1.VM\"\x1b\x82\xd3\xe4\x93\x02\x15\"\x13/api/vms/{id}/reset\x12_\n" +
 	"\n" +
-	"CtrlAltDel\x12\x1d.rookery.v1.CtrlAltDelRequest\x1a\x0e.rookery.v1.VM\"\"\x82\xd3\xe4\x93\x02\x1c\"\x1a/api/vms/{id}/ctrl-alt-del\x12e\n" +
+	"CtrlAltDel\x12\x1d.rookery.v1.CtrlAltDelRequest\x1a\x0e.rookery.v1.VM\"\"\x82\xd3\xe4\x93\x02\x1c\"\x1a/api/vms/{id}/ctrl-alt-del\x12U\n" +
+	"\bResumeVM\x12\x1b.rookery.v1.ResumeVMRequest\x1a\x0e.rookery.v1.VM\"\x1c\x82\xd3\xe4\x93\x02\x16\"\x14/api/vms/{id}/resume\x12e\n" +
 	"\fGetVMMetrics\x12\x1f.rookery.v1.GetVMMetricsRequest\x1a\x15.rookery.v1.VMMetrics\"\x1d\x82\xd3\xe4\x93\x02\x17\x12\x15/api/vms/{id}/metricsB?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
 
 var (
@@ -1177,7 +1372,7 @@ func file_rookery_v1_vm_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_vm_proto_rawDescData
 }
 
-var file_rookery_v1_vm_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_rookery_v1_vm_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_rookery_v1_vm_proto_goTypes = []any{
 	(*VM)(nil),                    // 0: rookery.v1.VM
 	(*ListVMsRequest)(nil),        // 1: rookery.v1.ListVMsRequest
@@ -1187,51 +1382,56 @@ var file_rookery_v1_vm_proto_goTypes = []any{
 	(*UpdateVMRequest)(nil),       // 5: rookery.v1.UpdateVMRequest
 	(*DeleteVMRequest)(nil),       // 6: rookery.v1.DeleteVMRequest
 	(*StartVMRequest)(nil),        // 7: rookery.v1.StartVMRequest
-	(*StopVMRequest)(nil),         // 8: rookery.v1.StopVMRequest
-	(*ResetVMRequest)(nil),        // 9: rookery.v1.ResetVMRequest
-	(*CtrlAltDelRequest)(nil),     // 10: rookery.v1.CtrlAltDelRequest
-	(*GetVMMetricsRequest)(nil),   // 11: rookery.v1.GetVMMetricsRequest
-	(*VMMetrics)(nil),             // 12: rookery.v1.VMMetrics
-	(*VMDisk)(nil),                // 13: rookery.v1.VMDisk
-	(*VMMedia)(nil),               // 14: rookery.v1.VMMedia
-	(*VMInterface)(nil),           // 15: rookery.v1.VMInterface
-	(*timestamppb.Timestamp)(nil), // 16: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),         // 17: google.protobuf.Empty
+	(*ResumeVMRequest)(nil),       // 8: rookery.v1.ResumeVMRequest
+	(*StopVMRequest)(nil),         // 9: rookery.v1.StopVMRequest
+	(*ResetVMRequest)(nil),        // 10: rookery.v1.ResetVMRequest
+	(*CtrlAltDelRequest)(nil),     // 11: rookery.v1.CtrlAltDelRequest
+	(*GetVMMetricsRequest)(nil),   // 12: rookery.v1.GetVMMetricsRequest
+	(*VMMetrics)(nil),             // 13: rookery.v1.VMMetrics
+	(*BlockDeviceMetrics)(nil),    // 14: rookery.v1.BlockDeviceMetrics
+	(*VMDisk)(nil),                // 15: rookery.v1.VMDisk
+	(*VMMedia)(nil),               // 16: rookery.v1.VMMedia
+	(*VMInterface)(nil),           // 17: rookery.v1.VMInterface
+	(*timestamppb.Timestamp)(nil), // 18: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),         // 19: google.protobuf.Empty
 }
 var file_rookery_v1_vm_proto_depIdxs = []int32{
-	13, // 0: rookery.v1.VM.disk:type_name -> rookery.v1.VMDisk
-	13, // 1: rookery.v1.VM.disks:type_name -> rookery.v1.VMDisk
-	14, // 2: rookery.v1.VM.boot_media:type_name -> rookery.v1.VMMedia
-	15, // 3: rookery.v1.VM.interfaces:type_name -> rookery.v1.VMInterface
-	16, // 4: rookery.v1.VM.created_at:type_name -> google.protobuf.Timestamp
-	16, // 5: rookery.v1.VM.updated_at:type_name -> google.protobuf.Timestamp
+	15, // 0: rookery.v1.VM.disk:type_name -> rookery.v1.VMDisk
+	15, // 1: rookery.v1.VM.disks:type_name -> rookery.v1.VMDisk
+	16, // 2: rookery.v1.VM.boot_media:type_name -> rookery.v1.VMMedia
+	17, // 3: rookery.v1.VM.interfaces:type_name -> rookery.v1.VMInterface
+	18, // 4: rookery.v1.VM.created_at:type_name -> google.protobuf.Timestamp
+	18, // 5: rookery.v1.VM.updated_at:type_name -> google.protobuf.Timestamp
 	0,  // 6: rookery.v1.ListVMsResponse.vms:type_name -> rookery.v1.VM
-	16, // 7: rookery.v1.VMMetrics.sampled_at:type_name -> google.protobuf.Timestamp
-	1,  // 8: rookery.v1.VMService.ListVMs:input_type -> rookery.v1.ListVMsRequest
-	3,  // 9: rookery.v1.VMService.GetVM:input_type -> rookery.v1.GetVMRequest
-	4,  // 10: rookery.v1.VMService.CreateVM:input_type -> rookery.v1.CreateVMRequest
-	5,  // 11: rookery.v1.VMService.UpdateVM:input_type -> rookery.v1.UpdateVMRequest
-	6,  // 12: rookery.v1.VMService.DeleteVM:input_type -> rookery.v1.DeleteVMRequest
-	7,  // 13: rookery.v1.VMService.StartVM:input_type -> rookery.v1.StartVMRequest
-	8,  // 14: rookery.v1.VMService.StopVM:input_type -> rookery.v1.StopVMRequest
-	9,  // 15: rookery.v1.VMService.ResetVM:input_type -> rookery.v1.ResetVMRequest
-	10, // 16: rookery.v1.VMService.CtrlAltDel:input_type -> rookery.v1.CtrlAltDelRequest
-	11, // 17: rookery.v1.VMService.GetVMMetrics:input_type -> rookery.v1.GetVMMetricsRequest
-	2,  // 18: rookery.v1.VMService.ListVMs:output_type -> rookery.v1.ListVMsResponse
-	0,  // 19: rookery.v1.VMService.GetVM:output_type -> rookery.v1.VM
-	0,  // 20: rookery.v1.VMService.CreateVM:output_type -> rookery.v1.VM
-	0,  // 21: rookery.v1.VMService.UpdateVM:output_type -> rookery.v1.VM
-	17, // 22: rookery.v1.VMService.DeleteVM:output_type -> google.protobuf.Empty
-	0,  // 23: rookery.v1.VMService.StartVM:output_type -> rookery.v1.VM
-	0,  // 24: rookery.v1.VMService.StopVM:output_type -> rookery.v1.VM
-	0,  // 25: rookery.v1.VMService.ResetVM:output_type -> rookery.v1.VM
-	0,  // 26: rookery.v1.VMService.CtrlAltDel:output_type -> rookery.v1.VM
-	12, // 27: rookery.v1.VMService.GetVMMetrics:output_type -> rookery.v1.VMMetrics
-	18, // [18:28] is the sub-list for method output_type
-	8,  // [8:18] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	18, // 7: rookery.v1.VMMetrics.sampled_at:type_name -> google.protobuf.Timestamp
+	14, // 8: rookery.v1.VMMetrics.block_devices:type_name -> rookery.v1.BlockDeviceMetrics
+	1,  // 9: rookery.v1.VMService.ListVMs:input_type -> rookery.v1.ListVMsRequest
+	3,  // 10: rookery.v1.VMService.GetVM:input_type -> rookery.v1.GetVMRequest
+	4,  // 11: rookery.v1.VMService.CreateVM:input_type -> rookery.v1.CreateVMRequest
+	5,  // 12: rookery.v1.VMService.UpdateVM:input_type -> rookery.v1.UpdateVMRequest
+	6,  // 13: rookery.v1.VMService.DeleteVM:input_type -> rookery.v1.DeleteVMRequest
+	7,  // 14: rookery.v1.VMService.StartVM:input_type -> rookery.v1.StartVMRequest
+	9,  // 15: rookery.v1.VMService.StopVM:input_type -> rookery.v1.StopVMRequest
+	10, // 16: rookery.v1.VMService.ResetVM:input_type -> rookery.v1.ResetVMRequest
+	11, // 17: rookery.v1.VMService.CtrlAltDel:input_type -> rookery.v1.CtrlAltDelRequest
+	8,  // 18: rookery.v1.VMService.ResumeVM:input_type -> rookery.v1.ResumeVMRequest
+	12, // 19: rookery.v1.VMService.GetVMMetrics:input_type -> rookery.v1.GetVMMetricsRequest
+	2,  // 20: rookery.v1.VMService.ListVMs:output_type -> rookery.v1.ListVMsResponse
+	0,  // 21: rookery.v1.VMService.GetVM:output_type -> rookery.v1.VM
+	0,  // 22: rookery.v1.VMService.CreateVM:output_type -> rookery.v1.VM
+	0,  // 23: rookery.v1.VMService.UpdateVM:output_type -> rookery.v1.VM
+	19, // 24: rookery.v1.VMService.DeleteVM:output_type -> google.protobuf.Empty
+	0,  // 25: rookery.v1.VMService.StartVM:output_type -> rookery.v1.VM
+	0,  // 26: rookery.v1.VMService.StopVM:output_type -> rookery.v1.VM
+	0,  // 27: rookery.v1.VMService.ResetVM:output_type -> rookery.v1.VM
+	0,  // 28: rookery.v1.VMService.CtrlAltDel:output_type -> rookery.v1.VM
+	0,  // 29: rookery.v1.VMService.ResumeVM:output_type -> rookery.v1.VM
+	13, // 30: rookery.v1.VMService.GetVMMetrics:output_type -> rookery.v1.VMMetrics
+	20, // [20:31] is the sub-list for method output_type
+	9,  // [9:20] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_rookery_v1_vm_proto_init() }
@@ -1251,7 +1451,7 @@ func file_rookery_v1_vm_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_vm_proto_rawDesc), len(file_rookery_v1_vm_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

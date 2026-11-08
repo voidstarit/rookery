@@ -5,10 +5,13 @@ import (
 	"errors"
 	"time"
 
+	koujav1 "github.com/voidstarit/kouja/gen/kouja/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
+	"github.com/voidstarit/rookery/internal/blockdev"
+	"github.com/voidstarit/rookery/internal/kouja"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -64,6 +67,54 @@ func (s *storageBackendService) GetStorageBackendHealth(ctx context.Context, req
 		})
 	}
 	return s.withDeletionBacklog(ctx, health)
+}
+
+func (s *storageBackendService) ProbeKoujaBackend(ctx context.Context, request *rookeryv1.ProbeKoujaBackendRequest) (*rookeryv1.ProbeKoujaBackendResponse, error) {
+	cfg := koujaConfigFromProto(request.GetConfig())
+	parsed, err := kouja.ParseConnectionConfig(store.StorageBackendConfig{Kouja: cfg})
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	factory := s.newKoujaClient
+	if factory == nil {
+		factory = kouja.NewClient
+	}
+	client, err := factory(parsed)
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, "could not connect to kouja: "+err.Error())
+	}
+	defer client.Close()
+	info, err := client.GetInfo(ctx, &koujav1.GetInfoRequest{})
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, "could not connect to kouja: "+err.Error())
+	}
+	classes, err := client.ListStorageClasses(ctx, &koujav1.ListStorageClassesRequest{})
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, "could not list kouja storage classes: "+err.Error())
+	}
+	response := &rookeryv1.ProbeKoujaBackendResponse{
+		Reachable: true, Ready: info.GetReady(), Owner: parsed.Owner,
+		Detail: "connected",
+	}
+	if !info.GetReady() {
+		response.Detail = "connected; kouja agent is not ready"
+	}
+	for _, protocol := range info.GetProtocols() {
+		switch protocol {
+		case koujav1.Protocol_PROTOCOL_ISCSI:
+			response.Protocols = append(response.Protocols, string(blockdev.ProtocolISCSI))
+		case koujav1.Protocol_PROTOCOL_NVME_TCP:
+			response.Protocols = append(response.Protocols, string(blockdev.ProtocolNVMeTCP))
+		default:
+			response.Protocols = append(response.Protocols, protocol.String())
+		}
+	}
+	for _, class := range classes.GetClasses() {
+		if name := class.GetName(); name != "" {
+			response.StorageClasses = append(response.StorageClasses, name)
+		}
+	}
+	return response, nil
 }
 
 func (s *storageBackendService) TestStorageBackendDataPath(context.Context, *rookeryv1.TestStorageBackendDataPathRequest) (*rookeryv1.StorageBackendHealth, error) {

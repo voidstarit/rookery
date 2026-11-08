@@ -33,6 +33,9 @@ type Config struct {
 	CAFile         string
 	ClientCertFile string
 	ClientKeyFile  string
+	CAPEM          string
+	ClientCertPEM  string
+	ClientKeyPEM   string
 	ServerName     string
 	Portal         string
 	Owner          string
@@ -40,6 +43,17 @@ type Config struct {
 
 // ParseConfig validates a stored kouja backend config.
 func ParseConfig(cfg store.StorageBackendConfig) (Config, error) {
+	return parseConfig(cfg, true)
+}
+
+// ParseConnectionConfig validates the connection and certificate fields without
+// requiring a storage class. It is used by the UI connection probe before the
+// operator has selected a class.
+func ParseConnectionConfig(cfg store.StorageBackendConfig) (Config, error) {
+	return parseConfig(cfg, false)
+}
+
+func parseConfig(cfg store.StorageBackendConfig, requireStorageClass bool) (Config, error) {
 	if cfg.Kouja == nil {
 		return Config{}, ErrNotConfigured
 	}
@@ -60,34 +74,58 @@ func ParseConfig(cfg store.StorageBackendConfig) (Config, error) {
 		CAFile:         strings.TrimSpace(raw.CAFile),
 		ClientCertFile: strings.TrimSpace(raw.ClientCertFile),
 		ClientKeyFile:  strings.TrimSpace(raw.ClientKeyFile),
+		CAPEM:          strings.TrimSpace(raw.CAPEM),
+		ClientCertPEM:  strings.TrimSpace(raw.ClientCertPEM),
+		ClientKeyPEM:   strings.TrimSpace(raw.ClientKeyPEM),
 		ServerName:     strings.TrimSpace(raw.ServerName),
 		Portal:         strings.TrimSpace(raw.Portal),
 	}
 	if err := validateEndpoint(parsed.Endpoint); err != nil {
 		return Config{}, err
 	}
-	if parsed.StorageClass == "" {
+	if requireStorageClass && parsed.StorageClass == "" {
 		return Config{}, errors.New("kouja storage_class is required")
 	}
 	if len(parsed.StorageClass) > 127 {
 		return Config{}, errors.New("kouja storage_class is too long")
 	}
-	for name, path := range map[string]string{
-		"ca_file": parsed.CAFile, "client_cert_file": parsed.ClientCertFile, "client_key_file": parsed.ClientKeyFile,
-	} {
-		if path == "" || !filepath.IsAbs(path) {
-			return Config{}, fmt.Errorf("%s must be an absolute path", name)
+	hasPEM := parsed.CAPEM != "" || parsed.ClientCertPEM != "" || parsed.ClientKeyPEM != ""
+	if hasPEM {
+		if parsed.CAPEM == "" || parsed.ClientCertPEM == "" || parsed.ClientKeyPEM == "" {
+			return Config{}, errors.New("ca_pem, client_cert_pem, and client_key_pem must be provided together")
 		}
-	}
-	if _, err := os.Stat(parsed.CAFile); err != nil {
-		return Config{}, fmt.Errorf("stat CA file: %w", err)
-	}
-	keyInfo, err := os.Stat(parsed.ClientKeyFile)
-	if err != nil {
-		return Config{}, fmt.Errorf("stat client key: %w", err)
-	}
-	if keyInfo.Mode().Perm()&0o004 != 0 {
-		return Config{}, errors.New("client_key_file must not be world-readable")
+		tlsConfig, err := tlsConfigFromPEM(parsed.CAPEM, parsed.ClientCertPEM, parsed.ClientKeyPEM)
+		if err != nil {
+			return Config{}, err
+		}
+		owner, err := ownerFromPair(tlsConfig.Certificates[0])
+		if err != nil {
+			return Config{}, err
+		}
+		parsed.Owner = owner
+	} else {
+		for name, path := range map[string]string{
+			"ca_file": parsed.CAFile, "client_cert_file": parsed.ClientCertFile, "client_key_file": parsed.ClientKeyFile,
+		} {
+			if path == "" || !filepath.IsAbs(path) {
+				return Config{}, fmt.Errorf("%s must be an absolute path", name)
+			}
+		}
+		if _, err := os.Stat(parsed.CAFile); err != nil {
+			return Config{}, fmt.Errorf("stat CA file: %w", err)
+		}
+		keyInfo, err := os.Stat(parsed.ClientKeyFile)
+		if err != nil {
+			return Config{}, fmt.Errorf("stat client key: %w", err)
+		}
+		if keyInfo.Mode().Perm()&0o004 != 0 {
+			return Config{}, errors.New("client_key_file must not be world-readable")
+		}
+		owner, err := ownerFromCertificate(parsed.ClientCertFile, parsed.ClientKeyFile)
+		if err != nil {
+			return Config{}, err
+		}
+		parsed.Owner = owner
 	}
 	switch protocol {
 	case blockdev.ProtocolISCSI:
@@ -104,11 +142,6 @@ func ParseConfig(cfg store.StorageBackendConfig) (Config, error) {
 			return Config{}, err
 		}
 	}
-	owner, err := ownerFromCertificate(parsed.ClientCertFile, parsed.ClientKeyFile)
-	if err != nil {
-		return Config{}, err
-	}
-	parsed.Owner = owner
 	return parsed, nil
 }
 
@@ -169,11 +202,31 @@ func isNQN(value string) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(value)), "nqn.")
 }
 
+func tlsConfigFromPEM(caPEM, certPEM, keyPEM string) (*tls.Config, error) {
+	certificate, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
+	if err != nil {
+		return nil, fmt.Errorf("load kouja client certificate: %w", err)
+	}
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM([]byte(caPEM)) {
+		return nil, errors.New("ca_pem does not contain a certificate")
+	}
+	return &tls.Config{ //nolint:gosec // kouja requires TLS 1.3 and hostname verification
+		MinVersion:   tls.VersionTLS13,
+		Certificates: []tls.Certificate{certificate},
+		RootCAs:      roots,
+	}, nil
+}
+
 func ownerFromCertificate(certFile, keyFile string) (string, error) {
 	pair, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		return "", fmt.Errorf("load kouja client certificate: %w", err)
 	}
+	return ownerFromPair(pair)
+}
+
+func ownerFromPair(pair tls.Certificate) (string, error) {
 	if len(pair.Certificate) == 0 {
 		return "", errors.New("kouja client certificate is empty")
 	}

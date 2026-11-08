@@ -169,17 +169,18 @@ labels in sync through the same API.
 | `PUT`    | `/api/cgroup-settings` | Apply host-wide cgroup v2 limits and classes |
 | `GET`    | `/api/cgroup-usage` | Live memory, CPU, task, and I/O usage per cgroup node |
 | `GET`    | `/api/storage-backends` | List registered storage backends |
-| `POST`   | `/api/storage-backends` | Register an LVM thin-pool backend |
+| `POST`   | `/api/storage-backends` | Register an LVM thin-pool or kouja backend |
 | `GET`    | `/api/storage-backends/{id}` | Get one storage backend |
 | `PUT`    | `/api/storage-backends/{id}` | Update an unused backend |
 | `DELETE` | `/api/storage-backends/{id}` | Delete a backend with no disks |
 | `GET`    | `/api/storage-backends/{id}/importable-disks` | List existing thin volumes and registration state |
 | `POST`   | `/api/storage-backends/{id}/import-disks` | Register existing thin volumes as disks |
+| `POST`   | `/api/storage-backends/kouja/probe` | Validate unsaved kouja connection fields and list storage classes |
 | `GET`    | `/api/disks`       | List all disks                    |
 | `POST`   | `/api/disks`       | Create a thin-LVM disk, host passthrough disk, template, or provisioned template clone |
 | `GET`    | `/api/disks/{id}`  | Get one disk                      |
-| `PUT`    | `/api/disks/{id}`  | Update template status or template provisioning settings |
-| `DELETE` | `/api/disks/{id}`  | Delete an unattached disk         |
+| `PUT`    | `/api/disks/{id}`  | Update template/provisioning settings or per-disk `read_bps`/`write_bps` limits |
+| `DELETE` | `/api/disks/{id}`  | Delete an unattached disk; remote kouja deletes return `202` and finish asynchronously |
 | `GET`    | `/api/media`       | List installation media           |
 | `POST`   | `/api/media`       | Register an existing ISO file     |
 | `GET`    | `/api/media/{id}`  | Get one media entry               |
@@ -307,11 +308,12 @@ VPP command.
 | `GET`    | `/api/vms`         | List all VMs                       |
 | `POST`   | `/api/vms`         | Create a VM with an existing disk and start it |
 | `GET`    | `/api/vms/{id}`    | Get one VM                         |
-| `GET`    | `/api/vms/{id}/metrics` | QEMU process CPU/memory/I/O and VPP vhost RX/TX telemetry |
+| `GET`    | `/api/vms/{id}/metrics` | QEMU process CPU/memory/I/O, per-drive blockstats, and VPP vhost RX/TX telemetry |
 | `PUT`    | `/api/vms/{id}`    | Update VM settings                 |
 | `DELETE` | `/api/vms/{id}`    | Delete a VM, freeing its disks     |
 | `POST`   | `/api/vms/{id}/start` | Start the VM with QEMU/KVM      |
 | `POST`   | `/api/vms/{id}/stop`  | Stop the VM                     |
+| `POST`   | `/api/vms/{id}/resume` | Resume a QEMU VM paused by an I/O error |
 | `POST`   | `/api/vms/{id}/ctrl-alt-del` | Send Ctrl+Alt+Del via QEMU's monitor |
 | `POST`   | `/api/vms/{id}/reset` | Force a VM reset; power-cycles legacy VMs without a monitor |
 | `GET`    | `/ws/vms/{id}/vnc`    | WebSocket proxy to the VM's VNC Unix socket |
@@ -332,8 +334,29 @@ curl -sS -X POST http://127.0.0.1:8080/api/disks \
 ```
 
 `POST /api/disks` accepts an optional `storage_backend_id`; omit it for the
-default backend. Empty disks run `lvcreate` against the selected backend's thin
-pool. A backend with `supports_templates` can also create a disk from another
+default backend. LVM disks run `lvcreate` against the selected backend's thin
+pool. kouja disks are created and exported by the kouja agent; their response
+includes `source=kouja`, `protocol=iscsi`, a display-only `locator`, and empty
+`device`. Delete a kouja disk with `DELETE /api/disks/{id}`; the API returns
+`202 Accepted` and the reclaimer unexports and deletes the volume. A
+`delete_failed` disk can be retried with the same DELETE call.
+
+Disks accept optional `read_bps` and `write_bps` limits in bytes per second on
+create and update (`0` means unlimited). Rookery passes them to QEMU as
+`throttling.bps-read` and `throttling.bps-write`; limits take effect the next
+time the VM starts. The Disks tab shows current limits and provides a **Limits**
+action.
+
+VM responses include `run_state` for running VMs. QEMU uses
+`rerror=stop,werror=stop` for remote iSCSI drives, so a transport error pauses
+the VM as `paused (io-error)` instead of silently dropping I/O. Use
+`POST /api/vms/{id}/resume` (or the UI **Resume** action) after the storage path
+recovers.
+
+A `kouja` backend's `config.kouja` accepts `ca_pem`, `client_cert_pem`, and
+`client_key_pem` as PEM content; the older `ca_file`, `client_cert_file`, and
+`client_key_file` paths are still accepted when the PEM fields are empty. The
+UI stores the content with the backend. A backend with `supports_templates` can also create a disk from another
 disk marked as a template using `template_disk_id`; the backend's
 `preparation_script` creates the clone LV/device. The clone size defaults to the
 template size and may only be increased.

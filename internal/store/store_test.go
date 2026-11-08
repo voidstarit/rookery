@@ -1043,3 +1043,41 @@ func TestDiskProvisioningSettings(t *testing.T) {
 		t.Fatalf("updated disk provisioning = %+v", updated)
 	}
 }
+
+func TestDiskBandwidthLimits(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	disk, err := st.CreateDisk(ctx, store.Disk{
+		Name: "limited", SizeGB: 5, VG: "vg0", ThinPool: "pool",
+		ReadBPS: 10 * 1024 * 1024, WriteBPS: 5 * 1024 * 1024,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if disk.ReadBPS != 10*1024*1024 || disk.WriteBPS != 5*1024*1024 {
+		t.Fatalf("created disk = %+v", disk)
+	}
+	updated, err := st.SetDiskBandwidth(ctx, disk.ID, 3*1024*1024, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ReadBPS != 3*1024*1024 || updated.WriteBPS != 0 {
+		t.Fatalf("updated disk = %+v", updated)
+	}
+	if _, err := st.SetDiskBandwidth(ctx, disk.ID, -1, 0); err == nil {
+		t.Fatal("SetDiskBandwidth accepted a negative limit")
+	}
+	if _, err := st.CreateDisk(ctx, store.Disk{Name: "negative", SizeGB: 5, ReadBPS: -1}); err == nil {
+		t.Fatal("CreateDisk accepted a negative bandwidth limit")
+	}
+	if _, err := st.SetDiskBandwidth(ctx, 999999, 1, 1); !errors.Is(err, store.ErrDiskNotFound) {
+		t.Fatalf("SetDiskBandwidth(missing) = %v", err)
+	}
+	vm, err := st.CreateVM(ctx, store.VM{Name: "limited-vm", VCPUs: 1, MemoryMB: 512, DiskIDs: []int64{disk.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vm.Disks) != 1 || vm.Disks[0].ReadBPS != 3*1024*1024 || vm.Disks[0].WriteBPS != 0 {
+		t.Fatalf("vm disks = %+v", vm.Disks)
+	}
+}

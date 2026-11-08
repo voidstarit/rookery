@@ -48,7 +48,7 @@ func TestBuildArgsWithBootMedia(t *testing.T) {
 		"-chardev qemu-vdagent,id=vdagent,clipboard=on,name=vdagent",
 		"-device virtio-serial-pci",
 		"-device virtserialport,chardev=vdagent,name=com.redhat.spice.0",
-		"-drive file=/dev/vg0/web-01-root,format=raw,if=virtio,cache=none,aio=native",
+		"-drive file=/dev/vg0/web-01-root,format=raw,if=virtio,id=rookery-disk-0,cache=none,aio=native",
 		"-vnc unix:" + socket,
 		"-pidfile " + pidfile,
 		"-monitor unix:" + monitor + ",server,nowait",
@@ -89,8 +89,8 @@ func TestBuildArgsWithMultipleDisks(t *testing.T) {
 	args := strings.Join(buildArgs(vm, "/tmp/vm.vnc", "/tmp/vm.pid", "/tmp/vm.monitor"), " ")
 
 	for _, want := range []string{
-		"-drive file=/dev/vg0/web-01-root,format=raw,if=virtio,cache=none,aio=native",
-		"-drive file=/dev/vg0/web-01-data,format=raw,if=virtio,cache=none,aio=native",
+		"-drive file=/dev/vg0/web-01-root,format=raw,if=virtio,id=rookery-disk-0,cache=none,aio=native",
+		"-drive file=/dev/vg0/web-01-data,format=raw,if=virtio,id=rookery-disk-0,cache=none,aio=native",
 	} {
 		if !strings.Contains(args, want) {
 			t.Fatalf("args %q do not contain %q", args, want)

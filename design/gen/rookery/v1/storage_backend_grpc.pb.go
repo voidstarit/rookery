@@ -29,6 +29,7 @@ const (
 	StorageBackendService_ImportDisks_FullMethodName                = "/rookery.v1.StorageBackendService/ImportDisks"
 	StorageBackendService_GetStorageBackendHealth_FullMethodName    = "/rookery.v1.StorageBackendService/GetStorageBackendHealth"
 	StorageBackendService_TestStorageBackendDataPath_FullMethodName = "/rookery.v1.StorageBackendService/TestStorageBackendDataPath"
+	StorageBackendService_ProbeKoujaBackend_FullMethodName          = "/rookery.v1.StorageBackendService/ProbeKoujaBackend"
 )
 
 // StorageBackendServiceClient is the client API for StorageBackendService service.
@@ -46,6 +47,7 @@ type StorageBackendServiceClient interface {
 	ImportDisks(ctx context.Context, in *ImportDisksRequest, opts ...grpc.CallOption) (*ImportDisksResponse, error)
 	GetStorageBackendHealth(ctx context.Context, in *GetStorageBackendHealthRequest, opts ...grpc.CallOption) (*StorageBackendHealth, error)
 	TestStorageBackendDataPath(ctx context.Context, in *TestStorageBackendDataPathRequest, opts ...grpc.CallOption) (*StorageBackendHealth, error)
+	ProbeKoujaBackend(ctx context.Context, in *ProbeKoujaBackendRequest, opts ...grpc.CallOption) (*ProbeKoujaBackendResponse, error)
 }
 
 type storageBackendServiceClient struct {
@@ -146,6 +148,16 @@ func (c *storageBackendServiceClient) TestStorageBackendDataPath(ctx context.Con
 	return out, nil
 }
 
+func (c *storageBackendServiceClient) ProbeKoujaBackend(ctx context.Context, in *ProbeKoujaBackendRequest, opts ...grpc.CallOption) (*ProbeKoujaBackendResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProbeKoujaBackendResponse)
+	err := c.cc.Invoke(ctx, StorageBackendService_ProbeKoujaBackend_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // StorageBackendServiceServer is the server API for StorageBackendService service.
 // All implementations must embed UnimplementedStorageBackendServiceServer
 // for forward compatibility.
@@ -161,6 +173,7 @@ type StorageBackendServiceServer interface {
 	ImportDisks(context.Context, *ImportDisksRequest) (*ImportDisksResponse, error)
 	GetStorageBackendHealth(context.Context, *GetStorageBackendHealthRequest) (*StorageBackendHealth, error)
 	TestStorageBackendDataPath(context.Context, *TestStorageBackendDataPathRequest) (*StorageBackendHealth, error)
+	ProbeKoujaBackend(context.Context, *ProbeKoujaBackendRequest) (*ProbeKoujaBackendResponse, error)
 	mustEmbedUnimplementedStorageBackendServiceServer()
 }
 
@@ -197,6 +210,9 @@ func (UnimplementedStorageBackendServiceServer) GetStorageBackendHealth(context.
 }
 func (UnimplementedStorageBackendServiceServer) TestStorageBackendDataPath(context.Context, *TestStorageBackendDataPathRequest) (*StorageBackendHealth, error) {
 	return nil, status.Error(codes.Unimplemented, "method TestStorageBackendDataPath not implemented")
+}
+func (UnimplementedStorageBackendServiceServer) ProbeKoujaBackend(context.Context, *ProbeKoujaBackendRequest) (*ProbeKoujaBackendResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ProbeKoujaBackend not implemented")
 }
 func (UnimplementedStorageBackendServiceServer) mustEmbedUnimplementedStorageBackendServiceServer() {}
 func (UnimplementedStorageBackendServiceServer) testEmbeddedByValue()                               {}
@@ -381,6 +397,24 @@ func _StorageBackendService_TestStorageBackendDataPath_Handler(srv interface{}, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StorageBackendService_ProbeKoujaBackend_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProbeKoujaBackendRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StorageBackendServiceServer).ProbeKoujaBackend(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StorageBackendService_ProbeKoujaBackend_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StorageBackendServiceServer).ProbeKoujaBackend(ctx, req.(*ProbeKoujaBackendRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // StorageBackendService_ServiceDesc is the grpc.ServiceDesc for StorageBackendService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -423,6 +457,10 @@ var StorageBackendService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TestStorageBackendDataPath",
 			Handler:    _StorageBackendService_TestStorageBackendDataPath_Handler,
+		},
+		{
+			MethodName: "ProbeKoujaBackend",
+			Handler:    _StorageBackendService_ProbeKoujaBackend_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

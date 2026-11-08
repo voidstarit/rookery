@@ -87,3 +87,59 @@ func TestDiskWriteRoutes(t *testing.T) {
 		t.Fatalf("deleted volumes = %+v", provisioner.deleted)
 	}
 }
+
+func TestDiskBandwidthRoutes(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "disk-bandwidth.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	provisioner := &fakeDiskProvisioner{}
+	gw, err := gateway.New(st, fakeReadiness{status: readiness.Status{
+		Ready: true,
+		ThinPool: readiness.ThinPoolStatus{
+			ComponentStatus: readiness.ComponentStatus{Ready: true},
+			VG:              "vg0",
+			Name:            "pool",
+		},
+	}}, gateway.WithDiskProvisioner(provisioner))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	server := httptest.NewServer(gw.Handler)
+	t.Cleanup(server.Close)
+
+	response, err := http.Post(server.URL+"/api/disks", "application/json", strings.NewReader(
+		`{"name":"limited","size_gb":10,"read_bps":10485760,"write_bps":5242880}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d, body = %s", response.StatusCode, readBody(t, response))
+	}
+	var disk map[string]any
+	decodeBody(t, response, &disk)
+	id := jsonID(disk["id"])
+	if disk["read_bps"].(float64) != 10485760 || disk["write_bps"].(float64) != 5242880 {
+		t.Fatalf("created disk = %+v", disk)
+	}
+
+	request, err := http.NewRequest(http.MethodPut, server.URL+"/api/disks/"+id, strings.NewReader(`{"read_bps":3145728}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	updated, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.StatusCode != http.StatusOK {
+		t.Fatalf("update status = %d, body = %s", updated.StatusCode, readBody(t, updated))
+	}
+	var updatedDisk map[string]any
+	decodeBody(t, updated, &updatedDisk)
+	if updatedDisk["read_bps"].(float64) != 3145728 || updatedDisk["write_bps"].(float64) != 5242880 {
+		t.Fatalf("updated disk = %+v", updatedDisk)
+	}
+}

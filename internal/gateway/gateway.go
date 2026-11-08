@@ -24,6 +24,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
+	"github.com/voidstarit/rookery/internal/kouja"
 	"github.com/voidstarit/rookery/internal/readiness"
 	"github.com/voidstarit/rookery/internal/storage"
 	"github.com/voidstarit/rookery/internal/store"
@@ -77,6 +78,7 @@ type options struct {
 	lightvmRuntime     LightVMRuntime
 	storageRegistry    *storage.Registry
 	startPlanner       *vmstart.Planner
+	koujaClientFactory func(kouja.Config) (*kouja.Client, error)
 }
 
 // WithGRPCListener exposes the generated gRPC server on listener instead of an
@@ -138,6 +140,14 @@ func WithStorageRegistry(registry *storage.Registry) Option {
 func WithStartPlanner(planner *vmstart.Planner) Option {
 	return func(opts *options) {
 		opts.startPlanner = planner
+	}
+}
+
+// WithKoujaClientFactory overrides kouja client construction, primarily for
+// connection probes and tests.
+func WithKoujaClientFactory(factory func(kouja.Config) (*kouja.Client, error)) Option {
+	return func(opts *options) {
+		opts.koujaClientFactory = factory
 	}
 }
 
@@ -324,7 +334,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	acls := &aclService{store: st, runtime: options.aclRuntime, readiness: ready}
 	routeTables := &routeTableService{store: st, runtime: options.aclRuntime, readiness: ready}
 	vnfs := &vnfService{store: st, runtime: options.vnfRuntime, statusProvider: options.vnfStatusProvider, writer: options.vnfWriter}
-	backends := &storageBackendService{store: st, readiness: ready, disks: options.diskProvisioner, mu: options.diskMutex, registry: options.storageRegistry}
+	backends := &storageBackendService{store: st, readiness: ready, disks: options.diskProvisioner, mu: options.diskMutex, registry: options.storageRegistry, newKoujaClient: options.koujaClientFactory}
 	hostInterfaces := &hostService{source: options.vppInterfaces, store: st, writer: options.hostWriter, taps: options.hostTapWriter, devices: options.hostDeviceLister, addresses: options.interfaceAddresses, readiness: ready}
 	troubleshoot := &troubleshootService{runtime: options.diagnostics, readiness: ready}
 	captures := &captureService{runtime: options.diagnostics, readiness: ready}
@@ -594,7 +604,7 @@ func (s *vmService) ListVMs(ctx context.Context, _ *rookeryv1.ListVMsRequest) (*
 	}
 	response := &rookeryv1.ListVMsResponse{Vms: make([]*rookeryv1.VM, 0, len(vms))}
 	for _, vm := range vms {
-		response.Vms = append(response.Vms, vmToProto(vm))
+		response.Vms = append(response.Vms, s.vmToProto(ctx, vm))
 	}
 	return response, nil
 }
@@ -607,7 +617,7 @@ func (s *vmService) GetVM(ctx context.Context, request *rookeryv1.GetVMRequest) 
 	case err != nil:
 		return nil, status.Error(codes.Internal, "could not read VM")
 	default:
-		return vmToProto(vm), nil
+		return s.vmToProto(ctx, vm), nil
 	}
 }
 
@@ -657,6 +667,6 @@ func vmDiskToProto(disk store.VMDisk) *rookeryv1.VMDisk {
 		Id: disk.ID, Name: disk.Name, SizeGb: int32(disk.SizeGB), SizeBytes: disk.SizeBytes,
 		StorageBackendId: disk.StorageBackendID, StorageBackendName: disk.StorageBackendName,
 		Vg: disk.VG, ThinPool: disk.ThinPool, Device: disk.Device, Source: disk.Source,
-		Protocol: disk.Protocol,
+		Protocol: disk.Protocol, ReadBps: disk.ReadBPS, WriteBps: disk.WriteBPS,
 	}
 }

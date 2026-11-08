@@ -116,14 +116,7 @@ func normalizeStorageBackendFields(name, title, description, driver string, conf
 		if config == nil || config.GetKouja() == nil {
 			return store.StorageBackend{}, errors.New("kouja configuration is required")
 		}
-		raw := config.GetKouja()
-		cfg := &store.KoujaConfig{
-			Endpoint: strings.TrimSpace(raw.GetEndpoint()), Protocol: strings.TrimSpace(raw.GetProtocol()),
-			StorageClass: strings.TrimSpace(raw.GetStorageClass()), Initiator: strings.TrimSpace(raw.GetInitiator()),
-			HostNQN: strings.TrimSpace(raw.GetHostNqn()), CAFile: strings.TrimSpace(raw.GetCaFile()),
-			ClientCertFile: strings.TrimSpace(raw.GetClientCertFile()), ClientKeyFile: strings.TrimSpace(raw.GetClientKeyFile()),
-			ServerName: strings.TrimSpace(raw.GetServerName()), Portal: strings.TrimSpace(raw.GetPortal()),
-		}
+		cfg := koujaConfigFromProto(config.GetKouja())
 		if _, err := kouja.ParseConfig(store.StorageBackendConfig{Kouja: cfg}); err != nil {
 			return store.StorageBackend{}, err
 		}
@@ -264,4 +257,19 @@ func (s *mediaService) DeleteMedia(ctx context.Context, request *rookeryv1.Delet
 		}
 	}
 	return &emptypb.Empty{}, nil
+}
+
+func koujaConfigFromProto(raw *rookeryv1.KoujaConfig) *store.KoujaConfig {
+	if raw == nil {
+		return nil
+	}
+	return &store.KoujaConfig{
+		Endpoint: strings.TrimSpace(raw.GetEndpoint()), Protocol: strings.TrimSpace(raw.GetProtocol()),
+		StorageClass: strings.TrimSpace(raw.GetStorageClass()), Initiator: strings.TrimSpace(raw.GetInitiator()),
+		HostNQN: strings.TrimSpace(raw.GetHostNqn()), CAFile: strings.TrimSpace(raw.GetCaFile()),
+		ClientCertFile: strings.TrimSpace(raw.GetClientCertFile()), ClientKeyFile: strings.TrimSpace(raw.GetClientKeyFile()),
+		CAPEM: strings.TrimSpace(raw.GetCaPem()), ClientCertPEM: strings.TrimSpace(raw.GetClientCertPem()),
+		ClientKeyPEM: strings.TrimSpace(raw.GetClientKeyPem()),
+		ServerName:   strings.TrimSpace(raw.GetServerName()), Portal: strings.TrimSpace(raw.GetPortal()),
+	}
 }

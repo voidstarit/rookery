@@ -1,7 +1,7 @@
 # Architecture
 
 Rookery is a single-host management plane for KVM virtual machines backed by
-LVM thin storage and FD.io VPP networking. It is split into two long-running Go
+LVM thin, kouja, and host-device storage plus FD.io VPP networking. It is split into two long-running Go
 processes:
 
 - `rookery` owns the API, SQLite, QEMU lifecycle, LVM, and VPP network
