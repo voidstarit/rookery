@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/voidstarit/rookery/internal/diskthrottle"
 	"github.com/voidstarit/rookery/internal/gateway"
 	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/readiness"
@@ -130,6 +131,45 @@ func TestHostDeviceDiskRoutes(t *testing.T) {
 		t.Fatalf("host device template status = %d, body = %s", asTemplate.StatusCode, readBody(t, asTemplate))
 	}
 	_ = asTemplate.Body.Close()
+
+	class, err := st.CreateDiskThrottleClass(context.Background(), store.DiskThrottleClass{
+		Name: "host-fast", Limits: diskthrottle.Limits{BPSRead: 1_000_000},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assignRequest, err := http.NewRequest(http.MethodPut, server.URL+"/api/disks/"+id,
+		strings.NewReader(fmt.Sprintf(`{"throttle_class_id":%d}`, class.ID)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assignRequest.Header.Set("Content-Type", "application/json")
+	assigned, err := http.DefaultClient.Do(assignRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if assigned.StatusCode != http.StatusOK {
+		t.Fatalf("assign host class status = %d, body = %s", assigned.StatusCode, readBody(t, assigned))
+	}
+	var assignedDisk map[string]any
+	decodeBody(t, assigned, &assignedDisk)
+	if assignedDisk["throttle_class_name"] != "host-fast" {
+		t.Fatalf("assigned host disk = %+v", assignedDisk)
+	}
+	clearRequest, err := http.NewRequest(http.MethodPut, server.URL+"/api/disks/"+id,
+		strings.NewReader(`{"throttle_class_id":0}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	clearRequest.Header.Set("Content-Type", "application/json")
+	cleared, err := http.DefaultClient.Do(clearRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleared.StatusCode != http.StatusOK {
+		t.Fatalf("clear host class status = %d, body = %s", cleared.StatusCode, readBody(t, cleared))
+	}
+	_ = cleared.Body.Close()
 
 	request, err := http.NewRequest(http.MethodDelete, server.URL+"/api/disks/"+id, nil)
 	if err != nil {

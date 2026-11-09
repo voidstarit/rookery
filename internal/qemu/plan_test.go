@@ -458,6 +458,18 @@ func TestBuildDiskArgsThrottling(t *testing.T) {
 		!strings.Contains(remoteArgs, "throttling.bps-write=5242880") {
 		t.Fatalf("remote args = %q", remoteArgs)
 	}
+
+	classID := int64(9)
+	if _, err := buildDiskArgs(store.VMDisk{
+		Device: "/dev/vg0/data", ThrottleClassID: &classID, ThrottleError: "invalid class",
+	}, StartPlan{}, nil); err == nil || !strings.Contains(err.Error(), "invalid class") {
+		t.Fatalf("throttle error = %v", err)
+	}
+	if _, err := buildDiskArgs(store.VMDisk{
+		Device: "/dev/vg0/data", ThrottleClassID: &classID,
+	}, StartPlan{}, nil); err == nil || !strings.Contains(err.Error(), "not resolved") {
+		t.Fatalf("dangling class error = %v", err)
+	}
 }
 
 func TestBlockStats(t *testing.T) {

@@ -63,6 +63,26 @@ func TestDiskThrottleClassRoutes(t *testing.T) {
 	if invalid.StatusCode != http.StatusBadRequest {
 		t.Fatalf("invalid status = %d, body = %s", invalid.StatusCode, readBody(t, invalid))
 	}
+	missingLimits := post("/api/disk-throttle-classes", `{"name":"empty"}`)
+	if missingLimits.StatusCode != http.StatusBadRequest {
+		t.Fatalf("missing limits status = %d, body = %s", missingLimits.StatusCode, readBody(t, missingLimits))
+	}
+	getResponse, err := http.Get(server.URL + "/api/disk-throttle-classes/" + id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if getResponse.StatusCode != http.StatusOK {
+		t.Fatalf("get class status = %d, body = %s", getResponse.StatusCode, readBody(t, getResponse))
+	}
+	_ = getResponse.Body.Close()
+	missingGet, err := http.Get(server.URL + "/api/disk-throttle-classes/999")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if missingGet.StatusCode != http.StatusNotFound {
+		t.Fatalf("missing class status = %d, body = %s", missingGet.StatusCode, readBody(t, missingGet))
+	}
+	_ = missingGet.Body.Close()
 
 	updateRequest, err := http.NewRequest(http.MethodPut, server.URL+"/api/disk-throttle-classes/"+id,
 		strings.NewReader(`{"description":"second"}`))
@@ -82,6 +102,48 @@ func TestDiskThrottleClassRoutes(t *testing.T) {
 	if updatedClass["description"] != "second" || updatedClass["limits"].(map[string]any)["bps_read"].(float64) != 1048576 {
 		t.Fatalf("merged class = %+v", updatedClass)
 	}
+	nameRequest, err := http.NewRequest(http.MethodPut, server.URL+"/api/disk-throttle-classes/"+id,
+		strings.NewReader(`{"name":"standard-renamed"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	nameRequest.Header.Set("Content-Type", "application/json")
+	renamed, err := http.DefaultClient.Do(nameRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if renamed.StatusCode != http.StatusOK {
+		t.Fatalf("rename status = %d, body = %s", renamed.StatusCode, readBody(t, renamed))
+	}
+	_ = renamed.Body.Close()
+	invalidUpdate, err := http.NewRequest(http.MethodPut, server.URL+"/api/disk-throttle-classes/"+id,
+		strings.NewReader(`{"limits":{"bps_read":1,"bps_total":1}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalidUpdate.Header.Set("Content-Type", "application/json")
+	invalidUpdated, err := http.DefaultClient.Do(invalidUpdate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if invalidUpdated.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid update status = %d, body = %s", invalidUpdated.StatusCode, readBody(t, invalidUpdated))
+	}
+	_ = invalidUpdated.Body.Close()
+	missingUpdate, err := http.NewRequest(http.MethodPut, server.URL+"/api/disk-throttle-classes/999",
+		strings.NewReader(`{"description":"x"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	missingUpdate.Header.Set("Content-Type", "application/json")
+	missingUpdated, err := http.DefaultClient.Do(missingUpdate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if missingUpdated.StatusCode != http.StatusNotFound {
+		t.Fatalf("missing update status = %d, body = %s", missingUpdated.StatusCode, readBody(t, missingUpdated))
+	}
+	_ = missingUpdated.Body.Close()
 
 	classIDValue := int64(1)
 	disk, err := st.CreateDisk(context.Background(), store.Disk{
@@ -119,6 +181,18 @@ func TestDiskThrottleClassRoutes(t *testing.T) {
 	if deleted.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d, body = %s", deleted.StatusCode, readBody(t, deleted))
 	}
+	missingDelete, err := http.NewRequest(http.MethodDelete, server.URL+"/api/disk-throttle-classes/999", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	missingDeleted, err := http.DefaultClient.Do(missingDelete)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if missingDeleted.StatusCode != http.StatusNotFound {
+		t.Fatalf("missing delete status = %d, body = %s", missingDeleted.StatusCode, readBody(t, missingDeleted))
+	}
+	_ = missingDeleted.Body.Close()
 }
 
 func TestDiskThrottleClassCorruptValidationError(t *testing.T) {
@@ -165,4 +239,32 @@ func TestDiskThrottleClassCorruptValidationError(t *testing.T) {
 	if len(classes) != 1 || classes[0]["validation_error"] == "" {
 		t.Fatalf("classes = %+v", classes)
 	}
+	repairRequest, err := http.NewRequest(http.MethodPut, server.URL+"/api/disk-throttle-classes/1",
+		strings.NewReader(`{"description":"still corrupt"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	repairRequest.Header.Set("Content-Type", "application/json")
+	repair, err := http.DefaultClient.Do(repairRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repair.StatusCode != http.StatusBadRequest {
+		t.Fatalf("metadata-only corrupt update status = %d, body = %s", repair.StatusCode, readBody(t, repair))
+	}
+	_ = repair.Body.Close()
+	validRequest, err := http.NewRequest(http.MethodPut, server.URL+"/api/disk-throttle-classes/1",
+		strings.NewReader(`{"description":"repaired","limits":{"bps_read":1}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	validRequest.Header.Set("Content-Type", "application/json")
+	valid, err := http.DefaultClient.Do(validRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if valid.StatusCode != http.StatusOK {
+		t.Fatalf("repair status = %d, body = %s", valid.StatusCode, readBody(t, valid))
+	}
+	_ = valid.Body.Close()
 }

@@ -205,4 +205,34 @@ func TestDiskThrottleClassDiskRoutes(t *testing.T) {
 	if len(provisioner.created) != before {
 		t.Fatalf("unknown class created a volume: %+v", provisioner.created)
 	}
+	negative, err := http.Post(server.URL+"/api/disks", "application/json", strings.NewReader(
+		`{"name":"negative","size_gb":10,"throttle_class_id":-1}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if negative.StatusCode != http.StatusBadRequest {
+		t.Fatalf("negative class status = %d, body = %s", negative.StatusCode, readBody(t, negative))
+	}
+	templateWithClass, err := http.Post(server.URL+"/api/disks", "application/json", strings.NewReader(
+		`{"name":"template-class","size_gb":10,"is_template":true,"throttle_class_id":1}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if templateWithClass.StatusCode != http.StatusBadRequest {
+		t.Fatalf("template class status = %d, body = %s", templateWithClass.StatusCode, readBody(t, templateWithClass))
+	}
+	unknownUpdate, err := http.NewRequest(http.MethodPut, server.URL+"/api/disks/"+diskID,
+		strings.NewReader(`{"throttle_class_id":999}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	unknownUpdate.Header.Set("Content-Type", "application/json")
+	unknownUpdated, err := http.DefaultClient.Do(unknownUpdate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unknownUpdated.StatusCode != http.StatusBadRequest {
+		t.Fatalf("unknown class update status = %d, body = %s", unknownUpdated.StatusCode, readBody(t, unknownUpdated))
+	}
+	_ = unknownUpdated.Body.Close()
 }

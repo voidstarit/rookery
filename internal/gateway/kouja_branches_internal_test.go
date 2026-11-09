@@ -98,6 +98,10 @@ func TestCreateKoujaDiskBranches(t *testing.T) {
 	if _, err := service.createKoujaDisk(ctx, request, existing.Name, backend, 5, nil); err == nil {
 		t.Fatal("createKoujaDisk accepted a duplicate name")
 	}
+	badClass := int64(999)
+	if _, err := service.createKoujaDisk(ctx, request, "bad-class", backend, 5, &badClass); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("createKoujaDisk(missing class) = %v", err)
+	}
 	tooBig := int32(maxGatewayDiskGB + 1)
 	if _, err := service.CreateDisk(ctx, &rookeryv1.CreateDiskRequest{Name: "too-big", SizeGb: &tooBig, StorageBackendId: &backend.ID}); err == nil {
 		t.Fatal("CreateDisk accepted an oversized kouja disk")
