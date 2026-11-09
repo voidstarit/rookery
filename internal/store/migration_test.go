@@ -331,10 +331,22 @@ func TestMigrationFromVersion50DropsRawBandwidthValues(t *testing.T) {
 	if !tableExists(t, st.db, "disk_throttle_classes") {
 		t.Fatal("disk_throttle_classes is missing")
 	}
-	// Phase 0 keeps the raw columns; Phase 4 removes them.
-	if !disksHasColumn(t, st.db, "read_bps") || !disksHasColumn(t, st.db, "write_bps") {
-		t.Fatal("raw bandwidth columns should remain until Phase 4")
+	if disksHasColumn(t, st.db, "read_bps") || disksHasColumn(t, st.db, "write_bps") {
+		t.Fatal("raw bandwidth columns should be dropped by 0052")
 	}
+}
+
+func TestMigration0051KeepsRawColumnsUntil0052(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "version-51.db")
+	db := openRawDB(t, dbPath)
+	migrateToVersion(t, db, 51)
+	if !disksHasColumn(t, db, "throttle_class_id") || !tableExists(t, db, "disk_throttle_classes") {
+		t.Fatal("0051 did not add the class schema")
+	}
+	if !disksHasColumn(t, db, "read_bps") || !disksHasColumn(t, db, "write_bps") {
+		t.Fatal("0051 unexpectedly dropped the raw columns")
+	}
+	closeRawDB(t, db)
 }
 
 func migrateToVersion(t *testing.T, db *sql.DB, target int) {
