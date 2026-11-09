@@ -20,7 +20,8 @@ func (s *Store) MarkDiskDeleting(ctx context.Context, id int64) error {
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE disks
 		SET deletion_state = ?, deletion_error = '', deletion_attempts = 0,
-		    deletion_next_attempt_at = ?, deletion_claimed_at = 0, updated_at = ?
+		    deletion_next_attempt_at = ?, deletion_claimed_at = 0,
+		    throttle_class_id = NULL, updated_at = ?
 		WHERE id = ?`,
 		DiskDeletionDeleting, now.UnixMilli(), now.UnixMilli(), id,
 	)
@@ -43,7 +44,7 @@ func (s *Store) SetDiskDeleteFailed(ctx context.Context, id int64, message strin
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE disks
 		SET deletion_state = ?, deletion_error = ?, deletion_next_attempt_at = 0,
-		    deletion_claimed_at = 0, updated_at = ?
+		    deletion_claimed_at = 0, throttle_class_id = NULL, updated_at = ?
 		WHERE id = ?`,
 		DiskDeletionFailed, message, now, id,
 	)
@@ -66,7 +67,8 @@ func (s *Store) RecordDiskDeletionFailure(ctx context.Context, id int64, attempt
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE disks
 		SET deletion_state = ?, deletion_attempts = ?, deletion_next_attempt_at = ?,
-		    deletion_error = ?, deletion_claimed_at = 0, updated_at = ?
+		    deletion_error = ?, deletion_claimed_at = 0,
+		    throttle_class_id = NULL, updated_at = ?
 		WHERE id = ?`,
 		DiskDeletionDeleting, attempts, next.UTC().UnixMilli(), message, now, id,
 	)

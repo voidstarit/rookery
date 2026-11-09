@@ -19,6 +19,9 @@
       "name": "DiskService"
     },
     {
+      "name": "DiskThrottleService"
+    },
+    {
       "name": "HostService"
     },
     {
@@ -299,6 +302,160 @@
         },
         "tags": [
           "SystemService"
+        ]
+      }
+    },
+    "/api/disk-throttle-classes": {
+      "get": {
+        "operationId": "DiskThrottleService_ListDiskThrottleClasses",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1DiskThrottleClass"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "DiskThrottleService"
+        ]
+      },
+      "post": {
+        "operationId": "DiskThrottleService_CreateDiskThrottleClass",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DiskThrottleClass"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateDiskThrottleClassRequest"
+            }
+          }
+        ],
+        "tags": [
+          "DiskThrottleService"
+        ]
+      }
+    },
+    "/api/disk-throttle-classes/{id}": {
+      "get": {
+        "operationId": "DiskThrottleService_GetDiskThrottleClass",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DiskThrottleClass"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DiskThrottleService"
+        ]
+      },
+      "delete": {
+        "operationId": "DiskThrottleService_DeleteDiskThrottleClass",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DiskThrottleService"
+        ]
+      },
+      "put": {
+        "operationId": "DiskThrottleService_UpdateDiskThrottleClass",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DiskThrottleClass"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DiskThrottleServiceUpdateDiskThrottleClassBody"
+            }
+          }
+        ],
+        "tags": [
+          "DiskThrottleService"
         ]
       }
     },
@@ -3897,6 +4054,20 @@
         }
       }
     },
+    "DiskThrottleServiceUpdateDiskThrottleClassBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "limits": {
+          "$ref": "#/definitions/v1DiskThrottleLimits"
+        }
+      }
+    },
     "HostServiceAttachHostInterfaceBody": {
       "type": "object"
     },
@@ -4858,6 +5029,20 @@
         }
       }
     },
+    "v1CreateDiskThrottleClassRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "limits": {
+          "$ref": "#/definitions/v1DiskThrottleLimits"
+        }
+      }
+    },
     "v1CreateHostTapRequest": {
       "type": "object",
       "properties": {
@@ -5302,6 +5487,121 @@
           "description": "read_bps and write_bps are QEMU block throttling limits in bytes per\nsecond. Zero means unlimited."
         },
         "write_bps": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1DiskThrottleClass": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "limits": {
+          "$ref": "#/definitions/v1DiskThrottleLimits"
+        },
+        "disk_count": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "validation_error": {
+          "type": "string"
+        }
+      }
+    },
+    "v1DiskThrottleLimits": {
+      "type": "object",
+      "properties": {
+        "bps_total": {
+          "type": "string",
+          "format": "int64",
+          "description": "All values are \u003e= 0. Base and *_max values are \u003c= 1e15;\nevery *_max_length is in seconds, \u003c= UINT_MAX (4,294,967,295),\nand must satisfy QEMU's overflow check."
+        },
+        "bps_total_max": {
+          "type": "string",
+          "format": "int64"
+        },
+        "bps_total_max_length": {
+          "type": "string",
+          "format": "int64"
+        },
+        "bps_read": {
+          "type": "string",
+          "format": "int64"
+        },
+        "bps_read_max": {
+          "type": "string",
+          "format": "int64"
+        },
+        "bps_read_max_length": {
+          "type": "string",
+          "format": "int64"
+        },
+        "bps_write": {
+          "type": "string",
+          "format": "int64"
+        },
+        "bps_write_max": {
+          "type": "string",
+          "format": "int64"
+        },
+        "bps_write_max_length": {
+          "type": "string",
+          "format": "int64"
+        },
+        "iops_total": {
+          "type": "string",
+          "format": "int64"
+        },
+        "iops_total_max": {
+          "type": "string",
+          "format": "int64"
+        },
+        "iops_total_max_length": {
+          "type": "string",
+          "format": "int64"
+        },
+        "iops_read": {
+          "type": "string",
+          "format": "int64"
+        },
+        "iops_read_max": {
+          "type": "string",
+          "format": "int64"
+        },
+        "iops_read_max_length": {
+          "type": "string",
+          "format": "int64"
+        },
+        "iops_write": {
+          "type": "string",
+          "format": "int64"
+        },
+        "iops_write_max": {
+          "type": "string",
+          "format": "int64"
+        },
+        "iops_write_max_length": {
+          "type": "string",
+          "format": "int64"
+        },
+        "iops_size": {
           "type": "string",
           "format": "int64"
         }
@@ -5955,6 +6255,18 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1VPPInterface"
+          }
+        }
+      }
+    },
+    "v1ListDiskThrottleClassesResponse": {
+      "type": "object",
+      "properties": {
+        "classes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1DiskThrottleClass"
           }
         }
       }
