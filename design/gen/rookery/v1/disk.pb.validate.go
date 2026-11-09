@@ -78,9 +78,9 @@ func (m *VMDisk) validate(all bool) error {
 
 	// no validation rules for Protocol
 
-	// no validation rules for ReadBps
+	// no validation rules for ThrottleClassId
 
-	// no validation rules for WriteBps
+	// no validation rules for ThrottleClassName
 
 	if m.StorageBackendId != nil {
 		// no validation rules for StorageBackendId
@@ -278,9 +278,9 @@ func (m *Disk) validate(all bool) error {
 
 	// no validation rules for Protocol
 
-	// no validation rules for ReadBps
+	// no validation rules for ThrottleClassId
 
-	// no validation rules for WriteBps
+	// no validation rules for ThrottleClassName
 
 	if m.StorageBackendId != nil {
 		// no validation rules for StorageBackendId
@@ -954,6 +954,17 @@ func (m *CreateDiskRequest) validate(all bool) error {
 
 	}
 
+	if m.GetThrottleClassId() < 0 {
+		err := CreateDiskRequestValidationError{
+			field:  "ThrottleClassId",
+			reason: "value must be greater than or equal to 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
 	if m.SizeGb != nil {
 
 		if val := m.GetSizeGb(); val < 1 || val > 65536 {
@@ -1001,36 +1012,6 @@ func (m *CreateDiskRequest) validate(all bool) error {
 
 	if m.IsTemplate != nil {
 		// no validation rules for IsTemplate
-	}
-
-	if m.ReadBps != nil {
-
-		if m.GetReadBps() < 0 {
-			err := CreateDiskRequestValidationError{
-				field:  "ReadBps",
-				reason: "value must be greater than or equal to 0",
-			}
-			if !all {
-				return err
-			}
-			errors = append(errors, err)
-		}
-
-	}
-
-	if m.WriteBps != nil {
-
-		if m.GetWriteBps() < 0 {
-			err := CreateDiskRequestValidationError{
-				field:  "WriteBps",
-				reason: "value must be greater than or equal to 0",
-			}
-			if !all {
-				return err
-			}
-			errors = append(errors, err)
-		}
-
 	}
 
 	if len(errors) > 0 {
@@ -1288,26 +1269,11 @@ func (m *UpdateDiskRequest) validate(all bool) error {
 
 	}
 
-	if m.ReadBps != nil {
+	if m.ThrottleClassId != nil {
 
-		if m.GetReadBps() < 0 {
+		if m.GetThrottleClassId() < 0 {
 			err := UpdateDiskRequestValidationError{
-				field:  "ReadBps",
-				reason: "value must be greater than or equal to 0",
-			}
-			if !all {
-				return err
-			}
-			errors = append(errors, err)
-		}
-
-	}
-
-	if m.WriteBps != nil {
-
-		if m.GetWriteBps() < 0 {
-			err := UpdateDiskRequestValidationError{
-				field:  "WriteBps",
+				field:  "ThrottleClassId",
 				reason: "value must be greater than or equal to 0",
 			}
 			if !all {

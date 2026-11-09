@@ -42,13 +42,11 @@ type VMDisk struct {
 	// locator is a display-only description of a remote attachment.
 	Locator string `protobuf:"bytes,11,opt,name=locator,proto3" json:"locator,omitempty"`
 	// protocol distinguishes local, iscsi, nvme-tcp, and rbd attachments.
-	Protocol string `protobuf:"bytes,12,opt,name=protocol,proto3" json:"protocol,omitempty"`
-	// read_bps and write_bps are QEMU block throttling limits in bytes per
-	// second. Zero means unlimited.
-	ReadBps       int64 `protobuf:"varint,13,opt,name=read_bps,json=readBps,proto3" json:"read_bps,omitempty"`
-	WriteBps      int64 `protobuf:"varint,14,opt,name=write_bps,json=writeBps,proto3" json:"write_bps,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Protocol          string `protobuf:"bytes,12,opt,name=protocol,proto3" json:"protocol,omitempty"`
+	ThrottleClassId   int64  `protobuf:"varint,15,opt,name=throttle_class_id,json=throttleClassId,proto3" json:"throttle_class_id,omitempty"`
+	ThrottleClassName string `protobuf:"bytes,16,opt,name=throttle_class_name,json=throttleClassName,proto3" json:"throttle_class_name,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *VMDisk) Reset() {
@@ -165,18 +163,18 @@ func (x *VMDisk) GetProtocol() string {
 	return ""
 }
 
-func (x *VMDisk) GetReadBps() int64 {
+func (x *VMDisk) GetThrottleClassId() int64 {
 	if x != nil {
-		return x.ReadBps
+		return x.ThrottleClassId
 	}
 	return 0
 }
 
-func (x *VMDisk) GetWriteBps() int64 {
+func (x *VMDisk) GetThrottleClassName() string {
 	if x != nil {
-		return x.WriteBps
+		return x.ThrottleClassName
 	}
-	return 0
+	return ""
 }
 
 type Disk struct {
@@ -209,13 +207,11 @@ type Disk struct {
 	// deletion_error is the last asynchronous deletion error.
 	DeletionError string `protobuf:"bytes,22,opt,name=deletion_error,json=deletionError,proto3" json:"deletion_error,omitempty"`
 	// protocol distinguishes local, iscsi, nvme-tcp, and rbd attachments.
-	Protocol string `protobuf:"bytes,23,opt,name=protocol,proto3" json:"protocol,omitempty"`
-	// read_bps and write_bps are QEMU block throttling limits in bytes per
-	// second. Zero means unlimited.
-	ReadBps       int64 `protobuf:"varint,24,opt,name=read_bps,json=readBps,proto3" json:"read_bps,omitempty"`
-	WriteBps      int64 `protobuf:"varint,25,opt,name=write_bps,json=writeBps,proto3" json:"write_bps,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Protocol          string `protobuf:"bytes,23,opt,name=protocol,proto3" json:"protocol,omitempty"`
+	ThrottleClassId   int64  `protobuf:"varint,26,opt,name=throttle_class_id,json=throttleClassId,proto3" json:"throttle_class_id,omitempty"`
+	ThrottleClassName string `protobuf:"bytes,27,opt,name=throttle_class_name,json=throttleClassName,proto3" json:"throttle_class_name,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *Disk) Reset() {
@@ -409,18 +405,18 @@ func (x *Disk) GetProtocol() string {
 	return ""
 }
 
-func (x *Disk) GetReadBps() int64 {
+func (x *Disk) GetThrottleClassId() int64 {
 	if x != nil {
-		return x.ReadBps
+		return x.ThrottleClassId
 	}
 	return 0
 }
 
-func (x *Disk) GetWriteBps() int64 {
+func (x *Disk) GetThrottleClassName() string {
 	if x != nil {
-		return x.WriteBps
+		return x.ThrottleClassName
 	}
-	return 0
+	return ""
 }
 
 type ImportableDisk struct {
@@ -653,11 +649,11 @@ type CreateDiskRequest struct {
 	// partition, or logical volume) for passthrough to one VM. When set,
 	// storage_backend_id, size_gb, is_template, template_disk_id, and
 	// provisioning settings must be omitted; the size is read from the device.
-	HostDevice    string `protobuf:"bytes,9,opt,name=host_device,json=hostDevice,proto3" json:"host_device,omitempty"`
-	ReadBps       *int64 `protobuf:"varint,10,opt,name=read_bps,json=readBps,proto3,oneof" json:"read_bps,omitempty"`
-	WriteBps      *int64 `protobuf:"varint,11,opt,name=write_bps,json=writeBps,proto3,oneof" json:"write_bps,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// throttle_class_id is allowed.
+	HostDevice      string `protobuf:"bytes,9,opt,name=host_device,json=hostDevice,proto3" json:"host_device,omitempty"`
+	ThrottleClassId int64  `protobuf:"varint,12,opt,name=throttle_class_id,json=throttleClassId,proto3" json:"throttle_class_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *CreateDiskRequest) Reset() {
@@ -753,16 +749,9 @@ func (x *CreateDiskRequest) GetHostDevice() string {
 	return ""
 }
 
-func (x *CreateDiskRequest) GetReadBps() int64 {
-	if x != nil && x.ReadBps != nil {
-		return *x.ReadBps
-	}
-	return 0
-}
-
-func (x *CreateDiskRequest) GetWriteBps() int64 {
-	if x != nil && x.WriteBps != nil {
-		return *x.WriteBps
+func (x *CreateDiskRequest) GetThrottleClassId() int64 {
+	if x != nil {
+		return x.ThrottleClassId
 	}
 	return 0
 }
@@ -825,8 +814,7 @@ type UpdateDiskRequest struct {
 	IsTemplate          *bool                  `protobuf:"varint,2,opt,name=is_template,json=isTemplate,proto3,oneof" json:"is_template,omitempty"`
 	ProvisioningScript  *string                `protobuf:"bytes,3,opt,name=provisioning_script,json=provisioningScript,proto3,oneof" json:"provisioning_script,omitempty"`
 	ProvisioningTimeout *string                `protobuf:"bytes,4,opt,name=provisioning_timeout,json=provisioningTimeout,proto3,oneof" json:"provisioning_timeout,omitempty"`
-	ReadBps             *int64                 `protobuf:"varint,5,opt,name=read_bps,json=readBps,proto3,oneof" json:"read_bps,omitempty"`
-	WriteBps            *int64                 `protobuf:"varint,6,opt,name=write_bps,json=writeBps,proto3,oneof" json:"write_bps,omitempty"`
+	ThrottleClassId     *int64                 `protobuf:"varint,7,opt,name=throttle_class_id,json=throttleClassId,proto3,oneof" json:"throttle_class_id,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -889,16 +877,9 @@ func (x *UpdateDiskRequest) GetProvisioningTimeout() string {
 	return ""
 }
 
-func (x *UpdateDiskRequest) GetReadBps() int64 {
-	if x != nil && x.ReadBps != nil {
-		return *x.ReadBps
-	}
-	return 0
-}
-
-func (x *UpdateDiskRequest) GetWriteBps() int64 {
-	if x != nil && x.WriteBps != nil {
-		return *x.WriteBps
+func (x *UpdateDiskRequest) GetThrottleClassId() int64 {
+	if x != nil && x.ThrottleClassId != nil {
+		return *x.ThrottleClassId
 	}
 	return 0
 }
@@ -952,7 +933,7 @@ var File_rookery_v1_disk_proto protoreflect.FileDescriptor
 const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\n" +
 	"\x15rookery/v1/disk.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\xab\x03\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\xf0\x03\n" +
 	"\x06VMDisk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
@@ -967,10 +948,10 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"size_bytes\x18\n" +
 	" \x01(\x04R\tsizeBytes\x12\x18\n" +
 	"\alocator\x18\v \x01(\tR\alocator\x12\x1a\n" +
-	"\bprotocol\x18\f \x01(\tR\bprotocol\x12\x19\n" +
-	"\bread_bps\x18\r \x01(\x03R\areadBps\x12\x1b\n" +
-	"\twrite_bps\x18\x0e \x01(\x03R\bwriteBpsB\x15\n" +
-	"\x13_storage_backend_id\"\xcc\a\n" +
+	"\bprotocol\x18\f \x01(\tR\bprotocol\x12*\n" +
+	"\x11throttle_class_id\x18\x0f \x01(\x03R\x0fthrottleClassId\x12.\n" +
+	"\x13throttle_class_name\x18\x10 \x01(\tR\x11throttleClassNameB\x15\n" +
+	"\x13_storage_backend_idJ\x04\b\r\x10\x0eJ\x04\b\x0e\x10\x0fR\bread_bpsR\twrite_bps\"\x91\b\n" +
 	"\x04Disk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
@@ -999,12 +980,12 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\alocator\x18\x14 \x01(\tR\alocator\x12%\n" +
 	"\x0edeletion_state\x18\x15 \x01(\tR\rdeletionState\x12%\n" +
 	"\x0edeletion_error\x18\x16 \x01(\tR\rdeletionError\x12\x1a\n" +
-	"\bprotocol\x18\x17 \x01(\tR\bprotocol\x12\x19\n" +
-	"\bread_bps\x18\x18 \x01(\x03R\areadBps\x12\x1b\n" +
-	"\twrite_bps\x18\x19 \x01(\x03R\bwriteBpsB\x15\n" +
+	"\bprotocol\x18\x17 \x01(\tR\bprotocol\x12*\n" +
+	"\x11throttle_class_id\x18\x1a \x01(\x03R\x0fthrottleClassId\x12.\n" +
+	"\x13throttle_class_name\x18\x1b \x01(\tR\x11throttleClassNameB\x15\n" +
 	"\x13_storage_backend_idB\x11\n" +
 	"\x0f_attached_vm_idB\x13\n" +
-	"\x11_template_disk_id\"\xa1\x02\n" +
+	"\x11_template_disk_idJ\x04\b\x18\x10\x19J\x04\b\x19\x10\x1aR\bread_bpsR\twrite_bps\"\xa1\x02\n" +
 	"\x0eImportableDisk\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x17\n" +
 	"\asize_gb\x18\x02 \x01(\x05R\x06sizeGb\x12\x1e\n" +
@@ -1022,7 +1003,7 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\x11ListDisksResponse\x12&\n" +
 	"\x05disks\x18\x01 \x03(\v2\x10.rookery.v1.DiskR\x05disks\")\n" +
 	"\x0eGetDiskRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\xb4\x05\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\x9b\x05\n" +
 	"\x11CreateDiskRequest\x12;\n" +
 	"\x04name\x18\x01 \x01(\tB'\xfaB$r\"\x10\x01\x18\x7f2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$R\x04name\x12)\n" +
 	"\asize_gb\x18\x02 \x01(\x05B\v\xfaB\b\x1a\x06\x18\x80\x80\x04(\x01H\x00R\x06sizeGb\x88\x01\x01\x12:\n" +
@@ -1035,35 +1016,28 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\xfaB\ar\x05\x18 \xd0\x01\x01R\x13provisioningTimeout\x12;\n" +
 	"\fprovisioning\x18\b \x01(\v2\x17.google.protobuf.StructR\fprovisioning\x12,\n" +
 	"\vhost_device\x18\t \x01(\tB\v\xfaB\br\x06\x18\x80 \xd0\x01\x01R\n" +
-	"hostDevice\x12'\n" +
-	"\bread_bps\x18\n" +
-	" \x01(\x03B\a\xfaB\x04\"\x02(\x00H\x04R\areadBps\x88\x01\x01\x12)\n" +
-	"\twrite_bps\x18\v \x01(\x03B\a\xfaB\x04\"\x02(\x00H\x05R\bwriteBps\x88\x01\x01B\n" +
+	"hostDevice\x123\n" +
+	"\x11throttle_class_id\x18\f \x01(\x03B\a\xfaB\x04\"\x02(\x00R\x0fthrottleClassIdB\n" +
 	"\n" +
 	"\b_size_gbB\x15\n" +
 	"\x13_storage_backend_idB\x13\n" +
 	"\x11_template_disk_idB\x0e\n" +
-	"\f_is_templateB\v\n" +
-	"\t_read_bpsB\f\n" +
-	"\n" +
-	"_write_bps\"F\n" +
+	"\f_is_templateJ\x04\b\n" +
+	"\x10\vJ\x04\b\v\x10\fR\bread_bpsR\twrite_bps\"F\n" +
 	"\x12DeleteDiskResponse\x12\x1a\n" +
 	"\baccepted\x18\x01 \x01(\bR\baccepted\x12\x14\n" +
-	"\x05state\x18\x02 \x01(\tR\x05state\"\x83\x03\n" +
+	"\x05state\x18\x02 \x01(\tR\x05state\"\x85\x03\n" +
 	"\x11UpdateDiskRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x12$\n" +
 	"\vis_template\x18\x02 \x01(\bH\x00R\n" +
 	"isTemplate\x88\x01\x01\x12>\n" +
 	"\x13provisioning_script\x18\x03 \x01(\tB\b\xfaB\x05r\x03\x18\x80 H\x01R\x12provisioningScript\x88\x01\x01\x12?\n" +
-	"\x14provisioning_timeout\x18\x04 \x01(\tB\a\xfaB\x04r\x02\x18 H\x02R\x13provisioningTimeout\x88\x01\x01\x12'\n" +
-	"\bread_bps\x18\x05 \x01(\x03B\a\xfaB\x04\"\x02(\x00H\x03R\areadBps\x88\x01\x01\x12)\n" +
-	"\twrite_bps\x18\x06 \x01(\x03B\a\xfaB\x04\"\x02(\x00H\x04R\bwriteBps\x88\x01\x01B\x0e\n" +
+	"\x14provisioning_timeout\x18\x04 \x01(\tB\a\xfaB\x04r\x02\x18 H\x02R\x13provisioningTimeout\x88\x01\x01\x128\n" +
+	"\x11throttle_class_id\x18\a \x01(\x03B\a\xfaB\x04\"\x02(\x00H\x03R\x0fthrottleClassId\x88\x01\x01B\x0e\n" +
 	"\f_is_templateB\x16\n" +
 	"\x14_provisioning_scriptB\x17\n" +
-	"\x15_provisioning_timeoutB\v\n" +
-	"\t_read_bpsB\f\n" +
-	"\n" +
-	"_write_bps\",\n" +
+	"\x15_provisioning_timeoutB\x14\n" +
+	"\x12_throttle_class_idJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aR\bread_bpsR\twrite_bps\",\n" +
 	"\x11DeleteDiskRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id2\xdb\x03\n" +
 	"\vDiskService\x12c\n" +

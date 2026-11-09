@@ -1,24 +1,25 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
 import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
-import type { Disk, HostAttachableBlockDevice, StorageBackend } from "../types";
+import type { Disk, DiskThrottleClass, HostAttachableBlockDevice, StorageBackend } from "../types";
+import { formatThrottleSummary } from "./throttle";
 
 type DiskDialogProps = {
   backends: StorageBackend[];
   disks: Disk[];
+  classes: DiskThrottleClass[];
   onClose: () => void;
   onSaved: (disk: Disk) => void;
 };
 
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
-export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProps) {
+export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskDialogProps) {
   const defaultBackend = backends.find((item) => item.name === "default") || backends[0];
   const [storageKind, setStorageKind] = useState<"lvm" | "host">(backends.length === 0 ? "host" : "lvm");
   const [name, setName] = useState("");
   const [sizeGB, setSizeGB] = useState("10");
-  const [readBPS, setReadBPS] = useState("0");
-  const [writeBPS, setWriteBPS] = useState("0");
+  const [throttleClassID, setThrottleClassID] = useState("0");
   const [backendID, setBackendID] = useState(defaultBackend ? String(defaultBackend.id) : "");
   const [hostDevices, setHostDevices] = useState<HostAttachableBlockDevice[]>([]);
   const [hostDevicePath, setHostDevicePath] = useState("");
@@ -49,6 +50,8 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
   );
   const template = templates.find((disk) => String(disk.id) === templateID) || null;
   const hostDevice = hostDevices.find((device) => device.path === hostDevicePath) || null;
+  const availableClasses = classes.filter((item) => !item.validation_error);
+  const classDisabled = storageKind === "lvm" && source === "empty" && markAsTemplate;
 
   useEffect(() => {
     if (!supportsTemplates) {
@@ -118,15 +121,15 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
     setError("");
     setSaving(true);
     try {
+      const classID = classDisabled ? 0 : Number(throttleClassID) || 0;
       const body =
         storageKind === "host"
-          ? { name: name.trim(), host_device: hostDevice?.path, read_bps: Number(readBPS) || 0, write_bps: Number(writeBPS) || 0 }
+          ? { name: name.trim(), host_device: hostDevice?.path, throttle_class_id: classID }
           : {
               name: name.trim(),
               size_gb: Number(sizeGB),
               storage_backend_id: Number(backendID),
-              read_bps: Number(readBPS) || 0,
-              write_bps: Number(writeBPS) || 0,
+              throttle_class_id: classID,
               ...(source === "template" && template ? { template_disk_id: template.id } : {}),
               ...(source === "template" && template?.provisioning_script && provisioning !== undefined
                 ? { provisioning }
@@ -220,28 +223,24 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
             </span>
           </label>
 
-          <label class="field">
-            <span class="field-label">Read bandwidth limit (bytes/s)</span>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              placeholder="0 (unlimited)"
-              value={readBPS}
-              onInput={(event) => setReadBPS(event.currentTarget.value)}
-            />
-          </label>
-          <label class="field">
-            <span class="field-label">Write bandwidth limit (bytes/s)</span>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              placeholder="0 (unlimited)"
-              value={writeBPS}
-              onInput={(event) => setWriteBPS(event.currentTarget.value)}
-            />
-            <span class="field-hint">QEMU block throttling; 0 means unlimited. Applies when the VM starts.</span>
+          <label class="field field-wide">
+            <span class="field-label">Throttling class</span>
+            <select
+              value={throttleClassID}
+              disabled={saving || classDisabled}
+              onChange={(event) => setThrottleClassID(event.currentTarget.value)}
+            >
+              <option value="0">Unlimited</option>
+              {availableClasses.map((item) => (
+                <option value={String(item.id)} key={item.id}>
+                  {item.name}
+                  {formatThrottleSummary(item.limits) ? ` · ${formatThrottleSummary(item.limits)}` : ""}
+                </option>
+              ))}
+            </select>
+            <span class="field-hint">
+              QEMU block throttling applies when the VM starts. Templates cannot carry a class.
+            </span>
           </label>
           {storageKind === "lvm" ? (
             <>
@@ -329,7 +328,13 @@ export function DiskDialog({ backends, disks, onClose, onSaved }: DiskDialogProp
                     <input
                       type="checkbox"
                       checked={markAsTemplate}
-                      onChange={(event) => setMarkAsTemplate(event.currentTarget.checked)}
+                      onChange={(event) => {
+                        const checked = event.currentTarget.checked;
+                        setMarkAsTemplate(checked);
+                        if (checked) {
+                          setThrottleClassID("0");
+                        }
+                      }}
                     />
                     <span>Mark this new disk as a template</span>
                   </span>

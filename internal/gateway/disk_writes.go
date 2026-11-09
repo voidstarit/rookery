@@ -38,8 +38,12 @@ func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateD
 	if name == "" {
 		return nil, status.Error(codes.InvalidArgument, "name is required")
 	}
+	classID, err := s.resolveCreateThrottleClass(ctx, request.GetThrottleClassId(), request.GetIsTemplate())
+	if err != nil {
+		return nil, err
+	}
 	if hostDevice := strings.TrimSpace(request.GetHostDevice()); hostDevice != "" {
-		return s.createHostDeviceDisk(ctx, request, name, hostDevice)
+		return s.createHostDeviceDisk(ctx, request, name, hostDevice, classID)
 	}
 	backend, err := s.resolveStorageBackend(ctx, request.StorageBackendId)
 	if err != nil {
@@ -53,7 +57,7 @@ func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateD
 		if sizeGB < 1 || sizeGB > maxGatewayDiskGB {
 			return nil, status.Error(codes.InvalidArgument, "size_gb is out of range")
 		}
-		return s.createKoujaDisk(ctx, request, name, backend, sizeGB)
+		return s.createKoujaDisk(ctx, request, name, backend, sizeGB, classID)
 	}
 	if backend.Driver != "lvm-thin" || backend.Config.VG == "" || backend.Config.ThinPool == "" {
 		return nil, status.Error(codes.FailedPrecondition, "selected storage backend is not a configured LVM thin backend")
@@ -143,9 +147,9 @@ func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateD
 	} else if !errors.Is(err, store.ErrDiskNotFound) {
 		return nil, status.Error(codes.Internal, "could not check disk name")
 	}
-	readBPS, writeBPS := requestDiskBandwidth(request)
 	disk := store.Disk{
-		Name: name, SizeGB: sizeGB, ReadBPS: readBPS, WriteBPS: writeBPS,
+		Name: name, SizeGB: sizeGB,
+		ThrottleClassID:  classID,
 		StorageBackendID: &backend.ID, StorageBackendName: backend.Name,
 		VG: backend.Config.VG, ThinPool: backend.Config.ThinPool,
 		Device:              "/dev/" + backend.Config.VG + "/" + name,
@@ -167,6 +171,9 @@ func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateD
 		created, err := s.store.CreateDisk(ctx, disk)
 		if err != nil {
 			_ = s.runDiskPreparationScript(context.Background(), "delete", backend, disk, template)
+			if mapped := diskAssignmentError(err); mapped != nil {
+				return nil, mapped
+			}
 			switch {
 			case errors.Is(err, store.ErrDiskNameTaken):
 				return nil, status.Error(codes.AlreadyExists, "a disk with that name already exists")
@@ -182,6 +189,9 @@ func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateD
 	created, err := s.store.CreateDisk(ctx, disk)
 	if err != nil {
 		_ = s.runtime.DeleteThinVolume(context.Background(), disk.VG, disk.Name)
+		if mapped := diskAssignmentError(err); mapped != nil {
+			return nil, mapped
+		}
 		switch {
 		case errors.Is(err, store.ErrDiskNameTaken):
 			return nil, status.Error(codes.AlreadyExists, "a disk with that name already exists")
@@ -195,7 +205,7 @@ func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateD
 // createHostDeviceDisk registers an existing host block device as a
 // passthrough disk. Rookery never creates, resizes, or deletes the underlying
 // device; deleting the disk record only removes the inventory entry.
-func (s *diskService) createHostDeviceDisk(ctx context.Context, request *rookeryv1.CreateDiskRequest, name, hostDevice string) (*rookeryv1.Disk, error) {
+func (s *diskService) createHostDeviceDisk(ctx context.Context, request *rookeryv1.CreateDiskRequest, name, hostDevice string, classID *int64) (*rookeryv1.Disk, error) {
 	if request.StorageBackendId != nil {
 		return nil, status.Error(codes.InvalidArgument, "storage_backend_id cannot be used with host_device")
 	}
@@ -245,14 +255,16 @@ func (s *diskService) createHostDeviceDisk(ctx context.Context, request *rookery
 	if sizeGB < 1 {
 		sizeGB = 1
 	}
-	readBPS, writeBPS := requestDiskBandwidth(request)
 	disk := store.Disk{
 		Name: name, SizeGB: sizeGB, SizeBytes: device.SizeBytes,
-		ReadBPS: readBPS, WriteBPS: writeBPS,
-		Device: device.Path, Source: store.DiskSourceHostDevice,
+		ThrottleClassID: classID,
+		Device:          device.Path, Source: store.DiskSourceHostDevice,
 	}
 	created, err := s.store.CreateDisk(ctx, disk)
 	if err != nil {
+		if mapped := diskAssignmentError(err); mapped != nil {
+			return nil, mapped
+		}
 		switch {
 		case errors.Is(err, store.ErrDiskNameTaken):
 			return nil, status.Error(codes.AlreadyExists, "a disk with that name already exists")
@@ -306,33 +318,37 @@ func hostDeviceStorageBackend(ctx context.Context, st *store.Store, path string)
 }
 
 func (s *diskService) UpdateDisk(ctx context.Context, request *rookeryv1.UpdateDiskRequest) (*rookeryv1.Disk, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	disk, err := s.store.GetDisk(ctx, request.GetId())
 	if err != nil {
 		return nil, storeReadError(err, store.ErrDiskNotFound, "disk not found")
 	}
+	hasProvisioning := request.ProvisioningScript != nil || request.ProvisioningTimeout != nil
+	hasClass := request.ThrottleClassId != nil
 	if disk.Source == store.DiskSourceHostDevice {
-		hasProvisioning := (request.ProvisioningScript != nil && strings.TrimSpace(request.GetProvisioningScript()) != "") ||
-			(request.ProvisioningTimeout != nil && strings.TrimSpace(request.GetProvisioningTimeout()) != "")
 		if request.GetIsTemplate() || hasProvisioning {
 			return nil, status.Error(codes.InvalidArgument, "host devices cannot be templates or template clones")
 		}
-		if readBPS, writeBPS, update := applyUpdateBandwidth(request, disk); update {
-			updated, err := s.store.SetDiskBandwidth(ctx, disk.ID, readBPS, writeBPS)
-			if err != nil {
-				return nil, diskUpdateError(err)
-			}
-			return diskToProto(updated), nil
+		if !hasClass {
+			return diskToProto(disk), nil
 		}
-		return diskToProto(disk), nil
+		updated, err := s.store.SetDiskThrottleClass(ctx, disk.ID, request.ThrottleClassId)
+		if err != nil {
+			return nil, diskUpdateError(err)
+		}
+		return diskToProto(updated), nil
 	}
-	hasProvisioning := request.ProvisioningScript != nil || request.ProvisioningTimeout != nil
-	hasBandwidth := request.ReadBps != nil || request.WriteBps != nil
-	if request.IsTemplate == nil && !hasProvisioning && !hasBandwidth {
+	if request.IsTemplate == nil && !hasProvisioning && !hasClass {
 		return diskToProto(disk), nil
 	}
 	targetTemplate := disk.IsTemplate
 	if request.IsTemplate != nil {
 		targetTemplate = request.GetIsTemplate()
+	}
+	if targetTemplate && hasClass && request.GetThrottleClassId() > 0 {
+		return nil, status.Error(codes.InvalidArgument, "templates cannot have a throttle class")
 	}
 	if hasProvisioning && !targetTemplate {
 		return nil, status.Error(codes.InvalidArgument, "provisioning settings require a template disk")
@@ -358,7 +374,7 @@ func (s *diskService) UpdateDisk(ctx context.Context, request *rookeryv1.UpdateD
 		}
 	}
 	updated := disk
-	if request.IsTemplate != nil {
+	if request.IsTemplate != nil && request.GetIsTemplate() != disk.IsTemplate {
 		updated, err = s.store.SetDiskTemplate(ctx, disk.ID, request.GetIsTemplate())
 		if err != nil {
 			return nil, diskUpdateError(err)
@@ -370,8 +386,8 @@ func (s *diskService) UpdateDisk(ctx context.Context, request *rookeryv1.UpdateD
 			return nil, diskUpdateError(err)
 		}
 	}
-	if readBPS, writeBPS, update := applyUpdateBandwidth(request, updated); update {
-		updated, err = s.store.SetDiskBandwidth(ctx, updated.ID, readBPS, writeBPS)
+	if hasClass {
+		updated, err = s.store.SetDiskThrottleClass(ctx, updated.ID, request.ThrottleClassId)
 		if err != nil {
 			return nil, diskUpdateError(err)
 		}
@@ -379,6 +395,43 @@ func (s *diskService) UpdateDisk(ctx context.Context, request *rookeryv1.UpdateD
 	return diskToProto(updated), nil
 }
 
+func (s *diskService) resolveCreateThrottleClass(ctx context.Context, id int64, isTemplate bool) (*int64, error) {
+	if id < 0 {
+		return nil, status.Error(codes.InvalidArgument, "throttle_class_id must not be negative")
+	}
+	if id == 0 {
+		return nil, nil
+	}
+	if isTemplate {
+		return nil, status.Error(codes.InvalidArgument, "templates cannot have a throttle class")
+	}
+	class, err := s.store.GetDiskThrottleClass(ctx, id)
+	if err != nil {
+		if errors.Is(err, store.ErrDiskThrottleClassNotFound) {
+			return nil, status.Error(codes.InvalidArgument, "throttle class not found")
+		}
+		return nil, status.Error(codes.Internal, "could not read throttle class")
+	}
+	if class.ValidationError != "" {
+		return nil, status.Errorf(codes.InvalidArgument, "throttle class is invalid: %s", class.ValidationError)
+	}
+	return &id, nil
+}
+
+func diskAssignmentError(err error) error {
+	switch {
+	case errors.Is(err, store.ErrDiskThrottleClassOnTemplate):
+		return status.Error(codes.InvalidArgument, "templates cannot have a throttle class")
+	case errors.Is(err, store.ErrDiskThrottleClassNotFound):
+		return status.Error(codes.InvalidArgument, "throttle class not found")
+	case errors.Is(err, store.ErrDiskThrottleClassInvalid):
+		return status.Error(codes.InvalidArgument, err.Error())
+	case errors.Is(err, store.ErrDiskThrottleClassInDeletion):
+		return status.Error(codes.Aborted, "disk is being deleted")
+	default:
+		return nil
+	}
+}
 func validateDiskProvisioning(script, timeout string) error {
 	if script != "" && !filepath.IsAbs(script) {
 		return errors.New("provisioning_script must be an absolute path")
@@ -398,6 +451,14 @@ func diskUpdateError(err error) error {
 		return status.Error(codes.NotFound, "disk not found")
 	case errors.Is(err, store.ErrDiskInUse):
 		return status.Error(codes.Aborted, "disk is attached to a VM")
+	case errors.Is(err, store.ErrDiskThrottleClassOnTemplate):
+		return status.Error(codes.InvalidArgument, "templates cannot have a throttle class")
+	case errors.Is(err, store.ErrDiskThrottleClassNotFound):
+		return status.Error(codes.InvalidArgument, "throttle class not found")
+	case errors.Is(err, store.ErrDiskThrottleClassInvalid):
+		return status.Error(codes.InvalidArgument, err.Error())
+	case errors.Is(err, store.ErrDiskThrottleClassInDeletion):
+		return status.Error(codes.Aborted, "disk is being deleted")
 	default:
 		return status.Error(codes.Internal, "could not update disk")
 	}
@@ -636,29 +697,4 @@ func normalizeImportNames(names []string) ([]string, error) {
 		out = append(out, name)
 	}
 	return out, nil
-}
-
-func requestDiskBandwidth(request *rookeryv1.CreateDiskRequest) (int64, int64) {
-	var readBPS, writeBPS int64
-	if request.ReadBps != nil {
-		readBPS = request.GetReadBps()
-	}
-	if request.WriteBps != nil {
-		writeBPS = request.GetWriteBps()
-	}
-	return readBPS, writeBPS
-}
-
-func applyUpdateBandwidth(request *rookeryv1.UpdateDiskRequest, disk store.Disk) (int64, int64, bool) {
-	if request.ReadBps == nil && request.WriteBps == nil {
-		return disk.ReadBPS, disk.WriteBPS, false
-	}
-	readBPS, writeBPS := disk.ReadBPS, disk.WriteBPS
-	if request.ReadBps != nil {
-		readBPS = request.GetReadBps()
-	}
-	if request.WriteBps != nil {
-		writeBPS = request.GetWriteBps()
-	}
-	return readBPS, writeBPS, true
 }

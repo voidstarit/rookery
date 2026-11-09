@@ -88,8 +88,8 @@ func TestDiskWriteRoutes(t *testing.T) {
 	}
 }
 
-func TestDiskBandwidthRoutes(t *testing.T) {
-	st, err := store.Open(filepath.Join(t.TempDir(), "disk-bandwidth.db"))
+func TestDiskThrottleClassDiskRoutes(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "disk-throttle.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,36 +110,129 @@ func TestDiskBandwidthRoutes(t *testing.T) {
 	server := httptest.NewServer(gw.Handler)
 	t.Cleanup(server.Close)
 
+	classResponse, err := http.Post(server.URL+"/api/disk-throttle-classes", "application/json", strings.NewReader(
+		`{"name":"limited","description":"test","limits":{"bps_read":10485760,"bps_write":5242880}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if classResponse.StatusCode != http.StatusCreated {
+		t.Fatalf("create class status = %d, body = %s", classResponse.StatusCode, readBody(t, classResponse))
+	}
+	if location := classResponse.Header.Get("Location"); location != "/api/disk-throttle-classes/1" {
+		t.Fatalf("class Location = %q", location)
+	}
+	var class map[string]any
+	decodeBody(t, classResponse, &class)
+	classID := jsonID(class["id"])
+	if class["name"] != "limited" || classID == "" {
+		t.Fatalf("class = %+v", class)
+	}
+
 	response, err := http.Post(server.URL+"/api/disks", "application/json", strings.NewReader(
-		`{"name":"limited","size_gb":10,"read_bps":10485760,"write_bps":5242880}`))
+		`{"name":"limited","size_gb":10,"throttle_class_id":1}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if response.StatusCode != http.StatusCreated {
-		t.Fatalf("create status = %d, body = %s", response.StatusCode, readBody(t, response))
+		t.Fatalf("create disk status = %d, body = %s", response.StatusCode, readBody(t, response))
 	}
 	var disk map[string]any
 	decodeBody(t, response, &disk)
-	id := jsonID(disk["id"])
-	if disk["read_bps"].(float64) != 10485760 || disk["write_bps"].(float64) != 5242880 {
+	diskID := jsonID(disk["id"])
+	if disk["throttle_class_id"].(float64) != 1 || disk["throttle_class_name"] != "limited" {
 		t.Fatalf("created disk = %+v", disk)
 	}
 
-	request, err := http.NewRequest(http.MethodPut, server.URL+"/api/disks/"+id, strings.NewReader(`{"read_bps":3145728}`))
+	classRequest, err := http.NewRequest(http.MethodPut, server.URL+"/api/disk-throttle-classes/"+classID, strings.NewReader(
+		`{"name":"limited","description":"updated","limits":{"bps_total":3145728}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Content-Type", "application/json")
-	updated, err := http.DefaultClient.Do(request)
+	classRequest.Header.Set("Content-Type", "application/json")
+	updatedClass, err := http.DefaultClient.Do(classRequest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.StatusCode != http.StatusOK {
-		t.Fatalf("update status = %d, body = %s", updated.StatusCode, readBody(t, updated))
+	if updatedClass.StatusCode != http.StatusOK {
+		t.Fatalf("update class status = %d, body = %s", updatedClass.StatusCode, readBody(t, updatedClass))
 	}
-	var updatedDisk map[string]any
-	decodeBody(t, updated, &updatedDisk)
-	if updatedDisk["read_bps"].(float64) != 3145728 || updatedDisk["write_bps"].(float64) != 5242880 {
-		t.Fatalf("updated disk = %+v", updatedDisk)
+	var updatedClassBody map[string]any
+	decodeBody(t, updatedClass, &updatedClassBody)
+	limits := updatedClassBody["limits"].(map[string]any)
+	if limits["bps_total"].(float64) != 3145728 || updatedClassBody["description"] != "updated" {
+		t.Fatalf("updated class = %+v", updatedClassBody)
 	}
+
+	deleteInUse, err := http.NewRequest(http.MethodDelete, server.URL+"/api/disk-throttle-classes/"+classID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inUse, err := http.DefaultClient.Do(deleteInUse)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inUse.StatusCode != http.StatusConflict {
+		t.Fatalf("delete assigned class status = %d, body = %s", inUse.StatusCode, readBody(t, inUse))
+	}
+
+	clearRequest, err := http.NewRequest(http.MethodPut, server.URL+"/api/disks/"+diskID, strings.NewReader(`{"throttle_class_id":0}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	clearRequest.Header.Set("Content-Type", "application/json")
+	cleared, err := http.DefaultClient.Do(clearRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleared.StatusCode != http.StatusOK {
+		t.Fatalf("clear class status = %d, body = %s", cleared.StatusCode, readBody(t, cleared))
+	}
+	var clearedDisk map[string]any
+	decodeBody(t, cleared, &clearedDisk)
+	if _, ok := clearedDisk["throttle_class_id"]; ok {
+		t.Fatalf("cleared disk = %+v", clearedDisk)
+	}
+
+	before := len(provisioner.created)
+	unknown, err := http.Post(server.URL+"/api/disks", "application/json", strings.NewReader(
+		`{"name":"unknown","size_gb":10,"throttle_class_id":999}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unknown.StatusCode != http.StatusBadRequest {
+		t.Fatalf("unknown class status = %d, body = %s", unknown.StatusCode, readBody(t, unknown))
+	}
+	if len(provisioner.created) != before {
+		t.Fatalf("unknown class created a volume: %+v", provisioner.created)
+	}
+	negative, err := http.Post(server.URL+"/api/disks", "application/json", strings.NewReader(
+		`{"name":"negative","size_gb":10,"throttle_class_id":-1}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if negative.StatusCode != http.StatusBadRequest {
+		t.Fatalf("negative class status = %d, body = %s", negative.StatusCode, readBody(t, negative))
+	}
+	templateWithClass, err := http.Post(server.URL+"/api/disks", "application/json", strings.NewReader(
+		`{"name":"template-class","size_gb":10,"is_template":true,"throttle_class_id":1}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if templateWithClass.StatusCode != http.StatusBadRequest {
+		t.Fatalf("template class status = %d, body = %s", templateWithClass.StatusCode, readBody(t, templateWithClass))
+	}
+	unknownUpdate, err := http.NewRequest(http.MethodPut, server.URL+"/api/disks/"+diskID,
+		strings.NewReader(`{"throttle_class_id":999}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	unknownUpdate.Header.Set("Content-Type", "application/json")
+	unknownUpdated, err := http.DefaultClient.Do(unknownUpdate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unknownUpdated.StatusCode != http.StatusBadRequest {
+		t.Fatalf("unknown class update status = %d, body = %s", unknownUpdated.StatusCode, readBody(t, unknownUpdated))
+	}
+	_ = unknownUpdated.Body.Close()
 }

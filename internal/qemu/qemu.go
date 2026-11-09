@@ -877,6 +877,16 @@ func buildArgsWithPlan(vm store.VM, socket, pidfile, monitor string, plan StartP
 }
 
 func buildDiskArgs(disk store.VMDisk, plan StartPlan, secretPaths map[int64]string) ([]string, error) {
+	classID := int64(0)
+	if disk.ThrottleClassID != nil {
+		classID = *disk.ThrottleClassID
+	}
+	if disk.ThrottleError != "" {
+		return nil, fmt.Errorf("disk %q (id %d, throttle class %d): %s", disk.Name, disk.ID, classID, disk.ThrottleError)
+	}
+	if classID != 0 && disk.Throttle == nil {
+		return nil, fmt.Errorf("disk %q (id %d, throttle class %d): class limits are not resolved", disk.Name, disk.ID, classID)
+	}
 	protocol := blockdev.Protocol(disk.Protocol).Normalize()
 	if disk.Source != store.DiskSourceKouja && disk.Source != store.DiskSourceCeph &&
 		(disk.Protocol == "" || protocol == blockdev.ProtocolLocal) {
@@ -912,12 +922,8 @@ func buildDiskArgs(disk store.VMDisk, plan StartPlan, secretPaths map[int64]stri
 }
 
 func diskThrottleArgs(disk store.VMDisk) string {
-	var args string
-	if disk.ReadBPS > 0 {
-		args += fmt.Sprintf(",throttling.bps-read=%d", disk.ReadBPS)
+	if disk.Throttle == nil {
+		return ""
 	}
-	if disk.WriteBPS > 0 {
-		args += fmt.Sprintf(",throttling.bps-write=%d", disk.WriteBPS)
-	}
-	return args
+	return disk.Throttle.QEMUOptions()
 }

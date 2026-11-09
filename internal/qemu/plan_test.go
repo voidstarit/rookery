@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/voidstarit/rookery/internal/blockdev"
+	"github.com/voidstarit/rookery/internal/diskthrottle"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -431,7 +432,10 @@ func TestRunStateMonitorErrors(t *testing.T) {
 
 func TestBuildDiskArgsThrottling(t *testing.T) {
 	local, err := buildDiskArgs(store.VMDisk{
-		Device: "/dev/vg0/data", ReadBPS: 10 * 1024 * 1024, WriteBPS: 5 * 1024 * 1024,
+		Device: "/dev/vg0/data",
+		Throttle: &diskthrottle.Limits{
+			BPSRead: 10 * 1024 * 1024, BPSWrite: 5 * 1024 * 1024,
+		},
 	}, StartPlan{}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -442,8 +446,9 @@ func TestBuildDiskArgsThrottling(t *testing.T) {
 		t.Fatalf("local args = %q", localArgs)
 	}
 	disk := testRemoteDisk()
-	disk.ReadBPS = 10 * 1024 * 1024
-	disk.WriteBPS = 5 * 1024 * 1024
+	disk.Throttle = &diskthrottle.Limits{
+		BPSRead: 10 * 1024 * 1024, BPSWrite: 5 * 1024 * 1024,
+	}
 	remote, err := buildDiskArgs(disk, testISCSIPlan(), map[int64]string{7: "/run/rookery/secret"})
 	if err != nil {
 		t.Fatal(err)
@@ -452,6 +457,18 @@ func TestBuildDiskArgsThrottling(t *testing.T) {
 	if !strings.Contains(remoteArgs, "throttling.bps-read=10485760") ||
 		!strings.Contains(remoteArgs, "throttling.bps-write=5242880") {
 		t.Fatalf("remote args = %q", remoteArgs)
+	}
+
+	classID := int64(9)
+	if _, err := buildDiskArgs(store.VMDisk{
+		Device: "/dev/vg0/data", ThrottleClassID: &classID, ThrottleError: "invalid class",
+	}, StartPlan{}, nil); err == nil || !strings.Contains(err.Error(), "invalid class") {
+		t.Fatalf("throttle error = %v", err)
+	}
+	if _, err := buildDiskArgs(store.VMDisk{
+		Device: "/dev/vg0/data", ThrottleClassID: &classID,
+	}, StartPlan{}, nil); err == nil || !strings.Contains(err.Error(), "not resolved") {
+		t.Fatalf("dangling class error = %v", err)
 	}
 }
 

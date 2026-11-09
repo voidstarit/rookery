@@ -58,10 +58,10 @@ message VMDisk {
   string locator = 11;
   // protocol distinguishes local, iscsi, nvme-tcp, and rbd attachments.
   string protocol = 12;
-  // read_bps and write_bps are QEMU block throttling limits in bytes per
-  // second. Zero means unlimited.
-  int64 read_bps = 13;
-  int64 write_bps = 14;
+  reserved 13, 14;
+  reserved "read_bps", "write_bps";
+  int64 throttle_class_id = 15;
+  string throttle_class_name = 16;
 }
 
 message Disk {
@@ -94,10 +94,10 @@ message Disk {
   string deletion_error = 22;
   // protocol distinguishes local, iscsi, nvme-tcp, and rbd attachments.
   string protocol = 23;
-  // read_bps and write_bps are QEMU block throttling limits in bytes per
-  // second. Zero means unlimited.
-  int64 read_bps = 24;
-  int64 write_bps = 25;
+  reserved 24, 25;
+  reserved "read_bps", "write_bps";
+  int64 throttle_class_id = 26;
+  string throttle_class_name = 27;
 }
 
 message ImportableDisk {
@@ -137,9 +137,11 @@ message CreateDiskRequest {
   // partition, or logical volume) for passthrough to one VM. When set,
   // storage_backend_id, size_gb, is_template, template_disk_id, and
   // provisioning settings must be omitted; the size is read from the device.
+  // throttle_class_id is allowed.
   string host_device = 9 [(validate.rules).string = {ignore_empty: true, max_len: 4096}];
-  optional int64 read_bps = 10 [(validate.rules).int64 = {gte: 0}];
-  optional int64 write_bps = 11 [(validate.rules).int64 = {gte: 0}];
+  reserved 10, 11;
+  reserved "read_bps", "write_bps";
+  int64 throttle_class_id = 12 [(validate.rules).int64 = {gte: 0}];
 }
 
 message DeleteDiskResponse {
@@ -152,8 +154,9 @@ message UpdateDiskRequest {
   optional bool is_template = 2;
   optional string provisioning_script = 3 [(validate.rules).string = {max_len: 4096}];
   optional string provisioning_timeout = 4 [(validate.rules).string = {max_len: 32}];
-  optional int64 read_bps = 5 [(validate.rules).int64 = {gte: 0}];
-  optional int64 write_bps = 6 [(validate.rules).int64 = {gte: 0}];
+  reserved 5, 6;
+  reserved "read_bps", "write_bps";
+  optional int64 throttle_class_id = 7 [(validate.rules).int64 = {gte: 0}];
 }
 
 message DeleteDiskRequest {
