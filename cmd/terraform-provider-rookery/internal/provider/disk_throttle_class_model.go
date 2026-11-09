@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -103,13 +104,13 @@ func diskThrottleLimitsFromModel(model diskThrottleClassModel) diskthrottle.Limi
 func validateDiskThrottleClassModel(model diskThrottleClassModel) error {
 	name := strings.TrimSpace(model.Name.ValueString())
 	if name == "" {
-		return fmt.Errorf("name is required")
+		return errors.New("name is required")
 	}
 	if len(name) > 127 || !diskThrottleClassNamePattern.MatchString(name) {
-		return fmt.Errorf("name must match ^[A-Za-z0-9][A-Za-z0-9._-]*$ and be at most 127 characters")
+		return errors.New("name must match ^[A-Za-z0-9][A-Za-z0-9._-]*$ and be at most 127 characters")
 	}
 	if len(strings.TrimSpace(model.Description.ValueString())) > 2000 {
-		return fmt.Errorf("description must be at most 2000 characters")
+		return errors.New("description must be at most 2000 characters")
 	}
 	limits := diskThrottleLimitsFromModel(model)
 	for field, value := range map[string]int64{

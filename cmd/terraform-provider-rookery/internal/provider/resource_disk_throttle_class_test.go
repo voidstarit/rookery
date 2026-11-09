@@ -2,11 +2,13 @@ package provider
 
 import (
 	"context"
-	"errors"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
@@ -14,30 +16,62 @@ import (
 )
 
 type fakeDiskThrottleClient struct {
-	class *rookeryv1.DiskThrottleClass
-	list  []*rookeryv1.DiskThrottleClass
+	class      *rookeryv1.DiskThrottleClass
+	list       []*rookeryv1.DiskThrottleClass
+	lastCreate *rookeryv1.CreateDiskThrottleClassRequest
+	lastUpdate *rookeryv1.UpdateDiskThrottleClassRequest
+	deleted    int64
+	getErr     error
+	createErr  error
+	updateErr  error
+	deleteErr  error
+	listErr    error
 }
 
 func (f *fakeDiskThrottleClient) ListDiskThrottleClasses(context.Context, *rookeryv1.ListDiskThrottleClassesRequest, ...grpc.CallOption) (*rookeryv1.ListDiskThrottleClassesResponse, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
 	return &rookeryv1.ListDiskThrottleClassesResponse{Classes: f.list}, nil
 }
 
 func (f *fakeDiskThrottleClient) GetDiskThrottleClass(context.Context, *rookeryv1.GetDiskThrottleClassRequest, ...grpc.CallOption) (*rookeryv1.DiskThrottleClass, error) {
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
 	if f.class == nil {
-		return nil, errors.New("not found")
+		return nil, status.Error(codes.NotFound, "not found")
 	}
 	return f.class, nil
 }
 
-func (f *fakeDiskThrottleClient) CreateDiskThrottleClass(context.Context, *rookeryv1.CreateDiskThrottleClassRequest, ...grpc.CallOption) (*rookeryv1.DiskThrottleClass, error) {
-	return f.class, nil
+func (f *fakeDiskThrottleClient) CreateDiskThrottleClass(_ context.Context, request *rookeryv1.CreateDiskThrottleClassRequest, _ ...grpc.CallOption) (*rookeryv1.DiskThrottleClass, error) {
+	f.lastCreate = request
+	if f.createErr != nil {
+		return nil, f.createErr
+	}
+	if f.class != nil {
+		return f.class, nil
+	}
+	return &rookeryv1.DiskThrottleClass{Id: 7, Name: request.GetName(), Description: request.GetDescription(), Limits: request.GetLimits()}, nil
 }
 
-func (f *fakeDiskThrottleClient) UpdateDiskThrottleClass(context.Context, *rookeryv1.UpdateDiskThrottleClassRequest, ...grpc.CallOption) (*rookeryv1.DiskThrottleClass, error) {
-	return f.class, nil
+func (f *fakeDiskThrottleClient) UpdateDiskThrottleClass(_ context.Context, request *rookeryv1.UpdateDiskThrottleClassRequest, _ ...grpc.CallOption) (*rookeryv1.DiskThrottleClass, error) {
+	f.lastUpdate = request
+	if f.updateErr != nil {
+		return nil, f.updateErr
+	}
+	if f.class != nil {
+		return f.class, nil
+	}
+	return &rookeryv1.DiskThrottleClass{Id: request.GetId(), Name: request.GetName(), Description: request.GetDescription(), Limits: request.GetLimits()}, nil
 }
 
-func (f *fakeDiskThrottleClient) DeleteDiskThrottleClass(context.Context, *rookeryv1.DeleteDiskThrottleClassRequest, ...grpc.CallOption) (*emptypb.Empty, error) {
+func (f *fakeDiskThrottleClient) DeleteDiskThrottleClass(_ context.Context, request *rookeryv1.DeleteDiskThrottleClassRequest, _ ...grpc.CallOption) (*emptypb.Empty, error) {
+	f.deleted = request.GetId()
+	if f.deleteErr != nil {
+		return nil, f.deleteErr
+	}
 	return &emptypb.Empty{}, nil
 }
 
@@ -77,6 +111,24 @@ func TestDiskThrottleClassModelRoundTrip(t *testing.T) {
 	model.Name = types.StringValue("bad name")
 	if err := validateDiskThrottleClassModel(model); err == nil {
 		t.Fatal("bad name accepted")
+	}
+	model.Name = types.StringValue("")
+	if err := validateDiskThrottleClassModel(model); err == nil {
+		t.Fatal("empty name accepted")
+	}
+	model.Name = types.StringValue("standard")
+	model.Description = types.StringValue(strings.Repeat("a", 2001))
+	if err := validateDiskThrottleClassModel(model); err == nil {
+		t.Fatal("long description accepted")
+	}
+	model.Description = types.StringValue("ok")
+	model.BPSRead = types.Int64Null()
+	if limits := diskThrottleLimitsFromModel(model); limits.BPSRead != 0 {
+		t.Fatalf("null limit = %+v", limits)
+	}
+	model.Name = types.StringValue("")
+	if diags := diskThrottleClassModelDiagnostics(model); !diags.HasError() {
+		t.Fatal("invalid model diagnostics were empty")
 	}
 }
 
