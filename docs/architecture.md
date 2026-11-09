@@ -207,7 +207,7 @@ SQLite is the inventory source of truth. The embedded migrations under
 
 | Area | Tables |
 | --- | --- |
-| Storage | `storage_backends`, `disks`, `vm_disks` |
+| Storage | `storage_backends`, `disks`, `vm_disks`, `disk_throttle_classes` |
 | VMs | `vms`, legacy `vms.disk_id` compatibility column |
 | Media | `media` |
 | Networks | `networks`, `virtual_interfaces`, `network_host_taps` |
@@ -219,7 +219,11 @@ SQLite is the inventory source of truth. The embedded migrations under
 Disks and VMs are separate resources: a disk must exist before a VM can attach
 it, and a disk can belong to only one VM at a time. Storage backends are
 extensible records; only `lvm-thin` is implemented today. Templates and
-script-created clones are tracked on `disks`.
+script-created clones are tracked on `disks`. Disks may reference a reusable
+`disk_throttle_classes` record. The class limits are joined into disk/VM reads
+and resolved into QEMU `throttling.*` arguments at VM start, so a class edit
+reaches assigned disks on their next start without changing a running QEMU
+process.
 
 The SQLite driver is pure Go (`modernc.org/sqlite`), so binaries do not require
 CGO or a system SQLite library.
