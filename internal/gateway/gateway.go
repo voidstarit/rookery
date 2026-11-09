@@ -328,6 +328,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	}
 	vms := &vmService{store: st, runtime: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, mu: options.vmMutex, logger: options.logger, planner: options.startPlanner}
 	disks := &diskService{store: st, runtime: options.diskProvisioner, readiness: ready, mu: options.diskMutex, logger: options.logger, hostDevices: options.hostDevices, registry: options.storageRegistry}
+	diskThrottle := &diskThrottleService{store: st}
 	media := &mediaService{store: st}
 	networks := &networkService{store: st, runtime: options.networkRuntime, readiness: ready, writer: options.networkWriter, mu: options.diskMutex}
 	interfaces := &interfaceService{store: st, runtime: options.aclRuntime, attachments: options.interfaceRuntime, addresses: options.interfaceAddresses, vms: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, runMu: options.vmMutex}
@@ -345,6 +346,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	rookeryv1.RegisterSystemServiceServer(server, system)
 	rookeryv1.RegisterVMServiceServer(server, vms)
 	rookeryv1.RegisterDiskServiceServer(server, disks)
+	rookeryv1.RegisterDiskThrottleServiceServer(server, diskThrottle)
 	rookeryv1.RegisterMediaServiceServer(server, media)
 	rookeryv1.RegisterNetworkServiceServer(server, networks)
 	rookeryv1.RegisterInterfaceServiceServer(server, interfaces)
@@ -402,6 +404,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 		rookeryv1.RegisterSystemServiceHandler,
 		rookeryv1.RegisterVMServiceHandler,
 		rookeryv1.RegisterDiskServiceHandler,
+		rookeryv1.RegisterDiskThrottleServiceHandler,
 		rookeryv1.RegisterMediaServiceHandler,
 		rookeryv1.RegisterNetworkServiceHandler,
 		rookeryv1.RegisterInterfaceServiceHandler,
@@ -663,10 +666,14 @@ func vmToProto(vm store.VM) *rookeryv1.VM {
 }
 
 func vmDiskToProto(disk store.VMDisk) *rookeryv1.VMDisk {
+	classID := int64(0)
+	if disk.ThrottleClassID != nil {
+		classID = *disk.ThrottleClassID
+	}
 	return &rookeryv1.VMDisk{
 		Id: disk.ID, Name: disk.Name, SizeGb: int32(disk.SizeGB), SizeBytes: disk.SizeBytes,
 		StorageBackendId: disk.StorageBackendID, StorageBackendName: disk.StorageBackendName,
 		Vg: disk.VG, ThinPool: disk.ThinPool, Device: disk.Device, Source: disk.Source,
-		Protocol: disk.Protocol, ReadBps: disk.ReadBPS, WriteBps: disk.WriteBPS,
+		Protocol: disk.Protocol, ThrottleClassId: classID, ThrottleClassName: disk.ThrottleClassName,
 	}
 }

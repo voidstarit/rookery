@@ -318,7 +318,7 @@ export function startInventory(): void {
 
   const tabForPath = (path: string): TabName => {
     const top = path.split("/").filter(Boolean)[0] || "vms";
-    if (top === "storage-backends") {
+    if (top === "storage-backends" || top === "disk-throttle-classes") {
       return "disks";
     }
     if (top === "interfaces" || top === "acls" || top === "route-tables") {

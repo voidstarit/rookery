@@ -188,8 +188,6 @@ type VMDisk struct {
 	Device             string               `json:"device"`
 	Source             string               `json:"source"`
 	Protocol           string               `json:"protocol"`
-	ReadBPS            int64                `json:"read_bps"`
-	WriteBPS           int64                `json:"write_bps"`
 	ThrottleClassID    *int64               `json:"throttle_class_id,omitempty"`
 	ThrottleClassName  string               `json:"throttle_class_name,omitempty"`
 	Throttle           *diskthrottle.Limits `json:"-"`
@@ -464,8 +462,6 @@ type Disk struct {
 	Device                string              `json:"device"`
 	Source                string              `json:"source"`
 	Protocol              string              `json:"protocol"`
-	ReadBPS               int64               `json:"read_bps"`
-	WriteBPS              int64               `json:"write_bps"`
 	ThrottleClassID       *int64              `json:"throttle_class_id,omitempty"`
 	ThrottleClassName     string              `json:"throttle_class_name,omitempty"`
 	BackendMetadata       DiskBackendMetadata `json:"backend_metadata,omitempty"`
@@ -951,9 +947,6 @@ func (s *Store) DeleteVM(ctx context.Context, id string) error {
 
 // CreateDisk inserts a disk record and returns the stored record.
 func (s *Store) CreateDisk(ctx context.Context, disk Disk) (Disk, error) {
-	if disk.ReadBPS < 0 || disk.WriteBPS < 0 {
-		return Disk{}, errors.New("disk bandwidth limits must not be negative")
-	}
 	if disk.ThrottleClassID != nil {
 		if *disk.ThrottleClassID < 0 {
 			return Disk{}, ErrDiskThrottleClassInvalid
@@ -1050,13 +1043,13 @@ func (s *Store) CreateDisk(ctx context.Context, disk Disk) (Disk, error) {
 
 	res, err := s.db.ExecContext(ctx, `
 		INSERT INTO disks (name, size_gb, vg, thin_pool, storage_backend_id, source, device, size_bytes,
-			attachment_protocol, backend_metadata, read_bps, write_bps, throttle_class_id,
+			attachment_protocol, backend_metadata, throttle_class_id,
 			deletion_state, deletion_error, deletion_attempts, deletion_next_attempt_at, deletion_claimed_at,
 			is_template, template_disk_id, provisioning_script, provisioning_timeout, prepared_by_script,
 			created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		disk.Name, disk.SizeGB, disk.VG, disk.ThinPool, disk.StorageBackendID, disk.Source,
-		disk.Device, disk.SizeBytes, disk.Protocol, backendMetadata, disk.ReadBPS, disk.WriteBPS, disk.ThrottleClassID,
+		disk.Device, disk.SizeBytes, disk.Protocol, backendMetadata, disk.ThrottleClassID,
 		disk.DeletionState, disk.DeletionError, disk.DeletionAttempts, nextAttempt, claimedAt,
 		disk.IsTemplate, disk.TemplateDiskID,
 		disk.ProvisioningScript, disk.ProvisioningTimeout, disk.PreparedByScript, now, now,
@@ -1227,28 +1220,6 @@ func (s *Store) SetDiskProvisioning(ctx context.Context, id int64, script, timeo
 		UPDATE disks SET provisioning_script = ?, provisioning_timeout = ?, updated_at = ? WHERE id = ?`,
 		script, timeout, now, id); err != nil {
 		return Disk{}, fmt.Errorf("update disk provisioning settings: %w", err)
-	}
-	return s.GetDisk(ctx, id)
-}
-
-// SetDiskBandwidth stores per-disk QEMU block throttling limits. Zero means
-// unlimited. Limits are applied when the disk is next attached to a VM start.
-func (s *Store) SetDiskBandwidth(ctx context.Context, id int64, readBPS, writeBPS int64) (Disk, error) {
-	if readBPS < 0 || writeBPS < 0 {
-		return Disk{}, errors.New("disk bandwidth limits must not be negative")
-	}
-	res, err := s.db.ExecContext(ctx, `
-		UPDATE disks SET read_bps = ?, write_bps = ?, updated_at = ? WHERE id = ?`,
-		readBPS, writeBPS, time.Now().UTC().UnixMilli(), id)
-	if err != nil {
-		return Disk{}, fmt.Errorf("update disk bandwidth: %w", err)
-	}
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return Disk{}, fmt.Errorf("read updated disk rows: %w", err)
-	}
-	if affected == 0 {
-		return Disk{}, ErrDiskNotFound
 	}
 	return s.GetDisk(ctx, id)
 }
@@ -2223,7 +2194,7 @@ func (s *Store) loadVMDisks(ctx context.Context, vms []VM) error {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT vd.vm_id, d.id, d.name, d.size_gb, d.vg, d.thin_pool,
 		       d.storage_backend_id, sb.name, d.source, d.device, d.size_bytes,
-		       d.attachment_protocol, d.read_bps, d.write_bps,
+		       d.attachment_protocol,
 		       d.throttle_class_id, dtc.name, dtc.limits
 		FROM vm_disks AS vd
 		JOIN disks AS d ON d.id = vd.disk_id
@@ -2251,7 +2222,7 @@ func (s *Store) loadVMDisks(ctx context.Context, vms []VM) error {
 		)
 		if err := rows.Scan(&vmID, &disk.ID, &disk.Name, &disk.SizeGB, &vg, &pool,
 			&backend, &backendName, &disk.Source, &device, &sizeBytes, &disk.Protocol,
-			&disk.ReadBPS, &disk.WriteBPS, &classID, &className, &classLimits); err != nil {
+			&classID, &className, &classLimits); err != nil {
 			return err
 		}
 		disk.VG = vg
@@ -2529,7 +2500,7 @@ const vmSelect = `
 const diskSelect = `
 	SELECT d.id, d.name, d.size_gb, d.vg, d.thin_pool,
 	       d.storage_backend_id, sb.name, d.source, d.device, d.size_bytes,
-	       d.attachment_protocol, d.backend_metadata, d.read_bps, d.write_bps,
+	       d.attachment_protocol, d.backend_metadata,
 	       d.throttle_class_id, dtc.name,
 	       d.deletion_state, d.deletion_error, d.deletion_attempts,
 	       d.deletion_next_attempt_at, d.deletion_claimed_at,
@@ -2676,8 +2647,6 @@ func scanDisk(s scanner) (Disk, error) {
 		backend               sql.NullString
 		sizeBytes             int64
 		backendMetadata       string
-		readBPS               int64
-		writeBPS              int64
 		classID               sql.NullInt64
 		className             sql.NullString
 		deletionNextAttemptAt int64
@@ -2706,8 +2675,6 @@ func scanDisk(s scanner) (Disk, error) {
 		&sizeBytes,
 		&disk.Protocol,
 		&backendMetadata,
-		&readBPS,
-		&writeBPS,
 		&classID,
 		&className,
 		&disk.DeletionState,
@@ -2730,8 +2697,6 @@ func scanDisk(s scanner) (Disk, error) {
 	}
 
 	disk.SizeBytes = uint64(sizeBytes)
-	disk.ReadBPS = readBPS
-	disk.WriteBPS = writeBPS
 	if classID.Valid {
 		id := classID.Int64
 		disk.ThrottleClassID = &id

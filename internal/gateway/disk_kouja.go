@@ -16,7 +16,7 @@ import (
 	"github.com/voidstarit/rookery/internal/store"
 )
 
-func (s *diskService) createKoujaDisk(ctx context.Context, request *rookeryv1.CreateDiskRequest, name string, backend store.StorageBackend, sizeGB int) (*rookeryv1.Disk, error) {
+func (s *diskService) createKoujaDisk(ctx context.Context, request *rookeryv1.CreateDiskRequest, name string, backend store.StorageBackend, sizeGB int, classID *int64) (*rookeryv1.Disk, error) {
 	if request.GetIsTemplate() || request.TemplateDiskId != nil {
 		return nil, status.Error(codes.InvalidArgument, "kouja disks cannot be templates or template clones")
 	}
@@ -41,9 +41,9 @@ func (s *diskService) createKoujaDisk(ctx context.Context, request *rookeryv1.Cr
 		}
 		storageClass = backend.Config.Kouja.StorageClass
 	}
-	readBPS, writeBPS := requestDiskBandwidth(request)
 	disk := store.Disk{
-		Name: name, SizeGB: sizeGB, ReadBPS: readBPS, WriteBPS: writeBPS,
+		Name: name, SizeGB: sizeGB,
+		ThrottleClassID:  classID,
 		StorageBackendID: &backend.ID, StorageBackendName: backend.Name,
 		Source: store.DiskSourceKouja, Protocol: string(protocol),
 		BackendMetadata: store.DiskBackendMetadata{
@@ -66,6 +66,9 @@ func (s *diskService) createKoujaDisk(ctx context.Context, request *rookeryv1.Cr
 	created, err := s.store.CreateDisk(ctx, disk)
 	s.mu.Unlock()
 	if err != nil {
+		if mapped := diskAssignmentError(err); mapped != nil {
+			return nil, mapped
+		}
 		if errors.Is(err, store.ErrDiskNameTaken) {
 			return nil, status.Error(codes.AlreadyExists, "a disk with that name already exists")
 		}

@@ -82,10 +82,10 @@ func TestCreateKoujaDiskBranches(t *testing.T) {
 	st, backend := branchStore(t)
 	size := int32(5)
 	request := &rookeryv1.CreateDiskRequest{Name: "branch", SizeGb: &size}
-	if _, err := branchDiskService(st, nil).createKoujaDisk(ctx, request, "branch", backend, 5); err == nil {
+	if _, err := branchDiskService(st, nil).createKoujaDisk(ctx, request, "branch", backend, 5, nil); err == nil {
 		t.Fatal("createKoujaDisk accepted a nil registry")
 	}
-	if _, err := branchDiskService(st, storage.NewRegistry()).createKoujaDisk(ctx, request, "branch", backend, 5); err == nil {
+	if _, err := branchDiskService(st, storage.NewRegistry()).createKoujaDisk(ctx, request, "branch", backend, 5, nil); err == nil {
 		t.Fatal("createKoujaDisk accepted a missing driver")
 	}
 	// Duplicate name and the out-of-range/default size paths.
@@ -95,7 +95,7 @@ func TestCreateKoujaDiskBranches(t *testing.T) {
 	}
 	driver := &branchDriver{createResult: validCreatedDisk()}
 	service := branchDiskService(st, storage.NewRegistry(driver))
-	if _, err := service.createKoujaDisk(ctx, request, existing.Name, backend, 5); err == nil {
+	if _, err := service.createKoujaDisk(ctx, request, existing.Name, backend, 5, nil); err == nil {
 		t.Fatal("createKoujaDisk accepted a duplicate name")
 	}
 	tooBig := int32(maxGatewayDiskGB + 1)
@@ -109,7 +109,7 @@ func TestCreateKoujaDiskBranches(t *testing.T) {
 	// NVMe protocol selection plus a finalize failure (invalid metadata).
 	backend.Config.Kouja = &store.KoujaConfig{Protocol: "nvme-tcp", StorageClass: "nvme"}
 	badDriver := &branchDriver{createResult: storage.CreatedDisk{SizeBytes: 5 << 30, Metadata: store.DiskBackendMetadata{Attachment: blockdev.Reference{Protocol: blockdev.ProtocolISCSI}}}}
-	if _, err := branchDiskService(st, storage.NewRegistry(badDriver)).createKoujaDisk(ctx, &rookeryv1.CreateDiskRequest{Name: "bad-finalize", SizeGb: &size}, "bad-finalize", backend, 5); err == nil {
+	if _, err := branchDiskService(st, storage.NewRegistry(badDriver)).createKoujaDisk(ctx, &rookeryv1.CreateDiskRequest{Name: "bad-finalize", SizeGb: &size}, "bad-finalize", backend, 5, nil); err == nil {
 		t.Fatal("createKoujaDisk accepted invalid finalize metadata")
 	}
 }

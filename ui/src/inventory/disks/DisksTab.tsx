@@ -2,9 +2,10 @@ import { useEffect, useState } from "preact/hooks";
 import { api } from "../../shared/api";
 import { showToast } from "../../shared/toast";
 import { EntityLabels, useEntityLabels } from "../../shared/labels";
-import type { Disk, StorageBackend } from "../types";
+import type { Disk, DiskThrottleClass, StorageBackend } from "../types";
 import { DiskDialog } from "./DiskDialog";
-import { DiskBandwidthDialog } from "./DiskBandwidthDialog";
+import { DiskThrottleAssignmentDialog } from "./DiskThrottleAssignmentDialog";
+import { formatThrottleSummary } from "./throttle";
 import { ImportDisksDialog } from "./ImportDisksDialog";
 import { StorageBackendDialog } from "./StorageBackendDialog";
 import { TemplateProvisioningDialog } from "./TemplateProvisioningDialog";
@@ -21,23 +22,6 @@ function formatDate(value: string | undefined): string {
     return "—";
   }
   return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-}
-
-function formatRate(bytes: number | undefined): string {
-  const value = Number(bytes) || 0;
-  if (value <= 0) {
-    return "unlimited";
-  }
-  if (value >= 1024 ** 3) {
-    return `${(value / 1024 ** 3).toFixed(1)} GiB/s`;
-  }
-  if (value >= 1024 ** 2) {
-    return `${(value / 1024 ** 2).toFixed(1)} MiB/s`;
-  }
-  if (value >= 1024) {
-    return `${(value / 1024).toFixed(1)} KiB/s`;
-  }
-  return `${value} B/s`;
 }
 
 function formatDiskSize(disk: Disk): string {
@@ -59,6 +43,7 @@ function formatDiskSize(disk: Disk): string {
 
 export function DisksTab() {
   const [disks, setDisks] = useState<Disk[]>([]);
+  const [classes, setClasses] = useState<DiskThrottleClass[]>([]);
   const [backends, setBackends] = useState<StorageBackend[]>([]);
   const [loading, setLoading] = useState(true);
   const [diskError, setDiskError] = useState("");
@@ -67,14 +52,14 @@ export function DisksTab() {
   const [backendDialog, setBackendDialog] = useState<{ backend: StorageBackend | null } | null>(null);
   const [importBackend, setImportBackend] = useState<StorageBackend | null>(null);
   const [provisioningDisk, setProvisioningDisk] = useState<Disk | null>(null);
-  const [bandwidthDisk, setBandwidthDisk] = useState<Disk | null>(null);
+  const [throttleDisk, setThrottleDisk] = useState<Disk | null>(null);
   const diskLabels = useEntityLabels("disk");
   const backendLabels = useEntityLabels("storage_backend");
   const route = useRoute();
 
   useEffect(() => {
     setProvisioningDisk(null);
-    setBandwidthDisk(null);
+    setThrottleDisk(null);
   }, [route.path, route.search]);
 
   useEffect(() => {
@@ -142,9 +127,23 @@ export function DisksTab() {
     }
   };
 
+  const loadClasses = async (showErrors = true) => {
+    try {
+      const data = await api<DiskThrottleClass[]>("/api/disk-throttle-classes");
+      setClasses(Array.isArray(data) ? data : []);
+      if (showErrors) {
+        setDiskError("");
+      }
+    } catch (err) {
+      if (showErrors) {
+        setDiskError(err instanceof Error ? err.message : String(err));
+      }
+    }
+  };
+
   const refreshAll = async () => {
     setLoading(true);
-    await Promise.allSettled([loadDisks(), loadBackends()]);
+    await Promise.allSettled([loadDisks(), loadBackends(), loadClasses()]);
     setLoading(false);
   };
 
@@ -476,9 +475,16 @@ export function DisksTab() {
                     </td>
                     <td class="mono">
                       {formatDiskSize(disk)}
-                      {disk.read_bps || disk.write_bps ? (
+                      {disk.throttle_class_name ? (
                         <span class="vm-description">
-                          {formatRate(disk.read_bps)} read · {formatRate(disk.write_bps)} write
+                          {disk.throttle_class_name}
+                          {formatThrottleSummary(
+                            classes.find((item) => item.id === disk.throttle_class_id)?.limits
+                          )
+                            ? ` · ${formatThrottleSummary(
+                                classes.find((item) => item.id === disk.throttle_class_id)?.limits
+                              )}`
+                            : ""}
                         </span>
                       ) : null}
                     </td>
@@ -503,15 +509,17 @@ export function DisksTab() {
                         <button
                           class="row-action"
                           type="button"
-                          disabled={Boolean(disk.deletion_state)}
+                          disabled={Boolean(disk.deletion_state) || Boolean(disk.is_template)}
                           title={
-                            disk.deletion_state
-                              ? "This disk is being deleted."
-                              : "Set QEMU read/write bandwidth limits; restart the VM to apply them."
+                            disk.is_template
+                              ? "Templates cannot have a throttling class."
+                              : disk.deletion_state
+                                ? "This disk is being deleted."
+                                : "Select a throttling class; restart the VM to apply it."
                           }
-                          onClick={() => setBandwidthDisk(disk)}
+                          onClick={() => setThrottleDisk(disk)}
                         >
-                          Limits
+                          Throttling
                         </button>
                         {disk.source === "host-device" || (disk.source && disk.source !== "lvm-thin") ? null : (
                           <button
@@ -573,14 +581,20 @@ export function DisksTab() {
         />
       ) : null}
 
-      {bandwidthDisk ? (
-        <DiskBandwidthDialog
-          disk={bandwidthDisk}
-          onClose={() => setBandwidthDisk(null)}
+      {throttleDisk ? (
+        <DiskThrottleAssignmentDialog
+          disk={throttleDisk}
+          classes={classes}
+          onClose={() => setThrottleDisk(null)}
           onSaved={(disk) => {
-            setBandwidthDisk(null);
+            setThrottleDisk(null);
             publishDisks(disks.map((item) => (item.id === disk.id ? disk : item)));
-            showToast(`Saved bandwidth limits for ${disk.name}`);
+            void loadClasses(false);
+            showToast(
+              disk.throttle_class_id
+                ? `Assigned ${disk.throttle_class_name || "class"} to ${disk.name}`
+                : `Cleared the throttling class for ${disk.name}`
+            );
           }}
         />
       ) : null}
@@ -589,6 +603,7 @@ export function DisksTab() {
         <DiskDialog
           backends={backends}
           disks={disks}
+          classes={classes}
           onClose={() => {
             setDiskDialogOpen(false);
             navigate("/disks", true);

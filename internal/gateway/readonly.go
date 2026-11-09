@@ -63,6 +63,10 @@ func (s *diskService) GetDisk(ctx context.Context, request *rookeryv1.GetDiskReq
 }
 
 func diskToProto(disk store.Disk) *rookeryv1.Disk {
+	classID := int64(0)
+	if disk.ThrottleClassID != nil {
+		classID = *disk.ThrottleClassID
+	}
 	return &rookeryv1.Disk{
 		Id: disk.ID, Name: disk.Name, SizeGb: int32(disk.SizeGB), SizeBytes: disk.SizeBytes,
 		StorageBackendId: disk.StorageBackendID, StorageBackendName: disk.StorageBackendName,
@@ -71,7 +75,7 @@ func diskToProto(disk store.Disk) *rookeryv1.Disk {
 		ProvisioningScript: disk.ProvisioningScript, ProvisioningTimeout: disk.ProvisioningTimeout,
 		AttachedVmId: disk.AttachedVMID, AttachedVmName: disk.AttachedVMName,
 		Locator: disk.BackendMetadata.Attachment.Locator(), Protocol: disk.Protocol,
-		ReadBps: disk.ReadBPS, WriteBps: disk.WriteBPS,
+		ThrottleClassId: classID, ThrottleClassName: disk.ThrottleClassName,
 		DeletionState: disk.DeletionState, DeletionError: disk.DeletionError,
 		CreatedAt: timestamp(disk.CreatedAt), UpdatedAt: timestamp(disk.UpdatedAt),
 	}

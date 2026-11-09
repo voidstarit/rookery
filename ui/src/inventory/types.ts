@@ -203,6 +203,39 @@ export type LightVM = {
   updated_at?: string;
 };
 
+export type DiskThrottleLimits = {
+  bps_total?: number;
+  bps_total_max?: number;
+  bps_total_max_length?: number;
+  bps_read?: number;
+  bps_read_max?: number;
+  bps_read_max_length?: number;
+  bps_write?: number;
+  bps_write_max?: number;
+  bps_write_max_length?: number;
+  iops_total?: number;
+  iops_total_max?: number;
+  iops_total_max_length?: number;
+  iops_read?: number;
+  iops_read_max?: number;
+  iops_read_max_length?: number;
+  iops_write?: number;
+  iops_write_max?: number;
+  iops_write_max_length?: number;
+  iops_size?: number;
+};
+
+export type DiskThrottleClass = {
+  id: number;
+  name: string;
+  description?: string;
+  limits?: DiskThrottleLimits;
+  disk_count?: number;
+  validation_error?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type VMDisk = {
   id: number;
   name: string;
@@ -216,8 +249,8 @@ export type VMDisk = {
   source?: string;
   protocol?: string;
   locator?: string;
-  read_bps?: number;
-  write_bps?: number;
+  throttle_class_id?: number;
+  throttle_class_name?: string;
 };
 
 export type VMMedia = {
@@ -359,8 +392,8 @@ export type Disk = {
   source?: string;
   protocol?: string;
   locator?: string;
-  read_bps?: number;
-  write_bps?: number;
+  throttle_class_id?: number;
+  throttle_class_name?: string;
   deletion_state?: string;
   deletion_error?: string;
   attached_vm_id?: string;
