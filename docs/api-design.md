@@ -96,11 +96,14 @@ schemas and HTTP annotations) are complete.
 
 The gateway under `internal/gateway` runs an in-process gRPC server, applies
 generated validation through a unary interceptor, and exposes all generated
-services: system, VMs, disks, media, networks, interfaces, ACLs, VNFs, storage
-backends, host interfaces, troubleshoot, and capture. Disk templates and backend preparation scripts are supported through `disk.is_template`, `template_disk_id`, and storage-backend template config. It preserves the
+services: system, VMs, disks, disk throttle classes, media, networks,
+interfaces, ACLs, VNFs, storage backends, host interfaces, troubleshoot, and
+capture. Disk templates and backend preparation scripts are supported through `disk.is_template`, `template_disk_id`, and storage-backend template config. It preserves the
 `{"error":"..."}` response shape, emits 64-bit integers as JSON numbers through
 a custom marshaler, keeps list responses as arrays, and returns `201` for
-creates and `204` for deletes.
+creates and `204` for deletes. `DiskThrottleService` follows the same mapping:
+class create returns `201` with a `/api/disk-throttle-classes/{id}` Location,
+and class delete returns `204`.
 
 The main `serve` listener routes `/api` through the gateway. `api.Server.NativeHandler`
 serves only native VNC WebSocket, pcap-download, PKI, and static UI paths. VM lifecycle and disk provisioning share the API server's mutexes so native and

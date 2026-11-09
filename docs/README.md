@@ -9,3 +9,4 @@
 | [API and access](api.md) | mTLS HTTP/gRPC listeners, Terraform provider, protobuf design, endpoint reference |
 | [Development](development.md) | Build, test, UI, release, protobuf generation |
 | [API design](api-design.md) | Deep protobuf/API generation and validation notes |
+| [Disk throttling classes](designs/disk-throttle-classes.md) | Reusable QEMU disk throttling policy design and implementation plan |

@@ -199,9 +199,20 @@ the start automatically after the previous QEMU session drains. The client certi
 `spiffe://kouja/caller/<name>` URI SAN; keep that identity stable across
 certificate rotation. Kouja disks are exported directly to QEMU;
 the host does not create an `iscsiadm` session. Queue a kouja disk delete and
-let the reclaimer finish it; `delete_failed` rows can be retried. Per-disk
-read/write bandwidth limits are set in the Disks UI and applied by QEMU at the
-next VM start.
+let the reclaimer finish it; `delete_failed` rows can be retried. Disk
+throughput and IOPS limits are configured through reusable throttling classes
+in the Disks UI, and QEMU applies them at the next VM start. A class edit does
+not modify a running QEMU process. Deleting a class is blocked while disks use
+it. Templates cannot carry a class; converting a disk to a template clears it.
+The class feature is tested with QEMU 10.0.13, and earlier versions are not
+verified.
+
+Migration `0051_disk_throttle_classes.sql` adds the class inventory and disk
+reference; `0052_drop_disk_bandwidth.sql` removes the obsolete raw bandwidth
+columns later in the same release. Before upgrading, take a pre-upgrade
+database backup. Downgrading to `v0.1.6` is unsupported because the older server
+does not know `disk_throttle_classes` and the raw columns are gone; restore the
+backup if a rollback is unavoidable.
 Each configured LVM backend has an **Import** action that lists existing thin
 volumes in its pool and registers selected volumes as disks without modifying
 LVM. Already registered volumes are shown as unavailable. The driver and config

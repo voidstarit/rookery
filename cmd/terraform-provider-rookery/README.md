@@ -350,6 +350,7 @@ terraform import rookery_network_pipe.app_edge 7
 terraform import rookery_host_tap.app 4
 terraform import rookery_vpp_interface_addresses.app_vm0 app-vm0
 terraform import rookery_vpp_interface_route_tables.app_tap hostnet1
+terraform import rookery_disk_throttle_class.standard 1
 terraform import rookery_startup_script.vpp vpp
 terraform import rookery_cgroup_settings.host cgroup
 ```
