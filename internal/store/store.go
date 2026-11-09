@@ -21,6 +21,7 @@ import (
 	"modernc.org/sqlite"
 
 	"github.com/voidstarit/rookery/internal/blockdev"
+	"github.com/voidstarit/rookery/internal/diskthrottle"
 )
 
 //go:embed migrations/*.sql
@@ -176,19 +177,23 @@ type VM struct {
 
 // VMDisk is the disk summary returned with a VM.
 type VMDisk struct {
-	ID                 int64  `json:"id"`
-	Name               string `json:"name"`
-	SizeGB             int    `json:"size_gb"`
-	SizeBytes          uint64 `json:"size_bytes,omitempty"`
-	StorageBackendID   *int64 `json:"storage_backend_id,omitempty"`
-	StorageBackendName string `json:"storage_backend_name,omitempty"`
-	VG                 string `json:"vg"`
-	ThinPool           string `json:"thin_pool"`
-	Device             string `json:"device"`
-	Source             string `json:"source"`
-	Protocol           string `json:"protocol"`
-	ReadBPS            int64  `json:"read_bps"`
-	WriteBPS           int64  `json:"write_bps"`
+	ID                 int64                `json:"id"`
+	Name               string               `json:"name"`
+	SizeGB             int                  `json:"size_gb"`
+	SizeBytes          uint64               `json:"size_bytes,omitempty"`
+	StorageBackendID   *int64               `json:"storage_backend_id,omitempty"`
+	StorageBackendName string               `json:"storage_backend_name,omitempty"`
+	VG                 string               `json:"vg"`
+	ThinPool           string               `json:"thin_pool"`
+	Device             string               `json:"device"`
+	Source             string               `json:"source"`
+	Protocol           string               `json:"protocol"`
+	ReadBPS            int64                `json:"read_bps"`
+	WriteBPS           int64                `json:"write_bps"`
+	ThrottleClassID    *int64               `json:"throttle_class_id,omitempty"`
+	ThrottleClassName  string               `json:"throttle_class_name,omitempty"`
+	Throttle           *diskthrottle.Limits `json:"-"`
+	ThrottleError      string               `json:"-"`
 }
 
 // VMMedia is the boot media summary returned with a VM.
@@ -461,6 +466,8 @@ type Disk struct {
 	Protocol              string              `json:"protocol"`
 	ReadBPS               int64               `json:"read_bps"`
 	WriteBPS              int64               `json:"write_bps"`
+	ThrottleClassID       *int64              `json:"throttle_class_id,omitempty"`
+	ThrottleClassName     string              `json:"throttle_class_name,omitempty"`
 	BackendMetadata       DiskBackendMetadata `json:"backend_metadata,omitempty"`
 	IsTemplate            bool                `json:"is_template"`
 	TemplateDiskID        *int64              `json:"template_disk_id,omitempty"`
@@ -947,6 +954,28 @@ func (s *Store) CreateDisk(ctx context.Context, disk Disk) (Disk, error) {
 	if disk.ReadBPS < 0 || disk.WriteBPS < 0 {
 		return Disk{}, errors.New("disk bandwidth limits must not be negative")
 	}
+	if disk.ThrottleClassID != nil {
+		if *disk.ThrottleClassID < 0 {
+			return Disk{}, ErrDiskThrottleClassInvalid
+		}
+		if *disk.ThrottleClassID == 0 {
+			disk.ThrottleClassID = nil
+		} else {
+			if disk.IsTemplate {
+				return Disk{}, ErrDiskThrottleClassOnTemplate
+			}
+			class, err := s.GetDiskThrottleClass(ctx, *disk.ThrottleClassID)
+			if err != nil {
+				if errors.Is(err, ErrDiskThrottleClassNotFound) {
+					return Disk{}, ErrDiskThrottleClassNotFound
+				}
+				return Disk{}, err
+			}
+			if class.ValidationError != "" {
+				return Disk{}, fmt.Errorf("%w: %s", ErrDiskThrottleClassInvalid, class.ValidationError)
+			}
+		}
+	}
 	if disk.Source == "" {
 		disk.Source = DiskSourceLVMThin
 	}
@@ -1021,13 +1050,13 @@ func (s *Store) CreateDisk(ctx context.Context, disk Disk) (Disk, error) {
 
 	res, err := s.db.ExecContext(ctx, `
 		INSERT INTO disks (name, size_gb, vg, thin_pool, storage_backend_id, source, device, size_bytes,
-			attachment_protocol, backend_metadata, read_bps, write_bps,
+			attachment_protocol, backend_metadata, read_bps, write_bps, throttle_class_id,
 			deletion_state, deletion_error, deletion_attempts, deletion_next_attempt_at, deletion_claimed_at,
 			is_template, template_disk_id, provisioning_script, provisioning_timeout, prepared_by_script,
 			created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		disk.Name, disk.SizeGB, disk.VG, disk.ThinPool, disk.StorageBackendID, disk.Source,
-		disk.Device, disk.SizeBytes, disk.Protocol, backendMetadata, disk.ReadBPS, disk.WriteBPS,
+		disk.Device, disk.SizeBytes, disk.Protocol, backendMetadata, disk.ReadBPS, disk.WriteBPS, disk.ThrottleClassID,
 		disk.DeletionState, disk.DeletionError, disk.DeletionAttempts, nextAttempt, claimedAt,
 		disk.IsTemplate, disk.TemplateDiskID,
 		disk.ProvisioningScript, disk.ProvisioningTimeout, disk.PreparedByScript, now, now,
@@ -1167,7 +1196,12 @@ func (s *Store) SetDiskTemplate(ctx context.Context, id int64, isTemplate bool) 
 		return Disk{}, ErrDiskInUse
 	}
 	now := time.Now().UTC().UnixMilli()
-	if _, err := s.db.ExecContext(ctx, `UPDATE disks SET is_template = ?, updated_at = ? WHERE id = ?`, isTemplate, now, id); err != nil {
+	if _, err := s.db.ExecContext(ctx, `
+		UPDATE disks
+		SET is_template = ?,
+		    throttle_class_id = CASE WHEN ? THEN NULL ELSE throttle_class_id END,
+		    updated_at = ?
+		WHERE id = ?`, isTemplate, isTemplate, now, id); err != nil {
 		return Disk{}, fmt.Errorf("update disk template flag: %w", err)
 	}
 	return s.GetDisk(ctx, id)
@@ -2189,10 +2223,12 @@ func (s *Store) loadVMDisks(ctx context.Context, vms []VM) error {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT vd.vm_id, d.id, d.name, d.size_gb, d.vg, d.thin_pool,
 		       d.storage_backend_id, sb.name, d.source, d.device, d.size_bytes,
-		       d.attachment_protocol, d.read_bps, d.write_bps
+		       d.attachment_protocol, d.read_bps, d.write_bps,
+		       d.throttle_class_id, dtc.name, dtc.limits
 		FROM vm_disks AS vd
 		JOIN disks AS d ON d.id = vd.disk_id
 		LEFT JOIN storage_backends AS sb ON sb.id = d.storage_backend_id
+		LEFT JOIN disk_throttle_classes AS dtc ON dtc.id = d.throttle_class_id
 		ORDER BY vd.vm_id, vd.position, d.name COLLATE NOCASE`)
 	if err != nil {
 		return fmt.Errorf("query vm disks: %w", err)
@@ -2209,10 +2245,13 @@ func (s *Store) loadVMDisks(ctx context.Context, vms []VM) error {
 			pool        string
 			device      string
 			sizeBytes   int64
+			classID     sql.NullInt64
+			className   sql.NullString
+			classLimits sql.NullString
 		)
 		if err := rows.Scan(&vmID, &disk.ID, &disk.Name, &disk.SizeGB, &vg, &pool,
 			&backend, &backendName, &disk.Source, &device, &sizeBytes, &disk.Protocol,
-			&disk.ReadBPS, &disk.WriteBPS); err != nil {
+			&disk.ReadBPS, &disk.WriteBPS, &classID, &className, &classLimits); err != nil {
 			return err
 		}
 		disk.VG = vg
@@ -2232,6 +2271,7 @@ func (s *Store) loadVMDisks(ctx context.Context, vms []VM) error {
 		if backendName.Valid {
 			disk.StorageBackendName = backendName.String
 		}
+		applyVMDiskThrottle(&disk, classID, className, classLimits)
 		byVM[vmID] = append(byVM[vmID], disk)
 	}
 	if err := rows.Err(); err != nil {
@@ -2478,16 +2518,19 @@ const vmSelect = `
 	SELECT v.id, v.name, v.description, v.status, v.desired_state, v.vcpus, v.memory_mb,
 	       v.disk_id, d.name, d.size_gb, d.vg, d.thin_pool,
 	       d.source, d.device, d.size_bytes, d.attachment_protocol,
+	       d.throttle_class_id, dtc.name, dtc.limits,
 	       v.boot_media_id, m.name, m.path, m.size_bytes,
 	       v.console_enabled, v.cgroup_class, v.created_at, v.updated_at
 	FROM vms AS v
 	LEFT JOIN disks AS d ON d.id = v.disk_id
+	LEFT JOIN disk_throttle_classes AS dtc ON dtc.id = d.throttle_class_id
 	LEFT JOIN media AS m ON m.id = v.boot_media_id`
 
 const diskSelect = `
 	SELECT d.id, d.name, d.size_gb, d.vg, d.thin_pool,
 	       d.storage_backend_id, sb.name, d.source, d.device, d.size_bytes,
 	       d.attachment_protocol, d.backend_metadata, d.read_bps, d.write_bps,
+	       d.throttle_class_id, dtc.name,
 	       d.deletion_state, d.deletion_error, d.deletion_attempts,
 	       d.deletion_next_attempt_at, d.deletion_claimed_at,
 	       d.is_template, d.template_disk_id,
@@ -2495,30 +2538,34 @@ const diskSelect = `
 	       td.name, v.id, v.name, d.created_at, d.updated_at
 	FROM disks AS d
 	LEFT JOIN storage_backends AS sb ON sb.id = d.storage_backend_id
+	LEFT JOIN disk_throttle_classes AS dtc ON dtc.id = d.throttle_class_id
 	LEFT JOIN disks AS td ON td.id = d.template_disk_id
 	LEFT JOIN vm_disks AS vd ON vd.disk_id = d.id
 	LEFT JOIN vms AS v ON v.id = vd.vm_id`
 
 func scanVM(s scanner) (VM, error) {
 	var (
-		vm           VM
-		createdAt    int64
-		updatedAt    int64
-		diskID       sql.NullInt64
-		diskName     sql.NullString
-		diskSize     sql.NullInt64
-		diskVG       sql.NullString
-		diskPool     sql.NullString
-		diskSource   sql.NullString
-		diskDevice   sql.NullString
-		diskSizeByte sql.NullInt64
-		diskProtocol sql.NullString
-		bootMediaID  sql.NullInt64
-		mediaName    sql.NullString
-		mediaPath    sql.NullString
-		mediaSize    sql.NullInt64
-		console      int64
-		cgroupClass  string
+		vm              VM
+		createdAt       int64
+		updatedAt       int64
+		diskID          sql.NullInt64
+		diskName        sql.NullString
+		diskSize        sql.NullInt64
+		diskVG          sql.NullString
+		diskPool        sql.NullString
+		diskSource      sql.NullString
+		diskDevice      sql.NullString
+		diskSizeByte    sql.NullInt64
+		diskProtocol    sql.NullString
+		diskClassID     sql.NullInt64
+		diskClassName   sql.NullString
+		diskClassLimits sql.NullString
+		bootMediaID     sql.NullInt64
+		mediaName       sql.NullString
+		mediaPath       sql.NullString
+		mediaSize       sql.NullInt64
+		console         int64
+		cgroupClass     string
 	)
 	if err := s.Scan(
 		&vm.ID,
@@ -2537,6 +2584,9 @@ func scanVM(s scanner) (VM, error) {
 		&diskDevice,
 		&diskSizeByte,
 		&diskProtocol,
+		&diskClassID,
+		&diskClassName,
+		&diskClassLimits,
 		&bootMediaID,
 		&mediaName,
 		&mediaPath,
@@ -2580,6 +2630,7 @@ func scanVM(s scanner) (VM, error) {
 			Source:    source,
 			Protocol:  protocol,
 		}
+		applyVMDiskThrottle(vm.Disk, diskClassID, diskClassName, diskClassLimits)
 	}
 	if bootMediaID.Valid {
 		id := bootMediaID.Int64
@@ -2599,6 +2650,25 @@ func scanVM(s scanner) (VM, error) {
 	return vm, nil
 }
 
+func applyVMDiskThrottle(disk *VMDisk, classID sql.NullInt64, className, classLimits sql.NullString) {
+	if disk == nil || !classID.Valid {
+		return
+	}
+	id := classID.Int64
+	disk.ThrottleClassID = &id
+	disk.ThrottleClassName = className.String
+	if !classLimits.Valid {
+		disk.ThrottleError = fmt.Sprintf("throttle class %d not found", id)
+		return
+	}
+	limits, validationError := decodeDiskThrottleLimits(classLimits.String)
+	if validationError != "" {
+		disk.ThrottleError = fmt.Sprintf("throttle class %d: %s", id, validationError)
+		return
+	}
+	disk.Throttle = &limits
+}
+
 func scanDisk(s scanner) (Disk, error) {
 	var (
 		disk                  Disk
@@ -2608,6 +2678,8 @@ func scanDisk(s scanner) (Disk, error) {
 		backendMetadata       string
 		readBPS               int64
 		writeBPS              int64
+		classID               sql.NullInt64
+		className             sql.NullString
 		deletionNextAttemptAt int64
 		deletionClaimedAt     int64
 		isTemplate            int64
@@ -2636,6 +2708,8 @@ func scanDisk(s scanner) (Disk, error) {
 		&backendMetadata,
 		&readBPS,
 		&writeBPS,
+		&classID,
+		&className,
 		&disk.DeletionState,
 		&disk.DeletionError,
 		&disk.DeletionAttempts,
@@ -2658,6 +2732,13 @@ func scanDisk(s scanner) (Disk, error) {
 	disk.SizeBytes = uint64(sizeBytes)
 	disk.ReadBPS = readBPS
 	disk.WriteBPS = writeBPS
+	if classID.Valid {
+		id := classID.Int64
+		disk.ThrottleClassID = &id
+	}
+	if className.Valid {
+		disk.ThrottleClassName = className.String
+	}
 	if disk.Source == "" {
 		disk.Source = DiskSourceLVMThin
 	}

@@ -3,7 +3,10 @@ package store
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"io/fs"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -12,123 +15,18 @@ import (
 
 func TestMigrationConvertsNetworkDHCPToVNF(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "legacy-dhcp.db")
-	st, err := Open(dbPath)
-	if err != nil {
-		t.Fatalf("create current database: %v", err)
-	}
-	if err := st.Close(); err != nil {
-		t.Fatalf("close current database: %v", err)
-	}
-
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		t.Fatalf("open legacy database: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE vnfs`); err != nil {
-		t.Fatalf("drop vnfs table: %v", err)
-	}
-	for _, column := range []string{
-		"bvi_host_name", "bvi_sw_if_index", "ipv4_gateway",
-		"vnf_transport", "vnf_memif_socket", "vnf_memif_sw_if_index", "vnf_memif_host_name",
-		"ipv4_cidr", "ipv6_cidr", "route_table_id",
-	} {
-		if _, err := db.Exec(`ALTER TABLE networks DROP COLUMN ` + column); err != nil {
-			t.Fatalf("drop networks.%s: %v", column, err)
-		}
-	}
-	if _, err := db.Exec(`DROP TABLE startup_script`); err != nil {
-		t.Fatalf("drop startup_script table: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE vpp_interface_addresses`); err != nil {
-		t.Fatalf("drop vpp_interface_addresses table: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE IF EXISTS network_pipes`); err != nil {
-		t.Fatalf("drop network_pipes table: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE IF EXISTS vpp_interface_route_tables`); err != nil {
-		t.Fatalf("drop vpp_interface_route_tables table: %v", err)
-	}
-	for _, column := range []string{
-		"route_count", "next_hop_table", "weight", "udp_encap",
-		"ipv4_lookup_table", "ipv6_lookup_table", "mpls_lookup_table",
-		"resolve_via_host", "resolve_via_connected",
-		"rx_ipv4_interface", "rx_ipv6_interface", "out_labels", "is_drop",
-		"description", "preference_set", "route_count_set", "next_hop_table_set",
-		"weight_set", "udp_encap_set", "ipv4_lookup_table_set",
-		"ipv6_lookup_table_set", "mpls_lookup_table_set",
-		"next_hop_table_name", "ipv4_lookup_table_name", "ipv6_lookup_table_name",
-	} {
-		if _, err := db.Exec(`ALTER TABLE routes DROP COLUMN ` + column); err != nil {
-			t.Fatalf("drop routes.%s: %v", column, err)
-		}
-	}
-	if _, err := db.Exec(`DROP TABLE IF EXISTS vpp_interface_dhcp_clients`); err != nil {
-		t.Fatalf("drop vpp_interface_dhcp_clients table: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE acls`); err != nil {
-		t.Fatalf("drop acls table: %v", err)
-	}
-	if _, err := db.Exec(`ALTER TABLE disks DROP COLUMN storage_backend_id`); err != nil {
-		t.Fatalf("drop disks.storage_backend_id: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE storage_backends`); err != nil {
-		t.Fatalf("drop storage_backends table: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE vm_disks`); err != nil {
-		t.Fatalf("drop vm_disks table: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE interface_acls`); err != nil {
-		t.Fatalf("drop interface_acls table: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE routes`); err != nil {
-		t.Fatalf("drop routes table: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE route_tables`); err != nil {
-		t.Fatalf("drop route_tables table: %v", err)
-	}
-	for _, column := range []string{"ipv4_table_id", "ipv6_table_id"} {
-		if _, err := db.Exec(`ALTER TABLE virtual_interfaces DROP COLUMN ` + column); err != nil {
-			t.Fatalf("drop virtual_interfaces.%s: %v", column, err)
-		}
-	}
-	if _, err := db.Exec(`DROP INDEX IF EXISTS idx_disks_template_disk_id`); err != nil {
-		t.Fatalf("drop disk template index: %v", err)
-	}
-	for _, column := range []string{"is_template", "template_disk_id", "prepared_by_script", "provisioning_script", "provisioning_timeout"} {
-		if _, err := db.Exec(`ALTER TABLE disks DROP COLUMN ` + column); err != nil {
-			t.Fatalf("drop disks.%s: %v", column, err)
-		}
-	}
-	for _, column := range []string{"ingress_acl_id", "egress_acl_id"} {
-		if _, err := db.Exec(`ALTER TABLE virtual_interfaces DROP COLUMN ` + column); err != nil {
-			t.Fatalf("drop virtual_interfaces.%s: %v", column, err)
-		}
-	}
-	if _, err := db.Exec(`ALTER TABLE vms DROP COLUMN desired_state`); err != nil {
-		t.Fatalf("drop vms.desired_state: %v", err)
-	}
-	dropCgroupSchema(t, db)
-	dropEntityLabelsSchema(t, db)
-	dropLightVMSchema(t, db)
-	if _, err := db.Exec(`
+	db := openRawDB(t, dbPath)
+	migrateToVersion(t, db, 7)
+	execSQL(t, db, `
 		INSERT INTO networks
 			(name, bridge_domain_id, dhcp_enabled, dhcp_gateway,
 			 dhcp_range_start, dhcp_range_end, dhcp_dns,
 			 dhcp_tap_sw_if_index, dhcp_tap_host_name, created_at, updated_at)
 		VALUES ('legacy-net', 100, 1, '10.20.0.1/24', '10.20.0.100', '10.20.0.200',
-		        '1.1.1.1', 3, 'ndn1', 1000, 2000)`); err != nil {
-		t.Fatalf("insert legacy network: %v", err)
-	}
-	dropDiskSourceSchema(t, db)
-	dropKoujaSchema(t, db)
-	if _, err := db.Exec(`PRAGMA user_version = 7`); err != nil {
-		t.Fatalf("set schema version: %v", err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatalf("close legacy database: %v", err)
-	}
+		        '1.1.1.1', 3, 'ndn1', 1000, 2000)`)
+	closeRawDB(t, db)
 
-	st, err = Open(dbPath)
+	st, err := Open(dbPath)
 	if err != nil {
 		t.Fatalf("open migrated database: %v", err)
 	}
@@ -154,154 +52,57 @@ func TestMigrationConvertsNetworkDHCPToVNF(t *testing.T) {
 func TestMigrationBackfillsVMDisks(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "legacy-vm-disk.db")
+	const (
+		diskID = int64(1)
+		vmID   = "11111111-1111-4111-8111-111111111111"
+	)
+
+	db := openRawDB(t, dbPath)
+	migrateToVersion(t, db, 11)
+	execSQL(t, db, `
+		INSERT INTO disks
+			(id, name, size_gb, vg, thin_pool, created_at, updated_at,
+			 storage_backend_id)
+		VALUES (1, 'legacy-root', 20, 'vg0', 'rookery', 1000, 1000, NULL)`)
+	execSQL(t, db, `
+		INSERT INTO vms
+			(id, name, description, status, vcpus, memory_mb, disk_id, boot_media_id,
+			 created_at, updated_at, console_enabled)
+		VALUES ('11111111-1111-4111-8111-111111111111', 'legacy', '', 'stopped',
+		        1, 512, 1, NULL, 1000, 1000, 1)`)
+	closeRawDB(t, db)
 
 	st, err := Open(dbPath)
-	if err != nil {
-		t.Fatalf("create current database: %v", err)
-	}
-	disk, err := st.CreateDisk(ctx, Disk{
-		Name:     "legacy-root",
-		SizeGB:   20,
-		VG:       "vg0",
-		ThinPool: "rookery",
-	})
-	if err != nil {
-		t.Fatalf("create legacy disk: %v", err)
-	}
-	vm, err := st.CreateVM(ctx, VM{
-		Name:     "legacy",
-		Status:   StatusStopped,
-		VCPUs:    1,
-		MemoryMB: 512,
-		DiskID:   &disk.ID,
-	})
-	if err != nil {
-		t.Fatalf("create legacy vm: %v", err)
-	}
-	if err := st.Close(); err != nil {
-		t.Fatalf("close current database: %v", err)
-	}
-
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		t.Fatalf("open legacy database: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE vm_disks`); err != nil {
-		t.Fatalf("drop vm_disks table: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE interface_acls`); err != nil {
-		t.Fatalf("drop interface_acls table: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE routes`); err != nil {
-		t.Fatalf("drop routes table: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE route_tables`); err != nil {
-		t.Fatalf("drop route_tables table: %v", err)
-	}
-	for _, column := range []string{"ipv4_table_id", "ipv6_table_id"} {
-		if _, err := db.Exec(`ALTER TABLE virtual_interfaces DROP COLUMN ` + column); err != nil {
-			t.Fatalf("drop virtual_interfaces.%s: %v", column, err)
-		}
-	}
-	if _, err := db.Exec(`DROP INDEX IF EXISTS idx_disks_template_disk_id`); err != nil {
-		t.Fatalf("drop disk template index: %v", err)
-	}
-	for _, column := range []string{"is_template", "template_disk_id", "prepared_by_script", "provisioning_script", "provisioning_timeout"} {
-		if _, err := db.Exec(`ALTER TABLE disks DROP COLUMN ` + column); err != nil {
-			t.Fatalf("drop disks.%s: %v", column, err)
-		}
-	}
-	for _, column := range []string{"memif_sw_if_index", "memif_socket", "memif_host_name"} {
-		if _, err := db.Exec(`ALTER TABLE vnfs DROP COLUMN ` + column); err != nil {
-			t.Fatalf("drop vnfs.%s: %v", column, err)
-		}
-	}
-	for _, column := range []string{
-		"vnf_transport", "vnf_memif_socket", "vnf_memif_sw_if_index", "vnf_memif_host_name",
-		"ipv4_cidr", "ipv6_cidr", "route_table_id",
-	} {
-		if _, err := db.Exec(`ALTER TABLE networks DROP COLUMN ` + column); err != nil {
-			t.Fatalf("drop networks.%s: %v", column, err)
-		}
-	}
-	if _, err := db.Exec(`DROP TABLE startup_script`); err != nil {
-		t.Fatalf("drop startup_script table: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE vpp_interface_addresses`); err != nil {
-		t.Fatalf("drop vpp_interface_addresses table: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE IF EXISTS network_pipes`); err != nil {
-		t.Fatalf("drop network_pipes table: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE IF EXISTS vpp_interface_route_tables`); err != nil {
-		t.Fatalf("drop vpp_interface_route_tables table: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE IF EXISTS vpp_interface_dhcp_clients`); err != nil {
-		t.Fatalf("drop vpp_interface_dhcp_clients table: %v", err)
-	}
-	if _, err := db.Exec(`ALTER TABLE vms DROP COLUMN desired_state`); err != nil {
-		t.Fatalf("drop vms.desired_state: %v", err)
-	}
-	dropCgroupSchema(t, db)
-	dropEntityLabelsSchema(t, db)
-	dropLightVMSchema(t, db)
-	dropDiskSourceSchema(t, db)
-	dropKoujaSchema(t, db)
-	if _, err := db.Exec(`PRAGMA user_version = 11`); err != nil {
-		t.Fatalf("set schema version: %v", err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatalf("close legacy database: %v", err)
-	}
-
-	st, err = Open(dbPath)
 	if err != nil {
 		t.Fatalf("open migrated database: %v", err)
 	}
 	defer st.Close()
 
-	got, err := st.GetVM(ctx, vm.ID)
+	got, err := st.GetVM(ctx, vmID)
 	if err != nil {
 		t.Fatalf("get migrated vm: %v", err)
 	}
-	if len(got.Disks) != 1 || got.Disks[0].ID != disk.ID || len(got.DiskIDs) != 1 || got.DiskIDs[0] != disk.ID {
+	if len(got.Disks) != 1 || got.Disks[0].ID != diskID || len(got.DiskIDs) != 1 || got.DiskIDs[0] != diskID {
 		t.Fatalf("migrated vm disks = %+v, ids = %v", got.Disks, got.DiskIDs)
 	}
-	gotDisk, err := st.GetDisk(ctx, disk.ID)
+	gotDisk, err := st.GetDisk(ctx, diskID)
 	if err != nil {
 		t.Fatalf("get migrated disk: %v", err)
 	}
-	if gotDisk.AttachedVMID == nil || *gotDisk.AttachedVMID != vm.ID {
-		t.Fatalf("migrated disk attached to %v, want %s", gotDisk.AttachedVMID, vm.ID)
+	if gotDisk.AttachedVMID == nil || *gotDisk.AttachedVMID != vmID {
+		t.Fatalf("migrated disk attached to %v, want %s", gotDisk.AttachedVMID, vmID)
 	}
 }
 
 func TestMigrationPreservesLegacyVMsWithoutDisks(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "legacy.db")
 
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		t.Fatalf("open legacy database: %v", err)
-	}
-
-	initSQL, err := migrations.ReadFile("migrations/0001_init.sql")
-	if err != nil {
-		t.Fatalf("read initial migration: %v", err)
-	}
-	if _, err := db.Exec(string(initSQL)); err != nil {
-		t.Fatalf("apply initial schema: %v", err)
-	}
-	if _, err := db.Exec(`PRAGMA user_version = 1`); err != nil {
-		t.Fatalf("set schema version: %v", err)
-	}
-	if _, err := db.Exec(`
+	db := openRawDB(t, dbPath)
+	migrateToVersion(t, db, 1)
+	execSQL(t, db, `
 		INSERT INTO vms (name, description, status, vcpus, memory_mb, disk_gb, created_at, updated_at)
-		VALUES ('legacy', 'old vm', 'stopped', 2, 1024, 42, 1000, 2000)`); err != nil {
-		t.Fatalf("insert legacy vm: %v", err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatalf("close legacy database: %v", err)
-	}
+		VALUES ('legacy', 'old vm', 'stopped', 2, 1024, 42, 1000, 2000)`)
+	closeRawDB(t, db)
 
 	st, err := Open(dbPath)
 	if err != nil {
@@ -344,65 +145,41 @@ func TestMigrationPreservesLegacyVMsWithoutDisks(t *testing.T) {
 	if err := st.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 50 {
-		t.Fatalf("schema version = %d, want 50", version)
+	if want := latestMigrationVersion(t); version != want {
+		t.Fatalf("schema version = %d, want %d", version, want)
 	}
 }
 
 func TestMigrationAddsDefaultLightVMConsole(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "lightvm-consoles.db")
-	st, err := Open(dbPath)
-	if err != nil {
-		t.Fatalf("create current database: %v", err)
-	}
-	ctx := context.Background()
-	kernel, err := st.CreateLightVMKernel(ctx, LightVMKernel{
-		Name: "vmlinuz", Path: "/tmp/vmlinuz", SizeBytes: 1,
-	})
-	if err != nil {
-		t.Fatalf("create kernel: %v", err)
-	}
-	initramfs, err := st.CreateLightVMInitramfs(ctx, LightVMInitramfs{
-		Name: "initramfs", Path: "/tmp/initramfs", SizeBytes: 1,
-	})
-	if err != nil {
-		t.Fatalf("create initramfs: %v", err)
-	}
-	vm, err := st.CreateLightVM(ctx, LightVM{
-		Name: "app-01", VCPUs: 1, MemoryMB: 128,
-		KernelID: kernel.ID, InitramfsID: initramfs.ID,
-		Image: "alpine", ExecutablePath: "/bin/sh",
-		Consoles: []LightVMConsole{{Name: "serial"}, {Name: "logs"}},
-	})
-	if err != nil {
-		t.Fatalf("create lightvm: %v", err)
-	}
-	if err := st.Close(); err != nil {
-		t.Fatalf("close current database: %v", err)
-	}
+	const vmID = "44444444-4444-4444-8444-444444444444"
 
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		t.Fatalf("open database: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE lightvm_consoles`); err != nil {
-		t.Fatalf("drop lightvm_consoles: %v", err)
-	}
-	dropDiskSourceSchema(t, db)
-	dropKoujaSchema(t, db)
-	if _, err := db.Exec(`PRAGMA user_version = 46`); err != nil {
-		t.Fatalf("set schema version: %v", err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatalf("close database: %v", err)
-	}
+	db := openRawDB(t, dbPath)
+	migrateToVersion(t, db, 46)
+	execSQL(t, db, `
+		INSERT INTO lightvm_kernels
+			(id, name, description, path, file_name, size_bytes, managed, created_at, updated_at)
+		VALUES (1, 'vmlinuz', '', '/tmp/vmlinuz', 'vmlinuz', 1, 0, 1000, 1000)`)
+	execSQL(t, db, `
+		INSERT INTO lightvm_initramfs
+			(id, name, description, path, file_name, size_bytes, managed, created_at, updated_at)
+		VALUES (1, 'initramfs', '', '/tmp/initramfs', 'initramfs', 1, 0, 1000, 1000)`)
+	execSQL(t, db, `
+		INSERT INTO lightvms
+			(id, name, description, vcpus, memory_mb, console_enabled, cgroup_class,
+			 kernel_id, initramfs_id, image, env, executable_path, executable_args,
+			 append, status, desired_state, created_at, updated_at)
+		VALUES ('44444444-4444-4444-8444-444444444444', 'app-01', '', 1, 128, 1, '',
+		        1, 1, 'alpine', '[]', '/bin/sh', '[]', 'console=hvc0 rdinit=/init',
+		        'stopped', 'stopped', 1000, 1000)`)
+	closeRawDB(t, db)
 
 	migrated, err := Open(dbPath)
 	if err != nil {
 		t.Fatalf("migrate database: %v", err)
 	}
 	defer migrated.Close()
-	updated, err := migrated.GetLightVM(ctx, vm.ID)
+	updated, err := migrated.GetLightVM(context.Background(), vmID)
 	if err != nil {
 		t.Fatalf("get migrated lightvm: %v", err)
 	}
@@ -413,38 +190,13 @@ func TestMigrationAddsDefaultLightVMConsole(t *testing.T) {
 }
 
 func TestEnsureStartupScriptSchemaAfterTableDrop(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "version-27.db")
+	dbPath := filepath.Join(t.TempDir(), "version-37.db")
+	db := openRawDB(t, dbPath)
+	migrateToVersion(t, db, 37)
+	execSQL(t, db, `DROP TABLE startup_script`)
+	closeRawDB(t, db)
+
 	st, err := Open(dbPath)
-	if err != nil {
-		t.Fatalf("create current database: %v", err)
-	}
-	if err := st.Close(); err != nil {
-		t.Fatalf("close current database: %v", err)
-	}
-
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		t.Fatalf("open database: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE startup_script`); err != nil {
-		t.Fatalf("drop startup_script table: %v", err)
-	}
-	if _, err := db.Exec(`ALTER TABLE vms DROP COLUMN desired_state`); err != nil {
-		t.Fatalf("drop vms.desired_state: %v", err)
-	}
-	dropCgroupSchema(t, db)
-	dropEntityLabelsSchema(t, db)
-	dropLightVMSchema(t, db)
-	dropDiskSourceSchema(t, db)
-	dropKoujaSchema(t, db)
-	if _, err := db.Exec(`PRAGMA user_version = 37`); err != nil {
-		t.Fatalf("set schema version: %v", err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatalf("close database: %v", err)
-	}
-
-	st, err = Open(dbPath)
 	if err != nil {
 		t.Fatalf("repair database without startup_script: %v", err)
 	}
@@ -470,65 +222,12 @@ func TestEnsureStartupScriptSchemaAfterTableDrop(t *testing.T) {
 
 func TestEnsureVPPInterfaceAddressesSchemaAfterTableDrop(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "addresses-version-30.db")
+	db := openRawDB(t, dbPath)
+	migrateToVersion(t, db, 30)
+	execSQL(t, db, `DROP TABLE vpp_interface_addresses`)
+	closeRawDB(t, db)
+
 	st, err := Open(dbPath)
-	if err != nil {
-		t.Fatalf("create current database: %v", err)
-	}
-	if err := st.Close(); err != nil {
-		t.Fatalf("close current database: %v", err)
-	}
-
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		t.Fatalf("open database: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE vpp_interface_addresses`); err != nil {
-		t.Fatalf("drop vpp_interface_addresses table: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE IF EXISTS network_pipes`); err != nil {
-		t.Fatalf("drop network_pipes table: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE IF EXISTS vpp_interface_route_tables`); err != nil {
-		t.Fatalf("drop vpp_interface_route_tables table: %v", err)
-	}
-	for _, column := range []string{
-		"route_count", "next_hop_table", "weight", "udp_encap",
-		"ipv4_lookup_table", "ipv6_lookup_table", "mpls_lookup_table",
-		"resolve_via_host", "resolve_via_connected",
-		"rx_ipv4_interface", "rx_ipv6_interface", "out_labels", "is_drop",
-		"description", "preference_set", "route_count_set", "next_hop_table_set",
-		"weight_set", "udp_encap_set", "ipv4_lookup_table_set",
-		"ipv6_lookup_table_set", "mpls_lookup_table_set",
-		"next_hop_table_name", "ipv4_lookup_table_name", "ipv6_lookup_table_name",
-	} {
-		if _, err := db.Exec(`ALTER TABLE routes DROP COLUMN ` + column); err != nil {
-			t.Fatalf("drop routes.%s: %v", column, err)
-		}
-	}
-	if _, err := db.Exec(`DROP TABLE IF EXISTS vpp_interface_dhcp_clients`); err != nil {
-		t.Fatalf("drop vpp_interface_dhcp_clients table: %v", err)
-	}
-	for _, column := range []string{"provisioning_script", "provisioning_timeout"} {
-		if _, err := db.Exec(`ALTER TABLE disks DROP COLUMN ` + column); err != nil {
-			t.Fatalf("drop disks.%s: %v", column, err)
-		}
-	}
-	if _, err := db.Exec(`ALTER TABLE vms DROP COLUMN desired_state`); err != nil {
-		t.Fatalf("drop vms.desired_state: %v", err)
-	}
-	dropCgroupSchema(t, db)
-	dropEntityLabelsSchema(t, db)
-	dropLightVMSchema(t, db)
-	dropDiskSourceSchema(t, db)
-	dropKoujaSchema(t, db)
-	if _, err := db.Exec(`PRAGMA user_version = 30`); err != nil {
-		t.Fatalf("set schema version: %v", err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatalf("close database: %v", err)
-	}
-
-	st, err = Open(dbPath)
 	if err != nil {
 		t.Fatalf("repair database without vpp_interface_addresses: %v", err)
 	}
@@ -548,64 +247,46 @@ func TestEnsureVPPInterfaceAddressesSchemaAfterTableDrop(t *testing.T) {
 func TestMigrationBackfillsVMPowerState(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "legacy-power.db")
+	const (
+		runningVMID = "22222222-2222-4222-8222-222222222222"
+		stoppedVMID = "33333333-3333-4333-8333-333333333333"
+	)
+
+	db := openRawDB(t, dbPath)
+	migrateToVersion(t, db, 37)
+	execSQL(t, db, `
+		INSERT INTO disks
+			(id, name, size_gb, vg, thin_pool, created_at, updated_at,
+			 storage_backend_id, is_template, template_disk_id, prepared_by_script,
+			 provisioning_script, provisioning_timeout)
+		VALUES (1, 'legacy-running', 20, 'vg0', 'rookery', 1000, 1000, NULL, 0, NULL,
+		        0, '', ''),
+		       (2, 'legacy-stopped', 20, 'vg0', 'rookery', 1000, 1000, NULL, 0, NULL,
+		        0, '', '')`)
+	execSQL(t, db, `
+		INSERT INTO vms
+			(id, name, description, status, vcpus, memory_mb, disk_id, boot_media_id,
+			 created_at, updated_at, console_enabled)
+		VALUES ('22222222-2222-4222-8222-222222222222', 'was-running', '', 'running',
+		        1, 512, 1, NULL, 1000, 1000, 1),
+		       ('33333333-3333-4333-8333-333333333333', 'was-stopped', '', 'stopped',
+		        1, 512, 2, NULL, 1000, 1000, 1)`)
+	closeRawDB(t, db)
 
 	st, err := Open(dbPath)
-	if err != nil {
-		t.Fatalf("create current database: %v", err)
-	}
-	runningDisk, err := st.CreateDisk(ctx, Disk{Name: "legacy-running", SizeGB: 20, VG: "vg0", ThinPool: "rookery"})
-	if err != nil {
-		t.Fatalf("create running disk: %v", err)
-	}
-	stoppedDisk, err := st.CreateDisk(ctx, Disk{Name: "legacy-stopped", SizeGB: 20, VG: "vg0", ThinPool: "rookery"})
-	if err != nil {
-		t.Fatalf("create stopped disk: %v", err)
-	}
-	running, err := st.CreateVM(ctx, VM{Name: "was-running", Status: StatusRunning, VCPUs: 1, MemoryMB: 512, DiskID: &runningDisk.ID})
-	if err != nil {
-		t.Fatalf("create running vm: %v", err)
-	}
-	stopped, err := st.CreateVM(ctx, VM{Name: "was-stopped", Status: StatusStopped, VCPUs: 1, MemoryMB: 512, DiskID: &stoppedDisk.ID})
-	if err != nil {
-		t.Fatalf("create stopped vm: %v", err)
-	}
-	if err := st.Close(); err != nil {
-		t.Fatalf("close current database: %v", err)
-	}
-
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		t.Fatalf("open legacy database: %v", err)
-	}
-	if _, err := db.Exec(`ALTER TABLE vms DROP COLUMN desired_state`); err != nil {
-		t.Fatalf("drop vms.desired_state: %v", err)
-	}
-	dropCgroupSchema(t, db)
-	dropEntityLabelsSchema(t, db)
-	dropLightVMSchema(t, db)
-	dropDiskSourceSchema(t, db)
-	dropKoujaSchema(t, db)
-	if _, err := db.Exec(`PRAGMA user_version = 37`); err != nil {
-		t.Fatalf("set schema version: %v", err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatalf("close legacy database: %v", err)
-	}
-
-	st, err = Open(dbPath)
 	if err != nil {
 		t.Fatalf("open migrated database: %v", err)
 	}
 	defer st.Close()
 
-	gotRunning, err := st.GetVM(ctx, running.ID)
+	gotRunning, err := st.GetVM(ctx, runningVMID)
 	if err != nil {
 		t.Fatalf("get migrated running vm: %v", err)
 	}
 	if gotRunning.DesiredState != DesiredRunning {
 		t.Fatalf("running vm desired state = %q, want running", gotRunning.DesiredState)
 	}
-	gotStopped, err := st.GetVM(ctx, stopped.ID)
+	gotStopped, err := st.GetVM(ctx, stoppedVMID)
 	if err != nil {
 		t.Fatalf("get migrated stopped vm: %v", err)
 	}
@@ -614,92 +295,189 @@ func TestMigrationBackfillsVMPowerState(t *testing.T) {
 	}
 }
 
-// dropEntityLabelsSchema removes the label table so a test can simulate an
-// older database before running the migrations again.
-func dropEntityLabelsSchema(t *testing.T, db *sql.DB) {
+func TestMigrationFromVersion50DropsRawBandwidthValues(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "legacy-raw.db")
+	db := openRawDB(t, dbPath)
+	migrateToVersion(t, db, 50)
+	execSQL(t, db, `
+		INSERT INTO disks
+			(id, name, size_gb, vg, thin_pool, created_at, updated_at,
+			 storage_backend_id, is_template, template_disk_id, prepared_by_script,
+			 provisioning_script, provisioning_timeout, source, device, size_bytes,
+			 backend_metadata, attachment_protocol, deletion_state, deletion_error,
+			 deletion_attempts, deletion_next_attempt_at, deletion_claimed_at,
+			 read_bps, write_bps)
+		VALUES (1, 'legacy-raw', 20, 'vg0', 'rookery', 1000, 1000, NULL, 0, NULL, 0,
+		        '', '', 'lvm-thin', '/dev/vg0/legacy-raw', 21474836480, '', '', '', '',
+		        0, 0, 0, 1048576, 524288)`)
+	closeRawDB(t, db)
+
+	st, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("open migrated database: %v", err)
+	}
+	defer st.Close()
+
+	disk, err := st.GetDisk(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("get migrated disk: %v", err)
+	}
+	if disk.ThrottleClassID != nil {
+		t.Fatalf("migrated disk class = %v, want nil", disk.ThrottleClassID)
+	}
+	if !disksHasColumn(t, st.db, "throttle_class_id") {
+		t.Fatal("disks.throttle_class_id is missing")
+	}
+	if !tableExists(t, st.db, "disk_throttle_classes") {
+		t.Fatal("disk_throttle_classes is missing")
+	}
+	// Phase 0 keeps the raw columns; Phase 4 removes them.
+	if !disksHasColumn(t, st.db, "read_bps") || !disksHasColumn(t, st.db, "write_bps") {
+		t.Fatal("raw bandwidth columns should remain until Phase 4")
+	}
+}
+
+func migrateToVersion(t *testing.T, db *sql.DB, target int) {
 	t.Helper()
-	for _, trigger := range []string{
-		"entity_labels_vm_delete", "entity_labels_disk_delete", "entity_labels_media_delete",
-		"entity_labels_network_delete", "entity_labels_interface_delete", "entity_labels_vnf_delete",
-		"entity_labels_acl_delete", "entity_labels_route_table_delete", "entity_labels_route_delete",
-		"entity_labels_network_pipe_delete", "entity_labels_storage_backend_delete",
-		"entity_labels_host_tap_delete", "entity_labels_host_interface_delete",
-		"entity_labels_lightvm_kernel_delete", "entity_labels_lightvm_initramfs_delete",
-		"entity_labels_lightvm_delete",
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	for _, pragma := range []string{
+		"PRAGMA journal_mode = WAL",
+		"PRAGMA synchronous = NORMAL",
+		"PRAGMA busy_timeout = 5000",
+		"PRAGMA foreign_keys = ON",
 	} {
-		if _, err := db.Exec(`DROP TRIGGER IF EXISTS ` + trigger); err != nil {
-			t.Fatalf("drop %s trigger: %v", trigger, err)
+		if _, err := db.Exec(pragma); err != nil {
+			t.Fatalf("apply %q: %v", pragma, err)
 		}
 	}
-	if _, err := db.Exec(`DROP TABLE IF EXISTS entity_labels`); err != nil {
-		t.Fatalf("drop entity_labels table: %v", err)
+	var current int
+	if err := db.QueryRow("PRAGMA user_version").Scan(&current); err != nil {
+		t.Fatalf("read schema version: %v", err)
+	}
+	entries, err := fs.ReadDir(migrations, "migrations")
+	if err != nil {
+		t.Fatalf("read embedded migrations: %v", err)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {
+			continue
+		}
+		version, err := migrationVersion(entry.Name())
+		if err != nil {
+			t.Fatalf("parse migration %s: %v", entry.Name(), err)
+		}
+		if version <= current || version > target {
+			continue
+		}
+		body, err := migrations.ReadFile("migrations/" + entry.Name())
+		if err != nil {
+			t.Fatalf("read migration %s: %v", entry.Name(), err)
+		}
+		tx, err := db.Begin()
+		if err != nil {
+			t.Fatalf("begin migration %s: %v", entry.Name(), err)
+		}
+		if _, err := tx.Exec(string(body)); err != nil {
+			tx.Rollback()
+			t.Fatalf("apply migration %s: %v", entry.Name(), err)
+		}
+		if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d", version)); err != nil {
+			tx.Rollback()
+			t.Fatalf("record migration %s: %v", entry.Name(), err)
+		}
+		if err := tx.Commit(); err != nil {
+			t.Fatalf("commit migration %s: %v", entry.Name(), err)
+		}
+		current = version
 	}
 }
 
-// dropDiskSourceSchema removes host-device passthrough columns so a test can
-// simulate a database created before migration 48.
-func dropDiskSourceSchema(t *testing.T, db *sql.DB) {
+func latestMigrationVersion(t *testing.T) int {
 	t.Helper()
-	if _, err := db.Exec(`DROP INDEX IF EXISTS idx_disks_host_device`); err != nil {
-		t.Fatalf("drop host device index: %v", err)
+	entries, err := fs.ReadDir(migrations, "migrations")
+	if err != nil {
+		t.Fatalf("read embedded migrations: %v", err)
 	}
-	for _, column := range []string{"source", "device", "size_bytes", "read_bps", "write_bps"} {
-		if _, err := db.Exec(`ALTER TABLE disks DROP COLUMN ` + column); err != nil {
-			t.Fatalf("drop disks.%s: %v", column, err)
+	latest := 0
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {
+			continue
+		}
+		version, err := migrationVersion(entry.Name())
+		if err != nil {
+			t.Fatalf("parse migration %s: %v", entry.Name(), err)
+		}
+		if version > latest {
+			latest = version
 		}
 	}
+	return latest
 }
 
-// dropKoujaSchema removes the kouja metadata and deletion-state columns so a
-// test can simulate a database created before migration 49.
-func dropKoujaSchema(t *testing.T, db *sql.DB) {
+func openRawDB(t *testing.T, path string) *sql.DB {
 	t.Helper()
-	if _, err := db.Exec(`DROP INDEX IF EXISTS idx_disks_deletion_due`); err != nil {
-		t.Fatalf("drop disk deletion index: %v", err)
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open raw database: %v", err)
 	}
-	for _, column := range []string{
-		"backend_metadata", "attachment_protocol", "deletion_state",
-		"deletion_error", "deletion_attempts", "deletion_next_attempt_at",
-		"deletion_claimed_at",
-	} {
-		if _, err := db.Exec(`ALTER TABLE disks DROP COLUMN ` + column); err != nil {
-			t.Fatalf("drop disks.%s: %v", column, err)
+	return db
+}
+
+func closeRawDB(t *testing.T, db *sql.DB) {
+	t.Helper()
+	if err := db.Close(); err != nil {
+		t.Fatalf("close raw database: %v", err)
+	}
+}
+
+func execSQL(t *testing.T, db *sql.DB, query string) {
+	t.Helper()
+	if _, err := db.Exec(query); err != nil {
+		t.Fatalf("exec SQL: %v", err)
+	}
+}
+
+func disksHasColumn(t *testing.T, db *sql.DB, column string) bool {
+	t.Helper()
+	rows, err := db.Query(`PRAGMA table_info('disks')`)
+	if err != nil {
+		t.Fatalf("read disks schema: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			cid     int
+			name    string
+			typ     string
+			notNull int
+			dflt    sql.NullString
+			pk      int
+		)
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &dflt, &pk); err != nil {
+			t.Fatalf("scan disks schema: %v", err)
+		}
+		if name == column {
+			return true
 		}
 	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate disks schema: %v", err)
+	}
+	return false
 }
 
-// dropCgroupSchema removes the newest schema objects so a test can simulate an
-// older database before running the migrations again.
-func dropCgroupSchema(t *testing.T, db *sql.DB) {
+// tableExists reports whether a table exists in the database.
+func tableExists(t *testing.T, db *sql.DB, table string) bool {
 	t.Helper()
-	if _, err := db.Exec(`ALTER TABLE vms DROP COLUMN cgroup_class`); err != nil {
-		t.Fatalf("drop vms.cgroup_class: %v", err)
+	var name string
+	err := db.QueryRow(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&name)
+	if err == sql.ErrNoRows {
+		return false
 	}
-	if _, err := db.Exec(`ALTER TABLE vms DROP COLUMN cgroup`); err != nil {
-		t.Fatalf("drop vms.cgroup: %v", err)
+	if err != nil {
+		t.Fatalf("query table %s: %v", table, err)
 	}
-	if _, err := db.Exec(`DROP TABLE IF EXISTS cgroup_settings`); err != nil {
-		t.Fatalf("drop cgroup_settings: %v", err)
-	}
-}
-
-// dropLightVMSchema removes the LightVM tables so a test can simulate a
-// database created before the LightVM inventory existed.
-func dropLightVMSchema(t *testing.T, db *sql.DB) {
-	t.Helper()
-	if _, err := db.Exec(`DROP TABLE IF EXISTS lightvm_consoles`); err != nil {
-		t.Fatalf("drop lightvm_consoles: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE IF EXISTS lightvm_interfaces`); err != nil {
-		t.Fatalf("drop lightvm_interfaces: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE IF EXISTS lightvms`); err != nil {
-		t.Fatalf("drop lightvms: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE IF EXISTS lightvm_kernels`); err != nil {
-		t.Fatalf("drop lightvm_kernels: %v", err)
-	}
-	if _, err := db.Exec(`DROP TABLE IF EXISTS lightvm_initramfs`); err != nil {
-		t.Fatalf("drop lightvm_initramfs: %v", err)
-	}
+	return name == table
 }

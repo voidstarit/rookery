@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// DiskThrottleService manages reusable QEMU disk throttling policies.
+service DiskThrottleService {
+  rpc ListDiskThrottleClasses(ListDiskThrottleClassesRequest) returns (ListDiskThrottleClassesResponse) {
+    option (google.api.http) = {
+      get: "/api/disk-throttle-classes"
+      response_body: "classes"
+    };
+  }
+
+  rpc GetDiskThrottleClass(GetDiskThrottleClassRequest) returns (DiskThrottleClass) {
+    option (google.api.http) = {get: "/api/disk-throttle-classes/{id}"};
+  }
+
+  rpc CreateDiskThrottleClass(CreateDiskThrottleClassRequest) returns (DiskThrottleClass) {
+    option (google.api.http) = {
+      post: "/api/disk-throttle-classes"
+      body: "*"
+    };
+  }
+
+  rpc UpdateDiskThrottleClass(UpdateDiskThrottleClassRequest) returns (DiskThrottleClass) {
+    option (google.api.http) = {
+      put: "/api/disk-throttle-classes/{id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteDiskThrottleClass(DeleteDiskThrottleClassRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/disk-throttle-classes/{id}"};
+  }
+}
+
+message DiskThrottleLimits {
+  // All values are >= 0. Base and *_max values are <= 1e15;
+  // every *_max_length is in seconds, <= UINT_MAX (4,294,967,295),
+  // and must satisfy QEMU's overflow check.
+  int64 bps_total = 1 [(validate.rules).int64 = {gte: 0, lte: 1000000000000000}];
+  int64 bps_total_max = 2 [(validate.rules).int64 = {gte: 0, lte: 1000000000000000}];
+  int64 bps_total_max_length = 3 [(validate.rules).int64 = {gte: 0, lte: 4294967295}];
+  int64 bps_read = 4 [(validate.rules).int64 = {gte: 0, lte: 1000000000000000}];
+  int64 bps_read_max = 5 [(validate.rules).int64 = {gte: 0, lte: 1000000000000000}];
+  int64 bps_read_max_length = 6 [(validate.rules).int64 = {gte: 0, lte: 4294967295}];
+  int64 bps_write = 7 [(validate.rules).int64 = {gte: 0, lte: 1000000000000000}];
+  int64 bps_write_max = 8 [(validate.rules).int64 = {gte: 0, lte: 1000000000000000}];
+  int64 bps_write_max_length = 9 [(validate.rules).int64 = {gte: 0, lte: 4294967295}];
+  int64 iops_total = 10 [(validate.rules).int64 = {gte: 0, lte: 1000000000000000}];
+  int64 iops_total_max = 11 [(validate.rules).int64 = {gte: 0, lte: 1000000000000000}];
+  int64 iops_total_max_length = 12 [(validate.rules).int64 = {gte: 0, lte: 4294967295}];
+  int64 iops_read = 13 [(validate.rules).int64 = {gte: 0, lte: 1000000000000000}];
+  int64 iops_read_max = 14 [(validate.rules).int64 = {gte: 0, lte: 1000000000000000}];
+  int64 iops_read_max_length = 15 [(validate.rules).int64 = {gte: 0, lte: 4294967295}];
+  int64 iops_write = 16 [(validate.rules).int64 = {gte: 0, lte: 1000000000000000}];
+  int64 iops_write_max = 17 [(validate.rules).int64 = {gte: 0, lte: 1000000000000000}];
+  int64 iops_write_max_length = 18 [(validate.rules).int64 = {gte: 0, lte: 4294967295}];
+  int64 iops_size = 19 [(validate.rules).int64 = {gte: 0, lte: 1000000000000000}];
+}
+
+message DiskThrottleClass {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+  DiskThrottleLimits limits = 4;
+  int32 disk_count = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+  string validation_error = 8;
+}
+
+message ListDiskThrottleClassesRequest {}
+
+message ListDiskThrottleClassesResponse {
+  repeated DiskThrottleClass classes = 1;
+}
+
+message GetDiskThrottleClassRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateDiskThrottleClassRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 127
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  string description = 2 [(validate.rules).string = {max_len: 2000}];
+  DiskThrottleLimits limits = 3;
+}
+
+message UpdateDiskThrottleClassRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  optional string name = 2 [(validate.rules).string = {
+    min_len: 1
+    max_len: 127
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  optional string description = 3 [(validate.rules).string = {max_len: 2000}];
+  optional DiskThrottleLimits limits = 4;
+}
+
+message DeleteDiskThrottleClassRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
