@@ -161,16 +161,36 @@ export function formatThrottleSummary(limits: DiskThrottleLimits | undefined): s
   if (!limits) {
     return "";
   }
+  const parts = [
+    formatThrottleFamilySummary(limits, "bps"),
+    formatThrottleFamilySummary(limits, "iops"),
+  ].filter(Boolean);
+  if ((limits.iops_size ?? 0) > 0) {
+    parts.push(`${formatBytesIEC(limits.iops_size)} I/O`);
+  }
+  return parts.join(" · ");
+}
+
+export function formatThrottleFamilySummary(
+  limits: DiskThrottleLimits | undefined,
+  family: "bps" | "iops"
+): string {
+  if (!limits) {
+    return "";
+  }
   const parts: string[] = [];
-  if ((limits.bps_total ?? 0) > 0) {
-    parts.push(`${formatRateIEC(limits.bps_total)} total`);
-  } else {
-    if ((limits.bps_read ?? 0) > 0) {
-      parts.push(`${formatRateIEC(limits.bps_read)} read`);
+  if (family === "bps") {
+    if ((limits.bps_total ?? 0) > 0) {
+      parts.push(`${formatRateIEC(limits.bps_total)} total`);
+    } else {
+      if ((limits.bps_read ?? 0) > 0) {
+        parts.push(`${formatRateIEC(limits.bps_read)} read`);
+      }
+      if ((limits.bps_write ?? 0) > 0) {
+        parts.push(`${formatRateIEC(limits.bps_write)} write`);
+      }
     }
-    if ((limits.bps_write ?? 0) > 0) {
-      parts.push(`${formatRateIEC(limits.bps_write)} write`);
-    }
+    return parts.join(" · ");
   }
   if ((limits.iops_total ?? 0) > 0) {
     parts.push(`${formatCount(limits.iops_total)} IOPS total`);
@@ -181,9 +201,6 @@ export function formatThrottleSummary(limits: DiskThrottleLimits | undefined): s
     if ((limits.iops_write ?? 0) > 0) {
       parts.push(`${formatCount(limits.iops_write)} write IOPS`);
     }
-  }
-  if ((limits.iops_size ?? 0) > 0) {
-    parts.push(`${formatBytesIEC(limits.iops_size)} I/O`);
   }
   return parts.join(" · ");
 }
