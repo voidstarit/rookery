@@ -5,7 +5,8 @@ import { EntityLabels, useEntityLabels } from "../../shared/labels";
 import type { Disk, DiskThrottleClass, StorageBackend } from "../types";
 import { DiskDialog } from "./DiskDialog";
 import { DiskThrottleAssignmentDialog } from "./DiskThrottleAssignmentDialog";
-import { formatThrottleSummary } from "./throttle";
+import { DiskThrottleClassDialog } from "./DiskThrottleClassDialog";
+import { formatThrottleFamilySummary, formatThrottleSummary } from "./throttle";
 import { ImportDisksDialog } from "./ImportDisksDialog";
 import { StorageBackendDialog } from "./StorageBackendDialog";
 import { TemplateProvisioningDialog } from "./TemplateProvisioningDialog";
@@ -49,6 +50,7 @@ export function DisksTab() {
   const [diskError, setDiskError] = useState("");
   const [backendError, setBackendError] = useState("");
   const [diskDialogOpen, setDiskDialogOpen] = useState(false);
+  const [classDialog, setClassDialog] = useState<{ item: DiskThrottleClass | null } | null>(null);
   const [backendDialog, setBackendDialog] = useState<{ backend: StorageBackend | null } | null>(null);
   const [importBackend, setImportBackend] = useState<StorageBackend | null>(null);
   const [provisioningDisk, setProvisioningDisk] = useState<Disk | null>(null);
@@ -64,14 +66,28 @@ export function DisksTab() {
 
   useEffect(() => {
     const [section, second, third] = route.segments;
+    if (section === "disk-throttle-classes") {
+      setDiskDialogOpen(false);
+      setBackendDialog(null);
+      setImportBackend(null);
+      if (second === "new") {
+        setClassDialog({ item: null });
+        return;
+      }
+      const item = classes.find((entry) => String(entry.id) === second);
+      setClassDialog(second && third === "edit" && item ? { item } : null);
+      return;
+    }
     if (section === "disks") {
       setDiskDialogOpen(second === "new");
       setBackendDialog(null);
       setImportBackend(null);
+      setClassDialog(null);
       return;
     }
     if (section === "storage-backends") {
       setDiskDialogOpen(false);
+      setClassDialog(null);
       if (second === "new") {
         setBackendDialog({ backend: null });
         setImportBackend(null);
@@ -90,7 +106,8 @@ export function DisksTab() {
     setDiskDialogOpen(false);
     setBackendDialog(null);
     setImportBackend(null);
-  }, [route.path, backends]);
+    setClassDialog(null);
+  }, [route.path, backends, classes]);
 
   const publishDisks = (list: Disk[]) => {
     setDisks(list);
@@ -260,6 +277,33 @@ export function DisksTab() {
     }
   };
 
+  const deleteClass = async (item: DiskThrottleClass) => {
+    const assigned = disks.filter((disk) => disk.throttle_class_id === item.id);
+    if (assigned.length > 0) {
+      const names = assigned.slice(0, 5).map((disk) => disk.name).join(", ");
+      showToast(
+        `Class ${item.name} is assigned to ${assigned.length} disk(s): ${names}${assigned.length > 5 ? ", …" : ""}. Reassign or clear them first.`,
+        true
+      );
+      return;
+    }
+    if (!window.confirm(`Delete throttling class "${item.name}"?`)) {
+      return;
+    }
+    try {
+      await api(`/api/disk-throttle-classes/${item.id}`, { method: "DELETE" });
+      setClasses(classes.filter((entry) => entry.id !== item.id));
+      showToast(`Deleted throttling class ${item.name}`);
+      setDiskError("");
+      void loadClasses(false);
+      void loadDisks(false);
+    } catch (err) {
+      setDiskError(
+        `Could not delete ${item.name}: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  };
+
   const attached = disks.filter((disk) => disk.attached_vm_id).length;
   const diskSummary =
     disks.length === 0
@@ -274,6 +318,12 @@ export function DisksTab() {
         ? "Loading storage backends…"
         : "No storage backends registered"
       : `${backends.length} backend${backends.length === 1 ? "" : "s"} · ${totalBackendDisks} disk${totalBackendDisks === 1 ? "" : "s"}`;
+  const classSummary =
+    classes.length === 0
+      ? loading
+        ? "Loading throttling classes…"
+        : "No throttling classes defined"
+      : `${classes.length} class${classes.length === 1 ? "" : "es"}`;
 
   return (
     <>
@@ -568,6 +618,106 @@ export function DisksTab() {
           )}
         </div>
       </section>
+
+      <section class="panel panel-spaced" aria-labelledby="disk-throttle-classes-heading">
+        <div class="panel-head">
+          <div>
+            <h2 id="disk-throttle-classes-heading">Throttling classes</h2>
+            <p class="panel-subtitle">{classSummary} · configured limits apply on the next VM start</p>
+          </div>
+          <button class="button primary" type="button" onClick={() => navigate("/disk-throttle-classes/new")}>
+            <span class="button-plus" aria-hidden="true">
+              +
+            </span>
+            Add class
+          </button>
+        </div>
+
+        <div class="table-wrap">
+          {classes.length > 0 ? (
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Description</th>
+                  <th scope="col">Bandwidth</th>
+                  <th scope="col">IOPS</th>
+                  <th scope="col">Disks</th>
+                  <th scope="col" class="hide-sm">
+                    Updated
+                  </th>
+                  <th scope="col">
+                    <span class="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {classes.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <span class="vm-name">{item.name}</span>
+                      {item.validation_error ? (
+                        <span class="import-disk-badge" title={item.validation_error}>
+                          invalid limits
+                        </span>
+                      ) : null}
+                    </td>
+                    <td>{item.description || "—"}</td>
+                    <td class="mono">{formatThrottleFamilySummary(item.limits, "bps") || "unlimited"}</td>
+                    <td class="mono">{formatThrottleFamilySummary(item.limits, "iops") || "unlimited"}</td>
+                    <td class={item.disk_count ? "mono" : "mono muted"}>{String(item.disk_count || 0)}</td>
+                    <td class="updated hide-sm">{formatDate(item.updated_at)}</td>
+                    <td>
+                      <div class="actions">
+                        <button
+                          class="row-action"
+                          type="button"
+                          onClick={() => navigate(`/disk-throttle-classes/${item.id}/edit`)}
+                        >
+                          Edit
+                        </button>
+                        <button class="row-action danger" type="button" onClick={() => void deleteClass(item)}>
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div class="empty">
+              <div class="empty-mark" aria-hidden="true">
+                ◈
+              </div>
+              <h3>No throttling classes yet</h3>
+              <p>Define a reusable QEMU block-throttling policy and assign it to disks.</p>
+              <button class="button primary" type="button" onClick={() => navigate("/disk-throttle-classes/new")}>
+                Create a throttling class
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {classDialog ? (
+        <DiskThrottleClassDialog
+          key={classDialog.item ? `edit-${classDialog.item.id}` : "new"}
+          classItem={classDialog.item}
+          onClose={() => {
+            setClassDialog(null);
+            navigate("/disks", true);
+          }}
+          onSaved={(item) => {
+            setClassDialog(null);
+            navigate("/disks", true);
+            setDiskError("");
+            showToast(`${classDialog.item ? "Saved" : "Created"} throttling class ${item.name}`);
+            void loadClasses();
+            void loadDisks(false);
+          }}
+        />
+      ) : null}
 
       {provisioningDisk ? (
         <TemplateProvisioningDialog
