@@ -68,6 +68,7 @@ provider "rookery" {
 | --- | --- |
 | `rookery_storage_backend` | LVM thin-pool backend |
 | `rookery_disk` | Thin volume, host passthrough block device, template, or provisioned template clone |
+| `rookery_disk_throttle_class` | Reusable QEMU disk throttling policy (BPS, IOPS, bursts, I/O size) |
 | `rookery_media` | Read-only ISO/image path |
 | `rookery_network` | VPP bridge domain + isolated VRF |
 | `rookery_network_pipe` | L2 pipe pair between two networks |
@@ -145,6 +146,35 @@ object to extend the root partition and grow the filesystem. The reference
 script supports a DOS table with root followed by an extended/swap partition
 (the swap is moved and recreated with the same UUID/label) and a single-root
 partition. Other layouts are resized only within their current partition.
+
+`rookery_disk_throttle_class` defines a reusable QEMU block-throttling policy.
+The 19 limits are optional; zero means unset. BPS values are bytes per second,
+IOPS values are operations per second, burst lengths are seconds, and
+`iops_size` is bytes. A class must set at least one positive BPS or IOPS base.
+Removing a numeric attribute preserves its prior state value; set it to `0` to
+clear it. Assign a class to a disk with `throttle_class_id`; `0` means
+unlimited, and omitting the attribute preserves the current class. Templates
+cannot carry a class.
+
+```hcl
+resource "rookery_disk_throttle_class" "standard" {
+  name       = "standard"
+  bps_read   = 524288000
+  bps_write  = 314572800
+  iops_total = 2000
+}
+
+resource "rookery_disk" "root" {
+  name               = "app-vm0-root"
+  size_gb            = 20
+  storage_backend_id = rookery_storage_backend.pool.id
+  throttle_class_id  = rookery_disk_throttle_class.standard.id
+}
+```
+
+Limits are resolved at VM start, so class edits affect assigned disks on their
+next start. The feature is tested with QEMU 10.0.13; earlier versions are not
+verified.
 
 `rookery_network_pipe` exposes computed `endpoint_a_name` and
 `endpoint_b_name` values (`pipe<instance>.0` and `.1`) for use with
@@ -286,6 +316,7 @@ Each resource has a matching data source:
 | `rookery_status` | No arguments; current thin-pool and VPP readiness |
 | `rookery_storage_backend` | `id` or `name` |
 | `rookery_disk` | `id` or `name` |
+| `rookery_disk_throttle_class` | `id` or `name` |
 | `rookery_media` | `id` or `name` |
 | `rookery_network` | `id` or `name` |
 | `rookery_network_pipe` | `id`, or `network_a_id` + `network_b_id` |

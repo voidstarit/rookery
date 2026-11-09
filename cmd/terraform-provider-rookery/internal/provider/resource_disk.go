@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
@@ -22,6 +23,7 @@ var (
 	_ resource.Resource                = (*diskResource)(nil)
 	_ resource.ResourceWithConfigure   = (*diskResource)(nil)
 	_ resource.ResourceWithImportState = (*diskResource)(nil)
+	_ resource.ResourceWithModifyPlan  = (*diskResource)(nil)
 )
 
 type diskResource struct{ configuredResource }
@@ -44,6 +46,8 @@ type diskModel struct {
 	Source              types.String `tfsdk:"source"`
 	Protocol            types.String `tfsdk:"protocol"`
 	Locator             types.String `tfsdk:"locator"`
+	ThrottleClassID     types.Int64  `tfsdk:"throttle_class_id"`
+	ThrottleClassName   types.String `tfsdk:"throttle_class_name"`
 	DeletionState       types.String `tfsdk:"deletion_state"`
 	DeletionError       types.String `tfsdk:"deletion_error"`
 	HostDevice          types.String `tfsdk:"host_device"`
@@ -92,10 +96,17 @@ func (r *diskResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				Computed:    true,
 				Description: "Disk source (lvm-thin, host-device, kouja, ...).",
 			},
-			"protocol":       schema.StringAttribute{Computed: true, Description: "Attachment protocol."},
-			"locator":        schema.StringAttribute{Computed: true, Description: "Display locator for remote disks."},
-			"deletion_state": schema.StringAttribute{Computed: true, Description: "Asynchronous deletion state."},
-			"deletion_error": schema.StringAttribute{Computed: true, Description: "Last asynchronous deletion error."},
+			"protocol": schema.StringAttribute{Computed: true, Description: "Attachment protocol."},
+			"locator":  schema.StringAttribute{Computed: true, Description: "Display locator for remote disks."},
+			"throttle_class_id": schema.Int64Attribute{
+				Optional:      true,
+				Computed:      true,
+				Description:   "Optional disk throttling class id. 0 means unlimited.",
+				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
+			},
+			"throttle_class_name": schema.StringAttribute{Computed: true, Description: "Name of the assigned throttling class."},
+			"deletion_state":      schema.StringAttribute{Computed: true, Description: "Asynchronous deletion state."},
+			"deletion_error":      schema.StringAttribute{Computed: true, Description: "Last asynchronous deletion error."},
 			"storage_backend_id": schema.Int64Attribute{
 				Optional:      true,
 				Computed:      true,
@@ -145,6 +156,16 @@ func (r *diskResource) Create(ctx context.Context, req resource.CreateRequest, r
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	var config diskModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	classID, err := createThrottleClassID(config.ThrottleClassID, plan.ThrottleClassID)
+	if err != nil {
+		resp.Diagnostics.AddError("Create disk", err.Error())
+		return
+	}
 	client, err := r.requireClient()
 	if err != nil {
 		resp.Diagnostics.AddError("Create disk", err.Error())
@@ -167,6 +188,7 @@ func (r *diskResource) Create(ctx context.Context, req resource.CreateRequest, r
 		ProvisioningTimeout: plan.ProvisioningTimeout.ValueString(),
 		Provisioning:        provisioning,
 		HostDevice:          plan.HostDevice.ValueString(),
+		ThrottleClassId:     classID,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Create disk", err.Error())
@@ -220,6 +242,11 @@ func (r *diskResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	var config diskModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	client, err := r.requireClient()
 	if err != nil {
 		resp.Diagnostics.AddError("Update disk", err.Error())
@@ -227,12 +254,12 @@ func (r *diskResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 	callCtx, cancel := context.WithTimeout(ctx, client.Timeout())
 	defer cancel()
-	disk, err := client.Disks.UpdateDisk(callCtx, &rookeryv1.UpdateDiskRequest{
-		Id:                  plan.ID.ValueInt64(),
-		IsTemplate:          boolPointer(plan.IsTemplate),
-		ProvisioningScript:  stringPointer(plan.ProvisioningScript),
-		ProvisioningTimeout: stringPointer(plan.ProvisioningTimeout),
-	})
+	request, err := buildDiskUpdateRequest(plan, config.ThrottleClassID)
+	if err != nil {
+		resp.Diagnostics.AddError("Update disk", err.Error())
+		return
+	}
+	disk, err := client.Disks.UpdateDisk(callCtx, request)
 	if err != nil {
 		resp.Diagnostics.AddError("Update disk", err.Error())
 		return
@@ -304,6 +331,81 @@ func (r *diskResource) ImportState(ctx context.Context, req resource.ImportState
 	importInt64ID(ctx, req, resp)
 }
 
+func (r *diskResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	var plan diskModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	var config diskModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if plan.IsTemplate.IsNull() || plan.IsTemplate.IsUnknown() || !plan.IsTemplate.ValueBool() {
+		return
+	}
+	if err := validateTemplateThrottleClassConfig(true, config.ThrottleClassID); err != nil {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("throttle_class_id"),
+			"Template cannot have a throttling class",
+			err.Error(),
+		)
+	}
+}
+
+func validateTemplateThrottleClassConfig(isTemplate bool, config types.Int64) error {
+	if !isTemplate || config.IsNull() {
+		return nil
+	}
+	if config.IsUnknown() || config.ValueInt64() > 0 {
+		return fmt.Errorf("set throttle_class_id to 0 or remove it when is_template is true")
+	}
+	return nil
+}
+
+func createThrottleClassID(config, plan types.Int64) (int64, error) {
+	if config.IsNull() {
+		return 0, nil
+	}
+	if !config.IsUnknown() {
+		return config.ValueInt64(), nil
+	}
+	if !plan.IsUnknown() && !plan.IsNull() {
+		return plan.ValueInt64(), nil
+	}
+	return 0, fmt.Errorf("throttle_class_id must be known at apply time")
+}
+
+func updateThrottleClassID(config, plan types.Int64) (*int64, error) {
+	if config.IsNull() {
+		return nil, nil
+	}
+	if !config.IsUnknown() {
+		value := config.ValueInt64()
+		return &value, nil
+	}
+	if !plan.IsUnknown() && !plan.IsNull() {
+		value := plan.ValueInt64()
+		return &value, nil
+	}
+	return nil, fmt.Errorf("throttle_class_id must be known at apply time")
+}
+
+func buildDiskUpdateRequest(plan diskModel, configClass types.Int64) (*rookeryv1.UpdateDiskRequest, error) {
+	classID, err := updateThrottleClassID(configClass, plan.ThrottleClassID)
+	if err != nil {
+		return nil, err
+	}
+	return &rookeryv1.UpdateDiskRequest{
+		Id:                  plan.ID.ValueInt64(),
+		IsTemplate:          boolPointer(plan.IsTemplate),
+		ProvisioningScript:  stringPointer(plan.ProvisioningScript),
+		ProvisioningTimeout: stringPointer(plan.ProvisioningTimeout),
+		ThrottleClassId:     classID,
+	}, nil
+}
+
 func setDiskState(state *diskModel, disk *rookeryv1.Disk) {
 	state.ID = types.Int64Value(disk.GetId())
 	state.Name = types.StringValue(disk.GetName())
@@ -317,6 +419,8 @@ func setDiskState(state *diskModel, disk *rookeryv1.Disk) {
 	state.Source = types.StringValue(disk.GetSource())
 	state.Protocol = optionalStringValue(disk.GetProtocol())
 	state.Locator = optionalStringValue(disk.GetLocator())
+	state.ThrottleClassID = types.Int64Value(disk.GetThrottleClassId())
+	state.ThrottleClassName = optionalStringValue(disk.GetThrottleClassName())
 	state.DeletionState = optionalStringValue(disk.GetDeletionState())
 	state.DeletionError = optionalStringValue(disk.GetDeletionError())
 	if disk.GetSource() == "host-device" {

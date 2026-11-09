@@ -43,9 +43,13 @@ func TestSetDiskStateHostDevice(t *testing.T) {
 	setDiskState(&state, &rookeryv1.Disk{
 		Id: 1, Name: "host-data", SizeGb: 10, SizeBytes: 10 << 30,
 		Device: "/dev/mapper/data", Source: "host-device",
+		ThrottleClassId: 4, ThrottleClassName: "standard",
 	})
 	if state.SizeBytes.ValueInt64() != 10<<30 {
 		t.Fatalf("size bytes = %v", state.SizeBytes)
+	}
+	if state.ThrottleClassID.ValueInt64() != 4 || state.ThrottleClassName.ValueString() != "standard" {
+		t.Fatalf("throttle state = %+v", state)
 	}
 	if state.Source.ValueString() != "host-device" || state.HostDevice.ValueString() != "/dev/mapper/data" {
 		t.Fatalf("host state = %+v", state)
@@ -54,6 +58,9 @@ func TestSetDiskStateHostDevice(t *testing.T) {
 	setDiskState(&state, &rookeryv1.Disk{Id: 2, Name: "lvm", Source: "lvm-thin"})
 	if !state.HostDevice.IsNull() {
 		t.Fatalf("lvm host device = %v, want null", state.HostDevice)
+	}
+	if state.ThrottleClassID.ValueInt64() != 0 || !state.ThrottleClassName.IsNull() {
+		t.Fatalf("lvm throttle state = %+v", state)
 	}
 	if !state.SizeBytes.IsNull() {
 		t.Fatalf("lvm size bytes = %v, want null", state.SizeBytes)

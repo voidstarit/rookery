@@ -32,20 +32,21 @@ type ClientConfig struct {
 type Client struct {
 	Conn *grpc.ClientConn
 
-	System          rookeryv1.SystemServiceClient
-	VMs             rookeryv1.VMServiceClient
-	Disks           rookeryv1.DiskServiceClient
-	Media           rookeryv1.MediaServiceClient
-	Networks        rookeryv1.NetworkServiceClient
-	Interfaces      rookeryv1.InterfaceServiceClient
-	ACLs            rookeryv1.ACLServiceClient
-	RouteTables     rookeryv1.RouteTableServiceClient
-	VNFs            rookeryv1.VNFServiceClient
-	StorageBackends rookeryv1.StorageBackendServiceClient
-	HostInterfaces  rookeryv1.HostServiceClient
-	Troubleshoot    rookeryv1.TroubleshootServiceClient
-	Captures        rookeryv1.CaptureServiceClient
-	Labels          rookeryv1.LabelServiceClient
+	System              rookeryv1.SystemServiceClient
+	VMs                 rookeryv1.VMServiceClient
+	Disks               rookeryv1.DiskServiceClient
+	DiskThrottleClasses rookeryv1.DiskThrottleServiceClient
+	Media               rookeryv1.MediaServiceClient
+	Networks            rookeryv1.NetworkServiceClient
+	Interfaces          rookeryv1.InterfaceServiceClient
+	ACLs                rookeryv1.ACLServiceClient
+	RouteTables         rookeryv1.RouteTableServiceClient
+	VNFs                rookeryv1.VNFServiceClient
+	StorageBackends     rookeryv1.StorageBackendServiceClient
+	HostInterfaces      rookeryv1.HostServiceClient
+	Troubleshoot        rookeryv1.TroubleshootServiceClient
+	Captures            rookeryv1.CaptureServiceClient
+	Labels              rookeryv1.LabelServiceClient
 
 	timeout time.Duration
 }
@@ -102,22 +103,23 @@ func NewClient(config ClientConfig) (*Client, error) {
 		return nil, fmt.Errorf("create Rookery gRPC client: %w", err)
 	}
 	return &Client{
-		Conn:            conn,
-		System:          rookeryv1.NewSystemServiceClient(conn),
-		VMs:             rookeryv1.NewVMServiceClient(conn),
-		Disks:           rookeryv1.NewDiskServiceClient(conn),
-		Media:           rookeryv1.NewMediaServiceClient(conn),
-		Networks:        rookeryv1.NewNetworkServiceClient(conn),
-		Interfaces:      rookeryv1.NewInterfaceServiceClient(conn),
-		ACLs:            rookeryv1.NewACLServiceClient(conn),
-		RouteTables:     rookeryv1.NewRouteTableServiceClient(conn),
-		VNFs:            rookeryv1.NewVNFServiceClient(conn),
-		StorageBackends: rookeryv1.NewStorageBackendServiceClient(conn),
-		HostInterfaces:  rookeryv1.NewHostServiceClient(conn),
-		Troubleshoot:    rookeryv1.NewTroubleshootServiceClient(conn),
-		Captures:        rookeryv1.NewCaptureServiceClient(conn),
-		Labels:          rookeryv1.NewLabelServiceClient(conn),
-		timeout:         timeout,
+		Conn:                conn,
+		System:              rookeryv1.NewSystemServiceClient(conn),
+		VMs:                 rookeryv1.NewVMServiceClient(conn),
+		Disks:               rookeryv1.NewDiskServiceClient(conn),
+		DiskThrottleClasses: rookeryv1.NewDiskThrottleServiceClient(conn),
+		Media:               rookeryv1.NewMediaServiceClient(conn),
+		Networks:            rookeryv1.NewNetworkServiceClient(conn),
+		Interfaces:          rookeryv1.NewInterfaceServiceClient(conn),
+		ACLs:                rookeryv1.NewACLServiceClient(conn),
+		RouteTables:         rookeryv1.NewRouteTableServiceClient(conn),
+		VNFs:                rookeryv1.NewVNFServiceClient(conn),
+		StorageBackends:     rookeryv1.NewStorageBackendServiceClient(conn),
+		HostInterfaces:      rookeryv1.NewHostServiceClient(conn),
+		Troubleshoot:        rookeryv1.NewTroubleshootServiceClient(conn),
+		Captures:            rookeryv1.NewCaptureServiceClient(conn),
+		Labels:              rookeryv1.NewLabelServiceClient(conn),
+		timeout:             timeout,
 	}, nil
 }
 
