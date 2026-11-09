@@ -40,6 +40,8 @@ func (d *diskDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 			"source":               dschema.StringAttribute{Computed: true},
 			"protocol":             dschema.StringAttribute{Computed: true},
 			"locator":              dschema.StringAttribute{Computed: true},
+			"throttle_class_id":    dschema.Int64Attribute{Computed: true},
+			"throttle_class_name":  dschema.StringAttribute{Computed: true},
 			"deletion_state":       dschema.StringAttribute{Computed: true},
 			"deletion_error":       dschema.StringAttribute{Computed: true},
 			"host_device":          dschema.StringAttribute{Computed: true},

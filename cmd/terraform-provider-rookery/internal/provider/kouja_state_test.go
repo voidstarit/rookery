@@ -68,10 +68,14 @@ func TestSetDiskStateRemoteFields(t *testing.T) {
 		Id: 7, Name: "remote", SizeGb: 5, Source: "kouja", Protocol: "iscsi",
 		Locator: "10.0.0.1:3260 iqn.2026-11.io.example:disk", DeletionState: "deleting",
 		DeletionError: "slow", Device: "/dev/ignored",
+		ThrottleClassId: 9, ThrottleClassName: "fast",
 	})
 	if state.Protocol.ValueString() != "iscsi" || state.Locator.ValueString() == "" ||
 		state.DeletionState.ValueString() != "deleting" || state.DeletionError.ValueString() != "slow" {
 		t.Fatalf("state = %+v", state)
+	}
+	if state.ThrottleClassID.ValueInt64() != 9 || state.ThrottleClassName.ValueString() != "fast" {
+		t.Fatalf("throttle state = %+v", state)
 	}
 	if !state.HostDevice.IsNull() {
 		t.Fatal("remote disk was treated as a host device")

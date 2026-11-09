@@ -28,6 +28,10 @@ data "rookery_disk" "root" {
   name = "app-vm0-root"
 }
 
+data "rookery_disk_throttle_class" "standard" {
+  name = "standard"
+}
+
 data "rookery_media" "installer" {
   name = "debian-13"
 }

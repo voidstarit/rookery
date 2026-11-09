@@ -119,6 +119,7 @@ func (p *RookeryProvider) Resources(_ context.Context) []func() resource.Resourc
 	return []func() resource.Resource{
 		NewStorageBackendResource,
 		NewDiskResource,
+		NewDiskThrottleClassResource,
 		NewMediaResource,
 		NewNetworkResource,
 		NewInterfaceResource,
@@ -142,6 +143,7 @@ func (p *RookeryProvider) DataSources(_ context.Context) []func() datasource.Dat
 		NewStatusDataSource,
 		NewStorageBackendDataSource,
 		NewDiskDataSource,
+		NewDiskThrottleClassDataSource,
 		NewMediaDataSource,
 		NewNetworkDataSource,
 		NewInterfaceDataSource,

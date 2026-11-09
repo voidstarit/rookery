@@ -80,10 +80,18 @@ resource "rookery_vpp_interface_addresses" "pipe_a" {
   ]
 }
 
+resource "rookery_disk_throttle_class" "standard" {
+  name       = "standard"
+  bps_read   = 524288000
+  bps_write  = 314572800
+  iops_total = 2000
+}
+
 resource "rookery_disk" "root" {
   name               = "app-vm0-root"
   size_gb            = 20
   storage_backend_id = rookery_storage_backend.pool.id
+  throttle_class_id  = rookery_disk_throttle_class.standard.id
   labels             = ["os"]
 }
 
