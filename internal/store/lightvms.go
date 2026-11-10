@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -39,38 +41,48 @@ type LightVMConsole struct {
 	Position int    `json:"position"`
 }
 
+// LightVMVirtioFSShare is one additional host directory exported to a LightVM.
+type LightVMVirtioFSShare struct {
+	ID       int64  `json:"id"`
+	HostPath string `json:"host_path"`
+	Tag      string `json:"tag"`
+	ReadOnly bool   `json:"read_only"`
+	Position int    `json:"position"`
+}
+
 // LightVM is a container-backed microVM definition. It is inventory-only until
 // a runtime is implemented; kernels and initramfs images must exist.
 type LightVM struct {
-	ID                  string           `json:"id"`
-	Name                string           `json:"name"`
-	Description         string           `json:"description"`
-	VCPUs               int              `json:"vcpus"`
-	MemoryMB            int              `json:"memory_mb"`
-	ConsoleEnabled      bool             `json:"console_enabled"`
-	CgroupClass         string           `json:"cgroup_class,omitempty"`
-	KernelID            int64            `json:"kernel_id"`
-	KernelName          string           `json:"kernel_name"`
-	InitramfsID         int64            `json:"initramfs_id"`
-	InitramfsName       string           `json:"initramfs_name"`
-	Image               string           `json:"image"`
-	Env                 []LightVMEnvVar  `json:"env"`
-	ExecutablePath      string           `json:"executable_path"`
-	ExecutableArgs      []string         `json:"executable_args"`
-	Append              string           `json:"append"`
-	Consoles            []LightVMConsole `json:"consoles"`
-	Status              string           `json:"status"`
-	DesiredState        string           `json:"desired_state"`
-	LifecycleGeneration int64            `json:"lifecycle_generation"`
-	KernelPath          string           `json:"-"`
-	InitramfsPath       string           `json:"-"`
-	DiskIDs             []int64          `json:"disk_ids,omitempty"`
-	Disks               []VMDisk         `json:"disks,omitempty"`
-	ReplaceDiskIDs      bool             `json:"-"`
-	InterfaceIDs        []int64          `json:"interface_ids,omitempty"`
-	Interfaces          []VMInterface    `json:"interfaces,omitempty"`
-	CreatedAt           time.Time        `json:"created_at"`
-	UpdatedAt           time.Time        `json:"updated_at"`
+	ID                  string                 `json:"id"`
+	Name                string                 `json:"name"`
+	Description         string                 `json:"description"`
+	VCPUs               int                    `json:"vcpus"`
+	MemoryMB            int                    `json:"memory_mb"`
+	ConsoleEnabled      bool                   `json:"console_enabled"`
+	CgroupClass         string                 `json:"cgroup_class,omitempty"`
+	KernelID            int64                  `json:"kernel_id"`
+	KernelName          string                 `json:"kernel_name"`
+	InitramfsID         int64                  `json:"initramfs_id"`
+	InitramfsName       string                 `json:"initramfs_name"`
+	Image               string                 `json:"image"`
+	Env                 []LightVMEnvVar        `json:"env"`
+	ExecutablePath      string                 `json:"executable_path"`
+	ExecutableArgs      []string               `json:"executable_args"`
+	Append              string                 `json:"append"`
+	Consoles            []LightVMConsole       `json:"consoles"`
+	Status              string                 `json:"status"`
+	DesiredState        string                 `json:"desired_state"`
+	LifecycleGeneration int64                  `json:"lifecycle_generation"`
+	KernelPath          string                 `json:"-"`
+	InitramfsPath       string                 `json:"-"`
+	DiskIDs             []int64                `json:"disk_ids,omitempty"`
+	Disks               []VMDisk               `json:"disks,omitempty"`
+	VirtioFSShares      []LightVMVirtioFSShare `json:"virtiofs_shares,omitempty"`
+	ReplaceDiskIDs      bool                   `json:"-"`
+	InterfaceIDs        []int64                `json:"interface_ids,omitempty"`
+	Interfaces          []VMInterface          `json:"interfaces,omitempty"`
+	CreatedAt           time.Time              `json:"created_at"`
+	UpdatedAt           time.Time              `json:"updated_at"`
 }
 
 func normalizeLightVMDiskIDs(ids []int64) ([]int64, error) {
@@ -92,9 +104,9 @@ func normalizeLightVMDiskIDs(ids []int64) ([]int64, error) {
 	return out, nil
 }
 
-func validateLightVMDeviceBudget(existingDisks, existingInterfaces, newDisks, newInterfaces int, create bool) error {
-	newTotal := newDisks + newInterfaces
-	existingTotal := existingDisks + existingInterfaces
+func validateLightVMDeviceBudget(existingDisks, existingInterfaces, existingShares, newDisks, newInterfaces, newShares int, create bool) error {
+	newTotal := newDisks + newInterfaces + newShares
+	existingTotal := existingDisks + existingInterfaces + existingShares
 	limit := func() error {
 		return fmt.Errorf("%w: %d devices requested, existing %d, limit %d",
 			ErrLightVMDeviceLimit, newTotal, existingTotal, MaxLightVMDevices)
@@ -115,6 +127,64 @@ func validateLightVMDeviceBudget(existingDisks, existingInterfaces, newDisks, ne
 		return limit()
 	}
 	return nil
+}
+
+func normalizeLightVMVirtioFSShares(shares []LightVMVirtioFSShare) ([]LightVMVirtioFSShare, error) {
+	seenTags := make(map[string]struct{}, len(shares))
+	out := make([]LightVMVirtioFSShare, 0, len(shares))
+	for _, share := range shares {
+		hostPath := strings.TrimSpace(share.HostPath)
+		if hostPath == "" || strings.ContainsRune(hostPath, 0) {
+			return nil, fmt.Errorf("%w: host_path is required", ErrInvalidVirtioFSShare)
+		}
+		if !filepath.IsAbs(hostPath) {
+			return nil, fmt.Errorf("%w: host_path must be absolute", ErrInvalidVirtioFSShare)
+		}
+		hostPath = filepath.Clean(hostPath)
+		info, err := os.Stat(hostPath)
+		if err != nil {
+			return nil, fmt.Errorf("%w: host_path %s: %v", ErrInvalidVirtioFSShare, hostPath, err)
+		}
+		if !info.IsDir() {
+			return nil, fmt.Errorf("%w: host_path %s is not a directory", ErrInvalidVirtioFSShare, hostPath)
+		}
+		tag := strings.TrimSpace(share.Tag)
+		if !validLightVMShareTag(tag) {
+			return nil, fmt.Errorf("%w: tag %q must match [A-Za-z0-9][A-Za-z0-9._-]* and be at most 64 characters", ErrInvalidVirtioFSShare, tag)
+		}
+		if strings.EqualFold(tag, "rootfs") {
+			return nil, fmt.Errorf("%w: tag %q is reserved for the container rootfs", ErrInvalidVirtioFSShare, tag)
+		}
+		key := strings.ToLower(tag)
+		if _, ok := seenTags[key]; ok {
+			return nil, fmt.Errorf("%w: tag %q is duplicated", ErrInvalidVirtioFSShare, tag)
+		}
+		seenTags[key] = struct{}{}
+		out = append(out, LightVMVirtioFSShare{
+			HostPath: hostPath,
+			Tag:      tag,
+			ReadOnly: share.ReadOnly,
+			Position: len(out),
+		})
+	}
+	return out, nil
+}
+
+func validLightVMShareTag(tag string) bool {
+	if tag == "" || len(tag) > 64 {
+		return false
+	}
+	for index, char := range tag {
+		switch {
+		case char >= 'A' && char <= 'Z':
+		case char >= 'a' && char <= 'z':
+		case char >= '0' && char <= '9':
+		case index > 0 && (char == '.' || char == '_' || char == '-'):
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 const lightVMSelect = `
@@ -154,6 +224,9 @@ func (s *Store) ListLightVMs(ctx context.Context) ([]LightVM, error) {
 	if err := s.loadLightVMDisks(ctx, vms); err != nil {
 		return nil, err
 	}
+	if err := s.loadLightVMVirtioFSShares(ctx, vms); err != nil {
+		return nil, err
+	}
 	return vms, nil
 }
 
@@ -175,6 +248,9 @@ func (s *Store) GetLightVM(ctx context.Context, id string) (LightVM, error) {
 		return LightVM{}, err
 	}
 	if err := s.loadLightVMDisks(ctx, items); err != nil {
+		return LightVM{}, err
+	}
+	if err := s.loadLightVMVirtioFSShares(ctx, items); err != nil {
 		return LightVM{}, err
 	}
 	return items[0], nil
@@ -215,7 +291,11 @@ func (s *Store) CreateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 			return LightVM{}, err
 		}
 	}
-	if err := validateLightVMDeviceBudget(0, 0, len(diskIDs), len(interfaceIDs), true); err != nil {
+	shares, err := normalizeLightVMVirtioFSShares(vm.VirtioFSShares)
+	if err != nil {
+		return LightVM{}, err
+	}
+	if err := validateLightVMDeviceBudget(0, 0, 0, len(diskIDs), len(interfaceIDs), len(shares), true); err != nil {
 		return LightVM{}, err
 	}
 	envJSON, err := marshalLightVMEnv(vm.Env)
@@ -258,6 +338,9 @@ func (s *Store) CreateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 			VALUES (NULL, ?, ?, ?)`, vm.ID, diskID, position); err != nil {
 			return LightVM{}, s.workloadDiskAttachError(ctx, tx, err, diskID)
 		}
+	}
+	if err := insertLightVMVirtioFSShares(ctx, tx, vm.ID, shares); err != nil {
+		return LightVM{}, err
 	}
 	if err := insertLightVMConsoles(ctx, tx, vm.ID, consoles); err != nil {
 		return LightVM{}, err
@@ -309,8 +392,12 @@ func (s *Store) UpdateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 			}
 		}
 	}
-	if err := validateLightVMDeviceBudget(len(existing.Disks), len(existing.Interfaces),
-		len(diskIDs), len(interfaceIDs), false); err != nil {
+	shares, err := normalizeLightVMVirtioFSShares(vm.VirtioFSShares)
+	if err != nil {
+		return LightVM{}, err
+	}
+	if err := validateLightVMDeviceBudget(len(existing.Disks), len(existing.Interfaces), len(existing.VirtioFSShares),
+		len(diskIDs), len(interfaceIDs), len(shares), false); err != nil {
 		return LightVM{}, err
 	}
 	envJSON, err := marshalLightVMEnv(vm.Env)
@@ -370,6 +457,12 @@ func (s *Store) UpdateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 				return LightVM{}, s.workloadDiskAttachError(ctx, tx, err, diskID)
 			}
 		}
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM lightvm_virtiofs_shares WHERE lightvm_id = ?`, vm.ID); err != nil {
+		return LightVM{}, fmt.Errorf("clear lightvm virtiofs shares: %w", err)
+	}
+	if err := insertLightVMVirtioFSShares(ctx, tx, vm.ID, shares); err != nil {
+		return LightVM{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM lightvm_consoles WHERE lightvm_id = ?`, vm.ID); err != nil {
 		return LightVM{}, fmt.Errorf("clear lightvm consoles: %w", err)
@@ -478,6 +571,26 @@ func (s *Store) normalizeLightVMInterfaceIDs(ctx context.Context, lightVMID stri
 	return unique, nil
 }
 
+func insertLightVMVirtioFSShares(ctx context.Context, tx *sql.Tx, lightVMID string, shares []LightVMVirtioFSShare) error {
+	for position, share := range shares {
+		readOnly := 0
+		if share.ReadOnly {
+			readOnly = 1
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO lightvm_virtiofs_shares
+				(lightvm_id, host_path, tag, read_only, position)
+			VALUES (?, ?, ?, ?, ?)`,
+			lightVMID, share.HostPath, share.Tag, readOnly, position); err != nil {
+			if isUniqueViolation(err) {
+				return fmt.Errorf("%w: tag %q is already used", ErrInvalidVirtioFSShare, share.Tag)
+			}
+			return fmt.Errorf("insert lightvm virtiofs share: %w", err)
+		}
+	}
+	return nil
+}
+
 func insertLightVMInterfaces(ctx context.Context, tx *sql.Tx, lightVMID string, interfaceIDs []int64) error {
 	for position, interfaceID := range interfaceIDs {
 		if _, err := tx.ExecContext(ctx, `
@@ -543,6 +656,44 @@ func (s *Store) loadLightVMDisks(ctx context.Context, vms []LightVM) error {
 		vms[i].DiskIDs = make([]int64, 0, len(vms[i].Disks))
 		for _, disk := range vms[i].Disks {
 			vms[i].DiskIDs = append(vms[i].DiskIDs, disk.ID)
+		}
+	}
+	return nil
+}
+
+// loadLightVMVirtioFSShares fills LightVM.VirtioFSShares for the supplied records.
+func (s *Store) loadLightVMVirtioFSShares(ctx context.Context, vms []LightVM) error {
+	if len(vms) == 0 {
+		return nil
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT lightvm_id, id, host_path, tag, read_only, position
+		FROM lightvm_virtiofs_shares
+		ORDER BY lightvm_id, position, id`)
+	if err != nil {
+		return fmt.Errorf("query lightvm virtiofs shares: %w", err)
+	}
+	defer rows.Close()
+	byVM := make(map[string][]LightVMVirtioFSShare)
+	for rows.Next() {
+		var (
+			lightVMID string
+			share     LightVMVirtioFSShare
+			readOnly  int64
+		)
+		if err := rows.Scan(&lightVMID, &share.ID, &share.HostPath, &share.Tag, &readOnly, &share.Position); err != nil {
+			return err
+		}
+		share.ReadOnly = readOnly != 0
+		byVM[lightVMID] = append(byVM[lightVMID], share)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate lightvm virtiofs shares: %w", err)
+	}
+	for i := range vms {
+		vms[i].VirtioFSShares = byVM[vms[i].ID]
+		if vms[i].VirtioFSShares == nil {
+			vms[i].VirtioFSShares = []LightVMVirtioFSShare{}
 		}
 	}
 	return nil

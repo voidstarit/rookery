@@ -34,7 +34,7 @@ const (
 
 // QEMURunner is the QEMU subset used by the LightVM runtime.
 type QEMURunner interface {
-	StartLightVMWithVirtioFSAndPlan(ctx context.Context, vm store.LightVM, rootfs qemu.LightVMVirtioFS, plan qemu.StartPlan) (bool, error)
+	StartLightVMWithVirtioFSAndPlan(ctx context.Context, vm store.LightVM, rootfs qemu.LightVMVirtioFS, shares []qemu.LightVMVirtioFS, plan qemu.StartPlan) (bool, error)
 	LightVMRunState(ctx context.Context, id string) (string, error)
 	StopLightVM(ctx context.Context, id string) error
 	RunningLightVM(id string) bool

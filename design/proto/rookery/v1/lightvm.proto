@@ -127,6 +127,18 @@ message LightVMConsole {
   string socket = 4;
 }
 
+message LightVMVirtioFSShare {
+  int64 id = 1;
+  string host_path = 2 [(validate.rules).string = {min_len: 1, max_len: 4096}];
+  string tag = 3 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  optional bool read_only = 4;
+  int32 position = 5;
+}
+
 message LightVM {
   string id = 1;
   string name = 2;
@@ -155,6 +167,7 @@ message LightVM {
   repeated int64 disk_ids = 25;
   repeated VMDisk disks = 26;
   optional string run_state = 27;
+  repeated LightVMVirtioFSShare virtiofs_shares = 28;
 }
 
 message ListLightVMsRequest {}
@@ -197,6 +210,9 @@ message CreateLightVMRequest {
     max_items: 32
     items: {int64: {gt: 0}}
   }];
+  repeated LightVMVirtioFSShare virtiofs_shares = 17 [(validate.rules).repeated = {
+    max_items: 24
+  }];
 }
 
 message UpdateLightVMRequest {
@@ -231,6 +247,9 @@ message UpdateLightVMRequest {
     items: {int64: {gt: 0}}
   }];
   optional bool replace_disk_ids = 18;
+  repeated LightVMVirtioFSShare virtiofs_shares = 19 [(validate.rules).repeated = {
+    max_items: 24
+  }];
 }
 
 message DeleteLightVMRequest {

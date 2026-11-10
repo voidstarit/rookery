@@ -28,7 +28,7 @@ func testLightVM() store.LightVM {
 
 func buildLightVMArgsForTest(t *testing.T, vm store.LightVM, consoles []lightVMConsoleArg, pidfile, monitor string, rootfs LightVMVirtioFS) string {
 	t.Helper()
-	args, err := buildLightVMArgs(vm, consoles, pidfile, monitor, rootfs, StartPlan{}, nil)
+	args, err := buildLightVMArgs(vm, consoles, pidfile, monitor, rootfs, nil, StartPlan{}, nil)
 	if err != nil {
 		t.Fatalf("buildLightVMArgs: %v", err)
 	}
@@ -83,6 +83,32 @@ func TestBuildLightVMArgs(t *testing.T) {
 	}
 	if strings.Contains(args, "-machine") {
 		t.Fatalf("args %q should not override the QEMU machine type", args)
+	}
+}
+
+func TestBuildLightVMArgsWithVirtioFShares(t *testing.T) {
+	vm := testLightVM()
+	args, err := buildLightVMArgs(vm, []lightVMConsoleArg{{SocketPath: "/tmp/console", PortName: "org.example.console"}},
+		"/tmp/pid", "/tmp/monitor", LightVMVirtioFS{SocketPath: "/tmp/rootfs", Tag: "rootfs"},
+		[]LightVMVirtioFS{
+			{SocketPath: "/tmp/share1", Tag: "tag1", ReadOnly: true},
+			{SocketPath: "/tmp/share2", Tag: "tag2"},
+		}, StartPlan{}, nil)
+	if err != nil {
+		t.Fatalf("buildLightVMArgs: %v", err)
+	}
+	joined := strings.Join(args, " ")
+	for _, want := range []string{
+		"-chardev socket,id=fs0,path=/tmp/rootfs",
+		"-device vhost-user-fs-pci,chardev=fs0,tag=rootfs",
+		"-chardev socket,id=fs1,path=/tmp/share1",
+		"-device vhost-user-fs-pci,chardev=fs1,tag=tag1",
+		"-chardev socket,id=fs2,path=/tmp/share2",
+		"-device vhost-user-fs-pci,chardev=fs2,tag=tag2",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("args %q do not contain %q", joined, want)
+		}
 	}
 }
 

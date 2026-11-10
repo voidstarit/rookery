@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/voidstarit/rookery/internal/store"
@@ -334,6 +336,144 @@ func TestLightVMDeviceBudgetAndGeneration(t *testing.T) {
 	}
 	if read.LifecycleGeneration != 3 {
 		t.Fatalf("read changed generation to %d", read.LifecycleGeneration)
+	}
+}
+
+func TestLightVMVirtioFSShares(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	kernel := createKernel(t, st, "vmlinuz-6.12")
+	initramfs := createInitramfs(t, st, "initramfs-6.12")
+	dir1 := filepath.Join(t.TempDir(), "share-one")
+	dir2 := filepath.Join(t.TempDir(), "share-two")
+	if err := os.MkdirAll(dir1, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dir2, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	created, err := st.CreateLightVM(ctx, store.LightVM{
+		Name: "share-app", VCPUs: 1, MemoryMB: 256,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+		Image: "alpine", ExecutablePath: "/bin/sh",
+		VirtioFSShares: []store.LightVMVirtioFSShare{
+			{HostPath: dir1, Tag: "tag1", ReadOnly: true},
+			{HostPath: dir2, Tag: "tag2", ReadOnly: false},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create lightvm with shares: %v", err)
+	}
+	if len(created.VirtioFSShares) != 2 ||
+		created.VirtioFSShares[0].Tag != "tag1" || !created.VirtioFSShares[0].ReadOnly ||
+		created.VirtioFSShares[1].Tag != "tag2" || created.VirtioFSShares[1].ReadOnly {
+		t.Fatalf("created shares = %+v", created.VirtioFSShares)
+	}
+	if created.VirtioFSShares[0].HostPath != dir1 || created.VirtioFSShares[1].HostPath != dir2 {
+		t.Fatalf("share paths = %+v", created.VirtioFSShares)
+	}
+
+	updated, err := st.UpdateLightVM(ctx, store.LightVM{
+		ID: created.ID, Name: created.Name, VCPUs: created.VCPUs, MemoryMB: created.MemoryMB,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+		Image: created.Image, ExecutablePath: created.ExecutablePath,
+		VirtioFSShares: []store.LightVMVirtioFSShare{
+			{HostPath: dir2, Tag: "data", ReadOnly: true},
+		},
+	})
+	if err != nil {
+		t.Fatalf("update shares: %v", err)
+	}
+	if len(updated.VirtioFSShares) != 1 || updated.VirtioFSShares[0].Tag != "data" ||
+		!updated.VirtioFSShares[0].ReadOnly {
+		t.Fatalf("updated shares = %+v", updated.VirtioFSShares)
+	}
+	if got, err := st.GetLightVM(ctx, created.ID); err != nil || len(got.VirtioFSShares) != 1 {
+		t.Fatalf("get shares = %+v, %v", got.VirtioFSShares, err)
+	}
+
+	filePath := filepath.Join(dir1, "file")
+	if err := os.WriteFile(filePath, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name  string
+		share store.LightVMVirtioFSShare
+	}{
+		{name: "empty path", share: store.LightVMVirtioFSShare{Tag: "x"}},
+		{name: "file path", share: store.LightVMVirtioFSShare{HostPath: filePath, Tag: "x"}},
+		{name: "relative", share: store.LightVMVirtioFSShare{HostPath: "relative", Tag: "x"}},
+		{name: "missing", share: store.LightVMVirtioFSShare{HostPath: filepath.Join(dir1, "missing"), Tag: "x"}},
+		{name: "rootfs", share: store.LightVMVirtioFSShare{HostPath: dir1, Tag: "rootfs"}},
+		{name: "bad tag", share: store.LightVMVirtioFSShare{HostPath: dir1, Tag: "bad tag"}},
+	} {
+		_, err := st.CreateLightVM(ctx, store.LightVM{
+			Name: "bad-" + tc.name, VCPUs: 1, MemoryMB: 256,
+			KernelID: kernel.ID, InitramfsID: initramfs.ID,
+			Image: "alpine", ExecutablePath: "/bin/sh",
+			VirtioFSShares: []store.LightVMVirtioFSShare{tc.share},
+		})
+		if !errors.Is(err, store.ErrInvalidVirtioFSShare) {
+			t.Fatalf("%s share error = %v, want ErrInvalidVirtioFSShare", tc.name, err)
+		}
+	}
+	_, err = st.CreateLightVM(ctx, store.LightVM{
+		Name: "duplicate-tag", VCPUs: 1, MemoryMB: 256,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+		Image: "alpine", ExecutablePath: "/bin/sh",
+		VirtioFSShares: []store.LightVMVirtioFSShare{
+			{HostPath: dir1, Tag: "same", ReadOnly: true},
+			{HostPath: dir2, Tag: "same", ReadOnly: true},
+		},
+	})
+	if !errors.Is(err, store.ErrInvalidVirtioFSShare) {
+		t.Fatalf("duplicate tag error = %v, want ErrInvalidVirtioFSShare", err)
+	}
+	_, err = st.UpdateLightVM(ctx, store.LightVM{
+		ID: created.ID, Name: created.Name, VCPUs: created.VCPUs, MemoryMB: created.MemoryMB,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+		Image: created.Image, ExecutablePath: created.ExecutablePath,
+		VirtioFSShares: []store.LightVMVirtioFSShare{{HostPath: dir1, Tag: "rootfs"}},
+	})
+	if !errors.Is(err, store.ErrInvalidVirtioFSShare) {
+		t.Fatalf("update invalid share error = %v, want ErrInvalidVirtioFSShare", err)
+	}
+
+	if err := st.DeleteLightVM(ctx, created.ID); err != nil {
+		t.Fatalf("delete lightvm: %v", err)
+	}
+}
+
+func TestLightVMShareBudget(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	kernel := createKernel(t, st, "vmlinuz-6.12")
+	initramfs := createInitramfs(t, st, "initramfs-6.12")
+	root := t.TempDir()
+	shares := make([]store.LightVMVirtioFSShare, 0, 25)
+	for i := 0; i < 25; i++ {
+		dir := filepath.Join(root, fmt.Sprintf("share-%02d", i))
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		shares = append(shares, store.LightVMVirtioFSShare{HostPath: dir, Tag: fmt.Sprintf("share%02d", i), ReadOnly: true})
+	}
+	if _, err := st.CreateLightVM(ctx, store.LightVM{
+		Name: "twenty-four-shares", VCPUs: 1, MemoryMB: 256,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+		Image: "alpine", ExecutablePath: "/bin/sh",
+		VirtioFSShares: shares[:24],
+	}); err != nil {
+		t.Fatalf("create 24 shares: %v", err)
+	}
+	if _, err := st.CreateLightVM(ctx, store.LightVM{
+		Name: "twenty-five-shares", VCPUs: 1, MemoryMB: 256,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+		Image: "alpine", ExecutablePath: "/bin/sh",
+		VirtioFSShares: shares,
+	}); !errors.Is(err, store.ErrLightVMDeviceLimit) {
+		t.Fatalf("create 25 shares error = %v, want ErrLightVMDeviceLimit", err)
 	}
 }
 

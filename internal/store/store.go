@@ -49,8 +49,10 @@ var (
 	// ErrInvalidDiskIDs is returned when disk IDs are malformed.
 	ErrInvalidDiskIDs = errors.New("invalid disk ids")
 	// ErrLightVMDeviceLimit is returned when a LightVM exceeds the combined
-	// disk and interface device limit.
+	// disk, interface, and virtiofs-share device limit.
 	ErrLightVMDeviceLimit = errors.New("lightvm device limit exceeded")
+	// ErrInvalidVirtioFSShare is returned for malformed host shares.
+	ErrInvalidVirtioFSShare = errors.New("invalid virtiofs share")
 	// ErrStorageBackendNotFound is returned when a storage backend does not exist.
 	ErrStorageBackendNotFound = errors.New("storage backend not found")
 	// ErrStorageBackendNameTaken is returned when a backend name is already in use.

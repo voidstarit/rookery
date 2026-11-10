@@ -75,52 +75,55 @@ func TestLightVMStartAndStopLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, store.LightVM{ID: vm.ID}, LightVMVirtioFS{}, StartPlan{}); err == nil {
+	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, store.LightVM{ID: vm.ID}, LightVMVirtioFS{}, nil, StartPlan{}); err == nil {
 		t.Fatal("missing kernel and initramfs paths were accepted")
 	}
 	kvmDevice = filepath.Join(dir, "missing-kvm")
-	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, vm, LightVMVirtioFS{}, StartPlan{}); err == nil {
+	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, vm, LightVMVirtioFS{}, nil, StartPlan{}); err == nil {
 		t.Fatal("missing KVM was accepted")
 	}
 	kvmDevice = fakeKVM
 
 	missingKernel := vm
 	missingKernel.KernelPath = filepath.Join(dir, "missing-kernel")
-	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, missingKernel, LightVMVirtioFS{}, StartPlan{}); err == nil {
+	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, missingKernel, LightVMVirtioFS{}, nil, StartPlan{}); err == nil {
 		t.Fatal("missing kernel was accepted")
 	}
 	missingInitramfs := vm
 	missingInitramfs.InitramfsPath = filepath.Join(dir, "missing-initramfs")
-	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, missingInitramfs, LightVMVirtioFS{}, StartPlan{}); err == nil {
+	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, missingInitramfs, LightVMVirtioFS{}, nil, StartPlan{}); err == nil {
 		t.Fatal("missing initramfs was accepted")
 	}
-	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, vm, LightVMVirtioFS{SocketPath: filepath.Join(dir, "missing.sock")}, StartPlan{}); err == nil {
+	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, vm, LightVMVirtioFS{SocketPath: filepath.Join(dir, "missing.sock")}, nil, StartPlan{}); err == nil {
 		t.Fatal("missing rootfs socket was accepted")
+	}
+	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, vm, LightVMVirtioFS{SocketPath: rootfsSocket}, []LightVMVirtioFS{{SocketPath: filepath.Join(dir, "missing-share.sock"), Tag: "data"}}, StartPlan{}); err == nil {
+		t.Fatal("missing share socket was accepted")
 	}
 	missingIface := vm
 	missingIface.Interfaces = []store.VMInterface{{SocketPath: filepath.Join(dir, "missing-vhost.sock")}}
-	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, missingIface, LightVMVirtioFS{SocketPath: rootfsSocket}, StartPlan{}); err == nil {
+	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, missingIface, LightVMVirtioFS{SocketPath: rootfsSocket}, nil, StartPlan{}); err == nil {
 		t.Fatal("missing vhost socket was accepted")
 	}
 	badDisk := vm
 	badDisk.Disks = []store.VMDisk{{
 		ID: 1, Name: "bad", Source: store.DiskSourceHostDevice, Device: filepath.Join(dir, "missing-disk"),
 	}}
-	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, badDisk, LightVMVirtioFS{SocketPath: rootfsSocket}, StartPlan{}); err == nil {
+	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, badDisk, LightVMVirtioFS{SocketPath: rootfsSocket}, nil, StartPlan{}); err == nil {
 		t.Fatal("invalid host disk was accepted")
 	}
 	badID := vm
 	badID.ID = "not-a-uuid"
-	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, badID, LightVMVirtioFS{}, StartPlan{}); err == nil {
+	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, badID, LightVMVirtioFS{}, nil, StartPlan{}); err == nil {
 		t.Fatal("invalid LightVM ID was accepted")
 	}
 
 	koujaDisk := vm
 	koujaDisk.Disks = []store.VMDisk{{ID: 1, Name: "remote", Source: store.DiskSourceKouja, Protocol: "iscsi"}}
-	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, koujaDisk, LightVMVirtioFS{SocketPath: rootfsSocket}, StartPlan{}); err == nil {
+	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, koujaDisk, LightVMVirtioFS{SocketPath: rootfsSocket}, nil, StartPlan{}); err == nil {
 		t.Fatal("remote disk without a prepared attachment was accepted")
 	}
-	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, koujaDisk, LightVMVirtioFS{SocketPath: rootfsSocket}, StartPlan{
+	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, koujaDisk, LightVMVirtioFS{SocketPath: rootfsSocket}, nil, StartPlan{
 		Attachments: map[int64]blockdev.Attachment{1: {Protocol: blockdev.ProtocolISCSI}},
 	}); err == nil {
 		t.Fatal("remote disk without an iSCSI credential was accepted")
@@ -131,14 +134,14 @@ func TestLightVMStartAndStopLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	vm.Disks = []store.VMDisk{{ID: 7, Name: "data", Source: store.DiskSourceLVMThin, Device: diskPath}}
-	started, err := q.StartLightVMWithVirtioFSAndPlan(ctx, vm, LightVMVirtioFS{SocketPath: rootfsSocket, Tag: "rootfs"}, StartPlan{})
+	started, err := q.StartLightVMWithVirtioFSAndPlan(ctx, vm, LightVMVirtioFS{SocketPath: rootfsSocket, Tag: "rootfs"}, nil, StartPlan{})
 	if err != nil || !started {
 		t.Fatalf("start = %v, %v", started, err)
 	}
 	if !q.RunningLightVM(vm.ID) {
 		t.Fatal("LightVM is not running after start")
 	}
-	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, vm, LightVMVirtioFS{SocketPath: rootfsSocket}, StartPlan{}); !errors.Is(err, ErrAlreadyRunning) {
+	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, vm, LightVMVirtioFS{SocketPath: rootfsSocket}, nil, StartPlan{}); !errors.Is(err, ErrAlreadyRunning) {
 		t.Fatalf("second start error = %v", err)
 	}
 	if state, err := q.LightVMRunState(ctx, vm.ID); err == nil || state != "" {
@@ -179,15 +182,15 @@ func TestLightVMStartAndStopLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := failing.StartLightVMWithVirtioFSAndPlan(ctx, vm, LightVMVirtioFS{SocketPath: rootfsSocket}, StartPlan{}); err == nil {
+	if _, err := failing.StartLightVMWithVirtioFSAndPlan(ctx, vm, LightVMVirtioFS{SocketPath: rootfsSocket}, nil, StartPlan{}); err == nil {
 		t.Fatal("missing QEMU binary was accepted")
 	}
 	t.Setenv("LIGHTVM_FAKE_QEMU_MODE", "fail")
-	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, vm, LightVMVirtioFS{SocketPath: rootfsSocket}, StartPlan{}); err == nil {
+	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, vm, LightVMVirtioFS{SocketPath: rootfsSocket}, nil, StartPlan{}); err == nil {
 		t.Fatal("failing QEMU was accepted")
 	}
 	t.Setenv("LIGHTVM_FAKE_QEMU_MODE", "exit")
-	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, vm, LightVMVirtioFS{SocketPath: rootfsSocket}, StartPlan{}); err == nil {
+	if _, err := q.StartLightVMWithVirtioFSAndPlan(ctx, vm, LightVMVirtioFS{SocketPath: rootfsSocket}, nil, StartPlan{}); err == nil {
 		t.Fatal("QEMU that exited without a pid file was accepted")
 	}
 	if err := q.StopLightVM(ctx, uuid.NewString()); err != nil {

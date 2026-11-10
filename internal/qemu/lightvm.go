@@ -21,6 +21,7 @@ import (
 type LightVMVirtioFS struct {
 	SocketPath string
 	Tag        string
+	ReadOnly   bool
 }
 
 // StartLightVM launches a QEMU process that boots the LightVM kernel and
@@ -33,7 +34,7 @@ func (q *QEMU) StartLightVM(ctx context.Context, vm store.LightVM) error {
 // StartLightVMWithVirtioFS launches a LightVM and attaches an optional
 // vhost-user-fs device backed by a virtiofsd socket.
 func (q *QEMU) StartLightVMWithVirtioFS(ctx context.Context, vm store.LightVM, rootfs LightVMVirtioFS) error {
-	_, err := q.StartLightVMWithVirtioFSAndPlan(ctx, vm, rootfs, StartPlan{})
+	_, err := q.StartLightVMWithVirtioFSAndPlan(ctx, vm, rootfs, nil, StartPlan{})
 	return err
 }
 
@@ -41,7 +42,7 @@ func (q *QEMU) StartLightVMWithVirtioFS(ctx context.Context, vm store.LightVM, r
 // attachments. started is true whenever this call launched a process that the
 // caller may need to stop; false guarantees that no process from this call
 // remains.
-func (q *QEMU) StartLightVMWithVirtioFSAndPlan(ctx context.Context, vm store.LightVM, rootfs LightVMVirtioFS, plan StartPlan) (bool, error) {
+func (q *QEMU) StartLightVMWithVirtioFSAndPlan(ctx context.Context, vm store.LightVM, rootfs LightVMVirtioFS, shares []LightVMVirtioFS, plan StartPlan) (bool, error) {
 	if strings.TrimSpace(vm.KernelPath) == "" || strings.TrimSpace(vm.InitramfsPath) == "" {
 		return false, errors.New("lightvm is missing its kernel or initramfs path")
 	}
@@ -57,6 +58,11 @@ func (q *QEMU) StartLightVMWithVirtioFSAndPlan(ctx context.Context, vm store.Lig
 	if rootfs.SocketPath != "" {
 		if _, err := os.Stat(rootfs.SocketPath); err != nil {
 			return false, fmt.Errorf("virtiofs socket %s is not available: %w", rootfs.SocketPath, err)
+		}
+	}
+	for _, share := range shares {
+		if _, err := os.Stat(share.SocketPath); err != nil {
+			return false, fmt.Errorf("virtiofs socket %s is not available: %w", share.SocketPath, err)
 		}
 	}
 	for _, iface := range vm.Interfaces {
@@ -89,7 +95,7 @@ func (q *QEMU) StartLightVMWithVirtioFSAndPlan(ctx context.Context, vm store.Lig
 	if err != nil {
 		return false, err
 	}
-	args, err := buildLightVMArgs(vm, q.lightVMConsoleArgs(vm), pidfile, monitor, rootfs, plan, secretPaths)
+	args, err := buildLightVMArgs(vm, q.lightVMConsoleArgs(vm), pidfile, monitor, rootfs, shares, plan, secretPaths)
 	if err != nil {
 		return false, err
 	}
@@ -342,7 +348,7 @@ const appHostnameParam = "APP_HOSTNAME="
 
 func lightvmSecretPrefix(id string) string { return "lightvm-" + id }
 
-func buildLightVMArgs(vm store.LightVM, consoles []lightVMConsoleArg, pidfile, monitor string, rootfs LightVMVirtioFS, plan StartPlan, secretPaths map[int64]string) ([]string, error) {
+func buildLightVMArgs(vm store.LightVM, consoles []lightVMConsoleArg, pidfile, monitor string, rootfs LightVMVirtioFS, shares []LightVMVirtioFS, plan StartPlan, secretPaths map[int64]string) ([]string, error) {
 	args := []string{
 		"-name", vm.Name,
 		"-uuid", vm.ID,
@@ -391,6 +397,13 @@ func buildLightVMArgs(vm store.LightVM, consoles []lightVMConsoleArg, pidfile, m
 		args = append(args,
 			"-chardev", fmt.Sprintf("socket,id=fs0,path=%s", rootfs.SocketPath),
 			"-device", "vhost-user-fs-pci,chardev=fs0,tag="+tag,
+		)
+	}
+	for index, share := range shares {
+		id := "fs" + strconv.Itoa(index+1)
+		args = append(args,
+			"-chardev", fmt.Sprintf("socket,id=%s,path=%s", id, share.SocketPath),
+			"-device", "vhost-user-fs-pci,chardev="+id+",tag="+share.Tag,
 		)
 	}
 	for _, disk := range vm.Disks {
