@@ -190,6 +190,9 @@ func TestMigrationWorkloadDisks(t *testing.T) {
 	if tableExists(t, st.db, "vm_disks") {
 		t.Fatal("vm_disks still exists")
 	}
+	if !tableExists(t, st.db, "lightvm_virtiofs_shares") {
+		t.Fatal("lightvm_virtiofs_shares table is missing")
+	}
 	var nonNull int
 	if err := st.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM vms WHERE disk_id IS NOT NULL`).Scan(&nonNull); err != nil {
 		t.Fatalf("count legacy disk pointers: %v", err)

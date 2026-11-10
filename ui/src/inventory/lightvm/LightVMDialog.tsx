@@ -8,6 +8,7 @@ import type {
   LightVMEnvVar,
   LightVMInitramfs,
   LightVMKernel,
+  LightVMVirtioFSShare,
   VMDisk,
   VMInterface,
   VirtualInterface,
@@ -157,6 +158,12 @@ export function LightVMDialog({
     return disks.filter((disk) => ids.has(disk.id));
   });
   const [diskChoice, setDiskChoice] = useState("");
+  const [shares, setShares] = useState<LightVMVirtioFSShare[]>(() =>
+    Array.isArray(vm?.virtiofs_shares) ? vm.virtiofs_shares : []
+  );
+  const [sharePath, setSharePath] = useState("");
+  const [shareTag, setShareTag] = useState("");
+  const [shareReadOnly, setShareReadOnly] = useState(true);
   const [interfaceChoice, setInterfaceChoice] = useState("");
   const [interfaceHint, setInterfaceHint] = useState("");
   const [labels, setLabels] = useEntityLabelDraft("lightvm", vm?.id);
@@ -259,6 +266,39 @@ export function LightVMDialog({
     setSelectedDisks((current) => current.filter((disk) => disk.id !== id));
   };
 
+  const addShare = () => {
+    const path = sharePath.trim();
+    const tag = shareTag.trim();
+    if (!path.startsWith("/")) {
+      setError("Host directory path must be absolute.");
+      return;
+    }
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(tag) || tag.length > 64) {
+      setError("Share tag must start with a letter or digit and contain only letters, digits, dots, dashes, and underscores.");
+      return;
+    }
+    if (tag.toLowerCase() === "rootfs") {
+      setError('The tag "rootfs" is reserved for the container root filesystem.');
+      return;
+    }
+    if (shares.some((share) => share.tag.toLowerCase() === tag.toLowerCase())) {
+      setError(`Share tag "${tag}" is already used.`);
+      return;
+    }
+    setShares((current) => [
+      ...current,
+      { host_path: path, tag, read_only: shareReadOnly },
+    ]);
+    setSharePath("");
+    setShareTag("");
+    setShareReadOnly(true);
+    setError("");
+  };
+
+  const removeShare = (tag: string) => {
+    setShares((current) => current.filter((share) => share.tag !== tag));
+  };
+
   const updateConsole = (index: number, name: string) => {
     setConsoles((current) =>
       current.map((console, position) => (position === index ? { ...console, name } : console))
@@ -335,6 +375,11 @@ export function LightVMDialog({
       interface_ids: selectedInterfaces.map((iface) => iface.id),
       disk_ids: selectedDisks.map((disk) => disk.id),
       replace_disk_ids: editing,
+      virtiofs_shares: shares.map((share) => ({
+        host_path: share.host_path,
+        tag: share.tag,
+        read_only: share.read_only,
+      })),
     };
 
     setError("");
@@ -684,6 +729,79 @@ export function LightVMDialog({
             <span class="field-hint">
               Disks are attached in this order. Root remains the container image; the
               guest initramfs mounts additional disks.
+            </span>
+          </div>
+
+          <div class="field field-wide">
+            <span class="field-label">Host directory shares <em>optional</em></span>
+            <div class="form-grid">
+              <label class="field field-wide">
+                <span class="field-label">Host path</span>
+                <input
+                  type="text"
+                  autocomplete="off"
+                  spellcheck={false}
+                  placeholder="/home/user/light-vm-1"
+                  value={sharePath}
+                  onInput={(event) => setSharePath(event.currentTarget.value)}
+                />
+                <span class="field-hint">Absolute path to an existing directory on the host.</span>
+              </label>
+              <label class="field">
+                <span class="field-label">Guest tag</span>
+                <input
+                  type="text"
+                  maxlength={64}
+                  autocomplete="off"
+                  spellcheck={false}
+                  placeholder="tag1"
+                  value={shareTag}
+                  onInput={(event) => setShareTag(event.currentTarget.value)}
+                />
+              </label>
+              <label class="field checkbox-field">
+                <span class="field-label">Access</span>
+                <span class="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={shareReadOnly}
+                    onChange={(event) => setShareReadOnly(event.currentTarget.checked)}
+                  />
+                  <span>Read-only</span>
+                </span>
+              </label>
+              <div class="field field-wide">
+                <button class="button ghost" type="button" onClick={addShare}>
+                  Add share
+                </button>
+              </div>
+            </div>
+            <ul class="interface-list">
+              {shares.length === 0 ? (
+                <li class="empty">No host directories shared</li>
+              ) : (
+                shares.map((share) => (
+                  <li key={share.tag}>
+                    <span class="interface-list-name">
+                      {share.tag}
+                      <span class="interface-list-network">
+                        {share.host_path} · {share.read_only ? "read-only" : "read-write"}
+                      </span>
+                    </span>
+                    <button
+                      class="row-action danger"
+                      type="button"
+                      onClick={() => removeShare(share.tag)}
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+            <span class="field-hint">
+              Each share gets a separate virtiofs device. The guest filesystem decides
+              whether and where to mount each tag. The tag <code>rootfs</code> is reserved.
             </span>
           </div>
 

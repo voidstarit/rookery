@@ -176,6 +176,14 @@ export type LightVMConsole = {
   socket?: string;
 };
 
+export type LightVMVirtioFSShare = {
+  id?: number;
+  host_path: string;
+  tag: string;
+  read_only: boolean;
+  position?: number;
+};
+
 export type LightVM = {
   id: string;
   name: string;
@@ -199,6 +207,7 @@ export type LightVM = {
   consoles?: LightVMConsole[];
   disk_ids?: number[];
   disks?: VMDisk[];
+  virtiofs_shares?: LightVMVirtioFSShare[];
   run_state?: string;
   interface_ids?: number[];
   interfaces?: VMInterface[];

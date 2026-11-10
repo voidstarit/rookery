@@ -254,7 +254,7 @@ func (s *Server) startAutostartLightVM(ctx context.Context, vm store.LightVM) {
 		}
 		return
 	}
-	if len(vm.Disks)+len(vm.Interfaces) > store.MaxLightVMDevices {
+	if len(vm.Disks)+len(vm.Interfaces)+len(vm.VirtioFSShares) > store.MaxLightVMDevices {
 		_, _ = s.store.SetLightVMStatus(ctx, vm.ID, store.StatusError)
 		_, _ = s.store.SetLightVMDesiredState(ctx, vm.ID, store.DesiredStopped)
 		s.logger.Error().Str("lightvm_id", vm.ID).Int("disks", len(vm.Disks)).Int("interfaces", len(vm.Interfaces)).Msg("LightVM exceeds device limit; leaving it stopped")

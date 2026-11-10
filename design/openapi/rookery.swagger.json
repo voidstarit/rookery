@@ -4246,6 +4246,13 @@
         },
         "replace_disk_ids": {
           "type": "boolean"
+        },
+        "virtiofs_shares": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMVirtioFSShare"
+          }
         }
       }
     },
@@ -5181,6 +5188,13 @@
           "items": {
             "type": "string",
             "format": "int64"
+          }
+        },
+        "virtiofs_shares": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMVirtioFSShare"
           }
         }
       }
@@ -6131,6 +6145,13 @@
         },
         "run_state": {
           "type": "string"
+        },
+        "virtiofs_shares": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMVirtioFSShare"
+          }
         }
       }
     },
@@ -6232,6 +6253,28 @@
         "updated_at": {
           "type": "string",
           "format": "date-time"
+        }
+      }
+    },
+    "v1LightVMVirtioFSShare": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "host_path": {
+          "type": "string"
+        },
+        "tag": {
+          "type": "string"
+        },
+        "read_only": {
+          "type": "boolean"
+        },
+        "position": {
+          "type": "integer",
+          "format": "int32"
         }
       }
     },

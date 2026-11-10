@@ -21,21 +21,23 @@ import (
 type fakeLightVMQEMU struct {
 	running           bool
 	fs                qemu.LightVMVirtioFS
+	shares            []qemu.LightVMVirtioFS
 	startErr          error
 	stopErr           error
 	stopLeavesRunning bool
 }
 
 func (f *fakeLightVMQEMU) StartLightVMWithVirtioFS(_ context.Context, _ store.LightVM, rootfs qemu.LightVMVirtioFS) error {
-	_, err := f.StartLightVMWithVirtioFSAndPlan(context.Background(), store.LightVM{}, rootfs, qemu.StartPlan{})
+	_, err := f.StartLightVMWithVirtioFSAndPlan(context.Background(), store.LightVM{}, rootfs, nil, qemu.StartPlan{})
 	return err
 }
-func (f *fakeLightVMQEMU) StartLightVMWithVirtioFSAndPlan(_ context.Context, _ store.LightVM, rootfs qemu.LightVMVirtioFS, _ qemu.StartPlan) (bool, error) {
+func (f *fakeLightVMQEMU) StartLightVMWithVirtioFSAndPlan(_ context.Context, _ store.LightVM, rootfs qemu.LightVMVirtioFS, shares []qemu.LightVMVirtioFS, _ qemu.StartPlan) (bool, error) {
 	if f.startErr != nil {
 		return false, f.startErr
 	}
 	f.running = true
 	f.fs = rootfs
+	f.shares = shares
 	return true, nil
 }
 func (f *fakeLightVMQEMU) LightVMRunState(context.Context, string) (string, error) {
@@ -126,6 +128,7 @@ func writeFakeVirtiofsd(t *testing.T, dir string) string {
 	t.Helper()
 	script := filepath.Join(dir, "virtiofsd")
 	content := `#!/bin/sh
+if [ -n "$LIGHTVM_FAKE_VIRTIOFSD_LOG" ]; then printf '%s\n' "$*" >> "$LIGHTVM_FAKE_VIRTIOFSD_LOG"; fi
 exec "$LIGHTVM_TEST_BINARY" -test.run=TestFakeVirtiofsdHelper -- "$@"
 `
 	if err := os.WriteFile(script, []byte(content), 0o755); err != nil {
@@ -325,6 +328,93 @@ func TestRuntimeTwoPhaseAttemptResources(t *testing.T) {
 	}
 	if strings.Contains(logText, "rm rookery-lightvm-"+vm.ID+"\n") {
 		t.Fatalf("cleanup removed the legacy container: %q", logText)
+	}
+}
+
+func TestRuntimeVirtioFSShareDevices(t *testing.T) {
+	dir := t.TempDir()
+	rootfs := filepath.Join(dir, "rootfs")
+	buildahLog := filepath.Join(dir, "buildah.log")
+	virtiofsdLog := filepath.Join(dir, "virtiofsd.log")
+	if err := os.WriteFile(buildahLog, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LIGHTVM_FAKE_BUILDAH_LOG", buildahLog)
+	t.Setenv("LIGHTVM_FAKE_ROOTFS", rootfs)
+	t.Setenv("LIGHTVM_FAKE_CONTAINERS", filepath.Join(dir, "containers.log"))
+	t.Setenv("LIGHTVM_FAKE_VIRTIOFSD_LOG", virtiofsdLog)
+	t.Setenv("LIGHTVM_TEST_BINARY", os.Args[0])
+	t.Setenv("GO_WANT_FAKE_VIRTIOFSD", "1")
+
+	shareOne := filepath.Join(dir, "share-one")
+	shareTwo := filepath.Join(dir, "share-two")
+	if err := os.MkdirAll(shareOne, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(shareTwo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	qemuRunner := &fakeLightVMQEMU{}
+	runtime, err := lightvm.NewRuntime(
+		qemuRunner, writeFakeBuildah(t, dir), writeFakeVirtiofsd(t, dir),
+		shortRuntimeDir(t), zerolog.Nop(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm := store.LightVM{
+		ID: uuid.NewString(), Name: "share-test", Image: "alpine:3.20",
+		ExecutablePath: "/bin/app",
+		VirtioFSShares: []store.LightVMVirtioFSShare{
+			{HostPath: shareOne, Tag: "tag1", ReadOnly: true},
+			{HostPath: shareTwo, Tag: "tag2", ReadOnly: false},
+		},
+	}
+	prepared, err := runtime.PrepareLightVM(context.Background(), vm)
+	if err != nil {
+		t.Fatalf("PrepareLightVM: %v", err)
+	}
+	if err := runtime.StartPreparedLightVM(context.Background(), &prepared, vm, qemu.StartPlan{}); err != nil {
+		t.Fatalf("StartPreparedLightVM: %v", err)
+	}
+	if len(qemuRunner.shares) != 2 ||
+		qemuRunner.shares[0].Tag != "tag1" || !qemuRunner.shares[0].ReadOnly ||
+		qemuRunner.shares[1].Tag != "tag2" || qemuRunner.shares[1].ReadOnly {
+		t.Fatalf("QEMU shares = %+v", qemuRunner.shares)
+	}
+	if len(prepared.Shares) != 2 || !prepared.Shares[0].Started || !prepared.Shares[1].Started {
+		t.Fatalf("prepared shares = %+v", prepared.Shares)
+	}
+	logData, err := os.ReadFile(virtiofsdLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(logData)), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("virtiofsd invocations = %d, want 3: %q", len(lines), string(logData))
+	}
+	var readOnlySeen, writableSeen bool
+	for _, line := range lines {
+		if strings.Contains(line, shareOne) && strings.Contains(line, "--readonly") {
+			readOnlySeen = true
+		}
+		if strings.Contains(line, shareTwo) && !strings.Contains(line, "--readonly") {
+			writableSeen = true
+		}
+	}
+	if !readOnlySeen || !writableSeen {
+		t.Fatalf("virtiofsd args did not reflect read-only flags: %q", string(logData))
+	}
+	if err := runtime.StopQEMULightVM(context.Background(), vm.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.CleanupPreparedLightVM(context.Background(), prepared); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	for _, share := range prepared.Shares {
+		if _, err := os.Stat(share.Socket); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("share socket %s still exists: %v", share.Socket, err)
+		}
 	}
 }
 

@@ -786,35 +786,41 @@ LightVM records are created at `POST /api/lightvm/instances` with `name`,
 `description`, `vcpus`, `memory_mb`, `console_enabled`, `cgroup_class`,
 `kernel_id`, `initramfs_id`, `image`, `env` (`name`/`value` pairs),
 `executable_path`, `executable_args` (ordered strings), `append`, `disk_ids`
-(ordered), `interface_ids`, and `consoles` (an ordered list of `name` entries).
-Every
+(ordered), `virtiofs_shares`, `interface_ids`, and `consoles` (an ordered list
+of `name` entries). Every
 LightVM has at least one console (up to 32); omitting `consoles` creates a
 single console named `console`. The server assigns each console an ID and
 guest port name: the first console is `org.example.console`, additional
 consoles are `org.example.console.<N>`. `append` is the kernel command line and defaults to
 `console=hvc0 rdinit=/init` when omitted on create; on update it is stored
 exactly as sent (empty clears it). `PUT` replaces every editable field,
-including the full console and interface sets and `disk_ids`; set
-`replace_disk_ids` with an empty list to clear disks explicitly. The ID is a
+including the full console, interface, `disk_ids`, and `virtiofs_shares` sets;
+set `replace_disk_ids` with an empty list to clear disks explicitly. The ID is a
 UUID. Kernel and initramfs references are required and cannot be deleted while
 a LightVM uses them. Disks and interfaces attached to a VM or another LightVM
-are rejected, as are templates and disks in a deletion state. A LightVM may
-have at most 24 combined disks and interfaces for a new or growing definition;
-the kernel image remains mandatory. Creating a LightVM stores the definition
+are rejected, as are templates and disks in a deletion state. Each
+`virtiofs_shares` entry is `{host_path, tag, read_only}`: `host_path` must be an
+absolute existing host directory, `tag` must be unique and match
+`[A-Za-z0-9][A-Za-z0-9._-]*` (the tag `rootfs` is reserved), and `read_only`
+defaults to true. A LightVM may have at most 24 combined disks, interfaces, and
+host-directory shares for a new or growing definition; the kernel image remains
+mandatory. Creating a LightVM stores the definition
 with `status=stopped`; `POST .../start` uses buildah to pull `image` if missing,
 creates an attempt-named ephemeral writable container, mounts its rootfs,
 writes the environment variables to `<rootfs>/.env` as one `NAME=value` line
 each and an executable `<rootfs>/.entrypoint` script containing the executable
 path and args, starts `virtiofsd`, and launches QEMU with `-kernel`, `-initrd`,
 `-append`, one virtio drive per disk in attachment order, a
-`vhost-user-fs-pci` device tagged `rootfs`, one virtio console socket per
+`vhost-user-fs-pci` device tagged `rootfs`, one additional virtiofs device per
+host-directory share, one virtio console socket per
 configured console under the QEMU run directory, the cgroup class, and any
 vhost-user interfaces. The initramfs mounts the `rootfs` tag; Rookery does not
 change `append`.
 `POST .../stop` terminates QEMU, stops virtiofsd, unmounts/removes the buildah
 container, and deleting a running LightVM stops it first. Guest writes live in
 the ephemeral container overlay and are discarded on stop. Responses include
-`disk_ids`/`disks` in attachment order and `run_state` for a live QEMU
+`disk_ids`/`disks` in attachment order, `virtiofs_shares` with resolved
+positions, and `run_state` for a live QEMU
 (`running`, `paused`, or `paused (io-error)`). While running, the response also
 includes `console_socket` for the first console and a `consoles` list with each
 console's `id`, `name`, `port_name`, and host `socket`. No graphical

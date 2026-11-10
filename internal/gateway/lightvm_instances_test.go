@@ -85,6 +85,7 @@ func TestLightVMRoutes(t *testing.T) {
 		return response, decoded
 	}
 
+	shareDir := t.TempDir()
 	response, created := request(http.MethodPost, "/api/lightvm/instances", map[string]any{
 		"name":            "app-01",
 		"description":     "test lightvm",
@@ -99,9 +100,20 @@ func TestLightVMRoutes(t *testing.T) {
 		"executable_args": []string{"--listen", ":8080"},
 		"interface_ids":   []int64{iface.ID},
 		"cgroup_class":    "",
+		"virtiofs_shares": []map[string]any{{
+			"host_path": shareDir, "tag": "data", "read_only": true,
+		}},
 	})
 	if response.StatusCode != http.StatusCreated {
 		t.Fatalf("create status = %d, body = %+v", response.StatusCode, created)
+	}
+	createdShares, _ := created["virtiofs_shares"].([]any)
+	if len(createdShares) != 1 {
+		t.Fatalf("created shares = %+v", created["virtiofs_shares"])
+	}
+	createdShare, _ := createdShares[0].(map[string]any)
+	if createdShare["tag"] != "data" || createdShare["host_path"] != shareDir || createdShare["read_only"] != true {
+		t.Fatalf("created share = %+v", createdShare)
 	}
 	id, _ := created["id"].(string)
 	if id == "" {

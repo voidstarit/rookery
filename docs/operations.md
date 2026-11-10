@@ -270,10 +270,14 @@ existing absolute host path are not allowed to delete that host file.
 A LightVM definition includes a name, description, vCPUs, memory, console flag,
 cgroup class, kernel and initramfs, a container image, environment variables,
 an executable path and argument list, a kernel command line, ordered block
-disks, network interfaces, and an ordered console list. Disks support the same
-LVM-thin, host-passthrough, and Kouja sources as VMs and use the same
-single-owner rule: a disk belongs to one VM or one LightVM, never both. Up to
-24 combined disks and interfaces are allowed for a new or growing definition;
+disks, ordered host-directory virtiofs shares, network interfaces, and an
+ordered console list. Disks support the same LVM-thin, host-passthrough, and
+Kouja sources as VMs and use the same single-owner rule: a disk belongs to one
+VM or one LightVM, never both. Host-directory shares bind an absolute existing
+directory with a unique guest tag; `read_only` defaults to true, and the tag
+`rootfs` is reserved. Read-only enforcement uses virtiofsd `--readonly`
+(virtiofsd 1.13+). Up to 24 combined disks, interfaces, and shares are allowed
+for a new or growing definition;
 existing over-budget definitions can be reduced or renamed but cannot start.
 The kernel image remains mandatory and `append` remains caller-owned; there is
 no boot-disk flag and Rookery does not add or rewrite `root=`. Every definition has at least one
@@ -282,8 +286,9 @@ console (up to 32); the first is exposed to the guest as
 `org.example.console.<N>`. New definitions default the
 kernel command line to `console=hvc0 rdinit=/init`. **Start** launches QEMU
 with the kernel and initramfs, one virtio drive per attached disk in attachment
-order, one virtio console Unix socket per configured console in the QEMU run
-directory, the selected cgroup class, and vhost-user interfaces. Rookery uses
+order, one `vhost-user-fs-pci` device per host-directory share, one virtio
+console Unix socket per configured console in the QEMU run directory, the
+selected cgroup class, and vhost-user interfaces. Rookery uses
 `-display none` rather than `-nographic` because QEMU does not allow
 `-nographic` together with `-daemonize`. **Stop** terminates the process.
 Status and desired state are reconciled after API/VPP restarts, and the
@@ -295,7 +300,10 @@ an **ephemeral writable** attempt container named
 `<rootfs>/.entrypoint` script containing the configured executable path and
 arguments, starts `virtiofsd` on
 `<run-dir>/lightvm-<uuid>-<token>.virtiofs.sock`, and passes a
-`vhost-user-fs-pci` device with tag `rootfs` to QEMU. Parse failures, stopped
+`vhost-user-fs-pci` device with tag `rootfs` to QEMU. Each host-directory share
+gets its own attempt-scoped virtiofsd process/socket and QEMU device; the guest
+image chooses whether and where to mount each tag. Read-only shares start
+virtiofsd with `--readonly`. Parse failures, stopped
 containers, and stale attempt resources are cleaned up on the next stop/delete. The initramfs is responsible for mounting that tag and can
 read `/rootfs/.env` and execute `/rootfs/.entrypoint`; Rookery does not modify
 `append`. In this mode the guest writes to its own rootfs overlay and those

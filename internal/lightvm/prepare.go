@@ -28,6 +28,17 @@ type PreparedLightVM struct {
 	VirtiofsdPID     int
 	VirtiofsdStarted bool
 	QEMUStarted      bool
+	Shares           []PreparedVirtioFSShare
+}
+
+// PreparedVirtioFSShare is one started host-directory virtiofs share.
+type PreparedVirtioFSShare struct {
+	Tag      string
+	HostPath string
+	ReadOnly bool
+	Socket   string
+	PID      int
+	Started  bool
 }
 
 // PrepareLightVM pulls the image, creates an attempt-unique container, and
@@ -96,17 +107,43 @@ func (r *Runtime) StartPreparedLightVM(ctx context.Context, prepared *PreparedLi
 	if r.qemuRunner.RunningLightVM(vm.ID) {
 		return qemu.ErrAlreadyRunning
 	}
-	socket, pid, err := r.startVirtiofsdAt(ctx, vm.ID, prepared.AttemptToken, prepared.Rootfs)
+	socket, pid, err := r.startVirtiofsdAt(ctx, vm.ID, prepared.AttemptToken, prepared.Rootfs, false)
 	if err != nil {
 		return err
 	}
 	prepared.VirtiofsdSocket = socket
 	prepared.VirtiofsdPID = pid
 	prepared.VirtiofsdStarted = true
+
+	shares := make([]qemu.LightVMVirtioFS, 0, len(vm.VirtioFSShares))
+	for index, share := range vm.VirtioFSShares {
+		info, err := os.Stat(share.HostPath)
+		if err != nil || !info.IsDir() {
+			if err == nil {
+				err = errors.New("not a directory")
+			}
+			return fmt.Errorf("virtiofs share %q host path %s: %w", share.Tag, share.HostPath, err)
+		}
+		shareSocket, sharePID, err := r.startVirtiofsdAt(ctx, vm.ID,
+			fmt.Sprintf("%s-s%d", prepared.AttemptToken, index), share.HostPath, share.ReadOnly)
+		if err != nil {
+			return fmt.Errorf("start virtiofs share %q: %w", share.Tag, err)
+		}
+		prepared.Shares = append(prepared.Shares, PreparedVirtioFSShare{
+			Tag: share.Tag, HostPath: share.HostPath, ReadOnly: share.ReadOnly,
+			Socket: shareSocket, PID: sharePID, Started: true,
+		})
+		shares = append(shares, qemu.LightVMVirtioFS{
+			SocketPath: shareSocket,
+			Tag:        share.Tag,
+			ReadOnly:   share.ReadOnly,
+		})
+	}
+
 	started, err := r.qemuRunner.StartLightVMWithVirtioFSAndPlan(ctx, vm, qemu.LightVMVirtioFS{
 		SocketPath: socket,
 		Tag:        RootfsTag,
-	}, plan)
+	}, shares, plan)
 	prepared.QEMUStarted = started
 	return err
 }
@@ -117,6 +154,13 @@ func (r *Runtime) CleanupPreparedLightVM(ctx context.Context, prepared PreparedL
 	if prepared.VirtiofsdStarted {
 		if err := r.stopVirtiofsdAt(ctx, prepared.VirtiofsdSocket, prepared.VirtiofsdPID); err != nil {
 			errs = append(errs, err)
+		}
+	}
+	for _, share := range prepared.Shares {
+		if share.Started {
+			if err := r.stopVirtiofsdAt(ctx, share.Socket, share.PID); err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
 	if prepared.Container != "" {
@@ -197,8 +241,11 @@ func newAttemptToken(generation int64) (string, error) {
 	return fmt.Sprintf("%016x%08x", generation, binary.BigEndian.Uint32(random[:])), nil
 }
 
-func (r *Runtime) startVirtiofsdAt(ctx context.Context, id, token, rootfs string) (string, int, error) {
+func (r *Runtime) startVirtiofsdAt(ctx context.Context, id, token, rootfs string, readOnly bool) (string, int, error) {
 	socket := filepath.Join(r.runDir, fmt.Sprintf("lightvm-%s-%s.virtiofs.sock", id, token))
+	if len(socket)+1 > 107 {
+		return "", 0, fmt.Errorf("virtiofs socket path is too long (%d bytes): shorten -run-dir", len(socket))
+	}
 	pidfile := strings.TrimSuffix(socket, ".sock") + "d.pid"
 	logPath := strings.TrimSuffix(socket, ".sock") + "d.log"
 	_ = os.Remove(socket)
@@ -214,6 +261,9 @@ func (r *Runtime) startVirtiofsdAt(ctx context.Context, id, token, rootfs string
 		"--cache=auto",
 		"--sandbox=none",
 		"--announce-submounts",
+	}
+	if readOnly {
+		args = append(args, "--readonly")
 	}
 	cmd := exec.Command(r.virtiofsdBinary, args...)
 	cmd.Stdout = logFile

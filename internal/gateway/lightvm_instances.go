@@ -214,10 +214,10 @@ func (s *lightVMService) StartLightVM(ctx context.Context, request *rookeryv1.St
 	if err != nil {
 		return nil, lightVMError(err, "read")
 	}
-	if len(vm.Disks)+len(vm.Interfaces) > store.MaxLightVMDevices {
+	if len(vm.Disks)+len(vm.Interfaces)+len(vm.VirtioFSShares) > store.MaxLightVMDevices {
 		return nil, status.Errorf(codes.FailedPrecondition,
-			"LightVM has %d disks and %d interfaces (limit %d); reduce the device count",
-			len(vm.Disks), len(vm.Interfaces), store.MaxLightVMDevices)
+			"LightVM has %d disks, %d interfaces, and %d virtiofs shares (limit %d); reduce the device count",
+			len(vm.Disks), len(vm.Interfaces), len(vm.VirtioFSShares), store.MaxLightVMDevices)
 	}
 	requestGeneration := vm.LifecycleGeneration
 	loadedDesired := vm.DesiredState
@@ -411,6 +411,7 @@ func lightVMFromCreateRequest(request *rookeryv1.CreateLightVMRequest) (store.Li
 		request.GetKernelId(), request.GetInitramfsId(), request.GetImage(),
 		request.GetEnv(), request.GetExecutablePath(), request.GetExecutableArgs(),
 		request.GetInterfaceIds(), request.GetDiskIds(), appendValue, request.GetConsoles(),
+		request.GetVirtiofsShares(),
 	)
 }
 
@@ -421,7 +422,7 @@ func lightVMFromUpdateRequest(request *rookeryv1.UpdateLightVMRequest) (store.Li
 		request.GetCgroupClass(), request.GetKernelId(), request.GetInitramfsId(),
 		request.GetImage(), request.GetEnv(), request.GetExecutablePath(),
 		request.GetExecutableArgs(), request.GetInterfaceIds(), request.GetDiskIds(),
-		request.GetAppend(), request.GetConsoles(),
+		request.GetAppend(), request.GetConsoles(), request.GetVirtiofsShares(),
 	)
 	if err != nil {
 		return store.LightVM{}, err
@@ -434,6 +435,7 @@ func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, conso
 	cgroupClass string, kernelID, initramfsID int64, image string,
 	env []*rookeryv1.LightVMEnvVar, executablePath string, executableArgs []string,
 	interfaceIDs, diskIDs []int64, appendValue string, consoles []*rookeryv1.LightVMConsole,
+	shares []*rookeryv1.LightVMVirtioFSShare,
 ) (store.LightVM, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -498,6 +500,18 @@ func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, conso
 	if err != nil {
 		return store.LightVM{}, err
 	}
+	virtioFSShares := make([]store.LightVMVirtioFSShare, 0, len(shares))
+	for _, share := range shares {
+		readOnly := true
+		if share.ReadOnly != nil {
+			readOnly = share.GetReadOnly()
+		}
+		virtioFSShares = append(virtioFSShares, store.LightVMVirtioFSShare{
+			HostPath: share.GetHostPath(),
+			Tag:      share.GetTag(),
+			ReadOnly: readOnly,
+		})
+	}
 
 	return store.LightVM{
 		ID:             id,
@@ -517,6 +531,7 @@ func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, conso
 		Consoles:       normalizedConsoles,
 		InterfaceIDs:   append([]int64(nil), interfaceIDs...),
 		DiskIDs:        normalizedDiskIDs,
+		VirtioFSShares: virtioFSShares,
 	}, nil
 }
 
@@ -679,6 +694,13 @@ func lightVMToProto(vm store.LightVM) *rookeryv1.LightVM {
 	for _, disk := range vm.Disks {
 		result.Disks = append(result.Disks, vmDiskToProto(disk))
 	}
+	for _, share := range vm.VirtioFSShares {
+		readOnly := share.ReadOnly
+		result.VirtiofsShares = append(result.VirtiofsShares, &rookeryv1.LightVMVirtioFSShare{
+			Id: share.ID, HostPath: share.HostPath, Tag: share.Tag,
+			ReadOnly: &readOnly, Position: int32(share.Position),
+		})
+	}
 	for _, iface := range vm.Interfaces {
 		result.Interfaces = append(result.Interfaces, &rookeryv1.VMInterface{
 			Id: iface.ID, Name: iface.Name, NetworkId: iface.NetworkID,
@@ -722,6 +744,8 @@ func lightVMError(err error, action string) error {
 	case errors.Is(err, store.ErrInvalidDiskIDs):
 		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, store.ErrLightVMDeviceLimit):
+		return status.Error(codes.InvalidArgument, err.Error())
+	case errors.Is(err, store.ErrInvalidVirtioFSShare):
 		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, store.ErrDiskIsTemplate):
 		return status.Error(codes.Aborted, "template disks cannot be attached to a LightVM")
