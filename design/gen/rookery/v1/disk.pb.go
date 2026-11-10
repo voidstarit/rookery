@@ -207,11 +207,13 @@ type Disk struct {
 	// deletion_error is the last asynchronous deletion error.
 	DeletionError string `protobuf:"bytes,22,opt,name=deletion_error,json=deletionError,proto3" json:"deletion_error,omitempty"`
 	// protocol distinguishes local, iscsi, nvme-tcp, and rbd attachments.
-	Protocol          string `protobuf:"bytes,23,opt,name=protocol,proto3" json:"protocol,omitempty"`
-	ThrottleClassId   int64  `protobuf:"varint,26,opt,name=throttle_class_id,json=throttleClassId,proto3" json:"throttle_class_id,omitempty"`
-	ThrottleClassName string `protobuf:"bytes,27,opt,name=throttle_class_name,json=throttleClassName,proto3" json:"throttle_class_name,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	Protocol            string  `protobuf:"bytes,23,opt,name=protocol,proto3" json:"protocol,omitempty"`
+	ThrottleClassId     int64   `protobuf:"varint,26,opt,name=throttle_class_id,json=throttleClassId,proto3" json:"throttle_class_id,omitempty"`
+	ThrottleClassName   string  `protobuf:"bytes,27,opt,name=throttle_class_name,json=throttleClassName,proto3" json:"throttle_class_name,omitempty"`
+	AttachedLightvmId   *string `protobuf:"bytes,28,opt,name=attached_lightvm_id,json=attachedLightvmId,proto3,oneof" json:"attached_lightvm_id,omitempty"`
+	AttachedLightvmName string  `protobuf:"bytes,29,opt,name=attached_lightvm_name,json=attachedLightvmName,proto3" json:"attached_lightvm_name,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *Disk) Reset() {
@@ -419,17 +421,33 @@ func (x *Disk) GetThrottleClassName() string {
 	return ""
 }
 
+func (x *Disk) GetAttachedLightvmId() string {
+	if x != nil && x.AttachedLightvmId != nil {
+		return *x.AttachedLightvmId
+	}
+	return ""
+}
+
+func (x *Disk) GetAttachedLightvmName() string {
+	if x != nil {
+		return x.AttachedLightvmName
+	}
+	return ""
+}
+
 type ImportableDisk struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	Name               string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	SizeGb             int32                  `protobuf:"varint,2,opt,name=size_gb,json=sizeGb,proto3" json:"size_gb,omitempty"`
-	Registered         bool                   `protobuf:"varint,3,opt,name=registered,proto3" json:"registered,omitempty"`
-	DiskId             *int64                 `protobuf:"varint,4,opt,name=disk_id,json=diskId,proto3,oneof" json:"disk_id,omitempty"`
-	AttachedVmId       *string                `protobuf:"bytes,5,opt,name=attached_vm_id,json=attachedVmId,proto3,oneof" json:"attached_vm_id,omitempty"`
-	AttachedVmName     string                 `protobuf:"bytes,6,opt,name=attached_vm_name,json=attachedVmName,proto3" json:"attached_vm_name,omitempty"`
-	StorageBackendName string                 `protobuf:"bytes,7,opt,name=storage_backend_name,json=storageBackendName,proto3" json:"storage_backend_name,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Name                string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	SizeGb              int32                  `protobuf:"varint,2,opt,name=size_gb,json=sizeGb,proto3" json:"size_gb,omitempty"`
+	Registered          bool                   `protobuf:"varint,3,opt,name=registered,proto3" json:"registered,omitempty"`
+	DiskId              *int64                 `protobuf:"varint,4,opt,name=disk_id,json=diskId,proto3,oneof" json:"disk_id,omitempty"`
+	AttachedVmId        *string                `protobuf:"bytes,5,opt,name=attached_vm_id,json=attachedVmId,proto3,oneof" json:"attached_vm_id,omitempty"`
+	AttachedVmName      string                 `protobuf:"bytes,6,opt,name=attached_vm_name,json=attachedVmName,proto3" json:"attached_vm_name,omitempty"`
+	StorageBackendName  string                 `protobuf:"bytes,7,opt,name=storage_backend_name,json=storageBackendName,proto3" json:"storage_backend_name,omitempty"`
+	AttachedLightvmId   *string                `protobuf:"bytes,8,opt,name=attached_lightvm_id,json=attachedLightvmId,proto3,oneof" json:"attached_lightvm_id,omitempty"`
+	AttachedLightvmName string                 `protobuf:"bytes,9,opt,name=attached_lightvm_name,json=attachedLightvmName,proto3" json:"attached_lightvm_name,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *ImportableDisk) Reset() {
@@ -507,6 +525,20 @@ func (x *ImportableDisk) GetAttachedVmName() string {
 func (x *ImportableDisk) GetStorageBackendName() string {
 	if x != nil {
 		return x.StorageBackendName
+	}
+	return ""
+}
+
+func (x *ImportableDisk) GetAttachedLightvmId() string {
+	if x != nil && x.AttachedLightvmId != nil {
+		return *x.AttachedLightvmId
+	}
+	return ""
+}
+
+func (x *ImportableDisk) GetAttachedLightvmName() string {
+	if x != nil {
+		return x.AttachedLightvmName
 	}
 	return ""
 }
@@ -951,7 +983,7 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\bprotocol\x18\f \x01(\tR\bprotocol\x12*\n" +
 	"\x11throttle_class_id\x18\x0f \x01(\x03R\x0fthrottleClassId\x12.\n" +
 	"\x13throttle_class_name\x18\x10 \x01(\tR\x11throttleClassNameB\x15\n" +
-	"\x13_storage_backend_idJ\x04\b\r\x10\x0eJ\x04\b\x0e\x10\x0fR\bread_bpsR\twrite_bps\"\x91\b\n" +
+	"\x13_storage_backend_idJ\x04\b\r\x10\x0eJ\x04\b\x0e\x10\x0fR\bread_bpsR\twrite_bps\"\x92\t\n" +
 	"\x04Disk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
@@ -982,10 +1014,13 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\x0edeletion_error\x18\x16 \x01(\tR\rdeletionError\x12\x1a\n" +
 	"\bprotocol\x18\x17 \x01(\tR\bprotocol\x12*\n" +
 	"\x11throttle_class_id\x18\x1a \x01(\x03R\x0fthrottleClassId\x12.\n" +
-	"\x13throttle_class_name\x18\x1b \x01(\tR\x11throttleClassNameB\x15\n" +
+	"\x13throttle_class_name\x18\x1b \x01(\tR\x11throttleClassName\x123\n" +
+	"\x13attached_lightvm_id\x18\x1c \x01(\tH\x03R\x11attachedLightvmId\x88\x01\x01\x122\n" +
+	"\x15attached_lightvm_name\x18\x1d \x01(\tR\x13attachedLightvmNameB\x15\n" +
 	"\x13_storage_backend_idB\x11\n" +
 	"\x0f_attached_vm_idB\x13\n" +
-	"\x11_template_disk_idJ\x04\b\x18\x10\x19J\x04\b\x19\x10\x1aR\bread_bpsR\twrite_bps\"\xa1\x02\n" +
+	"\x11_template_disk_idB\x16\n" +
+	"\x14_attached_lightvm_idJ\x04\b\x18\x10\x19J\x04\b\x19\x10\x1aR\bread_bpsR\twrite_bps\"\xa2\x03\n" +
 	"\x0eImportableDisk\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x17\n" +
 	"\asize_gb\x18\x02 \x01(\x05R\x06sizeGb\x12\x1e\n" +
@@ -995,10 +1030,13 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\adisk_id\x18\x04 \x01(\x03H\x00R\x06diskId\x88\x01\x01\x12)\n" +
 	"\x0eattached_vm_id\x18\x05 \x01(\tH\x01R\fattachedVmId\x88\x01\x01\x12(\n" +
 	"\x10attached_vm_name\x18\x06 \x01(\tR\x0eattachedVmName\x120\n" +
-	"\x14storage_backend_name\x18\a \x01(\tR\x12storageBackendNameB\n" +
+	"\x14storage_backend_name\x18\a \x01(\tR\x12storageBackendName\x123\n" +
+	"\x13attached_lightvm_id\x18\b \x01(\tH\x02R\x11attachedLightvmId\x88\x01\x01\x122\n" +
+	"\x15attached_lightvm_name\x18\t \x01(\tR\x13attachedLightvmNameB\n" +
 	"\n" +
 	"\b_disk_idB\x11\n" +
-	"\x0f_attached_vm_id\"\x12\n" +
+	"\x0f_attached_vm_idB\x16\n" +
+	"\x14_attached_lightvm_id\"\x12\n" +
 	"\x10ListDisksRequest\";\n" +
 	"\x11ListDisksResponse\x12&\n" +
 	"\x05disks\x18\x01 \x03(\v2\x10.rookery.v1.DiskR\x05disks\")\n" +

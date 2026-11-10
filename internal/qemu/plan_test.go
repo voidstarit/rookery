@@ -305,7 +305,11 @@ func TestPrepareSecretsWriteAndBuildErrors(t *testing.T) {
 
 func startMonitorProcess(t *testing.T, q *QEMU, vmID string) *exec.Cmd {
 	t.Helper()
-	cmd := exec.Command("sh", "-c", "while :; do sleep 1; done", vmID)
+	_, pidfile, _, err := q.paths(vmID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("sh", "-c", "while :; do sleep 1; done", "-uuid", vmID, "-pidfile", pidfile)
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -313,10 +317,6 @@ func startMonitorProcess(t *testing.T, q *QEMU, vmID string) *exec.Cmd {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
 	})
-	_, pidfile, _, err := q.paths(vmID)
-	if err != nil {
-		t.Fatal(err)
-	}
 	if err := os.WriteFile(pidfile, []byte(strconv.Itoa(cmd.Process.Pid)), 0o600); err != nil {
 		t.Fatal(err)
 	}

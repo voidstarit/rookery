@@ -47,15 +47,19 @@ type VMController interface {
 	Metrics(vmID string) (qemu.Metrics, error)
 }
 
-// StartPlanner prepares remote attachments for a VM start.
+// StartPlanner prepares remote attachments for VM and LightVM starts.
 type StartPlanner interface {
 	Plan(ctx context.Context, vm store.VM) (qemu.StartPlan, error)
+	PlanDisks(ctx context.Context, disks []store.VMDisk) (qemu.StartPlan, error)
 }
 
 // LightVMController starts and stops QEMU processes for LightVM definitions.
 type LightVMController interface {
-	StartLightVM(ctx context.Context, vm store.LightVM) error
-	StopLightVM(ctx context.Context, id string) error
+	PrepareLightVM(ctx context.Context, vm store.LightVM) (lightvm.PreparedLightVM, error)
+	StartPreparedLightVM(ctx context.Context, prepared *lightvm.PreparedLightVM, vm store.LightVM, plan qemu.StartPlan) error
+	CleanupPreparedLightVM(ctx context.Context, prepared lightvm.PreparedLightVM) error
+	StopQEMULightVM(ctx context.Context, id string) error
+	RunState(ctx context.Context, id string) (string, error)
 	RunningLightVM(id string) bool
 	LightVMConsoleSocket(id string, consoleID int64) string
 }
@@ -164,6 +168,8 @@ type Server struct {
 	rookeryStartupOnce sync.Once
 	vppStartupMu       sync.Mutex
 	startPlanner       StartPlanner
+	lightvmCoordinator *lightvm.StartCoordinator
+	lightVMStartCtx    context.Context
 
 	// resourceMu serializes host provisioning (disks, bridge domains, vhost
 	// interfaces) with VM attachment so resources cannot be removed mid-operation.
@@ -207,6 +213,14 @@ func (s *Server) ConfigureLightVMRuntime(controller LightVMController) {
 // ConfigureStartPlanner wires remote disk preparation into autostart.
 func (s *Server) ConfigureStartPlanner(planner StartPlanner) {
 	s.startPlanner = planner
+}
+
+// ConfigureLightVMStartCoordinator shares LightVM start serialization with the gateway.
+func (s *Server) ConfigureLightVMStartCoordinator(coordinator *lightvm.StartCoordinator) {
+	s.lightvmCoordinator = coordinator
+	if s.lightvmCoordinator == nil {
+		s.lightvmCoordinator = lightvm.NewStartCoordinator()
+	}
 }
 
 // SetVPPSocket records the VPP binary API socket exposed to network startup

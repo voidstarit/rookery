@@ -202,9 +202,16 @@ export function DisksTab() {
     }
   }, [disks.length]);
 
+  const diskAttached = (disk: Disk) => Boolean(disk.attached_vm_id || disk.attached_lightvm_id);
+  const diskOwner = (disk: Disk) =>
+    disk.attached_vm_id
+      ? disk.attached_vm_name || disk.attached_vm_id
+      : disk.attached_lightvm_id
+        ? disk.attached_lightvm_name || disk.attached_lightvm_id
+        : "";
   const deleteDisk = async (disk: Disk) => {
-    if (disk.attached_vm_id) {
-      showToast(`Detach ${disk.name} from ${disk.attached_vm_name || "its VM"} before deleting it.`, true);
+    if (diskAttached(disk)) {
+      showToast(`Detach ${disk.name} from ${disk.attached_lightvm_id ? "its LightVM" : "its VM"} before deleting it.`, true);
       return;
     }
     const confirmed = window.confirm(
@@ -238,8 +245,8 @@ export function DisksTab() {
       showToast("Only LVM thin disks can be templates.", true);
       return;
     }
-    if (disk.attached_vm_id) {
-      showToast("Detach the disk from its VM before changing template status.", true);
+    if (diskAttached(disk)) {
+      showToast("Detach the disk from its workload before changing template status.", true);
       return;
     }
     try {
@@ -304,7 +311,7 @@ export function DisksTab() {
     }
   };
 
-  const attached = disks.filter((disk) => disk.attached_vm_id).length;
+  const attached = disks.filter((disk) => diskAttached(disk)).length;
   const diskSummary =
     disks.length === 0
       ? loading
@@ -541,12 +548,8 @@ export function DisksTab() {
                     <td class={disk.storage_backend_name || disk.source === "host-device" ? "mono" : "mono muted"}>
                       {disk.source === "host-device" ? "host device" : disk.storage_backend_name || "—"}
                     </td>
-                    <td class={disk.is_template ? "mono muted" : disk.attached_vm_id ? "mono" : "mono muted"}>
-                      {disk.is_template
-                        ? "template"
-                        : disk.attached_vm_id
-                          ? disk.attached_vm_name || disk.attached_vm_id
-                          : "unattached"}
+                    <td class={disk.is_template ? "mono muted" : diskAttached(disk) ? "mono" : "mono muted"}>
+                      {disk.is_template ? "template" : diskAttached(disk) ? diskOwner(disk) : "unattached"}
                     </td>
                     <td class="updated hide-sm">{formatDate(disk.updated_at)}</td>
                     <td>
@@ -575,7 +578,7 @@ export function DisksTab() {
                           <button
                             class="row-action"
                             type="button"
-                            disabled={Boolean(disk.attached_vm_id)}
+                            disabled={diskAttached(disk)}
                             title={disk.is_template ? "Allow this disk to be used as a normal disk again." : "Mark this unattached disk as a template."}
                             onClick={() => void toggleTemplate(disk)}
                           >
@@ -585,10 +588,10 @@ export function DisksTab() {
                         <button
                           class="row-action danger"
                           type="button"
-                          disabled={Boolean(disk.attached_vm_id)}
+                          disabled={diskAttached(disk)}
                           title={
-                            disk.attached_vm_id
-                              ? `Detach ${disk.name} from ${disk.attached_vm_name || "its VM"} before deleting it.`
+                            diskAttached(disk)
+                              ? `Detach ${disk.name} from ${diskOwner(disk) || "its workload"} before deleting it.`
                               : ""
                           }
                           onClick={() => void deleteDisk(disk)}

@@ -30,7 +30,7 @@ func (q *QEMU) Metrics(vmID string) (Metrics, error) {
 		return Metrics{}, err
 	}
 	pid, ok := readPID(pidfile)
-	if !ok || !processAlive(pid) || !processMatches(pid, vmID) {
+	if !ok || !processAlive(pid) || !processMatches(pid, vmID, pidfile) {
 		return Metrics{Running: false}, nil
 	}
 

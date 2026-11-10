@@ -15,6 +15,8 @@ import (
 	"golang.org/x/net/websocket"
 
 	"github.com/voidstarit/rookery/internal/api"
+	"github.com/voidstarit/rookery/internal/lightvm"
+	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -24,9 +26,20 @@ type fakeLightVMController struct {
 	selected atomic.Int64
 }
 
-func (f *fakeLightVMController) StartLightVM(context.Context, store.LightVM) error { return nil }
-func (f *fakeLightVMController) StopLightVM(context.Context, string) error         { return nil }
-func (f *fakeLightVMController) RunningLightVM(string) bool                        { return f.running }
+func (f *fakeLightVMController) PrepareLightVM(context.Context, store.LightVM) (lightvm.PreparedLightVM, error) {
+	return lightvm.PreparedLightVM{}, nil
+}
+func (f *fakeLightVMController) StartPreparedLightVM(context.Context, *lightvm.PreparedLightVM, store.LightVM, qemu.StartPlan) error {
+	return nil
+}
+func (f *fakeLightVMController) CleanupPreparedLightVM(context.Context, lightvm.PreparedLightVM) error {
+	return nil
+}
+func (f *fakeLightVMController) StopQEMULightVM(context.Context, string) error { return nil }
+func (f *fakeLightVMController) RunState(context.Context, string) (string, error) {
+	return "running", nil
+}
+func (f *fakeLightVMController) RunningLightVM(string) bool { return f.running }
 func (f *fakeLightVMController) LightVMConsoleSocket(_ string, consoleID int64) string {
 	f.selected.Store(consoleID)
 	return f.sockets[consoleID]

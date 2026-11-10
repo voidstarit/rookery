@@ -7,6 +7,7 @@ import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 import "validate/validate.proto";
 import "rookery/v1/interface.proto";
+import "rookery/v1/disk.proto";
 
 option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
 
@@ -151,6 +152,9 @@ message LightVM {
   string desired_state = 22;
   string console_socket = 23;
   repeated LightVMConsole consoles = 24;
+  repeated int64 disk_ids = 25;
+  repeated VMDisk disks = 26;
+  optional string run_state = 27;
 }
 
 message ListLightVMsRequest {}
@@ -189,6 +193,10 @@ message CreateLightVMRequest {
   }];
   optional string append = 14 [(validate.rules).string = {max_len: 4096}];
   repeated LightVMConsole consoles = 15 [(validate.rules).repeated = {max_items: 32}];
+  repeated int64 disk_ids = 16 [(validate.rules).repeated = {
+    max_items: 32
+    items: {int64: {gt: 0}}
+  }];
 }
 
 message UpdateLightVMRequest {
@@ -218,6 +226,11 @@ message UpdateLightVMRequest {
   }];
   string append = 15 [(validate.rules).string = {max_len: 4096}];
   repeated LightVMConsole consoles = 16 [(validate.rules).repeated = {max_items: 32}];
+  repeated int64 disk_ids = 17 [(validate.rules).repeated = {
+    max_items: 32
+    items: {int64: {gt: 0}}
+  }];
+  optional bool replace_disk_ids = 18;
 }
 
 message DeleteLightVMRequest {

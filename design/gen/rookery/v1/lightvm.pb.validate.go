@@ -492,6 +492,44 @@ func (m *LightVM) validate(all bool) error {
 
 	}
 
+	for idx, item := range m.GetDisks() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, LightVMValidationError{
+						field:  fmt.Sprintf("Disks[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, LightVMValidationError{
+						field:  fmt.Sprintf("Disks[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return LightVMValidationError{
+					field:  fmt.Sprintf("Disks[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if m.RunState != nil {
+		// no validation rules for RunState
+	}
+
 	if len(errors) > 0 {
 		return LightVMMultiError(errors)
 	}
@@ -1183,6 +1221,33 @@ func (m *CreateLightVMRequest) validate(all bool) error {
 
 	}
 
+	if len(m.GetDiskIds()) > 32 {
+		err := CreateLightVMRequestValidationError{
+			field:  "DiskIds",
+			reason: "value must contain no more than 32 item(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	for idx, item := range m.GetDiskIds() {
+		_, _ = idx, item
+
+		if item <= 0 {
+			err := CreateLightVMRequestValidationError{
+				field:  fmt.Sprintf("DiskIds[%v]", idx),
+				reason: "value must be greater than 0",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
 	if m.Vcpus != nil {
 
 		if val := m.GetVcpus(); val < 1 || val > 128 {
@@ -1613,6 +1678,37 @@ func (m *UpdateLightVMRequest) validate(all bool) error {
 			}
 		}
 
+	}
+
+	if len(m.GetDiskIds()) > 32 {
+		err := UpdateLightVMRequestValidationError{
+			field:  "DiskIds",
+			reason: "value must contain no more than 32 item(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	for idx, item := range m.GetDiskIds() {
+		_, _ = idx, item
+
+		if item <= 0 {
+			err := UpdateLightVMRequestValidationError{
+				field:  fmt.Sprintf("DiskIds[%v]", idx),
+				reason: "value must be greater than 0",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.ReplaceDiskIds != nil {
+		// no validation rules for ReplaceDiskIds
 	}
 
 	if len(errors) > 0 {

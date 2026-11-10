@@ -53,6 +53,8 @@ type diskModel struct {
 	HostDevice          types.String `tfsdk:"host_device"`
 	AttachedVMID        types.String `tfsdk:"attached_vm_id"`
 	AttachedVMName      types.String `tfsdk:"attached_vm_name"`
+	AttachedLightVMID   types.String `tfsdk:"attached_lightvm_id"`
+	AttachedLightVMName types.String `tfsdk:"attached_lightvm_name"`
 	IsTemplate          types.Bool   `tfsdk:"is_template"`
 	TemplateDiskID      types.Int64  `tfsdk:"template_disk_id"`
 	TemplateDiskName    types.String `tfsdk:"template_disk_name"`
@@ -113,12 +115,14 @@ func (r *diskResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				Description:   "Storage backend id. Defaults to the server's default backend.",
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace(), int64planmodifier.UseStateForUnknown()},
 			},
-			"storage_backend_name": schema.StringAttribute{Computed: true},
-			"vg":                   schema.StringAttribute{Computed: true},
-			"thin_pool":            schema.StringAttribute{Computed: true},
-			"device":               schema.StringAttribute{Computed: true},
-			"attached_vm_id":       schema.StringAttribute{Computed: true},
-			"attached_vm_name":     schema.StringAttribute{Computed: true},
+			"storage_backend_name":  schema.StringAttribute{Computed: true},
+			"vg":                    schema.StringAttribute{Computed: true},
+			"thin_pool":             schema.StringAttribute{Computed: true},
+			"device":                schema.StringAttribute{Computed: true},
+			"attached_vm_id":        schema.StringAttribute{Computed: true},
+			"attached_vm_name":      schema.StringAttribute{Computed: true},
+			"attached_lightvm_id":   schema.StringAttribute{Computed: true},
+			"attached_lightvm_name": schema.StringAttribute{Computed: true},
 			"is_template": schema.BoolAttribute{
 				Optional:      true,
 				Computed:      true,
@@ -430,6 +434,8 @@ func setDiskState(state *diskModel, disk *rookeryv1.Disk) {
 	}
 	state.AttachedVMID = optionalStringValue(disk.GetAttachedVmId())
 	state.AttachedVMName = optionalStringValue(disk.GetAttachedVmName())
+	state.AttachedLightVMID = optionalStringValue(disk.GetAttachedLightvmId())
+	state.AttachedLightVMName = optionalStringValue(disk.GetAttachedLightvmName())
 	state.IsTemplate = types.BoolValue(disk.GetIsTemplate())
 	state.TemplateDiskID = optionalInt64Value(disk.TemplateDiskId)
 	state.TemplateDiskName = optionalStringValue(disk.GetTemplateDiskName())

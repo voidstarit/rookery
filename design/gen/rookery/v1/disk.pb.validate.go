@@ -282,6 +282,8 @@ func (m *Disk) validate(all bool) error {
 
 	// no validation rules for ThrottleClassName
 
+	// no validation rules for AttachedLightvmName
+
 	if m.StorageBackendId != nil {
 		// no validation rules for StorageBackendId
 	}
@@ -292,6 +294,10 @@ func (m *Disk) validate(all bool) error {
 
 	if m.TemplateDiskId != nil {
 		// no validation rules for TemplateDiskId
+	}
+
+	if m.AttachedLightvmId != nil {
+		// no validation rules for AttachedLightvmId
 	}
 
 	if len(errors) > 0 {
@@ -403,12 +409,18 @@ func (m *ImportableDisk) validate(all bool) error {
 
 	// no validation rules for StorageBackendName
 
+	// no validation rules for AttachedLightvmName
+
 	if m.DiskId != nil {
 		// no validation rules for DiskId
 	}
 
 	if m.AttachedVmId != nil {
 		// no validation rules for AttachedVmId
+	}
+
+	if m.AttachedLightvmId != nil {
+		// no validation rules for AttachedLightvmId
 	}
 
 	if len(errors) > 0 {

@@ -34,7 +34,8 @@ const (
 
 // QEMURunner is the QEMU subset used by the LightVM runtime.
 type QEMURunner interface {
-	StartLightVMWithVirtioFS(ctx context.Context, vm store.LightVM, rootfs qemu.LightVMVirtioFS) error
+	StartLightVMWithVirtioFSAndPlan(ctx context.Context, vm store.LightVM, rootfs qemu.LightVMVirtioFS, plan qemu.StartPlan) (bool, error)
+	LightVMRunState(ctx context.Context, id string) (string, error)
 	StopLightVM(ctx context.Context, id string) error
 	RunningLightVM(id string) bool
 	LightVMConsoleSocket(id string, consoleID int64) string
@@ -93,74 +94,47 @@ func DefaultVirtiofsdBinary() string {
 	return filepath.Join(filepath.Dir(executable), "virtiofsd")
 }
 
-// StartLightVM pulls the image if needed, creates an ephemeral buildah
-// container, starts virtiofsd, and then launches QEMU with the virtio-fs
-// rootfs share.
+// StartLightVM is the deprecated phase-2 wrapper over the two-phase path.
 func (r *Runtime) StartLightVM(ctx context.Context, vm store.LightVM) error {
-	if strings.TrimSpace(vm.Image) == "" {
-		return errors.New("lightvm container image is required")
-	}
-	if r.qemuRunner.RunningLightVM(vm.ID) {
-		return qemu.ErrAlreadyRunning
-	}
-	// Remove leftovers from a crashed or unclean previous run. QEMU is already
-	// confirmed stopped above, so it is safe to release the rootfs.
-	r.stopVirtiofsd(ctx, vm.ID)
-	r.cleanupContainer(ctx, vm.ID)
-
-	if err := r.ensureImage(ctx, vm.Image); err != nil {
+	prepared, err := r.PrepareLightVM(ctx, vm)
+	if err != nil {
 		return err
 	}
-	container := lightVMContainerName(vm.ID)
-	if _, err := r.runCommand(ctx, buildahCommandTimeout, r.buildahBinary,
-		"from", "--name", container, vm.Image); err != nil {
-		return fmt.Errorf("create buildah container: %w", err)
-	}
-	rootfs, err := r.runCommand(ctx, buildahCommandTimeout, r.buildahBinary, "mount", container)
-	if err != nil {
-		r.cleanupContainerBackground(vm.ID)
-		return fmt.Errorf("mount image rootfs: %w", err)
-	}
-	rootfs = strings.TrimSpace(rootfs)
-	if rootfs == "" || !filepath.IsAbs(rootfs) {
-		r.cleanupContainerBackground(vm.ID)
-		return fmt.Errorf("buildah returned an invalid rootfs path %q", rootfs)
-	}
-	if err := writeLightVMEnvFile(rootfs, vm.Env); err != nil {
-		r.cleanupContainerBackground(vm.ID)
-		return fmt.Errorf("write LightVM .env: %w", err)
-	}
-	if err := writeLightVMEntrypointFile(rootfs, vm.ExecutablePath, vm.ExecutableArgs); err != nil {
-		r.cleanupContainerBackground(vm.ID)
-		return fmt.Errorf("write LightVM .entrypoint: %w", err)
-	}
-
-	socket, err := r.startVirtiofsd(ctx, vm.ID, rootfs)
-	if err != nil {
-		r.cleanupContainerBackground(vm.ID)
-		return err
-	}
-	if err := r.qemuRunner.StartLightVMWithVirtioFS(ctx, vm, qemu.LightVMVirtioFS{
-		SocketPath: socket,
-		Tag:        RootfsTag,
-	}); err != nil {
+	startSucceeded := false
+	defer func() {
+		if startSucceeded {
+			return
+		}
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		r.stopVirtiofsd(cleanupCtx, vm.ID)
-		r.cleanupContainer(cleanupCtx, vm.ID)
+		if prepared.QEMUStarted {
+			if stopErr := r.StopQEMULightVM(cleanupCtx, vm.ID); stopErr != nil || r.RunningLightVM(vm.ID) {
+				return
+			}
+		}
+		_ = r.CleanupPreparedLightVM(cleanupCtx, prepared)
+	}()
+	if err := r.StartPreparedLightVM(ctx, &prepared, vm, qemu.StartPlan{}); err != nil {
+		if errors.Is(err, qemu.ErrAlreadyRunning) {
+			return err
+		}
 		return err
 	}
+	startSucceeded = true
 	return nil
 }
 
-// StopLightVM stops QEMU, virtiofsd, and the ephemeral buildah container.
+// StopLightVM is the deprecated phase-2 wrapper over the split stop path.
 func (r *Runtime) StopLightVM(ctx context.Context, id string) error {
-	qemuErr := r.qemuRunner.StopLightVM(ctx, id)
+	if err := r.StopQEMULightVM(ctx, id); err != nil {
+		return err
+	}
+	if r.RunningLightVM(id) {
+		return fmt.Errorf("lightvm %s is still running", id)
+	}
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	virtioErr := r.stopVirtiofsd(cleanupCtx, id)
-	containerErr := r.cleanupContainer(cleanupCtx, id)
-	return errors.Join(qemuErr, virtioErr, containerErr)
+	return r.CleanupStoppedLightVM(cleanupCtx, id)
 }
 
 // RunningLightVM reports whether the LightVM QEMU process is alive.
@@ -416,6 +390,9 @@ func (r *Runtime) runCommand(ctx context.Context, timeout time.Duration, binary 
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return "", ctxErr
+		}
 		message := strings.TrimSpace(stderr.String())
 		if message == "" {
 			message = strings.TrimSpace(stdout.String())
@@ -497,11 +474,19 @@ func matchingSocketPIDs(socket string) []int {
 		if err != nil || pid == self {
 			continue
 		}
-		if processCommandLineContains(pid, socket) {
+		if processCommandLineContains(pid, socket) && processIsVirtiofsd(pid) {
 			pids = append(pids, pid)
 		}
 	}
 	return pids
+}
+
+func processIsVirtiofsd(pid int) bool {
+	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "comm"))
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(strings.TrimSpace(string(data))), "virtiofsd")
 }
 
 func readLogTail(path string) string {

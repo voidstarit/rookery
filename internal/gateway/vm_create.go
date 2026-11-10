@@ -192,8 +192,14 @@ func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMReq
 			}
 			return nil, status.Error(codes.Internal, "could not read disk")
 		}
-		if disk.AttachedVMID != nil && *disk.AttachedVMID != existing.ID {
-			return nil, status.Errorf(codes.Aborted, "disk %q is already attached to another VM", disk.Name)
+		if (disk.AttachedVMID != nil && *disk.AttachedVMID != existing.ID) || disk.AttachedLightVMID != nil {
+			ownerErr := &store.DiskInUseError{}
+			if disk.AttachedLightVMID != nil {
+				ownerErr = &store.DiskInUseError{OwnerKind: "lightvm", OwnerID: *disk.AttachedLightVMID, OwnerName: disk.AttachedLightVMName}
+			} else if disk.AttachedVMID != nil {
+				ownerErr = &store.DiskInUseError{OwnerKind: "vm", OwnerID: *disk.AttachedVMID, OwnerName: disk.AttachedVMName}
+			}
+			return nil, diskInUseError(ownerErr)
 		}
 	}
 	var cgroupUpdater CgroupUpdater
@@ -455,7 +461,7 @@ func vmStoreError(err error, operation string) error {
 	case errors.Is(err, store.ErrDiskNotFound):
 		return status.Error(codes.InvalidArgument, "disk not found")
 	case errors.Is(err, store.ErrDiskInUse):
-		return status.Error(codes.Aborted, "disk is already attached to another VM")
+		return diskInUseError(err)
 	case errors.Is(err, store.ErrDiskIsTemplate):
 		return status.Error(codes.Aborted, "template disks cannot be attached to a VM")
 	case errors.Is(err, store.ErrMediaNotFound):

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -22,8 +23,9 @@ func (s *Store) MarkDiskDeleting(ctx context.Context, id int64) error {
 		SET deletion_state = ?, deletion_error = '', deletion_attempts = 0,
 		    deletion_next_attempt_at = ?, deletion_claimed_at = 0,
 		    throttle_class_id = NULL, updated_at = ?
-		WHERE id = ?`,
-		DiskDeletionDeleting, now.UnixMilli(), now.UnixMilli(), id,
+		WHERE id = ?
+		  AND NOT EXISTS (SELECT 1 FROM workload_disks WHERE disk_id = ?)`,
+		DiskDeletionDeleting, now.UnixMilli(), now.UnixMilli(), id, id,
 	)
 	if err != nil {
 		return fmt.Errorf("mark disk deleting: %w", err)
@@ -33,6 +35,16 @@ func (s *Store) MarkDiskDeleting(ctx context.Context, id int64) error {
 		return fmt.Errorf("read marked disk rows: %w", err)
 	}
 	if affected == 0 {
+		disk, getErr := s.GetDisk(ctx, id)
+		if errors.Is(getErr, ErrDiskNotFound) {
+			return ErrDiskNotFound
+		}
+		if getErr != nil {
+			return getErr
+		}
+		if ownerErr := s.checkDiskOwnership(ctx, disk, "", ""); ownerErr != nil {
+			return ownerErr
+		}
 		return ErrDiskNotFound
 	}
 	return nil

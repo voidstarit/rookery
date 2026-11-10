@@ -209,8 +209,27 @@ verified.
 
 Migration `0051_disk_throttle_classes.sql` adds the class inventory and disk
 reference; `0052_drop_disk_bandwidth.sql` removes the obsolete raw bandwidth
-columns later in the same release. Before upgrading, take a pre-upgrade
-database backup. Downgrading to `v0.1.6` is unsupported because the older server
+columns later in the same release. Migration `0053_workload_disks.sql` replaces
+`vm_disks` with the shared VM/LightVM `workload_disks` owner table and makes
+`vms.disk_id` inert. Before upgrading, take a pre-upgrade database backup and
+inspect legacy pointers that cannot be backfilled:
+
+```sql
+SELECT v.id AS vm_id, v.name AS vm_name, v.disk_id, d.name AS disk_name,
+       EXISTS (SELECT 1 FROM vm_disks vd WHERE vd.vm_id = v.id) AS has_disks,
+       EXISTS (SELECT 1 FROM vm_disks vd2
+               WHERE vd2.disk_id = v.disk_id AND vd2.vm_id <> v.id) AS owned_elsewhere
+FROM vms v
+LEFT JOIN disks d ON d.id = v.disk_id
+WHERE v.disk_id IS NOT NULL
+  AND (NOT EXISTS (SELECT 1 FROM disks d2 WHERE d2.id = v.disk_id)
+       OR EXISTS (SELECT 1 FROM vm_disks vd WHERE vd.vm_id = v.id)
+       OR EXISTS (SELECT 1 FROM vm_disks vd2
+                  WHERE vd2.disk_id = v.disk_id AND vd2.vm_id <> v.id));
+```
+
+Rows with `has_disks`, `owned_elsewhere`, or a missing disk are skipped and
+logged; attach a replacement disk to the affected VM after the upgrade. Downgrading to `v0.1.6` is unsupported because the older server
 does not know `disk_throttle_classes` and the raw columns are gone; restore the
 backup if a rollback is unavoidable.
 Each configured LVM backend has an **Import** action that lists existing thin
@@ -250,26 +269,34 @@ existing absolute host path are not allowed to delete that host file.
 
 A LightVM definition includes a name, description, vCPUs, memory, console flag,
 cgroup class, kernel and initramfs, a container image, environment variables,
-an executable path and argument list, a kernel command line, network
-interfaces, and an ordered console list. Every definition has at least one
+an executable path and argument list, a kernel command line, ordered block
+disks, network interfaces, and an ordered console list. Disks support the same
+LVM-thin, host-passthrough, and Kouja sources as VMs and use the same
+single-owner rule: a disk belongs to one VM or one LightVM, never both. Up to
+24 combined disks and interfaces are allowed for a new or growing definition;
+existing over-budget definitions can be reduced or renamed but cannot start.
+The kernel image remains mandatory and `append` remains caller-owned; there is
+no boot-disk flag and Rookery does not add or rewrite `root=`. Every definition has at least one
 console (up to 32); the first is exposed to the guest as
 `org.example.console`, and each additional console uses
 `org.example.console.<N>`. New definitions default the
 kernel command line to `console=hvc0 rdinit=/init`. **Start** launches QEMU
-with the kernel and initramfs (no block device), one virtio console Unix socket
-per configured console in the QEMU run directory, the selected cgroup class,
-and vhost-user interfaces. Rookery uses
+with the kernel and initramfs, one virtio drive per attached disk in attachment
+order, one virtio console Unix socket per configured console in the QEMU run
+directory, the selected cgroup class, and vhost-user interfaces. Rookery uses
 `-display none` rather than `-nographic` because QEMU does not allow
 `-nographic` together with `-daemonize`. **Stop** terminates the process.
 Status and desired state are reconciled after API/VPP restarts, and the
 container image/environment/executable fields are stored for the guest runtime.
 On start, Rookery uses `buildah` to pull `image` only if it is missing, creates
-an **ephemeral writable** container named `rookery-lightvm-<uuid>`, mounts its
-rootfs, writes the environment as `<rootfs>/.env` (one `NAME=value` per line)
-and an executable `<rootfs>/.entrypoint` script containing the configured
-executable path and arguments, starts `virtiofsd` on
-`<run-dir>/<uuid>.virtiofs.sock`, and passes a `vhost-user-fs-pci` device with
-tag `rootfs` to QEMU. The initramfs is responsible for mounting that tag and can
+an **ephemeral writable** attempt container named
+`rookery-lightvm-<uuid>-<token>`, mounts its rootfs, writes the environment as
+`<rootfs>/.env` (one `NAME=value` per line) and an executable
+`<rootfs>/.entrypoint` script containing the configured executable path and
+arguments, starts `virtiofsd` on
+`<run-dir>/lightvm-<uuid>-<token>.virtiofs.sock`, and passes a
+`vhost-user-fs-pci` device with tag `rootfs` to QEMU. Parse failures, stopped
+containers, and stale attempt resources are cleaned up on the next stop/delete. The initramfs is responsible for mounting that tag and can
 read `/rootfs/.env` and execute `/rootfs/.entrypoint`; Rookery does not modify
 `append`. In this mode the guest writes to its own rootfs overlay and those
 writes are discarded when the LightVM stops, because the container is unmounted
@@ -299,8 +326,9 @@ solarized dark, or black on white) and font size. It also has buttons for
 common control chords (Ctrl+C/D/Z/A/E/K/U/W/L/R, Esc, Tab); the **Ctrl** button
 latches for the next key so arbitrary Ctrl+key combinations can be sent.
 Console access follows `console_enabled` and is checked by the server; disable
-it to block new and existing console sessions. Interfaces can belong to either
-a VM or a LightVM, not both.
+it to block new and existing console sessions. Interfaces and disks can belong
+to either a VM or a LightVM, not both. A paused LightVM reports
+`run_state=paused` or `paused (io-error)`; stop and start it to recover.
 
 
 ## VM lifecycle and console

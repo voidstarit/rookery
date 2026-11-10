@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/voidstarit/rookery/internal/lightvm"
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/store"
 )
@@ -19,6 +20,7 @@ func (s *Server) RunInfrastructureReconciler(ctx context.Context) {
 	if s.readiness == nil || s.vnfs == nil || s.networks == nil {
 		return
 	}
+	s.lightVMStartCtx = ctx
 
 	if err := s.reconcileVMStatuses(ctx); err != nil {
 		s.logger.Warn().Err(err).Msg("VM status reconciliation failed")
@@ -232,8 +234,6 @@ func (s *Server) autostartLightVMs(ctx context.Context) {
 	if s.lightvms == nil {
 		return
 	}
-	s.runMu.Lock()
-	defer s.runMu.Unlock()
 	vms, err := s.store.ListLightVMs(ctx)
 	if err != nil {
 		s.logger.Warn().Err(err).Msg("could not list LightVMs for auto-start")
@@ -243,27 +243,87 @@ func (s *Server) autostartLightVMs(ctx context.Context) {
 		if vm.DesiredState != store.DesiredRunning {
 			continue
 		}
-		if s.lightvms.RunningLightVM(vm.ID) {
-			if vm.Status != store.StatusRunning {
-				if _, err := s.store.SetLightVMStatus(ctx, vm.ID, store.StatusRunning); err != nil {
-					s.logger.Warn().Err(err).Str("lightvm_id", vm.ID).Msg("could not repair auto-start LightVM status")
-				}
-			}
-			continue
-		}
-		if err := s.lightvms.StartLightVM(ctx, vm); err != nil {
-			s.logger.Error().Err(err).Str("lightvm_id", vm.ID).Str("lightvm", vm.Name).Msg("could not auto-start LightVM")
-			if _, statusErr := s.store.SetLightVMStatus(ctx, vm.ID, store.StatusError); statusErr != nil {
-				s.logger.Warn().Err(statusErr).Str("lightvm_id", vm.ID).Msg("could not mark LightVM as failed")
-			}
-			continue
-		}
-		if _, err := s.store.SetLightVMStatus(ctx, vm.ID, store.StatusRunning); err != nil {
-			s.logger.Warn().Err(err).Str("lightvm_id", vm.ID).Msg("could not update auto-started LightVM status")
-			continue
-		}
-		s.logger.Info().Str("lightvm_id", vm.ID).Str("lightvm", vm.Name).Msg("LightVM auto-started from desired state")
+		s.startAutostartLightVM(ctx, vm)
 	}
+}
+
+func (s *Server) startAutostartLightVM(ctx context.Context, vm store.LightVM) {
+	if s.lightvms.RunningLightVM(vm.ID) {
+		if vm.Status != store.StatusRunning {
+			_, _ = s.store.SetLightVMStatus(ctx, vm.ID, store.StatusRunning)
+		}
+		return
+	}
+	if len(vm.Disks)+len(vm.Interfaces) > store.MaxLightVMDevices {
+		_, _ = s.store.SetLightVMStatus(ctx, vm.ID, store.StatusError)
+		_, _ = s.store.SetLightVMDesiredState(ctx, vm.ID, store.DesiredStopped)
+		s.logger.Error().Str("lightvm_id", vm.ID).Int("disks", len(vm.Disks)).Int("interfaces", len(vm.Interfaces)).Msg("LightVM exceeds device limit; leaving it stopped")
+		return
+	}
+	coordinator := s.lightvmCoordinator
+	if coordinator == nil {
+		coordinator = lightvm.NewStartCoordinator()
+	}
+	startCtx, done, err := coordinator.Begin(ctx, vm.ID)
+	if err != nil {
+		return
+	}
+	defer done()
+	requestGeneration := vm.LifecycleGeneration
+	prepared, err := s.lightvms.PrepareLightVM(startCtx, vm)
+	if err != nil {
+		s.logger.Error().Err(err).Str("lightvm_id", vm.ID).Msg("could not prepare LightVM autostart")
+		return
+	}
+	cleanup := true
+	defer func() {
+		if cleanup {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+			_ = s.lightvms.CleanupPreparedLightVM(cleanupCtx, prepared)
+		}
+	}()
+	var plan qemu.StartPlan
+	if s.startPlanner != nil {
+		plan, err = s.startPlanner.PlanDisks(startCtx, vm.Disks)
+		if err != nil {
+			s.logger.Error().Err(err).Str("lightvm_id", vm.ID).Msg("could not plan LightVM disks")
+			return
+		}
+	}
+	s.runMu.Lock()
+	current, err := s.store.GetLightVM(ctx, vm.ID)
+	if err != nil {
+		s.runMu.Unlock()
+		return
+	}
+	if current.LifecycleGeneration != requestGeneration || current.DesiredState != store.DesiredRunning || startCtx.Err() != nil {
+		s.runMu.Unlock()
+		return
+	}
+	if s.lightvms.RunningLightVM(current.ID) {
+		_, _ = s.store.SetLightVMStatus(ctx, current.ID, store.StatusRunning)
+		s.runMu.Unlock()
+		return
+	}
+	if err := s.lightvms.StartPreparedLightVM(startCtx, &prepared, current, plan); err != nil {
+		if prepared.QEMUStarted {
+			stopErr := s.lightvms.StopQEMULightVM(context.Background(), current.ID)
+			if stopErr != nil || s.lightvms.RunningLightVM(current.ID) {
+				cleanup = false
+				s.logger.Error().Err(stopErr).Str("lightvm_id", current.ID).Msg("could not stop failed LightVM start; retaining its rootfs")
+			}
+		}
+		_, _ = s.store.SetLightVMStatus(ctx, current.ID, store.StatusError)
+		s.runMu.Unlock()
+		s.logger.Error().Err(err).Str("lightvm_id", current.ID).Msg("could not start LightVM")
+		return
+	}
+	cleanup = false
+	_, _ = s.store.SetLightVMStatus(ctx, current.ID, store.StatusRunning)
+	_, _ = s.store.SetLightVMDesiredState(ctx, current.ID, store.DesiredRunning)
+	s.runMu.Unlock()
+	s.logger.Info().Str("lightvm_id", current.ID).Str("lightvm", current.Name).Msg("LightVM auto-started from desired state")
 }
 
 func (s *Server) reconcileInfrastructureWithRetries(ctx context.Context) error {

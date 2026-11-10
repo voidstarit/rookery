@@ -20,7 +20,11 @@ func TestRunningAndStopFindOrphanProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd := exec.Command(os.Args[0], "-test.run=TestOrphanHelperProcess", "--", "-uuid", vmID)
+	_, pidfile, _, err := q.paths(vmID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=TestOrphanHelperProcess", "--", "-uuid", vmID, "-pidfile", pidfile)
 	cmd.Env = append(os.Environ(), "ROOKERY_ORPHAN_HELPER=1")
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)

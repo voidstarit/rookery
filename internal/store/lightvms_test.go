@@ -3,6 +3,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/voidstarit/rookery/internal/store"
@@ -128,6 +129,211 @@ func TestLightVMCRUD(t *testing.T) {
 	}
 	if err := st.DeleteLightVM(ctx, created.ID); !errors.Is(err, store.ErrLightVMNotFound) {
 		t.Fatalf("delete missing lightvm error = %v, want ErrLightVMNotFound", err)
+	}
+}
+
+func TestLightVMDiskAttachments(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	kernel := createKernel(t, st, "vmlinuz-6.12")
+	initramfs := createInitramfs(t, st, "initramfs-6.12")
+	first := createDisk(t, st, "lv-disk-1")
+	second := createDisk(t, st, "lv-disk-2")
+
+	created, err := st.CreateLightVM(ctx, store.LightVM{
+		Name:           "disk-app",
+		VCPUs:          1,
+		MemoryMB:       256,
+		KernelID:       kernel.ID,
+		InitramfsID:    initramfs.ID,
+		Image:          "alpine",
+		ExecutablePath: "/bin/sh",
+		DiskIDs:        []int64{second.ID, first.ID},
+	})
+	if err != nil {
+		t.Fatalf("create lightvm with disks: %v", err)
+	}
+	if len(created.DiskIDs) != 2 || created.DiskIDs[0] != second.ID || created.DiskIDs[1] != first.ID {
+		t.Fatalf("created disk ids = %v", created.DiskIDs)
+	}
+	if len(created.Disks) != 2 || created.Disks[0].ID != second.ID {
+		t.Fatalf("created disks = %+v", created.Disks)
+	}
+	attached, err := st.GetDisk(ctx, first.ID)
+	if err != nil {
+		t.Fatalf("get attached disk: %v", err)
+	}
+	if attached.AttachedLightVMID == nil || *attached.AttachedLightVMID != created.ID ||
+		attached.AttachedLightVMName != created.Name {
+		t.Fatalf("disk owner = %v/%q, want %s", attached.AttachedLightVMID, attached.AttachedLightVMName, created.ID)
+	}
+
+	updated, err := st.UpdateLightVM(ctx, store.LightVM{
+		ID:             created.ID,
+		Name:           created.Name,
+		VCPUs:          created.VCPUs,
+		MemoryMB:       created.MemoryMB,
+		KernelID:       kernel.ID,
+		InitramfsID:    initramfs.ID,
+		Image:          created.Image,
+		ExecutablePath: created.ExecutablePath,
+		DiskIDs:        []int64{first.ID, second.ID},
+		ReplaceDiskIDs: true,
+	})
+	if err != nil {
+		t.Fatalf("replace lightvm disks: %v", err)
+	}
+	if len(updated.DiskIDs) != 2 || updated.DiskIDs[0] != first.ID || updated.DiskIDs[1] != second.ID {
+		t.Fatalf("updated disk ids = %v", updated.DiskIDs)
+	}
+	preserved, err := st.UpdateLightVM(ctx, store.LightVM{
+		ID:             created.ID,
+		Name:           "disk-app-renamed",
+		VCPUs:          created.VCPUs,
+		MemoryMB:       created.MemoryMB,
+		KernelID:       kernel.ID,
+		InitramfsID:    initramfs.ID,
+		Image:          created.Image,
+		ExecutablePath: created.ExecutablePath,
+	})
+	if err != nil {
+		t.Fatalf("rename lightvm preserving disks: %v", err)
+	}
+	if len(preserved.DiskIDs) != 2 || preserved.DiskIDs[0] != first.ID {
+		t.Fatalf("preserved disk ids = %v", preserved.DiskIDs)
+	}
+	if err := st.DeleteLightVM(ctx, created.ID); err != nil {
+		t.Fatalf("delete lightvm: %v", err)
+	}
+	for _, disk := range []store.Disk{first, second} {
+		released, err := st.GetDisk(ctx, disk.ID)
+		if err != nil {
+			t.Fatalf("get released disk %d: %v", disk.ID, err)
+		}
+		if released.AttachedLightVMID != nil || released.AttachedVMID != nil {
+			t.Fatalf("disk %d still attached: %+v", disk.ID, released)
+		}
+	}
+}
+
+func TestLightVMDiskConflictsWithVM(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	kernel := createKernel(t, st, "vmlinuz-6.12")
+	initramfs := createInitramfs(t, st, "initramfs-6.12")
+	vm := createVM(t, st, "owner-vm")
+	_, err := st.CreateLightVM(ctx, store.LightVM{
+		Name: "conflict", VCPUs: 1, MemoryMB: 256,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+		Image: "alpine", ExecutablePath: "/bin/sh",
+		DiskIDs: []int64{vm.DiskIDs[0]},
+	})
+	var inUse *store.DiskInUseError
+	if !errors.Is(err, store.ErrDiskInUse) || !errors.As(err, &inUse) ||
+		inUse.OwnerKind != "vm" || inUse.OwnerID != vm.ID {
+		t.Fatalf("lightvm disk conflict error = %v (%#v), want vm owner", err, inUse)
+	}
+}
+
+func TestLightVMDeviceBudgetAndGeneration(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	kernel := createKernel(t, st, "vmlinuz-6.12")
+	initramfs := createInitramfs(t, st, "initramfs-6.12")
+	network := createNetwork(t, st, "budget-net")
+	makeInterfaces := func(prefix string, count int) []int64 {
+		ids := make([]int64, 0, count)
+		for i := 0; i < count; i++ {
+			iface := createInterface(t, st, fmt.Sprintf("%s-%d", prefix, i), network.ID)
+			ids = append(ids, iface.ID)
+		}
+		return ids
+	}
+	makeDisks := func(prefix string, count int) []int64 {
+		ids := make([]int64, 0, count)
+		for i := 0; i < count; i++ {
+			disk := createDisk(t, st, fmt.Sprintf("%s-%d", prefix, i))
+			ids = append(ids, disk.ID)
+		}
+		return ids
+	}
+	diskIDs := makeDisks("budget", 17)
+	firstInterfaces := makeInterfaces("budget-if", 8)
+	secondInterfaces := makeInterfaces("budget-if2", 8)
+	thirdInterfaces := makeInterfaces("budget-if3", 9)
+
+	created, err := st.CreateLightVM(ctx, store.LightVM{
+		Name: "twenty-four", VCPUs: 1, MemoryMB: 256,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+		Image: "alpine", ExecutablePath: "/bin/sh",
+		DiskIDs: diskIDs[:16], InterfaceIDs: firstInterfaces,
+	})
+	if err != nil {
+		t.Fatalf("create 24-device lightvm: %v", err)
+	}
+	if created.LifecycleGeneration != 0 {
+		t.Fatalf("initial generation = %d, want 0", created.LifecycleGeneration)
+	}
+	secondDiskIDs := makeDisks("budget2", 17)
+	_, err = st.CreateLightVM(ctx, store.LightVM{
+		Name: "twenty-five-create", VCPUs: 1, MemoryMB: 256,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+		Image: "alpine", ExecutablePath: "/bin/sh",
+		DiskIDs: secondDiskIDs, InterfaceIDs: secondInterfaces,
+	})
+	if !errors.Is(err, store.ErrLightVMDeviceLimit) {
+		t.Fatalf("create 25-device error = %v, want ErrLightVMDeviceLimit", err)
+	}
+	_, err = st.CreateLightVM(ctx, store.LightVM{
+		Name: "twenty-five-interfaces", VCPUs: 1, MemoryMB: 256,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+		Image: "alpine", ExecutablePath: "/bin/sh",
+		DiskIDs: secondDiskIDs[:16], InterfaceIDs: thirdInterfaces,
+	})
+	if !errors.Is(err, store.ErrLightVMDeviceLimit) {
+		t.Fatalf("create 16+9 error = %v, want ErrLightVMDeviceLimit", err)
+	}
+	_, err = st.UpdateLightVM(ctx, store.LightVM{
+		ID: created.ID, Name: created.Name, VCPUs: created.VCPUs, MemoryMB: created.MemoryMB,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+		Image: created.Image, ExecutablePath: created.ExecutablePath,
+		InterfaceIDs: thirdInterfaces,
+	})
+	if !errors.Is(err, store.ErrLightVMDeviceLimit) {
+		t.Fatalf("update 16+9 error = %v, want ErrLightVMDeviceLimit", err)
+	}
+
+	started, err := st.SetLightVMStatus(ctx, created.ID, store.StatusRunning)
+	if err != nil {
+		t.Fatalf("set status: %v", err)
+	}
+	if started.LifecycleGeneration != 1 {
+		t.Fatalf("generation after status = %d, want 1", started.LifecycleGeneration)
+	}
+	desired, err := st.SetLightVMDesiredState(ctx, created.ID, store.DesiredRunning)
+	if err != nil {
+		t.Fatalf("set desired state: %v", err)
+	}
+	if desired.LifecycleGeneration != 2 {
+		t.Fatalf("generation after desired state = %d, want 2", desired.LifecycleGeneration)
+	}
+	updated, err := st.UpdateLightVM(ctx, store.LightVM{
+		ID: created.ID, Name: "twenty-four-updated", VCPUs: created.VCPUs, MemoryMB: created.MemoryMB,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+		Image: created.Image, ExecutablePath: created.ExecutablePath,
+	})
+	if err != nil {
+		t.Fatalf("rename preserved 24-device lightvm: %v", err)
+	}
+	if updated.LifecycleGeneration != 3 || updated.DesiredState != store.DesiredStopped {
+		t.Fatalf("updated lifecycle = generation %d desired %q, want 3/stopped", updated.LifecycleGeneration, updated.DesiredState)
+	}
+	read, err := st.GetLightVM(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("get lightvm: %v", err)
+	}
+	if read.LifecycleGeneration != 3 {
+		t.Fatalf("read changed generation to %d", read.LifecycleGeneration)
 	}
 }
 

@@ -13,6 +13,8 @@ import (
 	"testing"
 
 	"github.com/voidstarit/rookery/internal/gateway"
+	"github.com/voidstarit/rookery/internal/lightvm"
+	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -23,24 +25,52 @@ type fakeLightVMRuntime struct {
 	stopErr  error
 }
 
-func (f *fakeLightVMRuntime) StartLightVM(_ context.Context, vm store.LightVM) error {
+func (f *fakeLightVMRuntime) PrepareLightVM(_ context.Context, vm store.LightVM) (lightvm.PreparedLightVM, error) {
+	if f.startErr != nil {
+		return lightvm.PreparedLightVM{}, f.startErr
+	}
+	if vm.KernelPath == "" || vm.InitramfsPath == "" {
+		return lightvm.PreparedLightVM{}, errors.New("missing kernel or initramfs path")
+	}
+	f.started = vm
+	return lightvm.PreparedLightVM{
+		LightVMID: vm.ID, Container: "rookery-lightvm-" + vm.ID + "-test",
+		Rootfs: "/tmp/rootfs", VirtiofsdSocket: "/tmp/lightvm-" + vm.ID + ".virtiofs.sock",
+	}, nil
+}
+
+func (f *fakeLightVMRuntime) StartPreparedLightVM(_ context.Context, prepared *lightvm.PreparedLightVM, vm store.LightVM, _ qemu.StartPlan) error {
 	if f.startErr != nil {
 		return f.startErr
 	}
-	if vm.KernelPath == "" || vm.InitramfsPath == "" {
-		return errors.New("missing kernel or initramfs path")
-	}
+	prepared.VirtiofsdStarted = true
+	prepared.QEMUStarted = true
 	f.started = vm
 	f.running[vm.ID] = true
 	return nil
 }
 
-func (f *fakeLightVMRuntime) StopLightVM(_ context.Context, id string) error {
+func (f *fakeLightVMRuntime) CleanupPreparedLightVM(context.Context, lightvm.PreparedLightVM) error {
+	return nil
+}
+
+func (f *fakeLightVMRuntime) StopQEMULightVM(_ context.Context, id string) error {
 	if f.stopErr != nil {
 		return f.stopErr
 	}
 	f.running[id] = false
 	return nil
+}
+
+func (f *fakeLightVMRuntime) CleanupStoppedLightVM(context.Context, string) error {
+	return nil
+}
+
+func (f *fakeLightVMRuntime) RunState(_ context.Context, id string) (string, error) {
+	if f.running[id] {
+		return "running", nil
+	}
+	return "", nil
 }
 
 func (f *fakeLightVMRuntime) RunningLightVM(id string) bool {

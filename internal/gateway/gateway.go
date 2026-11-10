@@ -25,6 +25,8 @@ import (
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/kouja"
+	"github.com/voidstarit/rookery/internal/lightvm"
+	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/readiness"
 	"github.com/voidstarit/rookery/internal/storage"
 	"github.com/voidstarit/rookery/internal/store"
@@ -77,8 +79,15 @@ type options struct {
 	lightvmDir         string
 	lightvmRuntime     LightVMRuntime
 	storageRegistry    *storage.Registry
-	startPlanner       *vmstart.Planner
+	startPlanner       StartPlanner
+	lightvmCoordinator *lightvm.StartCoordinator
 	koujaClientFactory func(kouja.Config) (*kouja.Client, error)
+}
+
+// StartPlanner prepares VM and LightVM disk attachments before start.
+type StartPlanner interface {
+	Plan(ctx context.Context, vm store.VM) (qemu.StartPlan, error)
+	PlanDisks(ctx context.Context, disks []store.VMDisk) (qemu.StartPlan, error)
 }
 
 // WithGRPCListener exposes the generated gRPC server on listener instead of an
@@ -136,10 +145,17 @@ func WithStorageRegistry(registry *storage.Registry) Option {
 	}
 }
 
-// WithStartPlanner sets the VM start planner used for remote attachments.
-func WithStartPlanner(planner *vmstart.Planner) Option {
+// WithStartPlanner sets the VM and LightVM start planner.
+func WithStartPlanner(planner StartPlanner) Option {
 	return func(opts *options) {
 		opts.startPlanner = planner
+	}
+}
+
+// WithLightVMStartCoordinator shares the LightVM start coordinator with API autostart.
+func WithLightVMStartCoordinator(coordinator *lightvm.StartCoordinator) Option {
+	return func(opts *options) {
+		opts.lightvmCoordinator = coordinator
 	}
 }
 
@@ -309,6 +325,9 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	if options.startPlanner == nil {
 		options.startPlanner = vmstart.NewPlanner(st, options.storageRegistry)
 	}
+	if options.lightvmCoordinator == nil {
+		options.lightvmCoordinator = lightvm.NewStartCoordinator()
+	}
 	listener := options.grpcListener
 	useBufconn := listener == nil
 	if useBufconn {
@@ -342,7 +361,11 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	entityLabels := &labelService{store: st}
 	kernels := &lightVMKernelService{store: st, storageDir: options.lightvmDir}
 	initramfs := &lightVMInitramfsService{store: st, storageDir: options.lightvmDir}
-	lightvms := &lightVMService{store: st, runtime: options.lightvmRuntime, mu: options.vmMutex}
+	lightvms := &lightVMService{
+		store: st, runtime: options.lightvmRuntime, mu: options.vmMutex,
+		resourceMu: options.diskMutex, planner: options.startPlanner,
+		startCoordinator: options.lightvmCoordinator,
+	}
 	rookeryv1.RegisterSystemServiceServer(server, system)
 	rookeryv1.RegisterVMServiceServer(server, vms)
 	rookeryv1.RegisterDiskServiceServer(server, disks)
@@ -597,7 +620,7 @@ type vmService struct {
 	resourceMu *sync.Mutex
 	mu         *sync.Mutex
 	logger     zerolog.Logger
-	planner    *vmstart.Planner
+	planner    StartPlanner
 }
 
 func (s *vmService) ListVMs(ctx context.Context, _ *rookeryv1.ListVMsRequest) (*rookeryv1.ListVMsResponse, error) {

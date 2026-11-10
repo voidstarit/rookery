@@ -25,12 +25,22 @@ type fakeLightVMQEMU struct {
 }
 
 func (f *fakeLightVMQEMU) StartLightVMWithVirtioFS(_ context.Context, _ store.LightVM, rootfs qemu.LightVMVirtioFS) error {
+	_, err := f.StartLightVMWithVirtioFSAndPlan(context.Background(), store.LightVM{}, rootfs, qemu.StartPlan{})
+	return err
+}
+func (f *fakeLightVMQEMU) StartLightVMWithVirtioFSAndPlan(_ context.Context, _ store.LightVM, rootfs qemu.LightVMVirtioFS, _ qemu.StartPlan) (bool, error) {
 	if f.startErr != nil {
-		return f.startErr
+		return false, f.startErr
 	}
 	f.running = true
 	f.fs = rootfs
-	return nil
+	return true, nil
+}
+func (f *fakeLightVMQEMU) LightVMRunState(context.Context, string) (string, error) {
+	if f.running {
+		return "running", nil
+	}
+	return "", nil
 }
 func (f *fakeLightVMQEMU) StopLightVM(context.Context, string) error {
 	f.running = false
@@ -73,6 +83,16 @@ func TestFakeVirtiofsdHelper(t *testing.T) {
 	}
 }
 
+func shortRuntimeDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "rkr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
+}
+
 func writeFakeBuildah(t *testing.T, dir string) string {
 	t.Helper()
 	script := filepath.Join(dir, "buildah")
@@ -81,8 +101,9 @@ printf '%s\n' "$*" >> "$LIGHTVM_FAKE_BUILDAH_LOG"
 case "$1" in
   inspect) exit 1 ;;
   pull) exit 0 ;;
-  from) exit 0 ;;
+  from) printf '%s\n' "$3" >> "$LIGHTVM_FAKE_CONTAINERS"; exit 0 ;;
   mount) mkdir -p "$LIGHTVM_FAKE_ROOTFS"; printf '%s\n' "$LIGHTVM_FAKE_ROOTFS" ;;
+  containers) cat "$LIGHTVM_FAKE_CONTAINERS" 2>/dev/null; exit 0 ;;
   umount|rm) exit 0 ;;
   *) exit 0 ;;
 esac
@@ -147,6 +168,7 @@ func TestRuntimeBuildsEphemeralRootfs(t *testing.T) {
 	}
 	t.Setenv("LIGHTVM_FAKE_BUILDAH_LOG", buildahLog)
 	t.Setenv("LIGHTVM_FAKE_ROOTFS", rootfs)
+	t.Setenv("LIGHTVM_FAKE_CONTAINERS", filepath.Join(dir, "containers.log"))
 	t.Setenv("LIGHTVM_TEST_BINARY", os.Args[0])
 	t.Setenv("GO_WANT_FAKE_VIRTIOFSD", "1")
 
@@ -155,7 +177,7 @@ func TestRuntimeBuildsEphemeralRootfs(t *testing.T) {
 		qemuRunner,
 		writeFakeBuildah(t, dir),
 		writeFakeVirtiofsd(t, dir),
-		filepath.Join(dir, "run"),
+		shortRuntimeDir(t),
 		zerolog.Nop(),
 	)
 	if err != nil {
@@ -211,7 +233,7 @@ func TestRuntimeBuildsEphemeralRootfs(t *testing.T) {
 		t.Fatal(err)
 	}
 	logText := string(logData)
-	for _, command := range []string{"inspect --type=image alpine:3.20", "pull alpine:3.20", "from --name rookery-lightvm-" + vm.ID, "mount rookery-lightvm-" + vm.ID} {
+	for _, command := range []string{"inspect --type=image alpine:3.20", "pull alpine:3.20", "from --name rookery-lightvm-" + vm.ID + "-", "mount rookery-lightvm-" + vm.ID + "-"} {
 		if !strings.Contains(logText, command) {
 			t.Fatalf("buildah log %q does not contain %q", logText, command)
 		}
@@ -231,10 +253,70 @@ func TestRuntimeBuildsEphemeralRootfs(t *testing.T) {
 		t.Fatal(err)
 	}
 	logText = string(logData)
-	for _, command := range []string{"umount rookery-lightvm-" + vm.ID, "rm rookery-lightvm-" + vm.ID} {
+	for _, command := range []string{"umount rookery-lightvm-" + vm.ID + "-", "rm rookery-lightvm-" + vm.ID + "-"} {
 		if !strings.Contains(logText, command) {
 			t.Fatalf("buildah log %q does not contain %q", logText, command)
 		}
+	}
+}
+
+func TestRuntimeTwoPhaseAttemptResources(t *testing.T) {
+	dir := t.TempDir()
+	rootfs := filepath.Join(dir, "rootfs")
+	buildahLog := filepath.Join(dir, "buildah.log")
+	if err := os.WriteFile(buildahLog, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LIGHTVM_FAKE_BUILDAH_LOG", buildahLog)
+	t.Setenv("LIGHTVM_FAKE_ROOTFS", rootfs)
+	t.Setenv("LIGHTVM_FAKE_CONTAINERS", filepath.Join(dir, "containers.log"))
+	t.Setenv("LIGHTVM_TEST_BINARY", os.Args[0])
+	t.Setenv("GO_WANT_FAKE_VIRTIOFSD", "1")
+
+	qemuRunner := &fakeLightVMQEMU{}
+	runtime, err := lightvm.NewRuntime(
+		qemuRunner, writeFakeBuildah(t, dir), writeFakeVirtiofsd(t, dir),
+		shortRuntimeDir(t), zerolog.Nop(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm := store.LightVM{
+		ID: uuid.NewString(), Name: "two-phase", Image: "alpine:3.20",
+		ExecutablePath: "/bin/app", LifecycleGeneration: 7,
+	}
+	prepared, err := runtime.PrepareLightVM(context.Background(), vm)
+	if err != nil {
+		t.Fatalf("PrepareLightVM: %v", err)
+	}
+	if !strings.HasPrefix(prepared.Container, "rookery-lightvm-"+vm.ID+"-") ||
+		!strings.Contains(prepared.AttemptToken, "0000000000000007") ||
+		!strings.HasSuffix(prepared.VirtiofsdSocket, ".virtiofs.sock") ||
+		prepared.VirtiofsdStarted || prepared.QEMUStarted {
+		t.Fatalf("prepared handle = %+v", prepared)
+	}
+	if err := runtime.StartPreparedLightVM(context.Background(), &prepared, vm, qemu.StartPlan{}); err != nil {
+		t.Fatalf("StartPreparedLightVM: %v", err)
+	}
+	if !prepared.VirtiofsdStarted || !prepared.QEMUStarted || !qemuRunner.running {
+		t.Fatalf("started handle = %+v, running = %v", prepared, qemuRunner.running)
+	}
+	if err := runtime.StopQEMULightVM(context.Background(), vm.ID); err != nil {
+		t.Fatalf("StopQEMULightVM: %v", err)
+	}
+	if err := runtime.CleanupPreparedLightVM(context.Background(), prepared); err != nil {
+		t.Fatalf("CleanupPreparedLightVM: %v", err)
+	}
+	logData, err := os.ReadFile(buildahLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logText := string(logData)
+	if !strings.Contains(logText, "umount "+prepared.Container) || !strings.Contains(logText, "rm "+prepared.Container) {
+		t.Fatalf("buildah log %q missing exact cleanup for %s", logText, prepared.Container)
+	}
+	if strings.Contains(logText, "rm rookery-lightvm-"+vm.ID+"\n") {
+		t.Fatalf("cleanup removed the legacy container: %q", logText)
 	}
 }
 
@@ -247,6 +329,7 @@ func TestRuntimeCleansUpWhenQEMUFails(t *testing.T) {
 	}
 	t.Setenv("LIGHTVM_FAKE_BUILDAH_LOG", buildahLog)
 	t.Setenv("LIGHTVM_FAKE_ROOTFS", rootfs)
+	t.Setenv("LIGHTVM_FAKE_CONTAINERS", filepath.Join(dir, "containers.log"))
 	t.Setenv("LIGHTVM_TEST_BINARY", os.Args[0])
 	t.Setenv("GO_WANT_FAKE_VIRTIOFSD", "1")
 
@@ -255,7 +338,7 @@ func TestRuntimeCleansUpWhenQEMUFails(t *testing.T) {
 		qemuRunner,
 		writeFakeBuildah(t, dir),
 		writeFakeVirtiofsd(t, dir),
-		filepath.Join(dir, "run"),
+		shortRuntimeDir(t),
 		zerolog.Nop(),
 	)
 	if err != nil {
@@ -273,7 +356,7 @@ func TestRuntimeCleansUpWhenQEMUFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	logText := string(logData)
-	for _, command := range []string{"umount rookery-lightvm-" + vm.ID, "rm rookery-lightvm-" + vm.ID} {
+	for _, command := range []string{"umount rookery-lightvm-" + vm.ID + "-", "rm rookery-lightvm-" + vm.ID + "-"} {
 		if !strings.Contains(logText, command) {
 			t.Fatalf("buildah log %q does not contain %q", logText, command)
 		}

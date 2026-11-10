@@ -3,10 +3,12 @@ import { api } from "../../shared/api";
 import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
 import type {
   CgroupSettings,
+  Disk,
   LightVM,
   LightVMEnvVar,
   LightVMInitramfs,
   LightVMKernel,
+  VMDisk,
   VMInterface,
   VirtualInterface,
 } from "../types";
@@ -16,6 +18,7 @@ type LightVMDialogProps = {
   kernels: LightVMKernel[];
   initramfs: LightVMInitramfs[];
   interfaces: VirtualInterface[];
+  disks: Disk[];
   onClose: () => void;
   onSaved: (vm: LightVM) => void;
 };
@@ -119,6 +122,7 @@ export function LightVMDialog({
   kernels,
   initramfs,
   interfaces,
+  disks,
   onClose,
   onSaved,
 }: LightVMDialogProps) {
@@ -145,6 +149,14 @@ export function LightVMDialog({
   const [selectedInterfaces, setSelectedInterfaces] = useState<VMInterface[]>(() =>
     vmInterfaces(vm)
   );
+  const [selectedDisks, setSelectedDisks] = useState<VMDisk[]>(() => {
+    if (Array.isArray(vm?.disks) && vm.disks.length > 0) {
+      return vm.disks;
+    }
+    const ids = new Set(vm?.disk_ids ?? []);
+    return disks.filter((disk) => ids.has(disk.id));
+  });
+  const [diskChoice, setDiskChoice] = useState("");
   const [interfaceChoice, setInterfaceChoice] = useState("");
   const [interfaceHint, setInterfaceHint] = useState("");
   const [labels, setLabels] = useEntityLabelDraft("lightvm", vm?.id);
@@ -155,6 +167,16 @@ export function LightVMDialog({
   const formRef = useRef<HTMLFormElement | null>(null);
 
   const selectedInterfaceIDs = new Set(selectedInterfaces.map((iface) => iface.id));
+  const selectedDiskIDs = new Set(selectedDisks.map((disk) => disk.id));
+  const availableDisks = disks.filter((disk) => {
+    if (selectedDiskIDs.has(disk.id) || disk.is_template || disk.deletion_state) {
+      return false;
+    }
+    if (disk.attached_vm_id) {
+      return false;
+    }
+    return !disk.attached_lightvm_id || (vm !== null && disk.attached_lightvm_id === vm.id);
+  });
   const cgroupClasses = Array.isArray(cgroupSettings?.classes) ? cgroupSettings.classes : [];
   const leafCgroupClasses = cgroupClasses.filter(
     (item) => !cgroupClasses.some((other) => other.name.startsWith(item.name + "/"))
@@ -215,6 +237,26 @@ export function LightVMDialog({
 
   const removeInterface = (id: number) => {
     setSelectedInterfaces((current) => current.filter((iface) => iface.id !== id));
+  };
+
+  const addDisk = () => {
+    const id = Number(diskChoice);
+    if (!id) {
+      return;
+    }
+    const disk =
+      disks.find((item) => item.id === id) ||
+      selectedDisks.find((item) => item.id === id);
+    if (disk) {
+      setSelectedDisks((current) =>
+        current.some((item) => item.id === disk.id) ? current : [...current, disk]
+      );
+      setDiskChoice("");
+    }
+  };
+
+  const removeDisk = (id: number) => {
+    setSelectedDisks((current) => current.filter((disk) => disk.id !== id));
   };
 
   const updateConsole = (index: number, name: string) => {
@@ -291,6 +333,8 @@ export function LightVMDialog({
       append: append.trim(),
       consoles: normalizedConsoles,
       interface_ids: selectedInterfaces.map((iface) => iface.id),
+      disk_ids: selectedDisks.map((disk) => disk.id),
+      replace_disk_ids: editing,
     };
 
     setError("");
@@ -586,6 +630,61 @@ export function LightVMDialog({
                   : ""}
               </span>
             </label>
+          </div>
+
+          <div class="field field-wide">
+            <span class="field-label">Disks <em>optional</em></span>
+            <div class="interface-picker">
+              <select
+                value={diskChoice}
+                disabled={availableDisks.length === 0}
+                onChange={(event) => setDiskChoice(event.currentTarget.value)}
+              >
+                <option value="">
+                  {availableDisks.length > 0 ? "Select a disk…" : "No disks available"}
+                </option>
+                {availableDisks.map((disk) => (
+                  <option value={String(disk.id)} key={disk.id}>
+                    {disk.name} · {disk.size_gb} GB
+                  </option>
+                ))}
+              </select>
+              <button
+                class="button ghost"
+                type="button"
+                disabled={availableDisks.length === 0}
+                onClick={addDisk}
+              >
+                Add
+              </button>
+            </div>
+            <ul class="interface-list">
+              {selectedDisks.length === 0 ? (
+                <li class="empty">No disks selected</li>
+              ) : (
+                selectedDisks.map((disk) => (
+                  <li key={disk.id}>
+                    <span class="interface-list-name">
+                      {disk.name}
+                      <span class="interface-list-network">
+                        {disk.size_gb} GB · {disk.source || "lvm-thin"}
+                      </span>
+                    </span>
+                    <button
+                      class="row-action danger"
+                      type="button"
+                      onClick={() => removeDisk(disk.id)}
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+            <span class="field-hint">
+              Disks are attached in this order. Root remains the container image; the
+              guest initramfs mounts additional disks.
+            </span>
           </div>
 
           <div class="field field-wide">

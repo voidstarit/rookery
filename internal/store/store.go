@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"modernc.org/sqlite"
 
 	"github.com/voidstarit/rookery/internal/blockdev"
@@ -39,12 +40,17 @@ var (
 	// ErrDiskDeviceTaken is returned when a host block device is already
 	// registered as a passthrough disk.
 	ErrDiskDeviceTaken = errors.New("host block device is already registered")
-	// ErrDiskInUse is returned when a disk is attached to a VM.
-	ErrDiskInUse = errors.New("disk is attached to a vm")
-	// ErrDiskIsTemplate is returned when a template disk is attached to a VM.
-	ErrDiskIsTemplate = errors.New("template disks cannot be attached to a vm")
+	// ErrDiskInUse is returned when a disk is attached to a workload.
+	ErrDiskInUse = errors.New("disk is attached to a workload")
+	// ErrDiskIsTemplate is returned when a template disk is attached to a workload.
+	ErrDiskIsTemplate = errors.New("template disks cannot be attached to a workload")
 	// ErrDiskDeleting is returned when a disk is provisioning or being deleted.
 	ErrDiskDeleting = errors.New("disk is provisioning or being deleted")
+	// ErrInvalidDiskIDs is returned when disk IDs are malformed.
+	ErrInvalidDiskIDs = errors.New("invalid disk ids")
+	// ErrLightVMDeviceLimit is returned when a LightVM exceeds the combined
+	// disk and interface device limit.
+	ErrLightVMDeviceLimit = errors.New("lightvm device limit exceeded")
 	// ErrStorageBackendNotFound is returned when a storage backend does not exist.
 	ErrStorageBackendNotFound = errors.New("storage backend not found")
 	// ErrStorageBackendNameTaken is returned when a backend name is already in use.
@@ -84,6 +90,37 @@ var (
 	// ErrACLInUse is returned when an ACL is assigned to an interface.
 	ErrACLInUse = errors.New("acl is assigned to an interface")
 )
+
+// MaxWorkloadDisks bounds a single workload's disk attachment list.
+const MaxWorkloadDisks = 32
+
+// MaxLightVMDevices bounds the combined disks and interfaces of a LightVM.
+const MaxLightVMDevices = 24
+
+// DiskInUseError names the workload that owns a disk.
+type DiskInUseError struct {
+	OwnerKind string
+	OwnerID   string
+	OwnerName string
+}
+
+func (e *DiskInUseError) Error() string {
+	if e == nil {
+		return ErrDiskInUse.Error()
+	}
+	switch {
+	case e.OwnerName != "" && e.OwnerKind != "":
+		return fmt.Sprintf("disk is attached to %s %q", e.OwnerKind, e.OwnerName)
+	case e.OwnerID != "" && e.OwnerKind != "":
+		return fmt.Sprintf("disk is attached to %s %s", e.OwnerKind, e.OwnerID)
+	case e.OwnerKind != "":
+		return fmt.Sprintf("disk is attached to a %s", e.OwnerKind)
+	default:
+		return ErrDiskInUse.Error()
+	}
+}
+
+func (e *DiskInUseError) Unwrap() error { return ErrDiskInUse }
 
 const (
 	StatusStopped  = "stopped"
@@ -473,6 +510,8 @@ type Disk struct {
 	PreparedByScript      bool                `json:"-"`
 	AttachedVMID          *string             `json:"attached_vm_id,omitempty"`
 	AttachedVMName        string              `json:"attached_vm_name,omitempty"`
+	AttachedLightVMID     *string             `json:"attached_lightvm_id,omitempty"`
+	AttachedLightVMName   string              `json:"attached_lightvm_name,omitempty"`
 	DeletionState         string              `json:"deletion_state,omitempty"`
 	DeletionError         string              `json:"deletion_error,omitempty"`
 	DeletionAttempts      int                 `json:"deletion_attempts,omitempty"`
@@ -550,6 +589,10 @@ func Open(dbPath string) (*Store, error) {
 		}
 	}
 
+	if err := reportLegacyDiskConflicts(ctx, db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if err := migrate(ctx, db); err != nil {
 		db.Close()
 		return nil, err
@@ -668,14 +711,13 @@ func (s *Store) CreateVM(ctx context.Context, vm VM) (VM, error) {
 		return VM{}, err
 	}
 	for _, diskID := range diskIDs {
-		if err := s.checkDiskAvailable(ctx, diskID, ""); err != nil {
+		if err := s.checkDiskAvailableForAttach(ctx, diskID, "vm", vm.ID); err != nil {
 			return VM{}, err
 		}
 	}
 	if err := s.checkBootMedia(ctx, vm.BootMediaID); err != nil {
 		return VM{}, err
 	}
-	vm.DiskID = &diskIDs[0]
 	vm.DiskIDs = diskIDs
 	if vm.DesiredState == "" {
 		vm.DesiredState = DesiredStopped
@@ -688,9 +730,9 @@ func (s *Store) CreateVM(ctx context.Context, vm VM) (VM, error) {
 	}
 	defer tx.Rollback()
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO vms (id, name, description, status, desired_state, vcpus, memory_mb, disk_id, boot_media_id, console_enabled, cgroup_class, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		vm.ID, vm.Name, vm.Description, vm.Status, vm.DesiredState, vm.VCPUs, vm.MemoryMB, diskIDs[0], vm.BootMediaID, vm.ConsoleEnabled, vm.CgroupClass, now, now,
+		INSERT INTO vms (id, name, description, status, desired_state, vcpus, memory_mb, boot_media_id, console_enabled, cgroup_class, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		vm.ID, vm.Name, vm.Description, vm.Status, vm.DesiredState, vm.VCPUs, vm.MemoryMB, vm.BootMediaID, vm.ConsoleEnabled, vm.CgroupClass, now, now,
 	); err != nil {
 		if constraintErr := classifyVMCreateError(err, vm.Name); constraintErr != nil {
 			return VM{}, constraintErr
@@ -699,13 +741,10 @@ func (s *Store) CreateVM(ctx context.Context, vm VM) (VM, error) {
 	}
 	for position, diskID := range diskIDs {
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO vm_disks (vm_id, disk_id, position) VALUES (?, ?, ?)`,
+			`INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position) VALUES (?, NULL, ?, ?)`,
 			vm.ID, diskID, position,
 		); err != nil {
-			if isForeignKeyViolation(err) {
-				return VM{}, ErrDiskInUse
-			}
-			return VM{}, fmt.Errorf("attach vm disk: %w", err)
+			return VM{}, s.workloadDiskAttachError(ctx, tx, err, diskID)
 		}
 	}
 	if err := tx.Commit(); err != nil {
@@ -724,7 +763,7 @@ func (s *Store) SetVMDisks(ctx context.Context, vmID string, diskIDs []int64) (V
 		return VM{}, err
 	}
 	for _, diskID := range diskIDs {
-		if err := s.checkDiskAvailable(ctx, diskID, vmID); err != nil {
+		if err := s.checkDiskAvailableForAttach(ctx, diskID, "vm", vmID); err != nil {
 			return VM{}, err
 		}
 	}
@@ -734,24 +773,21 @@ func (s *Store) SetVMDisks(ctx context.Context, vmID string, diskIDs []int64) (V
 		return VM{}, fmt.Errorf("begin update vm disks: %w", err)
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM vm_disks WHERE vm_id = ?`, vmID); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM workload_disks WHERE vm_id = ?`, vmID); err != nil {
 		return VM{}, fmt.Errorf("clear vm disks: %w", err)
 	}
 	for position, diskID := range diskIDs {
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO vm_disks (vm_id, disk_id, position) VALUES (?, ?, ?)`,
+			`INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position) VALUES (?, NULL, ?, ?)`,
 			vmID, diskID, position,
 		); err != nil {
-			if isForeignKeyViolation(err) {
-				return VM{}, ErrDiskInUse
-			}
-			return VM{}, fmt.Errorf("attach vm disk: %w", err)
+			return VM{}, s.workloadDiskAttachError(ctx, tx, err, diskID)
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE vms SET disk_id = ?, updated_at = ? WHERE id = ?`,
-		diskIDs[0], now, vmID,
+	if _, err := tx.ExecContext(ctx, `UPDATE vms SET updated_at = ? WHERE id = ?`,
+		now, vmID,
 	); err != nil {
-		return VM{}, fmt.Errorf("update primary vm disk: %w", err)
+		return VM{}, fmt.Errorf("update vm updated_at: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return VM{}, fmt.Errorf("commit update vm disks: %w", err)
@@ -774,6 +810,9 @@ func normalizeDiskIDs(ids []int64) ([]int64, error) {
 		}
 		seen[id] = struct{}{}
 		out = append(out, id)
+	}
+	if len(out) > MaxWorkloadDisks {
+		return nil, fmt.Errorf("%w: at most %d disks are allowed", ErrInvalidDiskIDs, MaxWorkloadDisks)
 	}
 	return out, nil
 }
@@ -1185,17 +1224,34 @@ func (s *Store) SetDiskTemplate(ctx context.Context, id int64, isTemplate bool) 
 	if disk.Source != DiskSourceLVMThin {
 		return Disk{}, errors.New("only LVM thin disks can be templates")
 	}
-	if disk.AttachedVMID != nil {
-		return Disk{}, ErrDiskInUse
+	if err := s.checkDiskOwnership(ctx, disk, "", ""); err != nil {
+		return Disk{}, err
+	}
+	if isTemplate {
+		if err := checkDiskNotDeleting(disk); err != nil {
+			return Disk{}, err
+		}
 	}
 	now := time.Now().UTC().UnixMilli()
-	if _, err := s.db.ExecContext(ctx, `
-		UPDATE disks
-		SET is_template = ?,
-		    throttle_class_id = CASE WHEN ? THEN NULL ELSE throttle_class_id END,
-		    updated_at = ?
-		WHERE id = ?`, isTemplate, isTemplate, now, id); err != nil {
-		return Disk{}, fmt.Errorf("update disk template flag: %w", err)
+	if isTemplate {
+		if _, err := s.db.ExecContext(ctx, `
+			UPDATE disks
+			SET is_template = 1,
+			    throttle_class_id = NULL,
+			    updated_at = ?
+			WHERE id = ?`, now, id); err != nil {
+			return Disk{}, fmt.Errorf("update disk template flag: %w", err)
+		}
+	} else {
+		if _, err := s.db.ExecContext(ctx, `
+			UPDATE disks
+			SET is_template = 0,
+			    provisioning_script = '',
+			    provisioning_timeout = '',
+			    updated_at = ?
+			WHERE id = ?`, now, id); err != nil {
+			return Disk{}, fmt.Errorf("update disk template flag: %w", err)
+		}
 	}
 	return s.GetDisk(ctx, id)
 }
@@ -1209,8 +1265,11 @@ func (s *Store) SetDiskProvisioning(ctx context.Context, id int64, script, timeo
 	if disk.Source != DiskSourceLVMThin {
 		return Disk{}, errors.New("only LVM thin disks can be templates")
 	}
-	if disk.AttachedVMID != nil {
-		return Disk{}, ErrDiskInUse
+	if err := s.checkDiskOwnership(ctx, disk, "", ""); err != nil {
+		return Disk{}, err
+	}
+	if err := checkDiskNotDeleting(disk); err != nil {
+		return Disk{}, err
 	}
 	if !disk.IsTemplate {
 		return Disk{}, errors.New("provisioning settings require a template disk")
@@ -1239,8 +1298,8 @@ func (s *Store) DeleteDisk(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
-	if disk.AttachedVMID != nil {
-		return ErrDiskInUse
+	if err := s.checkDiskOwnership(ctx, disk, "", ""); err != nil {
+		return err
 	}
 
 	res, err := s.db.ExecContext(ctx, `DELETE FROM disks WHERE id = ?`, id)
@@ -1261,19 +1320,68 @@ func (s *Store) DeleteDisk(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (s *Store) checkDiskAvailable(ctx context.Context, diskID int64, exceptVMID string) error {
+// DiskAttachedToAnyWorkload reports whether either owner column is set.
+func DiskAttachedToAnyWorkload(disk Disk) bool {
+	return disk.AttachedVMID != nil || disk.AttachedLightVMID != nil
+}
+
+func (s *Store) workloadDiskAttachError(ctx context.Context, tx *sql.Tx, err error, diskID int64) error {
+	if !isUniqueViolation(err) && !isForeignKeyViolation(err) {
+		return fmt.Errorf("attach workload disk: %w", err)
+	}
+	_ = tx.Rollback()
+	disk, getErr := s.GetDisk(ctx, diskID)
+	if errors.Is(getErr, ErrDiskNotFound) {
+		return ErrDiskNotFound
+	}
+	if getErr != nil {
+		return getErr
+	}
+	if ownerErr := s.checkDiskOwnership(ctx, disk, "", ""); ownerErr != nil {
+		return ownerErr
+	}
+	if isForeignKeyViolation(err) {
+		return ErrDiskNotFound
+	}
+	return &DiskInUseError{}
+}
+
+func (s *Store) checkDiskOwnership(_ context.Context, disk Disk, ownerKind, ownerID string) error {
+	if disk.AttachedVMID != nil {
+		if ownerKind == "vm" && ownerID == *disk.AttachedVMID {
+			return nil
+		}
+		return &DiskInUseError{OwnerKind: "vm", OwnerID: *disk.AttachedVMID, OwnerName: disk.AttachedVMName}
+	}
+	if disk.AttachedLightVMID != nil {
+		if ownerKind == "lightvm" && ownerID == *disk.AttachedLightVMID {
+			return nil
+		}
+		return &DiskInUseError{OwnerKind: "lightvm", OwnerID: *disk.AttachedLightVMID, OwnerName: disk.AttachedLightVMName}
+	}
+	return nil
+}
+
+func checkDiskNotDeleting(disk Disk) error {
+	if disk.DeletionState != "" {
+		return ErrDiskDeleting
+	}
+	return nil
+}
+
+func (s *Store) checkDiskAvailableForAttach(ctx context.Context, diskID int64, ownerKind, ownerID string) error {
 	disk, err := s.GetDisk(ctx, diskID)
 	if err != nil {
 		return err
 	}
+	if err := s.checkDiskOwnership(ctx, disk, ownerKind, ownerID); err != nil {
+		return err
+	}
+	if err := checkDiskNotDeleting(disk); err != nil {
+		return err
+	}
 	if disk.IsTemplate {
 		return ErrDiskIsTemplate
-	}
-	if disk.DeletionState != "" {
-		return ErrDiskDeleting
-	}
-	if disk.AttachedVMID != nil && *disk.AttachedVMID != exceptVMID {
-		return ErrDiskInUse
 	}
 	return nil
 }
@@ -2191,21 +2299,66 @@ func (s *Store) loadVMDisks(ctx context.Context, vms []VM) error {
 	if len(vms) == 0 {
 		return nil
 	}
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT vd.vm_id, d.id, d.name, d.size_gb, d.vg, d.thin_pool,
+	ids := make([]string, 0, len(vms))
+	for _, vm := range vms {
+		ids = append(ids, vm.ID)
+	}
+	byOwner, err := s.loadWorkloadDisks(ctx, "vm", ids)
+	if err != nil {
+		return err
+	}
+	for i := range vms {
+		disks := byOwner[vms[i].ID]
+		if len(disks) == 0 {
+			continue
+		}
+		vms[i].Disks = disks
+		vms[i].Disk = &vms[i].Disks[0]
+		vms[i].DiskID = &vms[i].Disks[0].ID
+		vms[i].DiskIDs = make([]int64, 0, len(disks))
+		for _, disk := range disks {
+			vms[i].DiskIDs = append(vms[i].DiskIDs, disk.ID)
+		}
+	}
+	return nil
+}
+
+// loadWorkloadDisks loads ordered disk attachments for one workload kind.
+func (s *Store) loadWorkloadDisks(ctx context.Context, ownerKind string, ownerIDs []string) (map[string][]VMDisk, error) {
+	result := make(map[string][]VMDisk)
+	if len(ownerIDs) == 0 {
+		return result, nil
+	}
+	ownerColumn := "wd.vm_id"
+	switch ownerKind {
+	case "vm":
+	case "lightvm":
+		ownerColumn = "wd.lightvm_id"
+	default:
+		return nil, fmt.Errorf("unsupported workload disk owner kind %q", ownerKind)
+	}
+	placeholders := make([]string, len(ownerIDs))
+	args := make([]any, len(ownerIDs))
+	for i, id := range ownerIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	query := `
+		SELECT ` + ownerColumn + `, d.id, d.name, d.size_gb, d.vg, d.thin_pool,
 		       d.storage_backend_id, sb.name, d.source, d.device, d.size_bytes,
 		       d.attachment_protocol,
 		       d.throttle_class_id, dtc.name, dtc.limits
-		FROM vm_disks AS vd
-		JOIN disks AS d ON d.id = vd.disk_id
+		FROM workload_disks AS wd
+		JOIN disks AS d ON d.id = wd.disk_id
 		LEFT JOIN storage_backends AS sb ON sb.id = d.storage_backend_id
 		LEFT JOIN disk_throttle_classes AS dtc ON dtc.id = d.throttle_class_id
-		ORDER BY vd.vm_id, vd.position, d.name COLLATE NOCASE`)
+		WHERE ` + ownerColumn + ` IN (` + strings.Join(placeholders, ",") + `)
+		ORDER BY ` + ownerColumn + `, wd.position, d.name COLLATE NOCASE`
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return fmt.Errorf("query vm disks: %w", err)
+		return nil, fmt.Errorf("query workload disks: %w", err)
 	}
 	defer rows.Close()
-	byVM := make(map[string][]VMDisk)
 	for rows.Next() {
 		var (
 			vmID        string
@@ -2223,7 +2376,7 @@ func (s *Store) loadVMDisks(ctx context.Context, vms []VM) error {
 		if err := rows.Scan(&vmID, &disk.ID, &disk.Name, &disk.SizeGB, &vg, &pool,
 			&backend, &backendName, &disk.Source, &device, &sizeBytes, &disk.Protocol,
 			&classID, &className, &classLimits); err != nil {
-			return err
+			return nil, err
 		}
 		disk.VG = vg
 		disk.ThinPool = pool
@@ -2243,25 +2396,12 @@ func (s *Store) loadVMDisks(ctx context.Context, vms []VM) error {
 			disk.StorageBackendName = backendName.String
 		}
 		applyVMDiskThrottle(&disk, classID, className, classLimits)
-		byVM[vmID] = append(byVM[vmID], disk)
+		result[vmID] = append(result[vmID], disk)
 	}
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("iterate vm disks: %w", err)
+		return nil, fmt.Errorf("iterate workload disks: %w", err)
 	}
-	for i := range vms {
-		disks := byVM[vms[i].ID]
-		if len(disks) == 0 {
-			continue
-		}
-		vms[i].Disks = disks
-		vms[i].Disk = &vms[i].Disks[0]
-		vms[i].DiskID = &vms[i].Disks[0].ID
-		vms[i].DiskIDs = make([]int64, 0, len(disks))
-		for _, disk := range disks {
-			vms[i].DiskIDs = append(vms[i].DiskIDs, disk.ID)
-		}
-	}
-	return nil
+	return result, nil
 }
 
 // loadVMInterfaces fills VM.Interfaces for the supplied VM records.
@@ -2487,14 +2627,9 @@ type scanner interface {
 
 const vmSelect = `
 	SELECT v.id, v.name, v.description, v.status, v.desired_state, v.vcpus, v.memory_mb,
-	       v.disk_id, d.name, d.size_gb, d.vg, d.thin_pool,
-	       d.source, d.device, d.size_bytes, d.attachment_protocol,
-	       d.throttle_class_id, dtc.name, dtc.limits,
 	       v.boot_media_id, m.name, m.path, m.size_bytes,
 	       v.console_enabled, v.cgroup_class, v.created_at, v.updated_at
 	FROM vms AS v
-	LEFT JOIN disks AS d ON d.id = v.disk_id
-	LEFT JOIN disk_throttle_classes AS dtc ON dtc.id = d.throttle_class_id
 	LEFT JOIN media AS m ON m.id = v.boot_media_id`
 
 const diskSelect = `
@@ -2506,37 +2641,26 @@ const diskSelect = `
 	       d.deletion_next_attempt_at, d.deletion_claimed_at,
 	       d.is_template, d.template_disk_id,
 	       d.provisioning_script, d.provisioning_timeout, d.prepared_by_script,
-	       td.name, v.id, v.name, d.created_at, d.updated_at
+	       td.name, v.id, v.name, lv.id, lv.name, d.created_at, d.updated_at
 	FROM disks AS d
 	LEFT JOIN storage_backends AS sb ON sb.id = d.storage_backend_id
 	LEFT JOIN disk_throttle_classes AS dtc ON dtc.id = d.throttle_class_id
 	LEFT JOIN disks AS td ON td.id = d.template_disk_id
-	LEFT JOIN vm_disks AS vd ON vd.disk_id = d.id
-	LEFT JOIN vms AS v ON v.id = vd.vm_id`
+	LEFT JOIN workload_disks AS wd ON wd.disk_id = d.id
+	LEFT JOIN vms AS v ON v.id = wd.vm_id
+	LEFT JOIN lightvms AS lv ON lv.id = wd.lightvm_id`
 
 func scanVM(s scanner) (VM, error) {
 	var (
-		vm              VM
-		createdAt       int64
-		updatedAt       int64
-		diskID          sql.NullInt64
-		diskName        sql.NullString
-		diskSize        sql.NullInt64
-		diskVG          sql.NullString
-		diskPool        sql.NullString
-		diskSource      sql.NullString
-		diskDevice      sql.NullString
-		diskSizeByte    sql.NullInt64
-		diskProtocol    sql.NullString
-		diskClassID     sql.NullInt64
-		diskClassName   sql.NullString
-		diskClassLimits sql.NullString
-		bootMediaID     sql.NullInt64
-		mediaName       sql.NullString
-		mediaPath       sql.NullString
-		mediaSize       sql.NullInt64
-		console         int64
-		cgroupClass     string
+		vm          VM
+		createdAt   int64
+		updatedAt   int64
+		bootMediaID sql.NullInt64
+		mediaName   sql.NullString
+		mediaPath   sql.NullString
+		mediaSize   sql.NullInt64
+		console     int64
+		cgroupClass string
 	)
 	if err := s.Scan(
 		&vm.ID,
@@ -2546,18 +2670,6 @@ func scanVM(s scanner) (VM, error) {
 		&vm.DesiredState,
 		&vm.VCPUs,
 		&vm.MemoryMB,
-		&diskID,
-		&diskName,
-		&diskSize,
-		&diskVG,
-		&diskPool,
-		&diskSource,
-		&diskDevice,
-		&diskSizeByte,
-		&diskProtocol,
-		&diskClassID,
-		&diskClassName,
-		&diskClassLimits,
 		&bootMediaID,
 		&mediaName,
 		&mediaPath,
@@ -2573,36 +2685,6 @@ func scanVM(s scanner) (VM, error) {
 	vm.ConsoleEnabled = console != 0
 	vm.CgroupClass = strings.TrimSpace(cgroupClass)
 
-	if diskID.Valid {
-		id := diskID.Int64
-		vm.DiskID = &id
-	}
-	if diskID.Valid && diskName.Valid && diskVG.Valid && diskPool.Valid {
-		source := diskSource.String
-		if source == "" {
-			source = DiskSourceLVMThin
-		}
-		protocol := diskProtocol.String
-		if protocol == "" {
-			protocol = string(blockdev.ProtocolLocal)
-		}
-		device := diskDevice.String
-		if source == DiskSourceLVMThin && device == "" {
-			device = devicePath(diskVG.String, diskName.String)
-		}
-		vm.Disk = &VMDisk{
-			ID:        diskID.Int64,
-			Name:      diskName.String,
-			SizeGB:    int(diskSize.Int64),
-			SizeBytes: uint64(diskSizeByte.Int64),
-			VG:        diskVG.String,
-			ThinPool:  diskPool.String,
-			Device:    device,
-			Source:    source,
-			Protocol:  protocol,
-		}
-		applyVMDiskThrottle(vm.Disk, diskClassID, diskClassName, diskClassLimits)
-	}
 	if bootMediaID.Valid {
 		id := bootMediaID.Int64
 		vm.BootMediaID = &id
@@ -2659,6 +2741,8 @@ func scanDisk(s scanner) (Disk, error) {
 		templateName          sql.NullString
 		vmID                  sql.NullString
 		vmName                sql.NullString
+		lightVMID             sql.NullString
+		lightVMName           sql.NullString
 		createdAt             int64
 		updatedAt             int64
 	)
@@ -2690,6 +2774,8 @@ func scanDisk(s scanner) (Disk, error) {
 		&templateName,
 		&vmID,
 		&vmName,
+		&lightVMID,
+		&lightVMName,
 		&createdAt,
 		&updatedAt,
 	); err != nil {
@@ -2755,6 +2841,13 @@ func scanDisk(s scanner) (Disk, error) {
 	if vmName.Valid {
 		disk.AttachedVMName = vmName.String
 	}
+	if lightVMID.Valid {
+		id := lightVMID.String
+		disk.AttachedLightVMID = &id
+	}
+	if lightVMName.Valid {
+		disk.AttachedLightVMName = lightVMName.String
+	}
 	disk.CreatedAt = time.UnixMilli(createdAt).UTC()
 	disk.UpdatedAt = time.UnixMilli(updatedAt).UTC()
 	return disk, nil
@@ -2795,10 +2888,80 @@ func classifyVMCreateError(err error, name string) error {
 	if !isUniqueViolation(err) {
 		return nil
 	}
-	if strings.Contains(strings.ToLower(err.Error()), "vms.disk_id") {
-		return fmt.Errorf("%w", ErrDiskInUse)
-	}
 	return fmt.Errorf("%w: %q", ErrNameTaken, name)
+}
+
+func reportLegacyDiskConflicts(ctx context.Context, db *sql.DB) error {
+	var version int
+	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
+		return fmt.Errorf("read schema version for legacy disk report: %w", err)
+	}
+	if version >= 53 {
+		return nil
+	}
+	var hasVMDisks, hasDiskID int
+	if err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM sqlite_master
+		WHERE type = 'table' AND name = 'vm_disks'`).Scan(&hasVMDisks); err != nil {
+		return fmt.Errorf("inspect vm_disks table: %w", err)
+	}
+	if hasVMDisks == 0 {
+		return nil
+	}
+	if err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM pragma_table_info('vms') WHERE name = 'disk_id'`).Scan(&hasDiskID); err != nil {
+		return fmt.Errorf("inspect vms.disk_id column: %w", err)
+	}
+	if hasDiskID == 0 {
+		return nil
+	}
+	rows, err := db.QueryContext(ctx, `
+		SELECT v.id, v.name, v.disk_id, COALESCE(d.name, ''),
+		       EXISTS (SELECT 1 FROM vm_disks vd WHERE vd.vm_id = v.id),
+		       EXISTS (SELECT 1 FROM vm_disks vd2
+		               WHERE vd2.disk_id = v.disk_id AND vd2.vm_id <> v.id)
+		FROM vms AS v
+		LEFT JOIN disks AS d ON d.id = v.disk_id
+		WHERE v.disk_id IS NOT NULL`)
+	if err != nil {
+		return fmt.Errorf("query legacy vm disk pointers: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			vmID, vmName string
+			diskID       int64
+			diskName     string
+			hasRows      int
+			ownedElse    int
+		)
+		if err := rows.Scan(&vmID, &vmName, &diskID, &diskName, &hasRows, &ownedElse); err != nil {
+			return fmt.Errorf("scan legacy vm disk pointer: %w", err)
+		}
+		reason := ""
+		switch {
+		case hasRows != 0:
+			reason = "ignored because the VM already has vm_disks rows"
+		case diskName == "":
+			reason = "skipped because the disk row is missing"
+		case ownedElse != 0:
+			reason = "skipped because the disk is owned by another VM"
+		}
+		if reason == "" {
+			continue
+		}
+		log.Warn().
+			Str("vm_id", vmID).
+			Str("vm_name", vmName).
+			Int64("disk_id", diskID).
+			Str("disk_name", diskName).
+			Str("reason", reason).
+			Msg("legacy vms.disk_id pointer will not be migrated")
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate legacy vm disk pointers: %w", err)
+	}
+	return nil
 }
 
 func migrate(ctx context.Context, db *sql.DB) error {
