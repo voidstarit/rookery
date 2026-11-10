@@ -146,3 +146,57 @@ func TestStartCoordinatorCanceledWaitDoesNotLeak(t *testing.T) {
 	_ = canceledCtx
 	canceledDone()
 }
+
+func TestStartCoordinatorNilAndDefaultLimit(t *testing.T) {
+	var c *StartCoordinator
+	ctx, done, err := c.Begin(context.Background(), "nil")
+	if err != nil || ctx == nil {
+		t.Fatalf("nil Begin = %v, %v", ctx, err)
+	}
+	done()
+	c.Cancel("nil")
+	release := c.Reserve("nil")
+	release()
+	release()
+
+	defaulted := NewStartCoordinatorWithLimit(0)
+	_, done, err = defaulted.Begin(context.Background(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	done()
+}
+
+func TestStartCoordinatorCanceledWhileWaitingForReservation(t *testing.T) {
+	c := NewStartCoordinatorWithLimit(2)
+	release := c.Reserve("reserved")
+	defer release()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, _, err := c.Begin(ctx, "reserved"); err == nil {
+		t.Fatal("Begin ignored cancellation while waiting for a reservation")
+	}
+}
+
+func TestStartCoordinatorCanceledWhileWaitingForPermit(t *testing.T) {
+	c := NewStartCoordinatorWithLimit(1)
+	_, done, err := c.Begin(context.Background(), "holder")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer done()
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if _, _, err := c.Begin(ctx, "waiter"); err == nil {
+		t.Fatal("Begin ignored cancellation while waiting for a permit")
+	}
+}
+
+func TestStartCoordinatorEntryInitializesReservationChannel(t *testing.T) {
+	c := NewStartCoordinatorWithLimit(1)
+	entry := c.entry("channel")
+	entry.reservedCh = nil
+	if got := c.entry("channel"); got.reservedCh == nil {
+		t.Fatal("reservation channel was not recreated")
+	}
+}

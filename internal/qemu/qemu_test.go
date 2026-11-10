@@ -160,3 +160,17 @@ func TestStopCleansStaleFiles(t *testing.T) {
 		t.Fatalf("monitor still exists: %v", err)
 	}
 }
+
+func TestMetricsStoppedAndInvalidID(t *testing.T) {
+	q, err := New("/bin/true", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	metrics, err := q.Metrics(uuid.NewString())
+	if err != nil || metrics.Running {
+		t.Fatalf("stopped metrics = %+v, %v", metrics, err)
+	}
+	if _, err := q.Metrics("not-a-uuid"); err == nil {
+		t.Fatal("invalid VM id was accepted")
+	}
+}

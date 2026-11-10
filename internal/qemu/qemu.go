@@ -41,10 +41,11 @@ const (
 	DefaultBinary = "qemu-system-x86_64"
 	// DefaultRunDir stores per-VM pid files and VNC sockets.
 	DefaultRunDir  = "/run/rookery"
-	kvmDevice      = "/dev/kvm"
 	stopTimeout    = 10 * time.Second
 	monitorTimeout = 3 * time.Second
 )
+
+var kvmDevice = "/dev/kvm"
 
 // QEMU launches and stops QEMU/KVM processes.
 type QEMU struct {
