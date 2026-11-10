@@ -26,9 +26,19 @@ func testLightVM() store.LightVM {
 	}
 }
 
+func buildLightVMArgsForTest(t *testing.T, vm store.LightVM, consoles []lightVMConsoleArg, pidfile, monitor string, rootfs LightVMVirtioFS) string {
+	t.Helper()
+	args, err := buildLightVMArgs(vm, consoles, pidfile, monitor, rootfs, StartPlan{}, nil)
+	if err != nil {
+		t.Fatalf("buildLightVMArgs: %v", err)
+	}
+	return strings.Join(args, " ")
+}
+
 func TestBuildLightVMArgs(t *testing.T) {
 	vm := testLightVM()
-	args := strings.Join(buildLightVMArgs(
+	args := buildLightVMArgsForTest(
+		t,
 		vm,
 		[]lightVMConsoleArg{{
 			SocketPath: "/run/rookery/" + vm.ID + ".console.1",
@@ -37,7 +47,7 @@ func TestBuildLightVMArgs(t *testing.T) {
 		"/run/rookery/"+vm.ID+".lightvm.pid",
 		"/run/rookery/"+vm.ID+".lightvm.monitor",
 		LightVMVirtioFS{SocketPath: "/run/rookery/" + vm.ID + ".virtiofs", Tag: "rootfs"},
-	), " ")
+	)
 
 	for _, want := range []string{
 		"-name app-01",
@@ -78,10 +88,10 @@ func TestBuildLightVMArgs(t *testing.T) {
 
 func TestBuildLightVMArgsWithMultipleConsoles(t *testing.T) {
 	vm := testLightVM()
-	args := strings.Join(buildLightVMArgs(vm, []lightVMConsoleArg{
+	args := buildLightVMArgsForTest(t, vm, []lightVMConsoleArg{
 		{SocketPath: "/tmp/console-one", PortName: "org.example.console"},
 		{SocketPath: "/tmp/console-two", PortName: "org.example.console.2"},
-	}, "/tmp/pid", "/tmp/monitor", LightVMVirtioFS{}), " ")
+	}, "/tmp/pid", "/tmp/monitor", LightVMVirtioFS{})
 
 	for _, want := range []string{
 		"-chardev socket,id=console0,path=/tmp/console-one,server=on,wait=off",
@@ -102,7 +112,7 @@ func TestBuildLightVMArgsWithoutAppendOrInterfaces(t *testing.T) {
 	vm := testLightVM()
 	vm.Append = ""
 	vm.Interfaces = nil
-	args := strings.Join(buildLightVMArgs(vm, []lightVMConsoleArg{{SocketPath: "/tmp/console", PortName: "org.example.console"}}, "/tmp/pid", "/tmp/monitor", LightVMVirtioFS{}), " ")
+	args := buildLightVMArgsForTest(t, vm, []lightVMConsoleArg{{SocketPath: "/tmp/console", PortName: "org.example.console"}}, "/tmp/pid", "/tmp/monitor", LightVMVirtioFS{})
 	if !strings.Contains(args, "-append APP_HOSTNAME=app-01") {
 		t.Fatalf("args %q should contain the default APP_HOSTNAME", args)
 	}
@@ -114,7 +124,7 @@ func TestBuildLightVMArgsWithoutAppendOrInterfaces(t *testing.T) {
 func TestBuildLightVMArgsPreservesAppHostname(t *testing.T) {
 	vm := testLightVM()
 	vm.Append = "console=hvc0 APP_HOSTNAME=web-07 rdinit=/init"
-	args := strings.Join(buildLightVMArgs(vm, []lightVMConsoleArg{{SocketPath: "/tmp/console", PortName: "org.example.console"}}, "/tmp/pid", "/tmp/monitor", LightVMVirtioFS{}), " ")
+	args := buildLightVMArgsForTest(t, vm, []lightVMConsoleArg{{SocketPath: "/tmp/console", PortName: "org.example.console"}}, "/tmp/pid", "/tmp/monitor", LightVMVirtioFS{})
 	if strings.Count(args, "APP_HOSTNAME=") != 1 {
 		t.Fatalf("args %q should contain exactly one APP_HOSTNAME", args)
 	}

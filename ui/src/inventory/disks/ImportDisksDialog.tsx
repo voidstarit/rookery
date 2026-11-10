@@ -146,7 +146,9 @@ export function ImportDisksDialog({ backend, onClose, onImported }: ImportDisksD
                     {item.registered
                       ? item.attached_vm_name
                         ? `already imported · attached to ${item.attached_vm_name}`
-                        : item.storage_backend_name
+                        : item.attached_lightvm_name
+                          ? `already imported · attached to LightVM ${item.attached_lightvm_name}`
+                          : item.storage_backend_name
                           ? `already imported · ${item.storage_backend_name}`
                           : "already imported"
                       : "available to import"}

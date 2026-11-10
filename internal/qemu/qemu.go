@@ -41,10 +41,11 @@ const (
 	DefaultBinary = "qemu-system-x86_64"
 	// DefaultRunDir stores per-VM pid files and VNC sockets.
 	DefaultRunDir  = "/run/rookery"
-	kvmDevice      = "/dev/kvm"
 	stopTimeout    = 10 * time.Second
 	monitorTimeout = 3 * time.Second
 )
+
+var kvmDevice = "/dev/kvm"
 
 // QEMU launches and stops QEMU/KVM processes.
 type QEMU struct {
@@ -184,7 +185,7 @@ func (q *QEMU) StartWithPlan(ctx context.Context, vm store.VM, plan StartPlan) e
 		return errors.New("qemu exited before creating its pid file")
 	}
 	if placement.Enabled {
-		pids := q.processIDs(vm.ID, pidfile)
+		pids := q.processIDs(vm.ID, pidfile, matchingVMPIDs)
 		if len(pids) == 0 {
 			_ = q.Stop(context.Background(), vm.ID)
 			return errors.New("could not find QEMU pid for cgroup placement")
@@ -217,7 +218,7 @@ func (q *QEMU) ApplyCgroup(ctx context.Context, vm store.VM) error {
 	if err != nil {
 		return err
 	}
-	pids := q.processIDs(vm.ID, pidfile)
+	pids := q.processIDs(vm.ID, pidfile, matchingVMPIDs)
 	if !placement.Enabled {
 		for _, pid := range pids {
 			if err := q.cgroups.Release(pid); err != nil {
@@ -280,7 +281,7 @@ func (q *QEMU) run(ctx context.Context, args []string, placement cgroup.Placemen
 
 // processIDs returns every live QEMU pid for a VM, preferring the pid file and
 // falling back to /proc for a process that lost its pid file.
-func (q *QEMU) processIDs(vmID, pidfile string) []int {
+func (q *QEMU) processIDs(vmID, pidfile string, matcher func(string) []int) []int {
 	seen := make(map[int]struct{}, 1)
 	pids := make([]int, 0, 1)
 	add := func(pid int) {
@@ -293,10 +294,10 @@ func (q *QEMU) processIDs(vmID, pidfile string) []int {
 		seen[pid] = struct{}{}
 		pids = append(pids, pid)
 	}
-	if pid, ok := readPID(pidfile); ok && processAlive(pid) && processMatches(pid, vmID) {
+	if pid, ok := readPID(pidfile); ok && processAlive(pid) && processMatches(pid, vmID, pidfile) {
 		add(pid)
 	}
-	for _, pid := range matchingVMPIDs(vmID) {
+	for _, pid := range matcher(vmID) {
 		add(pid)
 	}
 	return pids
@@ -312,11 +313,12 @@ func (q *QEMU) Stop(ctx context.Context, vmID string) error {
 	defer q.cleanupSecrets(vmID)
 
 	targets := make([]int, 0, 1)
-	if pid, ok := readPID(pidfile); ok && processAlive(pid) && processMatches(pid, vmID) {
+	if pid, ok := readPID(pidfile); ok && processAlive(pid) && processMatches(pid, vmID, pidfile) {
 		targets = append(targets, pid)
 	} else {
 		// The pid file can be lost (for example when the run directory was
-		// cleaned while QEMU kept running). Find the process by its -uuid.
+		// cleaned while QEMU kept running). Find the process by its -uuid and
+		// VM pidfile basename.
 		targets = matchingVMPIDs(vmID)
 	}
 	if len(targets) == 0 {
@@ -334,7 +336,7 @@ func (q *QEMU) Stop(ctx context.Context, vmID string) error {
 	for time.Now().Before(deadline) {
 		alive := false
 		for _, pid := range targets {
-			if processAlive(pid) && processMatches(pid, vmID) {
+			if processAlive(pid) && processMatchesBasename(pid, vmID, filepath.Base(pidfile)) {
 				alive = true
 				break
 			}
@@ -369,7 +371,7 @@ func (q *QEMU) Running(vmID string) bool {
 		return false
 	}
 	pid, ok := readPID(pidfile)
-	if ok && processAlive(pid) && processMatches(pid, vmID) {
+	if ok && processAlive(pid) && processMatches(pid, vmID, pidfile) {
 		return true
 	}
 	return len(matchingVMPIDs(vmID)) > 0
@@ -483,6 +485,10 @@ func (q *QEMU) monitorQuery(ctx context.Context, vmID, command string) (string, 
 	if err != nil {
 		return "", err
 	}
+	return q.monitorQueryPath(ctx, monitor, command)
+}
+
+func (q *QEMU) monitorQueryPath(ctx context.Context, monitor, command string) (string, error) {
 	dialer := net.Dialer{Timeout: monitorTimeout}
 	conn, err := dialer.DialContext(ctx, "unix", monitor)
 	if err != nil {
@@ -537,8 +543,12 @@ func qmpPathFromSocket(socket string) string {
 }
 
 func (q *QEMU) prepareSecrets(vm store.VM, plan StartPlan) (map[int64]string, error) {
+	return q.prepareDiskSecrets(vm.ID, vmDisks(vm), plan)
+}
+
+func (q *QEMU) prepareDiskSecrets(secretPrefix string, disks []store.VMDisk, plan StartPlan) (map[int64]string, error) {
 	paths := make(map[int64]string)
-	for _, disk := range vmDisks(vm) {
+	for _, disk := range disks {
 		attachment, ok := plan.Attachments[disk.ID]
 		if !ok {
 			continue
@@ -560,7 +570,7 @@ func (q *QEMU) prepareSecrets(vm store.VM, plan StartPlan) (map[int64]string, er
 		default:
 			continue
 		}
-		path := q.secretPath(vm.ID, disk.ID, attachment.Protocol)
+		path := q.secretPath(secretPrefix, disk.ID, attachment.Protocol)
 		if err := q.writeSecret(path, secret); err != nil {
 			q.removeSecretFiles(paths)
 			return nil, err
@@ -645,16 +655,70 @@ func processAlive(pid int) bool {
 	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
-func processMatches(pid int, vmID string) bool {
+func processArgs(pid int) []string {
 	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "cmdline"))
-	if err != nil {
-		return false
+	if err != nil || len(data) == 0 {
+		return nil
 	}
-	return strings.Contains(string(data), vmID)
+	return strings.Split(strings.TrimRight(string(data), "\x00"), "\x00")
 }
 
-// matchingVMPIDs returns PIDs whose command line carries this VM's QEMU UUID.
-func matchingVMPIDs(vmID string) []int {
+func processMatches(pid int, expectedUUID, expectedPidfile string) bool {
+	args := processArgs(pid)
+	uuidMatches, pidfileMatches := false, false
+	for i := 0; i+1 < len(args); i++ {
+		switch args[i] {
+		case "-uuid":
+			uuidMatches = args[i+1] == expectedUUID
+		case "-pidfile":
+			pidfileMatches = filepath.Clean(args[i+1]) == filepath.Clean(expectedPidfile)
+		}
+	}
+	for _, arg := range args {
+		if arg == "-uuid="+expectedUUID {
+			uuidMatches = true
+		}
+		if arg == "-pidfile="+expectedPidfile {
+			pidfileMatches = true
+		}
+	}
+	return uuidMatches && pidfileMatches
+}
+
+func processMatchesBasename(pid int, expectedUUID string, pidfileBases ...string) bool {
+	args := processArgs(pid)
+	uuidMatches := false
+	for i := 0; i+1 < len(args); i++ {
+		switch args[i] {
+		case "-uuid":
+			uuidMatches = args[i+1] == expectedUUID
+		case "-pidfile":
+			base := filepath.Base(args[i+1])
+			for _, want := range pidfileBases {
+				if base == want {
+					return uuidMatches
+				}
+			}
+		}
+	}
+	for _, arg := range args {
+		if arg == "-uuid="+expectedUUID {
+			uuidMatches = true
+		}
+		if strings.HasPrefix(arg, "-pidfile=") {
+			base := filepath.Base(strings.TrimPrefix(arg, "-pidfile="))
+			for _, want := range pidfileBases {
+				if base == want {
+					return uuidMatches
+				}
+			}
+		}
+	}
+	return false
+}
+
+// matchingProcessIDs returns PIDs whose command line carries this QEMU UUID.
+func matchingProcessIDs(vmID string) []int {
 	return cmdlinePIDs(func(args []string) bool {
 		for i := 0; i+1 < len(args); i++ {
 			if args[i] == "-uuid" && args[i+1] == vmID {
@@ -668,6 +732,96 @@ func matchingVMPIDs(vmID string) []int {
 		}
 		return false
 	})
+}
+
+// matchingVMPIDs returns PIDs whose command line carries this VM's UUID and
+// VM pidfile basename.
+func matchingVMPIDs(vmID string) []int {
+	return matchingPIDsWithPidfile(vmID, vmID+".pid")
+}
+
+// matchingLightVMPIDs returns PIDs whose command line carries this LightVM's
+// UUID and a LightVM pidfile basename.
+func matchingLightVMPIDs(id string) []int {
+	return matchingPIDsWithPidfile(id, "lightvm-"+id+".lightvm.pid", id+".lightvm.pid")
+}
+
+func matchingPIDsWithPidfile(id string, bases ...string) []int {
+	wanted := make(map[string]struct{}, len(bases))
+	for _, base := range bases {
+		wanted[base] = struct{}{}
+	}
+	return cmdlinePIDs(func(args []string) bool {
+		uuidMatches, pidfileMatches := false, false
+		for i := 0; i+1 < len(args); i++ {
+			switch args[i] {
+			case "-uuid":
+				uuidMatches = args[i+1] == id
+			case "-pidfile":
+				_, pidfileMatches = wanted[filepath.Base(args[i+1])]
+			}
+		}
+		for _, arg := range args {
+			if arg == "-uuid="+id {
+				uuidMatches = true
+			}
+			if strings.HasPrefix(arg, "-pidfile=") {
+				_, pidfileMatches = wanted[filepath.Base(strings.TrimPrefix(arg, "-pidfile="))]
+			}
+		}
+		return uuidMatches && pidfileMatches
+	})
+}
+
+// lightVMQEMUProcesses finds QEMU processes with LightVM-specific evidence:
+// a LightVM pidfile basename or a LightVM virtiofs socket. A bare -uuid is not
+// enough because a VM may share the UUID.
+func lightVMQEMUProcesses(id string) []int {
+	seen := make(map[int]struct{})
+	pids := make([]int, 0)
+	add := func(items []int) {
+		for _, pid := range items {
+			if _, ok := seen[pid]; ok {
+				continue
+			}
+			seen[pid] = struct{}{}
+			pids = append(pids, pid)
+		}
+	}
+	add(matchingLightVMPIDs(id))
+	add(cmdlinePIDs(func(args []string) bool {
+		return processArgsReferenceLightVMSocket(args, id)
+	}))
+	return pids
+}
+
+func processArgsReferenceLightVMSocket(args []string, id string) bool {
+	if len(args) == 0 || strings.Contains(filepath.Base(args[0]), "virtiofsd") {
+		return false
+	}
+	prefixes := []string{"lightvm-" + id, id}
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] != "-chardev" && args[i] != "-fsdev" {
+			continue
+		}
+		for _, prefix := range prefixes {
+			if strings.Contains(args[i+1], prefix) && strings.Contains(args[i+1], ".virtiofs.sock") {
+				return true
+			}
+		}
+	}
+	for _, arg := range args {
+		for _, prefix := range prefixes {
+			if strings.Contains(arg, prefix) && strings.Contains(arg, ".virtiofs.sock") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func processReferencesLightVMSocket(pid int, id string) bool {
+	return processArgsReferenceLightVMSocket(processArgs(pid), id)
 }
 
 type processRef struct {

@@ -19,6 +19,10 @@ func (p *plannerStub) Plan(context.Context, store.VM) (qemu.StartPlan, error) {
 	return p.plan, p.err
 }
 
+func (p *plannerStub) PlanDisks(context.Context, []store.VMDisk) (qemu.StartPlan, error) {
+	return p.plan, p.err
+}
+
 type plannerRuntime struct {
 	started     int
 	startedPlan int

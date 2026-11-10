@@ -197,6 +197,9 @@ export type LightVM = {
   desired_state: string;
   console_socket?: string;
   consoles?: LightVMConsole[];
+  disk_ids?: number[];
+  disks?: VMDisk[];
+  run_state?: string;
   interface_ids?: number[];
   interfaces?: VMInterface[];
   created_at?: string;
@@ -398,6 +401,8 @@ export type Disk = {
   deletion_error?: string;
   attached_vm_id?: string;
   attached_vm_name?: string;
+  attached_lightvm_id?: string;
+  attached_lightvm_name?: string;
   is_template?: boolean;
   template_disk_id?: number;
   template_disk_name?: string;
@@ -414,6 +419,8 @@ export type ImportableDisk = {
   disk_id?: number;
   attached_vm_id?: string;
   attached_vm_name?: string;
+  attached_lightvm_id?: string;
+  attached_lightvm_name?: string;
   storage_backend_name?: string;
 };
 

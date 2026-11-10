@@ -99,6 +99,10 @@ func (s *hostService) ListAttachableBlockDevices(ctx context.Context, _ *rookery
 				item.UnavailableReason = prefix + disk.Name + " (attached to " + disk.AttachedVMName + ")"
 			case disk.AttachedVMID != nil:
 				item.UnavailableReason = prefix + disk.Name + " (attached to a VM)"
+			case disk.AttachedLightVMID != nil && disk.AttachedLightVMName != "":
+				item.UnavailableReason = prefix + disk.Name + " (attached to LightVM " + disk.AttachedLightVMName + ")"
+			case disk.AttachedLightVMID != nil:
+				item.UnavailableReason = prefix + disk.Name + " (attached to a LightVM)"
 			default:
 				item.UnavailableReason = prefix + disk.Name
 			}

@@ -36,7 +36,7 @@ access, and per-VM monitoring.*
 - Thin-LVM disks, template clones, and existing-volume import
 - Reusable QEMU disk throttling classes (BPS, IOPS, bursts, I/O size) resolved at VM start; tested with QEMU 10.0.13 (see [`docs/api.md`](docs/api.md))
 - QEMU/KVM virtual machines with virtio disks, ISO boot media, and noVNC console
-- LightVMs that boot an uploaded kernel/initramfs and a buildah-mounted container rootfs through virtiofsd, with multiple selectable xterm.js serial consoles
+- LightVMs that boot an uploaded kernel/initramfs and a buildah-mounted container rootfs through virtiofsd, with ordered LVM-thin, host-passthrough, or Kouja disk attachments, shared VM/LightVM disk ownership, and multiple selectable xterm.js serial consoles
 - cgroup v2 CPU pinning, memory ceilings, and per-device I/O limits with reusable class profiles
 - Live cgroup telemetry for memory, CPU, tasks, and I/O in Settings
 - Free-form labels on inventory entities, with label chips and multi-label editing in the UI and Terraform

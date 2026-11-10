@@ -7,13 +7,18 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
+	"github.com/voidstarit/rookery/internal/kouja"
+	"github.com/voidstarit/rookery/internal/lightvm"
+	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -24,15 +29,27 @@ const (
 
 type lightVMService struct {
 	rookeryv1.UnimplementedLightVMServiceServer
-	store   *store.Store
-	runtime LightVMRuntime
-	mu      *sync.Mutex
+	store            *store.Store
+	runtime          LightVMRuntime
+	mu               *sync.Mutex
+	resourceMu       *sync.Mutex
+	planner          LightVMDiskPlanner
+	startCoordinator *lightvm.StartCoordinator
 }
 
-// LightVMRuntime starts and stops QEMU processes for LightVM definitions.
+// LightVMDiskPlanner prepares remote disk attachments for LightVM starts.
+type LightVMDiskPlanner interface {
+	PlanDisks(ctx context.Context, disks []store.VMDisk) (qemu.StartPlan, error)
+}
+
+// LightVMRuntime owns LightVM QEMU, virtiofsd, and ephemeral containers.
 type LightVMRuntime interface {
-	StartLightVM(ctx context.Context, vm store.LightVM) error
-	StopLightVM(ctx context.Context, id string) error
+	PrepareLightVM(ctx context.Context, vm store.LightVM) (lightvm.PreparedLightVM, error)
+	StartPreparedLightVM(ctx context.Context, prepared *lightvm.PreparedLightVM, vm store.LightVM, plan qemu.StartPlan) error
+	CleanupPreparedLightVM(ctx context.Context, prepared lightvm.PreparedLightVM) error
+	StopQEMULightVM(ctx context.Context, id string) error
+	CleanupStoppedLightVM(ctx context.Context, id string) error
+	RunState(ctx context.Context, id string) (string, error)
 	RunningLightVM(id string) bool
 	LightVMConsoleSocket(id string, consoleID int64) string
 }
@@ -52,7 +69,7 @@ func (s *lightVMService) ListLightVMs(ctx context.Context, _ *rookeryv1.ListLigh
 	}
 	response := &rookeryv1.ListLightVMsResponse{Lightvms: make([]*rookeryv1.LightVM, 0, len(vms))}
 	for _, vm := range vms {
-		response.Lightvms = append(response.Lightvms, s.toProto(vm))
+		response.Lightvms = append(response.Lightvms, s.toProto(ctx, vm))
 	}
 	return response, nil
 }
@@ -63,7 +80,7 @@ func (s *lightVMService) GetLightVM(ctx context.Context, request *rookeryv1.GetL
 	if err != nil {
 		return nil, lightVMError(err, "read")
 	}
-	return s.toProto(vm), nil
+	return s.toProto(ctx, vm), nil
 }
 
 // CreateLightVM inserts a LightVM definition. This is inventory-only: no
@@ -79,21 +96,39 @@ func (s *lightVMService) CreateLightVM(ctx context.Context, request *rookeryv1.C
 	if err := validateCgroupClassFor(ctx, s.store, vm.CgroupClass, "LightVM"); err != nil {
 		return nil, err
 	}
+	if s.resourceMu != nil {
+		s.resourceMu.Lock()
+		defer s.resourceMu.Unlock()
+	}
 	created, err := s.store.CreateLightVM(ctx, vm)
 	if err != nil {
 		return nil, lightVMError(err, "create")
 	}
-	return s.toProto(created), nil
+	return s.toProto(ctx, created), nil
 }
 
 // UpdateLightVM replaces the editable fields and the full interface set.
 func (s *lightVMService) UpdateLightVM(ctx context.Context, request *rookeryv1.UpdateLightVMRequest) (*rookeryv1.LightVM, error) {
+	if s.startCoordinator != nil {
+		release := s.startCoordinator.Reserve(request.GetId())
+		defer release()
+		s.startCoordinator.Cancel(request.GetId())
+	}
+	if s.resourceMu != nil {
+		s.resourceMu.Lock()
+		defer s.resourceMu.Unlock()
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, err := s.store.GetLightVM(ctx, request.GetId()); err != nil {
+	existing, err := s.store.GetLightVM(ctx, request.GetId())
+	if err != nil {
 		return nil, lightVMError(err, "read")
 	}
-	if s.runtime != nil && s.runtime.RunningLightVM(request.GetId()) {
+	if s.runtime == nil {
+		if existing.Status != store.StatusStopped || existing.DesiredState != store.DesiredStopped {
+			return nil, status.Error(codes.Unavailable, "LightVM runtime is unavailable; cannot verify the LightVM is stopped")
+		}
+	} else if s.runtime.RunningLightVM(existing.ID) {
 		return nil, status.Error(codes.Aborted, "stop the LightVM before editing it")
 	}
 	vm, err := lightVMFromUpdateRequest(request)
@@ -110,22 +145,61 @@ func (s *lightVMService) UpdateLightVM(ctx context.Context, request *rookeryv1.U
 	if err != nil {
 		return nil, lightVMError(err, "update")
 	}
-	return s.toProto(updated), nil
+	return s.toProto(ctx, updated), nil
 }
 
 // DeleteLightVM stops a running LightVM and removes its definition.
 func (s *lightVMService) DeleteLightVM(ctx context.Context, request *rookeryv1.DeleteLightVMRequest) (*emptypb.Empty, error) {
+	if s.startCoordinator != nil {
+		release := s.startCoordinator.Reserve(request.GetId())
+		defer release()
+		s.startCoordinator.Cancel(request.GetId())
+	}
+	lifecycleCtx := context.WithoutCancel(ctx)
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, err := s.store.GetLightVM(ctx, request.GetId()); err != nil {
+	existing, err := s.store.GetLightVM(ctx, request.GetId())
+	if err != nil {
+		s.mu.Unlock()
 		return nil, lightVMError(err, "read")
 	}
-	if s.runtime != nil {
-		if err := s.runtime.StopLightVM(ctx, request.GetId()); err != nil {
-			return nil, status.Error(codes.Internal, "could not stop LightVM: "+err.Error())
+	if s.runtime == nil {
+		if existing.Status != store.StatusStopped || existing.DesiredState != store.DesiredStopped {
+			s.mu.Unlock()
+			return nil, status.Error(codes.Unavailable, "LightVM runtime is unavailable; cannot verify the LightVM is stopped")
+		}
+	} else {
+		if _, err := s.store.SetLightVMDesiredState(lifecycleCtx, existing.ID, store.DesiredStopped); err != nil {
+			s.mu.Unlock()
+			return nil, status.Error(codes.Internal, "could not update LightVM desired state")
+		}
+		if err := s.runtime.StopQEMULightVM(lifecycleCtx, existing.ID); err != nil || s.runtime.RunningLightVM(existing.ID) {
+			s.mu.Unlock()
+			if err != nil {
+				return nil, status.Error(codes.Internal, "could not stop LightVM: "+err.Error())
+			}
+			return nil, status.Error(codes.Internal, "LightVM is still running")
+		}
+		if _, err := s.store.SetLightVMStatus(lifecycleCtx, existing.ID, store.StatusStopped); err != nil {
+			s.mu.Unlock()
+			return nil, status.Error(codes.Internal, "could not update LightVM status")
 		}
 	}
-	if err := s.store.DeleteLightVM(ctx, request.GetId()); err != nil {
+	s.mu.Unlock()
+
+	if s.runtime == nil {
+		log.Warn().Str("lightvm_id", existing.ID).Msg("LightVM runtime unavailable; skipping container cleanup")
+	} else {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		err = s.runtime.CleanupStoppedLightVM(cleanupCtx, existing.ID)
+		cancel()
+		if err != nil {
+			return nil, status.Error(codes.Internal, "could not clean up LightVM: "+err.Error())
+		}
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.store.DeleteLightVM(ctx, existing.ID); err != nil {
 		return nil, lightVMError(err, "delete")
 	}
 	return &emptypb.Empty{}, nil
@@ -133,8 +207,6 @@ func (s *lightVMService) DeleteLightVM(ctx context.Context, request *rookeryv1.D
 
 // StartLightVM launches the definition's QEMU process.
 func (s *lightVMService) StartLightVM(ctx context.Context, request *rookeryv1.StartLightVMRequest) (*rookeryv1.LightVM, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.runtimeUnavailable(); err != nil {
 		return nil, err
 	}
@@ -142,52 +214,182 @@ func (s *lightVMService) StartLightVM(ctx context.Context, request *rookeryv1.St
 	if err != nil {
 		return nil, lightVMError(err, "read")
 	}
-	if s.runtime.RunningLightVM(vm.ID) {
-		if _, err := s.store.SetLightVMStatus(ctx, vm.ID, store.StatusRunning); err != nil {
-			return nil, status.Error(codes.Internal, "could not update LightVM status")
+	if len(vm.Disks)+len(vm.Interfaces) > store.MaxLightVMDevices {
+		return nil, status.Errorf(codes.FailedPrecondition,
+			"LightVM has %d disks and %d interfaces (limit %d); reduce the device count",
+			len(vm.Disks), len(vm.Interfaces), store.MaxLightVMDevices)
+	}
+	requestGeneration := vm.LifecycleGeneration
+	loadedDesired := vm.DesiredState
+	var startCtx context.Context
+	done := func() {}
+	if s.startCoordinator != nil {
+		startCtx, done, err = s.startCoordinator.Begin(ctx, vm.ID)
+		if err != nil {
+			return nil, status.Error(codes.Aborted, "LightVM is already starting")
 		}
-		if _, err := s.store.SetLightVMDesiredState(ctx, vm.ID, store.DesiredRunning); err != nil {
-			return nil, status.Error(codes.Internal, "could not update LightVM desired state")
+	} else {
+		startCtx = ctx
+	}
+	defer done()
+
+	restorePrevious := func(current store.LightVM) {
+		if current.DesiredState != store.DesiredRunning {
+			return
 		}
+		if loadedDesired == store.DesiredStopped {
+			_, _ = s.store.SetLightVMDesiredState(context.WithoutCancel(ctx), current.ID, store.DesiredStopped)
+		}
+	}
+
+	s.mu.Lock()
+	current, err := s.store.GetLightVM(ctx, vm.ID)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, lightVMError(err, "read")
+	}
+	if s.runtime.RunningLightVM(current.ID) {
+		if current.DesiredState == store.DesiredStopped {
+			s.mu.Unlock()
+			return nil, status.Error(codes.Aborted, "a stop won the race with this start")
+		}
+		runState, stateErr := s.runtime.RunState(context.WithoutCancel(ctx), current.ID)
+		if stateErr != nil {
+			s.mu.Unlock()
+			return nil, status.Errorf(codes.FailedPrecondition, "cannot read LightVM run state; stop and start to recover: %v", stateErr)
+		}
+		if strings.HasPrefix(runState, "paused") {
+			s.mu.Unlock()
+			return nil, status.Error(codes.FailedPrecondition, "LightVM is paused by an I/O error; stop and start to recover")
+		}
+		_, _ = s.store.SetLightVMStatus(context.WithoutCancel(ctx), current.ID, store.StatusRunning)
+		_, _ = s.store.SetLightVMDesiredState(context.WithoutCancel(ctx), current.ID, store.DesiredRunning)
+		s.mu.Unlock()
 		return nil, status.Error(codes.AlreadyExists, "LightVM is already running")
 	}
-	if err := s.runtime.StartLightVM(ctx, vm); err != nil {
-		_, _ = s.store.SetLightVMStatus(ctx, vm.ID, store.StatusError)
-		return nil, status.Error(codes.Internal, "could not start LightVM: "+err.Error())
+	if current.DesiredState != loadedDesired || current.LifecycleGeneration != requestGeneration {
+		s.mu.Unlock()
+		return nil, status.Error(codes.Aborted, "LightVM changed while the start was queued")
 	}
-	if _, err := s.store.SetLightVMStatus(ctx, vm.ID, store.StatusRunning); err != nil {
-		return nil, status.Error(codes.Internal, "could not update LightVM status")
-	}
-	updated, err := s.store.SetLightVMDesiredState(ctx, vm.ID, store.DesiredRunning)
+	intent, err := s.store.SetLightVMDesiredState(context.WithoutCancel(ctx), current.ID, store.DesiredRunning)
 	if err != nil {
+		s.mu.Unlock()
 		return nil, status.Error(codes.Internal, "could not update LightVM desired state")
 	}
-	return s.toProto(updated), nil
+	startGeneration := intent.LifecycleGeneration
+	current.LifecycleGeneration = startGeneration
+	s.mu.Unlock()
+
+	prepared, err := s.runtime.PrepareLightVM(startCtx, current)
+	if err == nil {
+		var plan qemu.StartPlan
+		if s.planner != nil {
+			plan, err = s.planner.PlanDisks(startCtx, current.Disks)
+		}
+		if err == nil {
+			s.mu.Lock()
+			current, readErr := s.store.GetLightVM(ctx, current.ID)
+			if readErr != nil {
+				s.mu.Unlock()
+				err = readErr
+			} else if current.LifecycleGeneration != startGeneration || current.DesiredState != store.DesiredRunning {
+				restorePrevious(current)
+				s.mu.Unlock()
+				_ = s.runtime.CleanupPreparedLightVM(context.Background(), prepared)
+				return nil, status.Error(codes.Aborted, "LightVM changed while starting")
+			} else if startCtx.Err() != nil {
+				restorePrevious(current)
+				s.mu.Unlock()
+				_ = s.runtime.CleanupPreparedLightVM(context.Background(), prepared)
+				return nil, status.Error(codes.Aborted, "start was canceled")
+			} else {
+				err = s.runtime.StartPreparedLightVM(startCtx, &prepared, current, plan)
+				if err == nil {
+					_, _ = s.store.SetLightVMStatus(context.WithoutCancel(ctx), current.ID, store.StatusRunning)
+					updated, updateErr := s.store.SetLightVMDesiredState(context.WithoutCancel(ctx), current.ID, store.DesiredRunning)
+					s.mu.Unlock()
+					if updateErr != nil {
+						return nil, status.Error(codes.Internal, "could not update LightVM state")
+					}
+					return s.toProto(ctx, updated), nil
+				}
+				if errors.Is(err, qemu.ErrAlreadyRunning) && s.runtime.RunningLightVM(current.ID) {
+					_, _ = s.store.SetLightVMStatus(context.WithoutCancel(ctx), current.ID, store.StatusRunning)
+					_, _ = s.store.SetLightVMDesiredState(context.WithoutCancel(ctx), current.ID, store.DesiredRunning)
+					s.mu.Unlock()
+					_ = s.runtime.CleanupPreparedLightVM(context.Background(), prepared)
+					return nil, status.Error(codes.AlreadyExists, "LightVM is already running")
+				}
+				if prepared.QEMUStarted {
+					stopErr := s.runtime.StopQEMULightVM(context.WithoutCancel(ctx), current.ID)
+					if stopErr != nil || s.runtime.RunningLightVM(current.ID) {
+						s.mu.Unlock()
+						return nil, lightVMStartStatusError(err)
+					}
+				}
+				s.mu.Unlock()
+				_ = s.runtime.CleanupPreparedLightVM(context.Background(), prepared)
+				restorePrevious(current)
+				_, _ = s.store.SetLightVMStatus(context.WithoutCancel(ctx), current.ID, store.StatusError)
+			}
+		}
+	}
+	if err != nil {
+		_ = s.runtime.CleanupPreparedLightVM(context.Background(), prepared)
+		if errors.Is(err, qemu.ErrAlreadyRunning) && s.runtime.RunningLightVM(current.ID) {
+			_, _ = s.store.SetLightVMStatus(context.WithoutCancel(ctx), current.ID, store.StatusRunning)
+			_, _ = s.store.SetLightVMDesiredState(context.WithoutCancel(ctx), current.ID, store.DesiredRunning)
+			return nil, status.Error(codes.AlreadyExists, "LightVM is already running")
+		}
+		restorePrevious(current)
+		if !errors.Is(err, context.Canceled) && startCtx.Err() == nil {
+			_, _ = s.store.SetLightVMStatus(context.WithoutCancel(ctx), current.ID, store.StatusError)
+		}
+		return nil, lightVMStartStatusError(err)
+	}
+	return nil, status.Error(codes.Internal, "could not start LightVM")
 }
 
 // StopLightVM terminates the running QEMU process.
 func (s *lightVMService) StopLightVM(ctx context.Context, request *rookeryv1.StopLightVMRequest) (*rookeryv1.LightVM, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.runtimeUnavailable(); err != nil {
 		return nil, err
 	}
-	if _, err := s.store.GetLightVM(ctx, request.GetId()); err != nil {
+	if s.startCoordinator != nil {
+		release := s.startCoordinator.Reserve(request.GetId())
+		defer release()
+		s.startCoordinator.Cancel(request.GetId())
+	}
+	lifecycleCtx := context.WithoutCancel(ctx)
+	s.mu.Lock()
+	current, err := s.store.GetLightVM(ctx, request.GetId())
+	if err != nil {
+		s.mu.Unlock()
 		return nil, lightVMError(err, "read")
 	}
-	if s.runtime.RunningLightVM(request.GetId()) {
-		if err := s.runtime.StopLightVM(ctx, request.GetId()); err != nil {
-			return nil, status.Error(codes.Internal, "could not stop LightVM: "+err.Error())
-		}
-	}
-	if _, err := s.store.SetLightVMStatus(ctx, request.GetId(), store.StatusStopped); err != nil {
-		return nil, status.Error(codes.Internal, "could not update LightVM status")
-	}
-	updated, err := s.store.SetLightVMDesiredState(ctx, request.GetId(), store.DesiredStopped)
-	if err != nil {
+	if _, err := s.store.SetLightVMDesiredState(lifecycleCtx, current.ID, store.DesiredStopped); err != nil {
+		s.mu.Unlock()
 		return nil, status.Error(codes.Internal, "could not update LightVM desired state")
 	}
-	return s.toProto(updated), nil
+	if err := s.runtime.StopQEMULightVM(lifecycleCtx, current.ID); err != nil || s.runtime.RunningLightVM(current.ID) {
+		s.mu.Unlock()
+		if err != nil {
+			return nil, status.Error(codes.Internal, "could not stop LightVM: "+err.Error())
+		}
+		return nil, status.Error(codes.Internal, "LightVM is still running")
+	}
+	updated, err := s.store.SetLightVMStatus(lifecycleCtx, current.ID, store.StatusStopped)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, status.Error(codes.Internal, "could not update LightVM status")
+	}
+	s.mu.Unlock()
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if err := s.runtime.CleanupStoppedLightVM(cleanupCtx, current.ID); err != nil {
+		return nil, status.Error(codes.Internal, "could not clean up LightVM: "+err.Error())
+	}
+	return s.toProto(ctx, updated), nil
 }
 
 func lightVMFromCreateRequest(request *rookeryv1.CreateLightVMRequest) (store.LightVM, error) {
@@ -208,25 +410,30 @@ func lightVMFromCreateRequest(request *rookeryv1.CreateLightVMRequest) (store.Li
 		request.GetConsoleEnabled(), request.GetCgroupClass(),
 		request.GetKernelId(), request.GetInitramfsId(), request.GetImage(),
 		request.GetEnv(), request.GetExecutablePath(), request.GetExecutableArgs(),
-		request.GetInterfaceIds(), appendValue, request.GetConsoles(),
+		request.GetInterfaceIds(), request.GetDiskIds(), appendValue, request.GetConsoles(),
 	)
 }
 
 func lightVMFromUpdateRequest(request *rookeryv1.UpdateLightVMRequest) (store.LightVM, error) {
-	return lightVMFromRequest(
+	vm, err := lightVMFromRequest(
 		request.GetId(), request.GetName(), request.GetDescription(),
 		int(request.GetVcpus()), int(request.GetMemoryMb()), request.GetConsoleEnabled(),
 		request.GetCgroupClass(), request.GetKernelId(), request.GetInitramfsId(),
 		request.GetImage(), request.GetEnv(), request.GetExecutablePath(),
-		request.GetExecutableArgs(), request.GetInterfaceIds(), request.GetAppend(),
-		request.GetConsoles(),
+		request.GetExecutableArgs(), request.GetInterfaceIds(), request.GetDiskIds(),
+		request.GetAppend(), request.GetConsoles(),
 	)
+	if err != nil {
+		return store.LightVM{}, err
+	}
+	vm.ReplaceDiskIDs = request.GetReplaceDiskIds()
+	return vm, nil
 }
 
 func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, console bool,
 	cgroupClass string, kernelID, initramfsID int64, image string,
 	env []*rookeryv1.LightVMEnvVar, executablePath string, executableArgs []string,
-	interfaceIDs []int64, appendValue string, consoles []*rookeryv1.LightVMConsole,
+	interfaceIDs, diskIDs []int64, appendValue string, consoles []*rookeryv1.LightVMConsole,
 ) (store.LightVM, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -287,6 +494,10 @@ func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, conso
 	if err != nil {
 		return store.LightVM{}, err
 	}
+	normalizedDiskIDs, err := normalizeGatewayIDs(diskIDs, store.MaxWorkloadDisks, "disk_ids")
+	if err != nil {
+		return store.LightVM{}, err
+	}
 
 	return store.LightVM{
 		ID:             id,
@@ -305,6 +516,7 @@ func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, conso
 		Append:         appendValue,
 		Consoles:       normalizedConsoles,
 		InterfaceIDs:   append([]int64(nil), interfaceIDs...),
+		DiskIDs:        normalizedDiskIDs,
 	}, nil
 }
 
@@ -409,7 +621,7 @@ func validateLightVMReferences(ctx context.Context, st *store.Store, vm store.Li
 	return nil
 }
 
-func (s *lightVMService) toProto(vm store.LightVM) *rookeryv1.LightVM {
+func (s *lightVMService) toProto(ctx context.Context, vm store.LightVM) *rookeryv1.LightVM {
 	result := lightVMToProto(vm)
 	if s.runtime != nil && s.runtime.RunningLightVM(vm.ID) {
 		for _, console := range result.Consoles {
@@ -417,6 +629,14 @@ func (s *lightVMService) toProto(vm store.LightVM) *rookeryv1.LightVM {
 		}
 		if len(result.Consoles) > 0 {
 			result.ConsoleSocket = result.Consoles[0].Socket
+		}
+		runCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		state, err := s.runtime.RunState(runCtx, vm.ID)
+		cancel()
+		if err != nil {
+			log.Warn().Err(err).Str("lightvm_id", vm.ID).Msg("could not read LightVM run state")
+		} else if state != "" {
+			result.RunState = &state
 		}
 	}
 	return result
@@ -442,6 +662,7 @@ func lightVMToProto(vm store.LightVM) *rookeryv1.LightVM {
 		Status:         vm.Status,
 		DesiredState:   vm.DesiredState,
 		InterfaceIds:   append([]int64(nil), vm.InterfaceIDs...),
+		DiskIds:        append([]int64(nil), vm.DiskIDs...),
 		CreatedAt:      timestamp(vm.CreatedAt),
 		UpdatedAt:      timestamp(vm.UpdatedAt),
 	}
@@ -455,6 +676,9 @@ func lightVMToProto(vm store.LightVM) *rookeryv1.LightVM {
 			PortName: console.PortName,
 		})
 	}
+	for _, disk := range vm.Disks {
+		result.Disks = append(result.Disks, vmDiskToProto(disk))
+	}
 	for _, iface := range vm.Interfaces {
 		result.Interfaces = append(result.Interfaces, &rookeryv1.VMInterface{
 			Id: iface.ID, Name: iface.Name, NetworkId: iface.NetworkID,
@@ -464,6 +688,19 @@ func lightVMToProto(vm store.LightVM) *rookeryv1.LightVM {
 		})
 	}
 	return result
+}
+
+func lightVMStartStatusError(err error) error {
+	switch {
+	case errors.Is(err, kouja.ErrSessionActive):
+		return status.Error(codes.Unavailable, "a previous iSCSI session is still active; retry shortly")
+	case errors.Is(err, context.Canceled):
+		return status.Error(codes.Aborted, "start was canceled; start again")
+	case errors.Is(err, qemu.ErrAlreadyRunning):
+		return status.Error(codes.AlreadyExists, "LightVM is already running")
+	default:
+		return status.Error(codes.Internal, "could not start LightVM: "+err.Error())
+	}
 }
 
 func lightVMError(err error, action string) error {
@@ -480,6 +717,18 @@ func lightVMError(err error, action string) error {
 		return status.Error(codes.InvalidArgument, "interface not found")
 	case errors.Is(err, store.ErrInterfaceInUse):
 		return status.Error(codes.Aborted, "interface is already attached to a VM or LightVM")
+	case errors.Is(err, store.ErrDiskNotFound):
+		return status.Error(codes.InvalidArgument, "disk not found")
+	case errors.Is(err, store.ErrInvalidDiskIDs):
+		return status.Error(codes.InvalidArgument, err.Error())
+	case errors.Is(err, store.ErrLightVMDeviceLimit):
+		return status.Error(codes.InvalidArgument, err.Error())
+	case errors.Is(err, store.ErrDiskIsTemplate):
+		return status.Error(codes.Aborted, "template disks cannot be attached to a LightVM")
+	case errors.Is(err, store.ErrDiskDeleting):
+		return status.Error(codes.Aborted, "disk is provisioning or being deleted")
+	case errors.Is(err, store.ErrDiskInUse):
+		return diskInUseError(err)
 	default:
 		return status.Errorf(codes.Internal, "could not %s lightvm", action)
 	}

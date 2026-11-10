@@ -33,70 +33,98 @@ func (q *QEMU) StartLightVM(ctx context.Context, vm store.LightVM) error {
 // StartLightVMWithVirtioFS launches a LightVM and attaches an optional
 // vhost-user-fs device backed by a virtiofsd socket.
 func (q *QEMU) StartLightVMWithVirtioFS(ctx context.Context, vm store.LightVM, rootfs LightVMVirtioFS) error {
+	_, err := q.StartLightVMWithVirtioFSAndPlan(ctx, vm, rootfs, StartPlan{})
+	return err
+}
+
+// StartLightVMWithVirtioFSAndPlan launches a LightVM with the supplied disk
+// attachments. started is true whenever this call launched a process that the
+// caller may need to stop; false guarantees that no process from this call
+// remains.
+func (q *QEMU) StartLightVMWithVirtioFSAndPlan(ctx context.Context, vm store.LightVM, rootfs LightVMVirtioFS, plan StartPlan) (bool, error) {
 	if strings.TrimSpace(vm.KernelPath) == "" || strings.TrimSpace(vm.InitramfsPath) == "" {
-		return errors.New("lightvm is missing its kernel or initramfs path")
+		return false, errors.New("lightvm is missing its kernel or initramfs path")
 	}
 	if _, err := os.Stat(kvmDevice); err != nil {
-		return fmt.Errorf("KVM is not available: %w", err)
+		return false, fmt.Errorf("KVM is not available: %w", err)
 	}
 	if _, err := os.Stat(vm.KernelPath); err != nil {
-		return fmt.Errorf("kernel %s is not available: %w", vm.KernelPath, err)
+		return false, fmt.Errorf("kernel %s is not available: %w", vm.KernelPath, err)
 	}
 	if _, err := os.Stat(vm.InitramfsPath); err != nil {
-		return fmt.Errorf("initramfs %s is not available: %w", vm.InitramfsPath, err)
+		return false, fmt.Errorf("initramfs %s is not available: %w", vm.InitramfsPath, err)
 	}
 	if rootfs.SocketPath != "" {
 		if _, err := os.Stat(rootfs.SocketPath); err != nil {
-			return fmt.Errorf("virtiofs socket %s is not available: %w", rootfs.SocketPath, err)
+			return false, fmt.Errorf("virtiofs socket %s is not available: %w", rootfs.SocketPath, err)
 		}
 	}
 	for _, iface := range vm.Interfaces {
 		if _, err := os.Stat(iface.SocketPath); err != nil {
-			return fmt.Errorf("vhost socket %s is not available: %w", iface.SocketPath, err)
+			return false, fmt.Errorf("vhost socket %s is not available: %w", iface.SocketPath, err)
 		}
+	}
+	if err := validateVMDisks(ctx, vm.Disks); err != nil {
+		return false, err
 	}
 
 	_, pidfile, monitor, err := q.lightVMPaths(vm.ID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if q.RunningLightVM(vm.ID) {
-		return ErrAlreadyRunning
+		return false, ErrAlreadyRunning
 	}
 	q.cleanupLightVM(vm.ID)
 
+	secretPrefix := lightvmSecretPrefix(vm.ID)
+	secretPaths, err := q.prepareDiskSecrets(secretPrefix, vm.Disks, plan)
+	if err != nil {
+		return false, err
+	}
+	defer q.removeSecretFiles(secretPaths)
+	defer q.cleanupSecrets(secretPrefix)
+
 	placement, err := q.lightVMCgroupPlacement(vm)
 	if err != nil {
-		return err
+		return false, err
 	}
-	args := buildLightVMArgs(vm, q.lightVMConsoleArgs(vm), pidfile, monitor, rootfs)
+	args, err := buildLightVMArgs(vm, q.lightVMConsoleArgs(vm), pidfile, monitor, rootfs, plan, secretPaths)
+	if err != nil {
+		return false, err
+	}
 	out, err := q.run(ctx, args, placement)
 	if err != nil {
-		q.cleanupLightVM(vm.ID)
-		message := strings.TrimSpace(string(out))
-		if message == "" {
-			return fmt.Errorf("start lightvm qemu: %w", err)
+		if q.RunningLightVM(vm.ID) {
+			return true, lightVMStartError(out, err)
 		}
-		return fmt.Errorf("start lightvm qemu: %w: %s", err, message)
+		q.cleanupLightVM(vm.ID)
+		return false, lightVMStartError(out, err)
 	}
 	if !q.RunningLightVM(vm.ID) {
 		q.cleanupLightVM(vm.ID)
-		return errors.New("lightvm qemu exited before creating its pid file")
+		return false, errors.New("lightvm qemu exited before creating its pid file")
 	}
 	if placement.Enabled && q.cgroups != nil {
-		pids := q.processIDs(vm.ID, pidfile)
+		pids := q.processIDs(vm.ID, pidfile, matchingLightVMPIDs)
 		if len(pids) == 0 {
-			_ = q.StopLightVM(context.Background(), vm.ID)
-			return errors.New("could not find LightVM QEMU pid for cgroup placement")
+			return true, errors.New("could not find LightVM QEMU pid for cgroup placement")
 		}
 		for _, pid := range pids {
 			if err := q.cgroups.Assign(placement, pid); err != nil {
-				_ = q.StopLightVM(context.Background(), vm.ID)
-				return fmt.Errorf("place LightVM QEMU in cgroup: %w", err)
+				return true, fmt.Errorf("place LightVM QEMU in cgroup: %w", err)
 			}
 		}
 	}
-	return nil
+	return true, nil
+}
+
+func lightVMStartError(out []byte, err error) error {
+	message := strings.TrimSpace(string(out))
+	if message == "" {
+		return fmt.Errorf("start lightvm qemu: %w", err)
+	}
+	return fmt.Errorf("start lightvm qemu: %w: %s", err, message)
 }
 
 // StopLightVM terminates a running LightVM QEMU process.
@@ -107,14 +135,22 @@ func (q *QEMU) StopLightVM(ctx context.Context, id string) error {
 	}
 
 	targets := make([]int, 0, 1)
-	if pid, ok := readPID(pidfile); ok && processAlive(pid) && processMatches(pid, id) {
+	if pid, ok := readPID(pidfile); ok && processAlive(pid) && processMatches(pid, id, pidfile) {
 		targets = append(targets, pid)
 	} else {
-		targets = matchingVMPIDs(id)
+		targets = lightVMQEMUProcesses(id)
 	}
 	if len(targets) == 0 {
+		if q.RunningLightVM(id) {
+			return fmt.Errorf("stop lightvm %s: a live QEMU process could not be identified", id)
+		}
 		q.cleanupLightVM(id)
+		q.cleanupSecrets(lightvmSecretPrefix(id))
 		return nil
+	}
+	matchesTarget := func(pid int) bool {
+		return processMatchesBasename(pid, id, "lightvm-"+id+".lightvm.pid", id+".lightvm.pid") ||
+			processReferencesLightVMSocket(pid, id)
 	}
 	for _, pid := range targets {
 		if err := syscall.Kill(pid, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
@@ -125,13 +161,14 @@ func (q *QEMU) StopLightVM(ctx context.Context, id string) error {
 	for time.Now().Before(deadline) {
 		alive := false
 		for _, pid := range targets {
-			if processAlive(pid) && processMatches(pid, id) {
+			if processAlive(pid) && matchesTarget(pid) {
 				alive = true
 				break
 			}
 		}
 		if !alive {
 			q.cleanupLightVM(id)
+			q.cleanupSecrets(lightvmSecretPrefix(id))
 			return nil
 		}
 		select {
@@ -145,8 +182,27 @@ func (q *QEMU) StopLightVM(ctx context.Context, id string) error {
 			return fmt.Errorf("kill lightvm qemu pid %d: %w", pid, err)
 		}
 	}
-	q.cleanupLightVM(id)
-	return nil
+	deadline = time.Now().Add(stopTimeout)
+	for time.Now().Before(deadline) {
+		alive := false
+		for _, pid := range targets {
+			if processAlive(pid) && matchesTarget(pid) {
+				alive = true
+				break
+			}
+		}
+		if !alive && !q.RunningLightVM(id) {
+			q.cleanupLightVM(id)
+			q.cleanupSecrets(lightvmSecretPrefix(id))
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	return fmt.Errorf("stop lightvm %s: QEMU process is still alive after SIGKILL", id)
 }
 
 // RunningLightVM reports whether the LightVM has a live QEMU process.
@@ -155,10 +211,46 @@ func (q *QEMU) RunningLightVM(id string) bool {
 	if err != nil {
 		return false
 	}
-	if pid, ok := readPID(pidfile); ok && processAlive(pid) && processMatches(pid, id) {
+	if pid, ok := readPID(pidfile); ok && processAlive(pid) && processMatches(pid, id, pidfile) {
 		return true
 	}
-	return len(matchingVMPIDs(id)) > 0
+	return len(lightVMQEMUProcesses(id)) > 0
+}
+
+// LightVMRunState returns the observed QEMU run state for a LightVM.
+func (q *QEMU) LightVMRunState(ctx context.Context, id string) (string, error) {
+	if !q.RunningLightVM(id) {
+		return "", nil
+	}
+	_, _, monitor, err := q.lightVMPaths(id)
+	if err != nil {
+		return "", err
+	}
+	output, err := q.monitorQueryPath(ctx, monitor, "info status")
+	if err != nil {
+		// Fall back to the legacy monitor path through the compatibility window.
+		if base, baseErr := q.lightVMBase(id); baseErr == nil {
+			legacy := base + ".lightvm.monitor"
+			if legacy != monitor {
+				if legacyOutput, legacyErr := q.monitorQueryPath(ctx, legacy, "info status"); legacyErr == nil {
+					output, err = legacyOutput, nil
+				}
+			}
+		}
+	}
+	if err != nil {
+		return "", err
+	}
+	switch {
+	case strings.Contains(output, "paused (io-error)"):
+		return "paused (io-error)", nil
+	case strings.Contains(output, "paused"):
+		return "paused", nil
+	case strings.Contains(output, "running"):
+		return "running", nil
+	default:
+		return "", nil
+	}
 }
 
 // LightVMConsoleSocket returns the virtio console Unix socket for a running
@@ -248,7 +340,9 @@ func (q *QEMU) lightVMConsoleArgs(vm store.LightVM) []lightVMConsoleArg {
 
 const appHostnameParam = "APP_HOSTNAME="
 
-func buildLightVMArgs(vm store.LightVM, consoles []lightVMConsoleArg, pidfile, monitor string, rootfs LightVMVirtioFS) []string {
+func lightvmSecretPrefix(id string) string { return "lightvm-" + id }
+
+func buildLightVMArgs(vm store.LightVM, consoles []lightVMConsoleArg, pidfile, monitor string, rootfs LightVMVirtioFS, plan StartPlan, secretPaths map[int64]string) ([]string, error) {
 	args := []string{
 		"-name", vm.Name,
 		"-uuid", vm.ID,
@@ -299,6 +393,13 @@ func buildLightVMArgs(vm store.LightVM, consoles []lightVMConsoleArg, pidfile, m
 			"-device", "vhost-user-fs-pci,chardev=fs0,tag="+tag,
 		)
 	}
+	for _, disk := range vm.Disks {
+		diskArgs, err := buildDiskArgs(disk, plan, secretPaths)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, diskArgs...)
+	}
 	for i, iface := range vm.Interfaces {
 		id := strconv.Itoa(i)
 		device := fmt.Sprintf("virtio-net-pci,netdev=net%s", id)
@@ -311,7 +412,7 @@ func buildLightVMArgs(vm store.LightVM, consoles []lightVMConsoleArg, pidfile, m
 			"-device", device,
 		)
 	}
-	return args
+	return args, nil
 }
 
 // lightVMAppend returns the kernel command line with APP_HOSTNAME set to the

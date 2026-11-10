@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io/fs"
 	"path/filepath"
@@ -91,6 +92,181 @@ func TestMigrationBackfillsVMDisks(t *testing.T) {
 	}
 	if gotDisk.AttachedVMID == nil || *gotDisk.AttachedVMID != vmID {
 		t.Fatalf("migrated disk attached to %v, want %s", gotDisk.AttachedVMID, vmID)
+	}
+}
+
+func TestMigrationWorkloadDisks(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "workload-disks.db")
+	const (
+		vm1 = "11111111-1111-4111-8111-111111111111"
+		vm2 = "22222222-2222-4222-8222-222222222222"
+		vm3 = "33333333-3333-4333-8333-333333333333"
+		vm4 = "44444444-4444-4444-8444-444444444444"
+		vm5 = "55555555-5555-4555-8555-555555555555"
+		vm6 = "66666666-6666-4666-8666-666666666666"
+		vm7 = "77777777-7777-4777-8777-777777777777"
+	)
+
+	db := openRawDB(t, dbPath)
+	migrateToVersion(t, db, 52)
+	execSQL(t, db, `
+		INSERT INTO disks (id, name, size_gb, vg, thin_pool, created_at, updated_at)
+		VALUES (1, 'disk-a', 10, 'vg0', 'pool', 1, 1),
+		       (2, 'disk-b', 10, 'vg0', 'pool', 1, 1),
+		       (3, 'disk-c', 10, 'vg0', 'pool', 1, 1),
+		       (4, 'disk-d', 10, 'vg0', 'pool', 1, 1),
+		       (5, 'disk-e', 10, 'vg0', 'pool', 1, 1),
+		       (6, 'disk-f', 10, 'vg0', 'pool', 1, 1),
+		       (7, 'disk-h', 10, 'vg0', 'pool', 1, 1),
+		       (8, 'disk-i', 10, 'vg0', 'pool', 1, 1)`)
+	execSQL(t, db, `PRAGMA foreign_keys = OFF`)
+	execSQL(t, db, `
+		INSERT INTO vms (id, name, status, vcpus, memory_mb, disk_id, created_at, updated_at)
+		VALUES ('`+vm1+`', 'vm1', 'stopped', 1, 512, 6, 1, 1),
+		       ('`+vm2+`', 'vm2', 'stopped', 1, 512, NULL, 1, 1),
+		       ('`+vm3+`', 'vm3', 'stopped', 1, 512, NULL, 1, 1),
+		       ('`+vm4+`', 'vm4', 'stopped', 1, 512, 2, 1, 1),
+		       ('`+vm5+`', 'vm5', 'stopped', 1, 512, 5, 1, 1),
+		       ('`+vm6+`', 'vm6', 'stopped', 1, 512, 9, 1, 1),
+		       ('`+vm7+`', 'vm7', 'stopped', 1, 512, NULL, 1, 1)`)
+	execSQL(t, db, `PRAGMA foreign_keys = ON`)
+	execSQL(t, db, `
+		INSERT INTO vm_disks (vm_id, disk_id, position)
+		VALUES ('`+vm1+`', 1, 5),
+		       ('`+vm2+`', 2, 0),
+		       ('`+vm3+`', 3, -1),
+		       ('`+vm3+`', 4, 0),
+		       ('`+vm7+`', 8, 0),
+		       ('`+vm7+`', 7, 0)`)
+	closeRawDB(t, db)
+
+	st, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("open migrated database: %v", err)
+	}
+	defer st.Close()
+
+	assertAttachments := func(vmID string, want ...int64) {
+		t.Helper()
+		vm, err := st.GetVM(ctx, vmID)
+		if err != nil {
+			t.Fatalf("get %s: %v", vmID, err)
+		}
+		if len(vm.DiskIDs) != len(want) {
+			t.Fatalf("%s disk ids = %v, want %v", vmID, vm.DiskIDs, want)
+		}
+		for i, diskID := range want {
+			if vm.DiskIDs[i] != diskID {
+				t.Fatalf("%s disk ids = %v, want %v", vmID, vm.DiskIDs, want)
+			}
+		}
+	}
+	assertAttachments(vm1, 1)
+	assertAttachments(vm2, 2)
+	assertAttachments(vm3, 3, 4)
+	assertAttachments(vm4)
+	assertAttachments(vm5, 5)
+	assertAttachments(vm6)
+	assertAttachments(vm7, 7, 8)
+	disk2, err := st.GetDisk(ctx, 2)
+	if err != nil {
+		t.Fatalf("get disk b: %v", err)
+	}
+	if disk2.AttachedVMID == nil || *disk2.AttachedVMID != vm2 || disk2.AttachedVMName != "vm2" {
+		t.Fatalf("disk b owner = %v/%q, want vm2", disk2.AttachedVMID, disk2.AttachedVMName)
+	}
+	if err := st.DeleteDisk(ctx, 2); !errors.Is(err, ErrDiskInUse) {
+		t.Fatalf("delete attached disk error = %v, want ErrDiskInUse", err)
+	}
+
+	disk6, err := st.GetDisk(ctx, 6)
+	if err != nil {
+		t.Fatalf("get disk f: %v", err)
+	}
+	if disk6.AttachedVMID != nil || disk6.AttachedLightVMID != nil {
+		t.Fatalf("disk f owner = %v/%v, want unattached", disk6.AttachedVMID, disk6.AttachedLightVMID)
+	}
+	if tableExists(t, st.db, "vm_disks") {
+		t.Fatal("vm_disks still exists")
+	}
+	var nonNull int
+	if err := st.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM vms WHERE disk_id IS NOT NULL`).Scan(&nonNull); err != nil {
+		t.Fatalf("count legacy disk pointers: %v", err)
+	}
+	if nonNull != 0 {
+		t.Fatalf("legacy disk pointers = %d, want 0", nonNull)
+	}
+	var generation int64
+	if err := st.db.QueryRowContext(ctx, `SELECT lifecycle_generation FROM lightvms LIMIT 1`).Scan(&generation); err != nil && err != sql.ErrNoRows {
+		t.Fatalf("read lifecycle_generation: %v", err)
+	}
+
+	if err := st.DeleteVM(ctx, vm1); err != nil {
+		t.Fatalf("delete vm1: %v", err)
+	}
+	var rows int
+	if err := st.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM workload_disks WHERE disk_id = 1`).Scan(&rows); err != nil {
+		t.Fatalf("count vm1 attachment: %v", err)
+	}
+	if rows != 0 {
+		t.Fatalf("vm1 attachment rows = %d, want 0", rows)
+	}
+	if _, err := st.GetDisk(ctx, 1); err != nil {
+		t.Fatalf("disk a was deleted with vm1: %v", err)
+	}
+
+	if _, err := st.db.ExecContext(ctx, `INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position) VALUES (?, NULL, 3, 2)`, vm2); err == nil {
+		t.Fatal("both-owner workload row succeeded")
+	}
+	if _, err := st.db.ExecContext(ctx, `INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position) VALUES (NULL, NULL, 3, 2)`); err == nil {
+		t.Fatal("neither-owner workload row succeeded")
+	}
+	if err := st.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM workload_disks WHERE disk_id = 2`).Scan(&rows); err != nil {
+		t.Fatalf("count disk b attachment: %v", err)
+	}
+	if rows != 1 {
+		t.Fatalf("disk b attachment rows = %d, want 1", rows)
+	}
+
+	execSQL(t, st.db, `
+		INSERT INTO lightvm_kernels
+			(id, name, description, path, file_name, size_bytes, managed, created_at, updated_at)
+		VALUES (100, 'k', '', '/tmp/k', 'k', 1, 0, 1, 1)`)
+	execSQL(t, st.db, `
+		INSERT INTO lightvm_initramfs
+			(id, name, description, path, file_name, size_bytes, managed, created_at, updated_at)
+		VALUES (100, 'i', '', '/tmp/i', 'i', 1, 0, 1, 1)`)
+	execSQL(t, st.db, `
+		INSERT INTO lightvms
+			(id, name, description, vcpus, memory_mb, console_enabled, cgroup_class,
+			 kernel_id, initramfs_id, image, env, executable_path, executable_args,
+			 append, status, desired_state, created_at, updated_at)
+		VALUES ('99999999-9999-4999-8999-999999999999', 'lv', '', 1, 128, 0, '',
+		        100, 100, 'img', '[]', '/bin/sh', '[]', 'console=hvc0', 'stopped', 'stopped', 1, 1)`)
+	if _, err := st.db.ExecContext(ctx, `
+		INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position)
+		VALUES (NULL, '99999999-9999-4999-8999-999999999999', 6, 1)`); err != nil {
+		t.Fatalf("attach lightvm disk: %v", err)
+	}
+	if err := st.DeleteLightVM(ctx, "99999999-9999-4999-8999-999999999999"); err != nil {
+		t.Fatalf("delete lightvm: %v", err)
+	}
+	if err := st.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM workload_disks WHERE disk_id = 6`).Scan(&rows); err != nil {
+		t.Fatalf("count lightvm attachment: %v", err)
+	}
+	if rows != 0 {
+		t.Fatalf("lightvm attachment rows = %d, want 0", rows)
+	}
+
+	execSQL(t, st.db, `UPDATE vms SET disk_id = 6 WHERE id = '`+vm2+`'`)
+	assertAttachments(vm2, 2)
+	disk6, err = st.GetDisk(ctx, 6)
+	if err != nil {
+		t.Fatalf("get disk f after inert pointer: %v", err)
+	}
+	if disk6.AttachedVMID != nil {
+		t.Fatalf("inert vms.disk_id changed disk f owner: %v", disk6.AttachedVMID)
 	}
 }
 

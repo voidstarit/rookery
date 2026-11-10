@@ -6,7 +6,9 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/voidstarit/rookery/internal/gateway"
 	"github.com/voidstarit/rookery/internal/host"
@@ -85,6 +87,99 @@ func TestDiskWriteRoutes(t *testing.T) {
 	_ = deleted.Body.Close()
 	if len(provisioner.deleted) != 1 || provisioner.deleted[0] != "data-1" {
 		t.Fatalf("deleted volumes = %+v", provisioner.deleted)
+	}
+}
+
+func TestDeleteDiskRejectsLightVMOwnedDisk(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "disk-lightvm-delete.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	disk, err := st.CreateDisk(ctx, store.Disk{Name: "light-owned", SizeGB: 10, VG: "vg0", ThinPool: "pool"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kernel, err := st.CreateLightVMKernel(ctx, store.LightVMKernel{
+		Name: "kernel", Path: "/tmp/kernel", FileName: "kernel", SizeBytes: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	initramfs, err := st.CreateLightVMInitramfs(ctx, store.LightVMInitramfs{
+		Name: "initramfs", Path: "/tmp/initramfs", FileName: "initramfs", SizeBytes: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lightVM, err := st.CreateLightVM(ctx, store.LightVM{
+		Name: "disk-owner", VCPUs: 1, MemoryMB: 256,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+		Image: "alpine", ExecutablePath: "/bin/sh",
+		DiskIDs: []int64{disk.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provisioner := &fakeDiskProvisioner{}
+	diskMu := &sync.Mutex{}
+	gw, err := gateway.New(st, fakeReadiness{status: readiness.Status{
+		Ready: true,
+		ThinPool: readiness.ThinPoolStatus{
+			ComponentStatus: readiness.ComponentStatus{Ready: true},
+			VG:              "vg0",
+			Name:            "pool",
+		},
+	}}, gateway.WithDiskProvisioner(provisioner), gateway.WithDiskMutex(diskMu))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	server := httptest.NewServer(gw.Handler)
+	t.Cleanup(server.Close)
+
+	request, err := http.NewRequest(http.MethodDelete, server.URL+"/api/disks/"+jsonID(float64(disk.ID)), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	diskMu.Lock()
+	type result struct {
+		response *http.Response
+		err      error
+	}
+	resultCh := make(chan result, 1)
+	go func() {
+		response, err := http.DefaultClient.Do(request)
+		resultCh <- result{response: response, err: err}
+	}()
+	select {
+	case got := <-resultCh:
+		diskMu.Unlock()
+		if got.err != nil {
+			t.Fatal(got.err)
+		}
+		t.Fatalf("delete completed while disk mutex held: %d", got.response.StatusCode)
+	case <-time.After(100 * time.Millisecond):
+	}
+	diskMu.Unlock()
+	got := <-resultCh
+	response, err := got.response, got.err
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusConflict {
+		t.Fatalf("delete lightvm-owned disk status = %d, body = %s", response.StatusCode, readBody(t, response))
+	}
+	body := readBody(t, response)
+	if !strings.Contains(body, "lightvm") || !strings.Contains(body, lightVM.Name) {
+		t.Fatalf("delete error = %q, want lightvm owner name", body)
+	}
+	if len(provisioner.deleted) != 0 {
+		t.Fatalf("deleted volumes = %+v, want none", provisioner.deleted)
+	}
+	if _, err := st.GetDisk(ctx, disk.ID); err != nil {
+		t.Fatalf("disk was deleted despite owner: %v", err)
 	}
 }
 

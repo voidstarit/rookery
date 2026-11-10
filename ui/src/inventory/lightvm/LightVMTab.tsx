@@ -3,6 +3,7 @@ import { api } from "../../shared/api";
 import { EntityLabels, useEntityLabels } from "../../shared/labels";
 import { showToast } from "../../shared/toast";
 import type {
+  Disk,
   LightVM,
   LightVMInitramfs,
   LightVMKernel,
@@ -69,6 +70,7 @@ export function LightVMTab() {
   const [initramfs, setInitramfs] = useState<LightVMInitramfs[]>([]);
   const [lightvms, setLightVMs] = useState<LightVM[]>([]);
   const [interfaces, setInterfaces] = useState<VirtualInterface[]>([]);
+  const [disks, setDisks] = useState<Disk[]>([]);
   const [section, setSection] = useState<Section>("kernels");
   const [loading, setLoading] = useState(true);
   const [kernelError, setKernelError] = useState("");
@@ -154,6 +156,15 @@ export function LightVMTab() {
     }
   };
 
+  const loadDisks = async () => {
+    try {
+      const data = await api<Disk[]>("/api/disks");
+      setDisks(Array.isArray(data) ? data : []);
+    } catch {
+      setDisks([]);
+    }
+  };
+
   const loadRuntimeStatus = async () => {
     try {
       const status = await api<StatusResponse>("/api/status");
@@ -170,6 +181,7 @@ export function LightVMTab() {
       loadInitramfs(),
       loadLightVMs(),
       loadInterfaces(),
+      loadDisks(),
       loadRuntimeStatus(),
     ]);
     setLoading(false);
@@ -720,6 +732,7 @@ export function LightVMTab() {
                   const env = Array.isArray(vm.env) ? vm.env : [];
                   const attached = Array.isArray(vm.interfaces) ? vm.interfaces : [];
                   const consoles = Array.isArray(vm.consoles) ? vm.consoles : [];
+                  const paused = Boolean(vm.run_state?.startsWith("paused"));
                   const running = vm.status === "running" || vm.status === "starting";
                   const starting = lightVMAction === `start:${vm.id}`;
                   const stopping = lightVMAction === `stop:${vm.id}`;
@@ -741,8 +754,8 @@ export function LightVMTab() {
                         />
                       </td>
                       <td>
-                        <span class="status-badge" data-status={vm.status}>
-                          {vm.status || "unknown"}
+                        <span class="status-badge" data-status={paused ? "paused" : vm.status}>
+                          {paused ? vm.run_state : vm.status || "unknown"}
                         </span>
                         {vm.console_socket ? (
                           <span class="vm-description mono" title={vm.console_socket}>
@@ -924,6 +937,7 @@ export function LightVMTab() {
           kernels={kernels}
           initramfs={initramfs}
           interfaces={interfaces}
+          disks={disks}
           onClose={() => {
             setLightVMDialog(null);
             navigate("/lightvm/instances", true);

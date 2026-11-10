@@ -24,11 +24,16 @@ func NewPlanner(st *store.Store, registry *storage.Registry) *Planner {
 
 // Plan prepares attachments for every remote disk in vm.
 func (p *Planner) Plan(ctx context.Context, vm store.VM) (qemu.StartPlan, error) {
+	return p.PlanDisks(ctx, vmDisks(vm))
+}
+
+// PlanDisks prepares attachments for an ordered disk set.
+func (p *Planner) PlanDisks(ctx context.Context, disks []store.VMDisk) (qemu.StartPlan, error) {
 	plan := qemu.StartPlan{Attachments: make(map[int64]blockdev.Attachment)}
 	if p == nil || p.store == nil || p.registry == nil {
 		return plan, nil
 	}
-	for _, disk := range vmDisks(vm) {
+	for _, disk := range disks {
 		protocol := blockdev.Protocol(disk.Protocol).Normalize()
 		remote := disk.Source == store.DiskSourceKouja || disk.Source == store.DiskSourceCeph ||
 			(disk.Protocol != "" && protocol != blockdev.ProtocolLocal)

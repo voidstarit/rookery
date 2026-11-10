@@ -42,38 +42,86 @@ type LightVMConsole struct {
 // LightVM is a container-backed microVM definition. It is inventory-only until
 // a runtime is implemented; kernels and initramfs images must exist.
 type LightVM struct {
-	ID             string           `json:"id"`
-	Name           string           `json:"name"`
-	Description    string           `json:"description"`
-	VCPUs          int              `json:"vcpus"`
-	MemoryMB       int              `json:"memory_mb"`
-	ConsoleEnabled bool             `json:"console_enabled"`
-	CgroupClass    string           `json:"cgroup_class,omitempty"`
-	KernelID       int64            `json:"kernel_id"`
-	KernelName     string           `json:"kernel_name"`
-	InitramfsID    int64            `json:"initramfs_id"`
-	InitramfsName  string           `json:"initramfs_name"`
-	Image          string           `json:"image"`
-	Env            []LightVMEnvVar  `json:"env"`
-	ExecutablePath string           `json:"executable_path"`
-	ExecutableArgs []string         `json:"executable_args"`
-	Append         string           `json:"append"`
-	Consoles       []LightVMConsole `json:"consoles"`
-	Status         string           `json:"status"`
-	DesiredState   string           `json:"desired_state"`
-	KernelPath     string           `json:"-"`
-	InitramfsPath  string           `json:"-"`
-	InterfaceIDs   []int64          `json:"interface_ids,omitempty"`
-	Interfaces     []VMInterface    `json:"interfaces,omitempty"`
-	CreatedAt      time.Time        `json:"created_at"`
-	UpdatedAt      time.Time        `json:"updated_at"`
+	ID                  string           `json:"id"`
+	Name                string           `json:"name"`
+	Description         string           `json:"description"`
+	VCPUs               int              `json:"vcpus"`
+	MemoryMB            int              `json:"memory_mb"`
+	ConsoleEnabled      bool             `json:"console_enabled"`
+	CgroupClass         string           `json:"cgroup_class,omitempty"`
+	KernelID            int64            `json:"kernel_id"`
+	KernelName          string           `json:"kernel_name"`
+	InitramfsID         int64            `json:"initramfs_id"`
+	InitramfsName       string           `json:"initramfs_name"`
+	Image               string           `json:"image"`
+	Env                 []LightVMEnvVar  `json:"env"`
+	ExecutablePath      string           `json:"executable_path"`
+	ExecutableArgs      []string         `json:"executable_args"`
+	Append              string           `json:"append"`
+	Consoles            []LightVMConsole `json:"consoles"`
+	Status              string           `json:"status"`
+	DesiredState        string           `json:"desired_state"`
+	LifecycleGeneration int64            `json:"lifecycle_generation"`
+	KernelPath          string           `json:"-"`
+	InitramfsPath       string           `json:"-"`
+	DiskIDs             []int64          `json:"disk_ids,omitempty"`
+	Disks               []VMDisk         `json:"disks,omitempty"`
+	ReplaceDiskIDs      bool             `json:"-"`
+	InterfaceIDs        []int64          `json:"interface_ids,omitempty"`
+	Interfaces          []VMInterface    `json:"interfaces,omitempty"`
+	CreatedAt           time.Time        `json:"created_at"`
+	UpdatedAt           time.Time        `json:"updated_at"`
+}
+
+func normalizeLightVMDiskIDs(ids []int64) ([]int64, error) {
+	seen := make(map[int64]struct{}, len(ids))
+	out := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if id < 1 {
+			return nil, fmt.Errorf("%w: disk ids must be positive", ErrInvalidDiskIDs)
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	if len(out) > MaxWorkloadDisks {
+		return nil, fmt.Errorf("%w: at most %d disks are allowed", ErrInvalidDiskIDs, MaxWorkloadDisks)
+	}
+	return out, nil
+}
+
+func validateLightVMDeviceBudget(existingDisks, existingInterfaces, newDisks, newInterfaces int, create bool) error {
+	newTotal := newDisks + newInterfaces
+	existingTotal := existingDisks + existingInterfaces
+	limit := func() error {
+		return fmt.Errorf("%w: %d devices requested, existing %d, limit %d",
+			ErrLightVMDeviceLimit, newTotal, existingTotal, MaxLightVMDevices)
+	}
+	if create {
+		if newTotal > MaxLightVMDevices {
+			return limit()
+		}
+		return nil
+	}
+	if existingTotal > MaxLightVMDevices {
+		if newTotal > existingTotal {
+			return limit()
+		}
+		return nil
+	}
+	if newTotal > MaxLightVMDevices {
+		return limit()
+	}
+	return nil
 }
 
 const lightVMSelect = `
 	SELECT l.id, l.name, l.description, l.vcpus, l.memory_mb, l.console_enabled,
 	       l.cgroup_class, l.kernel_id, k.name, k.path, l.initramfs_id, i.name,
 	       i.path, l.image, l.env, l.executable_path, l.executable_args, l.append,
-	       l.status, l.desired_state, l.created_at, l.updated_at
+	       l.status, l.desired_state, l.lifecycle_generation, l.created_at, l.updated_at
 	FROM lightvms AS l
 	JOIN lightvm_kernels AS k ON k.id = l.kernel_id
 	JOIN lightvm_initramfs AS i ON i.id = l.initramfs_id`
@@ -103,6 +151,9 @@ func (s *Store) ListLightVMs(ctx context.Context) ([]LightVM, error) {
 	if err := s.loadLightVMConsoles(ctx, vms); err != nil {
 		return nil, err
 	}
+	if err := s.loadLightVMDisks(ctx, vms); err != nil {
+		return nil, err
+	}
 	return vms, nil
 }
 
@@ -121,6 +172,9 @@ func (s *Store) GetLightVM(ctx context.Context, id string) (LightVM, error) {
 		return LightVM{}, err
 	}
 	if err := s.loadLightVMConsoles(ctx, items); err != nil {
+		return LightVM{}, err
+	}
+	if err := s.loadLightVMDisks(ctx, items); err != nil {
 		return LightVM{}, err
 	}
 	return items[0], nil
@@ -150,6 +204,18 @@ func (s *Store) CreateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 	}
 	interfaceIDs, err := s.normalizeLightVMInterfaceIDs(ctx, vm.ID, vm.InterfaceIDs)
 	if err != nil {
+		return LightVM{}, err
+	}
+	diskIDs, err := normalizeLightVMDiskIDs(vm.DiskIDs)
+	if err != nil {
+		return LightVM{}, err
+	}
+	for _, diskID := range diskIDs {
+		if err := s.checkDiskAvailableForAttach(ctx, diskID, "lightvm", vm.ID); err != nil {
+			return LightVM{}, err
+		}
+	}
+	if err := validateLightVMDeviceBudget(0, 0, len(diskIDs), len(interfaceIDs), true); err != nil {
 		return LightVM{}, err
 	}
 	envJSON, err := marshalLightVMEnv(vm.Env)
@@ -186,6 +252,13 @@ func (s *Store) CreateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 	if err := insertLightVMInterfaces(ctx, tx, vm.ID, interfaceIDs); err != nil {
 		return LightVM{}, err
 	}
+	for position, diskID := range diskIDs {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position)
+			VALUES (NULL, ?, ?, ?)`, vm.ID, diskID, position); err != nil {
+			return LightVM{}, s.workloadDiskAttachError(ctx, tx, err, diskID)
+		}
+	}
 	if err := insertLightVMConsoles(ctx, tx, vm.ID, consoles); err != nil {
 		return LightVM{}, err
 	}
@@ -204,9 +277,40 @@ func (s *Store) UpdateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 	if _, err := s.GetLightVMInitramfs(ctx, vm.InitramfsID); err != nil {
 		return LightVM{}, err
 	}
+	existing, err := s.GetLightVM(ctx, vm.ID)
+	if err != nil {
+		return LightVM{}, err
+	}
 	consoles := normalizeLightVMConsoles(vm.Consoles)
 	interfaceIDs, err := s.normalizeLightVMInterfaceIDs(ctx, vm.ID, vm.InterfaceIDs)
 	if err != nil {
+		return LightVM{}, err
+	}
+	diskIDs, err := normalizeLightVMDiskIDs(vm.DiskIDs)
+	if err != nil {
+		return LightVM{}, err
+	}
+	replaceDisks := vm.ReplaceDiskIDs || len(vm.DiskIDs) > 0
+	if replaceDisks {
+		for _, diskID := range diskIDs {
+			if err := s.checkDiskAvailableForAttach(ctx, diskID, "lightvm", vm.ID); err != nil {
+				return LightVM{}, err
+			}
+		}
+	} else {
+		diskIDs = append([]int64(nil), existing.DiskIDs...)
+		for _, diskID := range diskIDs {
+			disk, err := s.GetDisk(ctx, diskID)
+			if err != nil {
+				return LightVM{}, err
+			}
+			if err := s.checkDiskOwnership(ctx, disk, "lightvm", vm.ID); err != nil {
+				return LightVM{}, err
+			}
+		}
+	}
+	if err := validateLightVMDeviceBudget(len(existing.Disks), len(existing.Interfaces),
+		len(diskIDs), len(interfaceIDs), false); err != nil {
 		return LightVM{}, err
 	}
 	envJSON, err := marshalLightVMEnv(vm.Env)
@@ -228,12 +332,13 @@ func (s *Store) UpdateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 		SET name = ?, description = ?, vcpus = ?, memory_mb = ?,
 		    console_enabled = ?, cgroup_class = ?, kernel_id = ?,
 		    initramfs_id = ?, image = ?, env = ?, executable_path = ?,
-		    executable_args = ?, append = ?, updated_at = ?
+		    executable_args = ?, append = ?, desired_state = ?,
+		    lifecycle_generation = lifecycle_generation + 1, updated_at = ?
 		WHERE id = ?`,
 		vm.Name, vm.Description, vm.VCPUs, vm.MemoryMB,
 		vm.ConsoleEnabled, vm.CgroupClass, vm.KernelID,
 		vm.InitramfsID, vm.Image, envJSON, vm.ExecutablePath,
-		argsJSON, vm.Append, time.Now().UTC().UnixMilli(), vm.ID,
+		argsJSON, vm.Append, DesiredStopped, time.Now().UTC().UnixMilli(), vm.ID,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -254,6 +359,18 @@ func (s *Store) UpdateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 	if err := insertLightVMInterfaces(ctx, tx, vm.ID, interfaceIDs); err != nil {
 		return LightVM{}, err
 	}
+	if replaceDisks {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM workload_disks WHERE lightvm_id = ?`, vm.ID); err != nil {
+			return LightVM{}, fmt.Errorf("clear lightvm disks: %w", err)
+		}
+		for position, diskID := range diskIDs {
+			if _, err := tx.ExecContext(ctx, `
+				INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position)
+				VALUES (NULL, ?, ?, ?)`, vm.ID, diskID, position); err != nil {
+				return LightVM{}, s.workloadDiskAttachError(ctx, tx, err, diskID)
+			}
+		}
+	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM lightvm_consoles WHERE lightvm_id = ?`, vm.ID); err != nil {
 		return LightVM{}, fmt.Errorf("clear lightvm consoles: %w", err)
 	}
@@ -272,7 +389,9 @@ func (s *Store) SetLightVMStatus(ctx context.Context, id, status string) (LightV
 		return LightVM{}, fmt.Errorf("invalid status %q", status)
 	}
 	res, err := s.db.ExecContext(ctx, `
-		UPDATE lightvms SET status = ?, updated_at = ? WHERE id = ?`,
+		UPDATE lightvms
+		SET status = ?, lifecycle_generation = lifecycle_generation + 1, updated_at = ?
+		WHERE id = ?`,
 		status, time.Now().UTC().UnixMilli(), id,
 	)
 	if err != nil {
@@ -295,7 +414,9 @@ func (s *Store) SetLightVMDesiredState(ctx context.Context, id, state string) (L
 		return LightVM{}, fmt.Errorf("invalid desired state %q", state)
 	}
 	res, err := s.db.ExecContext(ctx, `
-		UPDATE lightvms SET desired_state = ?, updated_at = ? WHERE id = ?`,
+		UPDATE lightvms
+		SET desired_state = ?, lifecycle_generation = lifecycle_generation + 1, updated_at = ?
+		WHERE id = ?`,
 		state, time.Now().UTC().UnixMilli(), id,
 	)
 	if err != nil {
@@ -399,6 +520,29 @@ func insertLightVMConsoles(ctx context.Context, tx *sql.Tx, lightVMID string, co
 				return fmt.Errorf("console %q already exists", name)
 			}
 			return fmt.Errorf("insert lightvm console: %w", err)
+		}
+	}
+	return nil
+}
+
+// loadLightVMDisks fills LightVM.Disks and DiskIDs for the supplied records.
+func (s *Store) loadLightVMDisks(ctx context.Context, vms []LightVM) error {
+	if len(vms) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(vms))
+	for _, vm := range vms {
+		ids = append(ids, vm.ID)
+	}
+	byOwner, err := s.loadWorkloadDisks(ctx, "lightvm", ids)
+	if err != nil {
+		return err
+	}
+	for i := range vms {
+		vms[i].Disks = byOwner[vms[i].ID]
+		vms[i].DiskIDs = make([]int64, 0, len(vms[i].Disks))
+		for _, disk := range vms[i].Disks {
+			vms[i].DiskIDs = append(vms[i].DiskIDs, disk.ID)
 		}
 	}
 	return nil
@@ -534,7 +678,7 @@ func scanLightVM(s scanner) (LightVM, error) {
 		&vm.ConsoleEnabled, &vm.CgroupClass, &vm.KernelID, &vm.KernelName,
 		&vm.KernelPath, &vm.InitramfsID, &vm.InitramfsName, &vm.InitramfsPath,
 		&vm.Image, &envJSON, &vm.ExecutablePath, &argsJSON, &vm.Append,
-		&vm.Status, &vm.DesiredState, &createdAt, &updatedAt,
+		&vm.Status, &vm.DesiredState, &vm.LifecycleGeneration, &createdAt, &updatedAt,
 	); err != nil {
 		return LightVM{}, err
 	}

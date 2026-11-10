@@ -12,35 +12,94 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/voidstarit/rookery/internal/gateway"
+	"github.com/voidstarit/rookery/internal/lightvm"
+	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
 type fakeLightVMRuntime struct {
-	running  map[string]bool
-	started  store.LightVM
-	startErr error
-	stopErr  error
+	running           map[string]bool
+	started           store.LightVM
+	startErr          error
+	prepareErr        error
+	startPreparedErr  error
+	runState          string
+	runStateErr       error
+	stopErr           error
+	stopLeavesRunning bool
+	cleanupStoppedErr error
+	onPrepare         func(store.LightVM)
 }
 
-func (f *fakeLightVMRuntime) StartLightVM(_ context.Context, vm store.LightVM) error {
+func (f *fakeLightVMRuntime) PrepareLightVM(_ context.Context, vm store.LightVM) (lightvm.PreparedLightVM, error) {
+	if f.prepareErr != nil {
+		return lightvm.PreparedLightVM{}, f.prepareErr
+	}
 	if f.startErr != nil {
-		return f.startErr
+		return lightvm.PreparedLightVM{}, f.startErr
+	}
+	if f.onPrepare != nil {
+		f.onPrepare(vm)
 	}
 	if vm.KernelPath == "" || vm.InitramfsPath == "" {
-		return errors.New("missing kernel or initramfs path")
+		return lightvm.PreparedLightVM{}, errors.New("missing kernel or initramfs path")
+	}
+	f.started = vm
+	return lightvm.PreparedLightVM{
+		LightVMID: vm.ID, Container: "rookery-lightvm-" + vm.ID + "-test",
+		Rootfs: "/tmp/rootfs", VirtiofsdSocket: "/tmp/lightvm-" + vm.ID + ".virtiofs.sock",
+	}, nil
+}
+
+func (f *fakeLightVMRuntime) StartPreparedLightVM(_ context.Context, prepared *lightvm.PreparedLightVM, vm store.LightVM, _ qemu.StartPlan) error {
+	prepared.VirtiofsdStarted = true
+	prepared.QEMUStarted = true
+	if f.startPreparedErr != nil {
+		if errors.Is(f.startPreparedErr, qemu.ErrAlreadyRunning) {
+			f.running[vm.ID] = true
+		}
+		return f.startPreparedErr
+	}
+	if f.startErr != nil {
+		return f.startErr
 	}
 	f.started = vm
 	f.running[vm.ID] = true
 	return nil
 }
 
-func (f *fakeLightVMRuntime) StopLightVM(_ context.Context, id string) error {
+func (f *fakeLightVMRuntime) CleanupPreparedLightVM(context.Context, lightvm.PreparedLightVM) error {
+	return nil
+}
+
+func (f *fakeLightVMRuntime) StopQEMULightVM(_ context.Context, id string) error {
 	if f.stopErr != nil {
 		return f.stopErr
 	}
-	f.running[id] = false
+	if !f.stopLeavesRunning {
+		f.running[id] = false
+	}
 	return nil
+}
+
+func (f *fakeLightVMRuntime) CleanupStoppedLightVM(context.Context, string) error {
+	return f.cleanupStoppedErr
+}
+
+func (f *fakeLightVMRuntime) RunState(_ context.Context, id string) (string, error) {
+	if f.runStateErr != nil {
+		return "", f.runStateErr
+	}
+	if f.runState != "" {
+		return f.runState, nil
+	}
+	if f.running[id] {
+		return "running", nil
+	}
+	return "", nil
 }
 
 func (f *fakeLightVMRuntime) RunningLightVM(id string) bool {
@@ -211,5 +270,261 @@ func TestLightVMLifecycleRoutes(t *testing.T) {
 	response, _ = request(http.MethodDelete, "/api/lightvm/instances/"+id, nil)
 	if response.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d", response.StatusCode)
+	}
+}
+
+type fakeLightVMPlanner struct {
+	err error
+}
+
+func (p *fakeLightVMPlanner) Plan(context.Context, store.VM) (qemu.StartPlan, error) {
+	return qemu.StartPlan{}, p.err
+}
+func (p *fakeLightVMPlanner) PlanDisks(context.Context, []store.VMDisk) (qemu.StartPlan, error) {
+	return qemu.StartPlan{}, p.err
+}
+
+func TestLightVMLifecycleRuntimeErrors(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "lightvm-errors.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	kernel, err := st.CreateLightVMKernel(ctx, store.LightVMKernel{
+		Name: "vmlinuz-errors", Path: "/tmp/vmlinuz", FileName: "vmlinuz", SizeBytes: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	initramfs, err := st.CreateLightVMInitramfs(ctx, store.LightVMInitramfs{
+		Name: "initramfs-errors", Path: "/tmp/initramfs", FileName: "initramfs", SizeBytes: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := &fakeLightVMRuntime{running: make(map[string]bool)}
+	planner := &fakeLightVMPlanner{}
+	gw, err := gateway.New(st, fakeReadiness{}, gateway.WithLightVMRuntime(runtime), gateway.WithStartPlanner(planner))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	server := httptest.NewServer(gw.Handler)
+	t.Cleanup(server.Close)
+	request := func(method, path string, body any) (*http.Response, map[string]any) {
+		t.Helper()
+		var reader *bytes.Reader
+		if body == nil {
+			reader = bytes.NewReader(nil)
+		} else {
+			data, err := json.Marshal(body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			reader = bytes.NewReader(data)
+		}
+		req, err := http.NewRequest(method, server.URL+path, reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		response, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var decoded map[string]any
+		if response.StatusCode != http.StatusNoContent {
+			_ = json.NewDecoder(response.Body).Decode(&decoded)
+		}
+		_ = response.Body.Close()
+		return response, decoded
+	}
+
+	vm, err := st.CreateLightVM(ctx, store.LightVM{
+		Name: "errors", VCPUs: 1, MemoryMB: 128,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+		Image: "alpine", ExecutablePath: "/bin/app",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	basePath := "/api/lightvm/instances/" + vm.ID
+	updateBody := map[string]any{
+		"name": "errors", "vcpus": 1, "memory_mb": 128,
+		"kernel_id": kernel.ID, "initramfs_id": initramfs.ID,
+		"image": "alpine", "executable_path": "/bin/app",
+		"executable_args": []string{}, "interface_ids": []int64{},
+	}
+
+	missingPath := "/api/lightvm/instances/" + uuid.NewString()
+	response, _ := request(http.MethodPost, missingPath+"/start", nil)
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("missing start = %d", response.StatusCode)
+	}
+	response, _ = request(http.MethodPost, missingPath+"/stop", nil)
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("missing stop = %d", response.StatusCode)
+	}
+	response, _ = request(http.MethodDelete, missingPath, nil)
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("missing delete = %d", response.StatusCode)
+	}
+	response, _ = request(http.MethodGet, missingPath, nil)
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("missing get = %d", response.StatusCode)
+	}
+
+	runtime.running[vm.ID] = true
+	if _, err := st.SetLightVMDesiredState(ctx, vm.ID, store.DesiredRunning); err != nil {
+		t.Fatal(err)
+	}
+	runtime.runStateErr = errors.New("monitor unavailable")
+	response, runStateBody := request(http.MethodPost, basePath+"/start", nil)
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("run state error start = %d, body = %+v", response.StatusCode, runStateBody)
+	}
+	runtime.runStateErr = nil
+	runtime.runState = "paused (io-error)"
+	response, _ = request(http.MethodPost, basePath+"/start", nil)
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("paused start = %d", response.StatusCode)
+	}
+	response, _ = request(http.MethodGet, basePath, nil)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("failed run state get = %d", response.StatusCode)
+	}
+	runtime.runState = ""
+	runtime.running[vm.ID] = false
+	if _, err := st.SetLightVMDesiredState(ctx, vm.ID, store.DesiredStopped); err != nil {
+		t.Fatal(err)
+	}
+
+	runtime.prepareErr = errors.New("prepare failed")
+	response, _ = request(http.MethodPost, basePath+"/start", nil)
+	if response.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("prepare error start = %d", response.StatusCode)
+	}
+	runtime.prepareErr = nil
+	planner.err = errors.New("plan failed")
+	response, _ = request(http.MethodPost, basePath+"/start", nil)
+	if response.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("planner error start = %d", response.StatusCode)
+	}
+	planner.err = nil
+
+	runtime.startPreparedErr = errors.New("qemu failed")
+	response, _ = request(http.MethodPost, basePath+"/start", nil)
+	if response.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("start prepared error = %d", response.StatusCode)
+	}
+	runtime.startPreparedErr = qemu.ErrAlreadyRunning
+	response, _ = request(http.MethodPost, basePath+"/start", nil)
+	if response.StatusCode != http.StatusConflict {
+		t.Fatalf("already running start = %d", response.StatusCode)
+	}
+	runtime.startPreparedErr = nil
+	runtime.running[vm.ID] = false
+
+	runtime.startPreparedErr = errors.New("qemu failed")
+	runtime.stopErr = errors.New("stop failed")
+	response, _ = request(http.MethodPost, basePath+"/start", nil)
+	if response.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("failed start with failed stop = %d", response.StatusCode)
+	}
+	runtime.startPreparedErr = nil
+	runtime.stopErr = nil
+	runtime.running[vm.ID] = false
+
+	runtime.onPrepare = func(changed store.LightVM) {
+		if _, err := st.SetLightVMDesiredState(ctx, changed.ID, store.DesiredStopped); err != nil {
+			t.Fatal(err)
+		}
+	}
+	response, _ = request(http.MethodPost, basePath+"/start", nil)
+	if response.StatusCode != http.StatusConflict {
+		t.Fatalf("changed during start = %d", response.StatusCode)
+	}
+	runtime.onPrepare = nil
+
+	response, started := request(http.MethodPost, basePath+"/start", nil)
+	if response.StatusCode != http.StatusOK || started["status"] != "running" {
+		t.Fatalf("successful start = %d, %+v", response.StatusCode, started)
+	}
+	runtime.runStateErr = errors.New("monitor unavailable")
+	response, _ = request(http.MethodGet, basePath, nil)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("run state warning get = %d", response.StatusCode)
+	}
+	runtime.runStateErr = nil
+
+	runtime.stopErr = errors.New("stop failed")
+	response, _ = request(http.MethodPost, basePath+"/stop", nil)
+	if response.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("stop error = %d", response.StatusCode)
+	}
+	runtime.stopErr = nil
+	runtime.stopLeavesRunning = true
+	response, _ = request(http.MethodPost, basePath+"/stop", nil)
+	if response.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("stop still running = %d", response.StatusCode)
+	}
+	runtime.stopLeavesRunning = false
+	runtime.running[vm.ID] = false
+	runtime.cleanupStoppedErr = errors.New("cleanup failed")
+	response, _ = request(http.MethodPost, basePath+"/stop", nil)
+	if response.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("stop cleanup error = %d", response.StatusCode)
+	}
+	response, _ = request(http.MethodDelete, basePath, nil)
+	if response.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("delete cleanup error = %d", response.StatusCode)
+	}
+	runtime.cleanupStoppedErr = nil
+
+	response, _ = request(http.MethodPost, basePath+"/start", nil)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("restart = %d", response.StatusCode)
+	}
+	response, _ = request(http.MethodPost, basePath+"/stop", nil)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("stop before no-runtime tests = %d", response.StatusCode)
+	}
+
+	noRuntime, err := gateway.New(st, fakeReadiness{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(noRuntime.Close)
+	noRuntimeServer := httptest.NewServer(noRuntime.Handler)
+	t.Cleanup(noRuntimeServer.Close)
+	if _, err := st.SetLightVMDesiredState(ctx, vm.ID, store.DesiredRunning); err != nil {
+		t.Fatal(err)
+	}
+	noRuntimeRequest := func(method, path string, body any) int {
+		data, _ := json.Marshal(body)
+		req, err := http.NewRequest(method, noRuntimeServer.URL+path, bytes.NewReader(data))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+	if code := noRuntimeRequest(http.MethodPut, basePath, updateBody); code != http.StatusServiceUnavailable {
+		t.Fatalf("update without runtime = %d", code)
+	}
+	if code := noRuntimeRequest(http.MethodDelete, basePath, nil); code != http.StatusServiceUnavailable {
+		t.Fatalf("delete without runtime = %d", code)
+	}
+	if _, err := st.SetLightVMDesiredState(ctx, vm.ID, store.DesiredStopped); err != nil {
+		t.Fatal(err)
+	}
+	if code := noRuntimeRequest(http.MethodDelete, basePath, nil); code != http.StatusNoContent {
+		t.Fatalf("delete after stop = %d", code)
 	}
 }

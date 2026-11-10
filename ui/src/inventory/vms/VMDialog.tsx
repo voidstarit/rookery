@@ -98,6 +98,9 @@ export function VMDialog({
     if (disk.deletion_state) {
       return false;
     }
+    if (disk.attached_lightvm_id) {
+      return false;
+    }
     return !disk.attached_vm_id || (vm !== null && disk.attached_vm_id === vm.id);
   });
 

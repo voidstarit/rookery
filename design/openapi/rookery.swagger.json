@@ -4236,6 +4236,16 @@
             "type": "object",
             "$ref": "#/definitions/v1LightVMConsole"
           }
+        },
+        "disk_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "int64"
+          }
+        },
+        "replace_disk_ids": {
+          "type": "boolean"
         }
       }
     },
@@ -5165,6 +5175,13 @@
             "type": "object",
             "$ref": "#/definitions/v1LightVMConsole"
           }
+        },
+        "disk_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "int64"
+          }
         }
       }
     },
@@ -5478,6 +5495,12 @@
           "format": "int64"
         },
         "throttle_class_name": {
+          "type": "string"
+        },
+        "attached_lightvm_id": {
+          "type": "string"
+        },
+        "attached_lightvm_name": {
           "type": "string"
         }
       }
@@ -5905,6 +5928,12 @@
         },
         "storage_backend_name": {
           "type": "string"
+        },
+        "attached_lightvm_id": {
+          "type": "string"
+        },
+        "attached_lightvm_name": {
+          "type": "string"
         }
       }
     },
@@ -6085,6 +6114,23 @@
             "type": "object",
             "$ref": "#/definitions/v1LightVMConsole"
           }
+        },
+        "disk_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "int64"
+          }
+        },
+        "disks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VMDisk"
+          }
+        },
+        "run_state": {
+          "type": "string"
         }
       }
     },

@@ -190,6 +190,8 @@ func runServe(args []string) error {
 		return fmt.Errorf("prepare LightVM runtime: %w", err)
 	}
 	apiServer.ConfigureLightVMRuntime(lightvmRuntime)
+	lightvmCoordinator := lightvm.NewStartCoordinator()
+	apiServer.ConfigureLightVMStartCoordinator(lightvmCoordinator)
 	apiServer.ConfigureMemifDHCP(transport == "memif", *memifDir)
 	apiServer.SetVPPSocket(vppSocket)
 	var pkiManager *pki.Manager
@@ -231,6 +233,7 @@ func runServe(args []string) error {
 		gateway.WithCgroupRuntime(cgroupManager),
 		gateway.WithLightVMStorageDir(lightvmStorage.Dir()),
 		gateway.WithLightVMRuntime(lightvmRuntime),
+		gateway.WithLightVMStartCoordinator(lightvmCoordinator),
 	}
 	var grpcListener net.Listener
 	if *grpcAddr != "" {

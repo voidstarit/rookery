@@ -115,8 +115,8 @@ func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateD
 		if value.StorageBackendID == nil || *value.StorageBackendID != backend.ID {
 			return nil, status.Error(codes.InvalidArgument, "template disk belongs to a different storage backend")
 		}
-		if value.AttachedVMID != nil {
-			return nil, status.Error(codes.FailedPrecondition, "template disk is attached to a VM")
+		if store.DiskAttachedToAnyWorkload(value) {
+			return nil, status.Error(codes.FailedPrecondition, "template disk is attached to a workload")
 		}
 		if sizeGB == 0 {
 			sizeGB = value.SizeGB
@@ -445,12 +445,29 @@ func validateDiskProvisioning(script, timeout string) error {
 	return nil
 }
 
+func diskInUseError(err error) error {
+	var owner *store.DiskInUseError
+	if errors.As(err, &owner) {
+		kind := owner.OwnerKind
+		if kind == "" {
+			kind = "workload"
+		}
+		switch {
+		case owner.OwnerName != "":
+			return status.Errorf(codes.Aborted, "disk is attached to %s %q; detach it first", kind, owner.OwnerName)
+		case owner.OwnerID != "":
+			return status.Errorf(codes.Aborted, "disk is attached to %s %s; detach it first", kind, owner.OwnerID)
+		}
+	}
+	return status.Error(codes.Aborted, "disk is attached to a workload; detach it first")
+}
+
 func diskUpdateError(err error) error {
 	switch {
 	case errors.Is(err, store.ErrDiskNotFound):
 		return status.Error(codes.NotFound, "disk not found")
 	case errors.Is(err, store.ErrDiskInUse):
-		return status.Error(codes.Aborted, "disk is attached to a VM")
+		return diskInUseError(err)
 	case errors.Is(err, store.ErrDiskThrottleClassOnTemplate):
 		return status.Error(codes.InvalidArgument, "templates cannot have a throttle class")
 	case errors.Is(err, store.ErrDiskThrottleClassNotFound):
@@ -471,15 +488,28 @@ func (s *diskService) DeleteDisk(ctx context.Context, request *rookeryv1.DeleteD
 	if err != nil {
 		return nil, storeReadError(err, store.ErrDiskNotFound, "disk not found")
 	}
-	if disk.AttachedVMID != nil {
-		return nil, status.Error(codes.Aborted, "disk is attached to a VM; delete the VM first")
+	if store.DiskAttachedToAnyWorkload(disk) {
+		ownerErr := &store.DiskInUseError{}
+		if disk.AttachedVMID != nil {
+			ownerErr = &store.DiskInUseError{OwnerKind: "vm", OwnerID: *disk.AttachedVMID, OwnerName: disk.AttachedVMName}
+		} else if disk.AttachedLightVMID != nil {
+			ownerErr = &store.DiskInUseError{OwnerKind: "lightvm", OwnerID: *disk.AttachedLightVMID, OwnerName: disk.AttachedLightVMName}
+		}
+		return nil, diskInUseError(ownerErr)
 	}
 	if disk.Source == store.DiskSourceKouja {
 		if s.registry == nil {
 			return nil, status.Error(codes.Unavailable, "storage registry is not configured")
 		}
 		if err := s.store.MarkDiskDeleting(ctx, disk.ID); err != nil {
-			return nil, status.Error(codes.Internal, "could not queue disk deletion")
+			switch {
+			case errors.Is(err, store.ErrDiskNotFound):
+				return nil, status.Error(codes.NotFound, "disk not found")
+			case errors.Is(err, store.ErrDiskInUse):
+				return nil, diskInUseError(err)
+			default:
+				return nil, status.Error(codes.Internal, "could not queue disk deletion")
+			}
 		}
 		return &rookeryv1.DeleteDiskResponse{Accepted: true, State: store.DiskDeletionDeleting}, nil
 	}
@@ -489,7 +519,7 @@ func (s *diskService) DeleteDisk(ctx context.Context, request *rookeryv1.DeleteD
 			case errors.Is(err, store.ErrDiskNotFound):
 				return nil, status.Error(codes.NotFound, "disk not found")
 			case errors.Is(err, store.ErrDiskInUse):
-				return nil, status.Error(codes.Aborted, "disk is attached to a VM; delete the VM first")
+				return nil, diskInUseError(err)
 			default:
 				return nil, status.Error(codes.Internal, "could not delete disk")
 			}
@@ -523,7 +553,7 @@ func (s *diskService) DeleteDisk(ctx context.Context, request *rookeryv1.DeleteD
 		case errors.Is(err, store.ErrDiskNotFound):
 			return nil, status.Error(codes.NotFound, "disk not found")
 		case errors.Is(err, store.ErrDiskInUse):
-			return nil, status.Error(codes.Aborted, "disk is attached to a VM; delete the VM first")
+			return nil, diskInUseError(err)
 		default:
 			return nil, status.Error(codes.Internal, "could not delete disk")
 		}
@@ -608,6 +638,8 @@ func (s *storageBackendService) ListImportableDisks(ctx context.Context, request
 			item.DiskId = &disk.ID
 			item.AttachedVmId = disk.AttachedVMID
 			item.AttachedVmName = disk.AttachedVMName
+			item.AttachedLightvmId = disk.AttachedLightVMID
+			item.AttachedLightvmName = disk.AttachedLightVMName
 			item.StorageBackendName = disk.StorageBackendName
 		}
 		items = append(items, item)

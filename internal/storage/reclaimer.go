@@ -57,7 +57,7 @@ func (r *Reclaimer) Tick(ctx context.Context) (int, error) {
 	}
 	processed := 0
 	for _, disk := range disks {
-		if disk.AttachedVMID != nil {
+		if store.DiskAttachedToAnyWorkload(disk) {
 			_ = r.store.ReleaseDiskDeletionClaim(ctx, disk.ID)
 			continue
 		}
