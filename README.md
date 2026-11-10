@@ -44,7 +44,7 @@ access, and per-VM monitoring.*
 - Optional NAT44 with DHCP outside addressing and DNAT rules
 - DHCPv4, DHCPv6, DNS, and BGP VNFs in a separate `vnfs` daemon
 - Embedded Preact/TypeScript inventory UI
-- REST and gRPC APIs, public mTLS listeners, and a Terraform provider
+- REST and gRPC APIs, public mTLS listeners, and a Terraform provider with LightVM kernel/initramfs uploads and LightVM resources
 - Single static binary per process for Linux x86_64/amd64
 
 ## Screenshots

@@ -57,6 +57,8 @@ provider "rookery" {
   client certificate is issued in the Rookery UI.
 - `ca_pem`, `cert_pem`, `key_pem` accept inline PEM instead of files.
 - `timeout` defaults to `30s`; use strings such as `2m`.
+- `upload_timeout` (or `ROOKERY_UPLOAD_TIMEOUT`) defaults to `30m` and applies
+  to streamed LightVM kernel/initramfs uploads.
 - Client certificates are issued under **Client certificates** in the Rookery
   sidebar. The private key is shown once.
 - The Rookery server must be started with `-grpc-mtls-addr` enabled. The HTTPS
@@ -81,6 +83,9 @@ provider "rookery" {
 | `rookery_route` | Static route in a route table, including VPP path options |
 | `rookery_vnf` | DHCPv4/DHCPv6/NAT44/BGP network function |
 | `rookery_vm` | VM definition, disks, interfaces, boot media, cgroup class |
+| `rookery_lightvm_kernel` | Kernel image, either uploaded from Terraform or registered from a host path |
+| `rookery_lightvm_initramfs` | Initramfs image, either uploaded from Terraform or registered from a host path |
+| `rookery_lightvm` | Container-backed LightVM definition, disks, interfaces, virtiofs shares, consoles |
 | `rookery_host_interface` | Take a physical NIC into VPP |
 | `rookery_startup_script` | Server-level Rookery or VPP reconnect script |
 | `rookery_cgroup_settings` | Host-wide cgroup limits and reusable VM classes |
@@ -89,7 +94,8 @@ All first-class resources and data sources expose a free-form `labels` set:
 `rookery_storage_backend`, `rookery_disk`, `rookery_media`, `rookery_network`,
 `rookery_network_pipe`, `rookery_interface`, `rookery_host_tap`,
 `rookery_acl`, `rookery_route_table`, `rookery_route`, `rookery_vnf`,
-`rookery_vm`, and `rookery_host_interface`. Assign any number of labels:
+`rookery_vm`, `rookery_lightvm_kernel`, `rookery_lightvm_initramfs`,
+`rookery_lightvm`, and `rookery_host_interface`. Assign any number of labels:
 
 ```hcl
 resource "rookery_vm" "app" {
@@ -146,6 +152,80 @@ object to extend the root partition and grow the filesystem. The reference
 script supports a DOS table with root followed by an extended/swap partition
 (the swap is moved and recreated with the same UUID/label) and a single-root
 partition. Other layouts are resized only within their current partition.
+
+## LightVM resources
+
+`rookery_lightvm_kernel` and `rookery_lightvm_initramfs` manage LightVM boot
+artifacts. Set `source_path` to upload a file from the machine running
+Terraform over the mTLS gRPC endpoint; Rookery streams it in chunks into its
+managed LightVM directory. Alternatively set `path` to register a file already
+present on the Rookery host.
+
+```hcl
+resource "rookery_lightvm_kernel" "app" {
+  name        = "vmlinuz-6.12"
+  source_path = "${path.module}/images/vmlinuz-6.12"
+  source_hash = filemd5("${path.module}/images/vmlinuz-6.12")
+  labels      = ["app", "kernel"]
+}
+
+resource "rookery_lightvm_initramfs" "app" {
+  name        = "initramfs-6.12"
+  source_path = "${path.module}/images/initramfs-6.12.img"
+  source_hash = filemd5("${path.module}/images/initramfs-6.12.img")
+}
+```
+
+Uploaded files are marked `managed = true`; destroying the resource removes
+them. Host-path registrations are not deleted by Rookery. `source_hash` is
+optional but should be set to a local file hash when uploads are used, because
+Terraform otherwise cannot detect that the file contents changed without a
+configuration change.
+
+`rookery_lightvm` manages the definition only; start and stop through the
+Rookery UI or API. The LightVM must be stopped before changing it. Disks,
+interfaces, shares, and consoles are replaced from their configured sets on
+each update; set an explicit empty list to clear one.
+
+```hcl
+resource "rookery_lightvm" "app" {
+  name           = "app-01"
+  description    = "container-backed application"
+  vcpus          = 2
+  memory_mb      = 512
+  kernel_id      = rookery_lightvm_kernel.app.id
+  initramfs_id   = rookery_lightvm_initramfs.app.id
+  image          = "alpine:3.20"
+  executable_path = "/usr/local/bin/app"
+  executable_args = ["serve"]
+  append          = "console=hvc0 rdinit=/init"
+  console_enabled = true
+  labels          = ["app", "lightvm"]
+
+  env = [
+    { name = "APP_ENV", value = "prod" },
+  ]
+
+  consoles = [
+    { name = "serial" },
+  ]
+
+  virtiofs_shares = [
+    {
+      host_path = "/srv/app-data"
+      tag       = "data"
+      read_only = true
+    },
+  ]
+
+  disk_ids      = [rookery_disk.app.id]
+  interface_ids = [rookery_interface.app.id]
+}
+```
+
+`consoles` is optional; omitting it creates the default
+`org.example.console` port. The tag `rootfs` is reserved. Shares count toward
+the combined 24-device LightVM limit with disks and interfaces.
 
 `rookery_disk_throttle_class` defines a reusable QEMU block-throttling policy.
 The 19 limits are optional; zero means unset. BPS values are bytes per second,

@@ -17,15 +17,16 @@ import (
 
 // ClientConfig is the resolved provider configuration.
 type ClientConfig struct {
-	Endpoint   string
-	CAFile     string
-	CertFile   string
-	KeyFile    string
-	CAPEM      string
-	CertPEM    string
-	KeyPEM     string
-	ServerName string
-	TimeoutRaw string
+	Endpoint         string
+	CAFile           string
+	CertFile         string
+	KeyFile          string
+	CAPEM            string
+	CertPEM          string
+	KeyPEM           string
+	ServerName       string
+	TimeoutRaw       string
+	UploadTimeoutRaw string
 }
 
 // Client bundles the generated gRPC service clients.
@@ -47,8 +48,13 @@ type Client struct {
 	Troubleshoot        rookeryv1.TroubleshootServiceClient
 	Captures            rookeryv1.CaptureServiceClient
 	Labels              rookeryv1.LabelServiceClient
+	LightVMKernels      rookeryv1.LightVMKernelServiceClient
+	LightVMInitramfs    rookeryv1.LightVMInitramfsServiceClient
+	LightVMArtifacts    rookeryv1.LightVMArtifactServiceClient
+	LightVMs            rookeryv1.LightVMServiceClient
 
-	timeout time.Duration
+	timeout       time.Duration
+	uploadTimeout time.Duration
 }
 
 func (c *Client) Timeout() time.Duration {
@@ -56,6 +62,14 @@ func (c *Client) Timeout() time.Duration {
 		return 30 * time.Second
 	}
 	return c.timeout
+}
+
+// UploadTimeout is used for streamed kernel and initramfs uploads.
+func (c *Client) UploadTimeout() time.Duration {
+	if c == nil || c.uploadTimeout <= 0 {
+		return 30 * time.Minute
+	}
+	return c.uploadTimeout
 }
 
 // NewClient creates an mTLS gRPC client. The server certificate is verified
@@ -92,6 +106,13 @@ func NewClient(config ClientConfig) (*Client, error) {
 			return nil, fmt.Errorf("timeout must be a positive duration, got %q", config.TimeoutRaw)
 		}
 	}
+	uploadTimeout := 30 * time.Minute
+	if strings.TrimSpace(config.UploadTimeoutRaw) != "" {
+		uploadTimeout, err = time.ParseDuration(strings.TrimSpace(config.UploadTimeoutRaw))
+		if err != nil || uploadTimeout <= 0 {
+			return nil, fmt.Errorf("upload_timeout must be a positive duration, got %q", config.UploadTimeoutRaw)
+		}
+	}
 	tlsConfig := &tls.Config{
 		MinVersion:   tls.VersionTLS13,
 		RootCAs:      pool,
@@ -119,7 +140,12 @@ func NewClient(config ClientConfig) (*Client, error) {
 		Troubleshoot:        rookeryv1.NewTroubleshootServiceClient(conn),
 		Captures:            rookeryv1.NewCaptureServiceClient(conn),
 		Labels:              rookeryv1.NewLabelServiceClient(conn),
+		LightVMKernels:      rookeryv1.NewLightVMKernelServiceClient(conn),
+		LightVMInitramfs:    rookeryv1.NewLightVMInitramfsServiceClient(conn),
+		LightVMArtifacts:    rookeryv1.NewLightVMArtifactServiceClient(conn),
+		LightVMs:            rookeryv1.NewLightVMServiceClient(conn),
 		timeout:             timeout,
+		uploadTimeout:       uploadTimeout,
 	}, nil
 }
 

@@ -73,10 +73,12 @@ Rookery resources over the public mTLS gRPC listener. It covers storage
 backends, disks, media, networks and network pipes, vhost and host interfaces,
 host taps, managed VPP addresses and interface route-table bindings, ACLs,
 route tables and routes, VNFs, VMs (with optional cgroup class assignment),
-host-wide cgroup settings and reusable classes, startup scripts, and
-host-interface takeover.
-Matching data sources look up existing resources, and `rookery_status` exposes
-current readiness. Configure
+host-wide cgroup settings and reusable classes, startup scripts,
+host-interface takeover, and LightVM kernels, initramfs images, and instances.
+Kernel/initramfs resources can stream files from the Terraform host over mTLS
+or register files already present on the Rookery host. Matching data sources
+look up existing resources, and `rookery_status` exposes current readiness.
+Configure
 it with the CA, client certificate, and private key downloaded from the
 **Client certificates** dialog:
 
@@ -135,8 +137,9 @@ static UI.
 All first-class inventory entities support free-form labels:
 
 ```text
-vm, disk, media, network, interface, vnf, acl, route_table, route,
-network_pipe, storage_backend, host_tap, host_interface
+vm, lightvm, lightvm_kernel, lightvm_initramfs, disk, media, network,
+interface, vnf, acl, route_table, route, network_pipe, storage_backend,
+host_tap, host_interface
 ```
 
 Labels are stored separately from the entity records. A `PUT` replaces the
@@ -778,9 +781,12 @@ the path is inside `-lightvm-dir`. Uploads use the native
 `POST /api/lightvm/initramfs`, then apply labels to entity type
 `lightvm_kernel` or `lightvm_initramfs`. Deleting an uploaded image removes its
 managed file; `PUT` can point the record at a replacement file and removes the
-previous managed file after the update succeeds. The upload endpoint is
-available on the local HTTP listener only; the mTLS listeners expose the
-generated inventory API.
+previous managed file after the update succeeds. The native multipart upload
+endpoint is available on the local HTTP listener only. The public gRPC
+listeners expose `LightVMArtifactService.UploadArtifact`, a client-streaming
+RPC that accepts `{kind, file_name, chunk}` messages and stores the file in
+managed LightVM storage, plus `DeleteArtifact` for cleanup. The Terraform
+provider uses this RPC for `source_path` uploads.
 
 LightVM records are created at `POST /api/lightvm/instances` with `name`,
 `description`, `vcpus`, `memory_mb`, `console_enabled`, `cgroup_class`,

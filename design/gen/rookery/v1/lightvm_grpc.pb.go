@@ -537,6 +537,149 @@ var LightVMInitramfsService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	LightVMArtifactService_UploadArtifact_FullMethodName = "/rookery.v1.LightVMArtifactService/UploadArtifact"
+	LightVMArtifactService_DeleteArtifact_FullMethodName = "/rookery.v1.LightVMArtifactService/DeleteArtifact"
+)
+
+// LightVMArtifactServiceClient is the client API for LightVMArtifactService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// LightVMArtifactService streams kernel and initramfs files into managed
+// storage for clients that do not have access to the local HTTP upload
+// endpoint, such as the Terraform provider.
+type LightVMArtifactServiceClient interface {
+	UploadArtifact(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse], error)
+	DeleteArtifact(ctx context.Context, in *DeleteArtifactRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+}
+
+type lightVMArtifactServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewLightVMArtifactServiceClient(cc grpc.ClientConnInterface) LightVMArtifactServiceClient {
+	return &lightVMArtifactServiceClient{cc}
+}
+
+func (c *lightVMArtifactServiceClient) UploadArtifact(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &LightVMArtifactService_ServiceDesc.Streams[0], LightVMArtifactService_UploadArtifact_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[UploadArtifactRequest, UploadArtifactResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type LightVMArtifactService_UploadArtifactClient = grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse]
+
+func (c *lightVMArtifactServiceClient) DeleteArtifact(ctx context.Context, in *DeleteArtifactRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, LightVMArtifactService_DeleteArtifact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// LightVMArtifactServiceServer is the server API for LightVMArtifactService service.
+// All implementations must embed UnimplementedLightVMArtifactServiceServer
+// for forward compatibility.
+//
+// LightVMArtifactService streams kernel and initramfs files into managed
+// storage for clients that do not have access to the local HTTP upload
+// endpoint, such as the Terraform provider.
+type LightVMArtifactServiceServer interface {
+	UploadArtifact(grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]) error
+	DeleteArtifact(context.Context, *DeleteArtifactRequest) (*emptypb.Empty, error)
+	mustEmbedUnimplementedLightVMArtifactServiceServer()
+}
+
+// UnimplementedLightVMArtifactServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedLightVMArtifactServiceServer struct{}
+
+func (UnimplementedLightVMArtifactServiceServer) UploadArtifact(grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]) error {
+	return status.Error(codes.Unimplemented, "method UploadArtifact not implemented")
+}
+func (UnimplementedLightVMArtifactServiceServer) DeleteArtifact(context.Context, *DeleteArtifactRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteArtifact not implemented")
+}
+func (UnimplementedLightVMArtifactServiceServer) mustEmbedUnimplementedLightVMArtifactServiceServer() {
+}
+func (UnimplementedLightVMArtifactServiceServer) testEmbeddedByValue() {}
+
+// UnsafeLightVMArtifactServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to LightVMArtifactServiceServer will
+// result in compilation errors.
+type UnsafeLightVMArtifactServiceServer interface {
+	mustEmbedUnimplementedLightVMArtifactServiceServer()
+}
+
+func RegisterLightVMArtifactServiceServer(s grpc.ServiceRegistrar, srv LightVMArtifactServiceServer) {
+	// If the following call panics, it indicates UnimplementedLightVMArtifactServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&LightVMArtifactService_ServiceDesc, srv)
+}
+
+func _LightVMArtifactService_UploadArtifact_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(LightVMArtifactServiceServer).UploadArtifact(&grpc.GenericServerStream[UploadArtifactRequest, UploadArtifactResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type LightVMArtifactService_UploadArtifactServer = grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]
+
+func _LightVMArtifactService_DeleteArtifact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteArtifactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LightVMArtifactServiceServer).DeleteArtifact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LightVMArtifactService_DeleteArtifact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LightVMArtifactServiceServer).DeleteArtifact(ctx, req.(*DeleteArtifactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// LightVMArtifactService_ServiceDesc is the grpc.ServiceDesc for LightVMArtifactService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var LightVMArtifactService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "rookery.v1.LightVMArtifactService",
+	HandlerType: (*LightVMArtifactServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "DeleteArtifact",
+			Handler:    _LightVMArtifactService_DeleteArtifact_Handler,
+		},
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "UploadArtifact",
+			Handler:       _LightVMArtifactService_UploadArtifact_Handler,
+			ClientStreams: true,
+		},
+	},
+	Metadata: "rookery/v1/lightvm.proto",
+}
+
+const (
 	LightVMService_ListLightVMs_FullMethodName  = "/rookery.v1.LightVMService/ListLightVMs"
 	LightVMService_GetLightVM_FullMethodName    = "/rookery.v1.LightVMService/GetLightVM"
 	LightVMService_CreateLightVM_FullMethodName = "/rookery.v1.LightVMService/CreateLightVM"

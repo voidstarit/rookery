@@ -4363,3 +4363,323 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = DeleteInitramfsRequestValidationError{}
+
+// Validate checks the field values on UploadArtifactRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *UploadArtifactRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on UploadArtifactRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// UploadArtifactRequestMultiError, or nil if none found.
+func (m *UploadArtifactRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *UploadArtifactRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Kind
+
+	// no validation rules for FileName
+
+	// no validation rules for Chunk
+
+	if len(errors) > 0 {
+		return UploadArtifactRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// UploadArtifactRequestMultiError is an error wrapping multiple validation
+// errors returned by UploadArtifactRequest.ValidateAll() if the designated
+// constraints aren't met.
+type UploadArtifactRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m UploadArtifactRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m UploadArtifactRequestMultiError) AllErrors() []error { return m }
+
+// UploadArtifactRequestValidationError is the validation error returned by
+// UploadArtifactRequest.Validate if the designated constraints aren't met.
+type UploadArtifactRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e UploadArtifactRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e UploadArtifactRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e UploadArtifactRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e UploadArtifactRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e UploadArtifactRequestValidationError) ErrorName() string {
+	return "UploadArtifactRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e UploadArtifactRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sUploadArtifactRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = UploadArtifactRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = UploadArtifactRequestValidationError{}
+
+// Validate checks the field values on UploadArtifactResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *UploadArtifactResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on UploadArtifactResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// UploadArtifactResponseMultiError, or nil if none found.
+func (m *UploadArtifactResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *UploadArtifactResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Path
+
+	// no validation rules for FileName
+
+	// no validation rules for SizeBytes
+
+	if len(errors) > 0 {
+		return UploadArtifactResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// UploadArtifactResponseMultiError is an error wrapping multiple validation
+// errors returned by UploadArtifactResponse.ValidateAll() if the designated
+// constraints aren't met.
+type UploadArtifactResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m UploadArtifactResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m UploadArtifactResponseMultiError) AllErrors() []error { return m }
+
+// UploadArtifactResponseValidationError is the validation error returned by
+// UploadArtifactResponse.Validate if the designated constraints aren't met.
+type UploadArtifactResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e UploadArtifactResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e UploadArtifactResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e UploadArtifactResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e UploadArtifactResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e UploadArtifactResponseValidationError) ErrorName() string {
+	return "UploadArtifactResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e UploadArtifactResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sUploadArtifactResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = UploadArtifactResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = UploadArtifactResponseValidationError{}
+
+// Validate checks the field values on DeleteArtifactRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *DeleteArtifactRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on DeleteArtifactRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// DeleteArtifactRequestMultiError, or nil if none found.
+func (m *DeleteArtifactRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *DeleteArtifactRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Path
+
+	if len(errors) > 0 {
+		return DeleteArtifactRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// DeleteArtifactRequestMultiError is an error wrapping multiple validation
+// errors returned by DeleteArtifactRequest.ValidateAll() if the designated
+// constraints aren't met.
+type DeleteArtifactRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m DeleteArtifactRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m DeleteArtifactRequestMultiError) AllErrors() []error { return m }
+
+// DeleteArtifactRequestValidationError is the validation error returned by
+// DeleteArtifactRequest.Validate if the designated constraints aren't met.
+type DeleteArtifactRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e DeleteArtifactRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e DeleteArtifactRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e DeleteArtifactRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e DeleteArtifactRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e DeleteArtifactRequestValidationError) ErrorName() string {
+	return "DeleteArtifactRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e DeleteArtifactRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sDeleteArtifactRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = DeleteArtifactRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = DeleteArtifactRequestValidationError{}

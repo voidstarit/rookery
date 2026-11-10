@@ -72,20 +72,25 @@ func (p *RookeryProvider) Schema(_ context.Context, _ provider.SchemaRequest, re
 				Optional:    true,
 				Description: "Timeout for individual API calls, for example 30s or 2m. Defaults to 30s.",
 			},
+			"upload_timeout": providerschema.StringAttribute{
+				Optional:    true,
+				Description: "Timeout for streamed LightVM kernel/initramfs uploads. Defaults to 30m. Can also be set with ROOKERY_UPLOAD_TIMEOUT.",
+			},
 		},
 	}
 }
 
 type providerModel struct {
-	Endpoint   types.String `tfsdk:"endpoint"`
-	CAFile     types.String `tfsdk:"ca_file"`
-	CertFile   types.String `tfsdk:"cert_file"`
-	KeyFile    types.String `tfsdk:"key_file"`
-	CAPEM      types.String `tfsdk:"ca_pem"`
-	CertPEM    types.String `tfsdk:"cert_pem"`
-	KeyPEM     types.String `tfsdk:"key_pem"`
-	ServerName types.String `tfsdk:"server_name"`
-	Timeout    types.String `tfsdk:"timeout"`
+	Endpoint      types.String `tfsdk:"endpoint"`
+	CAFile        types.String `tfsdk:"ca_file"`
+	CertFile      types.String `tfsdk:"cert_file"`
+	KeyFile       types.String `tfsdk:"key_file"`
+	CAPEM         types.String `tfsdk:"ca_pem"`
+	CertPEM       types.String `tfsdk:"cert_pem"`
+	KeyPEM        types.String `tfsdk:"key_pem"`
+	ServerName    types.String `tfsdk:"server_name"`
+	Timeout       types.String `tfsdk:"timeout"`
+	UploadTimeout types.String `tfsdk:"upload_timeout"`
 }
 
 func (p *RookeryProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
@@ -96,15 +101,16 @@ func (p *RookeryProvider) Configure(ctx context.Context, req provider.ConfigureR
 	}
 
 	clientConfig := ClientConfig{
-		Endpoint:   stringOrEnv(config.Endpoint, "ROOKERY_ENDPOINT"),
-		CAFile:     stringOrEnv(config.CAFile, "ROOKERY_CA_FILE"),
-		CertFile:   stringOrEnv(config.CertFile, "ROOKERY_CLIENT_CERT"),
-		KeyFile:    stringOrEnv(config.KeyFile, "ROOKERY_CLIENT_KEY"),
-		CAPEM:      config.CAPEM.ValueString(),
-		CertPEM:    config.CertPEM.ValueString(),
-		KeyPEM:     config.KeyPEM.ValueString(),
-		ServerName: config.ServerName.ValueString(),
-		TimeoutRaw: config.Timeout.ValueString(),
+		Endpoint:         stringOrEnv(config.Endpoint, "ROOKERY_ENDPOINT"),
+		CAFile:           stringOrEnv(config.CAFile, "ROOKERY_CA_FILE"),
+		CertFile:         stringOrEnv(config.CertFile, "ROOKERY_CLIENT_CERT"),
+		KeyFile:          stringOrEnv(config.KeyFile, "ROOKERY_CLIENT_KEY"),
+		CAPEM:            config.CAPEM.ValueString(),
+		CertPEM:          config.CertPEM.ValueString(),
+		KeyPEM:           config.KeyPEM.ValueString(),
+		ServerName:       config.ServerName.ValueString(),
+		TimeoutRaw:       config.Timeout.ValueString(),
+		UploadTimeoutRaw: stringOrEnv(config.UploadTimeout, "ROOKERY_UPLOAD_TIMEOUT"),
 	}
 	client, err := NewClient(clientConfig)
 	if err != nil {
@@ -135,6 +141,9 @@ func (p *RookeryProvider) Resources(_ context.Context) []func() resource.Resourc
 		NewVPPInterfaceRouteTablesResource,
 		NewStartupScriptResource,
 		NewCgroupSettingsResource,
+		NewLightVMKernelResource,
+		NewLightVMInitramfsResource,
+		NewLightVMResource,
 	}
 }
 

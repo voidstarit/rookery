@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -361,6 +362,15 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	entityLabels := &labelService{store: st}
 	kernels := &lightVMKernelService{store: st, storageDir: options.lightvmDir}
 	initramfs := &lightVMInitramfsService{store: st, storageDir: options.lightvmDir}
+	var artifactStorage *lightvm.Storage
+	if strings.TrimSpace(options.lightvmDir) != "" {
+		storage, storageErr := lightvm.NewStorage(options.lightvmDir, 0)
+		if storageErr != nil {
+			return nil, storageErr
+		}
+		artifactStorage = storage
+	}
+	artifacts := &lightVMArtifactService{storage: artifactStorage}
 	lightvms := &lightVMService{
 		store: st, runtime: options.lightvmRuntime, mu: options.vmMutex,
 		resourceMu: options.diskMutex, planner: options.startPlanner,
@@ -383,6 +393,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	rookeryv1.RegisterLabelServiceServer(server, entityLabels)
 	rookeryv1.RegisterLightVMKernelServiceServer(server, kernels)
 	rookeryv1.RegisterLightVMInitramfsServiceServer(server, initramfs)
+	rookeryv1.RegisterLightVMArtifactServiceServer(server, artifacts)
 	rookeryv1.RegisterLightVMServiceServer(server, lightvms)
 	healthServer := health.NewServer()
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
