@@ -393,10 +393,16 @@ func TestLightVMVirtioFSShares(t *testing.T) {
 		t.Fatalf("get shares = %+v, %v", got.VirtioFSShares, err)
 	}
 
+	filePath := filepath.Join(dir1, "file")
+	if err := os.WriteFile(filePath, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	for _, tc := range []struct {
 		name  string
 		share store.LightVMVirtioFSShare
 	}{
+		{name: "empty path", share: store.LightVMVirtioFSShare{Tag: "x"}},
+		{name: "file path", share: store.LightVMVirtioFSShare{HostPath: filePath, Tag: "x"}},
 		{name: "relative", share: store.LightVMVirtioFSShare{HostPath: "relative", Tag: "x"}},
 		{name: "missing", share: store.LightVMVirtioFSShare{HostPath: filepath.Join(dir1, "missing"), Tag: "x"}},
 		{name: "rootfs", share: store.LightVMVirtioFSShare{HostPath: dir1, Tag: "rootfs"}},
@@ -423,6 +429,15 @@ func TestLightVMVirtioFSShares(t *testing.T) {
 	})
 	if !errors.Is(err, store.ErrInvalidVirtioFSShare) {
 		t.Fatalf("duplicate tag error = %v, want ErrInvalidVirtioFSShare", err)
+	}
+	_, err = st.UpdateLightVM(ctx, store.LightVM{
+		ID: created.ID, Name: created.Name, VCPUs: created.VCPUs, MemoryMB: created.MemoryMB,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+		Image: created.Image, ExecutablePath: created.ExecutablePath,
+		VirtioFSShares: []store.LightVMVirtioFSShare{{HostPath: dir1, Tag: "rootfs"}},
+	})
+	if !errors.Is(err, store.ErrInvalidVirtioFSShare) {
+		t.Fatalf("update invalid share error = %v, want ErrInvalidVirtioFSShare", err)
 	}
 
 	if err := st.DeleteLightVM(ctx, created.ID); err != nil {

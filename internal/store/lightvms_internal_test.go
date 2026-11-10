@@ -79,23 +79,26 @@ func TestDiskIDNormalization(t *testing.T) {
 }
 
 func TestLightVMDeviceBudget(t *testing.T) {
-	if err := validateLightVMDeviceBudget(0, 0, MaxLightVMDevices, 0, true); err != nil {
+	if err := validateLightVMDeviceBudget(0, 0, 0, MaxLightVMDevices, 0, 0, true); err != nil {
 		t.Fatalf("at-limit create: %v", err)
 	}
-	if err := validateLightVMDeviceBudget(0, 0, MaxLightVMDevices+1, 0, true); !errors.Is(err, ErrLightVMDeviceLimit) {
+	if err := validateLightVMDeviceBudget(0, 0, 0, MaxLightVMDevices+1, 0, 0, true); !errors.Is(err, ErrLightVMDeviceLimit) {
 		t.Fatalf("over-limit create error = %v", err)
 	}
-	if err := validateLightVMDeviceBudget(MaxLightVMDevices+1, 0, MaxLightVMDevices, 0, false); err != nil {
+	if err := validateLightVMDeviceBudget(MaxLightVMDevices+1, 0, 0, MaxLightVMDevices, 0, 0, false); err != nil {
 		t.Fatalf("over-limit definition reduction: %v", err)
 	}
-	if err := validateLightVMDeviceBudget(MaxLightVMDevices+1, 0, MaxLightVMDevices+2, 0, false); !errors.Is(err, ErrLightVMDeviceLimit) {
+	if err := validateLightVMDeviceBudget(MaxLightVMDevices+1, 0, 0, MaxLightVMDevices+2, 0, 0, false); !errors.Is(err, ErrLightVMDeviceLimit) {
 		t.Fatalf("over-limit growth error = %v", err)
 	}
-	if err := validateLightVMDeviceBudget(0, 0, 0, MaxLightVMDevices+1, false); !errors.Is(err, ErrLightVMDeviceLimit) {
+	if err := validateLightVMDeviceBudget(0, 0, 0, 0, MaxLightVMDevices+1, 0, false); !errors.Is(err, ErrLightVMDeviceLimit) {
 		t.Fatalf("over-limit update error = %v", err)
 	}
-	if err := validateLightVMDeviceBudget(0, 0, 1, 1, false); err != nil {
+	if err := validateLightVMDeviceBudget(0, 0, 0, 1, 1, 0, false); err != nil {
 		t.Fatalf("within-limit update: %v", err)
+	}
+	if err := validateLightVMDeviceBudget(0, 0, 0, 0, 0, MaxLightVMDevices+1, false); !errors.Is(err, ErrLightVMDeviceLimit) {
+		t.Fatalf("over-limit share update error = %v", err)
 	}
 }
 
@@ -114,6 +117,15 @@ func TestLoadWorkloadDisksValidation(t *testing.T) {
 	}
 	if _, err := st.loadWorkloadDisks(ctx, "unknown", []string{"one"}); err == nil {
 		t.Fatal("unsupported owner kind was accepted")
+	}
+	if err := st.loadLightVMVirtioFSShares(ctx, nil); err != nil {
+		t.Fatalf("load no LightVM shares: %v", err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.loadLightVMVirtioFSShares(ctx, []LightVM{{ID: "one"}}); err == nil {
+		t.Fatal("share load on a closed store succeeded")
 	}
 }
 

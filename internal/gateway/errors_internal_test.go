@@ -41,6 +41,7 @@ func TestLightVMErrorMappings(t *testing.T) {
 		store.ErrDiskNotFound,
 		store.ErrInvalidDiskIDs,
 		store.ErrLightVMDeviceLimit,
+		store.ErrInvalidVirtioFSShare,
 		store.ErrDiskIsTemplate,
 		store.ErrDiskDeleting,
 		&store.DiskInUseError{OwnerKind: "vm", OwnerName: "app"},

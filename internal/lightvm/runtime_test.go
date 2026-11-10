@@ -643,3 +643,20 @@ func TestRuntimeWrappersPropagateErrors(t *testing.T) {
 		t.Fatal("StopLightVM ignored a stop error")
 	}
 }
+
+func TestRuntimeVirtioFSShareHostPathValidation(t *testing.T) {
+	runtime, _, dir, rootfs := prepareTestRuntime(t)
+	file := filepath.Join(dir, "not-a-directory")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	vm := prepareTestVM()
+	vm.VirtioFSShares = []store.LightVMVirtioFSShare{{HostPath: file, Tag: "data"}}
+	prepared := lightvm.PreparedLightVM{LightVMID: vm.ID, AttemptToken: "sharetest", Rootfs: rootfs}
+	if err := runtime.StartPreparedLightVM(context.Background(), &prepared, vm, qemu.StartPlan{}); err == nil {
+		t.Fatal("file share path was accepted")
+	}
+	if err := runtime.CleanupPreparedLightVM(context.Background(), prepared); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+}
