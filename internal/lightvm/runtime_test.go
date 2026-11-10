@@ -103,7 +103,7 @@ case "$1" in
   pull) exit 0 ;;
   from) printf '%s\n' "$3" >> "$LIGHTVM_FAKE_CONTAINERS"; exit 0 ;;
   mount) mkdir -p "$LIGHTVM_FAKE_ROOTFS"; printf '%s\n' "$LIGHTVM_FAKE_ROOTFS" ;;
-  containers) cat "$LIGHTVM_FAKE_CONTAINERS" 2>/dev/null; exit 0 ;;
+  containers) case "$*" in *"{{.ContainerName}}"*) cat "$LIGHTVM_FAKE_CONTAINERS" 2>/dev/null; exit 0 ;; *) echo "unexpected buildah template: $*" >&2; exit 125 ;; esac ;;
   umount|rm) exit 0 ;;
   *) exit 0 ;;
 esac

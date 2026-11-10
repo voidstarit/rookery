@@ -163,7 +163,7 @@ func (r *Runtime) CleanupStoppedLightVM(ctx context.Context, id string) error {
 	containers := map[string]struct{}{
 		lightVMContainerName(id): {},
 	}
-	if output, err := r.runCommand(ctx, 30*time.Second, r.buildahBinary, "containers", "--format", "{{.Name}}"); err != nil {
+	if output, err := r.runCommand(ctx, 30*time.Second, r.buildahBinary, "containers", "--format", "{{.ContainerName}}"); err != nil {
 		errs = append(errs, fmt.Errorf("enumerate buildah containers: %w", err))
 	} else {
 		for _, line := range strings.Split(output, "\n") {
