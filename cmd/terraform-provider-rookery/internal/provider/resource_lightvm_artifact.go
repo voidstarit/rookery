@@ -7,8 +7,10 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
@@ -78,7 +80,10 @@ func (r *lightVMArtifactResource) Schema(_ context.Context, _ resource.SchemaReq
 				Required:    true,
 				Description: fmt.Sprintf("%s name.", capitalize(r.noun)),
 			},
-			"description": schema.StringAttribute{Optional: true, Computed: true, Description: "Optional description."},
+			"description": schema.StringAttribute{
+				Optional: true, Computed: true, Description: "Optional description.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
 			"source_path": schema.StringAttribute{
 				Optional:    true,
 				Description: "Path to a local kernel/initramfs file to stream to Rookery. Mutually exclusive with a user-supplied path.",
@@ -93,9 +98,18 @@ func (r *lightVMArtifactResource) Schema(_ context.Context, _ resource.SchemaReq
 				Description:   "Absolute path on the Rookery host. Computed when source_path uploads a file.",
 				PlanModifiers: []planmodifier.String{artifactPathPlanModifier{}},
 			},
-			"file_name":  schema.StringAttribute{Optional: true, Computed: true, Description: "Display file name. Defaults to the uploaded or host file basename."},
-			"size_bytes": schema.Int64Attribute{Computed: true, Description: "Server-derived file size."},
-			"managed":    schema.BoolAttribute{Computed: true, Description: "Whether Rookery manages and may delete the file."},
+			"file_name": schema.StringAttribute{
+				Optional: true, Computed: true, Description: "Display file name. Defaults to the uploaded or host file basename.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"size_bytes": schema.Int64Attribute{
+				Computed: true, Description: "Server-derived file size.",
+				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
+			},
+			"managed": schema.BoolAttribute{
+				Computed: true, Description: "Whether Rookery manages and may delete the file.",
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+			},
 		},
 	}
 }

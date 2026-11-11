@@ -67,6 +67,7 @@ type LightVM struct {
 	Image               string                 `json:"image"`
 	Env                 []LightVMEnvVar        `json:"env"`
 	ExecutablePath      string                 `json:"executable_path"`
+	ExecutableScript    string                 `json:"executable_script"`
 	ExecutableArgs      []string               `json:"executable_args"`
 	Append              string                 `json:"append"`
 	Consoles            []LightVMConsole       `json:"consoles"`
@@ -190,7 +191,8 @@ func validLightVMShareTag(tag string) bool {
 const lightVMSelect = `
 	SELECT l.id, l.name, l.description, l.vcpus, l.memory_mb, l.console_enabled,
 	       l.cgroup_class, l.kernel_id, k.name, k.path, l.initramfs_id, i.name,
-	       i.path, l.image, l.env, l.executable_path, l.executable_args, l.append,
+	       i.path, l.image, l.env, l.executable_path, l.executable_script,
+	       l.executable_args, l.append,
 	       l.status, l.desired_state, l.lifecycle_generation, l.created_at, l.updated_at
 	FROM lightvms AS l
 	JOIN lightvm_kernels AS k ON k.id = l.kernel_id
@@ -317,12 +319,12 @@ func (s *Store) CreateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 		INSERT INTO lightvms
 			(id, name, description, vcpus, memory_mb, console_enabled,
 			 cgroup_class, kernel_id, initramfs_id, image, env,
-			 executable_path, executable_args, append, status, desired_state,
+			 executable_path, executable_script, executable_args, append, status, desired_state,
 			 created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		vm.ID, vm.Name, vm.Description, vm.VCPUs, vm.MemoryMB, vm.ConsoleEnabled,
 		vm.CgroupClass, vm.KernelID, vm.InitramfsID, vm.Image, envJSON,
-		vm.ExecutablePath, argsJSON, vm.Append, vm.Status, vm.DesiredState, now, now,
+		vm.ExecutablePath, vm.ExecutableScript, argsJSON, vm.Append, vm.Status, vm.DesiredState, now, now,
 	); err != nil {
 		if isUniqueViolation(err) {
 			return LightVM{}, fmt.Errorf("%w: %q", ErrLightVMNameTaken, vm.Name)
@@ -419,12 +421,12 @@ func (s *Store) UpdateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 		SET name = ?, description = ?, vcpus = ?, memory_mb = ?,
 		    console_enabled = ?, cgroup_class = ?, kernel_id = ?,
 		    initramfs_id = ?, image = ?, env = ?, executable_path = ?,
-		    executable_args = ?, append = ?, desired_state = ?,
+		    executable_script = ?, executable_args = ?, append = ?, desired_state = ?,
 		    lifecycle_generation = lifecycle_generation + 1, updated_at = ?
 		WHERE id = ?`,
 		vm.Name, vm.Description, vm.VCPUs, vm.MemoryMB,
 		vm.ConsoleEnabled, vm.CgroupClass, vm.KernelID,
-		vm.InitramfsID, vm.Image, envJSON, vm.ExecutablePath,
+		vm.InitramfsID, vm.Image, envJSON, vm.ExecutablePath, vm.ExecutableScript,
 		argsJSON, vm.Append, DesiredStopped, time.Now().UTC().UnixMilli(), vm.ID,
 	)
 	if err != nil {
@@ -828,7 +830,7 @@ func scanLightVM(s scanner) (LightVM, error) {
 		&vm.ID, &vm.Name, &vm.Description, &vm.VCPUs, &vm.MemoryMB,
 		&vm.ConsoleEnabled, &vm.CgroupClass, &vm.KernelID, &vm.KernelName,
 		&vm.KernelPath, &vm.InitramfsID, &vm.InitramfsName, &vm.InitramfsPath,
-		&vm.Image, &envJSON, &vm.ExecutablePath, &argsJSON, &vm.Append,
+		&vm.Image, &envJSON, &vm.ExecutablePath, &vm.ExecutableScript, &argsJSON, &vm.Append,
 		&vm.Status, &vm.DesiredState, &vm.LifecycleGeneration, &createdAt, &updatedAt,
 	); err != nil {
 		return LightVM{}, err

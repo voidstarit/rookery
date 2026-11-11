@@ -92,7 +92,7 @@ func (r *Runtime) PrepareLightVM(ctx context.Context, vm store.LightVM) (Prepare
 		r.cleanupContainerBackgroundByName(prepared.Container)
 		return PreparedLightVM{}, fmt.Errorf("write LightVM .env: %w", err)
 	}
-	if err := writeLightVMEntrypointFile(rootfs, vm.ExecutablePath, vm.ExecutableArgs); err != nil {
+	if err := writeLightVMEntrypointFile(rootfs, vm.ExecutablePath, vm.ExecutableArgs, vm.ExecutableScript); err != nil {
 		r.cleanupContainerBackgroundByName(prepared.Container)
 		return PreparedLightVM{}, fmt.Errorf("write LightVM .entrypoint: %w", err)
 	}

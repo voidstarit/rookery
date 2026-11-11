@@ -2,12 +2,15 @@ package provider
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -31,31 +34,32 @@ func NewLightVMResource() resource.Resource {
 }
 
 type lightVMModel struct {
-	ID             types.String `tfsdk:"id"`
-	Name           types.String `tfsdk:"name"`
-	Description    types.String `tfsdk:"description"`
-	VCPUs          types.Int64  `tfsdk:"vcpus"`
-	MemoryMB       types.Int64  `tfsdk:"memory_mb"`
-	ConsoleEnabled types.Bool   `tfsdk:"console_enabled"`
-	CgroupClass    types.String `tfsdk:"cgroup_class"`
-	KernelID       types.Int64  `tfsdk:"kernel_id"`
-	KernelName     types.String `tfsdk:"kernel_name"`
-	InitramfsID    types.Int64  `tfsdk:"initramfs_id"`
-	InitramfsName  types.String `tfsdk:"initramfs_name"`
-	Image          types.String `tfsdk:"image"`
-	Env            types.List   `tfsdk:"env"`
-	ExecutablePath types.String `tfsdk:"executable_path"`
-	ExecutableArgs types.List   `tfsdk:"executable_args"`
-	Append         types.String `tfsdk:"append"`
-	InterfaceIDs   types.List   `tfsdk:"interface_ids"`
-	DiskIDs        types.List   `tfsdk:"disk_ids"`
-	VirtioFSShares types.List   `tfsdk:"virtiofs_shares"`
-	Consoles       types.List   `tfsdk:"consoles"`
-	Status         types.String `tfsdk:"status"`
-	DesiredState   types.String `tfsdk:"desired_state"`
-	RunState       types.String `tfsdk:"run_state"`
-	ConsoleSocket  types.String `tfsdk:"console_socket"`
-	Labels         types.Set    `tfsdk:"labels"`
+	ID               types.String `tfsdk:"id"`
+	Name             types.String `tfsdk:"name"`
+	Description      types.String `tfsdk:"description"`
+	VCPUs            types.Int64  `tfsdk:"vcpus"`
+	MemoryMB         types.Int64  `tfsdk:"memory_mb"`
+	ConsoleEnabled   types.Bool   `tfsdk:"console_enabled"`
+	CgroupClass      types.String `tfsdk:"cgroup_class"`
+	KernelID         types.Int64  `tfsdk:"kernel_id"`
+	KernelName       types.String `tfsdk:"kernel_name"`
+	InitramfsID      types.Int64  `tfsdk:"initramfs_id"`
+	InitramfsName    types.String `tfsdk:"initramfs_name"`
+	Image            types.String `tfsdk:"image"`
+	Env              types.List   `tfsdk:"env"`
+	ExecutablePath   types.String `tfsdk:"executable_path"`
+	ExecutableScript types.String `tfsdk:"executable_script"`
+	ExecutableArgs   types.List   `tfsdk:"executable_args"`
+	Append           types.String `tfsdk:"append"`
+	InterfaceIDs     types.List   `tfsdk:"interface_ids"`
+	DiskIDs          types.List   `tfsdk:"disk_ids"`
+	VirtioFSShares   types.List   `tfsdk:"virtiofs_shares"`
+	Consoles         types.List   `tfsdk:"consoles"`
+	Status           types.String `tfsdk:"status"`
+	DesiredState     types.String `tfsdk:"desired_state"`
+	RunState         types.String `tfsdk:"run_state"`
+	ConsoleSocket    types.String `tfsdk:"console_socket"`
+	Labels           types.Set    `tfsdk:"labels"`
 }
 
 type lightVMEnvModel struct {
@@ -85,37 +89,72 @@ func (r *lightVMResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 	resp.Schema = schema.Schema{
 		Description: "A container-backed Rookery LightVM. Power actions are not managed by this resource.",
 		Attributes: map[string]schema.Attribute{
-			"labels":          labelsResourceAttribute(),
-			"id":              schema.StringAttribute{Computed: true, PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
-			"name":            schema.StringAttribute{Required: true, Description: "LightVM name."},
-			"description":     schema.StringAttribute{Optional: true, Computed: true, Description: "Optional description."},
-			"vcpus":           schema.Int64Attribute{Optional: true, Computed: true, Description: "Virtual CPUs."},
-			"memory_mb":       schema.Int64Attribute{Optional: true, Computed: true, Description: "Memory in MiB."},
-			"console_enabled": schema.BoolAttribute{Optional: true, Computed: true, Description: "Allow access to the virtio console."},
-			"cgroup_class":    schema.StringAttribute{Optional: true, Computed: true, Description: "Optional leaf cgroup class name."},
-			"kernel_id":       schema.Int64Attribute{Required: true, Description: "Kernel record id."},
-			"kernel_name":     schema.StringAttribute{Computed: true, Description: "Kernel record name."},
-			"initramfs_id":    schema.Int64Attribute{Required: true, Description: "Initramfs record id."},
-			"initramfs_name":  schema.StringAttribute{Computed: true, Description: "Initramfs record name."},
-			"image":           schema.StringAttribute{Required: true, Description: "Container image used to prepare the root filesystem."},
+			"labels": labelsResourceAttribute(),
+			"id":     schema.StringAttribute{Computed: true, PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
+			"name":   schema.StringAttribute{Required: true, Description: "LightVM name."},
+			"description": schema.StringAttribute{
+				Optional: true, Computed: true, Description: "Optional description.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"vcpus": schema.Int64Attribute{
+				Optional: true, Computed: true, Description: "Virtual CPUs.",
+				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
+			},
+			"memory_mb": schema.Int64Attribute{
+				Optional: true, Computed: true, Description: "Memory in MiB.",
+				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
+			},
+			"console_enabled": schema.BoolAttribute{
+				Optional: true, Computed: true, Description: "Allow access to the virtio console.",
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+			},
+			"cgroup_class": schema.StringAttribute{
+				Optional: true, Computed: true, Description: "Optional leaf cgroup class name.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"kernel_id": schema.Int64Attribute{Required: true, Description: "Kernel record id."},
+			"kernel_name": schema.StringAttribute{
+				Computed: true, Description: "Kernel record name.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"initramfs_id": schema.Int64Attribute{Required: true, Description: "Initramfs record id."},
+			"initramfs_name": schema.StringAttribute{
+				Computed: true, Description: "Initramfs record name.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"image": schema.StringAttribute{Required: true, Description: "Container image used to prepare the root filesystem."},
 			"env": schema.ListNestedAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "Environment variables written to the root filesystem .env file.",
+				Optional:      true,
+				Computed:      true,
+				Description:   "Environment variables written to the root filesystem .env file.",
+				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
 				NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 					"name":  schema.StringAttribute{Required: true, Description: "Variable name."},
 					"value": schema.StringAttribute{Optional: true, Computed: true, Description: "Variable value."},
 				}},
 			},
-			"executable_path": schema.StringAttribute{Required: true, Description: "Executable path written to the guest entrypoint."},
-			"executable_args": schema.ListAttribute{Optional: true, Computed: true, ElementType: types.StringType, Description: "Executable arguments."},
+			"executable_path": schema.StringAttribute{
+				Optional:    true,
+				Description: "Absolute executable path written to the guest entrypoint. Mutually exclusive with executable_script.",
+			},
+			"executable_script": schema.StringAttribute{
+				Optional:    true,
+				Description: "Inline script content written to /.entrypoint and executed on LightVM startup. Mutually exclusive with executable_path.",
+			},
+			"executable_args": schema.ListAttribute{
+				Optional: true, Computed: true, ElementType: types.StringType, Description: "Executable arguments.",
+				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
+			},
 			"append": schema.StringAttribute{
 				Optional:      true,
 				Computed:      true,
 				Description:   "Kernel command line. Defaults to console=hvc0 rdinit=/init.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
-			"interface_ids": schema.ListAttribute{Optional: true, Computed: true, ElementType: types.Int64Type, Description: "Attached network interface ids."},
+			"interface_ids": schema.ListAttribute{
+				Optional: true, Computed: true, ElementType: types.Int64Type, Description: "Attached network interface ids.",
+				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
+			},
 			"disk_ids": schema.ListAttribute{
 				Optional:      true,
 				Computed:      true,
@@ -124,9 +163,10 @@ func (r *lightVMResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
 			},
 			"virtiofs_shares": schema.ListNestedAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "Additional host directories exposed to the guest as virtiofs devices.",
+				Optional:      true,
+				Computed:      true,
+				Description:   "Additional host directories exposed to the guest as virtiofs devices.",
+				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
 				NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 					"id":        schema.Int64Attribute{Computed: true},
 					"host_path": schema.StringAttribute{Required: true, Description: "Absolute path to an existing host directory."},
@@ -136,19 +176,32 @@ func (r *lightVMResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				}},
 			},
 			"consoles": schema.ListNestedAttribute{
-				Optional:    true,
-				Computed:    true,
-				Description: "Virtio console ports. The server assigns ids and port names.",
+				Optional:      true,
+				Computed:      true,
+				Description:   "Virtio console ports. The server assigns ids and port names.",
+				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
 				NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 					"id":        schema.Int64Attribute{Computed: true},
 					"name":      schema.StringAttribute{Required: true, Description: "Console name."},
 					"port_name": schema.StringAttribute{Computed: true, Description: "Guest port name."},
 				}},
 			},
-			"status":         schema.StringAttribute{Computed: true, Description: "Current lifecycle status."},
-			"desired_state":  schema.StringAttribute{Computed: true, Description: "Persisted desired power state."},
-			"run_state":      schema.StringAttribute{Computed: true, Description: "Observed QEMU run state while running."},
-			"console_socket": schema.StringAttribute{Computed: true, Description: "First console socket while running."},
+			"status": schema.StringAttribute{
+				Computed: true, Description: "Current lifecycle status.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"desired_state": schema.StringAttribute{
+				Computed: true, Description: "Persisted desired power state.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"run_state": schema.StringAttribute{
+				Computed: true, Description: "Observed QEMU run state while running.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"console_socket": schema.StringAttribute{
+				Computed: true, Description: "First console socket while running.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
 		},
 	}
 }
@@ -273,6 +326,21 @@ func (r *lightVMResource) ImportState(ctx context.Context, req resource.ImportSt
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
+func validateLightVMExecution(plan lightVMModel, args []string) diag.Diagnostics {
+	var diags diag.Diagnostics
+	executablePath := strings.TrimSpace(plan.ExecutablePath.ValueString())
+	executableScript := strings.TrimSpace(plan.ExecutableScript.ValueString())
+	switch {
+	case executablePath == "" && executableScript == "":
+		diags.AddError("Invalid LightVM executable", "exactly one of executable_path or executable_script is required")
+	case executablePath != "" && executableScript != "":
+		diags.AddError("Invalid LightVM executable", "executable_path and executable_script are mutually exclusive")
+	case executableScript != "" && len(args) > 0:
+		diags.AddError("Invalid LightVM executable", "executable_args cannot be used with executable_script")
+	}
+	return diags
+}
+
 func lightVMCreateRequest(ctx context.Context, plan lightVMModel) (*rookeryv1.CreateLightVMRequest, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	env, envDiags := lightVMEnvFromModel(ctx, plan.Env)
@@ -283,27 +351,29 @@ func lightVMCreateRequest(ctx context.Context, plan lightVMModel) (*rookeryv1.Cr
 	diags.Append(shareDiags...)
 	args, argDiags := stringListValues(ctx, plan.ExecutableArgs)
 	diags.Append(argDiags...)
+	diags.Append(validateLightVMExecution(plan, args)...)
 	if diags.HasError() {
 		return nil, diags
 	}
 	return &rookeryv1.CreateLightVMRequest{
-		Name:           plan.Name.ValueString(),
-		Description:    plan.Description.ValueString(),
-		Vcpus:          int32Pointer(plan.VCPUs),
-		MemoryMb:       int32Pointer(plan.MemoryMB),
-		ConsoleEnabled: boolPointer(plan.ConsoleEnabled),
-		CgroupClass:    plan.CgroupClass.ValueString(),
-		KernelId:       plan.KernelID.ValueInt64(),
-		InitramfsId:    plan.InitramfsID.ValueInt64(),
-		Image:          plan.Image.ValueString(),
-		Env:            env,
-		ExecutablePath: plan.ExecutablePath.ValueString(),
-		ExecutableArgs: args,
-		InterfaceIds:   lightVMInt64Values(ctx, plan.InterfaceIDs),
-		Append:         stringPointer(plan.Append),
-		Consoles:       consoles,
-		DiskIds:        lightVMInt64Values(ctx, plan.DiskIDs),
-		VirtiofsShares: shares,
+		Name:             plan.Name.ValueString(),
+		Description:      plan.Description.ValueString(),
+		Vcpus:            int32Pointer(plan.VCPUs),
+		MemoryMb:         int32Pointer(plan.MemoryMB),
+		ConsoleEnabled:   boolPointer(plan.ConsoleEnabled),
+		CgroupClass:      plan.CgroupClass.ValueString(),
+		KernelId:         plan.KernelID.ValueInt64(),
+		InitramfsId:      plan.InitramfsID.ValueInt64(),
+		Image:            plan.Image.ValueString(),
+		Env:              env,
+		ExecutablePath:   plan.ExecutablePath.ValueString(),
+		ExecutableScript: plan.ExecutableScript.ValueString(),
+		ExecutableArgs:   args,
+		InterfaceIds:     lightVMInt64Values(ctx, plan.InterfaceIDs),
+		Append:           stringPointer(plan.Append),
+		Consoles:         consoles,
+		DiskIds:          lightVMInt64Values(ctx, plan.DiskIDs),
+		VirtiofsShares:   shares,
 	}, diags
 }
 
@@ -317,29 +387,31 @@ func lightVMUpdateRequest(ctx context.Context, plan lightVMModel) (*rookeryv1.Up
 	diags.Append(shareDiags...)
 	args, argDiags := stringListValues(ctx, plan.ExecutableArgs)
 	diags.Append(argDiags...)
+	diags.Append(validateLightVMExecution(plan, args)...)
 	if diags.HasError() {
 		return nil, diags
 	}
 	return &rookeryv1.UpdateLightVMRequest{
-		Id:             plan.ID.ValueString(),
-		Name:           plan.Name.ValueString(),
-		Description:    plan.Description.ValueString(),
-		Vcpus:          int32(plan.VCPUs.ValueInt64()),
-		MemoryMb:       int32(plan.MemoryMB.ValueInt64()),
-		ConsoleEnabled: plan.ConsoleEnabled.ValueBool(),
-		CgroupClass:    plan.CgroupClass.ValueString(),
-		KernelId:       plan.KernelID.ValueInt64(),
-		InitramfsId:    plan.InitramfsID.ValueInt64(),
-		Image:          plan.Image.ValueString(),
-		Env:            env,
-		ExecutablePath: plan.ExecutablePath.ValueString(),
-		ExecutableArgs: args,
-		InterfaceIds:   lightVMInt64Values(ctx, plan.InterfaceIDs),
-		Append:         plan.Append.ValueString(),
-		Consoles:       consoles,
-		DiskIds:        lightVMInt64Values(ctx, plan.DiskIDs),
-		ReplaceDiskIds: proto.Bool(true),
-		VirtiofsShares: shares,
+		Id:               plan.ID.ValueString(),
+		Name:             plan.Name.ValueString(),
+		Description:      plan.Description.ValueString(),
+		Vcpus:            int32(plan.VCPUs.ValueInt64()),
+		MemoryMb:         int32(plan.MemoryMB.ValueInt64()),
+		ConsoleEnabled:   plan.ConsoleEnabled.ValueBool(),
+		CgroupClass:      plan.CgroupClass.ValueString(),
+		KernelId:         plan.KernelID.ValueInt64(),
+		InitramfsId:      plan.InitramfsID.ValueInt64(),
+		Image:            plan.Image.ValueString(),
+		Env:              env,
+		ExecutablePath:   plan.ExecutablePath.ValueString(),
+		ExecutableScript: plan.ExecutableScript.ValueString(),
+		ExecutableArgs:   args,
+		InterfaceIds:     lightVMInt64Values(ctx, plan.InterfaceIDs),
+		Append:           plan.Append.ValueString(),
+		Consoles:         consoles,
+		DiskIds:          lightVMInt64Values(ctx, plan.DiskIDs),
+		ReplaceDiskIds:   proto.Bool(true),
+		VirtiofsShares:   shares,
 	}, diags
 }
 
@@ -357,7 +429,8 @@ func setLightVMState(ctx context.Context, state *lightVMModel, vm *rookeryv1.Lig
 	state.InitramfsID = types.Int64Value(vm.GetInitramfsId())
 	state.InitramfsName = types.StringValue(vm.GetInitramfsName())
 	state.Image = types.StringValue(vm.GetImage())
-	state.ExecutablePath = types.StringValue(vm.GetExecutablePath())
+	state.ExecutablePath = optionalStringValue(vm.GetExecutablePath())
+	state.ExecutableScript = optionalStringValue(vm.GetExecutableScript())
 	state.Append = types.StringValue(vm.GetAppend())
 	state.Status = types.StringValue(vm.GetStatus())
 	state.DesiredState = types.StringValue(vm.GetDesiredState())
@@ -373,7 +446,7 @@ func setLightVMState(ctx context.Context, state *lightVMModel, vm *rookeryv1.Lig
 	shares, shareDiags := types.ListValueFrom(ctx, types.ObjectType{AttrTypes: lightVMShareAttrTypes()}, lightVMShareValues(vm.GetVirtiofsShares()))
 	diags.Append(shareDiags...)
 	state.VirtioFSShares = shares
-	args, argDiags := stringList(ctx, vm.GetExecutableArgs())
+	args, argDiags := stringList(ctx, append([]string{}, vm.GetExecutableArgs()...))
 	diags.Append(argDiags...)
 	state.ExecutableArgs = args
 	interfaceIDs := make([]int64, 0, len(vm.GetInterfaces()))
@@ -383,7 +456,7 @@ func setLightVMState(ctx context.Context, state *lightVMModel, vm *rookeryv1.Lig
 	interfaceList, interfaceDiags := int64List(ctx, interfaceIDs)
 	diags.Append(interfaceDiags...)
 	state.InterfaceIDs = interfaceList
-	diskList, diskDiags := int64List(ctx, vm.GetDiskIds())
+	diskList, diskDiags := int64List(ctx, append([]int64{}, vm.GetDiskIds()...))
 	diags.Append(diskDiags...)
 	state.DiskIDs = diskList
 	return diags

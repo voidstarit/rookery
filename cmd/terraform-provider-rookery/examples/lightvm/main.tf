@@ -44,6 +44,7 @@ resource "rookery_lightvm" "app" {
   kernel_id       = rookery_lightvm_kernel.app.id
   initramfs_id    = rookery_lightvm_initramfs.app.id
   image           = "alpine:3.20"
+  # Alternatively replace executable_path + executable_args with executable_script.
   executable_path = "/usr/local/bin/app"
   executable_args = ["serve"]
   append          = "console=hvc0 rdinit=/init"

@@ -142,7 +142,11 @@ export function LightVMDialog({
   const [image, setImage] = useState(vm?.image || "");
   const [environment, setEnvironment] = useState(() => envText(vm));
   const [consoles, setConsoles] = useState<ConsoleRow[]>(() => consoleRows(vm));
+  const [executionMode, setExecutionMode] = useState<"path" | "script">(
+    vm?.executable_script ? "script" : "path"
+  );
   const [executablePath, setExecutablePath] = useState(vm?.executable_path || "");
+  const [executableScript, setExecutableScript] = useState(vm?.executable_script || "");
   const [argsText, setArgsText] = useState(
     Array.isArray(vm?.executable_args) ? vm.executable_args.join("\n") : ""
   );
@@ -368,8 +372,9 @@ export function LightVMDialog({
       initramfs_id: selectedInitramfs,
       image: image.trim(),
       env: parsedEnv.env,
-      executable_path: executablePath.trim(),
-      executable_args: executableArgs,
+      executable_path: executionMode === "path" ? executablePath.trim() : "",
+      executable_script: executionMode === "script" ? executableScript : "",
+      executable_args: executionMode === "path" ? executableArgs : [],
       append: append.trim(),
       consoles: normalizedConsoles,
       interface_ids: selectedInterfaces.map((iface) => iface.id),
@@ -544,35 +549,81 @@ export function LightVMDialog({
             <span class="field-hint">Docker/OCI image reference used by the LightVM runtime.</span>
           </label>
 
-          <label class="field field-wide">
-            <span class="field-label">Executable path</span>
-            <input
-              type="text"
-              required
-              maxlength={4096}
-              autocomplete="off"
-              spellcheck={false}
-              placeholder="/usr/local/bin/app"
-              value={executablePath}
-              onInput={(event) => setExecutablePath(event.currentTarget.value)}
-            />
-            <span class="field-hint">Absolute path to the executable inside the container image.</span>
-          </label>
+          <div class="field field-wide" role="radiogroup" aria-label="Startup command">
+            <span class="field-label">Startup command</span>
+            <label class="radio-row">
+              <input
+                type="radio"
+                name="execution-mode"
+                checked={executionMode === "path"}
+                onChange={() => setExecutionMode("path")}
+              />
+              <span>Executable path</span>
+            </label>
+            <label class="radio-row">
+              <input
+                type="radio"
+                name="execution-mode"
+                checked={executionMode === "script"}
+                onChange={() => setExecutionMode("script")}
+              />
+              <span>Inline executable script</span>
+            </label>
+          </div>
 
-          <label class="field field-wide">
-            <span class="field-label">Arguments</span>
-            <textarea
-              rows={4}
-              spellcheck={false}
-              placeholder={"--listen\n:8080"}
-              value={argsText}
-              onInput={(event) => setArgsText(event.currentTarget.value)}
-            />
-            <span class="field-hint">
-              One argument per line. Rookery writes the executable path and these
-              arguments to an executable <code>.entrypoint</code> script at the image root.
-            </span>
-          </label>
+          {executionMode === "path" ? (
+            <>
+              <label class="field field-wide">
+                <span class="field-label">Executable path</span>
+                <input
+                  type="text"
+                  required
+                  maxlength={4096}
+                  autocomplete="off"
+                  spellcheck={false}
+                  placeholder="/usr/local/bin/app"
+                  value={executablePath}
+                  onInput={(event) => setExecutablePath(event.currentTarget.value)}
+                />
+                <span class="field-hint">Absolute path to the executable inside the container image.</span>
+              </label>
+
+              <label class="field field-wide">
+                <span class="field-label">Arguments</span>
+                <textarea
+                  rows={4}
+                  spellcheck={false}
+                  placeholder={"--listen\n:8080"}
+                  value={argsText}
+                  onInput={(event) => setArgsText(event.currentTarget.value)}
+                />
+                <span class="field-hint">
+                  One argument per line. Rookery writes the executable path and these
+                  arguments to an executable <code>.entrypoint</code> script at the image root.
+                </span>
+              </label>
+            </>
+          ) : (
+            <label class="field field-wide">
+              <span class="field-label">Executable script</span>
+              <textarea
+                rows={12}
+                required
+                maxlength={1048576}
+                autocomplete="off"
+                spellcheck={false}
+                placeholder={"#!/bin/sh\necho \"hello from LightVM\"\nexec /usr/local/bin/app"}
+                value={executableScript}
+                onInput={(event) => setExecutableScript(event.currentTarget.value)}
+              />
+              <span class="field-hint">
+                Copied verbatim to <code>/.entrypoint</code> in the image root and made
+                executable. A <code>#!/bin/sh</code> header is added when the script
+                does not start with a shebang. Executable arguments are not used in
+                script mode.
+              </span>
+            </label>
+          )}
 
           <label class="field field-wide">
             <span class="field-label">Environment variables</span>

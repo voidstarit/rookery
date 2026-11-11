@@ -562,3 +562,36 @@ func TestLightVMInterfaceConflicts(t *testing.T) {
 		t.Fatalf("attach released interface to vm: %v", err)
 	}
 }
+
+func TestLightVMExecutableScriptPersistence(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	kernel := createKernel(t, st, "vmlinuz-script")
+	initramfs := createInitramfs(t, st, "initramfs-script")
+	created, err := st.CreateLightVM(ctx, store.LightVM{
+		Name: "script-app", VCPUs: 1, MemoryMB: 128,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+		Image: "alpine", ExecutableScript: "echo hello\nexit 0",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.ExecutablePath != "" || created.ExecutableScript != "echo hello\nexit 0" {
+		t.Fatalf("created executable = %q / %q", created.ExecutablePath, created.ExecutableScript)
+	}
+	created.ExecutableScript = "#!/bin/sh\necho updated"
+	updated, err := st.UpdateLightVM(ctx, created)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ExecutableScript != "#!/bin/sh\necho updated" {
+		t.Fatalf("updated script = %q", updated.ExecutableScript)
+	}
+	loaded, err := st.GetLightVM(ctx, created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.ExecutableScript != "#!/bin/sh\necho updated" {
+		t.Fatalf("loaded script = %q", loaded.ExecutableScript)
+	}
+}

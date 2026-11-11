@@ -196,6 +196,7 @@ resource "rookery_lightvm" "app" {
   kernel_id      = rookery_lightvm_kernel.app.id
   initramfs_id   = rookery_lightvm_initramfs.app.id
   image          = "alpine:3.20"
+  # Use either an executable path plus arguments, or executable_script.
   executable_path = "/usr/local/bin/app"
   executable_args = ["serve"]
   append          = "console=hvc0 rdinit=/init"
@@ -220,6 +221,25 @@ resource "rookery_lightvm" "app" {
 
   disk_ids      = [rookery_disk.app.id]
   interface_ids = [rookery_interface.app.id]
+}
+```
+
+Set `executable_script` instead of `executable_path` to supply an inline
+entrypoint script. Rookery writes it to `/.entrypoint` in the image root and
+adds `#!/bin/sh` when the content does not start with a shebang. Script mode
+does not accept `executable_args`.
+
+```hcl
+resource "rookery_lightvm" "scripted" {
+  name              = "scripted-01"
+  kernel_id         = rookery_lightvm_kernel.app.id
+  initramfs_id      = rookery_lightvm_initramfs.app.id
+  image             = "alpine:3.20"
+  executable_script = <<-EOT
+    #!/bin/sh
+    echo "starting LightVM"
+    exec /usr/local/bin/app
+  EOT
 }
 ```
 

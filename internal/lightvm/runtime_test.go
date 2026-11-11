@@ -660,3 +660,52 @@ func TestRuntimeVirtioFSShareHostPathValidation(t *testing.T) {
 		t.Fatalf("cleanup: %v", err)
 	}
 }
+
+func TestRuntimeWritesInlineExecutableScript(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		script string
+		want   string
+	}{
+		{name: "adds shell header", script: "echo hello", want: "#!/bin/sh\necho hello\n"},
+		{name: "preserves shebang", script: "#!/bin/sh\necho hello\n", want: "#!/bin/sh\necho hello\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			runtime, _, _, rootfs := prepareTestRuntime(t)
+			vm := prepareTestVM()
+			vm.ExecutablePath = ""
+			vm.ExecutableScript = tc.script
+			prepared, err := runtime.PrepareLightVM(context.Background(), vm)
+			if err != nil {
+				t.Fatalf("PrepareLightVM: %v", err)
+			}
+			t.Cleanup(func() {
+				_ = runtime.CleanupPreparedLightVM(context.Background(), prepared)
+			})
+			data, err := os.ReadFile(filepath.Join(rootfs, ".entrypoint"))
+			if err != nil {
+				t.Fatalf("read .entrypoint: %v", err)
+			}
+			if got := string(data); got != tc.want {
+				t.Fatalf(".entrypoint = %q, want %q", got, tc.want)
+			}
+			info, err := os.Stat(filepath.Join(rootfs, ".entrypoint"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Mode().Perm() != 0o755 {
+				t.Fatalf(".entrypoint mode = %o, want 755", info.Mode().Perm())
+			}
+		})
+	}
+}
+
+func TestRuntimeRejectsNULExecutableScript(t *testing.T) {
+	runtime, _, _, _ := prepareTestRuntime(t)
+	vm := prepareTestVM()
+	vm.ExecutablePath = ""
+	vm.ExecutableScript = "echo \x00bad"
+	if _, err := runtime.PrepareLightVM(context.Background(), vm); err == nil {
+		t.Fatal("NUL script was accepted")
+	}
+}

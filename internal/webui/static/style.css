@@ -1572,6 +1572,26 @@ dialog form {
   accent-color: var(--accent-strong);
 }
 
+.radio-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--text);
+  font-size: 0.84rem;
+}
+
+.radio-row + .radio-row {
+  margin-top: 0.35rem;
+}
+
+.radio-row input[type="radio"] {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--accent-strong);
+}
+
 .interface-picker {
   display: flex;
   align-items: center;

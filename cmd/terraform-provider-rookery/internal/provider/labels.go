@@ -7,6 +7,8 @@ import (
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
@@ -14,10 +16,11 @@ import (
 
 func labelsResourceAttribute() schema.SetAttribute {
 	return schema.SetAttribute{
-		Optional:    true,
-		Computed:    true,
-		ElementType: types.StringType,
-		Description: "Free-form labels assigned to the entity. Any number of labels can be assigned.",
+		Optional:      true,
+		Computed:      true,
+		ElementType:   types.StringType,
+		Description:   "Free-form labels assigned to the entity. Any number of labels can be assigned.",
+		PlanModifiers: []planmodifier.Set{setplanmodifier.UseStateForUnknown()},
 	}
 }
 

@@ -22,6 +22,8 @@ import (
 	"github.com/voidstarit/rookery/internal/store"
 )
 
+const maxLightVMExecutableScriptBytes = 1 << 20
+
 const (
 	lightVMDefaultVCPUs    = 1
 	lightVMDefaultMemoryMB = 512
@@ -409,7 +411,8 @@ func lightVMFromCreateRequest(request *rookeryv1.CreateLightVMRequest) (store.Li
 		"", request.GetName(), request.GetDescription(), vcpus, memoryMB,
 		request.GetConsoleEnabled(), request.GetCgroupClass(),
 		request.GetKernelId(), request.GetInitramfsId(), request.GetImage(),
-		request.GetEnv(), request.GetExecutablePath(), request.GetExecutableArgs(),
+		request.GetEnv(), request.GetExecutablePath(), request.GetExecutableScript(),
+		request.GetExecutableArgs(),
 		request.GetInterfaceIds(), request.GetDiskIds(), appendValue, request.GetConsoles(),
 		request.GetVirtiofsShares(),
 	)
@@ -421,7 +424,8 @@ func lightVMFromUpdateRequest(request *rookeryv1.UpdateLightVMRequest) (store.Li
 		int(request.GetVcpus()), int(request.GetMemoryMb()), request.GetConsoleEnabled(),
 		request.GetCgroupClass(), request.GetKernelId(), request.GetInitramfsId(),
 		request.GetImage(), request.GetEnv(), request.GetExecutablePath(),
-		request.GetExecutableArgs(), request.GetInterfaceIds(), request.GetDiskIds(),
+		request.GetExecutableScript(), request.GetExecutableArgs(),
+		request.GetInterfaceIds(), request.GetDiskIds(),
 		request.GetAppend(), request.GetConsoles(), request.GetVirtiofsShares(),
 	)
 	if err != nil {
@@ -433,7 +437,7 @@ func lightVMFromUpdateRequest(request *rookeryv1.UpdateLightVMRequest) (store.Li
 
 func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, console bool,
 	cgroupClass string, kernelID, initramfsID int64, image string,
-	env []*rookeryv1.LightVMEnvVar, executablePath string, executableArgs []string,
+	env []*rookeryv1.LightVMEnvVar, executablePath, executableScript string, executableArgs []string,
 	interfaceIDs, diskIDs []int64, appendValue string, consoles []*rookeryv1.LightVMConsole,
 	shares []*rookeryv1.LightVMVirtioFSShare,
 ) (store.LightVM, error) {
@@ -466,24 +470,44 @@ func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, conso
 		return store.LightVM{}, errors.New("image must be at most 512 characters")
 	}
 	executablePath = strings.TrimSpace(executablePath)
-	if executablePath == "" {
-		return store.LightVM{}, errors.New("executable_path is required")
+	scriptEmpty := strings.TrimSpace(executableScript) == ""
+	switch {
+	case executablePath == "" && scriptEmpty:
+		return store.LightVM{}, errors.New("exactly one of executable_path or executable_script is required")
+	case executablePath != "" && !scriptEmpty:
+		return store.LightVM{}, errors.New("executable_path and executable_script are mutually exclusive")
 	}
-	executablePath = path.Clean(executablePath)
-	if !path.IsAbs(executablePath) {
-		return store.LightVM{}, errors.New("executable_path must be an absolute container path")
+	if executablePath != "" {
+		executablePath = path.Clean(executablePath)
+		if !path.IsAbs(executablePath) {
+			return store.LightVM{}, errors.New("executable_path must be an absolute container path")
+		}
+		if utf8.RuneCountInString(executablePath) > 4096 {
+			return store.LightVM{}, errors.New("executable_path must be at most 4096 characters")
+		}
 	}
-	if utf8.RuneCountInString(executablePath) > 4096 {
-		return store.LightVM{}, errors.New("executable_path must be at most 4096 characters")
+	if !scriptEmpty {
+		if len(executableScript) > maxLightVMExecutableScriptBytes {
+			return store.LightVM{}, fmt.Errorf("executable_script must be at most %d bytes", maxLightVMExecutableScriptBytes)
+		}
+		if strings.ContainsRune(executableScript, 0) {
+			return store.LightVM{}, errors.New("executable_script cannot contain NUL characters")
+		}
+		if len(executableArgs) > 0 {
+			return store.LightVM{}, errors.New("executable_args cannot be used with executable_script")
+		}
 	}
 
 	normalizedEnv, err := normalizeLightVMEnv(env)
 	if err != nil {
 		return store.LightVM{}, err
 	}
-	normalizedArgs, err := normalizeLightVMArgs(executableArgs)
-	if err != nil {
-		return store.LightVM{}, err
+	var normalizedArgs []string
+	if executablePath != "" {
+		normalizedArgs, err = normalizeLightVMArgs(executableArgs)
+		if err != nil {
+			return store.LightVM{}, err
+		}
 	}
 	appendValue = strings.TrimSpace(appendValue)
 	if utf8.RuneCountInString(appendValue) > 4096 {
@@ -514,24 +538,25 @@ func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, conso
 	}
 
 	return store.LightVM{
-		ID:             id,
-		Name:           name,
-		Description:    description,
-		VCPUs:          vcpus,
-		MemoryMB:       memoryMB,
-		ConsoleEnabled: console,
-		CgroupClass:    cgroupClass,
-		KernelID:       kernelID,
-		InitramfsID:    initramfsID,
-		Image:          image,
-		Env:            normalizedEnv,
-		ExecutablePath: executablePath,
-		ExecutableArgs: normalizedArgs,
-		Append:         appendValue,
-		Consoles:       normalizedConsoles,
-		InterfaceIDs:   append([]int64(nil), interfaceIDs...),
-		DiskIDs:        normalizedDiskIDs,
-		VirtioFSShares: virtioFSShares,
+		ID:               id,
+		Name:             name,
+		Description:      description,
+		VCPUs:            vcpus,
+		MemoryMB:         memoryMB,
+		ConsoleEnabled:   console,
+		CgroupClass:      cgroupClass,
+		KernelID:         kernelID,
+		InitramfsID:      initramfsID,
+		Image:            image,
+		Env:              normalizedEnv,
+		ExecutablePath:   executablePath,
+		ExecutableScript: executableScript,
+		ExecutableArgs:   normalizedArgs,
+		Append:           appendValue,
+		Consoles:         normalizedConsoles,
+		InterfaceIDs:     append([]int64(nil), interfaceIDs...),
+		DiskIDs:          normalizedDiskIDs,
+		VirtioFSShares:   virtioFSShares,
 	}, nil
 }
 
@@ -659,27 +684,28 @@ func (s *lightVMService) toProto(ctx context.Context, vm store.LightVM) *rookery
 
 func lightVMToProto(vm store.LightVM) *rookeryv1.LightVM {
 	result := &rookeryv1.LightVM{
-		Id:             vm.ID,
-		Name:           vm.Name,
-		Description:    vm.Description,
-		Vcpus:          int32(vm.VCPUs),
-		MemoryMb:       int32(vm.MemoryMB),
-		ConsoleEnabled: vm.ConsoleEnabled,
-		CgroupClass:    vm.CgroupClass,
-		KernelId:       vm.KernelID,
-		KernelName:     vm.KernelName,
-		InitramfsId:    vm.InitramfsID,
-		InitramfsName:  vm.InitramfsName,
-		Image:          vm.Image,
-		ExecutablePath: vm.ExecutablePath,
-		ExecutableArgs: append([]string(nil), vm.ExecutableArgs...),
-		Append:         vm.Append,
-		Status:         vm.Status,
-		DesiredState:   vm.DesiredState,
-		InterfaceIds:   append([]int64(nil), vm.InterfaceIDs...),
-		DiskIds:        append([]int64(nil), vm.DiskIDs...),
-		CreatedAt:      timestamp(vm.CreatedAt),
-		UpdatedAt:      timestamp(vm.UpdatedAt),
+		Id:               vm.ID,
+		Name:             vm.Name,
+		Description:      vm.Description,
+		Vcpus:            int32(vm.VCPUs),
+		MemoryMb:         int32(vm.MemoryMB),
+		ConsoleEnabled:   vm.ConsoleEnabled,
+		CgroupClass:      vm.CgroupClass,
+		KernelId:         vm.KernelID,
+		KernelName:       vm.KernelName,
+		InitramfsId:      vm.InitramfsID,
+		InitramfsName:    vm.InitramfsName,
+		Image:            vm.Image,
+		ExecutablePath:   vm.ExecutablePath,
+		ExecutableScript: vm.ExecutableScript,
+		ExecutableArgs:   append([]string(nil), vm.ExecutableArgs...),
+		Append:           vm.Append,
+		Status:           vm.Status,
+		DesiredState:     vm.DesiredState,
+		InterfaceIds:     append([]int64(nil), vm.InterfaceIDs...),
+		DiskIds:          append([]int64(nil), vm.DiskIDs...),
+		CreatedAt:        timestamp(vm.CreatedAt),
+		UpdatedAt:        timestamp(vm.UpdatedAt),
 	}
 	for _, item := range vm.Env {
 		result.Env = append(result.Env, &rookeryv1.LightVMEnvVar{Name: item.Name, Value: item.Value})

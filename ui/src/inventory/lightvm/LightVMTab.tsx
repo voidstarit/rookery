@@ -782,11 +782,18 @@ export function LightVMTab() {
                       </td>
                       <td class="mono">{vm.image}</td>
                       <td>
-                        <span class="vm-name mono" title={vm.executable_path}>
-                          {vm.executable_path}
+                        <span
+                          class="vm-name mono"
+                          title={vm.executable_script || vm.executable_path || ""}
+                        >
+                          {vm.executable_script ? "inline script" : vm.executable_path || "—"}
                         </span>
                         <span class="vm-description mono" title={args.join(" ")}>
-                          {args.length ? args.join(" ") : "no arguments"}
+                          {vm.executable_script
+                            ? "contents written to /.entrypoint"
+                            : args.length
+                              ? args.join(" ")
+                              : "no arguments"}
                         </span>
                         <span class="vm-description">
                           {env.length} env var{env.length === 1 ? "" : "s"}

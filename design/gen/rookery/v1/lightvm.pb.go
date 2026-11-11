@@ -222,37 +222,38 @@ func (x *LightVMVirtioFSShare) GetPosition() int32 {
 }
 
 type LightVM struct {
-	state          protoimpl.MessageState  `protogen:"open.v1"`
-	Id             string                  `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name           string                  `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Description    string                  `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	Vcpus          int32                   `protobuf:"varint,4,opt,name=vcpus,proto3" json:"vcpus,omitempty"`
-	MemoryMb       int32                   `protobuf:"varint,5,opt,name=memory_mb,json=memoryMb,proto3" json:"memory_mb,omitempty"`
-	ConsoleEnabled bool                    `protobuf:"varint,6,opt,name=console_enabled,json=consoleEnabled,proto3" json:"console_enabled,omitempty"`
-	CgroupClass    string                  `protobuf:"bytes,7,opt,name=cgroup_class,json=cgroupClass,proto3" json:"cgroup_class,omitempty"`
-	KernelId       int64                   `protobuf:"varint,8,opt,name=kernel_id,json=kernelId,proto3" json:"kernel_id,omitempty"`
-	KernelName     string                  `protobuf:"bytes,9,opt,name=kernel_name,json=kernelName,proto3" json:"kernel_name,omitempty"`
-	InitramfsId    int64                   `protobuf:"varint,10,opt,name=initramfs_id,json=initramfsId,proto3" json:"initramfs_id,omitempty"`
-	InitramfsName  string                  `protobuf:"bytes,11,opt,name=initramfs_name,json=initramfsName,proto3" json:"initramfs_name,omitempty"`
-	Image          string                  `protobuf:"bytes,12,opt,name=image,proto3" json:"image,omitempty"`
-	Env            []*LightVMEnvVar        `protobuf:"bytes,13,rep,name=env,proto3" json:"env,omitempty"`
-	ExecutablePath string                  `protobuf:"bytes,14,opt,name=executable_path,json=executablePath,proto3" json:"executable_path,omitempty"`
-	ExecutableArgs []string                `protobuf:"bytes,15,rep,name=executable_args,json=executableArgs,proto3" json:"executable_args,omitempty"`
-	InterfaceIds   []int64                 `protobuf:"varint,16,rep,packed,name=interface_ids,json=interfaceIds,proto3" json:"interface_ids,omitempty"`
-	Interfaces     []*VMInterface          `protobuf:"bytes,17,rep,name=interfaces,proto3" json:"interfaces,omitempty"`
-	CreatedAt      *timestamppb.Timestamp  `protobuf:"bytes,18,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt      *timestamppb.Timestamp  `protobuf:"bytes,19,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	Append         string                  `protobuf:"bytes,20,opt,name=append,proto3" json:"append,omitempty"`
-	Status         string                  `protobuf:"bytes,21,opt,name=status,proto3" json:"status,omitempty"`
-	DesiredState   string                  `protobuf:"bytes,22,opt,name=desired_state,json=desiredState,proto3" json:"desired_state,omitempty"`
-	ConsoleSocket  string                  `protobuf:"bytes,23,opt,name=console_socket,json=consoleSocket,proto3" json:"console_socket,omitempty"`
-	Consoles       []*LightVMConsole       `protobuf:"bytes,24,rep,name=consoles,proto3" json:"consoles,omitempty"`
-	DiskIds        []int64                 `protobuf:"varint,25,rep,packed,name=disk_ids,json=diskIds,proto3" json:"disk_ids,omitempty"`
-	Disks          []*VMDisk               `protobuf:"bytes,26,rep,name=disks,proto3" json:"disks,omitempty"`
-	RunState       *string                 `protobuf:"bytes,27,opt,name=run_state,json=runState,proto3,oneof" json:"run_state,omitempty"`
-	VirtiofsShares []*LightVMVirtioFSShare `protobuf:"bytes,28,rep,name=virtiofs_shares,json=virtiofsShares,proto3" json:"virtiofs_shares,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state            protoimpl.MessageState  `protogen:"open.v1"`
+	Id               string                  `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name             string                  `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description      string                  `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	Vcpus            int32                   `protobuf:"varint,4,opt,name=vcpus,proto3" json:"vcpus,omitempty"`
+	MemoryMb         int32                   `protobuf:"varint,5,opt,name=memory_mb,json=memoryMb,proto3" json:"memory_mb,omitempty"`
+	ConsoleEnabled   bool                    `protobuf:"varint,6,opt,name=console_enabled,json=consoleEnabled,proto3" json:"console_enabled,omitempty"`
+	CgroupClass      string                  `protobuf:"bytes,7,opt,name=cgroup_class,json=cgroupClass,proto3" json:"cgroup_class,omitempty"`
+	KernelId         int64                   `protobuf:"varint,8,opt,name=kernel_id,json=kernelId,proto3" json:"kernel_id,omitempty"`
+	KernelName       string                  `protobuf:"bytes,9,opt,name=kernel_name,json=kernelName,proto3" json:"kernel_name,omitempty"`
+	InitramfsId      int64                   `protobuf:"varint,10,opt,name=initramfs_id,json=initramfsId,proto3" json:"initramfs_id,omitempty"`
+	InitramfsName    string                  `protobuf:"bytes,11,opt,name=initramfs_name,json=initramfsName,proto3" json:"initramfs_name,omitempty"`
+	Image            string                  `protobuf:"bytes,12,opt,name=image,proto3" json:"image,omitempty"`
+	Env              []*LightVMEnvVar        `protobuf:"bytes,13,rep,name=env,proto3" json:"env,omitempty"`
+	ExecutablePath   string                  `protobuf:"bytes,14,opt,name=executable_path,json=executablePath,proto3" json:"executable_path,omitempty"`
+	ExecutableArgs   []string                `protobuf:"bytes,15,rep,name=executable_args,json=executableArgs,proto3" json:"executable_args,omitempty"`
+	InterfaceIds     []int64                 `protobuf:"varint,16,rep,packed,name=interface_ids,json=interfaceIds,proto3" json:"interface_ids,omitempty"`
+	Interfaces       []*VMInterface          `protobuf:"bytes,17,rep,name=interfaces,proto3" json:"interfaces,omitempty"`
+	CreatedAt        *timestamppb.Timestamp  `protobuf:"bytes,18,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt        *timestamppb.Timestamp  `protobuf:"bytes,19,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Append           string                  `protobuf:"bytes,20,opt,name=append,proto3" json:"append,omitempty"`
+	Status           string                  `protobuf:"bytes,21,opt,name=status,proto3" json:"status,omitempty"`
+	DesiredState     string                  `protobuf:"bytes,22,opt,name=desired_state,json=desiredState,proto3" json:"desired_state,omitempty"`
+	ConsoleSocket    string                  `protobuf:"bytes,23,opt,name=console_socket,json=consoleSocket,proto3" json:"console_socket,omitempty"`
+	Consoles         []*LightVMConsole       `protobuf:"bytes,24,rep,name=consoles,proto3" json:"consoles,omitempty"`
+	DiskIds          []int64                 `protobuf:"varint,25,rep,packed,name=disk_ids,json=diskIds,proto3" json:"disk_ids,omitempty"`
+	Disks            []*VMDisk               `protobuf:"bytes,26,rep,name=disks,proto3" json:"disks,omitempty"`
+	RunState         *string                 `protobuf:"bytes,27,opt,name=run_state,json=runState,proto3,oneof" json:"run_state,omitempty"`
+	VirtiofsShares   []*LightVMVirtioFSShare `protobuf:"bytes,28,rep,name=virtiofs_shares,json=virtiofsShares,proto3" json:"virtiofs_shares,omitempty"`
+	ExecutableScript string                  `protobuf:"bytes,29,opt,name=executable_script,json=executableScript,proto3" json:"executable_script,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *LightVM) Reset() {
@@ -481,6 +482,13 @@ func (x *LightVM) GetVirtiofsShares() []*LightVMVirtioFSShare {
 	return nil
 }
 
+func (x *LightVM) GetExecutableScript() string {
+	if x != nil {
+		return x.ExecutableScript
+	}
+	return ""
+}
+
 type ListLightVMsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -606,26 +614,27 @@ func (x *GetLightVMRequest) GetId() string {
 }
 
 type CreateLightVMRequest struct {
-	state          protoimpl.MessageState  `protogen:"open.v1"`
-	Name           string                  `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Description    string                  `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
-	Vcpus          *int32                  `protobuf:"varint,3,opt,name=vcpus,proto3,oneof" json:"vcpus,omitempty"`
-	MemoryMb       *int32                  `protobuf:"varint,4,opt,name=memory_mb,json=memoryMb,proto3,oneof" json:"memory_mb,omitempty"`
-	ConsoleEnabled *bool                   `protobuf:"varint,5,opt,name=console_enabled,json=consoleEnabled,proto3,oneof" json:"console_enabled,omitempty"`
-	CgroupClass    string                  `protobuf:"bytes,6,opt,name=cgroup_class,json=cgroupClass,proto3" json:"cgroup_class,omitempty"`
-	KernelId       int64                   `protobuf:"varint,7,opt,name=kernel_id,json=kernelId,proto3" json:"kernel_id,omitempty"`
-	InitramfsId    int64                   `protobuf:"varint,8,opt,name=initramfs_id,json=initramfsId,proto3" json:"initramfs_id,omitempty"`
-	Image          string                  `protobuf:"bytes,9,opt,name=image,proto3" json:"image,omitempty"`
-	Env            []*LightVMEnvVar        `protobuf:"bytes,10,rep,name=env,proto3" json:"env,omitempty"`
-	ExecutablePath string                  `protobuf:"bytes,11,opt,name=executable_path,json=executablePath,proto3" json:"executable_path,omitempty"`
-	ExecutableArgs []string                `protobuf:"bytes,12,rep,name=executable_args,json=executableArgs,proto3" json:"executable_args,omitempty"`
-	InterfaceIds   []int64                 `protobuf:"varint,13,rep,packed,name=interface_ids,json=interfaceIds,proto3" json:"interface_ids,omitempty"`
-	Append         *string                 `protobuf:"bytes,14,opt,name=append,proto3,oneof" json:"append,omitempty"`
-	Consoles       []*LightVMConsole       `protobuf:"bytes,15,rep,name=consoles,proto3" json:"consoles,omitempty"`
-	DiskIds        []int64                 `protobuf:"varint,16,rep,packed,name=disk_ids,json=diskIds,proto3" json:"disk_ids,omitempty"`
-	VirtiofsShares []*LightVMVirtioFSShare `protobuf:"bytes,17,rep,name=virtiofs_shares,json=virtiofsShares,proto3" json:"virtiofs_shares,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state            protoimpl.MessageState  `protogen:"open.v1"`
+	Name             string                  `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Description      string                  `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	Vcpus            *int32                  `protobuf:"varint,3,opt,name=vcpus,proto3,oneof" json:"vcpus,omitempty"`
+	MemoryMb         *int32                  `protobuf:"varint,4,opt,name=memory_mb,json=memoryMb,proto3,oneof" json:"memory_mb,omitempty"`
+	ConsoleEnabled   *bool                   `protobuf:"varint,5,opt,name=console_enabled,json=consoleEnabled,proto3,oneof" json:"console_enabled,omitempty"`
+	CgroupClass      string                  `protobuf:"bytes,6,opt,name=cgroup_class,json=cgroupClass,proto3" json:"cgroup_class,omitempty"`
+	KernelId         int64                   `protobuf:"varint,7,opt,name=kernel_id,json=kernelId,proto3" json:"kernel_id,omitempty"`
+	InitramfsId      int64                   `protobuf:"varint,8,opt,name=initramfs_id,json=initramfsId,proto3" json:"initramfs_id,omitempty"`
+	Image            string                  `protobuf:"bytes,9,opt,name=image,proto3" json:"image,omitempty"`
+	Env              []*LightVMEnvVar        `protobuf:"bytes,10,rep,name=env,proto3" json:"env,omitempty"`
+	ExecutablePath   string                  `protobuf:"bytes,11,opt,name=executable_path,json=executablePath,proto3" json:"executable_path,omitempty"`
+	ExecutableArgs   []string                `protobuf:"bytes,12,rep,name=executable_args,json=executableArgs,proto3" json:"executable_args,omitempty"`
+	InterfaceIds     []int64                 `protobuf:"varint,13,rep,packed,name=interface_ids,json=interfaceIds,proto3" json:"interface_ids,omitempty"`
+	Append           *string                 `protobuf:"bytes,14,opt,name=append,proto3,oneof" json:"append,omitempty"`
+	Consoles         []*LightVMConsole       `protobuf:"bytes,15,rep,name=consoles,proto3" json:"consoles,omitempty"`
+	DiskIds          []int64                 `protobuf:"varint,16,rep,packed,name=disk_ids,json=diskIds,proto3" json:"disk_ids,omitempty"`
+	VirtiofsShares   []*LightVMVirtioFSShare `protobuf:"bytes,17,rep,name=virtiofs_shares,json=virtiofsShares,proto3" json:"virtiofs_shares,omitempty"`
+	ExecutableScript string                  `protobuf:"bytes,18,opt,name=executable_script,json=executableScript,proto3" json:"executable_script,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *CreateLightVMRequest) Reset() {
@@ -777,29 +786,37 @@ func (x *CreateLightVMRequest) GetVirtiofsShares() []*LightVMVirtioFSShare {
 	return nil
 }
 
+func (x *CreateLightVMRequest) GetExecutableScript() string {
+	if x != nil {
+		return x.ExecutableScript
+	}
+	return ""
+}
+
 type UpdateLightVMRequest struct {
-	state          protoimpl.MessageState  `protogen:"open.v1"`
-	Id             string                  `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name           string                  `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Description    string                  `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	Vcpus          int32                   `protobuf:"varint,4,opt,name=vcpus,proto3" json:"vcpus,omitempty"`
-	MemoryMb       int32                   `protobuf:"varint,5,opt,name=memory_mb,json=memoryMb,proto3" json:"memory_mb,omitempty"`
-	ConsoleEnabled bool                    `protobuf:"varint,6,opt,name=console_enabled,json=consoleEnabled,proto3" json:"console_enabled,omitempty"`
-	CgroupClass    string                  `protobuf:"bytes,7,opt,name=cgroup_class,json=cgroupClass,proto3" json:"cgroup_class,omitempty"`
-	KernelId       int64                   `protobuf:"varint,8,opt,name=kernel_id,json=kernelId,proto3" json:"kernel_id,omitempty"`
-	InitramfsId    int64                   `protobuf:"varint,9,opt,name=initramfs_id,json=initramfsId,proto3" json:"initramfs_id,omitempty"`
-	Image          string                  `protobuf:"bytes,10,opt,name=image,proto3" json:"image,omitempty"`
-	Env            []*LightVMEnvVar        `protobuf:"bytes,11,rep,name=env,proto3" json:"env,omitempty"`
-	ExecutablePath string                  `protobuf:"bytes,12,opt,name=executable_path,json=executablePath,proto3" json:"executable_path,omitempty"`
-	ExecutableArgs []string                `protobuf:"bytes,13,rep,name=executable_args,json=executableArgs,proto3" json:"executable_args,omitempty"`
-	InterfaceIds   []int64                 `protobuf:"varint,14,rep,packed,name=interface_ids,json=interfaceIds,proto3" json:"interface_ids,omitempty"`
-	Append         string                  `protobuf:"bytes,15,opt,name=append,proto3" json:"append,omitempty"`
-	Consoles       []*LightVMConsole       `protobuf:"bytes,16,rep,name=consoles,proto3" json:"consoles,omitempty"`
-	DiskIds        []int64                 `protobuf:"varint,17,rep,packed,name=disk_ids,json=diskIds,proto3" json:"disk_ids,omitempty"`
-	ReplaceDiskIds *bool                   `protobuf:"varint,18,opt,name=replace_disk_ids,json=replaceDiskIds,proto3,oneof" json:"replace_disk_ids,omitempty"`
-	VirtiofsShares []*LightVMVirtioFSShare `protobuf:"bytes,19,rep,name=virtiofs_shares,json=virtiofsShares,proto3" json:"virtiofs_shares,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state            protoimpl.MessageState  `protogen:"open.v1"`
+	Id               string                  `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name             string                  `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description      string                  `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	Vcpus            int32                   `protobuf:"varint,4,opt,name=vcpus,proto3" json:"vcpus,omitempty"`
+	MemoryMb         int32                   `protobuf:"varint,5,opt,name=memory_mb,json=memoryMb,proto3" json:"memory_mb,omitempty"`
+	ConsoleEnabled   bool                    `protobuf:"varint,6,opt,name=console_enabled,json=consoleEnabled,proto3" json:"console_enabled,omitempty"`
+	CgroupClass      string                  `protobuf:"bytes,7,opt,name=cgroup_class,json=cgroupClass,proto3" json:"cgroup_class,omitempty"`
+	KernelId         int64                   `protobuf:"varint,8,opt,name=kernel_id,json=kernelId,proto3" json:"kernel_id,omitempty"`
+	InitramfsId      int64                   `protobuf:"varint,9,opt,name=initramfs_id,json=initramfsId,proto3" json:"initramfs_id,omitempty"`
+	Image            string                  `protobuf:"bytes,10,opt,name=image,proto3" json:"image,omitempty"`
+	Env              []*LightVMEnvVar        `protobuf:"bytes,11,rep,name=env,proto3" json:"env,omitempty"`
+	ExecutablePath   string                  `protobuf:"bytes,12,opt,name=executable_path,json=executablePath,proto3" json:"executable_path,omitempty"`
+	ExecutableArgs   []string                `protobuf:"bytes,13,rep,name=executable_args,json=executableArgs,proto3" json:"executable_args,omitempty"`
+	InterfaceIds     []int64                 `protobuf:"varint,14,rep,packed,name=interface_ids,json=interfaceIds,proto3" json:"interface_ids,omitempty"`
+	Append           string                  `protobuf:"bytes,15,opt,name=append,proto3" json:"append,omitempty"`
+	Consoles         []*LightVMConsole       `protobuf:"bytes,16,rep,name=consoles,proto3" json:"consoles,omitempty"`
+	DiskIds          []int64                 `protobuf:"varint,17,rep,packed,name=disk_ids,json=diskIds,proto3" json:"disk_ids,omitempty"`
+	ReplaceDiskIds   *bool                   `protobuf:"varint,18,opt,name=replace_disk_ids,json=replaceDiskIds,proto3,oneof" json:"replace_disk_ids,omitempty"`
+	VirtiofsShares   []*LightVMVirtioFSShare `protobuf:"bytes,19,rep,name=virtiofs_shares,json=virtiofsShares,proto3" json:"virtiofs_shares,omitempty"`
+	ExecutableScript string                  `protobuf:"bytes,20,opt,name=executable_script,json=executableScript,proto3" json:"executable_script,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *UpdateLightVMRequest) Reset() {
@@ -963,6 +980,13 @@ func (x *UpdateLightVMRequest) GetVirtiofsShares() []*LightVMVirtioFSShare {
 		return x.VirtiofsShares
 	}
 	return nil
+}
+
+func (x *UpdateLightVMRequest) GetExecutableScript() string {
+	if x != nil {
+		return x.ExecutableScript
+	}
+	return ""
 }
 
 type DeleteLightVMRequest struct {
@@ -2124,7 +2148,7 @@ const file_rookery_v1_lightvm_proto_rawDesc = "" +
 	"\tread_only\x18\x04 \x01(\bH\x00R\breadOnly\x88\x01\x01\x12\x1a\n" +
 	"\bposition\x18\x05 \x01(\x05R\bpositionB\f\n" +
 	"\n" +
-	"_read_only\"\xb3\b\n" +
+	"_read_only\"\xe0\b\n" +
 	"\aLightVM\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -2159,14 +2183,15 @@ const file_rookery_v1_lightvm_proto_rawDesc = "" +
 	"\bdisk_ids\x18\x19 \x03(\x03R\adiskIds\x12(\n" +
 	"\x05disks\x18\x1a \x03(\v2\x12.rookery.v1.VMDiskR\x05disks\x12 \n" +
 	"\trun_state\x18\x1b \x01(\tH\x00R\brunState\x88\x01\x01\x12I\n" +
-	"\x0fvirtiofs_shares\x18\x1c \x03(\v2 .rookery.v1.LightVMVirtioFSShareR\x0evirtiofsSharesB\f\n" +
+	"\x0fvirtiofs_shares\x18\x1c \x03(\v2 .rookery.v1.LightVMVirtioFSShareR\x0evirtiofsShares\x12+\n" +
+	"\x11executable_script\x18\x1d \x01(\tR\x10executableScriptB\f\n" +
 	"\n" +
 	"_run_state\"\x15\n" +
 	"\x13ListLightVMsRequest\"G\n" +
 	"\x14ListLightVMsResponse\x12/\n" +
 	"\blightvms\x18\x01 \x03(\v2\x13.rookery.v1.LightVMR\blightvms\"-\n" +
 	"\x11GetLightVMRequest\x12\x18\n" +
-	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\"\xa0\a\n" +
+	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\"\xd6\a\n" +
 	"\x14CreateLightVMRequest\x12;\n" +
 	"\x04name\x18\x01 \x01(\tB'\xfaB$r\"\x10\x01\x18@2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$R\x04name\x12*\n" +
 	"\vdescription\x18\x02 \x01(\tB\b\xfaB\x05r\x03\x18\xd0\x0fR\vdescription\x12%\n" +
@@ -2180,20 +2205,20 @@ const file_rookery_v1_lightvm_proto_rawDesc = "" +
 	"\x05image\x18\t \x01(\tB\n" +
 	"\xfaB\ar\x05\x10\x01\x18\x80\x04R\x05image\x125\n" +
 	"\x03env\x18\n" +
-	" \x03(\v2\x19.rookery.v1.LightVMEnvVarB\b\xfaB\x05\x92\x01\x02\x10@R\x03env\x123\n" +
-	"\x0fexecutable_path\x18\v \x01(\tB\n" +
-	"\xfaB\ar\x05\x10\x01\x18\x80 R\x0eexecutablePath\x128\n" +
+	" \x03(\v2\x19.rookery.v1.LightVMEnvVarB\b\xfaB\x05\x92\x01\x02\x10@R\x03env\x121\n" +
+	"\x0fexecutable_path\x18\v \x01(\tB\b\xfaB\x05r\x03\x18\x80 R\x0eexecutablePath\x128\n" +
 	"\x0fexecutable_args\x18\f \x03(\tB\x0f\xfaB\f\x92\x01\t\x10@\"\x05r\x03\x18\x80 R\x0eexecutableArgs\x123\n" +
 	"\rinterface_ids\x18\r \x03(\x03B\x0e\xfaB\v\x92\x01\b\x10 \"\x04\"\x02 \x00R\finterfaceIds\x12%\n" +
 	"\x06append\x18\x0e \x01(\tB\b\xfaB\x05r\x03\x18\x80 H\x03R\x06append\x88\x01\x01\x12@\n" +
 	"\bconsoles\x18\x0f \x03(\v2\x1a.rookery.v1.LightVMConsoleB\b\xfaB\x05\x92\x01\x02\x10 R\bconsoles\x12)\n" +
 	"\bdisk_ids\x18\x10 \x03(\x03B\x0e\xfaB\v\x92\x01\b\x10 \"\x04\"\x02 \x00R\adiskIds\x12S\n" +
-	"\x0fvirtiofs_shares\x18\x11 \x03(\v2 .rookery.v1.LightVMVirtioFSShareB\b\xfaB\x05\x92\x01\x02\x10\x18R\x0evirtiofsSharesB\b\n" +
+	"\x0fvirtiofs_shares\x18\x11 \x03(\v2 .rookery.v1.LightVMVirtioFSShareB\b\xfaB\x05\x92\x01\x02\x10\x18R\x0evirtiofsShares\x126\n" +
+	"\x11executable_script\x18\x12 \x01(\tB\t\xfaB\x06r\x04\x18\x80\x80@R\x10executableScriptB\b\n" +
 	"\x06_vcpusB\f\n" +
 	"\n" +
 	"_memory_mbB\x12\n" +
 	"\x10_console_enabledB\t\n" +
-	"\a_append\"\xb3\a\n" +
+	"\a_append\"\xe9\a\n" +
 	"\x14UpdateLightVMRequest\x12\x18\n" +
 	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\x12;\n" +
 	"\x04name\x18\x02 \x01(\tB'\xfaB$r\"\x10\x01\x18@2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$R\x04name\x12*\n" +
@@ -2208,16 +2233,16 @@ const file_rookery_v1_lightvm_proto_rawDesc = "" +
 	"\x05image\x18\n" +
 	" \x01(\tB\n" +
 	"\xfaB\ar\x05\x10\x01\x18\x80\x04R\x05image\x125\n" +
-	"\x03env\x18\v \x03(\v2\x19.rookery.v1.LightVMEnvVarB\b\xfaB\x05\x92\x01\x02\x10@R\x03env\x123\n" +
-	"\x0fexecutable_path\x18\f \x01(\tB\n" +
-	"\xfaB\ar\x05\x10\x01\x18\x80 R\x0eexecutablePath\x128\n" +
+	"\x03env\x18\v \x03(\v2\x19.rookery.v1.LightVMEnvVarB\b\xfaB\x05\x92\x01\x02\x10@R\x03env\x121\n" +
+	"\x0fexecutable_path\x18\f \x01(\tB\b\xfaB\x05r\x03\x18\x80 R\x0eexecutablePath\x128\n" +
 	"\x0fexecutable_args\x18\r \x03(\tB\x0f\xfaB\f\x92\x01\t\x10@\"\x05r\x03\x18\x80 R\x0eexecutableArgs\x123\n" +
 	"\rinterface_ids\x18\x0e \x03(\x03B\x0e\xfaB\v\x92\x01\b\x10 \"\x04\"\x02 \x00R\finterfaceIds\x12 \n" +
 	"\x06append\x18\x0f \x01(\tB\b\xfaB\x05r\x03\x18\x80 R\x06append\x12@\n" +
 	"\bconsoles\x18\x10 \x03(\v2\x1a.rookery.v1.LightVMConsoleB\b\xfaB\x05\x92\x01\x02\x10 R\bconsoles\x12)\n" +
 	"\bdisk_ids\x18\x11 \x03(\x03B\x0e\xfaB\v\x92\x01\b\x10 \"\x04\"\x02 \x00R\adiskIds\x12-\n" +
 	"\x10replace_disk_ids\x18\x12 \x01(\bH\x00R\x0ereplaceDiskIds\x88\x01\x01\x12S\n" +
-	"\x0fvirtiofs_shares\x18\x13 \x03(\v2 .rookery.v1.LightVMVirtioFSShareB\b\xfaB\x05\x92\x01\x02\x10\x18R\x0evirtiofsSharesB\x13\n" +
+	"\x0fvirtiofs_shares\x18\x13 \x03(\v2 .rookery.v1.LightVMVirtioFSShareB\b\xfaB\x05\x92\x01\x02\x10\x18R\x0evirtiofsShares\x126\n" +
+	"\x11executable_script\x18\x14 \x01(\tB\t\xfaB\x06r\x04\x18\x80\x80@R\x10executableScriptB\x13\n" +
 	"\x11_replace_disk_ids\"0\n" +
 	"\x14DeleteLightVMRequest\x12\x18\n" +
 	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\"/\n" +

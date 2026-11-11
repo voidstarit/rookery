@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/voidstarit/rookery/internal/gateway"
@@ -200,5 +201,65 @@ func TestLightVMRoutes(t *testing.T) {
 	response, _ = request(http.MethodGet, "/api/lightvm/instances/"+id, nil)
 	if response.StatusCode != http.StatusNotFound {
 		t.Fatalf("get deleted status = %d", response.StatusCode)
+	}
+
+	response, scripted := request(http.MethodPost, "/api/lightvm/instances", map[string]any{
+		"name":              "script-app",
+		"vcpus":             1,
+		"memory_mb":         256,
+		"kernel_id":         kernel.ID,
+		"initramfs_id":      initramfs.ID,
+		"image":             "alpine:3.20",
+		"executable_script": "echo hello from script\nexit 0",
+		"interface_ids":     []int64{},
+	})
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("script create status = %d, body = %+v", response.StatusCode, scripted)
+	}
+	pathValue, _ := scripted["executable_path"].(string)
+	if scripted["executable_script"] != "echo hello from script\nexit 0" || pathValue != "" {
+		t.Fatalf("scripted fields = %+v", scripted)
+	}
+	scriptedID, _ := scripted["id"].(string)
+	response, _ = request(http.MethodDelete, "/api/lightvm/instances/"+scriptedID, nil)
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("script delete status = %d", response.StatusCode)
+	}
+
+	for _, body := range []map[string]any{
+		{
+			"name": "both", "vcpus": 1, "memory_mb": 256,
+			"kernel_id": kernel.ID, "initramfs_id": initramfs.ID, "image": "alpine",
+			"executable_path": "/bin/app", "executable_script": "echo both",
+		},
+		{
+			"name": "script-args", "vcpus": 1, "memory_mb": 256,
+			"kernel_id": kernel.ID, "initramfs_id": initramfs.ID, "image": "alpine",
+			"executable_script": "echo args", "executable_args": []string{"unexpected"},
+		},
+		{
+			"name": "neither", "vcpus": 1, "memory_mb": 256,
+			"kernel_id": kernel.ID, "initramfs_id": initramfs.ID, "image": "alpine",
+		},
+		{
+			"name": "script-nul", "vcpus": 1, "memory_mb": 256,
+			"kernel_id": kernel.ID, "initramfs_id": initramfs.ID, "image": "alpine",
+			"executable_script": "echo \u0000bad",
+		},
+		{
+			"name": "script-large", "vcpus": 1, "memory_mb": 256,
+			"kernel_id": kernel.ID, "initramfs_id": initramfs.ID, "image": "alpine",
+			"executable_script": strings.Repeat("x", 1<<20+1),
+		},
+		{
+			"name": "script-blank", "vcpus": 1, "memory_mb": 256,
+			"kernel_id": kernel.ID, "initramfs_id": initramfs.ID, "image": "alpine",
+			"executable_script": "   \n\t",
+		},
+	} {
+		response, _ = request(http.MethodPost, "/api/lightvm/instances", body)
+		if response.StatusCode != http.StatusBadRequest {
+			t.Fatalf("invalid executable body %+v status = %d", body, response.StatusCode)
+		}
 	}
 }
