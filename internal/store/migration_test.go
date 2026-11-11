@@ -193,6 +193,13 @@ func TestMigrationWorkloadDisks(t *testing.T) {
 	if !tableExists(t, st.db, "lightvm_virtiofs_shares") {
 		t.Fatal("lightvm_virtiofs_shares table is missing")
 	}
+	var hasScript int
+	if err := st.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('lightvms') WHERE name = 'executable_script'`).Scan(&hasScript); err != nil {
+		t.Fatalf("inspect executable_script column: %v", err)
+	}
+	if hasScript != 1 {
+		t.Fatal("lightvms.executable_script column is missing")
+	}
 	var nonNull int
 	if err := st.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM vms WHERE disk_id IS NOT NULL`).Scan(&nonNull); err != nil {
 		t.Fatalf("count legacy disk pointers: %v", err)

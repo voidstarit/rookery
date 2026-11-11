@@ -361,6 +361,25 @@ func TestLightVMResourceCRUD(t *testing.T) {
 		t.Fatalf("updated = %+v", updated)
 	}
 
+	scripted := updated
+	scripted.ExecutablePath = types.StringNull()
+	scripted.ExecutableScript = types.StringValue("#!/bin/sh\necho hello")
+	scripted.ExecutableArgs = types.ListNull(types.StringType)
+	scriptPlan := planForModel(t, lightVMSchema, &scripted)
+	scriptState := stateForModel(t, lightVMSchema, &updated)
+	scriptResponse := resource.UpdateResponse{State: scriptState}
+	value.Update(ctx, resource.UpdateRequest{Plan: scriptPlan, State: scriptState}, &scriptResponse)
+	if scriptResponse.Diagnostics.HasError() {
+		t.Fatalf("script update: %v", scriptResponse.Diagnostics)
+	}
+	if diags := scriptResponse.State.Get(ctx, &scripted); diags.HasError() {
+		t.Fatalf("scripted state: %v", diags)
+	}
+	if scripted.ExecutableScript.ValueString() != "#!/bin/sh\necho hello" || !scripted.ExecutablePath.IsNull() {
+		t.Fatalf("scripted = %+v", scripted)
+	}
+	updated = scripted
+
 	importResponse := resource.ImportStateResponse{State: stateForModel(t, lightVMSchema, &created)}
 	value.ImportState(ctx, resource.ImportStateRequest{ID: created.ID.ValueString()}, &importResponse)
 	if importResponse.Diagnostics.HasError() {
@@ -421,6 +440,15 @@ func TestLightVMResourceErrors(t *testing.T) {
 	value.Create(ctx, resource.CreateRequest{Plan: planForModel(t, schemaResponse.Schema, &invalid)}, &invalidResponse)
 	if !invalidResponse.Diagnostics.HasError() {
 		t.Fatal("invalid kernel references succeeded")
+	}
+
+	conflicting := invalid
+	conflicting.ExecutablePath = types.StringValue("/bin/app")
+	conflicting.ExecutableScript = types.StringValue("echo hello")
+	conflictResponse := resource.CreateResponse{State: tfsdk.State{Schema: schemaResponse.Schema}}
+	value.Create(ctx, resource.CreateRequest{Plan: planForModel(t, schemaResponse.Schema, &conflicting)}, &conflictResponse)
+	if !conflictResponse.Diagnostics.HasError() {
+		t.Fatal("executable path and script together succeeded")
 	}
 }
 
@@ -492,5 +520,29 @@ func TestArtifactPathPlanModifier(t *testing.T) {
 	}
 	if capitalize("") != "" || capitalize("kernel") != "Kernel" {
 		t.Fatalf("capitalize = %q, %q", capitalize(""), capitalize("kernel"))
+	}
+}
+
+func TestLightVMScriptRequestConversion(t *testing.T) {
+	ctx := context.Background()
+	model := lightVMModel{
+		Name: types.StringValue("scripted"), VCPUs: types.Int64Value(1), MemoryMB: types.Int64Value(128),
+		KernelID: types.Int64Value(1), InitramfsID: types.Int64Value(2), Image: types.StringValue("alpine"),
+		ExecutableScript: types.StringValue("echo hello"),
+		Env:              types.ListNull(types.ObjectType{AttrTypes: lightVMEnvAttrTypes()}),
+		ExecutableArgs:   types.ListNull(types.StringType),
+		InterfaceIDs:     types.ListNull(types.Int64Type), DiskIDs: types.ListNull(types.Int64Type),
+		VirtioFSShares: types.ListNull(types.ObjectType{AttrTypes: lightVMShareAttrTypes()}),
+		Consoles:       types.ListNull(types.ObjectType{AttrTypes: lightVMConsoleAttrTypes()}),
+		Labels:         types.SetNull(types.StringType),
+	}
+	create, diags := lightVMCreateRequest(ctx, model)
+	if diags.HasError() || create.GetExecutableScript() != "echo hello" || create.GetExecutablePath() != "" {
+		t.Fatalf("script create = %+v, %v", create, diags)
+	}
+	model.ID = types.StringValue("123e4567-e89b-12d3-a456-426614174000")
+	update, diags := lightVMUpdateRequest(ctx, model)
+	if diags.HasError() || update.GetExecutableScript() != "echo hello" {
+		t.Fatalf("script update = %+v, %v", update, diags)
 	}
 }

@@ -346,7 +346,10 @@ func validLightVMEnvName(name string) bool {
 
 // writeLightVMEntrypointFile writes an executable /.entrypoint script at the
 // root of the mounted image. The LightVM init can execute it directly.
-func writeLightVMEntrypointFile(rootfs, executable string, args []string) error {
+func writeLightVMEntrypointFile(rootfs, executable string, args []string, script string) error {
+	if strings.TrimSpace(script) != "" {
+		return writeLightVMScriptEntrypoint(rootfs, script)
+	}
 	executable = strings.TrimSpace(executable)
 	if executable == "" {
 		return errors.New("executable path is required")
@@ -367,6 +370,25 @@ func writeLightVMEntrypointFile(rootfs, executable string, args []string) error 
 		content.WriteString(shellQuote(arg))
 	}
 	content.WriteByte('\n')
+	path := filepath.Join(rootfs, ".entrypoint")
+	if err := os.WriteFile(path, []byte(content.String()), 0o755); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
+
+func writeLightVMScriptEntrypoint(rootfs, script string) error {
+	if strings.ContainsRune(script, 0) {
+		return errors.New("executable script cannot contain NUL characters")
+	}
+	var content strings.Builder
+	if !strings.HasPrefix(script, "#!") {
+		content.WriteString("#!/bin/sh\n")
+	}
+	content.WriteString(script)
+	if !strings.HasSuffix(script, "\n") {
+		content.WriteByte('\n')
+	}
 	path := filepath.Join(rootfs, ".entrypoint")
 	if err := os.WriteFile(path, []byte(content.String()), 0o755); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)

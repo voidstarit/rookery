@@ -198,7 +198,8 @@ export type LightVM = {
   initramfs_name: string;
   image: string;
   env?: LightVMEnvVar[];
-  executable_path: string;
+  executable_path?: string;
+  executable_script?: string;
   executable_args?: string[];
   append: string;
   status: string;

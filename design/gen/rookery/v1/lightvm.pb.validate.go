@@ -705,6 +705,8 @@ func (m *LightVM) validate(all bool) error {
 
 	}
 
+	// no validation rules for ExecutableScript
+
 	if m.RunState != nil {
 		// no validation rules for RunState
 	}
@@ -1290,10 +1292,10 @@ func (m *CreateLightVMRequest) validate(all bool) error {
 
 	}
 
-	if l := utf8.RuneCountInString(m.GetExecutablePath()); l < 1 || l > 4096 {
+	if utf8.RuneCountInString(m.GetExecutablePath()) > 4096 {
 		err := CreateLightVMRequestValidationError{
 			field:  "ExecutablePath",
-			reason: "value length must be between 1 and 4096 runes, inclusive",
+			reason: "value length must be at most 4096 runes",
 		}
 		if !all {
 			return err
@@ -1470,6 +1472,17 @@ func (m *CreateLightVMRequest) validate(all bool) error {
 			}
 		}
 
+	}
+
+	if utf8.RuneCountInString(m.GetExecutableScript()) > 1048576 {
+		err := CreateLightVMRequestValidationError{
+			field:  "ExecutableScript",
+			reason: "value length must be at most 1048576 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
 	}
 
 	if m.Vcpus != nil {
@@ -1783,10 +1796,10 @@ func (m *UpdateLightVMRequest) validate(all bool) error {
 
 	}
 
-	if l := utf8.RuneCountInString(m.GetExecutablePath()); l < 1 || l > 4096 {
+	if utf8.RuneCountInString(m.GetExecutablePath()) > 4096 {
 		err := UpdateLightVMRequestValidationError{
 			field:  "ExecutablePath",
-			reason: "value length must be between 1 and 4096 runes, inclusive",
+			reason: "value length must be at most 4096 runes",
 		}
 		if !all {
 			return err
@@ -1974,6 +1987,17 @@ func (m *UpdateLightVMRequest) validate(all bool) error {
 			}
 		}
 
+	}
+
+	if utf8.RuneCountInString(m.GetExecutableScript()) > 1048576 {
+		err := UpdateLightVMRequestValidationError{
+			field:  "ExecutableScript",
+			reason: "value length must be at most 1048576 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
 	}
 
 	if m.ReplaceDiskIds != nil {

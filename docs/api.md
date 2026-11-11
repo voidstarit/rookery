@@ -791,9 +791,11 @@ provider uses this RPC for `source_path` uploads.
 LightVM records are created at `POST /api/lightvm/instances` with `name`,
 `description`, `vcpus`, `memory_mb`, `console_enabled`, `cgroup_class`,
 `kernel_id`, `initramfs_id`, `image`, `env` (`name`/`value` pairs),
-`executable_path`, `executable_args` (ordered strings), `append`, `disk_ids`
+either `executable_path` plus `executable_args` (ordered strings) or
+`executable_script` (inline script content, max 1 MiB), `append`, `disk_ids`
 (ordered), `virtiofs_shares`, `interface_ids`, and `consoles` (an ordered list
-of `name` entries). Every
+of `name` entries). `executable_path` and `executable_script` are mutually
+exclusive; `executable_args` cannot be combined with `executable_script`. Every
 LightVM has at least one console (up to 32); omitting `consoles` creates a
 single console named `console`. The server assigns each console an ID and
 guest port name: the first console is `org.example.console`, additional
@@ -814,8 +816,10 @@ mandatory. Creating a LightVM stores the definition
 with `status=stopped`; `POST .../start` uses buildah to pull `image` if missing,
 creates an attempt-named ephemeral writable container, mounts its rootfs,
 writes the environment variables to `<rootfs>/.env` as one `NAME=value` line
-each and an executable `<rootfs>/.entrypoint` script containing the executable
-path and args, starts `virtiofsd`, and launches QEMU with `-kernel`, `-initrd`,
+each and an executable `<rootfs>/.entrypoint` script. In path mode the script
+contains the executable path and args; in script mode the configured content is
+written verbatim, with `#!/bin/sh` added only when it does not already start
+with a shebang. Rookery then starts `virtiofsd` and launches QEMU with `-kernel`, `-initrd`,
 `-append`, one virtio drive per disk in attachment order, a
 `vhost-user-fs-pci` device tagged `rootfs`, one additional virtiofs device per
 host-directory share, one virtio console socket per
@@ -835,7 +839,7 @@ display or VNC device is created. The native
 socket and requires `console_enabled`; without `console`, the first console is
 used. The UI opens it from the **Console** action using
 `/lightvm-console.html?vm=<uuid>` and lets the user choose a console on that
-page. The environment, executable path, and argument fields are not passed
+page. The environment, executable path, script, and argument fields are not passed
 over the kernel command line; the initramfs has its own workload contract.
 `virtiofsd` is resolved next to the `rookery` binary unless configured with
 `-virtiofsd-bin`. `/api/status` includes a

@@ -176,6 +176,7 @@ message LightVM {
   repeated VMDisk disks = 26;
   optional string run_state = 27;
   repeated LightVMVirtioFSShare virtiofs_shares = 28;
+  string executable_script = 29;
 }
 
 message ListLightVMsRequest {}
@@ -203,7 +204,7 @@ message CreateLightVMRequest {
   int64 initramfs_id = 8 [(validate.rules).int64 = {gt: 0}];
   string image = 9 [(validate.rules).string = {min_len: 1, max_len: 512}];
   repeated LightVMEnvVar env = 10 [(validate.rules).repeated = {max_items: 64}];
-  string executable_path = 11 [(validate.rules).string = {min_len: 1, max_len: 4096}];
+  string executable_path = 11 [(validate.rules).string = {max_len: 4096}];
   repeated string executable_args = 12 [(validate.rules).repeated = {
     max_items: 64
     items: {string: {max_len: 4096}}
@@ -221,6 +222,7 @@ message CreateLightVMRequest {
   repeated LightVMVirtioFSShare virtiofs_shares = 17 [(validate.rules).repeated = {
     max_items: 24
   }];
+  string executable_script = 18 [(validate.rules).string = {max_len: 1048576}];
 }
 
 message UpdateLightVMRequest {
@@ -239,7 +241,7 @@ message UpdateLightVMRequest {
   int64 initramfs_id = 9 [(validate.rules).int64 = {gt: 0}];
   string image = 10 [(validate.rules).string = {min_len: 1, max_len: 512}];
   repeated LightVMEnvVar env = 11 [(validate.rules).repeated = {max_items: 64}];
-  string executable_path = 12 [(validate.rules).string = {min_len: 1, max_len: 4096}];
+  string executable_path = 12 [(validate.rules).string = {max_len: 4096}];
   repeated string executable_args = 13 [(validate.rules).repeated = {
     max_items: 64
     items: {string: {max_len: 4096}}
@@ -258,6 +260,7 @@ message UpdateLightVMRequest {
   repeated LightVMVirtioFSShare virtiofs_shares = 19 [(validate.rules).repeated = {
     max_items: 24
   }];
+  string executable_script = 20 [(validate.rules).string = {max_len: 1048576}];
 }
 
 message DeleteLightVMRequest {

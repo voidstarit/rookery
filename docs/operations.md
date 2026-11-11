@@ -269,9 +269,11 @@ existing absolute host path are not allowed to delete that host file.
 
 A LightVM definition includes a name, description, vCPUs, memory, console flag,
 cgroup class, kernel and initramfs, a container image, environment variables,
-an executable path and argument list, a kernel command line, ordered block
-disks, ordered host-directory virtiofs shares, network interfaces, and an
-ordered console list. Disks support the same LVM-thin, host-passthrough, and
+either an executable path and argument list or inline executable script
+content, a kernel command line, ordered block disks, ordered host-directory
+virtiofs shares, network interfaces, and an ordered console list.
+`executable_path` and `executable_script` are mutually exclusive, and script
+mode does not accept executable arguments. Disks support the same LVM-thin, host-passthrough, and
 Kouja sources as VMs and use the same single-owner rule: a disk belongs to one
 VM or one LightVM, never both. Host-directory shares bind an absolute existing
 directory with a unique guest tag; `read_only` defaults to true, and the tag
@@ -297,8 +299,9 @@ On start, Rookery uses `buildah` to pull `image` only if it is missing, creates
 an **ephemeral writable** attempt container named
 `rookery-lightvm-<uuid>-<token>`, mounts its rootfs, writes the environment as
 `<rootfs>/.env` (one `NAME=value` per line) and an executable
-`<rootfs>/.entrypoint` script containing the configured executable path and
-arguments, starts `virtiofsd` on
+`<rootfs>/.entrypoint` script. Path mode writes the executable path and
+arguments; script mode writes the supplied content, adding `#!/bin/sh` only
+when no shebang is present. Rookery starts `virtiofsd` on
 `<run-dir>/lightvm-<uuid>-<token>.virtiofs.sock`, and passes a
 `vhost-user-fs-pci` device with tag `rootfs` to QEMU. Each host-directory share
 gets its own attempt-scoped virtiofsd process/socket and QEMU device; the guest
@@ -312,7 +315,7 @@ and removed. The UI environment editor accepts one `NAME=value` per line; blank
 lines, `export ` prefixes, and `#` comments are ignored, and names must match
 `[A-Za-z_][A-Za-z0-9_]*`. Values are written verbatim on a single line. The
 `.entrypoint` script is generated with the executable path and argument list,
-using shell quoting, and is mode `0755`.
+using shell quoting, or from inline script content; both are mode `0755`.
 `virtiofsd` is resolved next to the `rookery`
 executable unless `-virtiofsd-bin` is set. The container image/environment/
 executable fields are not passed over the kernel cmdline; the initramfs
