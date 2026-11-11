@@ -1937,6 +1937,170 @@ func (x *DeleteInitramfsRequest) GetId() int64 {
 	return 0
 }
 
+type UploadArtifactRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Kind          string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	FileName      string                 `protobuf:"bytes,2,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
+	Chunk         []byte                 `protobuf:"bytes,3,opt,name=chunk,proto3" json:"chunk,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UploadArtifactRequest) Reset() {
+	*x = UploadArtifactRequest{}
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UploadArtifactRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UploadArtifactRequest) ProtoMessage() {}
+
+func (x *UploadArtifactRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UploadArtifactRequest.ProtoReflect.Descriptor instead.
+func (*UploadArtifactRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *UploadArtifactRequest) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *UploadArtifactRequest) GetFileName() string {
+	if x != nil {
+		return x.FileName
+	}
+	return ""
+}
+
+func (x *UploadArtifactRequest) GetChunk() []byte {
+	if x != nil {
+		return x.Chunk
+	}
+	return nil
+}
+
+type UploadArtifactResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	FileName      string                 `protobuf:"bytes,2,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
+	SizeBytes     int64                  `protobuf:"varint,3,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UploadArtifactResponse) Reset() {
+	*x = UploadArtifactResponse{}
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UploadArtifactResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UploadArtifactResponse) ProtoMessage() {}
+
+func (x *UploadArtifactResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UploadArtifactResponse.ProtoReflect.Descriptor instead.
+func (*UploadArtifactResponse) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *UploadArtifactResponse) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *UploadArtifactResponse) GetFileName() string {
+	if x != nil {
+		return x.FileName
+	}
+	return ""
+}
+
+func (x *UploadArtifactResponse) GetSizeBytes() int64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
+type DeleteArtifactRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteArtifactRequest) Reset() {
+	*x = DeleteArtifactRequest{}
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteArtifactRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteArtifactRequest) ProtoMessage() {}
+
+func (x *DeleteArtifactRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteArtifactRequest.ProtoReflect.Descriptor instead.
+func (*DeleteArtifactRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *DeleteArtifactRequest) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
 var File_rookery_v1_lightvm_proto protoreflect.FileDescriptor
 
 const file_rookery_v1_lightvm_proto_rawDesc = "" +
@@ -2126,7 +2290,18 @@ const file_rookery_v1_lightvm_proto_rawDesc = "" +
 	"\xfaB\ar\x05\x10\x01\x18\x80 R\x04path\x12%\n" +
 	"\tfile_name\x18\x05 \x01(\tB\b\xfaB\x05r\x03\x18\xff\x01R\bfileName\"1\n" +
 	"\x16DeleteInitramfsRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id2\xc1\x04\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"^\n" +
+	"\x15UploadArtifactRequest\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x1b\n" +
+	"\tfile_name\x18\x02 \x01(\tR\bfileName\x12\x14\n" +
+	"\x05chunk\x18\x03 \x01(\fR\x05chunk\"h\n" +
+	"\x16UploadArtifactResponse\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x1b\n" +
+	"\tfile_name\x18\x02 \x01(\tR\bfileName\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x03 \x01(\x03R\tsizeBytes\"+\n" +
+	"\x15DeleteArtifactRequest\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path2\xc1\x04\n" +
 	"\x14LightVMKernelService\x12u\n" +
 	"\vListKernels\x12\x1e.rookery.v1.ListKernelsRequest\x1a\x1f.rookery.v1.ListKernelsResponse\"%\x82\xd3\xe4\x93\x02\x1fb\akernels\x12\x14/api/lightvm/kernels\x12g\n" +
 	"\tGetKernel\x12\x1c.rookery.v1.GetKernelRequest\x1a\x19.rookery.v1.LightVMKernel\"!\x82\xd3\xe4\x93\x02\x1b\x12\x19/api/lightvm/kernels/{id}\x12k\n" +
@@ -2138,7 +2313,10 @@ const file_rookery_v1_lightvm_proto_rawDesc = "" +
 	"\fGetInitramfs\x12\x1f.rookery.v1.GetInitramfsRequest\x1a\x1c.rookery.v1.LightVMInitramfs\"#\x82\xd3\xe4\x93\x02\x1d\x12\x1b/api/lightvm/initramfs/{id}\x12v\n" +
 	"\x0fCreateInitramfs\x12\".rookery.v1.CreateInitramfsRequest\x1a\x1c.rookery.v1.LightVMInitramfs\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/api/lightvm/initramfs\x12{\n" +
 	"\x0fUpdateInitramfs\x12\".rookery.v1.UpdateInitramfsRequest\x1a\x1c.rookery.v1.LightVMInitramfs\"&\x82\xd3\xe4\x93\x02 :\x01*\x1a\x1b/api/lightvm/initramfs/{id}\x12r\n" +
-	"\x0fDeleteInitramfs\x12\".rookery.v1.DeleteInitramfsRequest\x1a\x16.google.protobuf.Empty\"#\x82\xd3\xe4\x93\x02\x1d*\x1b/api/lightvm/initramfs/{id}2\x9e\x06\n" +
+	"\x0fDeleteInitramfs\x12\".rookery.v1.DeleteInitramfsRequest\x1a\x16.google.protobuf.Empty\"#\x82\xd3\xe4\x93\x02\x1d*\x1b/api/lightvm/initramfs/{id}2\xc0\x01\n" +
+	"\x16LightVMArtifactService\x12Y\n" +
+	"\x0eUploadArtifact\x12!.rookery.v1.UploadArtifactRequest\x1a\".rookery.v1.UploadArtifactResponse(\x01\x12K\n" +
+	"\x0eDeleteArtifact\x12!.rookery.v1.DeleteArtifactRequest\x1a\x16.google.protobuf.Empty2\x9e\x06\n" +
 	"\x0eLightVMService\x12{\n" +
 	"\fListLightVMs\x12\x1f.rookery.v1.ListLightVMsRequest\x1a .rookery.v1.ListLightVMsResponse\"(\x82\xd3\xe4\x93\x02\"b\blightvms\x12\x16/api/lightvm/instances\x12e\n" +
 	"\n" +
@@ -2161,7 +2339,7 @@ func file_rookery_v1_lightvm_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_lightvm_proto_rawDescData
 }
 
-var file_rookery_v1_lightvm_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_rookery_v1_lightvm_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_rookery_v1_lightvm_proto_goTypes = []any{
 	(*LightVMEnvVar)(nil),          // 0: rookery.v1.LightVMEnvVar
 	(*LightVMConsole)(nil),         // 1: rookery.v1.LightVMConsole
@@ -2189,18 +2367,21 @@ var file_rookery_v1_lightvm_proto_goTypes = []any{
 	(*CreateInitramfsRequest)(nil), // 23: rookery.v1.CreateInitramfsRequest
 	(*UpdateInitramfsRequest)(nil), // 24: rookery.v1.UpdateInitramfsRequest
 	(*DeleteInitramfsRequest)(nil), // 25: rookery.v1.DeleteInitramfsRequest
-	(*VMInterface)(nil),            // 26: rookery.v1.VMInterface
-	(*timestamppb.Timestamp)(nil),  // 27: google.protobuf.Timestamp
-	(*VMDisk)(nil),                 // 28: rookery.v1.VMDisk
-	(*emptypb.Empty)(nil),          // 29: google.protobuf.Empty
+	(*UploadArtifactRequest)(nil),  // 26: rookery.v1.UploadArtifactRequest
+	(*UploadArtifactResponse)(nil), // 27: rookery.v1.UploadArtifactResponse
+	(*DeleteArtifactRequest)(nil),  // 28: rookery.v1.DeleteArtifactRequest
+	(*VMInterface)(nil),            // 29: rookery.v1.VMInterface
+	(*timestamppb.Timestamp)(nil),  // 30: google.protobuf.Timestamp
+	(*VMDisk)(nil),                 // 31: rookery.v1.VMDisk
+	(*emptypb.Empty)(nil),          // 32: google.protobuf.Empty
 }
 var file_rookery_v1_lightvm_proto_depIdxs = []int32{
 	0,  // 0: rookery.v1.LightVM.env:type_name -> rookery.v1.LightVMEnvVar
-	26, // 1: rookery.v1.LightVM.interfaces:type_name -> rookery.v1.VMInterface
-	27, // 2: rookery.v1.LightVM.created_at:type_name -> google.protobuf.Timestamp
-	27, // 3: rookery.v1.LightVM.updated_at:type_name -> google.protobuf.Timestamp
+	29, // 1: rookery.v1.LightVM.interfaces:type_name -> rookery.v1.VMInterface
+	30, // 2: rookery.v1.LightVM.created_at:type_name -> google.protobuf.Timestamp
+	30, // 3: rookery.v1.LightVM.updated_at:type_name -> google.protobuf.Timestamp
 	1,  // 4: rookery.v1.LightVM.consoles:type_name -> rookery.v1.LightVMConsole
-	28, // 5: rookery.v1.LightVM.disks:type_name -> rookery.v1.VMDisk
+	31, // 5: rookery.v1.LightVM.disks:type_name -> rookery.v1.VMDisk
 	2,  // 6: rookery.v1.LightVM.virtiofs_shares:type_name -> rookery.v1.LightVMVirtioFSShare
 	3,  // 7: rookery.v1.ListLightVMsResponse.lightvms:type_name -> rookery.v1.LightVM
 	0,  // 8: rookery.v1.CreateLightVMRequest.env:type_name -> rookery.v1.LightVMEnvVar
@@ -2209,11 +2390,11 @@ var file_rookery_v1_lightvm_proto_depIdxs = []int32{
 	0,  // 11: rookery.v1.UpdateLightVMRequest.env:type_name -> rookery.v1.LightVMEnvVar
 	1,  // 12: rookery.v1.UpdateLightVMRequest.consoles:type_name -> rookery.v1.LightVMConsole
 	2,  // 13: rookery.v1.UpdateLightVMRequest.virtiofs_shares:type_name -> rookery.v1.LightVMVirtioFSShare
-	27, // 14: rookery.v1.LightVMKernel.created_at:type_name -> google.protobuf.Timestamp
-	27, // 15: rookery.v1.LightVMKernel.updated_at:type_name -> google.protobuf.Timestamp
+	30, // 14: rookery.v1.LightVMKernel.created_at:type_name -> google.protobuf.Timestamp
+	30, // 15: rookery.v1.LightVMKernel.updated_at:type_name -> google.protobuf.Timestamp
 	12, // 16: rookery.v1.ListKernelsResponse.kernels:type_name -> rookery.v1.LightVMKernel
-	27, // 17: rookery.v1.LightVMInitramfs.created_at:type_name -> google.protobuf.Timestamp
-	27, // 18: rookery.v1.LightVMInitramfs.updated_at:type_name -> google.protobuf.Timestamp
+	30, // 17: rookery.v1.LightVMInitramfs.created_at:type_name -> google.protobuf.Timestamp
+	30, // 18: rookery.v1.LightVMInitramfs.updated_at:type_name -> google.protobuf.Timestamp
 	19, // 19: rookery.v1.ListInitramfsResponse.initramfs:type_name -> rookery.v1.LightVMInitramfs
 	13, // 20: rookery.v1.LightVMKernelService.ListKernels:input_type -> rookery.v1.ListKernelsRequest
 	15, // 21: rookery.v1.LightVMKernelService.GetKernel:input_type -> rookery.v1.GetKernelRequest
@@ -2225,32 +2406,36 @@ var file_rookery_v1_lightvm_proto_depIdxs = []int32{
 	23, // 27: rookery.v1.LightVMInitramfsService.CreateInitramfs:input_type -> rookery.v1.CreateInitramfsRequest
 	24, // 28: rookery.v1.LightVMInitramfsService.UpdateInitramfs:input_type -> rookery.v1.UpdateInitramfsRequest
 	25, // 29: rookery.v1.LightVMInitramfsService.DeleteInitramfs:input_type -> rookery.v1.DeleteInitramfsRequest
-	4,  // 30: rookery.v1.LightVMService.ListLightVMs:input_type -> rookery.v1.ListLightVMsRequest
-	6,  // 31: rookery.v1.LightVMService.GetLightVM:input_type -> rookery.v1.GetLightVMRequest
-	7,  // 32: rookery.v1.LightVMService.CreateLightVM:input_type -> rookery.v1.CreateLightVMRequest
-	8,  // 33: rookery.v1.LightVMService.UpdateLightVM:input_type -> rookery.v1.UpdateLightVMRequest
-	9,  // 34: rookery.v1.LightVMService.DeleteLightVM:input_type -> rookery.v1.DeleteLightVMRequest
-	10, // 35: rookery.v1.LightVMService.StartLightVM:input_type -> rookery.v1.StartLightVMRequest
-	11, // 36: rookery.v1.LightVMService.StopLightVM:input_type -> rookery.v1.StopLightVMRequest
-	14, // 37: rookery.v1.LightVMKernelService.ListKernels:output_type -> rookery.v1.ListKernelsResponse
-	12, // 38: rookery.v1.LightVMKernelService.GetKernel:output_type -> rookery.v1.LightVMKernel
-	12, // 39: rookery.v1.LightVMKernelService.CreateKernel:output_type -> rookery.v1.LightVMKernel
-	12, // 40: rookery.v1.LightVMKernelService.UpdateKernel:output_type -> rookery.v1.LightVMKernel
-	29, // 41: rookery.v1.LightVMKernelService.DeleteKernel:output_type -> google.protobuf.Empty
-	21, // 42: rookery.v1.LightVMInitramfsService.ListInitramfs:output_type -> rookery.v1.ListInitramfsResponse
-	19, // 43: rookery.v1.LightVMInitramfsService.GetInitramfs:output_type -> rookery.v1.LightVMInitramfs
-	19, // 44: rookery.v1.LightVMInitramfsService.CreateInitramfs:output_type -> rookery.v1.LightVMInitramfs
-	19, // 45: rookery.v1.LightVMInitramfsService.UpdateInitramfs:output_type -> rookery.v1.LightVMInitramfs
-	29, // 46: rookery.v1.LightVMInitramfsService.DeleteInitramfs:output_type -> google.protobuf.Empty
-	5,  // 47: rookery.v1.LightVMService.ListLightVMs:output_type -> rookery.v1.ListLightVMsResponse
-	3,  // 48: rookery.v1.LightVMService.GetLightVM:output_type -> rookery.v1.LightVM
-	3,  // 49: rookery.v1.LightVMService.CreateLightVM:output_type -> rookery.v1.LightVM
-	3,  // 50: rookery.v1.LightVMService.UpdateLightVM:output_type -> rookery.v1.LightVM
-	29, // 51: rookery.v1.LightVMService.DeleteLightVM:output_type -> google.protobuf.Empty
-	3,  // 52: rookery.v1.LightVMService.StartLightVM:output_type -> rookery.v1.LightVM
-	3,  // 53: rookery.v1.LightVMService.StopLightVM:output_type -> rookery.v1.LightVM
-	37, // [37:54] is the sub-list for method output_type
-	20, // [20:37] is the sub-list for method input_type
+	26, // 30: rookery.v1.LightVMArtifactService.UploadArtifact:input_type -> rookery.v1.UploadArtifactRequest
+	28, // 31: rookery.v1.LightVMArtifactService.DeleteArtifact:input_type -> rookery.v1.DeleteArtifactRequest
+	4,  // 32: rookery.v1.LightVMService.ListLightVMs:input_type -> rookery.v1.ListLightVMsRequest
+	6,  // 33: rookery.v1.LightVMService.GetLightVM:input_type -> rookery.v1.GetLightVMRequest
+	7,  // 34: rookery.v1.LightVMService.CreateLightVM:input_type -> rookery.v1.CreateLightVMRequest
+	8,  // 35: rookery.v1.LightVMService.UpdateLightVM:input_type -> rookery.v1.UpdateLightVMRequest
+	9,  // 36: rookery.v1.LightVMService.DeleteLightVM:input_type -> rookery.v1.DeleteLightVMRequest
+	10, // 37: rookery.v1.LightVMService.StartLightVM:input_type -> rookery.v1.StartLightVMRequest
+	11, // 38: rookery.v1.LightVMService.StopLightVM:input_type -> rookery.v1.StopLightVMRequest
+	14, // 39: rookery.v1.LightVMKernelService.ListKernels:output_type -> rookery.v1.ListKernelsResponse
+	12, // 40: rookery.v1.LightVMKernelService.GetKernel:output_type -> rookery.v1.LightVMKernel
+	12, // 41: rookery.v1.LightVMKernelService.CreateKernel:output_type -> rookery.v1.LightVMKernel
+	12, // 42: rookery.v1.LightVMKernelService.UpdateKernel:output_type -> rookery.v1.LightVMKernel
+	32, // 43: rookery.v1.LightVMKernelService.DeleteKernel:output_type -> google.protobuf.Empty
+	21, // 44: rookery.v1.LightVMInitramfsService.ListInitramfs:output_type -> rookery.v1.ListInitramfsResponse
+	19, // 45: rookery.v1.LightVMInitramfsService.GetInitramfs:output_type -> rookery.v1.LightVMInitramfs
+	19, // 46: rookery.v1.LightVMInitramfsService.CreateInitramfs:output_type -> rookery.v1.LightVMInitramfs
+	19, // 47: rookery.v1.LightVMInitramfsService.UpdateInitramfs:output_type -> rookery.v1.LightVMInitramfs
+	32, // 48: rookery.v1.LightVMInitramfsService.DeleteInitramfs:output_type -> google.protobuf.Empty
+	27, // 49: rookery.v1.LightVMArtifactService.UploadArtifact:output_type -> rookery.v1.UploadArtifactResponse
+	32, // 50: rookery.v1.LightVMArtifactService.DeleteArtifact:output_type -> google.protobuf.Empty
+	5,  // 51: rookery.v1.LightVMService.ListLightVMs:output_type -> rookery.v1.ListLightVMsResponse
+	3,  // 52: rookery.v1.LightVMService.GetLightVM:output_type -> rookery.v1.LightVM
+	3,  // 53: rookery.v1.LightVMService.CreateLightVM:output_type -> rookery.v1.LightVM
+	3,  // 54: rookery.v1.LightVMService.UpdateLightVM:output_type -> rookery.v1.LightVM
+	32, // 55: rookery.v1.LightVMService.DeleteLightVM:output_type -> google.protobuf.Empty
+	3,  // 56: rookery.v1.LightVMService.StartLightVM:output_type -> rookery.v1.LightVM
+	3,  // 57: rookery.v1.LightVMService.StopLightVM:output_type -> rookery.v1.LightVM
+	39, // [39:58] is the sub-list for method output_type
+	20, // [20:39] is the sub-list for method input_type
 	20, // [20:20] is the sub-list for extension type_name
 	20, // [20:20] is the sub-list for extension extendee
 	0,  // [0:20] is the sub-list for field type_name
@@ -2273,9 +2458,9 @@ func file_rookery_v1_lightvm_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_lightvm_proto_rawDesc), len(file_rookery_v1_lightvm_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   26,
+			NumMessages:   29,
 			NumExtensions: 0,
-			NumServices:   3,
+			NumServices:   4,
 		},
 		GoTypes:           file_rookery_v1_lightvm_proto_goTypes,
 		DependencyIndexes: file_rookery_v1_lightvm_proto_depIdxs,

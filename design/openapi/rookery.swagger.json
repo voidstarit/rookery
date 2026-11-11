@@ -37,6 +37,9 @@
       "name": "LightVMInitramfsService"
     },
     {
+      "name": "LightVMArtifactService"
+    },
+    {
       "name": "LightVMService"
     },
     {

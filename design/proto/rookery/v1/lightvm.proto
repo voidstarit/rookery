@@ -75,6 +75,14 @@ service LightVMInitramfsService {
   }
 }
 
+// LightVMArtifactService streams kernel and initramfs files into managed
+// storage for clients that do not have access to the local HTTP upload
+// endpoint, such as the Terraform provider.
+service LightVMArtifactService {
+  rpc UploadArtifact(stream UploadArtifactRequest) returns (UploadArtifactResponse);
+  rpc DeleteArtifact(DeleteArtifactRequest) returns (google.protobuf.Empty);
+}
+
 // LightVMService manages container-backed LightVM definitions.
 service LightVMService {
   rpc ListLightVMs(ListLightVMsRequest) returns (ListLightVMsResponse) {
@@ -360,4 +368,20 @@ message UpdateInitramfsRequest {
 
 message DeleteInitramfsRequest {
   int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message UploadArtifactRequest {
+  string kind = 1;
+  string file_name = 2;
+  bytes chunk = 3;
+}
+
+message UploadArtifactResponse {
+  string path = 1;
+  string file_name = 2;
+  int64 size_bytes = 3;
+}
+
+message DeleteArtifactRequest {
+  string path = 1;
 }
