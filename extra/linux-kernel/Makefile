@@ -1,4 +1,16 @@
-# LightVM minimal kernel + initramfs builder.
+# LightVM kernel + initramfs builder.
+#
+# Kernel configuration is split into fragments under configs/:
+#   common.config   base options shared by every variant
+#   virtio.config   minimal virtio guest kernel (virtio-fs, -pci, -net, ...)
+#   storage.config  virtio plus LVM, iSCSI initiator/target, NBD, and ublk
+#
+# Two variants are built independently:
+#   virtio   common + virtio
+#   storage  common + virtio + storage (a superset so it still boots the same
+#            LightVM images)
+# Each variant has its own object directory and artifact name, so the two
+# builds never share a .config or overwrite each other. See configs/README.md.
 #
 # Init scripts and extra initramfs files live in initramfs/ (copied into both
 # images) and initramfs-virtiofs/ (overlay for the virtiofs switch_root image).
@@ -16,13 +28,16 @@
 # read-only root filesystem.
 #
 # Usage:
-#   make                 build kernel and both initramfs images
-#   make kernel          build only the kernel
+#   make                 build both kernels and both initramfs images
+#   make kernel          build both kernel variants
+#   make kernel-virtio   build only the virtio kernel
+#   make kernel-storage  build only the storage kernel
 #   make initramfs       build the debug/test initramfs
 #   make initramfs-virtiofs  build the initramfs that switch_root's into virtiofs
-#   make menuconfig      edit the kernel config
-#   make reconfigure     reset the kernel config to the built-in fragment
-#   make test            boot the debug artifacts in QEMU
+#   make menuconfig      edit one kernel config (KERNEL_VARIANT=..., default virtio)
+#   make reconfigure     reset all kernel configs to the checked-in fragments
+#                        (KERNEL_VARIANT=storage resets only that variant)
+#   make test            boot the debug artifacts in QEMU (virtio variant)
 #   make test-virtiofs   boot the virtiofs/switch_root initramfs in QEMU
 #   make shell           interactive shell in the builder container
 #   make clean           remove the build volume and current artifacts
@@ -30,6 +45,8 @@
 #
 # Overridable variables:
 #   KERNEL_VERSION=6.12.111
+#   KERNEL_VARIANT=virtio   variant used by menuconfig and the QEMU tests
+#   KERNEL_VARIANTS="virtio storage"  variants built by `make kernel`/`all`
 #   KERNEL_URL=https://cdn.kernel.org/pub/linux/kernel/v6.x
 #   JOBS=16
 #   OUT_DIR=/path/to/artifacts
@@ -39,10 +56,12 @@
 #   INITRAMFS_OVERLAY=/path/to/dir   extra files copied into the initramfs
 #
 # Artifacts:
-#   OUT_DIR/vmlinuz-lightvm-<version>
+#   OUT_DIR/kernel-<version>-virtio
+#   OUT_DIR/kernel-<version>-storage
 #   OUT_DIR/initramfs-lightvm-<version>.cpio.gz
 #   OUT_DIR/initramfs-lightvm-virtiofs-<version>.cpio.gz
-#   plus stable symlinks without the version suffix.
+#   plus stable kernel-lightvm-<variant> and initramfs symlinks without the
+#   version suffix.
 
 SHELL := /bin/sh
 .DEFAULT_GOAL := all
@@ -56,6 +75,42 @@ KERNEL_VERSION ?= 6.12.111
 KERNEL_MAJOR := $(firstword $(subst ., ,$(KERNEL_VERSION)))
 KERNEL_URL ?= https://cdn.kernel.org/pub/linux/kernel/v$(KERNEL_MAJOR).x
 JOBS ?= $(shell nproc 2>/dev/null || echo 4)
+
+# Kernel variants. Each variant is a set of config fragments merged after
+# common.config; add an entry here and in KERNEL_FRAGMENTS_<variant> /
+# KERNEL_REQUIRED_CONFIG_<variant> to introduce another kernel.
+KERNEL_VARIANTS ?= virtio storage
+# Variant used by single-variant targets such as menuconfig and the QEMU tests.
+KERNEL_VARIANT ?= virtio
+KERNEL_CONFIG_DIR := $(EXTRA_DIR)/configs
+
+KERNEL_FRAGMENTS_virtio := virtio.config
+KERNEL_FRAGMENTS_storage := virtio.config storage.config
+
+# Options that must be =y in the final .config. merge_config.sh silently drops
+# options with unmet Kconfig dependencies, so fail the build instead of
+# producing a kernel that is missing the features its variant promises.
+KERNEL_REQUIRED_CONFIG_virtio := \
+	CONFIG_PCI CONFIG_VIRTIO CONFIG_VIRTIO_PCI CONFIG_VIRTIO_BLK \
+	CONFIG_VIRTIO_NET CONFIG_VIRTIO_CONSOLE CONFIG_VIRTIO_FS CONFIG_FUSE_FS \
+	CONFIG_FILE_LOCKING CONFIG_AIO CONFIG_IO_URING CONFIG_IO_WQ
+KERNEL_REQUIRED_CONFIG_storage := \
+	$(KERNEL_REQUIRED_CONFIG_virtio) \
+	CONFIG_MD CONFIG_BLK_DEV_DM CONFIG_DM_THIN_PROVISIONING \
+	CONFIG_SCSI_ISCSI_ATTRS CONFIG_ISCSI_TCP CONFIG_TARGET_CORE \
+	CONFIG_CONFIGFS_FS CONFIG_TCM_FILEIO CONFIG_TCM_IBLOCK \
+	CONFIG_ISCSI_TARGET CONFIG_BLK_DEV_NBD CONFIG_BLK_DEV_UBLK \
+	CONFIG_BLKDEV_UBLK_LEGACY_OPCODES
+
+ifeq ($(strip $(KERNEL_VARIANT)),)
+$(error KERNEL_VARIANT must not be empty)
+endif
+ifeq ($(origin KERNEL_FRAGMENTS_$(KERNEL_VARIANT)),undefined)
+$(error unknown KERNEL_VARIANT '$(KERNEL_VARIANT)'; known variants: $(KERNEL_VARIANTS))
+endif
+
+KERNEL_FRAGMENTS := $(addprefix $(KERNEL_CONFIG_DIR)/,common.config $(KERNEL_FRAGMENTS_$(KERNEL_VARIANT)))
+KERNEL_REQUIRED_CONFIG := $(KERNEL_REQUIRED_CONFIG_$(KERNEL_VARIANT))
 
 OUT_DIR ?= $(EXTRA_DIR)/../../dist/lightvm
 ifeq ($(strip $(OUT_DIR)),)
@@ -75,32 +130,46 @@ BUILD_VOLUME ?= rookery-lightvm-kernel-build-$(HOST_UID)
 INITRAMFS_DIR := $(EXTRA_DIR)/initramfs
 INITRAMFS_VIRTIOFS_DIR := $(EXTRA_DIR)/initramfs-virtiofs
 
-# Paths inside the builder container.
+# Paths inside the builder container. The object directory is variant-specific
+# so the two kernels never share a .config or build tree; the kernel source
+# tarball and its extracted tree are shared because they are read-only inputs.
 BUILD_DIR := /build
 DIST_DIR := /out
 ROOTFS_DIR := $(BUILD_DIR)/initramfs-root
 SRC_DIR := $(BUILD_DIR)/linux-$(KERNEL_VERSION)
-OBJ_DIR := $(BUILD_DIR)/obj-$(KERNEL_VERSION)-$(ARCH)
-KCONFIG := $(BUILD_DIR)/lightvm.config
+OBJ_DIR := $(BUILD_DIR)/obj-$(KERNEL_VERSION)-$(ARCH)-$(KERNEL_VARIANT)
 LINUX_TARBALL := $(BUILD_DIR)/linux-$(KERNEL_VERSION).tar.xz
 KERNEL_IMAGE := $(OBJ_DIR)/arch/x86/boot/bzImage
 
-KERNEL_NAME := vmlinuz-lightvm-$(KERNEL_VERSION)
+# The variant is part of the artifact name and symlink so the virtio and
+# storage kernels can coexist in OUT_DIR.
+KERNEL_NAME := kernel-$(KERNEL_VERSION)-$(KERNEL_VARIANT)
+KERNEL_NAMES := $(foreach variant,$(KERNEL_VARIANTS),kernel-$(KERNEL_VERSION)-$(variant))
+KERNEL_LINK_NAMES := $(foreach variant,$(KERNEL_VARIANTS),kernel-lightvm-$(variant))
 INITRAMFS_NAME := initramfs-lightvm-$(KERNEL_VERSION).cpio.gz
 INITRAMFS_VIRTIOFS_NAME := initramfs-lightvm-virtiofs-$(KERNEL_VERSION).cpio.gz
 DIST_KERNEL := $(DIST_DIR)/$(KERNEL_NAME)
 DIST_INITRAMFS := $(DIST_DIR)/$(INITRAMFS_NAME)
 DIST_INITRAMFS_VIRTIOFS := $(DIST_DIR)/$(INITRAMFS_VIRTIOFS_NAME)
-DIST_KERNEL_LINK := $(DIST_DIR)/vmlinuz-lightvm
+DIST_KERNEL_LINK := $(DIST_DIR)/kernel-lightvm-$(KERNEL_VARIANT)
 DIST_INITRAMFS_LINK := $(DIST_DIR)/initramfs-lightvm.cpio.gz
 DIST_INITRAMFS_VIRTIOFS_LINK := $(DIST_DIR)/initramfs-lightvm-virtiofs.cpio.gz
 
 HOST_KERNEL := $(OUT_DIR)/$(KERNEL_NAME)
 HOST_INITRAMFS := $(OUT_DIR)/$(INITRAMFS_NAME)
 HOST_INITRAMFS_VIRTIOFS := $(OUT_DIR)/$(INITRAMFS_VIRTIOFS_NAME)
-HOST_KERNEL_LINK := $(OUT_DIR)/vmlinuz-lightvm
+HOST_KERNEL_LINK := $(OUT_DIR)/kernel-lightvm-$(KERNEL_VARIANT)
 HOST_INITRAMFS_LINK := $(OUT_DIR)/initramfs-lightvm.cpio.gz
 HOST_INITRAMFS_VIRTIOFS_LINK := $(OUT_DIR)/initramfs-lightvm-virtiofs.cpio.gz
+
+# Artifacts from the previous single-kernel builder, removed by `make clean` so
+# an upgrade does not leave stale kernels behind.
+LEGACY_KERNEL_FILES := \
+	vmlinuz-lightvm vmlinuz-lightvm-$(KERNEL_VERSION) \
+	vmlinuz-lightvm-$(KERNEL_VERSION).sha256 \
+	kernel-lightvm kernel-$(KERNEL_VERSION)-vfs-iscsi-nbd \
+	kernel-$(KERNEL_VERSION)-vfs-iscsi-nbd.sha256
+
 QEMU_TEST_DIR ?= $(if $(TMPDIR),$(TMPDIR),/tmp)/rookery-lightvm-test-$(HOST_UID)
 QEMU_LOG := $(QEMU_TEST_DIR)/qemu-test.log
 QEMU_DISK := $(QEMU_TEST_DIR)/qemu-test-disk.img
@@ -133,155 +202,43 @@ DOCKER_RUN_BASE := $(DOCKER) run --rm --platform $(DOCKER_PLATFORM) \
 	-w /work $(DOCKER_RUN_FLAGS)
 
 DOCKER_MAKE_ARGS := ARCH="$(ARCH)" KERNEL_VERSION="$(KERNEL_VERSION)" \
-	KERNEL_URL="$(KERNEL_URL)" JOBS="$(JOBS)"
+	KERNEL_URL="$(KERNEL_URL)" JOBS="$(JOBS)" KERNEL_VARIANT="$(KERNEL_VARIANT)"
 DOCKER_MAKE := $(DOCKER_RUN_BASE) $(DOCKER_IMAGE) make -C /work --no-print-directory $(DOCKER_MAKE_ARGS)
 DOCKER_MAKE_TTY := $(DOCKER_RUN_BASE) -it $(DOCKER_IMAGE) make -C /work --no-print-directory $(DOCKER_MAKE_ARGS)
-
-# ---------------------------------------------------------------------------
-# Embedded build inputs. Keeping the config fragment and init scripts here
-# means the source directory needs no generated or auxiliary files.
-# ---------------------------------------------------------------------------
-
-define KCONFIG_CONTENT
-# Architecture and process basics
-CONFIG_64BIT=y
-CONFIG_SMP=y
-CONFIG_NR_CPUS=16
-CONFIG_PRINTK=y
-CONFIG_BUG=y
-CONFIG_MULTIUSER=y
-CONFIG_BINFMT_ELF=y
-CONFIG_BINFMT_SCRIPT=y
-CONFIG_COREDUMP=y
-CONFIG_FUTEX=y
-CONFIG_EPOLL=y
-CONFIG_SIGNALFD=y
-CONFIG_TIMERFD=y
-CONFIG_EVENTFD=y
-CONFIG_INOTIFY_USER=y
-CONFIG_TTY=y
-CONFIG_UNIX98_PTYS=y
-CONFIG_SERIAL_8250=y
-CONFIG_SERIAL_8250_CONSOLE=y
-CONFIG_SERIAL_8250_NR_UARTS=4
-CONFIG_SERIAL_8250_RUNTIME_UARTS=4
-CONFIG_SERIAL_CORE=y
-CONFIG_SERIAL_CORE_CONSOLE=y
-CONFIG_EARLY_PRINTK=y
-CONFIG_DEFAULT_HOSTNAME="lightvm"
-CONFIG_LOCALVERSION="-lightvm"
-
-# Initramfs and memory-backed filesystems (no on-disk filesystems)
-CONFIG_BLOCK=y
-CONFIG_BLK_DEV_INITRD=y
-CONFIG_RD_GZIP=y
-CONFIG_DEVTMPFS=y
-CONFIG_DEVTMPFS_MOUNT=y
-CONFIG_PROC_FS=y
-CONFIG_PROC_SYSCTL=y
-CONFIG_SYSFS=y
-CONFIG_SHMEM=y
-CONFIG_TMPFS=y
-
-# PCI and virtio
-CONFIG_PCI=y
-CONFIG_PCI_MSI=y
-CONFIG_VIRTIO=y
-CONFIG_VIRTIO_MENU=y
-CONFIG_VIRTIO_PCI=y
-CONFIG_VIRTIO_BLK=y
-CONFIG_VIRTIO_NET=y
-CONFIG_VIRTIO_CONSOLE=y
-CONFIG_VIRTIO_BALLOON=y
-CONFIG_VIRTIO_VSOCKETS=y
-CONFIG_VSOCKETS=y
-CONFIG_FUSE_FS=y
-CONFIG_VIRTIO_FS=y
-CONFIG_HW_RANDOM=y
-CONFIG_HW_RANDOM_VIRTIO=y
-CONFIG_SCSI=y
-CONFIG_BLK_DEV_SD=y
-CONFIG_SCSI_VIRTIO=y
-CONFIG_NET_9P=y
-CONFIG_NET_9P_VIRTIO=y
-CONFIG_9P_FS=y
-CONFIG_VIRTIO_MMIO=y
-CONFIG_VIRTIO_MMIO_CMDLINE_DEVICES=y
-
-# Deliberately not enabled on this minimal image:
-# - DRM_VIRTIO_GPU: needs DRM; LightVM runs with -display none
-# - SND_VIRTIO: needs SOUND
-# - VIRTIO_INPUT: VT enables the input core, but no keyboard/tablet device is needed
-# - I2C_VIRTIO: needs I2C
-# - VIRTIO_DMA_SHARED_BUFFER: only useful with virtio-gpu
-# - VIRTIO_DEBUG: needs debugfs; debug support is disabled
-# - VIRTIO_IOMMU, RPMSG_VIRTIO, CRYPTO_DEV_VIRTIO: not used by LightVM
-# - VIRTIO_RTC*: not present in Linux 6.12 (introduced in 6.17)
-
-# Guest integration and ACPI poweroff
-CONFIG_HYPERVISOR_GUEST=y
-CONFIG_PARAVIRT=y
-CONFIG_KVM_GUEST=y
-CONFIG_ACPI=y
-
-# Networking (DHCP in the initramfs)
-CONFIG_NET=y
-CONFIG_UNIX=y
-CONFIG_INET=y
-CONFIG_PACKET=y
-CONFIG_NETDEVICES=y
-
-# Virtual terminals are required by images whose init/getty expects
-# /dev/tty1..N. Keep the VGA console and input devices disabled; LightVM uses
-# the virtio console (hvc0) for I/O.
-CONFIG_VT=y
-CONFIG_VT_CONSOLE=y
-# CONFIG_VGA_CONSOLE is not set
-# CONFIG_INPUT_KEYBOARD is not set
-# CONFIG_INPUT_MOUSE is not set
-# CONFIG_INPUT_MISC is not set
-# CONFIG_INPUT_JOYSTICK is not set
-# CONFIG_INPUT_TABLET is not set
-# CONFIG_INPUT_TOUCHSCREEN is not set
-# CONFIG_INPUT_MOUSEDEV is not set
-
-# Keep the image small: no debug, USB, sound, DRM, or real filesystems
-CONFIG_DEBUG_INFO_NONE=y
-# CONFIG_DEBUG_KERNEL is not set
-# CONFIG_DEBUG_FS is not set
-# CONFIG_MAGIC_SYSRQ is not set
-# CONFIG_KALLSYMS is not set
-# CONFIG_FTRACE is not set
-# CONFIG_FUNCTION_TRACER is not set
-# CONFIG_PERF_EVENTS is not set
-# CONFIG_SOUND is not set
-# CONFIG_USB_SUPPORT is not set
-# CONFIG_WLAN is not set
-# CONFIG_WIRELESS is not set
-# CONFIG_SERIO is not set
-# CONFIG_ACPI_BUTTON is not set
-# CONFIG_HID is not set
-# CONFIG_DRM is not set
-# CONFIG_NFS_FS is not set
-# CONFIG_CIFS is not set
-# CONFIG_EXT4_FS is not set
-# CONFIG_BTRFS_FS is not set
-# CONFIG_XFS_FS is not set
-endef
 
 # Init scripts and filesystem additions live in initramfs/ (common) and
 # initramfs-virtiofs/ (overlay for the virtiofs switch_root variant).
 
-.PHONY: all kernel initramfs initramfs-virtiofs docker-image docker-volume menuconfig reconfigure shell \
-	test test-virtiofs clean distclean help _configure _kernel _initramfs _initramfs_common \
-	_initramfs_virtiofs _initramfs_rootfs _menuconfig _shell
+.PHONY: all kernel $(addprefix kernel-,$(KERNEL_VARIANTS)) \
+	initramfs initramfs-virtiofs docker-image docker-volume menuconfig reconfigure shell \
+	test test-virtiofs clean distclean help _configure _kernel _kernel-variant _reconfigure \
+	_initramfs _initramfs_common _initramfs_virtiofs _initramfs_rootfs _menuconfig _shell
+
+# Kernel builds are memory-hungry and share one downloaded source tree; never
+# run two variant builds at once, even with `make -j ... kernel-virtio kernel-storage`.
+# The two initramfs targets share $(ROOTFS_DIR), so they must not overlap either.
+.NOTPARALLEL: $(addprefix kernel-,$(KERNEL_VARIANTS)) initramfs initramfs-virtiofs
 
 $(OBJ_DIR):
 	@mkdir -p "$@"
 
 all: kernel initramfs initramfs-virtiofs
 
-kernel: docker-image docker-volume
+# Build every configured variant one at a time. Each recursive make selects a
+# single KERNEL_VARIANT so the object directory, config merge, artifact name,
+# and symlink are all variant-specific.
+kernel:
+	@for variant in $(KERNEL_VARIANTS); do \
+		echo "==> kernel $$variant"; \
+		$(MAKE) --no-print-directory _kernel-variant KERNEL_VARIANT=$$variant || exit 1; \
+	done
+
+# Static pattern rule: the variant targets stay explicit (and .PHONY) while
+# each one recurses with its own KERNEL_VARIANT.
+$(addprefix kernel-,$(KERNEL_VARIANTS)): kernel-%:
+	$(MAKE) --no-print-directory _kernel-variant KERNEL_VARIANT=$*
+
+_kernel-variant: docker-image docker-volume
 	@mkdir -p "$(OUT_DIR)"
 	$(DOCKER_MAKE) _kernel
 	@printf 'kernel:    %s\n' "$(HOST_KERNEL)"
@@ -308,7 +265,21 @@ menuconfig: docker-image docker-volume
 	@mkdir -p "$(OUT_DIR)"
 	$(DOCKER_MAKE_TTY) _menuconfig
 
-reconfigure: docker-image docker-volume
+# `make reconfigure` resets every variant. Passing KERNEL_VARIANT explicitly
+# limits the reset to that variant (origin is "command line").
+ifeq ($(origin KERNEL_VARIANT),command line)
+RECONFIGURE_VARIANTS := $(KERNEL_VARIANT)
+else
+RECONFIGURE_VARIANTS := $(KERNEL_VARIANTS)
+endif
+
+reconfigure:
+	@for variant in $(RECONFIGURE_VARIANTS); do \
+		echo "==> reconfigure $$variant"; \
+		$(MAKE) --no-print-directory _reconfigure KERNEL_VARIANT=$$variant || exit 1; \
+	done
+
+_reconfigure: docker-image docker-volume
 	@mkdir -p "$(OUT_DIR)"
 	$(DOCKER_RUN_BASE) $(DOCKER_IMAGE) rm -f "$(OBJ_DIR)/.configured"
 	$(DOCKER_MAKE) _configure
@@ -357,21 +328,27 @@ $(SRC_DIR)/Makefile:
 	@echo "extracting $(notdir $(LINUX_TARBALL))"
 	@tar -C "$(BUILD_DIR)" --no-same-owner -xJf "$(LINUX_TARBALL)"
 
-$(KCONFIG): $(MAKEFILE_LIST)
-	$(file >$(KCONFIG).tmp,$(value KCONFIG_CONTENT))
-	@if [ -f "$@" ] && cmp -s "$@.tmp" "$@"; then \
-		rm -f "$@.tmp"; \
-	else \
-		mv "$@.tmp" "$@"; \
-	fi
-
 # The stamp is touched only after a successful merge, so an interrupted or
 # failed configuration is retried instead of leaving a raw tinyconfig behind.
-$(OBJ_DIR)/.configured: $(SRC_DIR)/Makefile $(KCONFIG) | $(OBJ_DIR)
+# Each variant merges common.config plus its own fragments into a fresh
+# tinyconfig in its own object directory.
+$(OBJ_DIR)/.configured: $(SRC_DIR)/Makefile $(KERNEL_FRAGMENTS) $(MAKEFILE_LIST) | $(OBJ_DIR)
+	@for fragment in $(KERNEL_FRAGMENTS); do \
+		[ -f "$$fragment" ] || { \
+			echo "error: missing kernel config fragment $$fragment" >&2; \
+			exit 1; \
+		}; \
+	done
 	$(MAKE) -C "$(SRC_DIR)" O="$(OBJ_DIR)" ARCH="$(ARCH)" tinyconfig
 	@cd "$(OBJ_DIR)" && "$(SRC_DIR)/scripts/kconfig/merge_config.sh" -m -O "$(OBJ_DIR)" \
-		"$(OBJ_DIR)/.config" "$(KCONFIG)"
+		"$(OBJ_DIR)/.config" $(KERNEL_FRAGMENTS)
 	$(MAKE) -C "$(SRC_DIR)" O="$(OBJ_DIR)" ARCH="$(ARCH)" olddefconfig
+	@for sym in $(KERNEL_REQUIRED_CONFIG); do \
+		grep -q "^$$sym=y" "$(OBJ_DIR)/.config" || { \
+			echo "error: $$sym is not enabled for KERNEL_VARIANT=$(KERNEL_VARIANT); check $(KERNEL_CONFIG_DIR)" >&2; \
+			exit 1; \
+		}; \
+	done
 	@touch "$@"
 
 # ---------------------------------------------------------------------------
@@ -385,7 +362,7 @@ _kernel: $(OBJ_DIR)/.configured
 	install -m 0644 "$(KERNEL_IMAGE)" "$(DIST_KERNEL)"
 	@ln -sfn "$(KERNEL_NAME)" "$(DIST_KERNEL_LINK)"
 	@cd "$(DIST_DIR)" && sha256sum "$(KERNEL_NAME)" > "$(KERNEL_NAME).sha256"
-	@printf 'kernel:    %s (%s bytes)\n' "$(DIST_KERNEL)" "$$(stat -c%s "$(DIST_KERNEL)")"
+	@printf 'kernel:    %s (%s bytes, variant %s)\n' "$(DIST_KERNEL)" "$$(stat -c%s "$(DIST_KERNEL)")" "$(KERNEL_VARIANT)"
 
 _configure: $(OBJ_DIR)/.configured
 
@@ -470,7 +447,7 @@ _shell:
 # Boot both artifacts with virtio-blk and virtio-net attached. The initramfs
 # requests DHCP, prints markers, and powers the VM off, so this checks the
 # virtio devices, networking, and ACPI poweroff at once.
-test: all
+test: kernel-$(KERNEL_VARIANT) initramfs
 	@command -v qemu-system-x86_64 >/dev/null || { \
 		echo "error: qemu-system-x86_64 is required for make test" >&2; \
 		exit 1; \
@@ -501,7 +478,7 @@ test: all
 
 # Boot the switch_root initramfs against a tiny writable virtiofs rootfs.
 # The test workload prints a marker, reads /hello, and powers the VM off.
-test-virtiofs: kernel initramfs-virtiofs
+test-virtiofs: kernel-$(KERNEL_VARIANT) initramfs-virtiofs
 	@command -v qemu-system-x86_64 >/dev/null || { \
 		echo "error: qemu-system-x86_64 is required for make test-virtiofs" >&2; \
 		exit 1; \
@@ -577,7 +554,11 @@ test-virtiofs: kernel initramfs-virtiofs
 
 clean:
 	@$(DOCKER) volume rm "$(BUILD_VOLUME)" >/dev/null 2>&1 || true
-	rm -f "$(HOST_KERNEL)" "$(HOST_KERNEL).sha256" "$(HOST_KERNEL_LINK)" \
+	rm -f \
+		$(addprefix $(OUT_DIR)/,$(KERNEL_NAMES)) \
+		$(addprefix $(OUT_DIR)/,$(addsuffix .sha256,$(KERNEL_NAMES))) \
+		$(addprefix $(OUT_DIR)/,$(KERNEL_LINK_NAMES)) \
+		$(addprefix $(OUT_DIR)/,$(LEGACY_KERNEL_FILES)) \
 		"$(HOST_INITRAMFS)" "$(HOST_INITRAMFS).sha256" "$(HOST_INITRAMFS_LINK)" \
 		"$(HOST_INITRAMFS_VIRTIOFS)" "$(HOST_INITRAMFS_VIRTIOFS).sha256" \
 		"$(HOST_INITRAMFS_VIRTIOFS_LINK)" \
@@ -589,20 +570,25 @@ distclean: clean
 	-$(DOCKER) image rm -f "$(DOCKER_IMAGE)" >/dev/null 2>&1
 
 help:
-	@echo "LightVM minimal kernel builder (builds entirely in Docker)"
+	@echo "LightVM kernel builder (builds entirely in Docker)"
 	@echo ""
-	@echo "  make                    build kernel and both initramfs images"
-	@echo "  make kernel             build only the kernel"
+	@echo "  make                    build both kernels and both initramfs images"
+	@echo "  make kernel             build both kernel variants"
+	@echo "  make kernel-virtio      build the virtio-only kernel"
+	@echo "  make kernel-storage     build the virtio+storage kernel"
 	@echo "  make initramfs          build the debug/test initramfs"
 	@echo "  make initramfs-virtiofs build the virtiofs switch_root initramfs"
-	@echo "  make menuconfig         edit the kernel configuration"
-	@echo "  make reconfigure        reset the kernel configuration"
+	@echo "  make menuconfig         edit one kernel configuration"
+	@echo "  make reconfigure        reset kernel configurations to configs/*.config"
 	@echo "  make test               boot the debug artifacts in QEMU"
 	@echo "  make test-virtiofs      test DHCP/renewal, virtiofs, and switch_root"
 	@echo "  make shell              shell inside the builder container"
 	@echo "  make clean              remove the build volume and artifacts"
 	@echo "  make distclean          also remove the builder image"
 	@echo ""
+	@echo "  kernel configs: $(KERNEL_CONFIG_DIR)"
+	@echo "  variants:       $(KERNEL_VARIANTS)  (selected: $(KERNEL_VARIANT))"
+	@echo "  artifacts:      $(addprefix kernel-$(KERNEL_VERSION)-,$(KERNEL_VARIANTS))"
 	@echo "  initramfs sources: $(INITRAMFS_DIR)"
 	@echo "                     $(INITRAMFS_VIRTIOFS_DIR)"
 	@echo "  OUT_DIR=$(OUT_DIR)"
