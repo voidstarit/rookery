@@ -217,7 +217,15 @@ mount -t tmpfs -o mode=1777 tmpfs /newroot/tmp 2>/dev/null || true
 # console as its controlling tty, so the line discipline can deliver SIGINT
 # (Ctrl+C) to the workload instead of ignoring it for PID 1. /etc/inittab is
 # data, so writing it here is safe.
-printf '%s\n' "::once:$chosen" > /newroot/etc/inittab
+if [ -x /newroot/.rookery/busybox ]; then
+	# init runs inittab commands through a shell. Give the workload its own
+	# session and a controlling console even if the inittab action itself does
+	# not, then exec the entrypoint (or DHCP renewal helper) as that session's
+	# leader. SIGINT from Ctrl+C then reaches the workload.
+	printf '%s\n' "::once:/.rookery/busybox setsid -c $chosen" > /newroot/etc/inittab
+else
+	printf '%s\n' "::once:$chosen" > /newroot/etc/inittab
+fi
 init=/bin/busybox
 if [ ! -x "/newroot$init" ]; then
 	init=/.rookery/busybox
