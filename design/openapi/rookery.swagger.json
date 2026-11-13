@@ -5744,7 +5744,7 @@
         },
         "kind": {
           "type": "string",
-          "description": "kind is \"disk\", \"partition\", \"lv\", or \"raid\"."
+          "description": "kind is \"disk\", \"partition\", \"lv\", \"raid\", \"loop\", \"ram\", or \"zram\"."
         },
         "model": {
           "type": "string"

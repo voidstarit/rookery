@@ -429,7 +429,7 @@ type HostAttachableBlockDevice struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Path  string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
-	// kind is "disk", "partition", "lv", or "raid".
+	// kind is "disk", "partition", "lv", "raid", "loop", "ram", or "zram".
 	Kind       string `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
 	Model      string `protobuf:"bytes,4,opt,name=model,proto3" json:"model,omitempty"`
 	SizeBytes  uint64 `protobuf:"varint,5,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
