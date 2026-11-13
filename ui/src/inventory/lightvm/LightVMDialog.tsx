@@ -379,7 +379,9 @@ export function LightVMDialog({
       consoles: normalizedConsoles,
       interface_ids: selectedInterfaces.map((iface) => iface.id),
       disk_ids: selectedDisks.map((disk) => disk.id),
-      replace_disk_ids: editing,
+      // replace_disk_ids only exists on UpdateLightVMRequest. Sending it
+      // (even as false) to CreateLightVMRequest is rejected by protojson.
+      ...(editing ? { replace_disk_ids: true } : {}),
       virtiofs_shares: shares.map((share) => ({
         host_path: share.host_path,
         tag: share.tag,

@@ -248,7 +248,7 @@ the interface returns to its network VRF (host taps) or the default table
 `PUT /api/interfaces/{id}/route-tables`.
 | `GET`    | `/api/host/interfaces` | List physical/external NICs, link state, and VPP host-interface correlation |
 | `GET`    | `/api/host/block-devices` | List whole block devices for cgroup I/O limits |
-| `GET`    | `/api/host/block-devices/attachable` | List disks, partitions, and LVs that can be passed through to VMs, with availability and registration state |
+| `GET`    | `/api/host/block-devices/attachable` | List disks, partitions, LVs, RAID arrays, and loop/ram/zram devices that can be passed through to VMs, with availability and registration state |
 | `POST`   | `/api/host/interfaces/{name}/attach` | Take over a wired NIC into VPP and persist the attachment |
 | `DELETE` | `/api/host/interfaces/{name}` | Detach a persisted host NIC from VPP |
 | `GET`    | `/api/host/taps` | List persisted network-to-host taps (`?network_id=<id>` optional) |

@@ -424,8 +424,8 @@ export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskD
                   ))}
                 </select>
                 <span class="field-hint">
-                  Whole disks, partitions, and logical volumes are listed. Mounted, swap, and
-                  otherwise busy devices are disabled.
+                  Whole disks, partitions, logical volumes, RAID arrays, and loop/ram/zram
+                  devices are listed. Mounted, swap, and otherwise busy devices are disabled.
                 </span>
               </label>
               {hostDevicesError ? (
@@ -496,6 +496,12 @@ function deviceKindLabel(kind: string | undefined): string {
       return "Logical volume";
     case "raid":
       return "RAID array";
+    case "loop":
+      return "Loop device";
+    case "ram":
+      return "RAM disk";
+    case "zram":
+      return "ZRAM device";
     default:
       return "Block device";
   }

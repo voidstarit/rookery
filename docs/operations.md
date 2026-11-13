@@ -176,7 +176,8 @@ The UI has **Virtual machines**, **Disks**, **Installation media**,
 **Rookery Networks**, **VNFs**, and **LightVM** tabs. The **Disks** tab manages storage
 backends, creates LVM thin disks, and registers host block devices for
 passthrough. The create dialog's **Storage source** selector switches between an
-LVM thin volume and a host disk, partition, or logical volume discovered through
+LVM thin volume and a host disk, partition, logical volume, RAID array, or
+loop/ram/zram device discovered through
 `/api/host/block-devices/attachable`; unavailable devices are disabled with the
 reason the host is using them. VM creation requires VPP and at least one
 unattached disk, and requires a ready thin pool only when an LVM disk is
