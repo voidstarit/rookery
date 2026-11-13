@@ -148,22 +148,30 @@ if [ -z "$chosen" ]; then
 	exec /bin/sh
 fi
 
+# Copy the initramfs BusyBox into the new root. BusyBox init uses it to run
+# the workload as a child with a controlling console; PID 1 itself ignores
+# keyboard signals such as SIGINT (Ctrl+C).
+renew_dir=/newroot/.rookery
+if [ -x /bin/busybox ]; then
+	mkdir -p "$renew_dir"
+	if cp /bin/busybox "$renew_dir/busybox"; then
+		chmod 0755 "$renew_dir/busybox"
+	fi
+fi
+
 # Keep a DHCP client alive after switch_root. The initramfs udhcpc exits after
 # the initial lease, so install a static BusyBox and renewal script inside the
 # new root and start one background client per Ethernet interface before
-# exec'ing the workload. Disable this with lightvm.dhcp_renew=0.
-if [ "$dhcp" = 1 ] && [ "$dhcp_renew" = 1 ] && [ -x /bin/busybox ]; then
-	renew_dir=/newroot/.rookery
-	mkdir -p "$renew_dir"
-	if cp /bin/busybox "$renew_dir/busybox" \
-		&& ln -sf /.rookery/busybox "$renew_dir/ip" \
+# running the workload. Disable this with lightvm.dhcp_renew=0.
+if [ "$dhcp" = 1 ] && [ "$dhcp_renew" = 1 ] && [ -x "$renew_dir/busybox" ]; then
+	if ln -sf /.rookery/busybox "$renew_dir/ip" \
 		&& ln -sf /.rookery/busybox "$renew_dir/hostname" \
 		&& sed '1s|^#!/bin/sh$|#!/.rookery/busybox sh|' \
 			/etc/udhcpc/default.script > "$renew_dir/udhcpc.script" \
-		&& chmod 0755 "$renew_dir/busybox" "$renew_dir/udhcpc.script"; then
+		&& chmod 0755 "$renew_dir/udhcpc.script"; then
 		printf '%s\n' "$chosen" > "$renew_dir/entry"
 		cat > "$renew_dir/start" <<'EOF'
-#!/.rookery/busybox sh
+#!/bin/sh
 # Start a persistent DHCP client for every Ethernet interface, then run the
 # LightVM workload. The clients use the static BusyBox copied into this root.
 for path in /sys/class/net/*; do
@@ -205,6 +213,19 @@ mount -t tmpfs tmpfs /newroot/dev/shm 2>/dev/null || true
 mount -t tmpfs tmpfs /newroot/run 2>/dev/null || true
 mount -t tmpfs -o mode=1777 tmpfs /newroot/tmp 2>/dev/null || true
 
+# Run the workload from BusyBox init: it creates a child process with the
+# console as its controlling tty, so the line discipline can deliver SIGINT
+# (Ctrl+C) to the workload instead of ignoring it for PID 1. /etc/inittab is
+# data, so writing it here is safe.
+printf '%s\n' "::once:$chosen" > /newroot/etc/inittab
+init=/bin/busybox
+if [ ! -x "/newroot$init" ]; then
+	init=/.rookery/busybox
+fi
+if [ -x "/newroot$init" ]; then
+	echo "lightvm: switch_root /newroot $init init"
+	# Use the absolute initramfs path: loading /.env may replace PATH.
+	exec /bin/switch_root /newroot "$init" init
+fi
 echo "lightvm: switch_root /newroot $chosen"
-# Use the absolute initramfs path: loading /.env may replace PATH before this.
 exec /bin/switch_root /newroot "$chosen"
