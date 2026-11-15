@@ -545,3 +545,136 @@ func TestBlockStatsErrors(t *testing.T) {
 		t.Fatal("BlockStats accepted a closed QMP socket")
 	}
 }
+
+func startLightVMMonitorProcess(t *testing.T, q *QEMU, id string) {
+	t.Helper()
+	_, pidfile, _, err := q.lightVMPaths(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("sh", "-c", "while :; do sleep 1; done", "-uuid", id, "-pidfile", pidfile)
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	})
+	if err := os.WriteFile(pidfile, []byte(strconv.Itoa(cmd.Process.Pid)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for !q.RunningLightVM(id) && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !q.RunningLightVM(id) {
+		t.Fatal("test lightvm process was not detected")
+	}
+}
+
+func TestLightVMMetrics(t *testing.T) {
+	q, err := New(DefaultBinary, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := uuid.NewString()
+	metrics, err := q.LightVMMetrics(id)
+	if err != nil || metrics.Running {
+		t.Fatalf("stopped metrics = %+v, %v", metrics, err)
+	}
+	if _, err := q.LightVMMetrics("not-a-uuid"); err == nil {
+		t.Fatal("invalid LightVM id was accepted")
+	}
+
+	startLightVMMonitorProcess(t, q, id)
+	metrics, err = q.LightVMMetrics(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !metrics.Running || metrics.PID == 0 {
+		t.Fatalf("running metrics = %+v", metrics)
+	}
+}
+
+func TestLightVMBlockStats(t *testing.T) {
+	ctx := context.Background()
+	q, err := New(DefaultBinary, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := uuid.NewString()
+	if stats, err := q.LightVMBlockStats(ctx, id); err != nil || stats != nil {
+		t.Fatalf("BlockStats(stopped) = %+v, %v", stats, err)
+	}
+	startLightVMMonitorProcess(t, q, id)
+	if _, err := q.LightVMBlockStats(ctx, id); err == nil {
+		t.Fatal("BlockStats accepted a missing QMP socket")
+	}
+	qmp, err := q.lightVMQMPPath(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("unix", qmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		reader := bufio.NewReader(conn)
+		_, _ = conn.Write([]byte(`{"QMP":{"version":{"qemu":{"major":10,"minor":0,"micro":0}}}}` + "\n"))
+		for _, response := range []string{
+			`{"return":{}}`,
+			`{"return":[{"device":"rookery-disk-7","stats":{"rd_bytes":1024,"wr_bytes":2048,"rd_operations":10,"wr_operations":20,"failed_rd_operations":1,"failed_wr_operations":2,"invalid_rd_operations":3,"invalid_wr_operations":4}},{"node-name":"node-x","stats":{"rd_bytes":1}},{"device":"no-stats"}]}`,
+		} {
+			if _, err := reader.ReadString('\n'); err != nil {
+				return
+			}
+			_, _ = conn.Write([]byte(response + "\n"))
+		}
+	}()
+	stats, err := q.LightVMBlockStats(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stats) != 2 || stats[0].Device != "rookery-disk-7" || stats[0].ReadBytes != 1024 ||
+		stats[0].FailedReadOps != 1 || stats[0].InvalidWriteOps != 4 || stats[1].Device != "node-x" {
+		t.Fatalf("stats = %+v", stats)
+	}
+}
+
+func TestBuildDiskArgsSerial(t *testing.T) {
+	local, err := buildDiskArgs(store.VMDisk{ID: 3, Device: "/dev/vg0/data", Serial: "data"}, StartPlan{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	localArgs := strings.Join(local, " ")
+	if !strings.Contains(localArgs, "if=none") {
+		t.Fatalf("local serial args do not use if=none: %q", localArgs)
+	}
+	if !strings.Contains(localArgs, "-device virtio-blk-pci,drive=rookery-disk-3,serial=data") {
+		t.Fatalf("local serial args do not set the device serial: %q", localArgs)
+	}
+
+	remoteDisk := testRemoteDisk()
+	remoteDisk.Serial = "logs"
+	remote, err := buildDiskArgs(remoteDisk, testISCSIPlan(), map[int64]string{7: "/run/rookery/secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	remoteArgs := strings.Join(remote, " ")
+	if !strings.Contains(remoteArgs, "if=none") {
+		t.Fatalf("remote serial args do not use if=none: %q", remoteArgs)
+	}
+	if !strings.Contains(remoteArgs, "-device virtio-blk-pci,drive=rookery-disk-7,serial=logs") {
+		t.Fatalf("remote serial args do not set the device serial: %q", remoteArgs)
+	}
+
+	if _, err := buildDiskArgs(store.VMDisk{ID: 4, Device: "/dev/vg0/data", Serial: "bad serial"}, StartPlan{}, nil); err == nil {
+		t.Fatal("buildDiskArgs accepted an invalid serial")
+	}
+}

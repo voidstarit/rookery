@@ -595,3 +595,36 @@ func TestLightVMExecutableScriptPersistence(t *testing.T) {
 		t.Fatalf("loaded script = %q", loaded.ExecutableScript)
 	}
 }
+
+func TestLightVMRootRequirement(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	kernel := createKernel(t, st, "root-kernel")
+	initramfs := createInitramfs(t, st, "root-initramfs")
+
+	base := store.LightVM{
+		Name: "root-required", VCPUs: 1, MemoryMB: 128,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+	}
+	if _, err := st.CreateLightVM(ctx, base); !errors.Is(err, store.ErrLightVMRootRequired) {
+		t.Fatalf("no image/no disk error = %v", err)
+	}
+
+	disk := createDisk(t, st, "root-disk")
+	base.Name = "disk-backed"
+	base.DiskIDs = []int64{disk.ID}
+	vm, err := st.CreateLightVM(ctx, base)
+	if err != nil {
+		t.Fatalf("disk-backed create: %v", err)
+	}
+	if vm.Image != "" || len(vm.Disks) != 1 {
+		t.Fatalf("disk-backed LightVM = %+v", vm)
+	}
+
+	update := vm
+	update.DiskIDs = nil
+	update.ReplaceDiskIDs = true
+	if _, err := st.UpdateLightVM(ctx, update); !errors.Is(err, store.ErrLightVMRootRequired) {
+		t.Fatalf("clearing disks without image error = %v", err)
+	}
+}

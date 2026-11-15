@@ -82,6 +82,8 @@ func (m *VMDisk) validate(all bool) error {
 
 	// no validation rules for ThrottleClassName
 
+	// no validation rules for Serial
+
 	if m.StorageBackendId != nil {
 		// no validation rules for StorageBackendId
 	}

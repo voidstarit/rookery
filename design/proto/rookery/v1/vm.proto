@@ -116,6 +116,11 @@ message CreateVMRequest {
   repeated int64 disk_ids = 9;
   optional int64 disk_id = 10 [(validate.rules).int64 = {gt: 0}];
   string cgroup_class = 11 [(validate.rules).string = {max_len: 200}];
+  map<int64, string> disk_serials = 12 [(validate.rules).map = {
+    max_pairs: 32
+    keys: {int64: {gt: 0}}
+    values: {string: {max_len: 20, pattern: "^[A-Za-z0-9._:-]*$"}}
+  }];
 }
 
 message UpdateVMRequest {
@@ -138,6 +143,11 @@ message UpdateVMRequest {
   optional bool replace_interface_ids = 11;
   optional bool replace_disk_ids = 12;
   optional string cgroup_class = 13 [(validate.rules).string = {max_len: 200}];
+  map<int64, string> disk_serials = 14 [(validate.rules).map = {
+    max_pairs: 32
+    keys: {int64: {gt: 0}}
+    values: {string: {max_len: 20, pattern: "^[A-Za-z0-9._:-]*$"}}
+  }];
 }
 
 message DeleteVMRequest {

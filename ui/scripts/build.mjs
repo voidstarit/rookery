@@ -8,6 +8,7 @@ const options = {
     app: "src/inventory/main.ts",
     console: "src/console/main.tsx",
     lightvmConsole: "src/lightvm-console/main.tsx",
+    monitor: "src/monitor/main.tsx",
   },
   bundle: true,
   format: "esm",

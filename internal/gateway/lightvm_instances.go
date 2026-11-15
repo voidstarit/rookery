@@ -12,8 +12,10 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/kouja"
@@ -24,6 +26,9 @@ import (
 
 const maxLightVMExecutableScriptBytes = 1 << 20
 
+// maxLightVMConsoleAccessTTL bounds issued console-access tokens.
+const maxLightVMConsoleAccessTTL = 24 * time.Hour
+
 const (
 	lightVMDefaultVCPUs    = 1
 	lightVMDefaultMemoryMB = 512
@@ -33,6 +38,7 @@ type lightVMService struct {
 	rookeryv1.UnimplementedLightVMServiceServer
 	store            *store.Store
 	runtime          LightVMRuntime
+	counters         InterfaceCounterSource
 	mu               *sync.Mutex
 	resourceMu       *sync.Mutex
 	planner          LightVMDiskPlanner
@@ -54,6 +60,8 @@ type LightVMRuntime interface {
 	RunState(ctx context.Context, id string) (string, error)
 	RunningLightVM(id string) bool
 	LightVMConsoleSocket(id string, consoleID int64) string
+	LightVMMetrics(id string) (qemu.Metrics, error)
+	LightVMBlockStats(ctx context.Context, id string) ([]qemu.BlockDeviceStats, error)
 }
 
 func (s *lightVMService) runtimeUnavailable() error {
@@ -133,7 +141,7 @@ func (s *lightVMService) UpdateLightVM(ctx context.Context, request *rookeryv1.U
 	} else if s.runtime.RunningLightVM(existing.ID) {
 		return nil, status.Error(codes.Aborted, "stop the LightVM before editing it")
 	}
-	vm, err := lightVMFromUpdateRequest(request)
+	vm, err := lightVMFromUpdateRequest(existing, request)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -394,6 +402,150 @@ func (s *lightVMService) StopLightVM(ctx context.Context, request *rookeryv1.Sto
 	return s.toProto(ctx, updated), nil
 }
 
+// CreateLightVMConsoleAccess issues a time-limited bearer token for a
+// LightVM's virtio console. The token is returned once and only its hash is
+// persisted. Access is still checked against console_enabled and the runtime
+// state on every connection.
+func (s *lightVMService) CreateLightVMConsoleAccess(ctx context.Context, request *rookeryv1.CreateLightVMConsoleAccessRequest) (*rookeryv1.LightVMConsoleAccess, error) {
+	vm, err := s.store.GetLightVM(ctx, request.GetId())
+	switch {
+	case errors.Is(err, store.ErrLightVMNotFound):
+		return nil, status.Error(codes.NotFound, "lightvm not found")
+	case err != nil:
+		return nil, status.Error(codes.Internal, "could not read LightVM")
+	}
+	if !vm.ConsoleEnabled {
+		return nil, status.Error(codes.PermissionDenied, "console access is disabled for this LightVM")
+	}
+	console, err := lightVMConsoleForAccess(vm, request.GetConsoleId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	ttl := time.Duration(request.GetTtlSeconds()) * time.Second
+	if ttl <= 0 || ttl > maxLightVMConsoleAccessTTL {
+		return nil, status.Errorf(codes.InvalidArgument, "ttl_seconds must be between 1 and %d", int64(maxLightVMConsoleAccessTTL/time.Second))
+	}
+	token, err := lightvm.NewConsoleAccessToken()
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not generate console access token")
+	}
+	access, err := s.store.CreateLightVMConsoleAccess(ctx, vm.ID, console.ID, lightvm.HashConsoleAccessToken(token), time.Now().Add(ttl))
+	switch {
+	case errors.Is(err, store.ErrLightVMConsoleAccessNotFound):
+		return nil, status.Error(codes.NotFound, "console not found")
+	case err != nil:
+		return nil, status.Error(codes.Internal, "could not issue console access")
+	}
+	path := lightvm.ConsoleAccessPath(token)
+	return &rookeryv1.LightVMConsoleAccess{
+		Id:            access.ID,
+		LightvmId:     access.LightVMID,
+		ConsoleId:     access.ConsoleID,
+		ConsoleName:   console.Name,
+		Token:         token,
+		WebsocketPath: path,
+		WebsocketUrl:  lightVMConsoleWebSocketURL(ctx, path),
+		ExpiresAt:     timestamp(access.ExpiresAt),
+		CreatedAt:     timestamp(access.CreatedAt),
+	}, nil
+}
+
+func lightVMConsoleWebSocketURL(ctx context.Context, path string) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+	hosts := md.Get("x-forwarded-host")
+	schemes := md.Get(forwardedProtoMetadataKey)
+	if len(hosts) == 0 || len(schemes) == 0 {
+		return ""
+	}
+	host := strings.TrimSpace(hosts[0])
+	scheme := strings.TrimSpace(schemes[0])
+	if host == "" {
+		return ""
+	}
+	switch scheme {
+	case "https":
+		scheme = "wss"
+	case "http":
+		scheme = "ws"
+	default:
+		return ""
+	}
+	return scheme + "://" + host + path
+}
+
+func lightVMConsoleForAccess(vm store.LightVM, consoleID int64) (store.LightVMConsole, error) {
+	if len(vm.Consoles) == 0 {
+		return store.LightVMConsole{}, errors.New("LightVM has no consoles")
+	}
+	if consoleID == 0 {
+		return vm.Consoles[0], nil
+	}
+	for _, console := range vm.Consoles {
+		if console.ID == consoleID {
+			return console, nil
+		}
+	}
+	return store.LightVMConsole{}, fmt.Errorf("console %d not found", consoleID)
+}
+
+// GetLightVMMetrics returns process-level QEMU telemetry for one LightVM.
+func (s *lightVMService) GetLightVMMetrics(ctx context.Context, request *rookeryv1.GetLightVMMetricsRequest) (*rookeryv1.LightVMMetrics, error) {
+	if err := s.runtimeUnavailable(); err != nil {
+		return nil, err
+	}
+	vm, err := s.store.GetLightVM(ctx, request.GetId())
+	switch {
+	case errors.Is(err, store.ErrLightVMNotFound):
+		return nil, status.Error(codes.NotFound, "lightvm not found")
+	case err != nil:
+		return nil, status.Error(codes.Internal, "could not read LightVM")
+	}
+	metrics, err := s.runtime.LightVMMetrics(vm.ID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not read LightVM metrics: "+err.Error())
+	}
+	result := &rookeryv1.LightVMMetrics{
+		Running:             metrics.Running,
+		Pid:                 int32(metrics.PID),
+		UptimeSeconds:       metrics.UptimeSeconds,
+		CpuSecondsTotal:     metrics.CPUSecondsTotal,
+		MemoryRssBytes:      metrics.RSSBytes,
+		MemoryVirtualBytes:  metrics.VirtualBytes,
+		DiskReadBytesTotal:  metrics.ReadBytesTotal,
+		DiskWriteBytesTotal: metrics.WriteBytesTotal,
+		LightvmId:           vm.ID,
+		Name:                vm.Name,
+		Vcpus:               int32(vm.VCPUs),
+		MemoryMb:            int32(vm.MemoryMB),
+		SampledAt:           timestamppb.New(time.Now().UTC()),
+	}
+	if metrics.Running {
+		if blockStats, blockErr := s.runtime.LightVMBlockStats(ctx, vm.ID); blockErr == nil {
+			for _, stat := range blockStats {
+				result.BlockDevices = append(result.BlockDevices, blockDeviceToProtoForDisks(vm.Disks, stat))
+			}
+		}
+	}
+	if metrics.Running && s.counters != nil && len(vm.Interfaces) > 0 {
+		names := make([]string, 0, len(vm.Interfaces))
+		for _, iface := range vm.Interfaces {
+			names = append(names, iface.Name)
+		}
+		if counters, counterErr := s.counters.InterfaceCounters(ctx, names); counterErr == nil {
+			for _, counter := range counters {
+				result.NetworkRxBytesTotal += counter.RXBytes
+				result.NetworkTxBytesTotal += counter.TXBytes
+				result.NetworkRxPacketsTotal += counter.RXPackets
+				result.NetworkTxPacketsTotal += counter.TXPackets
+			}
+		}
+	}
+	return result, nil
+}
+
 func lightVMFromCreateRequest(request *rookeryv1.CreateLightVMRequest) (store.LightVM, error) {
 	vcpus := int(request.GetVcpus())
 	if vcpus == 0 {
@@ -407,18 +559,27 @@ func lightVMFromCreateRequest(request *rookeryv1.CreateLightVMRequest) (store.Li
 	if request.Append != nil {
 		appendValue = request.GetAppend()
 	}
-	return lightVMFromRequest(
+	vm, err := lightVMFromRequest(
 		"", request.GetName(), request.GetDescription(), vcpus, memoryMB,
 		request.GetConsoleEnabled(), request.GetCgroupClass(),
 		request.GetKernelId(), request.GetInitramfsId(), request.GetImage(),
 		request.GetEnv(), request.GetExecutablePath(), request.GetExecutableScript(),
 		request.GetExecutableArgs(),
 		request.GetInterfaceIds(), request.GetDiskIds(), appendValue, request.GetConsoles(),
-		request.GetVirtiofsShares(),
+		request.GetVirtiofsShares(), 0,
 	)
+	if err != nil {
+		return store.LightVM{}, err
+	}
+	vm.DiskSerials = request.GetDiskSerials()
+	return vm, nil
 }
 
-func lightVMFromUpdateRequest(request *rookeryv1.UpdateLightVMRequest) (store.LightVM, error) {
+func lightVMFromUpdateRequest(existing store.LightVM, request *rookeryv1.UpdateLightVMRequest) (store.LightVM, error) {
+	existingDisks := len(existing.Disks)
+	if request.GetReplaceDiskIds() && len(request.GetDiskIds()) == 0 {
+		existingDisks = 0
+	}
 	vm, err := lightVMFromRequest(
 		request.GetId(), request.GetName(), request.GetDescription(),
 		int(request.GetVcpus()), int(request.GetMemoryMb()), request.GetConsoleEnabled(),
@@ -427,11 +588,13 @@ func lightVMFromUpdateRequest(request *rookeryv1.UpdateLightVMRequest) (store.Li
 		request.GetExecutableScript(), request.GetExecutableArgs(),
 		request.GetInterfaceIds(), request.GetDiskIds(),
 		request.GetAppend(), request.GetConsoles(), request.GetVirtiofsShares(),
+		existingDisks,
 	)
 	if err != nil {
 		return store.LightVM{}, err
 	}
 	vm.ReplaceDiskIDs = request.GetReplaceDiskIds()
+	vm.DiskSerials = request.GetDiskSerials()
 	return vm, nil
 }
 
@@ -439,7 +602,7 @@ func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, conso
 	cgroupClass string, kernelID, initramfsID int64, image string,
 	env []*rookeryv1.LightVMEnvVar, executablePath, executableScript string, executableArgs []string,
 	interfaceIDs, diskIDs []int64, appendValue string, consoles []*rookeryv1.LightVMConsole,
-	shares []*rookeryv1.LightVMVirtioFSShare,
+	shares []*rookeryv1.LightVMVirtioFSShare, existingDisks int,
 ) (store.LightVM, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -462,39 +625,49 @@ func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, conso
 	if utf8.RuneCountInString(cgroupClass) > 200 {
 		return store.LightVM{}, errors.New("cgroup_class must be at most 200 characters")
 	}
-	image = strings.TrimSpace(image)
-	if image == "" {
-		return store.LightVM{}, errors.New("image is required")
+	normalizedDiskIDs, err := normalizeGatewayIDs(diskIDs, store.MaxWorkloadDisks, "disk_ids")
+	if err != nil {
+		return store.LightVM{}, err
 	}
+	image = strings.TrimSpace(image)
 	if utf8.RuneCountInString(image) > 512 {
 		return store.LightVM{}, errors.New("image must be at most 512 characters")
 	}
+	if image == "" && len(normalizedDiskIDs) == 0 && existingDisks == 0 {
+		return store.LightVM{}, errors.New("a container image or at least one disk is required")
+	}
 	executablePath = strings.TrimSpace(executablePath)
 	scriptEmpty := strings.TrimSpace(executableScript) == ""
-	switch {
-	case executablePath == "" && scriptEmpty:
-		return store.LightVM{}, errors.New("exactly one of executable_path or executable_script is required")
-	case executablePath != "" && !scriptEmpty:
-		return store.LightVM{}, errors.New("executable_path and executable_script are mutually exclusive")
-	}
-	if executablePath != "" {
-		executablePath = path.Clean(executablePath)
-		if !path.IsAbs(executablePath) {
-			return store.LightVM{}, errors.New("executable_path must be an absolute container path")
+	if image == "" {
+		if len(env) > 0 || executablePath != "" || !scriptEmpty || len(executableArgs) > 0 {
+			return store.LightVM{}, errors.New("env and executable fields can only be used with a container image")
 		}
-		if utf8.RuneCountInString(executablePath) > 4096 {
-			return store.LightVM{}, errors.New("executable_path must be at most 4096 characters")
+	} else {
+		switch {
+		case executablePath == "" && scriptEmpty:
+			return store.LightVM{}, errors.New("exactly one of executable_path or executable_script is required")
+		case executablePath != "" && !scriptEmpty:
+			return store.LightVM{}, errors.New("executable_path and executable_script are mutually exclusive")
 		}
-	}
-	if !scriptEmpty {
-		if len(executableScript) > maxLightVMExecutableScriptBytes {
-			return store.LightVM{}, fmt.Errorf("executable_script must be at most %d bytes", maxLightVMExecutableScriptBytes)
+		if executablePath != "" {
+			executablePath = path.Clean(executablePath)
+			if !path.IsAbs(executablePath) {
+				return store.LightVM{}, errors.New("executable_path must be an absolute container path")
+			}
+			if utf8.RuneCountInString(executablePath) > 4096 {
+				return store.LightVM{}, errors.New("executable_path must be at most 4096 characters")
+			}
 		}
-		if strings.ContainsRune(executableScript, 0) {
-			return store.LightVM{}, errors.New("executable_script cannot contain NUL characters")
-		}
-		if len(executableArgs) > 0 {
-			return store.LightVM{}, errors.New("executable_args cannot be used with executable_script")
+		if !scriptEmpty {
+			if len(executableScript) > maxLightVMExecutableScriptBytes {
+				return store.LightVM{}, fmt.Errorf("executable_script must be at most %d bytes", maxLightVMExecutableScriptBytes)
+			}
+			if strings.ContainsRune(executableScript, 0) {
+				return store.LightVM{}, errors.New("executable_script cannot contain NUL characters")
+			}
+			if len(executableArgs) > 0 {
+				return store.LightVM{}, errors.New("executable_args cannot be used with executable_script")
+			}
 		}
 	}
 
@@ -517,10 +690,6 @@ func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, conso
 		return store.LightVM{}, errors.New("append cannot contain NUL characters")
 	}
 	normalizedConsoles, err := normalizeLightVMConsoles(consoles)
-	if err != nil {
-		return store.LightVM{}, err
-	}
-	normalizedDiskIDs, err := normalizeGatewayIDs(diskIDs, store.MaxWorkloadDisks, "disk_ids")
 	if err != nil {
 		return store.LightVM{}, err
 	}
@@ -768,6 +937,10 @@ func lightVMError(err error, action string) error {
 	case errors.Is(err, store.ErrDiskNotFound):
 		return status.Error(codes.InvalidArgument, "disk not found")
 	case errors.Is(err, store.ErrInvalidDiskIDs):
+		return status.Error(codes.InvalidArgument, err.Error())
+	case errors.Is(err, store.ErrInvalidDiskSerials):
+		return status.Error(codes.InvalidArgument, err.Error())
+	case errors.Is(err, store.ErrLightVMRootRequired):
 		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, store.ErrLightVMDeviceLimit):
 		return status.Error(codes.InvalidArgument, err.Error())

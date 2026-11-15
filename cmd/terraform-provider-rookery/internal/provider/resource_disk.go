@@ -336,6 +336,11 @@ func (r *diskResource) ImportState(ctx context.Context, req resource.ImportState
 }
 
 func (r *diskResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// A destroy plan has a null plan and config. Reading either into the model
+	// fails with a "Value Conversion Error", which aborts the whole destroy.
+	if req.Plan.Raw.IsNull() {
+		return
+	}
 	var plan diskModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {

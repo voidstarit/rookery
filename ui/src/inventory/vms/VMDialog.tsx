@@ -45,6 +45,17 @@ function vmInterfaces(vm: VM | null): VMInterface[] {
   return Array.isArray(vm?.interfaces) ? vm.interfaces : [];
 }
 
+function diskSerialPayload(disks: VMDisk[]): Record<string, string> {
+  const serials: Record<string, string> = {};
+  for (const disk of disks) {
+    const serial = (disk.serial ?? "").trim();
+    if (serial) {
+      serials[String(disk.id)] = serial;
+    }
+  }
+  return serials;
+}
+
 export function VMDialog({
   vm,
   disks,
@@ -130,7 +141,7 @@ export function VMDialog({
     } else if (availableDisks.length === 0 && selectedDisks.length === 0) {
       setDiskHint("Create a disk on the Disks tab first.");
     } else {
-      setDiskHint("Choose a disk and click Add. The first disk is the boot disk. Remove disks with the buttons below.");
+      setDiskHint("Choose a disk and click Add. The first disk is the boot disk. Set an optional serial so the guest can identify each disk. Remove disks with the buttons below.");
     }
   }, [availableDisks.length, selectedDisks.length, running]);
 
@@ -170,6 +181,12 @@ export function VMDialog({
     setSelectedDisks((current) => current.filter((disk) => disk.id !== id));
   };
 
+  const setDiskSerial = (id: number, serial: string) => {
+    setSelectedDisks((current) =>
+      current.map((disk) => (disk.id === id ? { ...disk, serial } : disk))
+    );
+  };
+
   const addInterface = () => {
     const id = Number(interfaceChoice);
     if (!id || running) {
@@ -205,6 +222,13 @@ export function VMDialog({
       setError("Select at least one disk.");
       return;
     }
+    const serials = selectedDisks
+      .map((disk) => (disk.serial ?? "").trim())
+      .filter((serial) => serial.length > 0);
+    if (new Set(serials).size !== serials.length) {
+      setError("Disk serials must be unique within the VM.");
+      return;
+    }
     if (!editing) {
       const needsThinPool = selectedDisks.some((disk) => diskNeedsThinPool(disk));
       if (!vppReady) {
@@ -225,13 +249,18 @@ export function VMDialog({
       console_enabled: consoleEnabled,
     };
 
+    const diskSerials = diskSerialPayload(selectedDisks);
     if (!editing) {
       payload.disk_ids = selectedDisks.map((disk) => disk.id);
+      if (Object.keys(diskSerials).length > 0) {
+        payload.disk_serials = diskSerials;
+      }
       if (selectedInterfaces.length > 0) {
         payload.interface_ids = selectedInterfaces.map((iface) => iface.id);
       }
     } else if (!running) {
       payload.disk_ids = selectedDisks.map((disk) => disk.id);
+      payload.disk_serials = diskSerials;
       payload.interface_ids = selectedInterfaces.map((iface) => iface.id);
       // The gateway treats omitted repeated fields as unchanged; editing the
       // dialog is an explicit replacement, including an empty interface set.
@@ -383,6 +412,21 @@ export function VMDialog({
                         {index === 0 ? " · boot" : ""}
                       </span>
                     </span>
+                    <label class="disk-serial">
+                      <span class="sr-only">Serial for {disk.name}</span>
+                      <input
+                        type="text"
+                        maxlength={20}
+                        pattern="[A-Za-z0-9._:-]*"
+                        autocomplete="off"
+                        spellcheck={false}
+                        placeholder="serial (optional)"
+                        title="Guest-visible virtio-blk serial, up to 20 bytes"
+                        value={disk.serial ?? ""}
+                        disabled={running}
+                        onInput={(event) => setDiskSerial(disk.id, event.currentTarget.value)}
+                      />
+                    </label>
                     <button
                       class="row-action danger"
                       type="button"

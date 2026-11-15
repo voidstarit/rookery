@@ -62,6 +62,8 @@ message VMDisk {
   reserved "read_bps", "write_bps";
   int64 throttle_class_id = 15;
   string throttle_class_name = 16;
+  // serial is the guest-visible virtio-blk serial for this attachment.
+  string serial = 17;
 }
 
 message Disk {

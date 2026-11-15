@@ -53,6 +53,7 @@ type lightVMModel struct {
 	Append           types.String `tfsdk:"append"`
 	InterfaceIDs     types.List   `tfsdk:"interface_ids"`
 	DiskIDs          types.List   `tfsdk:"disk_ids"`
+	DiskSerials      types.Map    `tfsdk:"disk_serials"`
 	VirtioFSShares   types.List   `tfsdk:"virtiofs_shares"`
 	Consoles         types.List   `tfsdk:"consoles"`
 	Status           types.String `tfsdk:"status"`
@@ -122,7 +123,12 @@ func (r *lightVMResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Computed: true, Description: "Initramfs record name.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
-			"image": schema.StringAttribute{Required: true, Description: "Container image used to prepare the root filesystem."},
+			"image": schema.StringAttribute{
+				Optional:      true,
+				Computed:      true,
+				Description:   "Optional container image used to prepare the root filesystem. Omit for a disk-backed LightVM with disk_ids.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
 			"env": schema.ListNestedAttribute{
 				Optional:      true,
 				Computed:      true,
@@ -161,6 +167,12 @@ func (r *lightVMResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				ElementType:   types.Int64Type,
 				Description:   "Attached disk ids, in attachment order.",
 				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
+			},
+			"disk_serials": schema.MapAttribute{
+				Optional:    true,
+				Computed:    true,
+				ElementType: types.StringType,
+				Description: "Guest-visible virtio-blk serials keyed by disk id. Serials are at most 20 bytes and may contain letters, digits, '.', '_', ':', and '-'.",
 			},
 			"virtiofs_shares": schema.ListNestedAttribute{
 				Optional:      true,
@@ -330,6 +342,12 @@ func validateLightVMExecution(plan lightVMModel, args []string) diag.Diagnostics
 	var diags diag.Diagnostics
 	executablePath := strings.TrimSpace(plan.ExecutablePath.ValueString())
 	executableScript := strings.TrimSpace(plan.ExecutableScript.ValueString())
+	if strings.TrimSpace(plan.Image.ValueString()) == "" {
+		if executablePath != "" || executableScript != "" || len(args) > 0 {
+			diags.AddError("Invalid LightVM executable", "executable_path, executable_script, and executable_args require a container image")
+		}
+		return diags
+	}
 	switch {
 	case executablePath == "" && executableScript == "":
 		diags.AddError("Invalid LightVM executable", "exactly one of executable_path or executable_script is required")
@@ -345,12 +363,17 @@ func lightVMCreateRequest(ctx context.Context, plan lightVMModel) (*rookeryv1.Cr
 	var diags diag.Diagnostics
 	env, envDiags := lightVMEnvFromModel(ctx, plan.Env)
 	diags.Append(envDiags...)
+	if strings.TrimSpace(plan.Image.ValueString()) == "" && len(env) > 0 {
+		diags.AddError("Invalid LightVM environment", "env requires a container image")
+	}
 	consoles, consoleDiags := lightVMConsolesFromModel(ctx, plan.Consoles)
 	diags.Append(consoleDiags...)
 	shares, shareDiags := lightVMVirtioFSFromModel(ctx, plan.VirtioFSShares)
 	diags.Append(shareDiags...)
 	args, argDiags := stringListValues(ctx, plan.ExecutableArgs)
 	diags.Append(argDiags...)
+	diskSerials, serialDiags := diskSerialsFromModel(ctx, plan.DiskSerials)
+	diags.Append(serialDiags...)
 	diags.Append(validateLightVMExecution(plan, args)...)
 	if diags.HasError() {
 		return nil, diags
@@ -373,6 +396,7 @@ func lightVMCreateRequest(ctx context.Context, plan lightVMModel) (*rookeryv1.Cr
 		Append:           stringPointer(plan.Append),
 		Consoles:         consoles,
 		DiskIds:          lightVMInt64Values(ctx, plan.DiskIDs),
+		DiskSerials:      diskSerials,
 		VirtiofsShares:   shares,
 	}, diags
 }
@@ -381,12 +405,17 @@ func lightVMUpdateRequest(ctx context.Context, plan lightVMModel) (*rookeryv1.Up
 	var diags diag.Diagnostics
 	env, envDiags := lightVMEnvFromModel(ctx, plan.Env)
 	diags.Append(envDiags...)
+	if strings.TrimSpace(plan.Image.ValueString()) == "" && len(env) > 0 {
+		diags.AddError("Invalid LightVM environment", "env requires a container image")
+	}
 	consoles, consoleDiags := lightVMConsolesFromModel(ctx, plan.Consoles)
 	diags.Append(consoleDiags...)
 	shares, shareDiags := lightVMVirtioFSFromModel(ctx, plan.VirtioFSShares)
 	diags.Append(shareDiags...)
 	args, argDiags := stringListValues(ctx, plan.ExecutableArgs)
 	diags.Append(argDiags...)
+	diskSerials, serialDiags := diskSerialsFromModel(ctx, plan.DiskSerials)
+	diags.Append(serialDiags...)
 	diags.Append(validateLightVMExecution(plan, args)...)
 	if diags.HasError() {
 		return nil, diags
@@ -410,6 +439,7 @@ func lightVMUpdateRequest(ctx context.Context, plan lightVMModel) (*rookeryv1.Up
 		Append:           plan.Append.ValueString(),
 		Consoles:         consoles,
 		DiskIds:          lightVMInt64Values(ctx, plan.DiskIDs),
+		DiskSerials:      diskSerials,
 		ReplaceDiskIds:   proto.Bool(true),
 		VirtiofsShares:   shares,
 	}, diags
@@ -459,6 +489,9 @@ func setLightVMState(ctx context.Context, state *lightVMModel, vm *rookeryv1.Lig
 	diskList, diskDiags := int64List(ctx, append([]int64{}, vm.GetDiskIds()...))
 	diags.Append(diskDiags...)
 	state.DiskIDs = diskList
+	diskSerials, serialDiags := diskSerialsValue(ctx, vm.GetDisks())
+	diags.Append(serialDiags...)
+	state.DiskSerials = diskSerials
 	return diags
 }
 

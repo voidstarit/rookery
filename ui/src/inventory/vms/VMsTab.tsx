@@ -9,9 +9,9 @@ import type {
   VirtualInterface,
   VM,
 } from "../types";
-import { formatMemory } from "./monitor";
+import { formatMemory } from "../monitor";
 import { VMDialog } from "./VMDialog";
-import { VMMonitorDialog } from "./VMMonitorDialog";
+import { WorkloadMonitorDialog } from "../WorkloadMonitorDialog";
 import { diskNeedsThinPool } from "./disk-predicates";
 import { navigate, useRoute } from "../router";
 
@@ -548,9 +548,12 @@ export function VMsTab() {
       ) : null}
 
       {monitorVM ? (
-        <VMMonitorDialog
+        <WorkloadMonitorDialog
           key={`monitor-${monitorVM.id}`}
-          vm={monitorVM}
+          kind="VM"
+          id={monitorVM.id}
+          name={monitorVM.name}
+          memoryMB={monitorVM.memory_mb}
           onClose={() => {
             setMonitorVM(null);
             navigate("/vms", true);

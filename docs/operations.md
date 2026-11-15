@@ -183,7 +183,11 @@ reason the host is using them. VM creation requires VPP and at least one
 unattached disk, and requires a ready thin pool only when an LVM disk is
 selected. The VM form uses a dropdown-and-Add picker for disks; the first added
 disk is the boot disk, and disks can be added or removed while the VM is
-stopped.
+stopped. The disk picker includes an optional serial field for each attached
+disk; API clients set the same values with the `disk_serials` map. Serials are
+limited to 20 bytes from `[A-Za-z0-9._:-]` and must be unique within the
+workload. Guests can use `/sys/block/vdX/serial` or udev's `ID_SERIAL` to
+identify a disk's role regardless of attachment order.
 The `default` backend is bootstrapped from
 the API `-vg`/`-thin-pool` flags when supplied; otherwise `serve` starts with
 the first registered storage backend, and adding a backend in the UI updates
@@ -269,10 +273,10 @@ Deleting an uploaded image removes the managed file; records registered with an
 existing absolute host path are not allowed to delete that host file.
 
 A LightVM definition includes a name, description, vCPUs, memory, console flag,
-cgroup class, kernel and initramfs, a container image, environment variables,
-either an executable path and argument list or inline executable script
-content, a kernel command line, ordered block disks, ordered host-directory
-virtiofs shares, network interfaces, and an ordered console list.
+cgroup class, kernel and initramfs, an optional container image, environment
+variables, either an executable path and argument list or inline executable
+script content, a kernel command line, ordered block disks, ordered
+host-directory virtiofs shares, network interfaces, and an ordered console list.
 `executable_path` and `executable_script` are mutually exclusive, and script
 mode does not accept executable arguments. Disks support the same LVM-thin, host-passthrough, and
 Kouja sources as VMs and use the same single-owner rule: a disk belongs to one
@@ -282,8 +286,38 @@ directory with a unique guest tag; `read_only` defaults to true, and the tag
 (virtiofsd 1.13+). Up to 24 combined disks, interfaces, and shares are allowed
 for a new or growing definition;
 existing over-budget definitions can be reduced or renamed but cannot start.
-The kernel image remains mandatory and `append` remains caller-owned; there is
-no boot-disk flag and Rookery does not add or rewrite `root=`. Every definition has at least one
+The kernel image remains mandatory and `append` remains caller-owned; Rookery
+does not add or rewrite `root=`. `image` may be omitted when at least one disk is
+attached: that definition is disk-backed, the first attached disk is the boot
+disk, and it boots the kernel/initramfs from the disks without buildah, a
+container rootfs, `.env`/`.entrypoint`, or the `rootfs` virtiofs device. In disk-backed mode `env`, `executable_path`,
+`executable_script`, and `executable_args` must be empty, and `append` should
+describe the disk root (for example `root=/dev/vda1 rootwait`). A definition
+must have either an image or at least one disk. The repository also builds a
+generic disk-root initramfs, `initramfs-lightvm-disk-rootfs` (`make -C
+extra/linux-kernel initramfs-disk-rootfs`), for an existing Linux root
+filesystem. It tries a virtio-fs tag `root` then `rootfs`, then the `root=`
+device, then a block device whose virtio-blk serial is `root` or `rootfs`
+(whole disk first, then its partitions, Linux filesystems only). `init=` or
+`lightvm.init=` selects the init; otherwise `/init`, `/sbin/init`, and
+`/bin/init` are tried. `rootfstype=`, `rootflags=`, `ro`, `rw`, `rootdelay=`,
+and `rootwait` are honored, and `root=UUID=`/`LABEL=` are resolved without
+udev. It does not implement the `.env`/`.entrypoint` contract or run DHCP.
+Use it with the `storage` kernel variant when the root is ext4 or XFS; the
+minimal `virtio` kernel has no on-disk filesystem drivers. LVM, dm-crypt,
+MD/RAID, and iSCSI roots still need a distribution-specific initramfs with the
+matching tools. For a writable overlay root, use
+`initramfs-lightvm-overlay-rootfs` (`make -C extra/linux-kernel
+initramfs-overlay-rootfs`) and set `overlay-rootfs=true`. Disks with serials
+`overlay=<N>` are sorted by N; the highest N is the writable upper layer and
+the rest are lower layers, with higher-numbered lower layers taking precedence.
+The initramfs also accepts `overlay:<N>` and `overlay-<N>`, the forms Rookery's
+disk-serial validation allows. On the upper filesystem it uses `upper/` and
+`work/` (override with `overlay-upper-dir=`/`overlay-work-dir=`). The upper is
+mounted with `index=off,metacopy=off,redirect_dir=nofollow,uuid=null` so it can
+be reused with a different lower filesystem. Pair it with the `storage` kernel.
+The LightVM disk picker also
+has an optional per-disk serial field, matching the VM disk picker. Every definition has at least one
 console (up to 32); the first is exposed to the guest as
 `org.example.console`, and each additional console uses
 `org.example.console.<N>`. New definitions default the
@@ -294,9 +328,9 @@ console Unix socket per configured console in the QEMU run directory, the
 selected cgroup class, and vhost-user interfaces. Rookery uses
 `-display none` rather than `-nographic` because QEMU does not allow
 `-nographic` together with `-daemonize`. **Stop** terminates the process.
-Status and desired state are reconciled after API/VPP restarts, and the
-container image/environment/executable fields are stored for the guest runtime.
-On start, Rookery uses `buildah` to pull `image` only if it is missing, creates
+Status and desired state are reconciled after API/VPP restarts. For an
+image-backed definition, Rookery uses `buildah` to pull `image` only if it is
+missing, creates
 an **ephemeral writable** attempt container named
 `rookery-lightvm-<uuid>-<token>`, mounts its rootfs, writes the environment as
 `<rootfs>/.env` (one `NAME=value` per line) and an executable
@@ -308,7 +342,7 @@ when no shebang is present. Rookery starts `virtiofsd` on
 gets its own attempt-scoped virtiofsd process/socket and QEMU device; the guest
 image chooses whether and where to mount each tag. Read-only shares start
 virtiofsd with `--readonly`. Parse failures, stopped
-containers, and stale attempt resources are cleaned up on the next stop/delete. The initramfs is responsible for mounting that tag and can
+containers, and stale attempt resources are cleaned up on the next stop/delete. The container-root initramfs is responsible for mounting that tag and can
 read `/rootfs/.env` and execute `/rootfs/.entrypoint`; Rookery does not modify
 `append`. In this mode the guest writes to its own rootfs overlay and those
 writes are discarded when the LightVM stops, because the container is unmounted
@@ -321,8 +355,10 @@ using shell quoting, or from inline script content; both are mode `0755`.
 executable unless `-virtiofsd-bin` is set. The container image/environment/
 executable fields are not passed over the kernel cmdline; the initramfs
 supplies its own contract. `/api/status` includes a `lightvm` component that
-reports whether `buildah` and `virtiofsd` are available; when either is missing
-the LightVM tab shows the error and disables Start. Run `make virtiofsd` (or
+reports whether `buildah` and `virtiofsd` are available. Image-backed
+definitions need both tools; disk-backed definitions need only virtiofsd when
+they have host-directory shares. The LightVM tab disables Start only for
+definitions that need a missing tool. Run `make virtiofsd` (or
 `make -C extra/virtiofsd virtiofsd`) to download the upstream static x86_64 binary into
 `extra/virtiofsd/`; `make release` includes it next to `rookery`.
 While a LightVM is running, the API returns `console_socket` for the first
@@ -338,9 +374,29 @@ solarized dark, or black on white) and font size. It also has buttons for
 common control chords (Ctrl+C/D/Z/A/E/K/U/W/L/R, Esc, Tab); the **Ctrl** button
 latches for the next key so arbitrary Ctrl+key combinations can be sent.
 Console access follows `console_enabled` and is checked by the server; disable
-it to block new and existing console sessions. Interfaces and disks can belong
+it to block new and existing console sessions. For scripted access without the
+UI, `POST /api/lightvm/instances/{id}/console-access` issues a bearer token and
+absolute WebSocket path (plus a ready-to-use URL for HTTP requests) valid for a
+requested duration of up to 24 hours. Only
+the token hash is stored. The token-authenticated
+`/ws/lightvm-console/{token}` route works from a plain WebSocket client and is
+also exposed on the public mTLS HTTP listener. The server still requires
+`console_enabled` and a running LightVM, and closes open sessions on expiry,
+stop, or when console access is disabled. Interfaces and disks can belong
 to either a VM or a LightVM, not both. A paused LightVM reports
 `run_state=paused` or `paused (io-error)`; stop and start it to recover.
+
+The LightVM table's **Monitor** action opens the same live telemetry dialog as
+VMs. It samples `GET /api/lightvm/instances/{id}/metrics` every two seconds and
+shows CPU usage, RSS/virtual memory, disk read and write rates, per-block-device
+totals and failed-operation counters, VPP vhost interface RX/TX rates, uptime,
+and PID. It keeps 60 samples (about two minutes) for the CPU, memory, disk, and
+network history charts. As with VMs, these are process- and interface-level
+metrics, not guest-OS metrics. Block-device counters come from the LightVM's
+QEMU QMP socket; restart a LightVM started by an older server once to enable
+them. Network counters use the VPP vhost interfaces attached to the LightVM.
+The dialog's **Expand** and **Full page** actions work the same way as for VMs;
+the full-page URL is `/monitor.html?kind=lightvm&id=<uuid>`.
 
 
 ## VM lifecycle and console
@@ -374,6 +430,13 @@ on embedded canvas charts. Network counters are read from the VM's VPP vhost
 interfaces. It reports process- and vhost-level metrics, not guest OS metrics.
 The same data is available from `GET /api/vms/{id}/metrics`; CPU, disk, and
 network counters are cumulative and the UI derives rates between samples.
+
+The monitor dialog has an **Expand** toggle that widens it into a multi-column
+view with larger charts and an all-counters panel, and a **Full page** link that
+opens the same telemetry in its own tab at
+`/monitor.html?kind=vm&id=<uuid>` (use `kind=lightvm` for a LightVM). The full
+page shows the summary cards, all four history charts, cumulative counters, and
+the per-block-device table without the inventory chrome.
 
 The **Console** action opens the embedded noVNC
 client, which connects to

@@ -261,6 +261,7 @@ export type VMDisk = {
   device: string;
   source?: string;
   protocol?: string;
+  serial?: string;
   locator?: string;
   throttle_class_id?: number;
   throttle_class_name?: string;
@@ -324,7 +325,7 @@ export type BlockDeviceMetrics = {
   invalid_write_operations: number;
 };
 
-export type VMMetrics = {
+export type WorkloadMetrics = {
   running: boolean;
   pid?: number;
   uptime_seconds: number;
@@ -333,7 +334,6 @@ export type VMMetrics = {
   memory_virtual_bytes: number;
   disk_read_bytes_total: number;
   disk_write_bytes_total: number;
-  vm_id: string;
   name: string;
   vcpus: number;
   memory_mb: number;
@@ -343,6 +343,14 @@ export type VMMetrics = {
   network_tx_packets_total: number;
   sampled_at: string;
   block_devices?: BlockDeviceMetrics[];
+};
+
+export type VMMetrics = WorkloadMetrics & {
+  vm_id: string;
+};
+
+export type LightVMMetrics = WorkloadMetrics & {
+  lightvm_id: string;
 };
 
 export type KoujaConfig = {

@@ -77,6 +77,7 @@ type LightVM struct {
 	KernelPath          string                 `json:"-"`
 	InitramfsPath       string                 `json:"-"`
 	DiskIDs             []int64                `json:"disk_ids,omitempty"`
+	DiskSerials         map[int64]string       `json:"-"`
 	Disks               []VMDisk               `json:"disks,omitempty"`
 	VirtioFSShares      []LightVMVirtioFSShare `json:"virtiofs_shares,omitempty"`
 	ReplaceDiskIDs      bool                   `json:"-"`
@@ -288,6 +289,13 @@ func (s *Store) CreateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 	if err != nil {
 		return LightVM{}, err
 	}
+	serials, err := normalizeDiskSerials(diskIDs, vm.DiskSerials)
+	if err != nil {
+		return LightVM{}, err
+	}
+	if strings.TrimSpace(vm.Image) == "" && len(diskIDs) == 0 {
+		return LightVM{}, ErrLightVMRootRequired
+	}
 	for _, diskID := range diskIDs {
 		if err := s.checkDiskAvailableForAttach(ctx, diskID, "lightvm", vm.ID); err != nil {
 			return LightVM{}, err
@@ -336,8 +344,8 @@ func (s *Store) CreateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 	}
 	for position, diskID := range diskIDs {
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position)
-			VALUES (NULL, ?, ?, ?)`, vm.ID, diskID, position); err != nil {
+			INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position, serial)
+			VALUES (NULL, ?, ?, ?, ?)`, vm.ID, diskID, position, serials[diskID]); err != nil {
 			return LightVM{}, s.workloadDiskAttachError(ctx, tx, err, diskID)
 		}
 	}
@@ -376,6 +384,12 @@ func (s *Store) UpdateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 		return LightVM{}, err
 	}
 	replaceDisks := vm.ReplaceDiskIDs || len(vm.DiskIDs) > 0
+	if !replaceDisks && len(vm.DiskSerials) > 0 {
+		// A serial-only update still replaces the attachment rows so omitted
+		// serials are cleared consistently.
+		replaceDisks = true
+		diskIDs = append([]int64(nil), existing.DiskIDs...)
+	}
 	if replaceDisks {
 		for _, diskID := range diskIDs {
 			if err := s.checkDiskAvailableForAttach(ctx, diskID, "lightvm", vm.ID); err != nil {
@@ -393,6 +407,13 @@ func (s *Store) UpdateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 				return LightVM{}, err
 			}
 		}
+	}
+	serials, err := normalizeDiskSerials(diskIDs, vm.DiskSerials)
+	if err != nil {
+		return LightVM{}, err
+	}
+	if strings.TrimSpace(vm.Image) == "" && len(diskIDs) == 0 {
+		return LightVM{}, ErrLightVMRootRequired
 	}
 	shares, err := normalizeLightVMVirtioFSShares(vm.VirtioFSShares)
 	if err != nil {
@@ -454,8 +475,8 @@ func (s *Store) UpdateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 		}
 		for position, diskID := range diskIDs {
 			if _, err := tx.ExecContext(ctx, `
-				INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position)
-				VALUES (NULL, ?, ?, ?)`, vm.ID, diskID, position); err != nil {
+				INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position, serial)
+				VALUES (NULL, ?, ?, ?, ?)`, vm.ID, diskID, position, serials[diskID]); err != nil {
 				return LightVM{}, s.workloadDiskAttachError(ctx, tx, err, diskID)
 			}
 		}

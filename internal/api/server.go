@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -246,8 +247,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.handler.ServeHTTP(w, r)
 }
 
+const lightVMConsoleAccessPathPrefix = "/ws/lightvm-console/"
+
+// redactRequestPath keeps console-access bearer tokens out of request logs.
+func redactRequestPath(path string) string {
+	if strings.HasPrefix(path, lightVMConsoleAccessPathPrefix) {
+		return lightVMConsoleAccessPathPrefix + "[redacted]"
+	}
+	return path
+}
+
 func (s *Server) internalError(w http.ResponseWriter, r *http.Request, err error) {
-	s.logger.Error().Str("method", r.Method).Str("path", r.URL.Path).Err(err).Msg("request failed")
+	s.logger.Error().Str("method", r.Method).Str("path", redactRequestPath(r.URL.Path)).Err(err).Msg("request failed")
 	writeError(w, http.StatusInternalServerError, "internal server error")
 }
 
@@ -348,9 +359,10 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 		if recorder.status == 0 {
 			recorder.status = http.StatusOK
 		}
+		path := redactRequestPath(r.URL.Path)
 		s.logger.Info().
 			Str("method", r.Method).
-			Str("path", r.URL.Path).
+			Str("path", path).
 			Int("status", recorder.status).
 			Int("bytes", recorder.bytes).
 			Dur("duration", time.Since(start).Round(time.Microsecond)).
@@ -371,7 +383,7 @@ func (s *Server) recoverPanic(next http.Handler) http.Handler {
 
 			s.logger.Error().
 				Str("method", r.Method).
-				Str("path", r.URL.Path).
+				Str("path", redactRequestPath(r.URL.Path)).
 				Str("panic", fmt.Sprint(recovered)).
 				Str("stack", string(debug.Stack())).
 				Msg("panic serving request")

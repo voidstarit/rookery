@@ -150,6 +150,11 @@ func TestLightVMRoutes(t *testing.T) {
 		t.Fatalf("get status = %d, body = %+v", response.StatusCode, fetched)
 	}
 
+	response, _ = request(http.MethodGet, "/api/lightvm/instances/"+id+"/metrics", nil)
+	if response.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("metrics without runtime status = %d", response.StatusCode)
+	}
+
 	listResponse, err := http.Get(server.URL + "/api/lightvm/instances")
 	if err != nil {
 		t.Fatal(err)

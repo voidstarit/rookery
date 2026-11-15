@@ -118,6 +118,17 @@ function vmInterfaces(vm: LightVM | null): VMInterface[] {
   return Array.isArray(vm?.interfaces) ? vm.interfaces : [];
 }
 
+function diskSerialPayload(disks: VMDisk[]): Record<string, string> {
+  const serials: Record<string, string> = {};
+  for (const disk of disks) {
+    const serial = (disk.serial ?? "").trim();
+    if (serial) {
+      serials[String(disk.id)] = serial;
+    }
+  }
+  return serials;
+}
+
 export function LightVMDialog({
   vm,
   kernels,
@@ -270,6 +281,12 @@ export function LightVMDialog({
     setSelectedDisks((current) => current.filter((disk) => disk.id !== id));
   };
 
+  const setDiskSerial = (id: number, serial: string) => {
+    setSelectedDisks((current) =>
+      current.map((disk) => (disk.id === id ? { ...disk, serial } : disk))
+    );
+  };
+
   const addShare = () => {
     const path = sharePath.trim();
     const tag = shareTag.trim();
@@ -320,6 +337,8 @@ export function LightVMDialog({
     ]);
   };
 
+  const diskBacked = image.trim() === "";
+
   const submit = async (event: Event) => {
     event.preventDefault();
     if (saving || !formRef.current?.reportValidity()) {
@@ -333,6 +352,17 @@ export function LightVMDialog({
     }
     if (consoles.length === 0) {
       setError("Add at least one console.");
+      return;
+    }
+    if (diskBacked && selectedDisks.length === 0) {
+      setError("Select at least one disk or provide a container image.");
+      return;
+    }
+    const serials = selectedDisks
+      .map((disk) => (disk.serial ?? "").trim())
+      .filter((serial) => serial.length > 0);
+    if (new Set(serials).size !== serials.length) {
+      setError("Disk serials must be unique within the LightVM.");
       return;
     }
     const normalizedConsoles: ConsoleRow[] = [];
@@ -351,7 +381,7 @@ export function LightVMDialog({
       seenConsoles.add(key);
       normalizedConsoles.push({ id: console.id, name: consoleName });
     }
-    const parsedEnv = parseEnvText(environment);
+    const parsedEnv = diskBacked ? { env: [], error: "" } : parseEnvText(environment);
     if (parsedEnv.error) {
       setError(parsedEnv.error);
       return;
@@ -371,14 +401,15 @@ export function LightVMDialog({
       kernel_id: selectedKernel,
       initramfs_id: selectedInitramfs,
       image: image.trim(),
-      env: parsedEnv.env,
-      executable_path: executionMode === "path" ? executablePath.trim() : "",
-      executable_script: executionMode === "script" ? executableScript : "",
-      executable_args: executionMode === "path" ? executableArgs : [],
+      env: diskBacked ? [] : parsedEnv.env,
+      executable_path: diskBacked ? "" : executionMode === "path" ? executablePath.trim() : "",
+      executable_script: diskBacked ? "" : executionMode === "script" ? executableScript : "",
+      executable_args: diskBacked ? [] : executionMode === "path" ? executableArgs : [],
       append: append.trim(),
       consoles: normalizedConsoles,
       interface_ids: selectedInterfaces.map((iface) => iface.id),
       disk_ids: selectedDisks.map((disk) => disk.id),
+      disk_serials: diskSerialPayload(selectedDisks),
       // replace_disk_ids only exists on UpdateLightVMRequest. Sending it
       // (even as false) to CreateLightVMRequest is rejected by protojson.
       ...(editing ? { replace_disk_ids: true } : {}),
@@ -540,7 +571,6 @@ export function LightVMDialog({
             <span class="field-label">Container image</span>
             <input
               type="text"
-              required
               maxlength={512}
               autocomplete="off"
               spellcheck={false}
@@ -548,9 +578,14 @@ export function LightVMDialog({
               value={image}
               onInput={(event) => setImage(event.currentTarget.value)}
             />
-            <span class="field-hint">Docker/OCI image reference used by the LightVM runtime.</span>
+            <span class="field-hint">
+              Optional Docker/OCI image reference. Leave empty to boot from the
+              selected disks with the kernel and initramfs.
+            </span>
           </label>
 
+          {!diskBacked ? (
+            <>
           <div class="field field-wide" role="radiogroup" aria-label="Startup command">
             <span class="field-label">Startup command</span>
             <label class="radio-row">
@@ -644,6 +679,9 @@ export function LightVMDialog({
               with <code>#</code> are ignored.
             </span>
           </label>
+
+            </>
+          ) : null}
 
           <div class="field field-wide">
             <span class="field-label">Consoles</span>
@@ -768,6 +806,20 @@ export function LightVMDialog({
                         {disk.size_gb} GB · {disk.source || "lvm-thin"}
                       </span>
                     </span>
+                    <label class="disk-serial">
+                      <span class="sr-only">Serial for {disk.name}</span>
+                      <input
+                        type="text"
+                        maxlength={20}
+                        pattern="[A-Za-z0-9._:-]*"
+                        autocomplete="off"
+                        spellcheck={false}
+                        placeholder="serial (optional)"
+                        title="Guest-visible virtio-blk serial, up to 20 bytes"
+                        value={disk.serial ?? ""}
+                        onInput={(event) => setDiskSerial(disk.id, event.currentTarget.value)}
+                      />
+                    </label>
                     <button
                       class="row-action danger"
                       type="button"
@@ -780,8 +832,10 @@ export function LightVMDialog({
               )}
             </ul>
             <span class="field-hint">
-              Disks are attached in this order. Root remains the container image; the
-              guest initramfs mounts additional disks.
+              Disks are attached in this order. With a container image, root remains the
+              image and the guest initramfs mounts additional disks. With no image, the
+              guest boots from these disks; set the kernel command line as needed. Set an
+              optional serial so the guest can identify each disk.
             </span>
           </div>
 

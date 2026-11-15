@@ -118,6 +118,10 @@ Rookery also persists the desired power state, so VMs that were running come
 back after an API restart or host reboot, while explicitly stopped VMs stay
 down.
 Changing `disk_ids` or `interface_ids` requires the VM to be stopped.
+`rookery_vm` and `rookery_lightvm` also accept `disk_serials`, a map from disk
+ID (as a string key) to the guest-visible virtio-blk serial. Serials are at
+most 20 bytes, use `[A-Za-z0-9._:-]`, and must be unique within the workload.
+The guest can read them from `/sys/block/vdX/serial` or udev's `ID_SERIAL`.
 `rookery_media` and `rookery_route_table` are immutable and replaced when
 changed. `rookery_network` names remain immutable, but its `ipv4_cidr` and
 `ipv6_cidr` can be updated while the network has no VNFs, host taps, or BVI.
@@ -185,7 +189,10 @@ configuration change.
 `rookery_lightvm` manages the definition only; start and stop through the
 Rookery UI or API. The LightVM must be stopped before changing it. Disks,
 interfaces, shares, and consoles are replaced from their configured sets on
-each update; set an explicit empty list to clear one.
+each update; set an explicit empty list to clear one. `image` is optional when
+`disk_ids` is non-empty: a LightVM without an image is disk-backed, boots from
+its disks via the kernel and initramfs, and must not set `env`,
+`executable_path`, `executable_script`, or `executable_args`.
 
 ```hcl
 resource "rookery_lightvm" "app" {

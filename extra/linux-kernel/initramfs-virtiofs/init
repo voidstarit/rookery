@@ -206,6 +206,21 @@ fi
 # mount: some init binaries misbehave when the console mount is moved.
 mount -t proc proc /newroot/proc 2>/dev/null || true
 mount -t sysfs sysfs /newroot/sys 2>/dev/null || true
+
+# Mount cgroup v2 for systemd and nested container runtimes. The kernel does
+# not mount it on its own; nsdelegate enables delegated cgroup namespaces and
+# memory_recursiveprot matches systemd's default. Fall back when an option is
+# unsupported so an older kernel still boots.
+mkdir -p /newroot/sys/fs/cgroup 2>/dev/null || true
+mount -t cgroup2 -o nsdelegate,memory_recursiveprot \
+	cgroup2 /newroot/sys/fs/cgroup 2>/dev/null \
+	|| mount -t cgroup2 -o nsdelegate cgroup2 /newroot/sys/fs/cgroup 2>/dev/null \
+	|| mount -t cgroup2 cgroup2 /newroot/sys/fs/cgroup 2>/dev/null \
+	|| true
+if grep -q ' /newroot/sys/fs/cgroup cgroup2 ' /proc/mounts 2>/dev/null; then
+	echo "lightvm: cgroup2 mounted"
+fi
+
 mount -t devtmpfs devtmpfs /newroot/dev 2>/dev/null || true
 mkdir -p /newroot/dev/pts /newroot/dev/shm
 mount -t devpts devpts /newroot/dev/pts 2>/dev/null || true

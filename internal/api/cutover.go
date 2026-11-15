@@ -32,6 +32,27 @@ func (s *Server) LogRequests(next http.Handler) http.Handler {
 	return s.logRequests(next)
 }
 
+// ConsoleAccessHandler serves only the token-authenticated LightVM console
+// WebSocket. Serve it alongside the gateway on listeners that do not expose
+// the full native UI handler, such as the public mTLS listener.
+func (s *Server) ConsoleAccessHandler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ws/lightvm-console/{token}", s.handleLightVMConsoleAccessProxy)
+	return mux
+}
+
+// ConsoleWebSocketHandler routes token-authenticated console WebSockets to the
+// native handler and every other request to the gateway.
+func ConsoleWebSocketHandler(gateway, console http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, lightVMConsoleAccessPathPrefix) {
+			console.ServeHTTP(w, r)
+			return
+		}
+		gateway.ServeHTTP(w, r)
+	})
+}
+
 // NativeHandler exposes only the protocol-native routes that remain on the
 // API server: VNC, LightVM console, pcap downloads, PKI, uploads, and static
 // UI assets.
@@ -39,6 +60,7 @@ func (s *Server) NativeHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ws/vms/{id}/vnc", s.handleVNCProxy)
 	mux.HandleFunc("GET /ws/lightvms/{id}/console", s.handleLightVMConsoleProxy)
+	mux.HandleFunc("GET /ws/lightvm-console/{token}", s.handleLightVMConsoleAccessProxy)
 	mux.HandleFunc("GET /api/pki/ca", s.handlePKICA)
 	mux.HandleFunc("GET /api/pki/clients", s.handlePKIListClients)
 	mux.HandleFunc("POST /api/pki/clients", s.handlePKIIssueClient)

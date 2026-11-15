@@ -59,6 +59,12 @@ func (f *fakeLightVMQEMU) RunningLightVM(string) bool { return f.running }
 func (f *fakeLightVMQEMU) LightVMConsoleSocket(id string, _ int64) string {
 	return "/tmp/" + id + ".console"
 }
+func (f *fakeLightVMQEMU) LightVMMetrics(string) (qemu.Metrics, error) {
+	return qemu.Metrics{Running: f.running}, nil
+}
+func (f *fakeLightVMQEMU) LightVMBlockStats(context.Context, string) ([]qemu.BlockDeviceStats, error) {
+	return nil, nil
+}
 
 // TestFakeVirtiofsdHelper is used as a stand-in virtiofsd process. It creates
 // the requested Unix socket and blocks until killed.
@@ -642,6 +648,14 @@ func TestRuntimeWrappersPropagateErrors(t *testing.T) {
 	if err := runtime.StopLightVM(context.Background(), vm.ID); err == nil {
 		t.Fatal("StopLightVM ignored a stop error")
 	}
+	metrics, err := runtime.LightVMMetrics(vm.ID)
+	if err != nil || metrics.Running {
+		t.Fatalf("LightVMMetrics = %+v, %v", metrics, err)
+	}
+	stats, err := runtime.LightVMBlockStats(context.Background(), vm.ID)
+	if err != nil || stats != nil {
+		t.Fatalf("LightVMBlockStats = %+v, %v", stats, err)
+	}
 }
 
 func TestRuntimeVirtioFSShareHostPathValidation(t *testing.T) {
@@ -707,5 +721,47 @@ func TestRuntimeRejectsNULExecutableScript(t *testing.T) {
 	vm.ExecutableScript = "echo \x00bad"
 	if _, err := runtime.PrepareLightVM(context.Background(), vm); err == nil {
 		t.Fatal("NUL script was accepted")
+	}
+}
+
+func TestDiskBackedLightVMNeedsNoBuildahOrVirtiofsd(t *testing.T) {
+	runner := &fakeLightVMQEMU{}
+	dir := t.TempDir()
+	runtime, err := lightvm.NewRuntime(
+		runner,
+		filepath.Join(dir, "missing-buildah"),
+		filepath.Join(dir, "missing-virtiofsd"),
+		shortRuntimeDir(t),
+		zerolog.Nop(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm := store.LightVM{
+		ID: uuid.NewString(), Name: "disk-only",
+		Disks: []store.VMDisk{{ID: 1, Device: "/dev/vg0/root"}},
+	}
+	prepared, err := runtime.PrepareLightVM(context.Background(), vm)
+	if err != nil {
+		t.Fatalf("PrepareLightVM: %v", err)
+	}
+	if prepared.Container != "" || prepared.Rootfs != "" || prepared.VirtiofsdSocket != "" {
+		t.Fatalf("disk-backed prepared handle = %+v", prepared)
+	}
+	if err := runtime.StartPreparedLightVM(context.Background(), &prepared, vm, qemu.StartPlan{}); err != nil {
+		t.Fatalf("StartPreparedLightVM: %v", err)
+	}
+	if !runner.running || runner.fs.SocketPath != "" {
+		t.Fatalf("running = %v, rootfs = %+v", runner.running, runner.fs)
+	}
+	if err := runtime.CleanupPreparedLightVM(context.Background(), prepared); err != nil {
+		t.Fatalf("CleanupPreparedLightVM: %v", err)
+	}
+	if _, err := runtime.PrepareLightVM(context.Background(), store.LightVM{ID: uuid.NewString(), Name: "rootless"}); err == nil {
+		t.Fatal("a LightVM with neither an image nor a disk was accepted")
+	}
+	runner.running = false
+	if err := runtime.CleanupStoppedLightVM(context.Background(), vm.ID); err != nil {
+		t.Fatalf("CleanupStoppedLightVM without buildah: %v", err)
 	}
 }

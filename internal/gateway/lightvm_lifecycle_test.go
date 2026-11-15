@@ -32,6 +32,10 @@ type fakeLightVMRuntime struct {
 	stopLeavesRunning bool
 	cleanupStoppedErr error
 	onPrepare         func(store.LightVM)
+	metrics           qemu.Metrics
+	metricsErr        error
+	blockStats        []qemu.BlockDeviceStats
+	blockStatsErr     error
 }
 
 func (f *fakeLightVMRuntime) PrepareLightVM(_ context.Context, vm store.LightVM) (lightvm.PreparedLightVM, error) {
@@ -108,6 +112,22 @@ func (f *fakeLightVMRuntime) RunningLightVM(id string) bool {
 
 func (f *fakeLightVMRuntime) LightVMConsoleSocket(id string, consoleID int64) string {
 	return filepath.Join("/tmp", fmt.Sprintf("%s-%d.console", id, consoleID))
+}
+
+func (f *fakeLightVMRuntime) LightVMMetrics(id string) (qemu.Metrics, error) {
+	if f.metricsErr != nil {
+		return qemu.Metrics{}, f.metricsErr
+	}
+	result := f.metrics
+	result.Running = result.Running || f.running[id]
+	return result, nil
+}
+
+func (f *fakeLightVMRuntime) LightVMBlockStats(context.Context, string) ([]qemu.BlockDeviceStats, error) {
+	if f.blockStatsErr != nil {
+		return nil, f.blockStatsErr
+	}
+	return f.blockStats, nil
 }
 
 func (f *fakeLightVMRuntime) LightVMStatus() (bool, string, string) {
@@ -231,6 +251,25 @@ func TestLightVMLifecycleRoutes(t *testing.T) {
 	}
 	if runtime.started.KernelPath != kernel.Path || runtime.started.InitramfsPath != initramfs.Path {
 		t.Fatalf("runtime paths = %+v", runtime.started)
+	}
+
+	runtime.metrics = qemu.Metrics{Running: true, PID: 4321, CPUSecondsTotal: 1.5, RSSBytes: 2048}
+	runtime.blockStats = []qemu.BlockDeviceStats{{Device: "rookery-disk-7", ReadBytes: 1024, WriteBytes: 2048}}
+	response, metrics := request(http.MethodGet, "/api/lightvm/instances/"+id+"/metrics", nil)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("metrics status = %d, body = %+v", response.StatusCode, metrics)
+	}
+	if metrics["running"] != true || metrics["lightvm_id"] != id || metrics["pid"] != float64(4321) ||
+		metrics["cpu_seconds_total"] != 1.5 || metrics["name"] != "app-01" {
+		t.Fatalf("metrics = %+v", metrics)
+	}
+	blockDevices, _ := metrics["block_devices"].([]any)
+	if len(blockDevices) != 1 {
+		t.Fatalf("block devices = %+v", metrics["block_devices"])
+	}
+	blockDevice, _ := blockDevices[0].(map[string]any)
+	if blockDevice["device"] != "rookery-disk-7" || blockDevice["disk_id"] != float64(7) {
+		t.Fatalf("block device = %+v", blockDevice)
 	}
 
 	response, _ = request(http.MethodPost, "/api/lightvm/instances/"+id+"/start", nil)

@@ -1,0 +1,411 @@
+#!/bin/sh
+# LightVM initramfs for a writable overlay root.
+#
+# This image builds an overlay root from virtio-blk disks whose serials are
+# overlay=<N>. The serial separators ':' and '-' are accepted too, because
+# Rookery's disk-serial validation allows ':' and '-' but not '=':
+#
+#   overlay=1  overlay=2  overlay=3
+#   overlay:1  overlay:2  overlay:3
+#   overlay-1  overlay-2  overlay-3
+#
+# Layers are sorted by N. The highest N is the writable upper layer; every
+# lower N is a read-only lower layer. Higher-numbered lower layers come first
+# in lowerdir, so overlay=2 overrides overlay=1.
+#
+# On the upper filesystem the image uses two sibling directories, upper/ and
+# work/ by default (override with overlay-upper-dir= and overlay-work-dir=).
+# The overlay is mounted with
+#
+#   index=off,metacopy=off,redirect_dir=nofollow,uuid=null
+#
+# so the upper layer does not store lower inode/file-handle/UUID references and
+# can be reused with a different lower filesystem. The layer mounts live under
+# /newroot/.overlay-layers/<N>, hidden by the overlay mount, so they move with
+# the new root and are not deleted by switch_root.
+#
+# overlay-rootfs=true (or 1/yes/on) is accepted; this image defaults to the
+# overlay model. Set overlay-rootfs=false/0/no/off to make it stop with an
+# error instead of building an unexpected root.
+#
+# init= (or lightvm.init=) selects the init inside the merged root; otherwise
+# /init, /sbin/init, and /bin/init are tried. rootwait and rootdelay= are
+# honored while waiting for the layer disks.
+#
+# Pair this initramfs with the storage kernel variant for ext4/XFS layers: the
+# virtio kernel variant has no on-disk filesystem drivers.
+PATH=/bin:/sbin
+export PATH
+
+NEWROOT=/newroot
+OVERLAY_LAYER_FILE=/tmp/overlay-layers
+OVERLAY_LAYER_ROOT=$NEWROOT/.overlay-layers
+OVERLAY_DUP=0
+LAYER_DEV=
+
+log() {
+	if echo "lightvm: $*" > /dev/kmsg 2>/dev/null; then
+		return 0
+	fi
+	echo "lightvm: $*"
+}
+warn() {
+	if echo "lightvm: $*" > /dev/kmsg 2>/dev/null; then
+		return 0
+	fi
+	echo "lightvm: $*" >&2
+}
+
+mount -t proc proc /proc 2>/dev/null || true
+mount -t sysfs sysfs /sys 2>/dev/null || true
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
+mkdir -p /dev/pts /dev/shm /run /tmp 2>/dev/null || true
+mount -t devpts devpts /dev/pts 2>/dev/null || true
+mount -t tmpfs -o mode=1777 tmpfs /tmp 2>/dev/null || true
+mount -t tmpfs tmpfs /run 2>/dev/null || true
+
+# Parse the kernel command line. Disable pathname expansion while splitting so
+# no cmdline value is expanded against the initramfs.
+overlay_rootfs=1
+overlay_upper_dir=upper
+overlay_work_dir=work
+root_wait=0
+root_delay=
+init_spec=
+set -f
+for arg in $(cat /proc/cmdline 2>/dev/null); do
+	case "$arg" in
+		overlay-rootfs=*)
+			case "${arg#overlay-rootfs=}" in
+				true|1|yes|on) overlay_rootfs=1 ;;
+				false|0|no|off) overlay_rootfs=0 ;;
+			esac
+			;;
+		overlay-upper-dir=*) overlay_upper_dir=${arg#overlay-upper-dir=} ;;
+		overlay-work-dir=*) overlay_work_dir=${arg#overlay-work-dir=} ;;
+		rootwait|rootwait=1) root_wait=1 ;;
+		rootdelay=*) root_delay=${arg#rootdelay=} ;;
+		init=*) init_spec=${arg#init=} ;;
+		lightvm.init=*) init_spec=${arg#lightvm.init=} ;;
+	esac
+done
+set +f
+
+# An explicit init= may carry arguments. Split it once; the first word is the
+# path inside the new root.
+init_path=
+init_args=
+if [ -n "$init_spec" ]; then
+	set -f
+	set -- $init_spec
+	set +f
+	case "$1" in
+		/*)
+			init_path=$1
+			shift
+			init_args="$*"
+			;;
+		*)
+			warn "ignoring non-absolute init '$1'"
+			init_spec=
+			;;
+	esac
+fi
+
+log "overlay-rootfs=$overlay_rootfs upper-dir=$overlay_upper_dir work-dir=$overlay_work_dir init=${init_path:-auto}"
+
+if [ "$overlay_rootfs" != 1 ]; then
+	warn "this initramfs only builds an overlay root; set overlay-rootfs=true or use the disk-root initramfs"
+	exec /bin/sh
+fi
+
+wait_polls() {
+	if [ "$root_wait" = 1 ]; then
+		echo 300
+	else
+		echo 50
+	fi
+}
+
+read_serial() {
+	for attr in "$1/serial" "$1/device/serial"; do
+		[ -r "$attr" ] || continue
+		value=$(cat "$attr" 2>/dev/null | tr -d '[:space:]')
+		if [ -n "$value" ]; then
+			printf '%s\n' "$value"
+			return 0
+		fi
+	done
+	return 1
+}
+
+partitions_of() {
+	for entry in "$1"/*; do
+		[ -d "$entry" ] || continue
+		[ -r "$entry/partition" ] || continue
+		printf '/dev/%s\n' "${entry##*/}"
+	done
+}
+
+choose_init() {
+	if [ -n "$init_path" ]; then
+		if [ -f "$NEWROOT$init_path" ] && [ -x "$NEWROOT$init_path" ]; then
+			chosen=$init_path
+			return 0
+		fi
+		return 1
+	fi
+	for candidate in /init /sbin/init /bin/init; do
+		if [ -f "$NEWROOT$candidate" ] && [ -x "$NEWROOT$candidate" ]; then
+			chosen=$candidate
+			return 0
+		fi
+	done
+	return 1
+}
+
+mount_layer() {
+	dev=$1
+	target=$2
+	ro=$3
+	mkdir -p "$target" 2>/dev/null || true
+	for fs in ext4 ext3 ext2 xfs btrfs f2fs; do
+		if [ "$ro" = 1 ]; then
+			mount -t "$fs" -o ro "$dev" "$target" 2>/dev/null && return 0
+		else
+			mount -t "$fs" "$dev" "$target" 2>/dev/null && return 0
+		fi
+	done
+	return 1
+}
+
+mount_layer_disk() {
+	sysdev=$1
+	target=$2
+	ro=$3
+	name=${sysdev##*/}
+	for dev in "/dev/$name" $(partitions_of "$sysdev"); do
+		[ -b "$dev" ] || continue
+		if mount_layer "$dev" "$target" "$ro"; then
+			LAYER_DEV=$dev
+			return 0
+		fi
+	done
+	return 1
+}
+
+scan_overlay_layers() {
+	: > "$OVERLAY_LAYER_FILE"
+	seen=
+	OVERLAY_DUP=0
+	for sysdev in /sys/block/*; do
+		[ -e "$sysdev" ] || continue
+		serial=$(read_serial "$sysdev")
+		case "$serial" in
+			overlay=*) n=${serial#overlay=} ;;
+			overlay:*) n=${serial#overlay:} ;;
+			overlay-*) n=${serial#overlay-} ;;
+			*) continue ;;
+		esac
+		case "$n" in
+			''|*[!0-9]*)
+				warn "ignoring overlay serial '$serial': expected overlay=<number>"
+				continue
+				;;
+		esac
+		while [ "${n#0}" != "$n" ]; do
+			n=${n#0}
+		done
+		if [ -z "$n" ]; then
+			n=0
+		fi
+		if [ "${#n}" -gt 3 ] || [ "$n" -lt 1 ]; then
+			warn "ignoring overlay serial '$serial': layer number must be 1-999"
+			continue
+		fi
+		case " $seen " in
+			*" $n "*)
+				warn "duplicate overlay layer $n"
+				OVERLAY_DUP=1
+				continue
+				;;
+		esac
+		seen="$seen $n"
+		printf '%s %s\n' "$n" "$sysdev" >> "$OVERLAY_LAYER_FILE"
+	done
+}
+
+setup_overlay_root() {
+	log "searching for virtio-blk serials overlay=<N>"
+	i=0
+	limit=$(wait_polls)
+	count=0
+	while [ "$i" -lt "$limit" ]; do
+		scan_overlay_layers
+		if [ "$OVERLAY_DUP" = 1 ]; then
+			break
+		fi
+		count=$(wc -l < "$OVERLAY_LAYER_FILE" | tr -d '[:space:]')
+		[ "$count" -ge 2 ] && break
+		sleep 0.2 2>/dev/null || sleep 1
+		i=$((i + 1))
+	done
+	if [ "$OVERLAY_DUP" = 1 ]; then
+		warn "duplicate overlay layer numbers; refusing to build a root"
+		return 1
+	fi
+	if [ "${count:-0}" -lt 2 ]; then
+		warn "an overlay root needs at least two disks with serials overlay=<N> (one lower and one upper); found ${count:-0}"
+		return 1
+	fi
+	if ! sort -n -o "$OVERLAY_LAYER_FILE" "$OVERLAY_LAYER_FILE"; then
+		warn "could not sort the overlay layers"
+		return 1
+	fi
+	upper_n=$(tail -n 1 "$OVERLAY_LAYER_FILE" | cut -d' ' -f1)
+	if [ -z "$upper_n" ]; then
+		warn "could not determine the upper overlay layer"
+		return 1
+	fi
+
+	# workdir and upperdir must be separate subtrees on the same filesystem.
+	for dir in "$overlay_upper_dir" "$overlay_work_dir"; do
+		case "$dir" in
+			''|/*|*..*)
+				warn "invalid overlay directory '$dir' (must be relative and must not contain '..')"
+				return 1
+				;;
+		esac
+	done
+	case "$overlay_work_dir/" in
+		"$overlay_upper_dir/"*)
+			warn "overlay-work-dir must not be inside overlay-upper-dir"
+			return 1
+			;;
+	esac
+	case "$overlay_upper_dir/" in
+		"$overlay_work_dir/"*)
+			warn "overlay-upper-dir must not be inside overlay-work-dir"
+			return 1
+			;;
+	esac
+
+	lowerdir=
+	upper_mnt=
+	while read -r n sysdev; do
+		[ -n "$n" ] || continue
+		[ -n "$sysdev" ] || continue
+		mnt=$OVERLAY_LAYER_ROOT/$n
+		if [ "$n" = "$upper_n" ]; then
+			if ! mount_layer_disk "$sysdev" "$mnt" 0; then
+				warn "overlay=$n: could not mount a writable upper filesystem"
+				return 1
+			fi
+			upper_mnt=$mnt
+			log "overlay=$n: upper at $mnt ($LAYER_DEV)"
+		else
+			if ! mount_layer_disk "$sysdev" "$mnt" 1; then
+				warn "overlay=$n: could not mount a lower filesystem"
+				return 1
+			fi
+			if [ -n "$lowerdir" ]; then
+				lowerdir="$mnt:$lowerdir"
+			else
+				lowerdir=$mnt
+			fi
+			log "overlay=$n: lower at $mnt ($LAYER_DEV)"
+		fi
+	done < "$OVERLAY_LAYER_FILE"
+	if [ -z "$upper_mnt" ] || [ -z "$lowerdir" ]; then
+		warn "overlay layers are incomplete (upper='$upper_mnt' lower='$lowerdir')"
+		return 1
+	fi
+
+	upperdir=$upper_mnt/$overlay_upper_dir
+	workdir=$upper_mnt/$overlay_work_dir
+	if ! mkdir -p "$upperdir" "$workdir" 2>/dev/null; then
+		warn "overlay=$upper_n: could not create $upperdir and $workdir"
+		return 1
+	fi
+	overlay_opts="lowerdir=$lowerdir,upperdir=$upperdir,workdir=$workdir,index=off,metacopy=off,redirect_dir=nofollow,uuid=null"
+	log "mounting overlay at $NEWROOT"
+	log "overlay options: $overlay_opts"
+	if ! mount -t overlay overlay -o "$overlay_opts" "$NEWROOT"; then
+		warn "overlay mount failed"
+		return 1
+	fi
+	if ! choose_init; then
+		warn "overlay root has no init (init '$init_path' or /init, /sbin/init, /bin/init)"
+		return 1
+	fi
+	root_source="overlay lowerdir=$lowerdir upper=$upperdir"
+	return 0
+}
+
+chosen=
+root_source=
+setup_overlay_root || true
+
+if [ -z "$root_source" ]; then
+	warn "no usable overlay root found"
+	warn "kernel command line: $(cat /proc/cmdline 2>/dev/null)"
+	warn "block devices:"
+	found=0
+	for dev in /dev/vd* /dev/sd* /dev/nvme* /dev/xvd* /dev/mmcblk*; do
+		[ -b "$dev" ] || continue
+		warn "  $dev"
+		found=1
+	done
+	[ "$found" = 1 ] || warn "  (none)"
+	warn "virtio-blk serials (expected overlay=<N>, overlay:<N>, or overlay-<N>):"
+	found=0
+	for sysdev in /sys/block/*; do
+		[ -e "$sysdev" ] || continue
+		serial=$(read_serial "$sysdev")
+		[ -n "$serial" ] || continue
+		warn "  /dev/${sysdev##*/} $serial"
+		found=1
+	done
+	[ "$found" = 1 ] || warn "  (none)"
+	warn "dropping to the initramfs shell"
+	exec /bin/sh
+fi
+
+log "using $root_source, init $chosen"
+
+# Prepare the merged root. Create dev/pts and dev/shm after mounting devtmpfs,
+# or the devtmpfs root hides them.
+mkdir -p "$NEWROOT/proc" "$NEWROOT/sys" "$NEWROOT/dev" "$NEWROOT/run" 2>/dev/null || true
+mount -t proc proc "$NEWROOT/proc" 2>/dev/null || true
+mount -t sysfs sysfs "$NEWROOT/sys" 2>/dev/null || true
+mount -t devtmpfs devtmpfs "$NEWROOT/dev" 2>/dev/null || true
+mkdir -p "$NEWROOT/dev/pts" "$NEWROOT/dev/shm" "$NEWROOT/run" 2>/dev/null || true
+mount -t devpts devpts "$NEWROOT/dev/pts" 2>/dev/null || true
+mount -t tmpfs tmpfs "$NEWROOT/dev/shm" 2>/dev/null || true
+mount -t tmpfs tmpfs "$NEWROOT/run" 2>/dev/null || true
+
+mkdir -p "$NEWROOT/sys/fs/cgroup" 2>/dev/null || true
+mount -t cgroup2 -o nsdelegate,memory_recursiveprot \
+	cgroup2 "$NEWROOT/sys/fs/cgroup" 2>/dev/null \
+	|| mount -t cgroup2 -o nsdelegate cgroup2 "$NEWROOT/sys/fs/cgroup" 2>/dev/null \
+	|| mount -t cgroup2 cgroup2 "$NEWROOT/sys/fs/cgroup" 2>/dev/null \
+	|| true
+if grep -q " $NEWROOT/sys/fs/cgroup cgroup2 " /proc/mounts 2>/dev/null; then
+	log "cgroup2 mounted"
+fi
+
+if [ ! -c "$NEWROOT/dev/console" ]; then
+	mknod "$NEWROOT/dev/console" c 5 1 2>/dev/null || true
+fi
+if [ ! -c "$NEWROOT/dev/null" ]; then
+	mknod "$NEWROOT/dev/null" c 1 3 2>/dev/null || true
+fi
+
+log "switch_root $NEWROOT $chosen"
+set -f
+if [ -n "$init_args" ]; then
+	exec /bin/switch_root "$NEWROOT" "$chosen" $init_args
+fi
+exec /bin/switch_root "$NEWROOT" "$chosen"
+warn "switch_root failed"
+exec /bin/sh

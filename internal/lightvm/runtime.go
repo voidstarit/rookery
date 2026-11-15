@@ -39,6 +39,8 @@ type QEMURunner interface {
 	StopLightVM(ctx context.Context, id string) error
 	RunningLightVM(id string) bool
 	LightVMConsoleSocket(id string, consoleID int64) string
+	LightVMMetrics(id string) (qemu.Metrics, error)
+	LightVMBlockStats(ctx context.Context, id string) ([]qemu.BlockDeviceStats, error)
 }
 
 // Runtime orchestrates the ephemeral buildah container, virtiofsd, and QEMU
@@ -145,6 +147,16 @@ func (r *Runtime) RunningLightVM(id string) bool {
 // LightVMConsoleSocket returns the virtio-console Unix socket path.
 func (r *Runtime) LightVMConsoleSocket(id string, consoleID int64) string {
 	return r.qemuRunner.LightVMConsoleSocket(id, consoleID)
+}
+
+// LightVMMetrics returns process-level telemetry for the LightVM's QEMU process.
+func (r *Runtime) LightVMMetrics(id string) (qemu.Metrics, error) {
+	return r.qemuRunner.LightVMMetrics(id)
+}
+
+// LightVMBlockStats returns per-drive QEMU block statistics for a LightVM.
+func (r *Runtime) LightVMBlockStats(ctx context.Context, id string) ([]qemu.BlockDeviceStats, error) {
+	return r.qemuRunner.LightVMBlockStats(ctx, id)
 }
 
 // LightVMStatus reports whether the external LightVM tools are available.

@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -48,6 +49,11 @@ var (
 	ErrDiskDeleting = errors.New("disk is provisioning or being deleted")
 	// ErrInvalidDiskIDs is returned when disk IDs are malformed.
 	ErrInvalidDiskIDs = errors.New("invalid disk ids")
+	// ErrInvalidDiskSerials is returned when a per-disk serial is malformed.
+	ErrInvalidDiskSerials = errors.New("invalid disk serials")
+	// ErrLightVMRootRequired is returned when a LightVM has neither a container
+	// image nor an attached disk to boot from.
+	ErrLightVMRootRequired = errors.New("lightvm container image or disk is required")
 	// ErrLightVMDeviceLimit is returned when a LightVM exceeds the combined
 	// disk, interface, and virtiofs-share device limit.
 	ErrLightVMDeviceLimit = errors.New("lightvm device limit exceeded")
@@ -194,24 +200,25 @@ func ValidDesiredState(s string) bool {
 
 // VM is a virtual machine record.
 type VM struct {
-	ID             string        `json:"id"`
-	Name           string        `json:"name"`
-	Description    string        `json:"description"`
-	Status         string        `json:"status"`
-	DesiredState   string        `json:"desired_state"`
-	VCPUs          int           `json:"vcpus"`
-	MemoryMB       int           `json:"memory_mb"`
-	DiskID         *int64        `json:"disk_id,omitempty"`
-	Disk           *VMDisk       `json:"disk,omitempty"`
-	DiskIDs        []int64       `json:"disk_ids,omitempty"`
-	Disks          []VMDisk      `json:"disks,omitempty"`
-	BootMediaID    *int64        `json:"boot_media_id,omitempty"`
-	BootMedia      *VMMedia      `json:"boot_media,omitempty"`
-	Interfaces     []VMInterface `json:"interfaces,omitempty"`
-	ConsoleEnabled bool          `json:"console_enabled"`
-	CgroupClass    string        `json:"cgroup_class,omitempty"`
-	CreatedAt      time.Time     `json:"created_at"`
-	UpdatedAt      time.Time     `json:"updated_at"`
+	ID             string           `json:"id"`
+	Name           string           `json:"name"`
+	Description    string           `json:"description"`
+	Status         string           `json:"status"`
+	DesiredState   string           `json:"desired_state"`
+	VCPUs          int              `json:"vcpus"`
+	MemoryMB       int              `json:"memory_mb"`
+	DiskID         *int64           `json:"disk_id,omitempty"`
+	Disk           *VMDisk          `json:"disk,omitempty"`
+	DiskIDs        []int64          `json:"disk_ids,omitempty"`
+	DiskSerials    map[int64]string `json:"-"`
+	Disks          []VMDisk         `json:"disks,omitempty"`
+	BootMediaID    *int64           `json:"boot_media_id,omitempty"`
+	BootMedia      *VMMedia         `json:"boot_media,omitempty"`
+	Interfaces     []VMInterface    `json:"interfaces,omitempty"`
+	ConsoleEnabled bool             `json:"console_enabled"`
+	CgroupClass    string           `json:"cgroup_class,omitempty"`
+	CreatedAt      time.Time        `json:"created_at"`
+	UpdatedAt      time.Time        `json:"updated_at"`
 }
 
 // VMDisk is the disk summary returned with a VM.
@@ -227,6 +234,7 @@ type VMDisk struct {
 	Device             string               `json:"device"`
 	Source             string               `json:"source"`
 	Protocol           string               `json:"protocol"`
+	Serial             string               `json:"serial,omitempty"`
 	ThrottleClassID    *int64               `json:"throttle_class_id,omitempty"`
 	ThrottleClassName  string               `json:"throttle_class_name,omitempty"`
 	Throttle           *diskthrottle.Limits `json:"-"`
@@ -712,6 +720,10 @@ func (s *Store) CreateVM(ctx context.Context, vm VM) (VM, error) {
 	if err != nil {
 		return VM{}, err
 	}
+	serials, err := normalizeDiskSerials(diskIDs, vm.DiskSerials)
+	if err != nil {
+		return VM{}, err
+	}
 	for _, diskID := range diskIDs {
 		if err := s.checkDiskAvailableForAttach(ctx, diskID, "vm", vm.ID); err != nil {
 			return VM{}, err
@@ -721,6 +733,7 @@ func (s *Store) CreateVM(ctx context.Context, vm VM) (VM, error) {
 		return VM{}, err
 	}
 	vm.DiskIDs = diskIDs
+	vm.DiskSerials = serials
 	if vm.DesiredState == "" {
 		vm.DesiredState = DesiredStopped
 	}
@@ -743,8 +756,8 @@ func (s *Store) CreateVM(ctx context.Context, vm VM) (VM, error) {
 	}
 	for position, diskID := range diskIDs {
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position) VALUES (?, NULL, ?, ?)`,
-			vm.ID, diskID, position,
+			`INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position, serial) VALUES (?, NULL, ?, ?, ?)`,
+			vm.ID, diskID, position, serials[diskID],
 		); err != nil {
 			return VM{}, s.workloadDiskAttachError(ctx, tx, err, diskID)
 		}
@@ -757,10 +770,20 @@ func (s *Store) CreateVM(ctx context.Context, vm VM) (VM, error) {
 
 // SetVMDisks replaces the disks attached to a stopped VM.
 func (s *Store) SetVMDisks(ctx context.Context, vmID string, diskIDs []int64) (VM, error) {
+	return s.SetVMDisksWithSerials(ctx, vmID, diskIDs, nil)
+}
+
+// SetVMDisksWithSerials replaces the disks attached to a stopped VM and sets
+// the guest-visible serial for each attachment.
+func (s *Store) SetVMDisksWithSerials(ctx context.Context, vmID string, diskIDs []int64, serials map[int64]string) (VM, error) {
 	if _, err := s.GetVM(ctx, vmID); err != nil {
 		return VM{}, err
 	}
 	diskIDs, err := normalizeDiskIDs(diskIDs)
+	if err != nil {
+		return VM{}, err
+	}
+	serials, err = normalizeDiskSerials(diskIDs, serials)
 	if err != nil {
 		return VM{}, err
 	}
@@ -780,8 +803,8 @@ func (s *Store) SetVMDisks(ctx context.Context, vmID string, diskIDs []int64) (V
 	}
 	for position, diskID := range diskIDs {
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position) VALUES (?, NULL, ?, ?)`,
-			vmID, diskID, position,
+			`INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position, serial) VALUES (?, NULL, ?, ?, ?)`,
+			vmID, diskID, position, serials[diskID],
 		); err != nil {
 			return VM{}, s.workloadDiskAttachError(ctx, tx, err, diskID)
 		}
@@ -795,6 +818,65 @@ func (s *Store) SetVMDisks(ctx context.Context, vmID string, diskIDs []int64) (V
 		return VM{}, fmt.Errorf("commit update vm disks: %w", err)
 	}
 	return s.GetVM(ctx, vmID)
+}
+
+// MaxDiskSerialLength is the virtio-blk serial field size. QEMU truncates
+// longer values, so reject them instead of silently changing the guest-visible
+// serial.
+const MaxDiskSerialLength = 20
+
+var diskSerialPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]*$`)
+
+// NormalizeDiskSerial trims and validates a guest-visible disk serial. An
+// empty serial means the disk has no explicit serial.
+func NormalizeDiskSerial(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	if len(value) > MaxDiskSerialLength {
+		return "", fmt.Errorf("%w: serial %q is longer than %d bytes", ErrInvalidDiskSerials, value, MaxDiskSerialLength)
+	}
+	if !diskSerialPattern.MatchString(value) {
+		return "", fmt.Errorf("%w: serial %q may contain only letters, digits, '.', '_', ':', and '-'", ErrInvalidDiskSerials, value)
+	}
+	return value, nil
+}
+
+// normalizeDiskSerials validates a disk ID to serial mapping and returns only
+// the non-empty serials. Every key must reference a disk in diskIDs, and
+// serials must be unique within the workload.
+func normalizeDiskSerials(diskIDs []int64, serials map[int64]string) (map[int64]string, error) {
+	if len(serials) == 0 {
+		return nil, nil
+	}
+	allowed := make(map[int64]struct{}, len(diskIDs))
+	for _, diskID := range diskIDs {
+		allowed[diskID] = struct{}{}
+	}
+	normalized := make(map[int64]string, len(serials))
+	owners := make(map[string]int64, len(serials))
+	for diskID, raw := range serials {
+		if _, ok := allowed[diskID]; !ok {
+			return nil, fmt.Errorf("%w: disk %d is not attached to this workload", ErrInvalidDiskSerials, diskID)
+		}
+		serial, err := NormalizeDiskSerial(raw)
+		if err != nil {
+			return nil, err
+		}
+		if serial == "" {
+			continue
+		}
+		if owner, ok := owners[serial]; ok {
+			return nil, fmt.Errorf("%w: serial %q is used by disks %d and %d", ErrInvalidDiskSerials, serial, owner, diskID)
+		}
+		owners[serial] = diskID
+		normalized[diskID] = serial
+	}
+	if len(normalized) == 0 {
+		return nil, nil
+	}
+	return normalized, nil
 }
 
 func normalizeDiskIDs(ids []int64) ([]int64, error) {
@@ -2348,7 +2430,7 @@ func (s *Store) loadWorkloadDisks(ctx context.Context, ownerKind string, ownerID
 	query := `
 		SELECT ` + ownerColumn + `, d.id, d.name, d.size_gb, d.vg, d.thin_pool,
 		       d.storage_backend_id, sb.name, d.source, d.device, d.size_bytes,
-		       d.attachment_protocol,
+		       d.attachment_protocol, wd.serial,
 		       d.throttle_class_id, dtc.name, dtc.limits
 		FROM workload_disks AS wd
 		JOIN disks AS d ON d.id = wd.disk_id
@@ -2376,7 +2458,7 @@ func (s *Store) loadWorkloadDisks(ctx context.Context, ownerKind string, ownerID
 			classLimits sql.NullString
 		)
 		if err := rows.Scan(&vmID, &disk.ID, &disk.Name, &disk.SizeGB, &vg, &pool,
-			&backend, &backendName, &disk.Source, &device, &sizeBytes, &disk.Protocol,
+			&backend, &backendName, &disk.Source, &device, &sizeBytes, &disk.Protocol, &disk.Serial,
 			&classID, &className, &classLimits); err != nil {
 			return nil, err
 		}

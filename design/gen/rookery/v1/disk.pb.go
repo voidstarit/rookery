@@ -45,8 +45,10 @@ type VMDisk struct {
 	Protocol          string `protobuf:"bytes,12,opt,name=protocol,proto3" json:"protocol,omitempty"`
 	ThrottleClassId   int64  `protobuf:"varint,15,opt,name=throttle_class_id,json=throttleClassId,proto3" json:"throttle_class_id,omitempty"`
 	ThrottleClassName string `protobuf:"bytes,16,opt,name=throttle_class_name,json=throttleClassName,proto3" json:"throttle_class_name,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// serial is the guest-visible virtio-blk serial for this attachment.
+	Serial        string `protobuf:"bytes,17,opt,name=serial,proto3" json:"serial,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *VMDisk) Reset() {
@@ -173,6 +175,13 @@ func (x *VMDisk) GetThrottleClassId() int64 {
 func (x *VMDisk) GetThrottleClassName() string {
 	if x != nil {
 		return x.ThrottleClassName
+	}
+	return ""
+}
+
+func (x *VMDisk) GetSerial() string {
+	if x != nil {
+		return x.Serial
 	}
 	return ""
 }
@@ -965,7 +974,7 @@ var File_rookery_v1_disk_proto protoreflect.FileDescriptor
 const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\n" +
 	"\x15rookery/v1/disk.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\xf0\x03\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\x88\x04\n" +
 	"\x06VMDisk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
@@ -982,7 +991,8 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\alocator\x18\v \x01(\tR\alocator\x12\x1a\n" +
 	"\bprotocol\x18\f \x01(\tR\bprotocol\x12*\n" +
 	"\x11throttle_class_id\x18\x0f \x01(\x03R\x0fthrottleClassId\x12.\n" +
-	"\x13throttle_class_name\x18\x10 \x01(\tR\x11throttleClassNameB\x15\n" +
+	"\x13throttle_class_name\x18\x10 \x01(\tR\x11throttleClassName\x12\x16\n" +
+	"\x06serial\x18\x11 \x01(\tR\x06serialB\x15\n" +
 	"\x13_storage_backend_idJ\x04\b\r\x10\x0eJ\x04\b\x0e\x10\x0fR\bread_bpsR\twrite_bps\"\x92\t\n" +
 	"\x04Disk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +

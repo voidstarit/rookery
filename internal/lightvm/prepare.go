@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/store"
 )
@@ -44,8 +46,9 @@ type PreparedVirtioFSShare struct {
 // PrepareLightVM pulls the image, creates an attempt-unique container, and
 // writes the guest files. It does not start virtiofsd or QEMU.
 func (r *Runtime) PrepareLightVM(ctx context.Context, vm store.LightVM) (PreparedLightVM, error) {
-	if strings.TrimSpace(vm.Image) == "" {
-		return PreparedLightVM{}, errors.New("lightvm container image is required")
+	diskBacked := strings.TrimSpace(vm.Image) == ""
+	if diskBacked && len(vm.Disks) == 0 {
+		return PreparedLightVM{}, errors.New("lightvm requires a container image or at least one disk")
 	}
 	if r.qemuRunner.RunningLightVM(vm.ID) {
 		return PreparedLightVM{}, qemu.ErrAlreadyRunning
@@ -59,17 +62,22 @@ func (r *Runtime) PrepareLightVM(ctx context.Context, vm store.LightVM) (Prepare
 		return PreparedLightVM{}, err
 	}
 	socket := filepath.Join(r.runDir, fmt.Sprintf("lightvm-%s-%s.virtiofs.sock", vm.ID, token))
-	if len(socket)+1 > 107 {
+	if !diskBacked && len(socket)+1 > 107 {
 		return PreparedLightVM{}, fmt.Errorf("virtiofs socket path is too long (%d bytes): shorten -run-dir", len(socket))
 	}
 	container := lightVMContainerPrefix + vm.ID + "-" + token
 	prepared := PreparedLightVM{
-		LightVMID:       vm.ID,
-		AttemptToken:    token,
-		Container:       container,
-		VirtiofsdSocket: socket,
+		LightVMID:    vm.ID,
+		AttemptToken: token,
+	}
+	if !diskBacked {
+		prepared.Container = container
+		prepared.VirtiofsdSocket = socket
 	}
 
+	if diskBacked {
+		return prepared, nil
+	}
 	if err := r.ensureImage(ctx, vm.Image); err != nil {
 		return PreparedLightVM{}, err
 	}
@@ -107,13 +115,23 @@ func (r *Runtime) StartPreparedLightVM(ctx context.Context, prepared *PreparedLi
 	if r.qemuRunner.RunningLightVM(vm.ID) {
 		return qemu.ErrAlreadyRunning
 	}
-	socket, pid, err := r.startVirtiofsdAt(ctx, vm.ID, prepared.AttemptToken, prepared.Rootfs, false)
-	if err != nil {
-		return err
+	if strings.TrimSpace(vm.Image) != "" && prepared.Rootfs == "" {
+		return errors.New("prepared LightVM rootfs is required for an image-backed LightVM")
 	}
-	prepared.VirtiofsdSocket = socket
-	prepared.VirtiofsdPID = pid
-	prepared.VirtiofsdStarted = true
+	rootfs := qemu.LightVMVirtioFS{}
+	if prepared.Rootfs != "" {
+		socket, pid, err := r.startVirtiofsdAt(ctx, vm.ID, prepared.AttemptToken, prepared.Rootfs, false)
+		if err != nil {
+			return err
+		}
+		prepared.VirtiofsdSocket = socket
+		prepared.VirtiofsdPID = pid
+		prepared.VirtiofsdStarted = true
+		rootfs = qemu.LightVMVirtioFS{
+			SocketPath: socket,
+			Tag:        RootfsTag,
+		}
+	}
 
 	shares := make([]qemu.LightVMVirtioFS, 0, len(vm.VirtioFSShares))
 	for index, share := range vm.VirtioFSShares {
@@ -140,10 +158,7 @@ func (r *Runtime) StartPreparedLightVM(ctx context.Context, prepared *PreparedLi
 		})
 	}
 
-	started, err := r.qemuRunner.StartLightVMWithVirtioFSAndPlan(ctx, vm, qemu.LightVMVirtioFS{
-		SocketPath: socket,
-		Tag:        RootfsTag,
-	}, shares, plan)
+	started, err := r.qemuRunner.StartLightVMWithVirtioFSAndPlan(ctx, vm, rootfs, shares, plan)
 	prepared.QEMUStarted = started
 	return err
 }
@@ -204,25 +219,30 @@ func (r *Runtime) CleanupStoppedLightVM(ctx context.Context, id string) error {
 	}
 	_ = r.stopVirtiofsd(ctx, id)
 
-	containers := map[string]struct{}{
-		lightVMContainerName(id): {},
-	}
-	if output, err := r.runCommand(ctx, 30*time.Second, r.buildahBinary, "containers", "--format", "{{.ContainerName}}"); err != nil {
-		errs = append(errs, fmt.Errorf("enumerate buildah containers: %w", err))
+	if _, err := exec.LookPath(r.buildahBinary); err != nil {
+		log.Warn().Err(err).Str("binary", r.buildahBinary).Str("lightvm_id", id).
+			Msg("buildah unavailable; skipping LightVM container cleanup")
 	} else {
-		for _, line := range strings.Split(output, "\n") {
-			name := strings.TrimSpace(line)
-			if name == "" {
-				continue
-			}
-			if strings.HasPrefix(name, lightVMContainerPrefix+id+"-") || name == lightVMContainerName(id) {
-				containers[name] = struct{}{}
+		containers := map[string]struct{}{
+			lightVMContainerName(id): {},
+		}
+		if output, err := r.runCommand(ctx, 30*time.Second, r.buildahBinary, "containers", "--format", "{{.ContainerName}}"); err != nil {
+			errs = append(errs, fmt.Errorf("enumerate buildah containers: %w", err))
+		} else {
+			for _, line := range strings.Split(output, "\n") {
+				name := strings.TrimSpace(line)
+				if name == "" {
+					continue
+				}
+				if strings.HasPrefix(name, lightVMContainerPrefix+id+"-") || name == lightVMContainerName(id) {
+					containers[name] = struct{}{}
+				}
 			}
 		}
-	}
-	for container := range containers {
-		if err := r.cleanupContainerByName(ctx, container); err != nil {
-			errs = append(errs, err)
+		for container := range containers {
+			if err := r.cleanupContainerByName(ctx, container); err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
 	return errors.Join(errs...)

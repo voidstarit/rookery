@@ -78,6 +78,10 @@ func (q *QEMU) StartLightVMWithVirtioFSAndPlan(ctx context.Context, vm store.Lig
 	if err != nil {
 		return false, err
 	}
+	qmp, err := q.lightVMQMPPath(vm.ID)
+	if err != nil {
+		return false, err
+	}
 	if q.RunningLightVM(vm.ID) {
 		return false, ErrAlreadyRunning
 	}
@@ -95,7 +99,7 @@ func (q *QEMU) StartLightVMWithVirtioFSAndPlan(ctx context.Context, vm store.Lig
 	if err != nil {
 		return false, err
 	}
-	args, err := buildLightVMArgs(vm, q.lightVMConsoleArgs(vm), pidfile, monitor, rootfs, shares, plan, secretPaths)
+	args, err := buildLightVMArgs(vm, q.lightVMConsoleArgs(vm), pidfile, monitor, qmp, rootfs, shares, plan, secretPaths)
 	if err != nil {
 		return false, err
 	}
@@ -295,6 +299,15 @@ func (q *QEMU) lightVMPaths(id string) (console, pidfile, monitor string, err er
 	return base + ".console", base + ".lightvm.pid", base + ".lightvm.monitor", nil
 }
 
+// lightVMQMPPath returns the QMP socket used for block-level telemetry.
+func (q *QEMU) lightVMQMPPath(id string) (string, error) {
+	base, err := q.lightVMBase(id)
+	if err != nil {
+		return "", err
+	}
+	return base + ".lightvm.qmp", nil
+}
+
 func (q *QEMU) lightVMBase(id string) (string, error) {
 	parsed, err := uuid.Parse(id)
 	if err != nil {
@@ -311,6 +324,7 @@ func (q *QEMU) cleanupLightVM(id string) {
 	_ = os.Remove(base + ".console")
 	_ = os.Remove(base + ".lightvm.pid")
 	_ = os.Remove(base + ".lightvm.monitor")
+	_ = os.Remove(base + ".lightvm.qmp")
 	matches, _ := filepath.Glob(base + ".console.*")
 	for _, match := range matches {
 		_ = os.Remove(match)
@@ -348,7 +362,7 @@ const appHostnameParam = "APP_HOSTNAME="
 
 func lightvmSecretPrefix(id string) string { return "lightvm-" + id }
 
-func buildLightVMArgs(vm store.LightVM, consoles []lightVMConsoleArg, pidfile, monitor string, rootfs LightVMVirtioFS, shares []LightVMVirtioFS, plan StartPlan, secretPaths map[int64]string) ([]string, error) {
+func buildLightVMArgs(vm store.LightVM, consoles []lightVMConsoleArg, pidfile, monitor, qmp string, rootfs LightVMVirtioFS, shares []LightVMVirtioFS, plan StartPlan, secretPaths map[int64]string) ([]string, error) {
 	args := []string{
 		"-name", vm.Name,
 		"-uuid", vm.ID,
@@ -386,6 +400,7 @@ func buildLightVMArgs(vm store.LightVM, consoles []lightVMConsoleArg, pidfile, m
 	args = append(args,
 		"-pidfile", pidfile,
 		"-monitor", "unix:"+monitor+",server,nowait",
+		"-qmp", "unix:"+qmp+",server,nowait",
 		"-nic", "none",
 		"-daemonize",
 	)

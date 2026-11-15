@@ -1586,6 +1586,75 @@
         ]
       }
     },
+    "/api/lightvm/instances/{id}/console-access": {
+      "post": {
+        "summary": "CreateLightVMConsoleAccess issues a time-limited bearer token that a\nclient can use directly against the console WebSocket without the\nbrowser UI.",
+        "operationId": "LightVMService_CreateLightVMConsoleAccess",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMConsoleAccess"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/LightVMServiceCreateLightVMConsoleAccessBody"
+            }
+          }
+        ],
+        "tags": [
+          "LightVMService"
+        ]
+      }
+    },
+    "/api/lightvm/instances/{id}/metrics": {
+      "get": {
+        "operationId": "LightVMService_GetLightVMMetrics",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMMetrics"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "LightVMService"
+        ]
+      }
+    },
     "/api/lightvm/instances/{id}/start": {
       "post": {
         "operationId": "LightVMService_StartLightVM",
@@ -4173,6 +4242,21 @@
         }
       }
     },
+    "LightVMServiceCreateLightVMConsoleAccessBody": {
+      "type": "object",
+      "properties": {
+        "console_id": {
+          "type": "string",
+          "format": "int64",
+          "description": "console_id selects a console port; 0 uses the first console."
+        },
+        "ttl_seconds": {
+          "type": "integer",
+          "format": "int64",
+          "description": "ttl_seconds bounds how long the returned WebSocket access remains valid."
+        }
+      }
+    },
     "LightVMServiceUpdateLightVMBody": {
       "type": "object",
       "properties": {
@@ -4205,7 +4289,8 @@
           "format": "int64"
         },
         "image": {
-          "type": "string"
+          "type": "string",
+          "description": "image is optional when at least one disk is attached."
         },
         "env": {
           "type": "array",
@@ -4259,6 +4344,12 @@
         },
         "executable_script": {
           "type": "string"
+        },
+        "disk_serials": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },
@@ -4517,6 +4608,12 @@
         },
         "cgroup_class": {
           "type": "string"
+        },
+        "disk_serials": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },
@@ -5154,7 +5251,8 @@
           "format": "int64"
         },
         "image": {
-          "type": "string"
+          "type": "string",
+          "description": "image is optional when at least one disk is attached; disk-backed\nLightVMs boot the kernel/initramfs from their disks."
         },
         "env": {
           "type": "array",
@@ -5205,6 +5303,12 @@
         },
         "executable_script": {
           "type": "string"
+        },
+        "disk_serials": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },
@@ -5328,6 +5432,12 @@
         },
         "cgroup_class": {
           "type": "string"
+        },
+        "disk_serials": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },
@@ -6185,6 +6295,45 @@
         }
       }
     },
+    "v1LightVMConsoleAccess": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "lightvm_id": {
+          "type": "string"
+        },
+        "console_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "console_name": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string",
+          "description": "token is returned only when the access is issued."
+        },
+        "websocket_path": {
+          "type": "string",
+          "description": "websocket_path is the absolute path to append to a Rookery listener's\nws:// or wss:// base URL."
+        },
+        "websocket_url": {
+          "type": "string",
+          "description": "websocket_url is a ready-to-use ws:// or wss:// URL when the request\narrived through the HTTP gateway."
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
     "v1LightVMEnvVar": {
       "type": "object",
       "properties": {
@@ -6265,6 +6414,83 @@
         "updated_at": {
           "type": "string",
           "format": "date-time"
+        }
+      }
+    },
+    "v1LightVMMetrics": {
+      "type": "object",
+      "properties": {
+        "running": {
+          "type": "boolean"
+        },
+        "pid": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "uptime_seconds": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "cpu_seconds_total": {
+          "type": "number",
+          "format": "double"
+        },
+        "memory_rss_bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "memory_virtual_bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "disk_read_bytes_total": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "disk_write_bytes_total": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "lightvm_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "vcpus": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "memory_mb": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "network_rx_bytes_total": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "network_tx_bytes_total": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "network_rx_packets_total": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "network_tx_packets_total": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "sampled_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "block_devices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1BlockDeviceMetrics"
+          }
         }
       }
     },
@@ -7539,6 +7765,10 @@
         },
         "throttle_class_name": {
           "type": "string"
+        },
+        "serial": {
+          "type": "string",
+          "description": "serial is the guest-visible virtio-blk serial for this attachment."
         }
       }
     },

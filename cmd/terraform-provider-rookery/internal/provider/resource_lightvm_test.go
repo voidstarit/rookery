@@ -24,6 +24,10 @@ func TestLightVMRequestConversion(t *testing.T) {
 	envType := types.ObjectType{AttrTypes: lightVMEnvAttrTypes()}
 	consoleType := types.ObjectType{AttrTypes: lightVMConsoleAttrTypes()}
 	shareType := types.ObjectType{AttrTypes: lightVMShareAttrTypes()}
+	serials, serialDiags := types.MapValueFrom(ctx, types.StringType, map[string]string{"5": "root"})
+	if serialDiags.HasError() {
+		t.Fatalf("disk serial map: %v", serialDiags)
+	}
 	model := lightVMModel{
 		Name:           types.StringValue("app"),
 		Description:    types.StringValue("test"),
@@ -40,6 +44,7 @@ func TestLightVMRequestConversion(t *testing.T) {
 		ExecutableArgs: testList(t, ctx, types.StringType, []string{"serve"}),
 		InterfaceIDs:   testList(t, ctx, types.Int64Type, []int64{3, 4}),
 		DiskIDs:        testList(t, ctx, types.Int64Type, []int64{5}),
+		DiskSerials:    serials,
 		VirtioFSShares: testList(t, ctx, shareType, []lightVMVirtioFSShareModel{{HostPath: types.StringValue("/tmp"), Tag: types.StringValue("data"), ReadOnly: types.BoolValue(true)}}),
 		Consoles:       testList(t, ctx, consoleType, []lightVMConsoleModel{{Name: types.StringValue("serial")}}),
 	}
@@ -50,7 +55,7 @@ func TestLightVMRequestConversion(t *testing.T) {
 	if create.GetName() != "app" || create.GetVcpus() != 2 || create.GetConsoleEnabled() != true ||
 		len(create.GetEnv()) != 1 || len(create.GetConsoles()) != 1 || len(create.GetVirtiofsShares()) != 1 ||
 		create.GetVirtiofsShares()[0].GetReadOnly() != true || len(create.GetInterfaceIds()) != 2 ||
-		len(create.GetDiskIds()) != 1 || create.GetAppend() != "console=hvc0" {
+		len(create.GetDiskIds()) != 1 || create.GetDiskSerials()[5] != "root" || create.GetAppend() != "console=hvc0" {
 		t.Fatalf("create request = %+v", create)
 	}
 
@@ -59,7 +64,7 @@ func TestLightVMRequestConversion(t *testing.T) {
 	if diags.HasError() {
 		t.Fatalf("update request: %v", diags)
 	}
-	if update.GetId() == "" || !update.GetReplaceDiskIds() || update.GetAppend() != "console=hvc0" {
+	if update.GetId() == "" || !update.GetReplaceDiskIds() || update.GetDiskSerials()[5] != "root" || update.GetAppend() != "console=hvc0" {
 		t.Fatalf("update request = %+v", update)
 	}
 }
@@ -112,3 +117,43 @@ func TestArtifactStateAndRecords(t *testing.T) {
 }
 
 func boolPtr(value bool) *bool { return &value }
+
+func TestDiskBackedLightVMRequestConversion(t *testing.T) {
+	ctx := context.Background()
+	model := lightVMModel{
+		Name:           types.StringValue("disk-backed"),
+		VCPUs:          types.Int64Value(1),
+		MemoryMB:       types.Int64Value(128),
+		KernelID:       types.Int64Value(1),
+		InitramfsID:    types.Int64Value(2),
+		Image:          types.StringNull(),
+		DiskIDs:        testList(t, ctx, types.Int64Type, []int64{3}),
+		DiskSerials:    types.MapNull(types.StringType),
+		Env:            types.ListNull(types.ObjectType{AttrTypes: lightVMEnvAttrTypes()}),
+		ExecutableArgs: types.ListNull(types.StringType),
+		InterfaceIDs:   types.ListNull(types.Int64Type),
+		VirtioFSShares: types.ListNull(types.ObjectType{AttrTypes: lightVMShareAttrTypes()}),
+		Consoles:       types.ListNull(types.ObjectType{AttrTypes: lightVMConsoleAttrTypes()}),
+		Labels:         types.SetNull(types.StringType),
+	}
+	create, diags := lightVMCreateRequest(ctx, model)
+	if diags.HasError() {
+		t.Fatalf("disk-backed create request: %v", diags)
+	}
+	if create.GetImage() != "" || len(create.GetDiskIds()) != 1 {
+		t.Fatalf("disk-backed create request = %+v", create)
+	}
+	model.ID = types.StringValue("123e4567-e89b-12d3-a456-426614174000")
+	update, diags := lightVMUpdateRequest(ctx, model)
+	if diags.HasError() {
+		t.Fatalf("disk-backed update request: %v", diags)
+	}
+	if update.GetImage() != "" || len(update.GetDiskIds()) != 1 {
+		t.Fatalf("disk-backed update request = %+v", update)
+	}
+
+	model.ExecutablePath = types.StringValue("/bin/app")
+	if _, diags := lightVMCreateRequest(ctx, model); !diags.HasError() {
+		t.Fatal("executable without image was accepted")
+	}
+}

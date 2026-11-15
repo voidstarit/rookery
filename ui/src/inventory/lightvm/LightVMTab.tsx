@@ -11,6 +11,7 @@ import type {
   VirtualInterface,
 } from "../types";
 import { navigate, useRoute } from "../router";
+import { WorkloadMonitorDialog } from "../WorkloadMonitorDialog";
 import {
   ArtifactDialog,
   type LightVMArtifact,
@@ -83,6 +84,7 @@ export function LightVMTab() {
     artifact: LightVMArtifact | null;
   } | null>(null);
   const [lightVMDialog, setLightVMDialog] = useState<{ vm: LightVM | null } | null>(null);
+  const [monitorVM, setMonitorVM] = useState<LightVM | null>(null);
   const kernelLabels = useEntityLabels("lightvm_kernel");
   const initramfsLabels = useEntityLabels("lightvm_initramfs");
   const lightVMLabels = useEntityLabels("lightvm");
@@ -218,6 +220,7 @@ export function LightVMTab() {
     if (root !== "lightvm") {
       setDialog(null);
       setLightVMDialog(null);
+      setMonitorVM(null);
       return;
     }
 
@@ -230,21 +233,33 @@ export function LightVMTab() {
     if (second === "instances") {
       setDialog(null);
       if (third === "new") {
+        setMonitorVM(null);
         setLightVMDialog({ vm: null });
         return;
       }
       if (third && fourth === "edit") {
         const vm = lightvms.find((item) => item.id === third);
         if (vm) {
+          setMonitorVM(null);
           setLightVMDialog({ vm });
           return;
         }
       }
+      if (third && fourth === "monitor") {
+        const vm = lightvms.find((item) => item.id === third);
+        if (vm) {
+          setLightVMDialog(null);
+          setMonitorVM(vm);
+          return;
+        }
+      }
       setLightVMDialog(null);
+      setMonitorVM(null);
       return;
     }
 
     setLightVMDialog(null);
+    setMonitorVM(null);
     if ((second === "kernels" || second === "initramfs") && third === "new") {
       setDialog({
         kind: second === "kernels" ? "kernel" : "initramfs",
@@ -415,7 +430,8 @@ export function LightVMTab() {
         <div class="banner" role="alert">
           <strong>LightVM runtime unavailable.</strong>{" "}
           {runtimeStatus.detail ||
-            "Install buildah and virtiofsd before starting a LightVM."}
+            "Install buildah and virtiofsd before starting a container-image LightVM."}{" "}
+          Disk-backed LightVMs without host-directory shares can still start.
         </div>
       ) : null}
 
@@ -698,8 +714,10 @@ export function LightVMTab() {
         </div>
 
         <p class="field-hint">
-          A LightVM combines uploaded kernel and initramfs images with a container image, environment,
-          executable path, and arguments. Definitions are inventory-only until the runtime is added.
+          A LightVM combines uploaded kernel and initramfs images with an optional container
+          image or attached disks. Environment and executable fields apply to container-image
+          LightVMs; disk-backed LightVMs boot from their disks. Definitions are inventory-only
+          until the runtime is added.
         </p>
 
         {lightVMError ? (
@@ -736,6 +754,9 @@ export function LightVMTab() {
                   const running = vm.status === "running" || vm.status === "starting";
                   const starting = lightVMAction === `start:${vm.id}`;
                   const stopping = lightVMAction === `stop:${vm.id}`;
+                  const shares = Array.isArray(vm.virtiofs_shares) ? vm.virtiofs_shares : [];
+                  const needsRuntimeTools = Boolean(vm.image) || shares.length > 0;
+                  const runtimeBlocked = !runtimeReady && needsRuntimeTools;
                   return (
                     <tr key={vm.id}>
                       <td>
@@ -780,7 +801,7 @@ export function LightVMTab() {
                           {vm.append ? `append: ${vm.append}` : "append: none"}
                         </span>
                       </td>
-                      <td class="mono">{vm.image}</td>
+                      <td class="mono">{vm.image || "disk boot"}</td>
                       <td>
                         <span
                           class="vm-name mono"
@@ -818,11 +839,11 @@ export function LightVMTab() {
                             <button
                               class="row-action"
                               type="button"
-                              disabled={starting || !runtimeReady}
+                              disabled={starting || runtimeBlocked}
                               title={
-                                !runtimeReady
+                                runtimeBlocked
                                   ? runtimeStatus?.detail ||
-                                    "Install buildah and virtiofsd before starting a LightVM."
+                                    "Install buildah and virtiofsd before starting this LightVM."
                                   : ""
                               }
                               onClick={() => void startLightVM(vm)}
@@ -844,6 +865,13 @@ export function LightVMTab() {
                             onClick={() => openLightVMConsole(vm)}
                           >
                             Console
+                          </button>
+                          <button
+                            class="row-action"
+                            type="button"
+                            onClick={() => navigate(`/lightvm/instances/${vm.id}/monitor`)}
+                          >
+                            Monitor
                           </button>
                           <button
                             class="row-action"
@@ -961,6 +989,20 @@ export function LightVMTab() {
             setLightVMError("");
             void loadInterfaces();
             showToast(created ? `Created LightVM ${saved.name}` : `Saved LightVM ${saved.name}`);
+          }}
+        />
+      ) : null}
+
+      {monitorVM ? (
+        <WorkloadMonitorDialog
+          key={`monitor-${monitorVM.id}`}
+          kind="LightVM"
+          id={monitorVM.id}
+          name={monitorVM.name}
+          memoryMB={monitorVM.memory_mb}
+          onClose={() => {
+            setMonitorVM(null);
+            navigate("/lightvm/instances", true);
           }}
         />
       ) : null}

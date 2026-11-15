@@ -95,5 +95,5 @@ func (l *RateLimiter) logRejection(r *http.Request) {
 	rate := l.rate
 	l.mu.Unlock()
 
-	log.Warn().Str("method", r.Method).Str("path", r.URL.Path).Float64("rate_limit_rps", rate).Msg("rate limit exceeded")
+	log.Warn().Str("method", r.Method).Str("path", redactRequestPath(r.URL.Path)).Float64("rate_limit_rps", rate).Msg("rate limit exceeded")
 }

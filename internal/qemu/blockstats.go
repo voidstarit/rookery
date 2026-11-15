@@ -50,7 +50,22 @@ func (q *QEMU) BlockStats(ctx context.Context, vmID string) ([]BlockDeviceStats,
 	if err != nil {
 		return nil, err
 	}
-	socket := qmpPathFromSocket(vnc)
+	return blockStatsAtQMP(ctx, qmpPathFromSocket(vnc))
+}
+
+// LightVMBlockStats returns per-drive QEMU block statistics for a LightVM.
+func (q *QEMU) LightVMBlockStats(ctx context.Context, id string) ([]BlockDeviceStats, error) {
+	if !q.RunningLightVM(id) {
+		return nil, nil
+	}
+	qmp, err := q.lightVMQMPPath(id)
+	if err != nil {
+		return nil, err
+	}
+	return blockStatsAtQMP(ctx, qmp)
+}
+
+func blockStatsAtQMP(ctx context.Context, socket string) ([]BlockDeviceStats, error) {
 	dialer := net.Dialer{Timeout: monitorTimeout}
 	conn, err := dialer.DialContext(ctx, "unix", socket)
 	if err != nil {
