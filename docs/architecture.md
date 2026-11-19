@@ -217,7 +217,8 @@ SQLite is the inventory source of truth. The embedded migrations under
 | PKI | `client_certificates` |
 
 Disks and VMs are separate resources: a disk must exist before a VM can attach
-it, and a disk can belong to only one VM at a time. Storage backends are
+it. A read-write disk can belong to only one workload at a time; a read-only
+disk may be shared by any number of VMs and LightVMs. Storage backends are
 extensible records; only `lvm-thin` is implemented today. Templates and
 script-created clones are tracked on `disks`. Disks may reference a reusable
 `disk_throttle_classes` record. The class limits are joined into disk/VM reads

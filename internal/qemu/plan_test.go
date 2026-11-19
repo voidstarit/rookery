@@ -678,3 +678,44 @@ func TestBuildDiskArgsSerial(t *testing.T) {
 		t.Fatal("buildDiskArgs accepted an invalid serial")
 	}
 }
+
+func TestBuildDiskArgsReadOnly(t *testing.T) {
+	local, err := buildDiskArgs(store.VMDisk{ID: 5, Device: "/dev/vg0/shared", ReadOnly: true}, StartPlan{}, nil)
+	if err != nil {
+		t.Fatalf("buildDiskArgs read-only local: %v", err)
+	}
+	joined := strings.Join(local, " ")
+	if !strings.Contains(joined, "readonly=on") {
+		t.Fatalf("read-only local args = %q, want readonly=on", joined)
+	}
+
+	serialLocal, err := buildDiskArgs(store.VMDisk{
+		ID: 6, Device: "/dev/vg0/shared-serial", ReadOnly: true, Serial: "shared",
+	}, StartPlan{}, nil)
+	if err != nil {
+		t.Fatalf("buildDiskArgs read-only local with serial: %v", err)
+	}
+	serialJoined := strings.Join(serialLocal, " ")
+	if !strings.Contains(serialJoined, "readonly=on") ||
+		!strings.Contains(serialJoined, "virtio-blk-pci,drive=rookery-disk-6,serial=shared") {
+		t.Fatalf("read-only serial args = %q", serialJoined)
+	}
+
+	remote := testRemoteDisk()
+	remote.ReadOnly = true
+	remoteArgs, err := buildDiskArgs(remote, testISCSIPlan(), map[int64]string{7: "/run/rookery/secret"})
+	if err != nil {
+		t.Fatalf("buildDiskArgs read-only iSCSI: %v", err)
+	}
+	if joined := strings.Join(remoteArgs, " "); !strings.Contains(joined, "readonly=on") {
+		t.Fatalf("read-only iSCSI args = %q, want readonly=on", joined)
+	}
+
+	readWrite, err := buildDiskArgs(store.VMDisk{ID: 8, Device: "/dev/vg0/data"}, StartPlan{}, nil)
+	if err != nil {
+		t.Fatalf("buildDiskArgs read-write local: %v", err)
+	}
+	if joined := strings.Join(readWrite, " "); strings.Contains(joined, "readonly=on") {
+		t.Fatalf("read-write args = %q, must not contain readonly=on", joined)
+	}
+}

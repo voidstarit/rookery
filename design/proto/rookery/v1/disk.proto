@@ -64,6 +64,19 @@ message VMDisk {
   string throttle_class_name = 16;
   // serial is the guest-visible virtio-blk serial for this attachment.
   string serial = 17;
+  // read_only is true when QEMU attaches this disk read-only. Such a disk may
+  // be attached to multiple VMs and LightVMs.
+  bool read_only = 18;
+}
+
+// DiskAttachment names one workload that has the disk attached.
+message DiskAttachment {
+  // workload_kind is "vm" or "lightvm".
+  string workload_kind = 1;
+  string workload_id = 2;
+  string workload_name = 3;
+  int32 position = 4;
+  bool read_only = 5;
 }
 
 message Disk {
@@ -102,6 +115,12 @@ message Disk {
   string throttle_class_name = 27;
   optional string attached_lightvm_id = 28;
   string attached_lightvm_name = 29;
+  // read_only means QEMU attaches the disk read-only and multiple workloads
+  // may own it.
+  bool read_only = 30;
+  // attachments lists every workload owner. The attached_* fields above are
+  // populated only when exactly one workload owns the disk.
+  repeated DiskAttachment attachments = 31;
 }
 
 message ImportableDisk {
@@ -148,6 +167,9 @@ message CreateDiskRequest {
   reserved 10, 11;
   reserved "read_bps", "write_bps";
   int64 throttle_class_id = 12 [(validate.rules).int64 = {gte: 0}];
+  // read_only marks the disk as shared read-only. Templates cannot be
+  // read-only.
+  optional bool read_only = 13;
 }
 
 message DeleteDiskResponse {
@@ -163,6 +185,8 @@ message UpdateDiskRequest {
   reserved 5, 6;
   reserved "read_bps", "write_bps";
   optional int64 throttle_class_id = 7 [(validate.rules).int64 = {gte: 0}];
+  // read_only may change only while the disk has no attachments.
+  optional bool read_only = 8;
 }
 
 message DeleteDiskRequest {

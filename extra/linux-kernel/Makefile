@@ -21,14 +21,22 @@
 # rootfs virtio-fs tag and switch_roots into it. It also leaves a static
 # BusyBox/udhcpc renewal helper in /.rookery inside the guest (disable with
 # lightvm.dhcp_renew=0).
-# The disk-root image does not implement that container contract. It looks for
-# a virtio-fs tag "root"/"rootfs", then the root= device, then a block device
+# The disk-root image does not mount the container rootfs. It looks for a
+# virtio-fs tag "root"/"rootfs", then the root= device, then a block device
 # whose virtio-blk serial is "root"/"rootfs", mounts the filesystem, and
 # switch_roots into it. Use it with the storage kernel for ext4/XFS roots.
+# It also extracts a read-only virtio-blk disk with serial "rookery-config"
+# into /run/rookery (system env/startup-cmd plus arbitrary user files), loads
+# its env file, and uses its startup-cmd as PID 1 unless an explicit
+# init=/lightvm.init= is supplied. The chosen init runs as
+# PID 1 in a new session with /dev/console as its controlling terminal, so a
+# console shell has job control and Ctrl+C works.
 # The overlay-root image builds a writable overlay from disks whose serials are
 # overlay=<N>, overlay:<N>, or overlay-<N>. The highest N is the upper layer,
 # the rest are lower layers, and the upper is mounted with the portable
-# index=off,metacopy=off,redirect_dir=nofollow,uuid=null option set.
+# index=off,metacopy=off,redirect_dir=nofollow,uuid=null option set. It handles
+# the rookery-config drive and startup command the same way, and the chosen
+# init gets the same console session as the disk-root image.
 # Add scripts there instead of editing shell fragments in this Makefile.
 # All build state lives in a Docker volume and all artifacts are written to
 # OUT_DIR (default: ../../dist/lightvm, i.e. the repository dist directory).

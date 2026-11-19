@@ -57,6 +57,10 @@ type QEMU struct {
 // StartPlan carries runtime attachments for remote disks.
 type StartPlan struct {
 	Attachments map[int64]blockdev.Attachment
+	// ExplicitVirtio selects explicit virtio-blk-pci devices even for disks
+	// without a serial. This keeps block-device order deterministic when an
+	// additional device (such as the LightVM config drive) is attached.
+	ExplicitVirtio bool
 }
 
 // PreparedStarter is implemented by runtimes that accept a StartPlan.
@@ -834,6 +838,11 @@ type processRef struct {
 func imageLockHolders(disks []store.VMDisk) []processRef {
 	paths := make(map[string]struct{}, len(disks))
 	for _, disk := range disks {
+		// Read-only images take shared locks and can be opened by many guests;
+		// they are not a plausible source of a start failure.
+		if disk.ReadOnly {
+			continue
+		}
 		paths[disk.Device] = struct{}{}
 	}
 	if len(paths) == 0 {
@@ -1046,14 +1055,15 @@ func buildDiskArgs(disk store.VMDisk, plan StartPlan, secretPaths map[int64]stri
 		return nil, fmt.Errorf("disk %q (id %d): %w", disk.Name, disk.ID, err)
 	}
 	protocol := blockdev.Protocol(disk.Protocol).Normalize()
+	explicit := plan.ExplicitVirtio || serial != ""
 	if disk.Source != store.DiskSourceKouja && disk.Source != store.DiskSourceCeph &&
 		(disk.Protocol == "" || protocol == blockdev.ProtocolLocal) {
 		iface := "virtio"
-		if serial != "" {
+		if explicit {
 			iface = "none"
 		}
-		drive := fmt.Sprintf("file=%s,format=raw,if=%s,id=rookery-disk-%d,cache=none,aio=native%s", disk.Device, iface, disk.ID, diskThrottleArgs(disk))
-		return virtioDiskArgs(drive, disk.ID, serial), nil
+		drive := fmt.Sprintf("file=%s,format=raw,if=%s,id=rookery-disk-%d,cache=none,aio=native%s%s", disk.Device, iface, disk.ID, diskReadOnlyArg(disk), diskThrottleArgs(disk))
+		return virtioDiskArgs(drive, disk.ID, serial, explicit), nil
 	}
 	attachment, ok := plan.Attachments[disk.ID]
 	if !ok {
@@ -1070,16 +1080,16 @@ func buildDiskArgs(disk store.VMDisk, plan StartPlan, secretPaths map[int64]stri
 		}
 		secretID := fmt.Sprintf("rookery-iscsi-%d", disk.ID)
 		iface := "virtio"
-		if serial != "" {
+		if explicit {
 			iface = "none"
 		}
-		drive := fmt.Sprintf("file.driver=iscsi,file.transport=tcp,file.portal=%s,file.target=%s,file.lun=%d,file.user=%s,file.password-secret=%s,file.initiator-name=%s,file.timeout=30,if=%s,id=rookery-disk-%d,format=raw,cache=none,werror=stop,rerror=stop%s",
+		drive := fmt.Sprintf("file.driver=iscsi,file.transport=tcp,file.portal=%s,file.target=%s,file.lun=%d,file.user=%s,file.password-secret=%s,file.initiator-name=%s,file.timeout=30,if=%s,id=rookery-disk-%d,format=raw,cache=none,werror=stop,rerror=stop%s%s",
 			attachment.ISCSI.Portal, attachment.ISCSI.Target, attachment.ISCSI.LUN,
-			attachment.ISCSI.Username, secretID, attachment.ISCSI.Initiator, iface, disk.ID, diskThrottleArgs(disk))
+			attachment.ISCSI.Username, secretID, attachment.ISCSI.Initiator, iface, disk.ID, diskReadOnlyArg(disk), diskThrottleArgs(disk))
 		args := []string{
 			"-object", fmt.Sprintf("secret,id=%s,file=%s,format=raw", secretID, secretPath),
 		}
-		return append(args, virtioDiskArgs(drive, disk.ID, serial)...), nil
+		return append(args, virtioDiskArgs(drive, disk.ID, serial, explicit)...), nil
 	case blockdev.ProtocolNVMeTCP:
 		return nil, fmt.Errorf("NVMe/TCP attachments are not implemented")
 	case blockdev.ProtocolRBD:
@@ -1090,16 +1100,28 @@ func buildDiskArgs(disk store.VMDisk, plan StartPlan, secretPaths map[int64]stri
 }
 
 // virtioDiskArgs keeps the existing -drive if=virtio form for disks without a
-// serial. A guest-visible serial requires an explicit virtio-blk-pci device,
-// because -drive has no serial option; callers use if=none in that case.
-func virtioDiskArgs(drive string, diskID int64, serial string) []string {
-	if serial == "" {
+// serial unless the caller requires explicit devices. A guest-visible serial
+// requires an explicit virtio-blk-pci device because -drive has no serial
+// option; callers use if=none in that case.
+func virtioDiskArgs(drive string, diskID int64, serial string, explicit bool) []string {
+	if !explicit && serial == "" {
 		return []string{"-drive", drive}
+	}
+	device := fmt.Sprintf("virtio-blk-pci,drive=rookery-disk-%d", diskID)
+	if serial != "" {
+		device += ",serial=" + serial
 	}
 	return []string{
 		"-drive", drive,
-		"-device", fmt.Sprintf("virtio-blk-pci,drive=rookery-disk-%d,serial=%s", diskID, serial),
+		"-device", device,
 	}
+}
+
+func diskReadOnlyArg(disk store.VMDisk) string {
+	if disk.ReadOnly {
+		return ",readonly=on"
+	}
+	return ""
 }
 
 func diskThrottleArgs(disk store.VMDisk) string {

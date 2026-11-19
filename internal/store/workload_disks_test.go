@@ -125,3 +125,149 @@ func TestDeletingDiskCannotBeAttached(t *testing.T) {
 		t.Fatalf("template deleting disk = %v, want ErrDiskDeleting", err)
 	}
 }
+
+func TestReadOnlyDiskAllowsMultipleWorkloads(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	kernel := createKernel(t, st, "read-only-kernel")
+	initramfs := createInitramfs(t, st, "read-only-initramfs")
+
+	disk, err := st.CreateDisk(ctx, store.Disk{
+		Name: "shared-ro", SizeGB: 20, VG: "vg0", ThinPool: "rookery", ReadOnly: true,
+	})
+	if err != nil {
+		t.Fatalf("create read-only disk: %v", err)
+	}
+	first, err := st.CreateVM(ctx, store.VM{
+		Name: "ro-first", VCPUs: 1, MemoryMB: 256, DiskIDs: []int64{disk.ID},
+	})
+	if err != nil {
+		t.Fatalf("attach read-only disk to first VM: %v", err)
+	}
+	second, err := st.CreateVM(ctx, store.VM{
+		Name: "ro-second", VCPUs: 1, MemoryMB: 256, DiskIDs: []int64{disk.ID},
+	})
+	if err != nil {
+		t.Fatalf("attach read-only disk to second VM: %v", err)
+	}
+	light, err := st.CreateLightVM(ctx, store.LightVM{
+		Name: "ro-light", VCPUs: 1, MemoryMB: 256,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+		DiskIDs: []int64{disk.ID},
+	})
+	if err != nil {
+		t.Fatalf("attach read-only disk to LightVM: %v", err)
+	}
+
+	got, err := st.GetDisk(ctx, disk.ID)
+	if err != nil {
+		t.Fatalf("get shared disk: %v", err)
+	}
+	if !got.ReadOnly {
+		t.Fatal("shared disk lost its read-only flag")
+	}
+	if len(got.Attachments) != 3 {
+		t.Fatalf("attachments = %+v, want three workloads", got.Attachments)
+	}
+	if got.AttachedVMID != nil || got.AttachedLightVMID != nil {
+		t.Fatalf("legacy owner fields set for a shared disk: %+v", got)
+	}
+	if !store.DiskAttachedToAnyWorkload(got) {
+		t.Fatal("shared disk reports no attachments")
+	}
+	if err := st.DeleteDisk(ctx, disk.ID); !errors.Is(err, store.ErrDiskInUse) {
+		t.Fatalf("delete shared attached disk = %v, want ErrDiskInUse", err)
+	}
+
+	for _, id := range []string{first.ID, second.ID} {
+		if err := st.DeleteVM(ctx, id); err != nil {
+			t.Fatalf("delete vm %s: %v", id, err)
+		}
+	}
+	if err := st.DeleteLightVM(ctx, light.ID); err != nil {
+		t.Fatalf("delete lightvm: %v", err)
+	}
+	if err := st.DeleteDisk(ctx, disk.ID); err != nil {
+		t.Fatalf("delete detached shared disk: %v", err)
+	}
+}
+
+func TestSetDiskReadOnlyRequiresDetachedDisk(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	disk := createDisk(t, st, "read-only-toggle")
+
+	vm, err := st.CreateVM(ctx, store.VM{
+		Name: "toggle-vm", VCPUs: 1, MemoryMB: 256, DiskIDs: []int64{disk.ID},
+	})
+	if err != nil {
+		t.Fatalf("create vm: %v", err)
+	}
+	if _, err := st.SetDiskReadOnly(ctx, disk.ID, true); !errors.Is(err, store.ErrDiskInUse) {
+		t.Fatalf("promote attached disk = %v, want ErrDiskInUse", err)
+	}
+	// The same value is a no-op even while attached.
+	if _, err := st.SetDiskReadOnly(ctx, disk.ID, false); err != nil {
+		t.Fatalf("no-op read-only update: %v", err)
+	}
+
+	if err := st.DeleteVM(ctx, vm.ID); err != nil {
+		t.Fatalf("delete vm: %v", err)
+	}
+	promoted, err := st.SetDiskReadOnly(ctx, disk.ID, true)
+	if err != nil {
+		t.Fatalf("promote detached disk: %v", err)
+	}
+	if !promoted.ReadOnly {
+		t.Fatal("disk is not read-only after update")
+	}
+
+	first, err := st.CreateVM(ctx, store.VM{
+		Name: "shared-first", VCPUs: 1, MemoryMB: 256, DiskIDs: []int64{disk.ID},
+	})
+	if err != nil {
+		t.Fatalf("attach promoted disk to first VM: %v", err)
+	}
+	second, err := st.CreateVM(ctx, store.VM{
+		Name: "shared-second", VCPUs: 1, MemoryMB: 256, DiskIDs: []int64{disk.ID},
+	})
+	if err != nil {
+		t.Fatalf("attach promoted disk to second VM: %v", err)
+	}
+	if _, err := st.SetDiskReadOnly(ctx, disk.ID, false); !errors.Is(err, store.ErrDiskInUse) {
+		t.Fatalf("demote shared disk = %v, want ErrDiskInUse", err)
+	}
+
+	for _, id := range []string{first.ID, second.ID} {
+		if err := st.DeleteVM(ctx, id); err != nil {
+			t.Fatalf("delete vm %s: %v", id, err)
+		}
+	}
+	demoted, err := st.SetDiskReadOnly(ctx, disk.ID, false)
+	if err != nil {
+		t.Fatalf("demote detached disk: %v", err)
+	}
+	if demoted.ReadOnly {
+		t.Fatal("disk is still read-only after demotion")
+	}
+}
+
+func TestReadOnlyDiskCannotBeTemplate(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+
+	if _, err := st.CreateDisk(ctx, store.Disk{
+		Name: "ro-template", SizeGB: 10, VG: "vg0", ThinPool: "rookery",
+		IsTemplate: true, ReadOnly: true,
+	}); !errors.Is(err, store.ErrDiskReadOnlyTemplate) {
+		t.Fatalf("create read-only template = %v, want ErrDiskReadOnlyTemplate", err)
+	}
+
+	disk := createDisk(t, st, "plain-then-template")
+	if _, err := st.SetDiskReadOnly(ctx, disk.ID, true); err != nil {
+		t.Fatalf("mark plain disk read-only: %v", err)
+	}
+	if _, err := st.SetDiskTemplate(ctx, disk.ID, true); !errors.Is(err, store.ErrDiskReadOnlyTemplate) {
+		t.Fatalf("mark read-only disk as template = %v, want ErrDiskReadOnlyTemplate", err)
+	}
+}

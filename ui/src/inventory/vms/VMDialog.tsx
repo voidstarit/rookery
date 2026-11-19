@@ -109,6 +109,10 @@ export function VMDialog({
     if (disk.deletion_state) {
       return false;
     }
+    if (disk.read_only) {
+      // Read-only disks are shareable across VMs and LightVMs.
+      return true;
+    }
     if (disk.attached_lightvm_id) {
       return false;
     }
@@ -386,6 +390,7 @@ export function VMDialog({
                   <option value={String(disk.id)} key={disk.id}>
                     {disk.name} · {formatBytes(disk.size_bytes || disk.size_gb * 1024 ** 3)}
                     {disk.source === "host-device" ? " · passthrough" : disk.source === "kouja" ? " · kouja" : ""}
+                    {disk.read_only ? " · read-only" : ""}
                   </option>
                 ))}
               </select>
@@ -409,6 +414,7 @@ export function VMDialog({
                       <span class="interface-list-network">
                         {formatBytes(disk.size_bytes || disk.size_gb * 1024 ** 3)}
                         {disk.source === "host-device" ? " · passthrough" : disk.source === "kouja" ? " · kouja" : ""}
+                        {disk.read_only ? " · read-only" : ""}
                         {index === 0 ? " · boot" : ""}
                       </span>
                     </span>

@@ -231,7 +231,9 @@ export function VMsTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route.path]);
 
-  const freeDisks = disks.filter((disk) => !disk.attached_vm_id && !disk.is_template && !disk.deletion_state);
+  const freeDisks = disks.filter(
+    (disk) => (disk.read_only || !disk.attached_vm_id) && !disk.is_template && !disk.deletion_state
+  );
   const hasProvisionableDisk = freeDisks.some((disk) => !diskNeedsThinPool(disk));
 
   useEffect(() => {

@@ -38,6 +38,9 @@ func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateD
 	if name == "" {
 		return nil, status.Error(codes.InvalidArgument, "name is required")
 	}
+	if request.GetIsTemplate() && request.GetReadOnly() {
+		return nil, status.Error(codes.InvalidArgument, "template disks cannot be read-only")
+	}
 	classID, err := s.resolveCreateThrottleClass(ctx, request.GetThrottleClassId(), request.GetIsTemplate())
 	if err != nil {
 		return nil, err
@@ -158,6 +161,7 @@ func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateD
 		ProvisioningScript:  provisioningScript,
 		ProvisioningTimeout: provisioningTimeout,
 		PreparedByScript:    template != nil,
+		ReadOnly:            request.GetReadOnly(),
 	}
 	if template != nil {
 		if err := s.runDiskPreparationScript(ctx, "create", backend, disk, template); err != nil {
@@ -257,8 +261,8 @@ func (s *diskService) createHostDeviceDisk(ctx context.Context, request *rookery
 	}
 	disk := store.Disk{
 		Name: name, SizeGB: sizeGB, SizeBytes: device.SizeBytes,
-		ThrottleClassID: classID,
-		Device:          device.Path, Source: store.DiskSourceHostDevice,
+		ThrottleClassID: classID, ReadOnly: request.GetReadOnly(),
+		Device: device.Path, Source: store.DiskSourceHostDevice,
 	}
 	created, err := s.store.CreateDisk(ctx, disk)
 	if err != nil {
@@ -327,25 +331,44 @@ func (s *diskService) UpdateDisk(ctx context.Context, request *rookeryv1.UpdateD
 	}
 	hasProvisioning := request.ProvisioningScript != nil || request.ProvisioningTimeout != nil
 	hasClass := request.ThrottleClassId != nil
+	hasReadOnly := request.ReadOnly != nil
+	if request.GetIsTemplate() && request.GetReadOnly() {
+		return nil, status.Error(codes.InvalidArgument, "template disks cannot be read-only")
+	}
+	if hasReadOnly && request.GetReadOnly() != disk.ReadOnly && store.DiskAttachedToAnyWorkload(disk) {
+		return nil, diskInUseError(diskInUseFromRecord(disk))
+	}
 	if disk.Source == store.DiskSourceHostDevice {
 		if request.GetIsTemplate() || hasProvisioning {
 			return nil, status.Error(codes.InvalidArgument, "host devices cannot be templates or template clones")
 		}
-		if !hasClass {
+		if !hasClass && !hasReadOnly {
 			return diskToProto(disk), nil
 		}
-		updated, err := s.store.SetDiskThrottleClass(ctx, disk.ID, request.ThrottleClassId)
-		if err != nil {
-			return nil, diskUpdateError(err)
+		updated := disk
+		if hasReadOnly {
+			updated, err = s.store.SetDiskReadOnly(ctx, disk.ID, request.GetReadOnly())
+			if err != nil {
+				return nil, diskUpdateError(err)
+			}
+		}
+		if hasClass {
+			updated, err = s.store.SetDiskThrottleClass(ctx, updated.ID, request.ThrottleClassId)
+			if err != nil {
+				return nil, diskUpdateError(err)
+			}
 		}
 		return diskToProto(updated), nil
 	}
-	if request.IsTemplate == nil && !hasProvisioning && !hasClass {
+	if request.IsTemplate == nil && !hasProvisioning && !hasClass && !hasReadOnly {
 		return diskToProto(disk), nil
 	}
 	targetTemplate := disk.IsTemplate
 	if request.IsTemplate != nil {
 		targetTemplate = request.GetIsTemplate()
+	}
+	if hasReadOnly && request.GetReadOnly() && targetTemplate {
+		return nil, status.Error(codes.InvalidArgument, "template disks cannot be read-only")
 	}
 	if targetTemplate && hasClass && request.GetThrottleClassId() > 0 {
 		return nil, status.Error(codes.InvalidArgument, "templates cannot have a throttle class")
@@ -392,7 +415,26 @@ func (s *diskService) UpdateDisk(ctx context.Context, request *rookeryv1.UpdateD
 			return nil, diskUpdateError(err)
 		}
 	}
+	if hasReadOnly {
+		updated, err = s.store.SetDiskReadOnly(ctx, updated.ID, request.GetReadOnly())
+		if err != nil {
+			return nil, diskUpdateError(err)
+		}
+	}
 	return diskToProto(updated), nil
+}
+
+func diskInUseFromRecord(disk store.Disk) *store.DiskInUseError {
+	if len(disk.Attachments) == 0 {
+		return &store.DiskInUseError{}
+	}
+	first := disk.Attachments[0]
+	return &store.DiskInUseError{
+		OwnerKind:       first.WorkloadKind,
+		OwnerID:         first.WorkloadID,
+		OwnerName:       first.WorkloadName,
+		AttachmentCount: len(disk.Attachments),
+	}
 }
 
 func (s *diskService) resolveCreateThrottleClass(ctx context.Context, id int64, isTemplate bool) (*int64, error) {
@@ -428,6 +470,8 @@ func diskAssignmentError(err error) error {
 		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, store.ErrDiskThrottleClassInDeletion):
 		return status.Error(codes.Aborted, "disk is being deleted")
+	case errors.Is(err, store.ErrDiskReadOnlyTemplate):
+		return status.Error(codes.InvalidArgument, "template disks cannot be read-only")
 	default:
 		return nil
 	}
@@ -448,6 +492,9 @@ func validateDiskProvisioning(script, timeout string) error {
 func diskInUseError(err error) error {
 	var owner *store.DiskInUseError
 	if errors.As(err, &owner) {
+		if owner.AttachmentCount > 1 {
+			return status.Errorf(codes.Aborted, "%s; detach them first", owner.Error())
+		}
 		kind := owner.OwnerKind
 		if kind == "" {
 			kind = "workload"
@@ -476,6 +523,8 @@ func diskUpdateError(err error) error {
 		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, store.ErrDiskThrottleClassInDeletion):
 		return status.Error(codes.Aborted, "disk is being deleted")
+	case errors.Is(err, store.ErrDiskReadOnlyTemplate):
+		return status.Error(codes.InvalidArgument, "template disks cannot be read-only")
 	default:
 		return status.Error(codes.Internal, "could not update disk")
 	}
@@ -489,13 +538,7 @@ func (s *diskService) DeleteDisk(ctx context.Context, request *rookeryv1.DeleteD
 		return nil, storeReadError(err, store.ErrDiskNotFound, "disk not found")
 	}
 	if store.DiskAttachedToAnyWorkload(disk) {
-		ownerErr := &store.DiskInUseError{}
-		if disk.AttachedVMID != nil {
-			ownerErr = &store.DiskInUseError{OwnerKind: "vm", OwnerID: *disk.AttachedVMID, OwnerName: disk.AttachedVMName}
-		} else if disk.AttachedLightVMID != nil {
-			ownerErr = &store.DiskInUseError{OwnerKind: "lightvm", OwnerID: *disk.AttachedLightVMID, OwnerName: disk.AttachedLightVMName}
-		}
-		return nil, diskInUseError(ownerErr)
+		return nil, diskInUseError(diskInUseFromRecord(disk))
 	}
 	if disk.Source == store.DiskSourceKouja {
 		if s.registry == nil {

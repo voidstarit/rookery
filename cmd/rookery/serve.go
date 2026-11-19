@@ -315,6 +315,7 @@ func runServe(args []string) error {
 
 	go manager.Run(ctx)
 	go diskReclaimer.Run(ctx)
+	go apiServer.RunLightVMEphemeralReaper(ctx)
 	go apiServer.RunInfrastructureReconciler(ctx)
 
 	servers := []*http.Server{srv}

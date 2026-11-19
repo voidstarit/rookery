@@ -11,6 +11,10 @@
 #   * root=/dev/vda1 that cannot be mounted, then a serial=rootfs fallback
 #   * no root=, a virtio-blk disk with serial=rootfs (serial fallback)
 #   * no root=, a partitioned disk with serial=rootfs (partition search)
+#   * a console session for the chosen init (PID 1's process group is the
+#     console's foreground group, which is what lets Ctrl+C reach the guest)
+#   * a rookery-config drive extracted to /run/rookery: its env is loaded and
+#     startup-cmd becomes PID 1, while an explicit init= still overrides it
 #   * a virtio-fs tag "root" when virtiofsd is available
 #
 # Required environment:
@@ -87,9 +91,32 @@ chmod 0755 "$ROOT/init"
 cat > "$ROOT/sbin/alt-init" <<'EOF'
 #!/bin/busybox sh
 echo "LIGHTVM-DISK-ROOTFS-ALT-OK"
+echo "lightvm: alt-init env=${ROOKERY_CONFIG_ENV:-}"
 /bin/busybox poweroff -f
 EOF
 chmod 0755 "$ROOT/sbin/alt-init"
+
+# The initramfs must hand PID 1 a session whose process group owns the
+# console: the tty line discipline signals that group for Ctrl+C. tcgetpgrp(0)
+# reads the console's foreground group, so a match proves a console shell can
+# interrupt its foreground job. A static binary is used because the test root
+# has no libc.
+cat > /test/session-init.c <<'EOF'
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/reboot.h>
+int main(void) {
+	printf("LIGHTVM-CONSOLE-SESSION pid=%d pgrp=%d sid=%d fg=%d\n",
+	       (int)getpid(), (int)getpgrp(), (int)getsid(0),
+	       (int)tcgetpgrp(0));
+	fflush(stdout);
+	sync();
+	reboot(RB_POWER_OFF);
+	return 0;
+}
+EOF
+gcc -static -O2 -o "$ROOT/sbin/session-init" /test/session-init.c
+chmod 0755 "$ROOT/sbin/session-init"
 printf '%s\n' disk > "$ROOT/marker"
 
 # A directly formatted disk: root=/dev/vda and the serial fallback both use it.
@@ -154,6 +181,30 @@ SCRIPT
 	--tmpfs /tmp:rw,exec,nosuid,nodev,mode=1777 \
 	-v "$WORK_DIR:/test:rw" \
 	"$DOCKER_IMAGE" sh /test/make-image.sh
+
+# A rookery-config tar for the config-drive boot cases. This is the same layout
+# Rookery writes for a disk-backed LightVM with env and a startup command.
+CONFIG_DIR=$WORK_DIR/config
+rm -rf "$CONFIG_DIR"
+mkdir -p "$CONFIG_DIR/app"
+printf '%s\n' 'ROOKERY_CONFIG_ENV=from-config' > "$CONFIG_DIR/env"
+printf '%s\n' 'key: value' > "$CONFIG_DIR/app/config.yaml"
+cat > "$CONFIG_DIR/startup-cmd" <<'EOF'
+#!/bin/busybox sh
+echo "LIGHTVM-CONFIG-STARTUP-OK"
+echo "lightvm: config pid=$$"
+echo "lightvm: config env=$ROOKERY_CONFIG_ENV"
+[ -f /run/rookery/env ] && echo "lightvm: config env file present"
+[ -f /run/rookery/startup-cmd ] && echo "lightvm: config startup file present"
+[ -f /run/rookery/app/config.yaml ] && echo "lightvm: config user file=$(/bin/busybox cat /run/rookery/app/config.yaml)"
+[ -c /dev/console ] && echo "lightvm: config console present"
+if /bin/busybox grep -q ' / overlay ' /proc/mounts 2>/dev/null; then
+	echo "lightvm: config overlay present"
+fi
+/bin/busybox poweroff -f
+EOF
+chmod 0755 "$CONFIG_DIR/startup-cmd"
+tar -cf "$WORK_DIR/rookery-config.tar" -C "$CONFIG_DIR" env startup-cmd app/config.yaml
 
 ACCEL="-accel tcg"
 CPU=""
@@ -243,7 +294,55 @@ expect 'lightvm: found block device /dev/vda with serial rootfs'
 expect 'lightvm: mounted /dev/vda1'
 expect 'lightvm: switch_root /newroot /init'
 
-# 6. A virtio-fs tag "root" is the first choice. A serial-tagged disk is also
+# 6. A rookery-config drive is extracted to /run/rookery, its environment is
+#    loaded, and its startup-cmd becomes PID 1. The disk-root /init must not run.
+boot_case config LIGHTVM-CONFIG-STARTUP-OK "root=/dev/vda" \
+	-drive "file=$WORK_DIR/disk.img,if=none,id=test-root,format=raw" \
+	-device "virtio-blk-pci,drive=test-root" \
+	-drive "file=$WORK_DIR/rookery-config.tar,if=none,id=rookery-config,format=raw,readonly=on" \
+	-device "virtio-blk-pci,drive=rookery-config,serial=rookery-config"
+expect 'lightvm: found rookery-config device /dev/vd'
+expect 'lightvm: extracted LightVM config to /run/rookery'
+expect 'lightvm: loading LightVM environment from /run/rookery/env'
+expect 'lightvm: using LightVM startup-cmd as PID 1'
+expect 'lightvm: switch_root /newroot /run/rookery/startup-cmd'
+expect 'LIGHTVM-CONFIG-STARTUP-OK'
+expect 'lightvm: config pid=1'
+expect 'lightvm: config env=from-config'
+expect 'lightvm: config env file present'
+expect 'lightvm: config startup file present'
+expect 'lightvm: config user file=key: value'
+expect 'lightvm: config console present'
+if grep -q 'LIGHTVM-DISK-ROOTFS-OK' "$LAST_LOG"; then
+	fail "the disk-root /init ran even though startup-cmd was present"
+fi
+
+# 7. An explicit init= overrides the config startup-cmd, but the config drive
+#    is still extracted and its environment is loaded for the chosen init.
+boot_case config-explicit LIGHTVM-DISK-ROOTFS-ALT-OK \
+	"root=/dev/vda init=/sbin/alt-init" \
+	-drive "file=$WORK_DIR/disk.img,if=none,id=test-root,format=raw" \
+	-device "virtio-blk-pci,drive=test-root" \
+	-drive "file=$WORK_DIR/rookery-config.tar,if=none,id=rookery-config,format=raw,readonly=on" \
+	-device "virtio-blk-pci,drive=rookery-config,serial=rookery-config"
+expect 'lightvm: extracted LightVM config to /run/rookery'
+expect 'lightvm: loading LightVM environment from /run/rookery/env'
+expect 'lightvm: alt-init env=from-config'
+if grep -q 'LIGHTVM-CONFIG-STARTUP-OK' "$LAST_LOG"; then
+	fail "startup-cmd ran even though init= was set"
+fi
+
+# 8. The handoff puts the chosen init in its own session with the console as
+#    its controlling terminal, so a shell started with init=/bin/sh has job
+#    control and receives Ctrl+C. PID 1 is not a process group leader or
+#    session leader at boot, so without the handoff all of these read 0 or -1.
+boot_case console-session LIGHTVM-CONSOLE-SESSION \
+	"root=/dev/vda init=/sbin/session-init" \
+	-drive "file=$WORK_DIR/disk.img,if=virtio,format=raw"
+expect 'LIGHTVM-CONSOLE-SESSION pid=1 pgrp=1 sid=1 fg=1'
+expect 'lightvm: switch_root /newroot /sbin/session-init'
+
+# 9. A virtio-fs tag "root" is the first choice. A serial-tagged disk is also
 #    attached to prove the block search is never reached. This needs the host
 #    virtiofsd used by the other LightVM tests; skip it when it is not
 #    installed.

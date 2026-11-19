@@ -60,6 +60,7 @@ type LightVMController interface {
 	StartPreparedLightVM(ctx context.Context, prepared *lightvm.PreparedLightVM, vm store.LightVM, plan qemu.StartPlan) error
 	CleanupPreparedLightVM(ctx context.Context, prepared lightvm.PreparedLightVM) error
 	StopQEMULightVM(ctx context.Context, id string) error
+	CleanupStoppedLightVM(ctx context.Context, id string) error
 	RunState(ctx context.Context, id string) (string, error)
 	RunningLightVM(id string) bool
 	LightVMConsoleSocket(id string, consoleID int64) string

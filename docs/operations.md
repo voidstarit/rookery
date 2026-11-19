@@ -274,13 +274,15 @@ existing absolute host path are not allowed to delete that host file.
 
 A LightVM definition includes a name, description, vCPUs, memory, console flag,
 cgroup class, kernel and initramfs, an optional container image, environment
-variables, either an executable path and argument list or inline executable
-script content, a kernel command line, ordered block disks, ordered
-host-directory virtiofs shares, network interfaces, and an ordered console list.
+variables, ordered user config files (`config_files`), either an executable
+path and argument list or inline executable script content, a kernel command
+line, ordered block disks, ordered host-directory virtiofs shares, network
+interfaces, and an ordered console list.
 `executable_path` and `executable_script` are mutually exclusive, and script
 mode does not accept executable arguments. Disks support the same LVM-thin, host-passthrough, and
-Kouja sources as VMs and use the same single-owner rule: a disk belongs to one
-VM or one LightVM, never both. Host-directory shares bind an absolute existing
+Kouja sources as VMs and use the same ownership rule: a read-write disk belongs
+to one VM or one LightVM, never both, while a read-only disk may be attached to
+any number of workloads. Host-directory shares bind an absolute existing
 directory with a unique guest tag; `read_only` defaults to true, and the tag
 `rootfs` is reserved. Read-only enforcement uses virtiofsd `--readonly`
 (virtiofsd 1.13+). Up to 24 combined disks, interfaces, and shares are allowed
@@ -290,9 +292,28 @@ The kernel image remains mandatory and `append` remains caller-owned; Rookery
 does not add or rewrite `root=`. `image` may be omitted when at least one disk is
 attached: that definition is disk-backed, the first attached disk is the boot
 disk, and it boots the kernel/initramfs from the disks without buildah, a
-container rootfs, `.env`/`.entrypoint`, or the `rootfs` virtiofs device. In disk-backed mode `env`, `executable_path`,
-`executable_script`, and `executable_args` must be empty, and `append` should
-describe the disk root (for example `root=/dev/vda1 rootwait`). A definition
+container rootfs, `.env`/`.entrypoint`, or the `rootfs` virtiofs device. A
+disk-backed definition may still set environment variables, arbitrary config
+files, and a startup command or script. Rookery writes an attempt-scoped,
+read-only, uncompressed tar archive to
+`<run-dir>/lightvm-<uuid>-<token>.rookery-config.tar` and attaches it after the
+workload disks as a read-only virtio-blk device with serial `rookery-config`.
+The archive contains `env` (one `NAME=value` per line), `startup-cmd` (an
+executable `#!/bin/sh` script) when set, and every user config file at its
+relative name. The LightVM form's **Config files** section accepts uploaded
+text files or pasted name/content pairs (up to 64 files, each up to 1 MiB and
+4 MiB combined); names are relative, must not traverse (`..`), and may not use
+the reserved root names `env` or `startup-cmd`. Guests can
+find the device through `/dev/disk/by-id/virtio-rookery-config` with udev, or by
+scanning `/sys/block/*/serial`, and read it with `tar -xOf` or `tar -xf`.
+Rookery does not execute the startup command itself; the bundled
+`initramfs-lightvm-disk-rootfs` and `initramfs-lightvm-overlay-rootfs` extract
+the archive into `/run/rookery`, load its environment, and exec `startup-cmd`
+as PID 1 unless an explicit `init=`/`lightvm.init=` is set. A custom initramfs
+may consume the device differently. When a config drive is attached, Rookery
+uses explicit `virtio-blk-pci` devices for the workload disks too, preserving
+their `vda`/`vdb` order. `append` should describe the disk root (for example
+`root=/dev/vda1 rootwait`). A definition
 must have either an image or at least one disk. The repository also builds a
 generic disk-root initramfs, `initramfs-lightvm-disk-rootfs` (`make -C
 extra/linux-kernel initramfs-disk-rootfs`), for an existing Linux root
@@ -303,7 +324,11 @@ device, then a block device whose virtio-blk serial is `root` or `rootfs`
 `/bin/init` are tried. `rootfstype=`, `rootflags=`, `ro`, `rw`, `rootdelay=`,
 and `rootwait` are honored, and `root=UUID=`/`LABEL=` are resolved without
 udev. It does not implement the `.env`/`.entrypoint` contract or run DHCP.
-Use it with the `storage` kernel variant when the root is ext4 or XFS; the
+The selected init runs as PID 1 in a new session with `/dev/console` as its
+controlling terminal, so a console shell started with `init=/bin/sh` has job
+control and Ctrl+C signals its foreground job; `/dev/console` stays its
+standard input and output. Use it with the `storage` kernel variant when the
+root is ext4 or XFS; the
 minimal `virtio` kernel has no on-disk filesystem drivers. LVM, dm-crypt,
 MD/RAID, and iSCSI roots still need a distribution-specific initramfs with the
 matching tools. For a writable overlay root, use
@@ -315,7 +340,9 @@ The initramfs also accepts `overlay:<N>` and `overlay-<N>`, the forms Rookery's
 disk-serial validation allows. On the upper filesystem it uses `upper/` and
 `work/` (override with `overlay-upper-dir=`/`overlay-work-dir=`). The upper is
 mounted with `index=off,metacopy=off,redirect_dir=nofollow,uuid=null` so it can
-be reused with a different lower filesystem. Pair it with the `storage` kernel.
+be reused with a different lower filesystem. Pair it with the `storage` kernel,
+and note that it hands the init the same console session as the disk-root
+image.
 The LightVM disk picker also
 has an optional per-disk serial field, matching the VM disk picker. Every definition has at least one
 console (up to 32); the first is exposed to the guest as
@@ -328,7 +355,15 @@ console Unix socket per configured console in the QEMU run directory, the
 selected cgroup class, and vhost-user interfaces. Rookery uses
 `-display none` rather than `-nographic` because QEMU does not allow
 `-nographic` together with `-daemonize`. **Stop** terminates the process.
-Status and desired state are reconciled after API/VPP restarts. For an
+Status and desired state are reconciled after API/VPP restarts. An
+**ephemeral** LightVM is one-shot: QEMU starts with `-no-reboot` and the
+kernel command line gets `panic=-1` (unless an explicit `panic=` is supplied),
+so a guest reboot, kernel panic, or poweroff ends the process. Rookery then
+removes the attempt container, virtiofsd processes, config drive, and console
+sockets, deletes the definition, and releases its disk and interface
+attachments so other VMs can use them; the disk and network records themselves
+are kept. An explicit **Stop** on an ephemeral LightVM does the same. Ephemeral
+definitions are not restarted automatically after an API or host restart. For an
 image-backed definition, Rookery uses `buildah` to pull `image` only if it is
 missing, creates
 an **ephemeral writable** attempt container named
@@ -338,7 +373,9 @@ an **ephemeral writable** attempt container named
 arguments; script mode writes the supplied content, adding `#!/bin/sh` only
 when no shebang is present. Rookery starts `virtiofsd` on
 `<run-dir>/lightvm-<uuid>-<token>.virtiofs.sock`, and passes a
-`vhost-user-fs-pci` device with tag `rootfs` to QEMU. Each host-directory share
+`vhost-user-fs-pci` device with tag `rootfs` to QEMU. For a disk-backed
+definition with environment or startup data, Rookery instead passes the
+read-only `rookery-config` virtio-blk device described above. Each host-directory share
 gets its own attempt-scoped virtiofsd process/socket and QEMU device; the guest
 image chooses whether and where to mount each tag. Read-only shares start
 virtiofsd with `--readonly`. Parse failures, stopped
@@ -353,8 +390,9 @@ lines, `export ` prefixes, and `#` comments are ignored, and names must match
 using shell quoting, or from inline script content; both are mode `0755`.
 `virtiofsd` is resolved next to the `rookery`
 executable unless `-virtiofsd-bin` is set. The container image/environment/
-executable fields are not passed over the kernel cmdline; the initramfs
-supplies its own contract. `/api/status` includes a `lightvm` component that
+executable fields are not passed over the kernel cmdline for image-backed
+definitions; the initramfs supplies its own contract. Disk-backed definitions
+receive them only through the `rookery-config` block device. `/api/status` includes a `lightvm` component that
 reports whether `buildah` and `virtiofsd` are available. Image-backed
 definitions need both tools; disk-backed definitions need only virtiofsd when
 they have host-directory shares. The LightVM tab disables Start only for

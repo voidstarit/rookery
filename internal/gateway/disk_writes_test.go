@@ -331,3 +331,107 @@ func TestDiskThrottleClassDiskRoutes(t *testing.T) {
 	}
 	_ = unknownUpdated.Body.Close()
 }
+
+func TestDiskReadOnlyRoutes(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "disk-readonly.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	gw, err := gateway.New(st, fakeReadiness{status: readiness.Status{
+		Ready: true,
+		ThinPool: readiness.ThinPoolStatus{
+			ComponentStatus: readiness.ComponentStatus{Ready: true},
+			VG:              "vg0",
+			Name:            "pool",
+		},
+	}}, gateway.WithDiskProvisioner(&fakeDiskProvisioner{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	server := httptest.NewServer(gw.Handler)
+	t.Cleanup(server.Close)
+
+	created, err := http.Post(server.URL+"/api/disks", "application/json",
+		strings.NewReader(`{"name":"shared-data","size_gb":20,"read_only":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.StatusCode != http.StatusCreated {
+		t.Fatalf("create read-only disk status = %d, body = %s", created.StatusCode, readBody(t, created))
+	}
+	var disk map[string]any
+	decodeBody(t, created, &disk)
+	if disk["read_only"] != true {
+		t.Fatalf("created disk = %+v, want read_only true", disk)
+	}
+	id := jsonID(disk["id"])
+
+	put := func(body string) (int, map[string]any) {
+		t.Helper()
+		request, err := http.NewRequest(http.MethodPut, server.URL+"/api/disks/"+id, strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Content-Type", "application/json")
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var decoded map[string]any
+		if response.StatusCode == http.StatusOK {
+			decodeBody(t, response, &decoded)
+		} else {
+			_ = readBody(t, response)
+		}
+		return response.StatusCode, decoded
+	}
+
+	if status, updated := put(`{"read_only":false}`); status != http.StatusOK || updated["read_only"] == true {
+		t.Fatalf("demote disk: status=%d body=%+v", status, updated)
+	}
+	if status, updated := put(`{"read_only":true}`); status != http.StatusOK || updated["read_only"] != true {
+		t.Fatalf("promote disk: status=%d body=%+v", status, updated)
+	}
+
+	diskID := jsonInteger(disk["id"])
+	vm, err := st.CreateVM(ctx, store.VM{
+		Name: "read-only-owner", VCPUs: 1, MemoryMB: 256, DiskIDs: []int64{diskID},
+	})
+	if err != nil {
+		t.Fatalf("attach disk directly: %v", err)
+	}
+	if status, _ := put(`{"read_only":false}`); status == http.StatusOK {
+		t.Fatal("demoted an attached read-only disk")
+	}
+
+	list, err := http.Get(server.URL + "/api/disks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var listed []map[string]any
+	decodeBody(t, list, &listed)
+	if len(listed) != 1 || len(listed[0]["attachments"].([]any)) != 1 {
+		t.Fatalf("listed disks = %+v, want one attachment", listed)
+	}
+
+	if err := st.DeleteVM(ctx, vm.ID); err != nil {
+		t.Fatalf("delete vm: %v", err)
+	}
+	if status, updated := put(`{"read_only":false}`); status != http.StatusOK || updated["read_only"] == true {
+		t.Fatalf("demote detached disk: status=%d body=%+v", status, updated)
+	}
+
+	template, err := http.Post(server.URL+"/api/disks", "application/json",
+		strings.NewReader(`{"name":"bad-template","size_gb":10,"is_template":true,"read_only":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if template.StatusCode == http.StatusCreated {
+		t.Fatal("created a read-only template")
+	}
+	_ = readBody(t, template)
+}

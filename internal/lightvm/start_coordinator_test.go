@@ -200,3 +200,44 @@ func TestStartCoordinatorEntryInitializesReservationChannel(t *testing.T) {
 		t.Fatal("reservation channel was not recreated")
 	}
 }
+
+func TestStartCoordinatorReserveForCleanup(t *testing.T) {
+	c := NewStartCoordinatorWithLimit(2)
+	release, busy := c.ReserveForCleanup("idle")
+	if busy {
+		t.Fatal("idle ReserveForCleanup reported a busy start")
+	}
+	release()
+
+	startCtx, done, err := c.Begin(context.Background(), "busy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	release, busy = c.ReserveForCleanup("busy")
+	if !busy {
+		t.Fatal("ReserveForCleanup did not report the active start")
+	}
+	select {
+	case <-startCtx.Done():
+		t.Fatal("ReserveForCleanup canceled an active start")
+	default:
+	}
+	release()
+	done()
+
+	held := c.Reserve("reserved")
+	cleanupRelease, busy := c.ReserveForCleanup("reserved")
+	if !busy {
+		t.Fatal("ReserveForCleanup did not report a held reservation")
+	}
+	cleanupRelease()
+	held()
+
+	var nilCoordinator *StartCoordinator
+	release, busy = nilCoordinator.ReserveForCleanup("nil")
+	if busy {
+		t.Fatal("nil ReserveForCleanup reported busy")
+	}
+	release()
+	release()
+}

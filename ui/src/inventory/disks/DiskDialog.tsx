@@ -28,6 +28,7 @@ export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskD
   const [source, setSource] = useState<"empty" | "template">("empty");
   const [templateID, setTemplateID] = useState("");
   const [markAsTemplate, setMarkAsTemplate] = useState(false);
+  const [readOnly, setReadOnly] = useState(false);
   const [provisioningScript, setProvisioningScript] = useState("");
   const [provisioningTimeout, setProvisioningTimeout] = useState("5m");
   const [provisioningJSON, setProvisioningJSON] = useState("{}");
@@ -51,7 +52,8 @@ export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskD
   const template = templates.find((disk) => String(disk.id) === templateID) || null;
   const hostDevice = hostDevices.find((device) => device.path === hostDevicePath) || null;
   const availableClasses = classes.filter((item) => !item.validation_error);
-  const classDisabled = storageKind === "lvm" && source === "empty" && markAsTemplate;
+  const creatingTemplate = storageKind === "lvm" && source === "empty" && markAsTemplate;
+  const classDisabled = creatingTemplate;
 
   useEffect(() => {
     if (!supportsTemplates) {
@@ -124,12 +126,13 @@ export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskD
       const classID = classDisabled ? 0 : Number(throttleClassID) || 0;
       const body =
         storageKind === "host"
-          ? { name: name.trim(), host_device: hostDevice?.path, throttle_class_id: classID }
+          ? { name: name.trim(), host_device: hostDevice?.path, throttle_class_id: classID, read_only: readOnly }
           : {
               name: name.trim(),
               size_gb: Number(sizeGB),
               storage_backend_id: Number(backendID),
               throttle_class_id: classID,
+              read_only: readOnly,
               ...(source === "template" && template ? { template_disk_id: template.id } : {}),
               ...(source === "template" && template?.provisioning_script && provisioning !== undefined
                 ? { provisioning }
@@ -333,6 +336,7 @@ export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskD
                         setMarkAsTemplate(checked);
                         if (checked) {
                           setThrottleClassID("0");
+                          setReadOnly(false);
                         }
                       }}
                     />
@@ -453,6 +457,22 @@ export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskD
               ) : null}
             </>
           )}
+          <label class="field field-wide checkbox-field">
+            <span class="field-label">Read-only</span>
+            <span class="checkbox-row">
+              <input
+                type="checkbox"
+                checked={readOnly}
+                disabled={saving || creatingTemplate}
+                onChange={(event) => setReadOnly(event.currentTarget.checked)}
+              />
+              <span>Attach this disk read-only and allow sharing by multiple VMs and LightVMs</span>
+            </span>
+            <span class="field-hint">
+              QEMU opens a read-only disk with write access disabled. Read-only disks may be
+              attached to any number of workloads; read-write disks remain single-owner.
+            </span>
+          </label>
           <div class="field field-wide">
             <LabelsInput labels={labels} onChange={setLabels} disabled={saving} />
           </div>

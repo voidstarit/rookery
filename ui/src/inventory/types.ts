@@ -169,6 +169,11 @@ export type LightVMEnvVar = {
   value: string;
 };
 
+export type LightVMConfigFile = {
+  name: string;
+  content: string;
+};
+
 export type LightVMConsole = {
   id: number;
   name: string;
@@ -191,6 +196,7 @@ export type LightVM = {
   vcpus: number;
   memory_mb: number;
   console_enabled: boolean;
+  ephemeral?: boolean;
   cgroup_class?: string;
   kernel_id: number;
   kernel_name: string;
@@ -198,6 +204,7 @@ export type LightVM = {
   initramfs_name: string;
   image: string;
   env?: LightVMEnvVar[];
+  config_files?: LightVMConfigFile[];
   executable_path?: string;
   executable_script?: string;
   executable_args?: string[];
@@ -262,6 +269,7 @@ export type VMDisk = {
   source?: string;
   protocol?: string;
   serial?: string;
+  read_only?: boolean;
   locator?: string;
   throttle_class_id?: number;
   throttle_class_name?: string;
@@ -400,6 +408,14 @@ export type StorageBackend = {
   updated_at: string;
 };
 
+export type DiskAttachment = {
+  workload_kind: "vm" | "lightvm" | string;
+  workload_id: string;
+  workload_name: string;
+  position: number;
+  read_only?: boolean;
+};
+
 export type Disk = {
   id: number;
   name: string;
@@ -421,6 +437,8 @@ export type Disk = {
   attached_vm_name?: string;
   attached_lightvm_id?: string;
   attached_lightvm_name?: string;
+  read_only?: boolean;
+  attachments?: DiskAttachment[];
   is_template?: boolean;
   template_disk_id?: number;
   template_disk_name?: string;

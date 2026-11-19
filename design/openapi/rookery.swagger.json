@@ -4119,6 +4119,10 @@
         "throttle_class_id": {
           "type": "string",
           "format": "int64"
+        },
+        "read_only": {
+          "type": "boolean",
+          "description": "read_only may change only while the disk has no attachments."
         }
       }
     },
@@ -4350,6 +4354,17 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "config_files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMConfigFile"
+          }
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "ephemeral terminates the runtime when the guest exits while keeping the\ndefinition's disks and interfaces attached."
         }
       }
     },
@@ -5138,6 +5153,10 @@
         "throttle_class_id": {
           "type": "string",
           "format": "int64"
+        },
+        "read_only": {
+          "type": "boolean",
+          "description": "read_only marks the disk as shared read-only. Templates cannot be\nread-only."
         }
       }
     },
@@ -5309,6 +5328,17 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "config_files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMConfigFile"
+          }
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "ephemeral terminates the runtime when the guest exits while keeping the\ndefinition's disks and interfaces attached."
         }
       }
     },
@@ -5635,8 +5665,43 @@
         },
         "attached_lightvm_name": {
           "type": "string"
+        },
+        "read_only": {
+          "type": "boolean",
+          "description": "read_only means QEMU attaches the disk read-only and multiple workloads\nmay own it."
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1DiskAttachment"
+          },
+          "description": "attachments lists every workload owner. The attached_* fields above are\npopulated only when exactly one workload owns the disk."
         }
       }
+    },
+    "v1DiskAttachment": {
+      "type": "object",
+      "properties": {
+        "workload_kind": {
+          "type": "string",
+          "description": "workload_kind is \"vm\" or \"lightvm\"."
+        },
+        "workload_id": {
+          "type": "string"
+        },
+        "workload_name": {
+          "type": "string"
+        },
+        "position": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "read_only": {
+          "type": "boolean"
+        }
+      },
+      "description": "DiskAttachment names one workload that has the disk attached."
     },
     "v1DiskThrottleClass": {
       "type": "object",
@@ -6274,8 +6339,31 @@
         },
         "executable_script": {
           "type": "string"
+        },
+        "config_files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMConfigFile"
+          }
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "ephemeral makes the LightVM one-shot: when the guest exits (reboot,\npanic, or poweroff) Rookery stops QEMU, virtiofsd, and the attempt\ncontainer automatically. Attached disks and interfaces remain."
         }
       }
+    },
+    "v1LightVMConfigFile": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        }
+      },
+      "description": "LightVMConfigFile is one user-supplied file in the rookery-config tar for a\ndisk-backed LightVM. Names are relative to /run/rookery in the guest; the\nsystem reserves \"env\" and \"startup-cmd\" at the archive root."
     },
     "v1LightVMConsole": {
       "type": "object",
@@ -7769,6 +7857,10 @@
         "serial": {
           "type": "string",
           "description": "serial is the guest-visible virtio-blk serial for this attachment."
+        },
+        "read_only": {
+          "type": "boolean",
+          "description": "read_only is true when QEMU attaches this disk read-only. Such a disk may\nbe attached to multiple VMs and LightVMs."
         }
       }
     },

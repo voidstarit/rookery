@@ -39,6 +39,10 @@ func TestLightVMDiskBootWithoutImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	configDisk, err := st.CreateDisk(ctx, store.Disk{Name: "boot-config", SizeGB: 10, VG: "vg0", ThinPool: "pool", StorageBackendID: &backend.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	gw, err := gateway.New(st, fakeReadiness{})
 	if err != nil {
@@ -114,13 +118,47 @@ func TestLightVMDiskBootWithoutImage(t *testing.T) {
 	if response, _ := post(base("no-root")); response.StatusCode != http.StatusBadRequest {
 		t.Fatalf("no-image/no-disk status = %d", response.StatusCode)
 	}
-	if response, _ := post(mergeMap(base("exec-without-image"), map[string]any{
-		"disk_ids": []int64{disk.ID}, "executable_path": "/bin/app",
+	configured, configuredVM := post(mergeMap(base("configured"), map[string]any{
+		"disk_ids":        []int64{configDisk.ID},
+		"executable_path": "/sbin/init",
+		"executable_args": []string{"--verbose"},
+		"env":             []map[string]string{{"name": "APP_ENV", "value": "production"}},
+		"config_files":    []map[string]string{{"name": "app/config.yaml", "content": "key: value\n"}},
+	}))
+	if configured.StatusCode != http.StatusCreated {
+		t.Fatalf("disk-backed executable status = %d", configured.StatusCode)
+	}
+	if env, _ := configuredVM["env"].([]any); len(env) != 1 {
+		t.Fatalf("disk-backed env = %+v", configuredVM["env"])
+	}
+	if configuredVM["executable_path"] != "/sbin/init" {
+		t.Fatalf("disk-backed executable_path = %+v", configuredVM["executable_path"])
+	}
+	if files, _ := configuredVM["config_files"].([]any); len(files) != 1 {
+		t.Fatalf("disk-backed config_files = %+v", configuredVM["config_files"])
+	}
+	if response, _ := post(mergeMap(base("image-with-config"), map[string]any{
+		"image": "alpine:3.20", "executable_path": "/bin/app",
+		"config_files": []map[string]string{{"name": "app/config.yaml", "content": "x"}},
 	})); response.StatusCode != http.StatusBadRequest {
-		t.Fatalf("executable without image status = %d", response.StatusCode)
+		t.Fatalf("image-backed config_files status = %d", response.StatusCode)
+	}
+	if response, _ := post(mergeMap(base("bad-config-name"), map[string]any{
+		"disk_ids":     []int64{configDisk.ID},
+		"config_files": []map[string]string{{"name": "../escape", "content": "x"}},
+	})); response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid config file name status = %d", response.StatusCode)
+	}
+	if response, _ := post(mergeMap(base("args-without-path"), map[string]any{
+		"disk_ids": []int64{configDisk.ID}, "executable_args": []string{"--verbose"},
+	})); response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("executable_args without path status = %d", response.StatusCode)
 	}
 
-	updated, updatedVM := put(id, base("disk-boot"))
+	updated, updatedVM := put(id, mergeMap(base("disk-boot"), map[string]any{
+		"env":             []map[string]string{{"name": "APP_ENV", "value": "staging"}},
+		"executable_path": "/sbin/init",
+	}))
 	if updated.StatusCode != http.StatusOK {
 		t.Fatalf("update status = %d", updated.StatusCode)
 	}

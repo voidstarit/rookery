@@ -10,7 +10,8 @@
 # The second boot repeats the test with overlay:1/2/3 serials, the form that is
 # valid through Rookery's disk-serial validation. The upper image is inspected
 # after each boot to prove that a guest write landed in upper/ on the overlay
-# upper filesystem.
+# upper filesystem. A third boot attaches a rookery-config drive and proves its
+# env is loaded and startup-cmd becomes PID 1.
 #
 # Required environment:
 #   KERNEL, INITRAMFS, WORK_DIR, DOCKER_IMAGE
@@ -81,6 +82,11 @@ fi
 if /bin/busybox grep -q ' /dev/shm tmpfs ' /proc/mounts 2>/dev/null; then
 	echo "lightvm: devshm mounted"
 fi
+# The handoff must leave PID 1 in its own session; a console shell's Ctrl+C
+# then has a foreground process group to signal. /proc/1/stat fields 5 and 6
+# are the process group and session.
+set -- $(/bin/busybox cat /proc/1/stat)
+echo "lightvm: console session pgrp=$5 sid=$6"
 /bin/busybox touch /written-by-guest
 /bin/busybox sync
 /bin/busybox poweroff -f
@@ -106,6 +112,28 @@ SCRIPT
 	--read-only --cap-drop=ALL --security-opt=no-new-privileges \
 	-v "$WORK_DIR:/test:rw" \
 	"$DOCKER_IMAGE" sh /test/make-image.sh
+
+# A rookery-config tar for the config-drive boot case.
+CONFIG_DIR=$WORK_DIR/config
+rm -rf "$CONFIG_DIR"
+mkdir -p "$CONFIG_DIR/app"
+printf '%s\n' 'ROOKERY_CONFIG_ENV=from-config' > "$CONFIG_DIR/env"
+printf '%s\n' 'key: value' > "$CONFIG_DIR/app/config.yaml"
+cat > "$CONFIG_DIR/startup-cmd" <<'EOF'
+#!/bin/busybox sh
+echo "LIGHTVM-OVERLAY-CONFIG-OK"
+echo "lightvm: config pid=$$"
+echo "lightvm: config env=$ROOKERY_CONFIG_ENV"
+[ -f /run/rookery/env ] && echo "lightvm: config env file present"
+[ -f /run/rookery/startup-cmd ] && echo "lightvm: config startup file present"
+[ -f /run/rookery/app/config.yaml ] && echo "lightvm: config user file=$(/bin/busybox cat /run/rookery/app/config.yaml)"
+if /bin/busybox grep -q ' / overlay ' /proc/mounts 2>/dev/null; then
+	echo "lightvm: config overlay present"
+fi
+/bin/busybox poweroff -f
+EOF
+chmod 0755 "$CONFIG_DIR/startup-cmd"
+tar -cf "$WORK_DIR/rookery-config.tar" -C "$CONFIG_DIR" env startup-cmd app/config.yaml
 
 ACCEL="-accel tcg"
 CPU=""
@@ -165,6 +193,7 @@ check_common() {
 	expect 'lightvm: overlay option uuid=null'
 	expect 'lightvm: devpts mounted'
 	expect 'lightvm: devshm mounted'
+	expect 'lightvm: console session pgrp=1 sid=1'
 }
 
 # A guest write must land in <upper>/written-by-guest on the upper filesystem.
@@ -193,5 +222,41 @@ check_upper "$WORK_DIR/upper.img"
 boot_overlay colon ':' "$WORK_DIR/upper-colon.img"
 check_common
 check_upper "$WORK_DIR/upper-colon.img"
+
+# A rookery-config drive is extracted into /run/rookery and its startup-cmd
+# becomes PID 1 instead of the overlay root's /init.
+LAST_LOG=$WORK_DIR/qemu-config.log
+rm -f "$LAST_LOG"
+echo "==> config"
+timeout "$BOOT_TIMEOUT" "$QEMU" \
+	-machine q35 -m 256M -smp 2 $ACCEL $CPU \
+	-kernel "$KERNEL" \
+	-initrd "$INITRAMFS" \
+	-append "console=ttyS0,115200 panic=1 overlay-rootfs=true" \
+	-drive "file=$WORK_DIR/lower1.img,if=none,id=ovl1,format=raw" \
+	-device "virtio-blk-pci,drive=ovl1,serial=overlay=1" \
+	-drive "file=$WORK_DIR/lower2.img,if=none,id=ovl2,format=raw" \
+	-device "virtio-blk-pci,drive=ovl2,serial=overlay=2" \
+	-drive "file=$WORK_DIR/upper.img,if=none,id=ovl3,format=raw" \
+	-device "virtio-blk-pci,drive=ovl3,serial=overlay=3" \
+	-drive "file=$WORK_DIR/rookery-config.tar,if=none,id=rookery-config,format=raw,readonly=on" \
+	-device "virtio-blk-pci,drive=rookery-config,serial=rookery-config" \
+	-display none -serial stdio -monitor none -no-reboot \
+	>"$LAST_LOG" 2>&1 || true
+grep -q 'LIGHTVM-OVERLAY-CONFIG-OK' "$LAST_LOG" || fail "config startup-cmd did not run"
+expect 'lightvm: found rookery-config device /dev/vd'
+expect 'lightvm: extracted LightVM config to /run/rookery'
+expect 'lightvm: loading LightVM environment from /run/rookery/env'
+expect 'lightvm: using LightVM startup-cmd as PID 1'
+expect 'lightvm: switch_root /newroot /run/rookery/startup-cmd'
+expect 'lightvm: config pid=1'
+expect 'lightvm: config env=from-config'
+expect 'lightvm: config env file present'
+expect 'lightvm: config startup file present'
+expect 'lightvm: config user file=key: value'
+expect 'lightvm: config overlay present'
+if grep -q 'LIGHTVM-OVERLAY-ROOTFS-OK' "$LAST_LOG"; then
+	fail "the overlay root /init ran even though startup-cmd was present"
+fi
 
 echo "overlay-root initramfs test passed"

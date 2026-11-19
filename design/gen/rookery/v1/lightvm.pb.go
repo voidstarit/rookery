@@ -77,6 +77,61 @@ func (x *LightVMEnvVar) GetValue() string {
 	return ""
 }
 
+// LightVMConfigFile is one user-supplied file in the rookery-config tar for a
+// disk-backed LightVM. Names are relative to /run/rookery in the guest; the
+// system reserves "env" and "startup-cmd" at the archive root.
+type LightVMConfigFile struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Content       string                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LightVMConfigFile) Reset() {
+	*x = LightVMConfigFile{}
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LightVMConfigFile) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LightVMConfigFile) ProtoMessage() {}
+
+func (x *LightVMConfigFile) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LightVMConfigFile.ProtoReflect.Descriptor instead.
+func (*LightVMConfigFile) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *LightVMConfigFile) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *LightVMConfigFile) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
 type LightVMConsole struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -89,7 +144,7 @@ type LightVMConsole struct {
 
 func (x *LightVMConsole) Reset() {
 	*x = LightVMConsole{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[1]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -101,7 +156,7 @@ func (x *LightVMConsole) String() string {
 func (*LightVMConsole) ProtoMessage() {}
 
 func (x *LightVMConsole) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[1]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -114,7 +169,7 @@ func (x *LightVMConsole) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LightVMConsole.ProtoReflect.Descriptor instead.
 func (*LightVMConsole) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{1}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *LightVMConsole) GetId() int64 {
@@ -158,7 +213,7 @@ type LightVMVirtioFSShare struct {
 
 func (x *LightVMVirtioFSShare) Reset() {
 	*x = LightVMVirtioFSShare{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[2]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -170,7 +225,7 @@ func (x *LightVMVirtioFSShare) String() string {
 func (*LightVMVirtioFSShare) ProtoMessage() {}
 
 func (x *LightVMVirtioFSShare) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[2]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -183,7 +238,7 @@ func (x *LightVMVirtioFSShare) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LightVMVirtioFSShare.ProtoReflect.Descriptor instead.
 func (*LightVMVirtioFSShare) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{2}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *LightVMVirtioFSShare) GetId() int64 {
@@ -252,13 +307,18 @@ type LightVM struct {
 	RunState         *string                 `protobuf:"bytes,27,opt,name=run_state,json=runState,proto3,oneof" json:"run_state,omitempty"`
 	VirtiofsShares   []*LightVMVirtioFSShare `protobuf:"bytes,28,rep,name=virtiofs_shares,json=virtiofsShares,proto3" json:"virtiofs_shares,omitempty"`
 	ExecutableScript string                  `protobuf:"bytes,29,opt,name=executable_script,json=executableScript,proto3" json:"executable_script,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	ConfigFiles      []*LightVMConfigFile    `protobuf:"bytes,30,rep,name=config_files,json=configFiles,proto3" json:"config_files,omitempty"`
+	// ephemeral makes the LightVM one-shot: when the guest exits (reboot,
+	// panic, or poweroff) Rookery stops QEMU, virtiofsd, and the attempt
+	// container automatically. Attached disks and interfaces remain.
+	Ephemeral     bool `protobuf:"varint,31,opt,name=ephemeral,proto3" json:"ephemeral,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *LightVM) Reset() {
 	*x = LightVM{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[3]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -270,7 +330,7 @@ func (x *LightVM) String() string {
 func (*LightVM) ProtoMessage() {}
 
 func (x *LightVM) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[3]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -283,7 +343,7 @@ func (x *LightVM) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LightVM.ProtoReflect.Descriptor instead.
 func (*LightVM) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{3}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *LightVM) GetId() string {
@@ -489,6 +549,20 @@ func (x *LightVM) GetExecutableScript() string {
 	return ""
 }
 
+func (x *LightVM) GetConfigFiles() []*LightVMConfigFile {
+	if x != nil {
+		return x.ConfigFiles
+	}
+	return nil
+}
+
+func (x *LightVM) GetEphemeral() bool {
+	if x != nil {
+		return x.Ephemeral
+	}
+	return false
+}
+
 type ListLightVMsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -497,7 +571,7 @@ type ListLightVMsRequest struct {
 
 func (x *ListLightVMsRequest) Reset() {
 	*x = ListLightVMsRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[4]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -509,7 +583,7 @@ func (x *ListLightVMsRequest) String() string {
 func (*ListLightVMsRequest) ProtoMessage() {}
 
 func (x *ListLightVMsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[4]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -522,7 +596,7 @@ func (x *ListLightVMsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLightVMsRequest.ProtoReflect.Descriptor instead.
 func (*ListLightVMsRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{4}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{5}
 }
 
 type ListLightVMsResponse struct {
@@ -534,7 +608,7 @@ type ListLightVMsResponse struct {
 
 func (x *ListLightVMsResponse) Reset() {
 	*x = ListLightVMsResponse{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[5]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -546,7 +620,7 @@ func (x *ListLightVMsResponse) String() string {
 func (*ListLightVMsResponse) ProtoMessage() {}
 
 func (x *ListLightVMsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[5]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -559,7 +633,7 @@ func (x *ListLightVMsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLightVMsResponse.ProtoReflect.Descriptor instead.
 func (*ListLightVMsResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{5}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ListLightVMsResponse) GetLightvms() []*LightVM {
@@ -578,7 +652,7 @@ type GetLightVMRequest struct {
 
 func (x *GetLightVMRequest) Reset() {
 	*x = GetLightVMRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[6]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -590,7 +664,7 @@ func (x *GetLightVMRequest) String() string {
 func (*GetLightVMRequest) ProtoMessage() {}
 
 func (x *GetLightVMRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[6]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -603,7 +677,7 @@ func (x *GetLightVMRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLightVMRequest.ProtoReflect.Descriptor instead.
 func (*GetLightVMRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{6}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetLightVMRequest) GetId() string {
@@ -636,13 +710,17 @@ type CreateLightVMRequest struct {
 	VirtiofsShares   []*LightVMVirtioFSShare `protobuf:"bytes,17,rep,name=virtiofs_shares,json=virtiofsShares,proto3" json:"virtiofs_shares,omitempty"`
 	ExecutableScript string                  `protobuf:"bytes,18,opt,name=executable_script,json=executableScript,proto3" json:"executable_script,omitempty"`
 	DiskSerials      map[int64]string        `protobuf:"bytes,19,rep,name=disk_serials,json=diskSerials,proto3" json:"disk_serials,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	ConfigFiles      []*LightVMConfigFile    `protobuf:"bytes,20,rep,name=config_files,json=configFiles,proto3" json:"config_files,omitempty"`
+	// ephemeral terminates the runtime when the guest exits while keeping the
+	// definition's disks and interfaces attached.
+	Ephemeral     *bool `protobuf:"varint,21,opt,name=ephemeral,proto3,oneof" json:"ephemeral,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateLightVMRequest) Reset() {
 	*x = CreateLightVMRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[7]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -654,7 +732,7 @@ func (x *CreateLightVMRequest) String() string {
 func (*CreateLightVMRequest) ProtoMessage() {}
 
 func (x *CreateLightVMRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[7]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -667,7 +745,7 @@ func (x *CreateLightVMRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateLightVMRequest.ProtoReflect.Descriptor instead.
 func (*CreateLightVMRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{7}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *CreateLightVMRequest) GetName() string {
@@ -803,6 +881,20 @@ func (x *CreateLightVMRequest) GetDiskSerials() map[int64]string {
 	return nil
 }
 
+func (x *CreateLightVMRequest) GetConfigFiles() []*LightVMConfigFile {
+	if x != nil {
+		return x.ConfigFiles
+	}
+	return nil
+}
+
+func (x *CreateLightVMRequest) GetEphemeral() bool {
+	if x != nil && x.Ephemeral != nil {
+		return *x.Ephemeral
+	}
+	return false
+}
+
 type UpdateLightVMRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -827,13 +919,17 @@ type UpdateLightVMRequest struct {
 	VirtiofsShares   []*LightVMVirtioFSShare `protobuf:"bytes,19,rep,name=virtiofs_shares,json=virtiofsShares,proto3" json:"virtiofs_shares,omitempty"`
 	ExecutableScript string                  `protobuf:"bytes,20,opt,name=executable_script,json=executableScript,proto3" json:"executable_script,omitempty"`
 	DiskSerials      map[int64]string        `protobuf:"bytes,21,rep,name=disk_serials,json=diskSerials,proto3" json:"disk_serials,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	ConfigFiles      []*LightVMConfigFile    `protobuf:"bytes,22,rep,name=config_files,json=configFiles,proto3" json:"config_files,omitempty"`
+	// ephemeral terminates the runtime when the guest exits while keeping the
+	// definition's disks and interfaces attached.
+	Ephemeral     bool `protobuf:"varint,23,opt,name=ephemeral,proto3" json:"ephemeral,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpdateLightVMRequest) Reset() {
 	*x = UpdateLightVMRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[8]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -845,7 +941,7 @@ func (x *UpdateLightVMRequest) String() string {
 func (*UpdateLightVMRequest) ProtoMessage() {}
 
 func (x *UpdateLightVMRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[8]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -858,7 +954,7 @@ func (x *UpdateLightVMRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateLightVMRequest.ProtoReflect.Descriptor instead.
 func (*UpdateLightVMRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{8}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *UpdateLightVMRequest) GetId() string {
@@ -1008,6 +1104,20 @@ func (x *UpdateLightVMRequest) GetDiskSerials() map[int64]string {
 	return nil
 }
 
+func (x *UpdateLightVMRequest) GetConfigFiles() []*LightVMConfigFile {
+	if x != nil {
+		return x.ConfigFiles
+	}
+	return nil
+}
+
+func (x *UpdateLightVMRequest) GetEphemeral() bool {
+	if x != nil {
+		return x.Ephemeral
+	}
+	return false
+}
+
 type DeleteLightVMRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -1017,7 +1127,7 @@ type DeleteLightVMRequest struct {
 
 func (x *DeleteLightVMRequest) Reset() {
 	*x = DeleteLightVMRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[9]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1029,7 +1139,7 @@ func (x *DeleteLightVMRequest) String() string {
 func (*DeleteLightVMRequest) ProtoMessage() {}
 
 func (x *DeleteLightVMRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[9]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1042,7 +1152,7 @@ func (x *DeleteLightVMRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteLightVMRequest.ProtoReflect.Descriptor instead.
 func (*DeleteLightVMRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{9}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *DeleteLightVMRequest) GetId() string {
@@ -1061,7 +1171,7 @@ type StartLightVMRequest struct {
 
 func (x *StartLightVMRequest) Reset() {
 	*x = StartLightVMRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[10]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1073,7 +1183,7 @@ func (x *StartLightVMRequest) String() string {
 func (*StartLightVMRequest) ProtoMessage() {}
 
 func (x *StartLightVMRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[10]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1086,7 +1196,7 @@ func (x *StartLightVMRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartLightVMRequest.ProtoReflect.Descriptor instead.
 func (*StartLightVMRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{10}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *StartLightVMRequest) GetId() string {
@@ -1105,7 +1215,7 @@ type StopLightVMRequest struct {
 
 func (x *StopLightVMRequest) Reset() {
 	*x = StopLightVMRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[11]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1117,7 +1227,7 @@ func (x *StopLightVMRequest) String() string {
 func (*StopLightVMRequest) ProtoMessage() {}
 
 func (x *StopLightVMRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[11]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1130,7 +1240,7 @@ func (x *StopLightVMRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopLightVMRequest.ProtoReflect.Descriptor instead.
 func (*StopLightVMRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{11}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *StopLightVMRequest) GetId() string {
@@ -1149,7 +1259,7 @@ type GetLightVMMetricsRequest struct {
 
 func (x *GetLightVMMetricsRequest) Reset() {
 	*x = GetLightVMMetricsRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[12]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1161,7 +1271,7 @@ func (x *GetLightVMMetricsRequest) String() string {
 func (*GetLightVMMetricsRequest) ProtoMessage() {}
 
 func (x *GetLightVMMetricsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[12]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1174,7 +1284,7 @@ func (x *GetLightVMMetricsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLightVMMetricsRequest.ProtoReflect.Descriptor instead.
 func (*GetLightVMMetricsRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{12}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *GetLightVMMetricsRequest) GetId() string {
@@ -1197,7 +1307,7 @@ type CreateLightVMConsoleAccessRequest struct {
 
 func (x *CreateLightVMConsoleAccessRequest) Reset() {
 	*x = CreateLightVMConsoleAccessRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[13]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1209,7 +1319,7 @@ func (x *CreateLightVMConsoleAccessRequest) String() string {
 func (*CreateLightVMConsoleAccessRequest) ProtoMessage() {}
 
 func (x *CreateLightVMConsoleAccessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[13]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1222,7 +1332,7 @@ func (x *CreateLightVMConsoleAccessRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use CreateLightVMConsoleAccessRequest.ProtoReflect.Descriptor instead.
 func (*CreateLightVMConsoleAccessRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{13}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *CreateLightVMConsoleAccessRequest) GetId() string {
@@ -1268,7 +1378,7 @@ type LightVMConsoleAccess struct {
 
 func (x *LightVMConsoleAccess) Reset() {
 	*x = LightVMConsoleAccess{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[14]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1280,7 +1390,7 @@ func (x *LightVMConsoleAccess) String() string {
 func (*LightVMConsoleAccess) ProtoMessage() {}
 
 func (x *LightVMConsoleAccess) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[14]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1293,7 +1403,7 @@ func (x *LightVMConsoleAccess) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LightVMConsoleAccess.ProtoReflect.Descriptor instead.
 func (*LightVMConsoleAccess) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{14}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *LightVMConsoleAccess) GetId() int64 {
@@ -1385,7 +1495,7 @@ type LightVMMetrics struct {
 
 func (x *LightVMMetrics) Reset() {
 	*x = LightVMMetrics{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[15]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1397,7 +1507,7 @@ func (x *LightVMMetrics) String() string {
 func (*LightVMMetrics) ProtoMessage() {}
 
 func (x *LightVMMetrics) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[15]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1410,7 +1520,7 @@ func (x *LightVMMetrics) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LightVMMetrics.ProtoReflect.Descriptor instead.
 func (*LightVMMetrics) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{15}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *LightVMMetrics) GetRunning() bool {
@@ -1556,7 +1666,7 @@ type LightVMKernel struct {
 
 func (x *LightVMKernel) Reset() {
 	*x = LightVMKernel{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[16]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1568,7 +1678,7 @@ func (x *LightVMKernel) String() string {
 func (*LightVMKernel) ProtoMessage() {}
 
 func (x *LightVMKernel) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[16]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1581,7 +1691,7 @@ func (x *LightVMKernel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LightVMKernel.ProtoReflect.Descriptor instead.
 func (*LightVMKernel) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{16}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *LightVMKernel) GetId() int64 {
@@ -1655,7 +1765,7 @@ type ListKernelsRequest struct {
 
 func (x *ListKernelsRequest) Reset() {
 	*x = ListKernelsRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[17]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1667,7 +1777,7 @@ func (x *ListKernelsRequest) String() string {
 func (*ListKernelsRequest) ProtoMessage() {}
 
 func (x *ListKernelsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[17]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1680,7 +1790,7 @@ func (x *ListKernelsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListKernelsRequest.ProtoReflect.Descriptor instead.
 func (*ListKernelsRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{17}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{18}
 }
 
 type ListKernelsResponse struct {
@@ -1692,7 +1802,7 @@ type ListKernelsResponse struct {
 
 func (x *ListKernelsResponse) Reset() {
 	*x = ListKernelsResponse{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[18]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1704,7 +1814,7 @@ func (x *ListKernelsResponse) String() string {
 func (*ListKernelsResponse) ProtoMessage() {}
 
 func (x *ListKernelsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[18]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1717,7 +1827,7 @@ func (x *ListKernelsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListKernelsResponse.ProtoReflect.Descriptor instead.
 func (*ListKernelsResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{18}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ListKernelsResponse) GetKernels() []*LightVMKernel {
@@ -1736,7 +1846,7 @@ type GetKernelRequest struct {
 
 func (x *GetKernelRequest) Reset() {
 	*x = GetKernelRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[19]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1748,7 +1858,7 @@ func (x *GetKernelRequest) String() string {
 func (*GetKernelRequest) ProtoMessage() {}
 
 func (x *GetKernelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[19]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1761,7 +1871,7 @@ func (x *GetKernelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetKernelRequest.ProtoReflect.Descriptor instead.
 func (*GetKernelRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{19}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GetKernelRequest) GetId() int64 {
@@ -1783,7 +1893,7 @@ type CreateKernelRequest struct {
 
 func (x *CreateKernelRequest) Reset() {
 	*x = CreateKernelRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[20]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1795,7 +1905,7 @@ func (x *CreateKernelRequest) String() string {
 func (*CreateKernelRequest) ProtoMessage() {}
 
 func (x *CreateKernelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[20]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1808,7 +1918,7 @@ func (x *CreateKernelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateKernelRequest.ProtoReflect.Descriptor instead.
 func (*CreateKernelRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{20}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *CreateKernelRequest) GetName() string {
@@ -1852,7 +1962,7 @@ type UpdateKernelRequest struct {
 
 func (x *UpdateKernelRequest) Reset() {
 	*x = UpdateKernelRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[21]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1864,7 +1974,7 @@ func (x *UpdateKernelRequest) String() string {
 func (*UpdateKernelRequest) ProtoMessage() {}
 
 func (x *UpdateKernelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[21]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1877,7 +1987,7 @@ func (x *UpdateKernelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateKernelRequest.ProtoReflect.Descriptor instead.
 func (*UpdateKernelRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{21}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *UpdateKernelRequest) GetId() int64 {
@@ -1924,7 +2034,7 @@ type DeleteKernelRequest struct {
 
 func (x *DeleteKernelRequest) Reset() {
 	*x = DeleteKernelRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[22]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1936,7 +2046,7 @@ func (x *DeleteKernelRequest) String() string {
 func (*DeleteKernelRequest) ProtoMessage() {}
 
 func (x *DeleteKernelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[22]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1949,7 +2059,7 @@ func (x *DeleteKernelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteKernelRequest.ProtoReflect.Descriptor instead.
 func (*DeleteKernelRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{22}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *DeleteKernelRequest) GetId() int64 {
@@ -1976,7 +2086,7 @@ type LightVMInitramfs struct {
 
 func (x *LightVMInitramfs) Reset() {
 	*x = LightVMInitramfs{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[23]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1988,7 +2098,7 @@ func (x *LightVMInitramfs) String() string {
 func (*LightVMInitramfs) ProtoMessage() {}
 
 func (x *LightVMInitramfs) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[23]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2001,7 +2111,7 @@ func (x *LightVMInitramfs) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LightVMInitramfs.ProtoReflect.Descriptor instead.
 func (*LightVMInitramfs) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{23}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *LightVMInitramfs) GetId() int64 {
@@ -2075,7 +2185,7 @@ type ListInitramfsRequest struct {
 
 func (x *ListInitramfsRequest) Reset() {
 	*x = ListInitramfsRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[24]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2087,7 +2197,7 @@ func (x *ListInitramfsRequest) String() string {
 func (*ListInitramfsRequest) ProtoMessage() {}
 
 func (x *ListInitramfsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[24]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2100,7 +2210,7 @@ func (x *ListInitramfsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInitramfsRequest.ProtoReflect.Descriptor instead.
 func (*ListInitramfsRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{24}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{25}
 }
 
 type ListInitramfsResponse struct {
@@ -2112,7 +2222,7 @@ type ListInitramfsResponse struct {
 
 func (x *ListInitramfsResponse) Reset() {
 	*x = ListInitramfsResponse{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[25]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2124,7 +2234,7 @@ func (x *ListInitramfsResponse) String() string {
 func (*ListInitramfsResponse) ProtoMessage() {}
 
 func (x *ListInitramfsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[25]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2137,7 +2247,7 @@ func (x *ListInitramfsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInitramfsResponse.ProtoReflect.Descriptor instead.
 func (*ListInitramfsResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{25}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ListInitramfsResponse) GetInitramfs() []*LightVMInitramfs {
@@ -2156,7 +2266,7 @@ type GetInitramfsRequest struct {
 
 func (x *GetInitramfsRequest) Reset() {
 	*x = GetInitramfsRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[26]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2168,7 +2278,7 @@ func (x *GetInitramfsRequest) String() string {
 func (*GetInitramfsRequest) ProtoMessage() {}
 
 func (x *GetInitramfsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[26]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2181,7 +2291,7 @@ func (x *GetInitramfsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetInitramfsRequest.ProtoReflect.Descriptor instead.
 func (*GetInitramfsRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{26}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *GetInitramfsRequest) GetId() int64 {
@@ -2203,7 +2313,7 @@ type CreateInitramfsRequest struct {
 
 func (x *CreateInitramfsRequest) Reset() {
 	*x = CreateInitramfsRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[27]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2215,7 +2325,7 @@ func (x *CreateInitramfsRequest) String() string {
 func (*CreateInitramfsRequest) ProtoMessage() {}
 
 func (x *CreateInitramfsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[27]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2228,7 +2338,7 @@ func (x *CreateInitramfsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateInitramfsRequest.ProtoReflect.Descriptor instead.
 func (*CreateInitramfsRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{27}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *CreateInitramfsRequest) GetName() string {
@@ -2272,7 +2382,7 @@ type UpdateInitramfsRequest struct {
 
 func (x *UpdateInitramfsRequest) Reset() {
 	*x = UpdateInitramfsRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[28]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2284,7 +2394,7 @@ func (x *UpdateInitramfsRequest) String() string {
 func (*UpdateInitramfsRequest) ProtoMessage() {}
 
 func (x *UpdateInitramfsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[28]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2297,7 +2407,7 @@ func (x *UpdateInitramfsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateInitramfsRequest.ProtoReflect.Descriptor instead.
 func (*UpdateInitramfsRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{28}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *UpdateInitramfsRequest) GetId() int64 {
@@ -2344,7 +2454,7 @@ type DeleteInitramfsRequest struct {
 
 func (x *DeleteInitramfsRequest) Reset() {
 	*x = DeleteInitramfsRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[29]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2356,7 +2466,7 @@ func (x *DeleteInitramfsRequest) String() string {
 func (*DeleteInitramfsRequest) ProtoMessage() {}
 
 func (x *DeleteInitramfsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[29]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2369,7 +2479,7 @@ func (x *DeleteInitramfsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteInitramfsRequest.ProtoReflect.Descriptor instead.
 func (*DeleteInitramfsRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{29}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *DeleteInitramfsRequest) GetId() int64 {
@@ -2390,7 +2500,7 @@ type UploadArtifactRequest struct {
 
 func (x *UploadArtifactRequest) Reset() {
 	*x = UploadArtifactRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[30]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2402,7 +2512,7 @@ func (x *UploadArtifactRequest) String() string {
 func (*UploadArtifactRequest) ProtoMessage() {}
 
 func (x *UploadArtifactRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[30]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2415,7 +2525,7 @@ func (x *UploadArtifactRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadArtifactRequest.ProtoReflect.Descriptor instead.
 func (*UploadArtifactRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{30}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *UploadArtifactRequest) GetKind() string {
@@ -2450,7 +2560,7 @@ type UploadArtifactResponse struct {
 
 func (x *UploadArtifactResponse) Reset() {
 	*x = UploadArtifactResponse{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[31]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2462,7 +2572,7 @@ func (x *UploadArtifactResponse) String() string {
 func (*UploadArtifactResponse) ProtoMessage() {}
 
 func (x *UploadArtifactResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[31]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2475,7 +2585,7 @@ func (x *UploadArtifactResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadArtifactResponse.ProtoReflect.Descriptor instead.
 func (*UploadArtifactResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{31}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *UploadArtifactResponse) GetPath() string {
@@ -2508,7 +2618,7 @@ type DeleteArtifactRequest struct {
 
 func (x *DeleteArtifactRequest) Reset() {
 	*x = DeleteArtifactRequest{}
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[32]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2520,7 +2630,7 @@ func (x *DeleteArtifactRequest) String() string {
 func (*DeleteArtifactRequest) ProtoMessage() {}
 
 func (x *DeleteArtifactRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_lightvm_proto_msgTypes[32]
+	mi := &file_rookery_v1_lightvm_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2533,7 +2643,7 @@ func (x *DeleteArtifactRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteArtifactRequest.ProtoReflect.Descriptor instead.
 func (*DeleteArtifactRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{32}
+	return file_rookery_v1_lightvm_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *DeleteArtifactRequest) GetPath() string {
@@ -2552,7 +2662,11 @@ const file_rookery_v1_lightvm_proto_rawDesc = "" +
 	"\rLightVMEnvVar\x12\x1e\n" +
 	"\x04name\x18\x01 \x01(\tB\n" +
 	"\xfaB\ar\x05\x10\x01\x18\x80\x01R\x04name\x12\x1e\n" +
-	"\x05value\x18\x02 \x01(\tB\b\xfaB\x05r\x03\x18\x80 R\x05value\"t\n" +
+	"\x05value\x18\x02 \x01(\tB\b\xfaB\x05r\x03\x18\x80 R\x05value\"X\n" +
+	"\x11LightVMConfigFile\x12\x1e\n" +
+	"\x04name\x18\x01 \x01(\tB\n" +
+	"\xfaB\ar\x05\x10\x01\x18\xff\x01R\x04name\x12#\n" +
+	"\acontent\x18\x02 \x01(\tB\t\xfaB\x06r\x04\x18\x80\x80@R\acontent\"t\n" +
 	"\x0eLightVMConsole\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1d\n" +
 	"\x04name\x18\x02 \x01(\tB\t\xfaB\x06r\x04\x10\x01\x18@R\x04name\x12\x1b\n" +
@@ -2566,7 +2680,7 @@ const file_rookery_v1_lightvm_proto_rawDesc = "" +
 	"\tread_only\x18\x04 \x01(\bH\x00R\breadOnly\x88\x01\x01\x12\x1a\n" +
 	"\bposition\x18\x05 \x01(\x05R\bpositionB\f\n" +
 	"\n" +
-	"_read_only\"\xe0\b\n" +
+	"_read_only\"\xc0\t\n" +
 	"\aLightVM\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -2602,14 +2716,17 @@ const file_rookery_v1_lightvm_proto_rawDesc = "" +
 	"\x05disks\x18\x1a \x03(\v2\x12.rookery.v1.VMDiskR\x05disks\x12 \n" +
 	"\trun_state\x18\x1b \x01(\tH\x00R\brunState\x88\x01\x01\x12I\n" +
 	"\x0fvirtiofs_shares\x18\x1c \x03(\v2 .rookery.v1.LightVMVirtioFSShareR\x0evirtiofsShares\x12+\n" +
-	"\x11executable_script\x18\x1d \x01(\tR\x10executableScriptB\f\n" +
+	"\x11executable_script\x18\x1d \x01(\tR\x10executableScript\x12@\n" +
+	"\fconfig_files\x18\x1e \x03(\v2\x1d.rookery.v1.LightVMConfigFileR\vconfigFiles\x12\x1c\n" +
+	"\tephemeral\x18\x1f \x01(\bR\tephemeralB\f\n" +
 	"\n" +
 	"_run_state\"\x15\n" +
 	"\x13ListLightVMsRequest\"G\n" +
 	"\x14ListLightVMsResponse\x12/\n" +
 	"\blightvms\x18\x01 \x03(\v2\x13.rookery.v1.LightVMR\blightvms\"-\n" +
 	"\x11GetLightVMRequest\x12\x18\n" +
-	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\"\x94\t\n" +
+	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\"\x91\n" +
+	"\n" +
 	"\x14CreateLightVMRequest\x12;\n" +
 	"\x04name\x18\x01 \x01(\tB'\xfaB$r\"\x10\x01\x18@2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$R\x04name\x12*\n" +
 	"\vdescription\x18\x02 \x01(\tB\b\xfaB\x05r\x03\x18\xd0\x0fR\vdescription\x12%\n" +
@@ -2631,7 +2748,9 @@ const file_rookery_v1_lightvm_proto_rawDesc = "" +
 	"\bdisk_ids\x18\x10 \x03(\x03B\x0e\xfaB\v\x92\x01\b\x10 \"\x04\"\x02 \x00R\adiskIds\x12S\n" +
 	"\x0fvirtiofs_shares\x18\x11 \x03(\v2 .rookery.v1.LightVMVirtioFSShareB\b\xfaB\x05\x92\x01\x02\x10\x18R\x0evirtiofsShares\x126\n" +
 	"\x11executable_script\x18\x12 \x01(\tB\t\xfaB\x06r\x04\x18\x80\x80@R\x10executableScript\x12~\n" +
-	"\fdisk_serials\x18\x13 \x03(\v21.rookery.v1.CreateLightVMRequest.DiskSerialsEntryB(\xfaB%\x9a\x01\"\x10 \"\x04\"\x02 \x00*\x18r\x16\x18\x142\x12^[A-Za-z0-9._:-]*$R\vdiskSerials\x1a>\n" +
+	"\fdisk_serials\x18\x13 \x03(\v21.rookery.v1.CreateLightVMRequest.DiskSerialsEntryB(\xfaB%\x9a\x01\"\x10 \"\x04\"\x02 \x00*\x18r\x16\x18\x142\x12^[A-Za-z0-9._:-]*$R\vdiskSerials\x12J\n" +
+	"\fconfig_files\x18\x14 \x03(\v2\x1d.rookery.v1.LightVMConfigFileB\b\xfaB\x05\x92\x01\x02\x10@R\vconfigFiles\x12!\n" +
+	"\tephemeral\x18\x15 \x01(\bH\x04R\tephemeral\x88\x01\x01\x1a>\n" +
 	"\x10DiskSerialsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\b\n" +
@@ -2639,7 +2758,10 @@ const file_rookery_v1_lightvm_proto_rawDesc = "" +
 	"\n" +
 	"_memory_mbB\x12\n" +
 	"\x10_console_enabledB\t\n" +
-	"\a_append\"\xa7\t\n" +
+	"\a_appendB\f\n" +
+	"\n" +
+	"_ephemeral\"\x91\n" +
+	"\n" +
 	"\x14UpdateLightVMRequest\x12\x18\n" +
 	"\x02id\x18\x01 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01R\x02id\x12;\n" +
 	"\x04name\x18\x02 \x01(\tB'\xfaB$r\"\x10\x01\x18@2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$R\x04name\x12*\n" +
@@ -2663,7 +2785,9 @@ const file_rookery_v1_lightvm_proto_rawDesc = "" +
 	"\x10replace_disk_ids\x18\x12 \x01(\bH\x00R\x0ereplaceDiskIds\x88\x01\x01\x12S\n" +
 	"\x0fvirtiofs_shares\x18\x13 \x03(\v2 .rookery.v1.LightVMVirtioFSShareB\b\xfaB\x05\x92\x01\x02\x10\x18R\x0evirtiofsShares\x126\n" +
 	"\x11executable_script\x18\x14 \x01(\tB\t\xfaB\x06r\x04\x18\x80\x80@R\x10executableScript\x12~\n" +
-	"\fdisk_serials\x18\x15 \x03(\v21.rookery.v1.UpdateLightVMRequest.DiskSerialsEntryB(\xfaB%\x9a\x01\"\x10 \"\x04\"\x02 \x00*\x18r\x16\x18\x142\x12^[A-Za-z0-9._:-]*$R\vdiskSerials\x1a>\n" +
+	"\fdisk_serials\x18\x15 \x03(\v21.rookery.v1.UpdateLightVMRequest.DiskSerialsEntryB(\xfaB%\x9a\x01\"\x10 \"\x04\"\x02 \x00*\x18r\x16\x18\x142\x12^[A-Za-z0-9._:-]*$R\vdiskSerials\x12J\n" +
+	"\fconfig_files\x18\x16 \x03(\v2\x1d.rookery.v1.LightVMConfigFileB\b\xfaB\x05\x92\x01\x02\x10@R\vconfigFiles\x12\x1c\n" +
+	"\tephemeral\x18\x17 \x01(\bR\tephemeral\x1a>\n" +
 	"\x10DiskSerialsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x13\n" +
@@ -2834,123 +2958,127 @@ func file_rookery_v1_lightvm_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_lightvm_proto_rawDescData
 }
 
-var file_rookery_v1_lightvm_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
+var file_rookery_v1_lightvm_proto_msgTypes = make([]protoimpl.MessageInfo, 36)
 var file_rookery_v1_lightvm_proto_goTypes = []any{
 	(*LightVMEnvVar)(nil),                     // 0: rookery.v1.LightVMEnvVar
-	(*LightVMConsole)(nil),                    // 1: rookery.v1.LightVMConsole
-	(*LightVMVirtioFSShare)(nil),              // 2: rookery.v1.LightVMVirtioFSShare
-	(*LightVM)(nil),                           // 3: rookery.v1.LightVM
-	(*ListLightVMsRequest)(nil),               // 4: rookery.v1.ListLightVMsRequest
-	(*ListLightVMsResponse)(nil),              // 5: rookery.v1.ListLightVMsResponse
-	(*GetLightVMRequest)(nil),                 // 6: rookery.v1.GetLightVMRequest
-	(*CreateLightVMRequest)(nil),              // 7: rookery.v1.CreateLightVMRequest
-	(*UpdateLightVMRequest)(nil),              // 8: rookery.v1.UpdateLightVMRequest
-	(*DeleteLightVMRequest)(nil),              // 9: rookery.v1.DeleteLightVMRequest
-	(*StartLightVMRequest)(nil),               // 10: rookery.v1.StartLightVMRequest
-	(*StopLightVMRequest)(nil),                // 11: rookery.v1.StopLightVMRequest
-	(*GetLightVMMetricsRequest)(nil),          // 12: rookery.v1.GetLightVMMetricsRequest
-	(*CreateLightVMConsoleAccessRequest)(nil), // 13: rookery.v1.CreateLightVMConsoleAccessRequest
-	(*LightVMConsoleAccess)(nil),              // 14: rookery.v1.LightVMConsoleAccess
-	(*LightVMMetrics)(nil),                    // 15: rookery.v1.LightVMMetrics
-	(*LightVMKernel)(nil),                     // 16: rookery.v1.LightVMKernel
-	(*ListKernelsRequest)(nil),                // 17: rookery.v1.ListKernelsRequest
-	(*ListKernelsResponse)(nil),               // 18: rookery.v1.ListKernelsResponse
-	(*GetKernelRequest)(nil),                  // 19: rookery.v1.GetKernelRequest
-	(*CreateKernelRequest)(nil),               // 20: rookery.v1.CreateKernelRequest
-	(*UpdateKernelRequest)(nil),               // 21: rookery.v1.UpdateKernelRequest
-	(*DeleteKernelRequest)(nil),               // 22: rookery.v1.DeleteKernelRequest
-	(*LightVMInitramfs)(nil),                  // 23: rookery.v1.LightVMInitramfs
-	(*ListInitramfsRequest)(nil),              // 24: rookery.v1.ListInitramfsRequest
-	(*ListInitramfsResponse)(nil),             // 25: rookery.v1.ListInitramfsResponse
-	(*GetInitramfsRequest)(nil),               // 26: rookery.v1.GetInitramfsRequest
-	(*CreateInitramfsRequest)(nil),            // 27: rookery.v1.CreateInitramfsRequest
-	(*UpdateInitramfsRequest)(nil),            // 28: rookery.v1.UpdateInitramfsRequest
-	(*DeleteInitramfsRequest)(nil),            // 29: rookery.v1.DeleteInitramfsRequest
-	(*UploadArtifactRequest)(nil),             // 30: rookery.v1.UploadArtifactRequest
-	(*UploadArtifactResponse)(nil),            // 31: rookery.v1.UploadArtifactResponse
-	(*DeleteArtifactRequest)(nil),             // 32: rookery.v1.DeleteArtifactRequest
-	nil,                                       // 33: rookery.v1.CreateLightVMRequest.DiskSerialsEntry
-	nil,                                       // 34: rookery.v1.UpdateLightVMRequest.DiskSerialsEntry
-	(*VMInterface)(nil),                       // 35: rookery.v1.VMInterface
-	(*timestamppb.Timestamp)(nil),             // 36: google.protobuf.Timestamp
-	(*VMDisk)(nil),                            // 37: rookery.v1.VMDisk
-	(*BlockDeviceMetrics)(nil),                // 38: rookery.v1.BlockDeviceMetrics
-	(*emptypb.Empty)(nil),                     // 39: google.protobuf.Empty
+	(*LightVMConfigFile)(nil),                 // 1: rookery.v1.LightVMConfigFile
+	(*LightVMConsole)(nil),                    // 2: rookery.v1.LightVMConsole
+	(*LightVMVirtioFSShare)(nil),              // 3: rookery.v1.LightVMVirtioFSShare
+	(*LightVM)(nil),                           // 4: rookery.v1.LightVM
+	(*ListLightVMsRequest)(nil),               // 5: rookery.v1.ListLightVMsRequest
+	(*ListLightVMsResponse)(nil),              // 6: rookery.v1.ListLightVMsResponse
+	(*GetLightVMRequest)(nil),                 // 7: rookery.v1.GetLightVMRequest
+	(*CreateLightVMRequest)(nil),              // 8: rookery.v1.CreateLightVMRequest
+	(*UpdateLightVMRequest)(nil),              // 9: rookery.v1.UpdateLightVMRequest
+	(*DeleteLightVMRequest)(nil),              // 10: rookery.v1.DeleteLightVMRequest
+	(*StartLightVMRequest)(nil),               // 11: rookery.v1.StartLightVMRequest
+	(*StopLightVMRequest)(nil),                // 12: rookery.v1.StopLightVMRequest
+	(*GetLightVMMetricsRequest)(nil),          // 13: rookery.v1.GetLightVMMetricsRequest
+	(*CreateLightVMConsoleAccessRequest)(nil), // 14: rookery.v1.CreateLightVMConsoleAccessRequest
+	(*LightVMConsoleAccess)(nil),              // 15: rookery.v1.LightVMConsoleAccess
+	(*LightVMMetrics)(nil),                    // 16: rookery.v1.LightVMMetrics
+	(*LightVMKernel)(nil),                     // 17: rookery.v1.LightVMKernel
+	(*ListKernelsRequest)(nil),                // 18: rookery.v1.ListKernelsRequest
+	(*ListKernelsResponse)(nil),               // 19: rookery.v1.ListKernelsResponse
+	(*GetKernelRequest)(nil),                  // 20: rookery.v1.GetKernelRequest
+	(*CreateKernelRequest)(nil),               // 21: rookery.v1.CreateKernelRequest
+	(*UpdateKernelRequest)(nil),               // 22: rookery.v1.UpdateKernelRequest
+	(*DeleteKernelRequest)(nil),               // 23: rookery.v1.DeleteKernelRequest
+	(*LightVMInitramfs)(nil),                  // 24: rookery.v1.LightVMInitramfs
+	(*ListInitramfsRequest)(nil),              // 25: rookery.v1.ListInitramfsRequest
+	(*ListInitramfsResponse)(nil),             // 26: rookery.v1.ListInitramfsResponse
+	(*GetInitramfsRequest)(nil),               // 27: rookery.v1.GetInitramfsRequest
+	(*CreateInitramfsRequest)(nil),            // 28: rookery.v1.CreateInitramfsRequest
+	(*UpdateInitramfsRequest)(nil),            // 29: rookery.v1.UpdateInitramfsRequest
+	(*DeleteInitramfsRequest)(nil),            // 30: rookery.v1.DeleteInitramfsRequest
+	(*UploadArtifactRequest)(nil),             // 31: rookery.v1.UploadArtifactRequest
+	(*UploadArtifactResponse)(nil),            // 32: rookery.v1.UploadArtifactResponse
+	(*DeleteArtifactRequest)(nil),             // 33: rookery.v1.DeleteArtifactRequest
+	nil,                                       // 34: rookery.v1.CreateLightVMRequest.DiskSerialsEntry
+	nil,                                       // 35: rookery.v1.UpdateLightVMRequest.DiskSerialsEntry
+	(*VMInterface)(nil),                       // 36: rookery.v1.VMInterface
+	(*timestamppb.Timestamp)(nil),             // 37: google.protobuf.Timestamp
+	(*VMDisk)(nil),                            // 38: rookery.v1.VMDisk
+	(*BlockDeviceMetrics)(nil),                // 39: rookery.v1.BlockDeviceMetrics
+	(*emptypb.Empty)(nil),                     // 40: google.protobuf.Empty
 }
 var file_rookery_v1_lightvm_proto_depIdxs = []int32{
 	0,  // 0: rookery.v1.LightVM.env:type_name -> rookery.v1.LightVMEnvVar
-	35, // 1: rookery.v1.LightVM.interfaces:type_name -> rookery.v1.VMInterface
-	36, // 2: rookery.v1.LightVM.created_at:type_name -> google.protobuf.Timestamp
-	36, // 3: rookery.v1.LightVM.updated_at:type_name -> google.protobuf.Timestamp
-	1,  // 4: rookery.v1.LightVM.consoles:type_name -> rookery.v1.LightVMConsole
-	37, // 5: rookery.v1.LightVM.disks:type_name -> rookery.v1.VMDisk
-	2,  // 6: rookery.v1.LightVM.virtiofs_shares:type_name -> rookery.v1.LightVMVirtioFSShare
-	3,  // 7: rookery.v1.ListLightVMsResponse.lightvms:type_name -> rookery.v1.LightVM
-	0,  // 8: rookery.v1.CreateLightVMRequest.env:type_name -> rookery.v1.LightVMEnvVar
-	1,  // 9: rookery.v1.CreateLightVMRequest.consoles:type_name -> rookery.v1.LightVMConsole
-	2,  // 10: rookery.v1.CreateLightVMRequest.virtiofs_shares:type_name -> rookery.v1.LightVMVirtioFSShare
-	33, // 11: rookery.v1.CreateLightVMRequest.disk_serials:type_name -> rookery.v1.CreateLightVMRequest.DiskSerialsEntry
-	0,  // 12: rookery.v1.UpdateLightVMRequest.env:type_name -> rookery.v1.LightVMEnvVar
-	1,  // 13: rookery.v1.UpdateLightVMRequest.consoles:type_name -> rookery.v1.LightVMConsole
-	2,  // 14: rookery.v1.UpdateLightVMRequest.virtiofs_shares:type_name -> rookery.v1.LightVMVirtioFSShare
-	34, // 15: rookery.v1.UpdateLightVMRequest.disk_serials:type_name -> rookery.v1.UpdateLightVMRequest.DiskSerialsEntry
-	36, // 16: rookery.v1.LightVMConsoleAccess.expires_at:type_name -> google.protobuf.Timestamp
-	36, // 17: rookery.v1.LightVMConsoleAccess.created_at:type_name -> google.protobuf.Timestamp
-	36, // 18: rookery.v1.LightVMMetrics.sampled_at:type_name -> google.protobuf.Timestamp
-	38, // 19: rookery.v1.LightVMMetrics.block_devices:type_name -> rookery.v1.BlockDeviceMetrics
-	36, // 20: rookery.v1.LightVMKernel.created_at:type_name -> google.protobuf.Timestamp
-	36, // 21: rookery.v1.LightVMKernel.updated_at:type_name -> google.protobuf.Timestamp
-	16, // 22: rookery.v1.ListKernelsResponse.kernels:type_name -> rookery.v1.LightVMKernel
-	36, // 23: rookery.v1.LightVMInitramfs.created_at:type_name -> google.protobuf.Timestamp
-	36, // 24: rookery.v1.LightVMInitramfs.updated_at:type_name -> google.protobuf.Timestamp
-	23, // 25: rookery.v1.ListInitramfsResponse.initramfs:type_name -> rookery.v1.LightVMInitramfs
-	17, // 26: rookery.v1.LightVMKernelService.ListKernels:input_type -> rookery.v1.ListKernelsRequest
-	19, // 27: rookery.v1.LightVMKernelService.GetKernel:input_type -> rookery.v1.GetKernelRequest
-	20, // 28: rookery.v1.LightVMKernelService.CreateKernel:input_type -> rookery.v1.CreateKernelRequest
-	21, // 29: rookery.v1.LightVMKernelService.UpdateKernel:input_type -> rookery.v1.UpdateKernelRequest
-	22, // 30: rookery.v1.LightVMKernelService.DeleteKernel:input_type -> rookery.v1.DeleteKernelRequest
-	24, // 31: rookery.v1.LightVMInitramfsService.ListInitramfs:input_type -> rookery.v1.ListInitramfsRequest
-	26, // 32: rookery.v1.LightVMInitramfsService.GetInitramfs:input_type -> rookery.v1.GetInitramfsRequest
-	27, // 33: rookery.v1.LightVMInitramfsService.CreateInitramfs:input_type -> rookery.v1.CreateInitramfsRequest
-	28, // 34: rookery.v1.LightVMInitramfsService.UpdateInitramfs:input_type -> rookery.v1.UpdateInitramfsRequest
-	29, // 35: rookery.v1.LightVMInitramfsService.DeleteInitramfs:input_type -> rookery.v1.DeleteInitramfsRequest
-	30, // 36: rookery.v1.LightVMArtifactService.UploadArtifact:input_type -> rookery.v1.UploadArtifactRequest
-	32, // 37: rookery.v1.LightVMArtifactService.DeleteArtifact:input_type -> rookery.v1.DeleteArtifactRequest
-	4,  // 38: rookery.v1.LightVMService.ListLightVMs:input_type -> rookery.v1.ListLightVMsRequest
-	6,  // 39: rookery.v1.LightVMService.GetLightVM:input_type -> rookery.v1.GetLightVMRequest
-	7,  // 40: rookery.v1.LightVMService.CreateLightVM:input_type -> rookery.v1.CreateLightVMRequest
-	8,  // 41: rookery.v1.LightVMService.UpdateLightVM:input_type -> rookery.v1.UpdateLightVMRequest
-	9,  // 42: rookery.v1.LightVMService.DeleteLightVM:input_type -> rookery.v1.DeleteLightVMRequest
-	10, // 43: rookery.v1.LightVMService.StartLightVM:input_type -> rookery.v1.StartLightVMRequest
-	11, // 44: rookery.v1.LightVMService.StopLightVM:input_type -> rookery.v1.StopLightVMRequest
-	12, // 45: rookery.v1.LightVMService.GetLightVMMetrics:input_type -> rookery.v1.GetLightVMMetricsRequest
-	13, // 46: rookery.v1.LightVMService.CreateLightVMConsoleAccess:input_type -> rookery.v1.CreateLightVMConsoleAccessRequest
-	18, // 47: rookery.v1.LightVMKernelService.ListKernels:output_type -> rookery.v1.ListKernelsResponse
-	16, // 48: rookery.v1.LightVMKernelService.GetKernel:output_type -> rookery.v1.LightVMKernel
-	16, // 49: rookery.v1.LightVMKernelService.CreateKernel:output_type -> rookery.v1.LightVMKernel
-	16, // 50: rookery.v1.LightVMKernelService.UpdateKernel:output_type -> rookery.v1.LightVMKernel
-	39, // 51: rookery.v1.LightVMKernelService.DeleteKernel:output_type -> google.protobuf.Empty
-	25, // 52: rookery.v1.LightVMInitramfsService.ListInitramfs:output_type -> rookery.v1.ListInitramfsResponse
-	23, // 53: rookery.v1.LightVMInitramfsService.GetInitramfs:output_type -> rookery.v1.LightVMInitramfs
-	23, // 54: rookery.v1.LightVMInitramfsService.CreateInitramfs:output_type -> rookery.v1.LightVMInitramfs
-	23, // 55: rookery.v1.LightVMInitramfsService.UpdateInitramfs:output_type -> rookery.v1.LightVMInitramfs
-	39, // 56: rookery.v1.LightVMInitramfsService.DeleteInitramfs:output_type -> google.protobuf.Empty
-	31, // 57: rookery.v1.LightVMArtifactService.UploadArtifact:output_type -> rookery.v1.UploadArtifactResponse
-	39, // 58: rookery.v1.LightVMArtifactService.DeleteArtifact:output_type -> google.protobuf.Empty
-	5,  // 59: rookery.v1.LightVMService.ListLightVMs:output_type -> rookery.v1.ListLightVMsResponse
-	3,  // 60: rookery.v1.LightVMService.GetLightVM:output_type -> rookery.v1.LightVM
-	3,  // 61: rookery.v1.LightVMService.CreateLightVM:output_type -> rookery.v1.LightVM
-	3,  // 62: rookery.v1.LightVMService.UpdateLightVM:output_type -> rookery.v1.LightVM
-	39, // 63: rookery.v1.LightVMService.DeleteLightVM:output_type -> google.protobuf.Empty
-	3,  // 64: rookery.v1.LightVMService.StartLightVM:output_type -> rookery.v1.LightVM
-	3,  // 65: rookery.v1.LightVMService.StopLightVM:output_type -> rookery.v1.LightVM
-	15, // 66: rookery.v1.LightVMService.GetLightVMMetrics:output_type -> rookery.v1.LightVMMetrics
-	14, // 67: rookery.v1.LightVMService.CreateLightVMConsoleAccess:output_type -> rookery.v1.LightVMConsoleAccess
-	47, // [47:68] is the sub-list for method output_type
-	26, // [26:47] is the sub-list for method input_type
-	26, // [26:26] is the sub-list for extension type_name
-	26, // [26:26] is the sub-list for extension extendee
-	0,  // [0:26] is the sub-list for field type_name
+	36, // 1: rookery.v1.LightVM.interfaces:type_name -> rookery.v1.VMInterface
+	37, // 2: rookery.v1.LightVM.created_at:type_name -> google.protobuf.Timestamp
+	37, // 3: rookery.v1.LightVM.updated_at:type_name -> google.protobuf.Timestamp
+	2,  // 4: rookery.v1.LightVM.consoles:type_name -> rookery.v1.LightVMConsole
+	38, // 5: rookery.v1.LightVM.disks:type_name -> rookery.v1.VMDisk
+	3,  // 6: rookery.v1.LightVM.virtiofs_shares:type_name -> rookery.v1.LightVMVirtioFSShare
+	1,  // 7: rookery.v1.LightVM.config_files:type_name -> rookery.v1.LightVMConfigFile
+	4,  // 8: rookery.v1.ListLightVMsResponse.lightvms:type_name -> rookery.v1.LightVM
+	0,  // 9: rookery.v1.CreateLightVMRequest.env:type_name -> rookery.v1.LightVMEnvVar
+	2,  // 10: rookery.v1.CreateLightVMRequest.consoles:type_name -> rookery.v1.LightVMConsole
+	3,  // 11: rookery.v1.CreateLightVMRequest.virtiofs_shares:type_name -> rookery.v1.LightVMVirtioFSShare
+	34, // 12: rookery.v1.CreateLightVMRequest.disk_serials:type_name -> rookery.v1.CreateLightVMRequest.DiskSerialsEntry
+	1,  // 13: rookery.v1.CreateLightVMRequest.config_files:type_name -> rookery.v1.LightVMConfigFile
+	0,  // 14: rookery.v1.UpdateLightVMRequest.env:type_name -> rookery.v1.LightVMEnvVar
+	2,  // 15: rookery.v1.UpdateLightVMRequest.consoles:type_name -> rookery.v1.LightVMConsole
+	3,  // 16: rookery.v1.UpdateLightVMRequest.virtiofs_shares:type_name -> rookery.v1.LightVMVirtioFSShare
+	35, // 17: rookery.v1.UpdateLightVMRequest.disk_serials:type_name -> rookery.v1.UpdateLightVMRequest.DiskSerialsEntry
+	1,  // 18: rookery.v1.UpdateLightVMRequest.config_files:type_name -> rookery.v1.LightVMConfigFile
+	37, // 19: rookery.v1.LightVMConsoleAccess.expires_at:type_name -> google.protobuf.Timestamp
+	37, // 20: rookery.v1.LightVMConsoleAccess.created_at:type_name -> google.protobuf.Timestamp
+	37, // 21: rookery.v1.LightVMMetrics.sampled_at:type_name -> google.protobuf.Timestamp
+	39, // 22: rookery.v1.LightVMMetrics.block_devices:type_name -> rookery.v1.BlockDeviceMetrics
+	37, // 23: rookery.v1.LightVMKernel.created_at:type_name -> google.protobuf.Timestamp
+	37, // 24: rookery.v1.LightVMKernel.updated_at:type_name -> google.protobuf.Timestamp
+	17, // 25: rookery.v1.ListKernelsResponse.kernels:type_name -> rookery.v1.LightVMKernel
+	37, // 26: rookery.v1.LightVMInitramfs.created_at:type_name -> google.protobuf.Timestamp
+	37, // 27: rookery.v1.LightVMInitramfs.updated_at:type_name -> google.protobuf.Timestamp
+	24, // 28: rookery.v1.ListInitramfsResponse.initramfs:type_name -> rookery.v1.LightVMInitramfs
+	18, // 29: rookery.v1.LightVMKernelService.ListKernels:input_type -> rookery.v1.ListKernelsRequest
+	20, // 30: rookery.v1.LightVMKernelService.GetKernel:input_type -> rookery.v1.GetKernelRequest
+	21, // 31: rookery.v1.LightVMKernelService.CreateKernel:input_type -> rookery.v1.CreateKernelRequest
+	22, // 32: rookery.v1.LightVMKernelService.UpdateKernel:input_type -> rookery.v1.UpdateKernelRequest
+	23, // 33: rookery.v1.LightVMKernelService.DeleteKernel:input_type -> rookery.v1.DeleteKernelRequest
+	25, // 34: rookery.v1.LightVMInitramfsService.ListInitramfs:input_type -> rookery.v1.ListInitramfsRequest
+	27, // 35: rookery.v1.LightVMInitramfsService.GetInitramfs:input_type -> rookery.v1.GetInitramfsRequest
+	28, // 36: rookery.v1.LightVMInitramfsService.CreateInitramfs:input_type -> rookery.v1.CreateInitramfsRequest
+	29, // 37: rookery.v1.LightVMInitramfsService.UpdateInitramfs:input_type -> rookery.v1.UpdateInitramfsRequest
+	30, // 38: rookery.v1.LightVMInitramfsService.DeleteInitramfs:input_type -> rookery.v1.DeleteInitramfsRequest
+	31, // 39: rookery.v1.LightVMArtifactService.UploadArtifact:input_type -> rookery.v1.UploadArtifactRequest
+	33, // 40: rookery.v1.LightVMArtifactService.DeleteArtifact:input_type -> rookery.v1.DeleteArtifactRequest
+	5,  // 41: rookery.v1.LightVMService.ListLightVMs:input_type -> rookery.v1.ListLightVMsRequest
+	7,  // 42: rookery.v1.LightVMService.GetLightVM:input_type -> rookery.v1.GetLightVMRequest
+	8,  // 43: rookery.v1.LightVMService.CreateLightVM:input_type -> rookery.v1.CreateLightVMRequest
+	9,  // 44: rookery.v1.LightVMService.UpdateLightVM:input_type -> rookery.v1.UpdateLightVMRequest
+	10, // 45: rookery.v1.LightVMService.DeleteLightVM:input_type -> rookery.v1.DeleteLightVMRequest
+	11, // 46: rookery.v1.LightVMService.StartLightVM:input_type -> rookery.v1.StartLightVMRequest
+	12, // 47: rookery.v1.LightVMService.StopLightVM:input_type -> rookery.v1.StopLightVMRequest
+	13, // 48: rookery.v1.LightVMService.GetLightVMMetrics:input_type -> rookery.v1.GetLightVMMetricsRequest
+	14, // 49: rookery.v1.LightVMService.CreateLightVMConsoleAccess:input_type -> rookery.v1.CreateLightVMConsoleAccessRequest
+	19, // 50: rookery.v1.LightVMKernelService.ListKernels:output_type -> rookery.v1.ListKernelsResponse
+	17, // 51: rookery.v1.LightVMKernelService.GetKernel:output_type -> rookery.v1.LightVMKernel
+	17, // 52: rookery.v1.LightVMKernelService.CreateKernel:output_type -> rookery.v1.LightVMKernel
+	17, // 53: rookery.v1.LightVMKernelService.UpdateKernel:output_type -> rookery.v1.LightVMKernel
+	40, // 54: rookery.v1.LightVMKernelService.DeleteKernel:output_type -> google.protobuf.Empty
+	26, // 55: rookery.v1.LightVMInitramfsService.ListInitramfs:output_type -> rookery.v1.ListInitramfsResponse
+	24, // 56: rookery.v1.LightVMInitramfsService.GetInitramfs:output_type -> rookery.v1.LightVMInitramfs
+	24, // 57: rookery.v1.LightVMInitramfsService.CreateInitramfs:output_type -> rookery.v1.LightVMInitramfs
+	24, // 58: rookery.v1.LightVMInitramfsService.UpdateInitramfs:output_type -> rookery.v1.LightVMInitramfs
+	40, // 59: rookery.v1.LightVMInitramfsService.DeleteInitramfs:output_type -> google.protobuf.Empty
+	32, // 60: rookery.v1.LightVMArtifactService.UploadArtifact:output_type -> rookery.v1.UploadArtifactResponse
+	40, // 61: rookery.v1.LightVMArtifactService.DeleteArtifact:output_type -> google.protobuf.Empty
+	6,  // 62: rookery.v1.LightVMService.ListLightVMs:output_type -> rookery.v1.ListLightVMsResponse
+	4,  // 63: rookery.v1.LightVMService.GetLightVM:output_type -> rookery.v1.LightVM
+	4,  // 64: rookery.v1.LightVMService.CreateLightVM:output_type -> rookery.v1.LightVM
+	4,  // 65: rookery.v1.LightVMService.UpdateLightVM:output_type -> rookery.v1.LightVM
+	40, // 66: rookery.v1.LightVMService.DeleteLightVM:output_type -> google.protobuf.Empty
+	4,  // 67: rookery.v1.LightVMService.StartLightVM:output_type -> rookery.v1.LightVM
+	4,  // 68: rookery.v1.LightVMService.StopLightVM:output_type -> rookery.v1.LightVM
+	16, // 69: rookery.v1.LightVMService.GetLightVMMetrics:output_type -> rookery.v1.LightVMMetrics
+	15, // 70: rookery.v1.LightVMService.CreateLightVMConsoleAccess:output_type -> rookery.v1.LightVMConsoleAccess
+	50, // [50:71] is the sub-list for method output_type
+	29, // [29:50] is the sub-list for method input_type
+	29, // [29:29] is the sub-list for extension type_name
+	29, // [29:29] is the sub-list for extension extendee
+	0,  // [0:29] is the sub-list for field type_name
 }
 
 func init() { file_rookery_v1_lightvm_proto_init() }
@@ -2961,17 +3089,17 @@ func file_rookery_v1_lightvm_proto_init() {
 	file_rookery_v1_interface_proto_init()
 	file_rookery_v1_disk_proto_init()
 	file_rookery_v1_vm_proto_init()
-	file_rookery_v1_lightvm_proto_msgTypes[2].OneofWrappers = []any{}
 	file_rookery_v1_lightvm_proto_msgTypes[3].OneofWrappers = []any{}
-	file_rookery_v1_lightvm_proto_msgTypes[7].OneofWrappers = []any{}
+	file_rookery_v1_lightvm_proto_msgTypes[4].OneofWrappers = []any{}
 	file_rookery_v1_lightvm_proto_msgTypes[8].OneofWrappers = []any{}
+	file_rookery_v1_lightvm_proto_msgTypes[9].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_lightvm_proto_rawDesc), len(file_rookery_v1_lightvm_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   35,
+			NumMessages:   36,
 			NumExtensions: 0,
 			NumServices:   4,
 		},

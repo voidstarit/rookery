@@ -955,6 +955,12 @@ tbody tr:hover {
   --status-border: rgba(251, 113, 133, 0.24);
 }
 
+.status-badge[data-status="terminated"] {
+  --status-color: #c4b5fd;
+  --status-bg: rgba(167, 139, 250, 0.1);
+  --status-border: rgba(167, 139, 250, 0.24);
+}
+
 .status-badge[data-status="disabled"] {
   --status-color: var(--faint);
   --status-bg: rgba(143, 161, 179, 0.06);

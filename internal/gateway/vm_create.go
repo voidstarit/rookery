@@ -197,7 +197,7 @@ func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMReq
 			}
 			return nil, status.Error(codes.Internal, "could not read disk")
 		}
-		if (disk.AttachedVMID != nil && *disk.AttachedVMID != existing.ID) || disk.AttachedLightVMID != nil {
+		if !disk.ReadOnly && ((disk.AttachedVMID != nil && *disk.AttachedVMID != existing.ID) || disk.AttachedLightVMID != nil) {
 			ownerErr := &store.DiskInUseError{}
 			if disk.AttachedLightVMID != nil {
 				ownerErr = &store.DiskInUseError{OwnerKind: "lightvm", OwnerID: *disk.AttachedLightVMID, OwnerName: disk.AttachedLightVMName}

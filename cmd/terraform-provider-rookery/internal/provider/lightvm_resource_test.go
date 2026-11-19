@@ -299,6 +299,7 @@ func TestLightVMResourceCRUD(t *testing.T) {
 		Env: testList(t, ctx, envType, []lightVMEnvModel{
 			{Name: types.StringValue("APP_ENV"), Value: types.StringValue("test")},
 		}),
+		ConfigFiles:    types.ListNull(types.ObjectType{AttrTypes: lightVMConfigFileAttrTypes()}),
 		ExecutableArgs: testList(t, ctx, types.StringType, []string{"serve"}),
 		InterfaceIDs:   types.ListNull(types.Int64Type),
 		DiskIDs:        types.ListNull(types.Int64Type),
@@ -413,6 +414,7 @@ func TestLightVMResourceErrors(t *testing.T) {
 	model := lightVMModel{
 		Name:           types.StringValue("missing-client"),
 		Env:            types.ListNull(types.ObjectType{AttrTypes: lightVMEnvAttrTypes()}),
+		ConfigFiles:    types.ListNull(types.ObjectType{AttrTypes: lightVMConfigFileAttrTypes()}),
 		ExecutableArgs: types.ListNull(types.StringType),
 		InterfaceIDs:   types.ListNull(types.Int64Type), DiskIDs: types.ListNull(types.Int64Type),
 		DiskSerials:    types.MapNull(types.StringType),
@@ -432,6 +434,7 @@ func TestLightVMResourceErrors(t *testing.T) {
 		Name: types.StringValue("bad-kernel"), KernelID: types.Int64Value(999), InitramfsID: types.Int64Value(999),
 		Image: types.StringValue("alpine"), ExecutablePath: types.StringValue("/bin/app"),
 		Env:            types.ListNull(types.ObjectType{AttrTypes: lightVMEnvAttrTypes()}),
+		ConfigFiles:    types.ListNull(types.ObjectType{AttrTypes: lightVMConfigFileAttrTypes()}),
 		ExecutableArgs: types.ListNull(types.StringType),
 		InterfaceIDs:   types.ListNull(types.Int64Type), DiskIDs: types.ListNull(types.Int64Type),
 		DiskSerials:    types.MapNull(types.StringType),
@@ -526,6 +529,119 @@ func TestArtifactPathPlanModifier(t *testing.T) {
 	}
 }
 
+func TestArtifactDerivedPlanModifiers(t *testing.T) {
+	ctx := context.Background()
+	value := &lightVMArtifactResource{kind: "kernel", typeName: "lightvm_kernel", entityType: "lightvm_kernel", noun: "kernel"}
+	schemaValue := artifactSchema(t, value)
+
+	configFor := func(model lightVMArtifactModel) tfsdk.Config {
+		t.Helper()
+		return tfsdk.Config{Schema: schemaValue, Raw: planForModel(t, schemaValue, &model).Raw}
+	}
+
+	// State left by an uploaded artifact: Rookery assigned the managed path.
+	uploadState := lightVMArtifactModel{
+		ID: types.Int64Value(7), Name: types.StringValue("kernel"),
+		SourcePath: types.StringValue("/local/kernel"), SourceHash: types.StringValue("one"),
+		Path: types.StringValue("/managed/one"), FileName: types.StringValue("kernel"),
+		SizeBytes: types.Int64Value(1070494), Managed: types.BoolValue(true),
+		Labels: types.SetNull(types.StringType),
+	}
+	// Matching configuration: path stays unset because the upload assigns it.
+	uploadConfig := lightVMArtifactModel{
+		Name:       types.StringValue("kernel"),
+		SourcePath: types.StringValue("/local/kernel"), SourceHash: types.StringValue("one"),
+		Labels: types.SetNull(types.StringType),
+	}
+	// State left by a host-path registration.
+	hostState := lightVMArtifactModel{
+		ID: types.Int64Value(8), Name: types.StringValue("host-kernel"),
+		Path: types.StringValue("/host/kernel"), FileName: types.StringValue("kernel"),
+		SizeBytes: types.Int64Value(4096), Managed: types.BoolValue(false),
+		Labels: types.SetNull(types.StringType),
+	}
+	hostConfig := lightVMArtifactModel{
+		Name: types.StringValue("host-kernel"), Path: types.StringValue("/host/kernel"),
+		Labels: types.SetNull(types.StringType),
+	}
+
+	check := func(t *testing.T, configModel, stateModel lightVMArtifactModel, wantSize types.Int64, wantManaged types.Bool) {
+		t.Helper()
+		state := stateForModel(t, schemaValue, &stateModel)
+		plan := planForModel(t, schemaValue, &stateModel)
+		sizeRequest := planmodifier.Int64Request{
+			Config: configFor(configModel), Plan: plan, State: state,
+			PlanValue: types.Int64Unknown(), StateValue: stateModel.SizeBytes,
+		}
+		sizeResponse := planmodifier.Int64Response{PlanValue: sizeRequest.PlanValue}
+		artifactSizePlanModifier{}.PlanModifyInt64(ctx, sizeRequest, &sizeResponse)
+		if sizeResponse.Diagnostics.HasError() {
+			t.Fatalf("size diagnostics: %v", sizeResponse.Diagnostics)
+		}
+		if !sizeResponse.PlanValue.Equal(wantSize) {
+			t.Fatalf("size = %v, want %v", sizeResponse.PlanValue, wantSize)
+		}
+		managedRequest := planmodifier.BoolRequest{
+			Config: configFor(configModel), Plan: plan, State: state,
+			PlanValue: types.BoolUnknown(), StateValue: stateModel.Managed,
+		}
+		managedResponse := planmodifier.BoolResponse{PlanValue: managedRequest.PlanValue}
+		artifactManagedPlanModifier{}.PlanModifyBool(ctx, managedRequest, &managedResponse)
+		if managedResponse.Diagnostics.HasError() {
+			t.Fatalf("managed diagnostics: %v", managedResponse.Diagnostics)
+		}
+		if !managedResponse.PlanValue.Equal(wantManaged) {
+			t.Fatalf("managed = %v, want %v", managedResponse.PlanValue, wantManaged)
+		}
+	}
+
+	// Updates that leave the file alone (labels, description, name) keep the
+	// server-derived values in the plan.
+	check(t, uploadConfig, uploadState, types.Int64Value(1070494), types.BoolValue(true))
+	check(t, hostConfig, hostState, types.Int64Value(4096), types.BoolValue(false))
+
+	// Re-uploading a rebuilt file changes its size, so the plan must defer both
+	// values to apply. A stale size in the plan is exactly what produced
+	// "provider produced inconsistent result after apply".
+	rebuilt := uploadConfig
+	rebuilt.SourceHash = types.StringValue("two")
+	check(t, rebuilt, uploadState, types.Int64Unknown(), types.BoolUnknown())
+
+	renamed := uploadConfig
+	renamed.SourcePath = types.StringValue("/local/kernel-2")
+	check(t, renamed, uploadState, types.Int64Unknown(), types.BoolUnknown())
+
+	// Switching from a managed upload to a host path flips managed and re-stats
+	// the file.
+	toHost := uploadConfig
+	toHost.SourcePath = types.StringNull()
+	toHost.SourceHash = types.StringNull()
+	toHost.Path = types.StringValue("/host/kernel")
+	check(t, toHost, uploadState, types.Int64Unknown(), types.BoolUnknown())
+
+	// A different registered host path is a different file.
+	movedHost := hostConfig
+	movedHost.Path = types.StringValue("/host/kernel-2")
+	check(t, movedHost, hostState, types.Int64Unknown(), types.BoolUnknown())
+
+	// An interpolated path cannot be compared at plan time, so defer to apply.
+	unknownHost := hostConfig
+	unknownHost.Path = types.StringUnknown()
+	check(t, unknownHost, hostState, types.Int64Unknown(), types.BoolUnknown())
+
+	// Create has no prior state, so the values stay unknown until apply.
+	createPlan := planForModel(t, schemaValue, &uploadConfig)
+	createRequest := planmodifier.Int64Request{
+		Config: configFor(uploadConfig), Plan: createPlan,
+		State: tfsdk.State{Schema: schemaValue}, PlanValue: types.Int64Unknown(),
+	}
+	createResponse := planmodifier.Int64Response{PlanValue: createRequest.PlanValue}
+	artifactSizePlanModifier{}.PlanModifyInt64(ctx, createRequest, &createResponse)
+	if createResponse.Diagnostics.HasError() || !createResponse.PlanValue.IsUnknown() {
+		t.Fatalf("create size = %v, %v", createResponse.PlanValue, createResponse.Diagnostics)
+	}
+}
+
 func TestLightVMScriptRequestConversion(t *testing.T) {
 	ctx := context.Background()
 	model := lightVMModel{
@@ -533,6 +649,7 @@ func TestLightVMScriptRequestConversion(t *testing.T) {
 		KernelID: types.Int64Value(1), InitramfsID: types.Int64Value(2), Image: types.StringValue("alpine"),
 		ExecutableScript: types.StringValue("echo hello"),
 		Env:              types.ListNull(types.ObjectType{AttrTypes: lightVMEnvAttrTypes()}),
+		ConfigFiles:      types.ListNull(types.ObjectType{AttrTypes: lightVMConfigFileAttrTypes()}),
 		ExecutableArgs:   types.ListNull(types.StringType),
 		InterfaceIDs:     types.ListNull(types.Int64Type), DiskIDs: types.ListNull(types.Int64Type),
 		DiskSerials:    types.MapNull(types.StringType),

@@ -202,16 +202,45 @@ export function DisksTab() {
     }
   }, [disks.length]);
 
-  const diskAttached = (disk: Disk) => Boolean(disk.attached_vm_id || disk.attached_lightvm_id);
-  const diskOwner = (disk: Disk) =>
-    disk.attached_vm_id
+  const diskAttachments = (disk: Disk) => disk.attachments ?? [];
+  const diskAttached = (disk: Disk) =>
+    diskAttachments(disk).length > 0 || Boolean(disk.attached_vm_id || disk.attached_lightvm_id);
+  const diskOwner = (disk: Disk) => {
+    const attachments = diskAttachments(disk);
+    if (attachments.length === 1) {
+      return attachments[0].workload_name || attachments[0].workload_id;
+    }
+    if (attachments.length > 1) {
+      return `${attachments.length} workloads · ${attachments
+        .map((attachment) => attachment.workload_name || attachment.workload_id)
+        .join(", ")}`;
+    }
+    return disk.attached_vm_id
       ? disk.attached_vm_name || disk.attached_vm_id
       : disk.attached_lightvm_id
         ? disk.attached_lightvm_name || disk.attached_lightvm_id
         : "";
+  };
+  const toggleReadOnly = async (disk: Disk) => {
+    if (diskAttached(disk)) {
+      showToast(`Detach ${disk.name} from ${diskOwner(disk) || "its workloads"} before changing read-only mode.`, true);
+      return;
+    }
+    try {
+      const updated = await api<Disk>(`/api/disks/${disk.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ read_only: !disk.read_only }),
+      });
+      publishDisks(disks.map((item) => (item.id === updated.id ? updated : item)));
+      showToast(updated.read_only ? `${updated.name} is now read-only and shareable` : `${updated.name} is read-write`);
+      setDiskError("");
+    } catch (err) {
+      setDiskError(`Could not update ${disk.name}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
   const deleteDisk = async (disk: Disk) => {
     if (diskAttached(disk)) {
-      showToast(`Detach ${disk.name} from ${disk.attached_lightvm_id ? "its LightVM" : "its VM"} before deleting it.`, true);
+      showToast(`Detach ${disk.name} from ${diskOwner(disk) || "its workloads"} before deleting it.`, true);
       return;
     }
     const confirmed = window.confirm(
@@ -501,6 +530,7 @@ export function DisksTab() {
                     <td>
                       <span class="vm-name">{disk.name}</span>
                       {disk.is_template ? <span class="import-disk-badge">template</span> : null}
+                      {disk.read_only ? <span class="import-disk-badge">read-only</span> : null}
                       {disk.source === "host-device" ? (
                         <span class="import-disk-badge">passthrough</span>
                       ) : null}
@@ -585,6 +615,21 @@ export function DisksTab() {
                             {disk.is_template ? "Unmark" : "Template"}
                           </button>
                         )}
+                        <button
+                          class="row-action"
+                          type="button"
+                          disabled={diskAttached(disk) || Boolean(disk.deletion_state)}
+                          title={
+                            diskAttached(disk)
+                              ? `Detach ${disk.name} before changing read-only mode.`
+                              : disk.read_only
+                                ? "Make this disk read-write and single-owner again."
+                                : "Make this disk read-only and shareable across workloads."
+                          }
+                          onClick={() => void toggleReadOnly(disk)}
+                        >
+                          {disk.read_only ? "Read-write" : "Read-only"}
+                        </button>
                         <button
                           class="row-action danger"
                           type="button"

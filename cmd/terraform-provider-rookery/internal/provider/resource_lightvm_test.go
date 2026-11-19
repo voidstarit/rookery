@@ -41,6 +41,7 @@ func TestLightVMRequestConversion(t *testing.T) {
 		ExecutablePath: types.StringValue("/bin/app"),
 		Append:         types.StringValue("console=hvc0"),
 		Env:            testList(t, ctx, envType, []lightVMEnvModel{{Name: types.StringValue("A"), Value: types.StringValue("b")}}),
+		ConfigFiles:    types.ListNull(types.ObjectType{AttrTypes: lightVMConfigFileAttrTypes()}),
 		ExecutableArgs: testList(t, ctx, types.StringType, []string{"serve"}),
 		InterfaceIDs:   testList(t, ctx, types.Int64Type, []int64{3, 4}),
 		DiskIDs:        testList(t, ctx, types.Int64Type, []int64{5}),
@@ -130,6 +131,7 @@ func TestDiskBackedLightVMRequestConversion(t *testing.T) {
 		DiskIDs:        testList(t, ctx, types.Int64Type, []int64{3}),
 		DiskSerials:    types.MapNull(types.StringType),
 		Env:            types.ListNull(types.ObjectType{AttrTypes: lightVMEnvAttrTypes()}),
+		ConfigFiles:    types.ListNull(types.ObjectType{AttrTypes: lightVMConfigFileAttrTypes()}),
 		ExecutableArgs: types.ListNull(types.StringType),
 		InterfaceIDs:   types.ListNull(types.Int64Type),
 		VirtioFSShares: types.ListNull(types.ObjectType{AttrTypes: lightVMShareAttrTypes()}),
@@ -153,7 +155,21 @@ func TestDiskBackedLightVMRequestConversion(t *testing.T) {
 	}
 
 	model.ExecutablePath = types.StringValue("/bin/app")
+	model.Env = testList(t, ctx, types.ObjectType{AttrTypes: lightVMEnvAttrTypes()}, []lightVMEnvModel{{Name: types.StringValue("A"), Value: types.StringValue("b")}})
+	model.ConfigFiles = testList(t, ctx, types.ObjectType{AttrTypes: lightVMConfigFileAttrTypes()}, []lightVMConfigFileModel{{Name: types.StringValue("app/config.yaml"), Content: types.StringValue("key: value\n")}})
+	model.ExecutableArgs = testList(t, ctx, types.StringType, []string{"serve"})
+	create, diags = lightVMCreateRequest(ctx, model)
+	if diags.HasError() {
+		t.Fatalf("disk-backed executable create request: %v", diags)
+	}
+	if len(create.GetEnv()) != 1 || create.GetExecutablePath() != "/bin/app" || len(create.GetExecutableArgs()) != 1 {
+		t.Fatalf("disk-backed executable create request = %+v", create)
+	}
+	if len(create.GetConfigFiles()) != 1 || create.GetConfigFiles()[0].GetName() != "app/config.yaml" || create.GetConfigFiles()[0].GetContent() != "key: value\n" {
+		t.Fatalf("disk-backed config files = %+v", create.GetConfigFiles())
+	}
+	model.ExecutablePath = types.StringNull()
 	if _, diags := lightVMCreateRequest(ctx, model); !diags.HasError() {
-		t.Fatal("executable without image was accepted")
+		t.Fatal("executable_args without executable_path was accepted")
 	}
 }

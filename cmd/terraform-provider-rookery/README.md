@@ -144,6 +144,11 @@ template clones. Use `GET /api/host/block-devices/attachable` (or the UI) to
 see candidate devices and whether they are mounted, in use, or already
 registered.
 
+Set `read_only = true` to make a disk shareable by multiple VMs and LightVMs.
+QEMU attaches it read-only for every guest; a read-write disk remains
+single-owner. The disk must be detached before `read_only` can change, and
+templates cannot be read-only.
+
 `rookery_disk` templates can set `provisioning_script` and
 `provisioning_timeout`. Clones created with `template_disk_id` can pass
 `provisioning_json = jsonencode({...})`; the object is sent to the template
@@ -184,15 +189,24 @@ Uploaded files are marked `managed = true`; destroying the resource removes
 them. Host-path registrations are not deleted by Rookery. `source_hash` is
 optional but should be set to a local file hash when uploads are used, because
 Terraform otherwise cannot detect that the file contents changed without a
-configuration change.
+configuration change. `size_bytes` and `managed` are derived by the server from
+the stored file, so plans that upload a new or rebuilt file show both as
+`(known after apply)`; the applied state reflects the new file's size.
 
 `rookery_lightvm` manages the definition only; start and stop through the
 Rookery UI or API. The LightVM must be stopped before changing it. Disks,
 interfaces, shares, and consoles are replaced from their configured sets on
 each update; set an explicit empty list to clear one. `image` is optional when
-`disk_ids` is non-empty: a LightVM without an image is disk-backed, boots from
-its disks via the kernel and initramfs, and must not set `env`,
-`executable_path`, `executable_script`, or `executable_args`.
+`disk_ids` is non-empty: a LightVM without an image is disk-backed and boots
+from its disks via the kernel and initramfs. A disk-backed LightVM may still set
+`env`, `executable_path` plus `executable_args`, or `executable_script`; Rookery
+publishes them in a read-only `rookery-config` virtio-blk tar device for the
+guest init to consume. Set `ephemeral = true` for a one-shot LightVM: when the
+guest exits (reboot, panic, or poweroff), Rookery stops QEMU, virtiofsd, and
+the attempt container, deletes the definition, and releases its disk and
+interface attachments so other workloads can use them. The disk and network
+records themselves are kept. Ephemeral definitions are not auto-started after a
+restart.
 
 ```hcl
 resource "rookery_lightvm" "app" {
@@ -208,6 +222,8 @@ resource "rookery_lightvm" "app" {
   executable_args = ["serve"]
   append          = "console=hvc0 rdinit=/init"
   console_enabled = true
+  # Optional: tear down the runtime when the guest exits.
+  ephemeral       = true
   labels          = ["app", "lightvm"]
 
   env = [
@@ -231,10 +247,25 @@ resource "rookery_lightvm" "app" {
 }
 ```
 
+`config_files` is only valid for disk-backed LightVMs. Each entry is a
+`{ name, content }` object added to the `rookery-config` tar at the given
+relative path; the guest initramfs extracts it under `/run/rookery`. Content is
+text. Names must
+be unique, relative, and free of `.`/`..` components, and the root names `env`
+and `startup-cmd` are reserved. Up to 64 files are allowed, each at most 1 MiB
+with 4 MiB combined content. Typical usage reads a local file:
+
+```hcl
+config_files = [
+  { name = "app/config.yaml", content = file("${path.module}/config.yaml") },
+]
+```
+
 Set `executable_script` instead of `executable_path` to supply an inline
 entrypoint script. Rookery writes it to `/.entrypoint` in the image root and
 adds `#!/bin/sh` when the content does not start with a shebang. Script mode
-does not accept `executable_args`.
+does not accept `executable_args`. For a disk-backed LightVM the same content is
+written to the `startup-cmd` file in the `rookery-config` tar archive instead.
 
 ```hcl
 resource "rookery_lightvm" "scripted" {

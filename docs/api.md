@@ -185,7 +185,7 @@ labels in sync through the same API.
 | `GET`    | `/api/disks`       | List all disks                    |
 | `POST`   | `/api/disks`       | Create a thin-LVM disk, host passthrough disk, template, or provisioned template clone |
 | `GET`    | `/api/disks/{id}`  | Get one disk                      |
-| `PUT`    | `/api/disks/{id}`  | Update template/provisioning settings or the disk's throttling class |
+| `PUT`    | `/api/disks/{id}`  | Update template/provisioning settings, the read-only flag, or the throttling class |
 | `DELETE` | `/api/disks/{id}`  | Delete an unattached disk; remote kouja deletes return `202` and finish asynchronously |
 | `GET`    | `/api/disk-throttle-classes` | List reusable QEMU disk throttling classes |
 | `POST`   | `/api/disk-throttle-classes` | Create a throttling class |
@@ -356,10 +356,16 @@ includes `source=kouja`, `protocol=iscsi`, a display-only `locator`, and empty
 `device`. Delete a kouja disk with `DELETE /api/disks/{id}`; the API returns
 `202 Accepted` and the reclaimer unexports and deletes the volume. A
 `delete_failed` disk can be retried with the same DELETE call. Disk responses
-include either `attached_vm_id`/`attached_vm_name` or
-`attached_lightvm_id`/`attached_lightvm_name` when the disk belongs to a
-workload. A disk has exactly one workload owner; attaching it to a second VM or
-LightVM is rejected, and the owning workload must release it before deletion.
+include `attached_vm_id`/`attached_vm_name` or
+`attached_lightvm_id`/`attached_lightvm_name` when exactly one workload owns
+the disk, plus an `attachments` array that lists every owner. A read-write disk
+has exactly one workload owner; attaching it to a second VM or LightVM is
+rejected. Set `read_only=true` on create or update to make a disk shareable:
+QEMU opens it read-only for every guest, and any number of VMs and LightVMs may
+attach it. `read_only` may change only while the disk has no attachments, and
+templates cannot be read-only. Every workload must release the disk before
+deletion. Each `attachments` entry has `workload_kind` (`vm` or `lightvm`),
+`workload_id`, `workload_name`, `position`, and `read_only`.
 
 Disk throughput and IOPS limits are configured through reusable
 `disk_throttle_classes` records. A disk may reference one class with
@@ -432,9 +438,9 @@ disk also cannot be registered if one of its partitions is already a
 passthrough disk (and vice versa), so two guests cannot write the same sectors.
 Rookery never creates, resizes, or deletes the underlying device; deleting the
 disk record removes only the inventory entry and is blocked while a VM uses it.
-Passthrough disks cannot be templates or template clones. They can be attached
-to one VM at a time like any other disk, and QEMU opens them as raw block
-devices.
+Passthrough disks cannot be templates or template clones. They follow the normal
+ownership rule: one read-write owner, or any number of read-only owners, and
+QEMU opens them as raw block devices.
 
 The response includes the LVM location:
 
@@ -809,8 +815,10 @@ managed LightVM storage, plus `DeleteArtifact` for cleanup. The Terraform
 provider uses this RPC for `source_path` uploads.
 
 LightVM records are created at `POST /api/lightvm/instances` with `name`,
-`description`, `vcpus`, `memory_mb`, `console_enabled`, `cgroup_class`,
-`kernel_id`, `initramfs_id`, `image` (optional when a disk is attached), `env` (`name`/`value` pairs),
+`description`, `vcpus`, `memory_mb`, `console_enabled`, `ephemeral`,
+`cgroup_class`, `kernel_id`, `initramfs_id`, `image` (optional when a disk is
+attached), `env` (`name`/`value` pairs),
+`config_files` (ordered `{name, content}` entries for the rookery-config tar),
 either `executable_path` plus `executable_args` (ordered strings) or
 `executable_script` (inline script content, max 1 MiB), `append`, `disk_ids`
 (ordered), `disk_serials` (map of disk ID to virtio-blk serial),
@@ -823,9 +831,9 @@ guest port name: the first console is `org.example.console`, additional
 consoles are `org.example.console.<N>`. `append` is the kernel command line and defaults to
 `console=hvc0 rdinit=/init` when omitted on create; on update it is stored
 exactly as sent (empty clears it). `PUT` replaces every editable field,
-including the full console, interface, `disk_ids`, `disk_serials`, and
-`virtiofs_shares` sets; set `replace_disk_ids` with an empty list to clear disks
-explicitly. `disk_serials` follows the same rules as VM disks: at most 20
+including the full console, interface, `disk_ids`, `disk_serials`,
+`config_files`, and `virtiofs_shares` sets; set `replace_disk_ids` with an empty
+list to clear disks explicitly. `disk_serials` follows the same rules as VM disks: at most 20
 bytes, characters from `[A-Za-z0-9._:-]`, and unique per LightVM. On update,
 send it with a replacement `disk_ids` set or by itself to update the current
 attachments; it is the complete serial set, and attachments without an entry
@@ -835,10 +843,33 @@ have no serial. Omitting it while replacing disks clears the old serials.
 container image is disk-backed; the first attached disk is the boot disk.
 Rookery skips buildah, the container rootfs,
 `.env`/`.entrypoint`, and the `rootfs` virtiofs device, then boots the kernel and
-initramfs with the attached disks. In that mode `env`, `executable_path`,
-`executable_script`, and `executable_args` must be empty. Set `append` as needed
-for the disk (for example `root=/dev/vda1 rootwait`); Rookery does not add
-`root=`. The repository's `initramfs-lightvm-disk-rootfs` artifact is a
+initramfs with the attached disks. A disk-backed definition may still set `env`,
+`config_files`, `executable_path` plus `executable_args`, or
+`executable_script`. Rather than
+modifying the disk image, Rookery writes an attempt-scoped, read-only,
+uncompressed tar archive (`<run-dir>/lightvm-<uuid>-<token>.rookery-config.tar`,
+mode 0600) and attaches it after the workload disks as a read-only virtio-blk
+device with serial `rookery-config`. The archive contains `env` (one
+`NAME=value` per line) and/or `startup-cmd` (an executable `#!/bin/sh` script)
+when those fields are set, followed by every `config_files` entry at its
+configured relative path. `config_files` is only valid for disk-backed
+definitions; each name must be relative, unique, free of `.`/`..` components,
+and must not use the reserved root names `env` or `startup-cmd`. Content is
+text (UTF-8). At most 64 files are allowed, each at most 1 MiB, with a combined
+content limit of 4 MiB.
+The guest can find the device through
+`/dev/disk/by-id/virtio-rookery-config` when udev is available, or by scanning
+`/sys/block/*/serial` for `rookery-config`, and can read it with, for example,
+`tar -xOf /dev/disk/by-id/virtio-rookery-config env` or
+`tar -xf /dev/disk/by-id/virtio-rookery-config -C /run/rookery`. Rookery does
+not execute `startup-cmd` itself; the bundled
+`initramfs-lightvm-disk-rootfs` and `initramfs-lightvm-overlay-rootfs` extract
+the archive into `/run/rookery`, export `env`, and exec `startup-cmd` as PID 1
+unless an explicit `init=`/`lightvm.init=` is set. A custom initramfs may
+consume the device differently. When a config drive is attached, Rookery uses
+explicit `virtio-blk-pci` devices for the workload disks as well, so the config
+device follows them and `vda`, `vdb`, ... keep their existing order. Set `append` as needed for the disk (for example
+`root=/dev/vda1 rootwait`); Rookery does not add `root=`. The repository's `initramfs-lightvm-disk-rootfs` artifact is a
 generic initramfs for this mode: it finds a virtio-fs tag `root`/`rootfs`, the
 `root=` device, or a virtio-blk disk with serial `root`/`rootfs`, mounts the
 filesystem, and runs `init=` (or `/init`, `/sbin/init`, `/bin/init`). Pair it
@@ -868,15 +899,39 @@ each and an executable `<rootfs>/.entrypoint` script. In path mode the script
 contains the executable path and args; in script mode the configured content is
 written verbatim, with `#!/bin/sh` added only when it does not already start
 with a shebang. Rookery then starts `virtiofsd` and launches QEMU with `-kernel`, `-initrd`,
-`-append`, one virtio drive per disk in attachment order, a
-`vhost-user-fs-pci` device tagged `rootfs`, one additional virtiofs device per
-host-directory share, one virtio console socket per
+`-append`, one virtio drive per disk in attachment order, an optional
+read-only `rookery-config` config drive for disk-backed definitions with env or
+startup data, a `vhost-user-fs-pci` device tagged `rootfs`, one additional
+virtiofs device per host-directory share, one virtio console socket per
 configured console under the QEMU run directory, the cgroup class, and any
 vhost-user interfaces. The container-root initramfs mounts the `rootfs` tag; Rookery does not
 change `append`.
 `POST .../stop` terminates QEMU, stops virtiofsd, unmounts/removes the buildah
 container, and deleting a running LightVM stops it first. Guest writes live in
-the ephemeral container overlay and are discarded on stop. Responses include
+the ephemeral container overlay and are discarded on stop.
+
+Set `ephemeral` to make a LightVM one-shot. Rookery boots it normally, but when
+the guest kernel exits the runtime is terminated automatically: QEMU is stopped
+and its console/monitor/QMP sockets are removed, virtiofsd processes are
+stopped, and the attempt container and config drive are deleted. Rookery then
+deletes the LightVM definition. Deleting the definition cascades its
+`workload_disks` and `lightvm_interfaces` rows, so attached disks and network
+interfaces become available to other VMs and LightVMs; the disk records, data,
+network records, and VPP interfaces themselves are not deleted. An explicit
+`POST .../stop` on an ephemeral LightVM behaves the same way: it tears down the
+runtime, deletes the definition, and releases the attachments.
+An ephemeral start adds `-no-reboot` to QEMU and appends `panic=-1` to the
+kernel command line unless the caller already supplied a `panic=` value. A
+guest reboot, a kernel panic, or a poweroff therefore makes QEMU exit (a plain
+CPU halt without an ACPI poweroff is indistinguishable from an idle guest and
+does not by itself end the run). The API reaps the exited process within about
+a second. Ephemeral LightVMs are not auto-started after an API or host restart;
+a run that is still alive keeps running, while a finished run is deleted. If
+cleanup or deletion fails, the definition stays `terminated` so the reaper can
+retry; it is never started again. `ephemeral` is editable while the LightVM is
+stopped.
+
+Responses include
 `disk_ids`/`disks` in attachment order (each disk includes its `serial`),
 `virtiofs_shares` with resolved positions, and `run_state` for a live QEMU
 (`running`, `paused`, or `paused (io-error)`). While running, the response also
@@ -889,10 +944,12 @@ used. The UI opens it from the **Console** action using
 `/lightvm-console.html?vm=<uuid>` and lets the user choose a console on that
 page. The environment, executable path, script, and argument fields are not passed
 over the kernel command line; the initramfs has its own workload contract.
+For disk-backed definitions they are passed only through the `rookery-config`
+block device.
 `virtiofsd` is resolved next to the `rookery` binary unless configured with
 `-virtiofsd-bin`. `/api/status` includes a
 `lightvm` component reporting buildah/virtiofsd availability; the LightVM tab
-shows its error and disables Start when either tool is missing.
+shows its error and disables Start only for definitions that need a missing tool.
 
 ### Direct LightVM console access
 
@@ -933,11 +990,13 @@ invalidates outstanding tokens. Treat the token as a secret bearer credential:
 use `wss` or the local listener, and do not put it in shared logs.
 
 Valid statuses are `stopped`, `starting`, `running`, `stopping`, `paused`, and
-`error`. A VM can have multiple disks. At creation, provide `disk_ids` with at
+`error`; an ephemeral LightVM may briefly report `terminated` if its runtime
+cleanup or deletion is still being retried. A VM can have multiple disks. At creation, provide `disk_ids` with at
 least one existing unattached disk; the first ID is the boot disk. To replace
 the attached set, send `disk_ids` on `PUT` while the VM is stopped; omit it to
-leave the disks unchanged. A disk can be attached to only one VM and cannot be
-deleted while attached. Deleting a VM makes all of its disks available again.
+leave the disks unchanged. A read-write disk can be attached to only one VM; a
+read-only disk may be shared. A disk cannot be deleted while attached. Deleting
+a VM makes all of its disks available again.
 Deleting a disk removes both its LVM thin volume and its inventory record. The
 VM response includes `disk_ids` and a `disks` array with disk details.
 Unlike disks, a VM's boot media can be changed or cleared by `PUT`; sending

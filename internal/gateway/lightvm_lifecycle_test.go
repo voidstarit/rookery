@@ -567,3 +567,91 @@ func TestLightVMLifecycleRuntimeErrors(t *testing.T) {
 		t.Fatalf("delete after stop = %d", code)
 	}
 }
+
+func TestLightVMEphemeralStopDeletesDefinition(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "ephemeral-stop.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	kernel, err := st.CreateLightVMKernel(ctx, store.LightVMKernel{
+		Name: "vmlinuz", Path: "/tmp/vmlinuz", FileName: "vmlinuz", SizeBytes: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	initramfs, err := st.CreateLightVMInitramfs(ctx, store.LightVMInitramfs{
+		Name: "initramfs", Path: "/tmp/initramfs", FileName: "initramfs", SizeBytes: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := &fakeLightVMRuntime{running: make(map[string]bool)}
+	gw, err := gateway.New(st, fakeReadiness{}, gateway.WithLightVMRuntime(runtime))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	server := httptest.NewServer(gw.Handler)
+	t.Cleanup(server.Close)
+
+	request := func(method, path string, body any) (*http.Response, map[string]any) {
+		t.Helper()
+		var reader *bytes.Reader
+		if body == nil {
+			reader = bytes.NewReader(nil)
+		} else {
+			data, err := json.Marshal(body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			reader = bytes.NewReader(data)
+		}
+		req, err := http.NewRequest(method, server.URL+path, reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		response, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var decoded map[string]any
+		if response.StatusCode != http.StatusNoContent {
+			_ = json.NewDecoder(response.Body).Decode(&decoded)
+		}
+		_ = response.Body.Close()
+		return response, decoded
+	}
+
+	response, created := request(http.MethodPost, "/api/lightvm/instances", map[string]any{
+		"name": "one-shot", "vcpus": 1, "memory_mb": 256,
+		"kernel_id": kernel.ID, "initramfs_id": initramfs.ID,
+		"image": "alpine", "executable_path": "/bin/app",
+		"ephemeral": true,
+	})
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d, body = %+v", response.StatusCode, created)
+	}
+	id, _ := created["id"].(string)
+	if id == "" {
+		t.Fatalf("created ephemeral LightVM = %+v", created)
+	}
+
+	response, _ = request(http.MethodPost, "/api/lightvm/instances/"+id+"/start", nil)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("start status = %d", response.StatusCode)
+	}
+	response, stopped := request(http.MethodPost, "/api/lightvm/instances/"+id+"/stop", nil)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("stop status = %d, body = %+v", response.StatusCode, stopped)
+	}
+	if stopped["status"] != "terminated" {
+		t.Fatalf("stopped status = %+v", stopped["status"])
+	}
+	response, _ = request(http.MethodGet, "/api/lightvm/instances/"+id, nil)
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("get deleted ephemeral LightVM status = %d", response.StatusCode)
+	}
+}

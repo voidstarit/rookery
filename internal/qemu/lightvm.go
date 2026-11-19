@@ -17,11 +17,27 @@ import (
 	"github.com/voidstarit/rookery/internal/store"
 )
 
+const (
+	// LightVMConfigDriveSerial is the guest-visible virtio-blk serial for the
+	// read-only config device used by disk-backed LightVMs. The guest can find
+	// the device through /dev/disk/by-id/virtio-rookery-config or by scanning
+	// /sys/block/*/serial.
+	LightVMConfigDriveSerial = "rookery-config"
+	lightVMConfigDriveID     = "rookery-config"
+)
+
 // LightVMVirtioFS describes a virtio-fs share attached to a LightVM.
 type LightVMVirtioFS struct {
 	SocketPath string
 	Tag        string
 	ReadOnly   bool
+}
+
+// LightVMConfigDrive describes a read-only file-backed virtio-blk device that
+// carries the LightVM environment and startup command. An empty Path means no
+// config device is attached.
+type LightVMConfigDrive struct {
+	Path string
 }
 
 // StartLightVM launches a QEMU process that boots the LightVM kernel and
@@ -34,7 +50,7 @@ func (q *QEMU) StartLightVM(ctx context.Context, vm store.LightVM) error {
 // StartLightVMWithVirtioFS launches a LightVM and attaches an optional
 // vhost-user-fs device backed by a virtiofsd socket.
 func (q *QEMU) StartLightVMWithVirtioFS(ctx context.Context, vm store.LightVM, rootfs LightVMVirtioFS) error {
-	_, err := q.StartLightVMWithVirtioFSAndPlan(ctx, vm, rootfs, nil, StartPlan{})
+	_, err := q.StartLightVMWithVirtioFSAndPlan(ctx, vm, rootfs, nil, LightVMConfigDrive{}, StartPlan{})
 	return err
 }
 
@@ -42,7 +58,7 @@ func (q *QEMU) StartLightVMWithVirtioFS(ctx context.Context, vm store.LightVM, r
 // attachments. started is true whenever this call launched a process that the
 // caller may need to stop; false guarantees that no process from this call
 // remains.
-func (q *QEMU) StartLightVMWithVirtioFSAndPlan(ctx context.Context, vm store.LightVM, rootfs LightVMVirtioFS, shares []LightVMVirtioFS, plan StartPlan) (bool, error) {
+func (q *QEMU) StartLightVMWithVirtioFSAndPlan(ctx context.Context, vm store.LightVM, rootfs LightVMVirtioFS, shares []LightVMVirtioFS, configDrive LightVMConfigDrive, plan StartPlan) (bool, error) {
 	if strings.TrimSpace(vm.KernelPath) == "" || strings.TrimSpace(vm.InitramfsPath) == "" {
 		return false, errors.New("lightvm is missing its kernel or initramfs path")
 	}
@@ -63,6 +79,11 @@ func (q *QEMU) StartLightVMWithVirtioFSAndPlan(ctx context.Context, vm store.Lig
 	for _, share := range shares {
 		if _, err := os.Stat(share.SocketPath); err != nil {
 			return false, fmt.Errorf("virtiofs socket %s is not available: %w", share.SocketPath, err)
+		}
+	}
+	if configDrive.Path != "" {
+		if _, err := os.Stat(configDrive.Path); err != nil {
+			return false, fmt.Errorf("lightvm config drive %s is not available: %w", configDrive.Path, err)
 		}
 	}
 	for _, iface := range vm.Interfaces {
@@ -99,7 +120,7 @@ func (q *QEMU) StartLightVMWithVirtioFSAndPlan(ctx context.Context, vm store.Lig
 	if err != nil {
 		return false, err
 	}
-	args, err := buildLightVMArgs(vm, q.lightVMConsoleArgs(vm), pidfile, monitor, qmp, rootfs, shares, plan, secretPaths)
+	args, err := buildLightVMArgs(vm, q.lightVMConsoleArgs(vm), pidfile, monitor, qmp, rootfs, shares, configDrive, plan, secretPaths)
 	if err != nil {
 		return false, err
 	}
@@ -362,7 +383,7 @@ const appHostnameParam = "APP_HOSTNAME="
 
 func lightvmSecretPrefix(id string) string { return "lightvm-" + id }
 
-func buildLightVMArgs(vm store.LightVM, consoles []lightVMConsoleArg, pidfile, monitor, qmp string, rootfs LightVMVirtioFS, shares []LightVMVirtioFS, plan StartPlan, secretPaths map[int64]string) ([]string, error) {
+func buildLightVMArgs(vm store.LightVM, consoles []lightVMConsoleArg, pidfile, monitor, qmp string, rootfs LightVMVirtioFS, shares []LightVMVirtioFS, configDrive LightVMConfigDrive, plan StartPlan, secretPaths map[int64]string) ([]string, error) {
 	args := []string{
 		"-name", vm.Name,
 		"-uuid", vm.ID,
@@ -402,8 +423,14 @@ func buildLightVMArgs(vm store.LightVM, consoles []lightVMConsoleArg, pidfile, m
 		"-monitor", "unix:"+monitor+",server,nowait",
 		"-qmp", "unix:"+qmp+",server,nowait",
 		"-nic", "none",
-		"-daemonize",
 	)
+	if vm.Ephemeral {
+		// Exit instead of rebooting so a guest reset (including the immediate
+		// panic reboot configured by lightVMAppend) ends the QEMU process and
+		// lets the ephemeral reaper release the attempt resources.
+		args = append(args, "-no-reboot")
+	}
+	args = append(args, "-daemonize")
 	if rootfs.SocketPath != "" {
 		tag := strings.TrimSpace(rootfs.Tag)
 		if tag == "" {
@@ -421,12 +448,27 @@ func buildLightVMArgs(vm store.LightVM, consoles []lightVMConsoleArg, pidfile, m
 			"-device", "vhost-user-fs-pci,chardev="+id+",tag="+share.Tag,
 		)
 	}
+	// When a config drive is attached, use explicit virtio-blk-pci devices for
+	// the workload disks too. Mixing implicit if=virtio disks with an explicit
+	// config device lets QEMU realize the config drive first, shifting the
+	// guest's vda/vdb letters. Explicit devices preserve argument order.
+	if configDrive.Path != "" {
+		plan.ExplicitVirtio = true
+	}
 	for _, disk := range vm.Disks {
 		diskArgs, err := buildDiskArgs(disk, plan, secretPaths)
 		if err != nil {
 			return nil, err
 		}
 		args = append(args, diskArgs...)
+	}
+	// Append the config drive after the workload disks so it does not shift
+	// their guest device letters (vda, vdb, ...). The serial identifies it.
+	if configDrive.Path != "" {
+		args = append(args,
+			"-drive", fmt.Sprintf("file=%s,format=raw,if=none,id=%s,readonly=on", configDrive.Path, lightVMConfigDriveID),
+			"-device", fmt.Sprintf("virtio-blk-pci,drive=%s,serial=%s", lightVMConfigDriveID, LightVMConfigDriveSerial),
+		)
 	}
 	for i, iface := range vm.Interfaces {
 		id := strconv.Itoa(i)
@@ -448,10 +490,29 @@ func buildLightVMArgs(vm store.LightVM, consoles []lightVMConsoleArg, pidfile, m
 // uses it as the DHCP hostname/FQDN option so Rookery's DNS can map the lease.
 func lightVMAppend(vm store.LightVM) string {
 	appendValue := strings.TrimSpace(vm.Append)
+	hasHostname := false
+	hasPanic := false
 	for _, field := range strings.Fields(appendValue) {
 		if strings.HasPrefix(field, appHostnameParam) {
-			return appendValue
+			hasHostname = true
 		}
+		if strings.HasPrefix(field, "panic=") {
+			hasPanic = true
+		}
+	}
+	// A one-shot LightVM must not sit halted after its workload exits with a
+	// kernel panic. panic=-1 reboots immediately; -no-reboot then makes QEMU
+	// exit so the reaper can tear the machine down. An explicit panic= value
+	// supplied by the caller is preserved.
+	if vm.Ephemeral && !hasPanic {
+		if appendValue == "" {
+			appendValue = "panic=-1"
+		} else {
+			appendValue += " panic=-1"
+		}
+	}
+	if hasHostname {
+		return appendValue
 	}
 	hostname := lightVMHostname(vm.Name)
 	if hostname == "" {

@@ -725,7 +725,7 @@ func vmDiskToProto(disk store.VMDisk) *rookeryv1.VMDisk {
 		Id: disk.ID, Name: disk.Name, SizeGb: int32(disk.SizeGB), SizeBytes: disk.SizeBytes,
 		StorageBackendId: disk.StorageBackendID, StorageBackendName: disk.StorageBackendName,
 		Vg: disk.VG, ThinPool: disk.ThinPool, Device: disk.Device, Source: disk.Source,
-		Protocol: disk.Protocol, Serial: disk.Serial,
+		Protocol: disk.Protocol, Serial: disk.Serial, ReadOnly: disk.ReadOnly,
 		ThrottleClassId: classID, ThrottleClassName: disk.ThrottleClassName,
 	}
 }

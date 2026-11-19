@@ -141,7 +141,10 @@ func (p *Preparer) validateLiveExport(cfg Config, protocol blockdev.Protocol, di
 	// stale ACTIVE value must not wedge a start after QEMU has logged out;
 	// only a fresh non-zero active-session count is authoritative here. The
 	// target still refuses a second login if a real session exists.
-	if sessionFresh && activeSessions > 0 {
+	//
+	// Read-only disks are intentionally shared by several workloads, so an
+	// existing session is expected and the target enforces its own limit.
+	if !disk.ReadOnly && sessionFresh && activeSessions > 0 {
 		return ErrSessionActive
 	}
 	if owner := strings.TrimSpace(disk.BackendMetadata.Volume.Owner); owner != "" &&

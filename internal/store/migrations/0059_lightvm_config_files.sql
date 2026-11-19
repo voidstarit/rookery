@@ -1,0 +1,1 @@
+ALTER TABLE lightvms ADD COLUMN config_files TEXT NOT NULL DEFAULT '[]';

@@ -40,6 +40,9 @@ func (f *fakeLightVMController) CleanupPreparedLightVM(context.Context, lightvm.
 	return nil
 }
 func (f *fakeLightVMController) StopQEMULightVM(context.Context, string) error { return nil }
+func (f *fakeLightVMController) CleanupStoppedLightVM(context.Context, string) error {
+	return nil
+}
 func (f *fakeLightVMController) RunState(context.Context, string) (string, error) {
 	return "running", nil
 }

@@ -281,12 +281,17 @@ func (s *lightVMService) StartLightVM(ctx context.Context, request *rookeryv1.St
 		s.mu.Unlock()
 		return nil, status.Error(codes.Aborted, "LightVM changed while the start was queued")
 	}
-	intent, err := s.store.SetLightVMDesiredState(context.WithoutCancel(ctx), current.ID, store.DesiredRunning)
-	if err != nil {
+	if _, err := s.store.SetLightVMDesiredState(context.WithoutCancel(ctx), current.ID, store.DesiredRunning); err != nil {
 		s.mu.Unlock()
 		return nil, status.Error(codes.Internal, "could not update LightVM desired state")
 	}
-	startGeneration := intent.LifecycleGeneration
+	starting, err := s.store.SetLightVMStatus(context.WithoutCancel(ctx), current.ID, store.StatusStarting)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, status.Error(codes.Internal, "could not update LightVM status")
+	}
+	startGeneration := starting.LifecycleGeneration
+	current = starting
 	current.LifecycleGeneration = startGeneration
 	s.mu.Unlock()
 
@@ -388,7 +393,13 @@ func (s *lightVMService) StopLightVM(ctx context.Context, request *rookeryv1.Sto
 		}
 		return nil, status.Error(codes.Internal, "LightVM is still running")
 	}
-	updated, err := s.store.SetLightVMStatus(lifecycleCtx, current.ID, store.StatusStopped)
+	statusTarget := store.StatusStopped
+	if current.Ephemeral {
+		// An ephemeral LightVM is one-shot. Mark it terminated so the reaper
+		// can retry cleanup/deletion if any step below fails.
+		statusTarget = store.StatusTerminated
+	}
+	updated, err := s.store.SetLightVMStatus(lifecycleCtx, current.ID, statusTarget)
 	if err != nil {
 		s.mu.Unlock()
 		return nil, status.Error(codes.Internal, "could not update LightVM status")
@@ -398,6 +409,11 @@ func (s *lightVMService) StopLightVM(ctx context.Context, request *rookeryv1.Sto
 	defer cancel()
 	if err := s.runtime.CleanupStoppedLightVM(cleanupCtx, current.ID); err != nil {
 		return nil, status.Error(codes.Internal, "could not clean up LightVM: "+err.Error())
+	}
+	if current.Ephemeral {
+		if err := s.store.DeleteLightVM(lifecycleCtx, current.ID); err != nil && !errors.Is(err, store.ErrLightVMNotFound) {
+			return nil, status.Error(codes.Internal, "could not delete ephemeral LightVM: "+err.Error())
+		}
 	}
 	return s.toProto(ctx, updated), nil
 }
@@ -561,10 +577,10 @@ func lightVMFromCreateRequest(request *rookeryv1.CreateLightVMRequest) (store.Li
 	}
 	vm, err := lightVMFromRequest(
 		"", request.GetName(), request.GetDescription(), vcpus, memoryMB,
-		request.GetConsoleEnabled(), request.GetCgroupClass(),
+		request.GetConsoleEnabled(), request.GetEphemeral(), request.GetCgroupClass(),
 		request.GetKernelId(), request.GetInitramfsId(), request.GetImage(),
-		request.GetEnv(), request.GetExecutablePath(), request.GetExecutableScript(),
-		request.GetExecutableArgs(),
+		request.GetEnv(), request.GetConfigFiles(), request.GetExecutablePath(),
+		request.GetExecutableScript(), request.GetExecutableArgs(),
 		request.GetInterfaceIds(), request.GetDiskIds(), appendValue, request.GetConsoles(),
 		request.GetVirtiofsShares(), 0,
 	)
@@ -583,9 +599,9 @@ func lightVMFromUpdateRequest(existing store.LightVM, request *rookeryv1.UpdateL
 	vm, err := lightVMFromRequest(
 		request.GetId(), request.GetName(), request.GetDescription(),
 		int(request.GetVcpus()), int(request.GetMemoryMb()), request.GetConsoleEnabled(),
-		request.GetCgroupClass(), request.GetKernelId(), request.GetInitramfsId(),
-		request.GetImage(), request.GetEnv(), request.GetExecutablePath(),
-		request.GetExecutableScript(), request.GetExecutableArgs(),
+		request.GetEphemeral(), request.GetCgroupClass(), request.GetKernelId(), request.GetInitramfsId(),
+		request.GetImage(), request.GetEnv(), request.GetConfigFiles(),
+		request.GetExecutablePath(), request.GetExecutableScript(), request.GetExecutableArgs(),
 		request.GetInterfaceIds(), request.GetDiskIds(),
 		request.GetAppend(), request.GetConsoles(), request.GetVirtiofsShares(),
 		existingDisks,
@@ -598,9 +614,10 @@ func lightVMFromUpdateRequest(existing store.LightVM, request *rookeryv1.UpdateL
 	return vm, nil
 }
 
-func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, console bool,
+func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, console, ephemeral bool,
 	cgroupClass string, kernelID, initramfsID int64, image string,
-	env []*rookeryv1.LightVMEnvVar, executablePath, executableScript string, executableArgs []string,
+	env []*rookeryv1.LightVMEnvVar, configFiles []*rookeryv1.LightVMConfigFile,
+	executablePath, executableScript string, executableArgs []string,
 	interfaceIDs, diskIDs []int64, appendValue string, consoles []*rookeryv1.LightVMConsole,
 	shares []*rookeryv1.LightVMVirtioFSShare, existingDisks int,
 ) (store.LightVM, error) {
@@ -636,38 +653,40 @@ func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, conso
 	if image == "" && len(normalizedDiskIDs) == 0 && existingDisks == 0 {
 		return store.LightVM{}, errors.New("a container image or at least one disk is required")
 	}
+	normalizedConfigFiles, err := normalizeGatewayConfigFiles(configFiles)
+	if err != nil {
+		return store.LightVM{}, err
+	}
+	if image != "" && len(normalizedConfigFiles) > 0 {
+		return store.LightVM{}, errors.New("config_files can only be used with a disk-backed LightVM")
+	}
 	executablePath = strings.TrimSpace(executablePath)
 	scriptEmpty := strings.TrimSpace(executableScript) == ""
-	if image == "" {
-		if len(env) > 0 || executablePath != "" || !scriptEmpty || len(executableArgs) > 0 {
-			return store.LightVM{}, errors.New("env and executable fields can only be used with a container image")
+	switch {
+	case executablePath != "" && !scriptEmpty:
+		return store.LightVM{}, errors.New("executable_path and executable_script are mutually exclusive")
+	case !scriptEmpty && len(executableArgs) > 0:
+		return store.LightVM{}, errors.New("executable_args cannot be used with executable_script")
+	case len(executableArgs) > 0 && executablePath == "":
+		return store.LightVM{}, errors.New("executable_args requires executable_path")
+	case image != "" && executablePath == "" && scriptEmpty:
+		return store.LightVM{}, errors.New("exactly one of executable_path or executable_script is required")
+	}
+	if executablePath != "" {
+		executablePath = path.Clean(executablePath)
+		if !path.IsAbs(executablePath) {
+			return store.LightVM{}, errors.New("executable_path must be an absolute guest path")
 		}
-	} else {
-		switch {
-		case executablePath == "" && scriptEmpty:
-			return store.LightVM{}, errors.New("exactly one of executable_path or executable_script is required")
-		case executablePath != "" && !scriptEmpty:
-			return store.LightVM{}, errors.New("executable_path and executable_script are mutually exclusive")
+		if utf8.RuneCountInString(executablePath) > 4096 {
+			return store.LightVM{}, errors.New("executable_path must be at most 4096 characters")
 		}
-		if executablePath != "" {
-			executablePath = path.Clean(executablePath)
-			if !path.IsAbs(executablePath) {
-				return store.LightVM{}, errors.New("executable_path must be an absolute container path")
-			}
-			if utf8.RuneCountInString(executablePath) > 4096 {
-				return store.LightVM{}, errors.New("executable_path must be at most 4096 characters")
-			}
+	}
+	if !scriptEmpty {
+		if len(executableScript) > maxLightVMExecutableScriptBytes {
+			return store.LightVM{}, fmt.Errorf("executable_script must be at most %d bytes", maxLightVMExecutableScriptBytes)
 		}
-		if !scriptEmpty {
-			if len(executableScript) > maxLightVMExecutableScriptBytes {
-				return store.LightVM{}, fmt.Errorf("executable_script must be at most %d bytes", maxLightVMExecutableScriptBytes)
-			}
-			if strings.ContainsRune(executableScript, 0) {
-				return store.LightVM{}, errors.New("executable_script cannot contain NUL characters")
-			}
-			if len(executableArgs) > 0 {
-				return store.LightVM{}, errors.New("executable_args cannot be used with executable_script")
-			}
+		if strings.ContainsRune(executableScript, 0) {
+			return store.LightVM{}, errors.New("executable_script cannot contain NUL characters")
 		}
 	}
 
@@ -713,11 +732,13 @@ func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, conso
 		VCPUs:            vcpus,
 		MemoryMB:         memoryMB,
 		ConsoleEnabled:   console,
+		Ephemeral:        ephemeral,
 		CgroupClass:      cgroupClass,
 		KernelID:         kernelID,
 		InitramfsID:      initramfsID,
 		Image:            image,
 		Env:              normalizedEnv,
+		ConfigFiles:      normalizedConfigFiles,
 		ExecutablePath:   executablePath,
 		ExecutableScript: executableScript,
 		ExecutableArgs:   normalizedArgs,
@@ -754,6 +775,17 @@ func normalizeLightVMConsoles(values []*rookeryv1.LightVMConsole) ([]store.Light
 		result = append(result, store.LightVMConsole{Name: name})
 	}
 	return result, nil
+}
+
+func normalizeGatewayConfigFiles(values []*rookeryv1.LightVMConfigFile) ([]store.LightVMConfigFile, error) {
+	files := make([]store.LightVMConfigFile, 0, len(values))
+	for _, item := range values {
+		files = append(files, store.LightVMConfigFile{
+			Name:    item.GetName(),
+			Content: item.GetContent(),
+		})
+	}
+	return store.NormalizeLightVMConfigFiles(files)
 }
 
 func normalizeLightVMEnv(values []*rookeryv1.LightVMEnvVar) ([]store.LightVMEnvVar, error) {
@@ -859,6 +891,7 @@ func lightVMToProto(vm store.LightVM) *rookeryv1.LightVM {
 		Vcpus:            int32(vm.VCPUs),
 		MemoryMb:         int32(vm.MemoryMB),
 		ConsoleEnabled:   vm.ConsoleEnabled,
+		Ephemeral:        vm.Ephemeral,
 		CgroupClass:      vm.CgroupClass,
 		KernelId:         vm.KernelID,
 		KernelName:       vm.KernelName,
@@ -878,6 +911,11 @@ func lightVMToProto(vm store.LightVM) *rookeryv1.LightVM {
 	}
 	for _, item := range vm.Env {
 		result.Env = append(result.Env, &rookeryv1.LightVMEnvVar{Name: item.Name, Value: item.Value})
+	}
+	for _, item := range vm.ConfigFiles {
+		result.ConfigFiles = append(result.ConfigFiles, &rookeryv1.LightVMConfigFile{
+			Name: item.Name, Content: item.Content,
+		})
 	}
 	for _, console := range vm.Consoles {
 		result.Consoles = append(result.Consoles, &rookeryv1.LightVMConsole{

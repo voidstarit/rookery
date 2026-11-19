@@ -143,6 +143,14 @@ message LightVMEnvVar {
   string value = 2 [(validate.rules).string = {max_len: 4096}];
 }
 
+// LightVMConfigFile is one user-supplied file in the rookery-config tar for a
+// disk-backed LightVM. Names are relative to /run/rookery in the guest; the
+// system reserves "env" and "startup-cmd" at the archive root.
+message LightVMConfigFile {
+  string name = 1 [(validate.rules).string = {min_len: 1, max_len: 255}];
+  string content = 2 [(validate.rules).string = {max_len: 1048576}];
+}
+
 message LightVMConsole {
   int64 id = 1;
   string name = 2 [(validate.rules).string = {min_len: 1, max_len: 64}];
@@ -192,6 +200,11 @@ message LightVM {
   optional string run_state = 27;
   repeated LightVMVirtioFSShare virtiofs_shares = 28;
   string executable_script = 29;
+  repeated LightVMConfigFile config_files = 30;
+  // ephemeral makes the LightVM one-shot: when the guest exits (reboot,
+  // panic, or poweroff) Rookery stops QEMU, virtiofsd, and the attempt
+  // container automatically. Attached disks and interfaces remain.
+  bool ephemeral = 31;
 }
 
 message ListLightVMsRequest {}
@@ -245,6 +258,10 @@ message CreateLightVMRequest {
     keys: {int64: {gt: 0}}
     values: {string: {max_len: 20, pattern: "^[A-Za-z0-9._:-]*$"}}
   }];
+  repeated LightVMConfigFile config_files = 20 [(validate.rules).repeated = {max_items: 64}];
+  // ephemeral terminates the runtime when the guest exits while keeping the
+  // definition's disks and interfaces attached.
+  optional bool ephemeral = 21;
 }
 
 message UpdateLightVMRequest {
@@ -289,6 +306,10 @@ message UpdateLightVMRequest {
     keys: {int64: {gt: 0}}
     values: {string: {max_len: 20, pattern: "^[A-Za-z0-9._:-]*$"}}
   }];
+  repeated LightVMConfigFile config_files = 22 [(validate.rules).repeated = {max_items: 64}];
+  // ephemeral terminates the runtime when the guest exits while keeping the
+  // definition's disks and interfaces attached.
+  bool ephemeral = 23;
 }
 
 message DeleteLightVMRequest {
