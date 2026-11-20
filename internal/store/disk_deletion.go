@@ -102,6 +102,45 @@ func (s *Store) ResetDiskDeletion(ctx context.Context, id int64) error {
 	return s.MarkDiskDeleting(ctx, id)
 }
 
+// ForceDeleteDisk removes a disk record whose asynchronous deletion is still
+// pending or has failed. It deliberately does not contact the backend, so the
+// remote volume may remain and need manual cleanup. A disk must already have a
+// queued (deleting) or failed (delete_failed) deletion and must be unattached.
+func (s *Store) ForceDeleteDisk(ctx context.Context, id int64) error {
+	res, err := s.db.ExecContext(ctx, `
+		DELETE FROM disks
+		WHERE id = ?
+		  AND deletion_state IN (?, ?)
+		  AND NOT EXISTS (SELECT 1 FROM workload_disks WHERE disk_id = ?)`,
+		id, DiskDeletionDeleting, DiskDeletionFailed, id,
+	)
+	if err != nil {
+		if isForeignKeyViolation(err) {
+			return ErrDiskInUse
+		}
+		return fmt.Errorf("force delete disk: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read force deleted disk rows: %w", err)
+	}
+	if affected > 0 {
+		return nil
+	}
+
+	disk, getErr := s.GetDisk(ctx, id)
+	if errors.Is(getErr, ErrDiskNotFound) {
+		return ErrDiskNotFound
+	}
+	if getErr != nil {
+		return getErr
+	}
+	if ownerErr := s.checkDiskOwnership(ctx, disk, "", ""); ownerErr != nil {
+		return ownerErr
+	}
+	return ErrDiskDeletionNotQueued
+}
+
 // ReleaseDiskDeletionClaim releases a worker claim without changing state.
 func (s *Store) ReleaseDiskDeletionClaim(ctx context.Context, id int64) error {
 	res, err := s.db.ExecContext(ctx, `UPDATE disks SET deletion_claimed_at = 0 WHERE id = ?`, id)

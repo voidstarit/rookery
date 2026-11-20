@@ -571,6 +571,13 @@
             "required": true,
             "type": "string",
             "format": "int64"
+          },
+          {
+            "name": "force",
+            "description": "force removes the inventory record immediately when an asynchronous\nbackend deletion is still pending or has failed. The remote volume is not\ncleaned up by this call and may need manual removal on the backend.",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
           }
         ],
         "tags": [

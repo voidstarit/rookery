@@ -194,4 +194,8 @@ message UpdateDiskRequest {
 
 message DeleteDiskRequest {
   int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  // force removes the inventory record immediately when an asynchronous
+  // backend deletion is still pending or has failed. The remote volume is not
+  // cleaned up by this call and may need manual removal on the backend.
+  bool force = 2;
 }

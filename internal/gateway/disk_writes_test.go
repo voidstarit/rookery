@@ -73,6 +73,19 @@ func TestDiskWriteRoutes(t *testing.T) {
 		t.Fatalf("created volumes = %+v", provisioner.created)
 	}
 
+	forceRequest, err := http.NewRequest(http.MethodDelete, server.URL+"/api/disks/"+id+"?force=true", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forceResponse, err := http.DefaultClient.Do(forceRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if forceResponse.StatusCode != http.StatusBadRequest {
+		t.Fatalf("force delete ready disk status = %d, body = %s", forceResponse.StatusCode, readBody(t, forceResponse))
+	}
+	_ = forceResponse.Body.Close()
+
 	request, err := http.NewRequest(http.MethodDelete, server.URL+"/api/disks/"+id, nil)
 	if err != nil {
 		t.Fatal(err)

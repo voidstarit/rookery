@@ -540,6 +540,24 @@ func (s *diskService) DeleteDisk(ctx context.Context, request *rookeryv1.DeleteD
 	if store.DiskAttachedToAnyWorkload(disk) {
 		return nil, diskInUseError(diskInUseFromRecord(disk))
 	}
+	if request.GetForce() {
+		if err := s.store.ForceDeleteDisk(ctx, disk.ID); err != nil {
+			switch {
+			case errors.Is(err, store.ErrDiskNotFound):
+				return nil, status.Error(codes.NotFound, "disk not found")
+			case errors.Is(err, store.ErrDiskInUse):
+				return nil, diskInUseError(err)
+			case errors.Is(err, store.ErrDiskDeletionNotQueued):
+				return nil, status.Error(codes.FailedPrecondition,
+					"disk deletion is not queued; start a normal delete or retry the failed deletion before forcing")
+			default:
+				return nil, status.Error(codes.Internal, "could not force delete disk")
+			}
+		}
+		// The inventory record is gone even though the remote volume may still
+		// exist, so report a completed delete instead of an async acceptance.
+		return &rookeryv1.DeleteDiskResponse{}, nil
+	}
 	if disk.Source == store.DiskSourceKouja {
 		if s.registry == nil {
 			return nil, status.Error(codes.Unavailable, "storage registry is not configured")

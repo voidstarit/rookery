@@ -49,6 +49,9 @@ var (
 	ErrDiskReadOnlyTemplate = errors.New("template disks cannot be read-only")
 	// ErrDiskDeleting is returned when a disk is provisioning or being deleted.
 	ErrDiskDeleting = errors.New("disk is provisioning or being deleted")
+	// ErrDiskDeletionNotQueued is returned when a forced delete is requested for
+	// a disk that has no pending or failed asynchronous deletion.
+	ErrDiskDeletionNotQueued = errors.New("disk deletion is not queued")
 	// ErrInvalidDiskIDs is returned when disk IDs are malformed.
 	ErrInvalidDiskIDs = errors.New("invalid disk ids")
 	// ErrInvalidDiskSerials is returned when a per-disk serial is malformed.

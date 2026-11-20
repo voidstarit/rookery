@@ -62,6 +62,7 @@ type diskModel struct {
 	ProvisioningScript  types.String `tfsdk:"provisioning_script"`
 	ProvisioningTimeout types.String `tfsdk:"provisioning_timeout"`
 	ProvisioningJSON    types.String `tfsdk:"provisioning_json"`
+	ForceDelete         types.Bool   `tfsdk:"force_delete"`
 	Labels              types.Set    `tfsdk:"labels"`
 }
 
@@ -156,6 +157,11 @@ func (r *diskResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				Optional:      true,
 				Description:   "JSON object passed to a template clone provisioning script.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+			},
+			"force_delete": schema.BoolAttribute{
+				Optional: true,
+				Description: "Remove the disk inventory record when asynchronous backend cleanup fails. " +
+					"The remote volume may remain on the storage backend and require manual cleanup.",
 			},
 		},
 	}
@@ -299,16 +305,21 @@ func (r *diskResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	}
 	callCtx, cancel := context.WithTimeout(ctx, 4*time.Hour)
 	defer cancel()
-	if err := deleteDiskAsync(callCtx, client.Disks, state.ID.ValueInt64(), 4*time.Hour, 2*time.Second); err != nil {
+	if err := deleteDiskAsync(callCtx, client.Disks, state.ID.ValueInt64(), 4*time.Hour, 2*time.Second, state.ForceDelete.ValueBool()); err != nil {
 		resp.Diagnostics.AddError("Delete disk", err.Error())
 	}
 }
 
-func deleteDiskAsync(ctx context.Context, client rookeryv1.DiskServiceClient, id int64, timeout, poll time.Duration) error {
+func deleteDiskAsync(ctx context.Context, client rookeryv1.DiskServiceClient, id int64, timeout, poll time.Duration, force bool) error {
 	deleted, err := client.DeleteDisk(ctx, &rookeryv1.DeleteDiskRequest{Id: id})
 	if err != nil {
 		if isNotFound(err) {
 			return nil
+		}
+		if force {
+			if forceErr := forceDeleteDisk(ctx, client, id); forceErr == nil {
+				return nil
+			}
 		}
 		return err
 	}
@@ -330,13 +341,40 @@ func deleteDiskAsync(ctx context.Context, client rookeryv1.DiskServiceClient, id
 			return readErr
 		}
 		if disk.GetDeletionState() == "delete_failed" {
+			if force {
+				return forceDeleteDisk(ctx, client, id)
+			}
 			return fmt.Errorf("%s", disk.GetDeletionError())
 		}
 		if disk.GetDeletionState() == "" {
 			return nil
 		}
 	}
+	if force {
+		// The surrounding context normally expires with the same 4h budget, so
+		// use a short detached context for the final forced removal.
+		forceCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		return forceDeleteDisk(forceCtx, client, id)
+	}
 	return fmt.Errorf("timed out waiting for asynchronous disk deletion")
+}
+
+// forceDeleteDisk removes the inventory record even though an asynchronous
+// backend cleanup is pending or failed. The remote volume may remain.
+func forceDeleteDisk(ctx context.Context, client rookeryv1.DiskServiceClient, id int64) error {
+	deleted, err := client.DeleteDisk(ctx, &rookeryv1.DeleteDiskRequest{Id: id, Force: true})
+	if err != nil {
+		if isNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	if deleted.GetAccepted() {
+		// An older server ignored the force option and only queued cleanup.
+		return fmt.Errorf("server did not honor the forced disk deletion")
+	}
+	return nil
 }
 
 func (r *diskResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

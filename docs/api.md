@@ -186,7 +186,7 @@ labels in sync through the same API.
 | `POST`   | `/api/disks`       | Create a thin-LVM disk, host passthrough disk, template, or provisioned template clone |
 | `GET`    | `/api/disks/{id}`  | Get one disk                      |
 | `PUT`    | `/api/disks/{id}`  | Update template/provisioning settings, the read-only flag, or the throttling class |
-| `DELETE` | `/api/disks/{id}`  | Delete an unattached disk; remote kouja deletes return `202` and finish asynchronously |
+| `DELETE` | `/api/disks/{id}`  | Delete an unattached disk; remote kouja deletes return `202` and finish asynchronously. Add `?force=true` to drop a `deleting`/`delete_failed` record without backend cleanup |
 | `GET`    | `/api/disk-throttle-classes` | List reusable QEMU disk throttling classes |
 | `POST`   | `/api/disk-throttle-classes` | Create a throttling class |
 | `GET`    | `/api/disk-throttle-classes/{id}` | Get one throttling class |
@@ -355,7 +355,11 @@ pool. kouja disks are created and exported by the kouja agent; their response
 includes `source=kouja`, `protocol=iscsi`, a display-only `locator`, and empty
 `device`. Delete a kouja disk with `DELETE /api/disks/{id}`; the API returns
 `202 Accepted` and the reclaimer unexports and deletes the volume. A
-`delete_failed` disk can be retried with the same DELETE call. Disk responses
+`delete_failed` disk can be retried with the same DELETE call. If cleanup is
+stuck or the backend is unreachable, `DELETE /api/disks/{id}?force=true` on a
+disk already in `deleting` or `delete_failed` removes the inventory record
+immediately. Force deletion does not contact the backend, so any remaining
+remote volume must be removed there manually. Disk responses
 include `attached_vm_id`/`attached_vm_name` or
 `attached_lightvm_id`/`attached_lightvm_name` when exactly one workload owns
 the disk, plus an `attachments` array that lists every owner. A read-write disk

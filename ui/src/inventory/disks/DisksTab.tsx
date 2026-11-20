@@ -192,6 +192,8 @@ export function DisksTab() {
   const diskAttachments = (disk: Disk) => disk.attachments ?? [];
   const diskAttached = (disk: Disk) =>
     diskAttachments(disk).length > 0 || Boolean(disk.attached_vm_id || disk.attached_lightvm_id);
+  const diskDeletionPending = (disk: Disk) =>
+    disk.deletion_state === "deleting" || disk.deletion_state === "delete_failed";
   const diskOwner = (disk: Disk) => {
     const attachments = diskAttachments(disk);
     if (attachments.length === 1) {
@@ -234,7 +236,7 @@ export function DisksTab() {
       disk.source === "host-device"
         ? `Delete disk "${disk.name}"?\n\nThis removes only the inventory record. The host block device ${disk.device} is not modified.`
         : disk.source === "kouja"
-          ? `Delete disk "${disk.name}"?\n\nThis queues the kouja volume for unexport and deletion. The disk stays visible until cleanup finishes.`
+          ? `Delete disk "${disk.name}"?\n\nThis queues the kouja volume for unexport and deletion. The disk stays visible until cleanup finishes; use Force remove to drop the record while cleanup is pending.`
           : `Delete disk "${disk.name}"?\n\nThis removes the LVM thin volume and its inventory record.`
     );
     if (!confirmed) {
@@ -253,6 +255,29 @@ export function DisksTab() {
       void loadBackends(false);
     } catch (err) {
       setDiskError(`Could not delete ${disk.name}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+  const forceDeleteDisk = async (disk: Disk) => {
+    if (diskAttached(disk)) {
+      showToast(`Detach ${disk.name} from ${diskOwner(disk) || "its workloads"} before deleting it.`, true);
+      return;
+    }
+    const confirmed = window.confirm(
+      `Force-remove disk "${disk.name}"?\n\nThis deletes the inventory record immediately, even though the ${
+        disk.source === "kouja" ? "kouja volume" : "backend volume"
+      } may not have been cleaned up. Any remaining volume on the storage backend must be removed there manually.`
+    );
+    if (!confirmed) {
+      return;
+    }
+    try {
+      await api(`/api/disks/${disk.id}?force=true`, { method: "DELETE" });
+      publishDisks(disks.filter((item) => item.id !== disk.id));
+      showToast(`Force-removed disk ${disk.name}`);
+      setDiskError("");
+      void loadBackends(false);
+    } catch (err) {
+      setDiskError(`Could not force-remove ${disk.name}: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -630,6 +655,21 @@ export function DisksTab() {
                         >
                           Delete
                         </button>
+                        {diskDeletionPending(disk) ? (
+                          <button
+                            class="row-action danger"
+                            type="button"
+                            disabled={diskAttached(disk)}
+                            title={
+                              diskAttached(disk)
+                                ? `Detach ${disk.name} from ${diskOwner(disk) || "its workload"} before deleting it.`
+                                : "Remove the inventory record now, even if backend cleanup is still pending or failed."
+                            }
+                            onClick={() => void forceDeleteDisk(disk)}
+                          >
+                            Force remove
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

@@ -20,11 +20,18 @@ type fakeDiskClient struct {
 	rookeryv1.DiskServiceClient
 	deleteResponse *rookeryv1.DeleteDiskResponse
 	deleteErr      error
+	forceResponse  *rookeryv1.DeleteDiskResponse
+	forceErr       error
 	getResponse    *rookeryv1.Disk
 	getErr         error
+	deleteRequests []*rookeryv1.DeleteDiskRequest
 }
 
-func (f *fakeDiskClient) DeleteDisk(context.Context, *rookeryv1.DeleteDiskRequest, ...grpc.CallOption) (*rookeryv1.DeleteDiskResponse, error) {
+func (f *fakeDiskClient) DeleteDisk(_ context.Context, request *rookeryv1.DeleteDiskRequest, _ ...grpc.CallOption) (*rookeryv1.DeleteDiskResponse, error) {
+	f.deleteRequests = append(f.deleteRequests, request)
+	if request.GetForce() && (f.forceResponse != nil || f.forceErr != nil) {
+		return f.forceResponse, f.forceErr
+	}
 	return f.deleteResponse, f.deleteErr
 }
 
@@ -34,34 +41,65 @@ func (f *fakeDiskClient) GetDisk(context.Context, *rookeryv1.GetDiskRequest, ...
 
 func TestDeleteDiskAsyncBranches(t *testing.T) {
 	ctx := context.Background()
-	if err := deleteDiskAsync(ctx, &fakeDiskClient{deleteResponse: &rookeryv1.DeleteDiskResponse{}}, 1, time.Second, time.Millisecond); err != nil {
+	if err := deleteDiskAsync(ctx, &fakeDiskClient{deleteResponse: &rookeryv1.DeleteDiskResponse{}}, 1, time.Second, time.Millisecond, false); err != nil {
 		t.Fatalf("completed delete = %v", err)
 	}
-	if err := deleteDiskAsync(ctx, &fakeDiskClient{deleteErr: status.Error(codes.NotFound, "gone")}, 1, time.Second, time.Millisecond); err != nil {
+	if err := deleteDiskAsync(ctx, &fakeDiskClient{deleteErr: status.Error(codes.NotFound, "gone")}, 1, time.Second, time.Millisecond, false); err != nil {
 		t.Fatalf("not-found delete = %v", err)
 	}
-	if err := deleteDiskAsync(ctx, &fakeDiskClient{deleteErr: errors.New("boom")}, 1, time.Second, time.Millisecond); err == nil {
+	if err := deleteDiskAsync(ctx, &fakeDiskClient{deleteErr: errors.New("boom")}, 1, time.Second, time.Millisecond, false); err == nil {
 		t.Fatal("delete error was ignored")
 	}
 	if err := deleteDiskAsync(ctx, &fakeDiskClient{deleteResponse: &rookeryv1.DeleteDiskResponse{Accepted: true},
-		getErr: status.Error(codes.NotFound, "gone")}, 1, time.Second, time.Millisecond); err != nil {
+		getErr: status.Error(codes.NotFound, "gone")}, 1, time.Second, time.Millisecond, false); err != nil {
 		t.Fatalf("accepted not-found = %v", err)
 	}
 	if err := deleteDiskAsync(ctx, &fakeDiskClient{deleteResponse: &rookeryv1.DeleteDiskResponse{Accepted: true},
-		getErr: errors.New("read failed")}, 1, time.Second, time.Millisecond); err == nil {
+		getErr: errors.New("read failed")}, 1, time.Second, time.Millisecond, false); err == nil {
 		t.Fatal("accepted read error was ignored")
 	}
 	if err := deleteDiskAsync(ctx, &fakeDiskClient{deleteResponse: &rookeryv1.DeleteDiskResponse{Accepted: true},
-		getResponse: &rookeryv1.Disk{DeletionState: "delete_failed", DeletionError: "failed"}}, 1, time.Second, time.Millisecond); err == nil {
+		getResponse: &rookeryv1.Disk{DeletionState: "delete_failed", DeletionError: "failed"}}, 1, time.Second, time.Millisecond, false); err == nil {
 		t.Fatal("delete_failed was ignored")
 	}
 	if err := deleteDiskAsync(ctx, &fakeDiskClient{deleteResponse: &rookeryv1.DeleteDiskResponse{Accepted: true},
-		getResponse: &rookeryv1.Disk{}}, 1, time.Second, time.Millisecond); err != nil {
+		getResponse: &rookeryv1.Disk{}}, 1, time.Second, time.Millisecond, false); err != nil {
 		t.Fatalf("completed polling = %v", err)
 	}
 	if err := deleteDiskAsync(ctx, &fakeDiskClient{deleteResponse: &rookeryv1.DeleteDiskResponse{Accepted: true},
-		getResponse: &rookeryv1.Disk{DeletionState: "deleting"}}, 1, time.Millisecond, time.Millisecond); err == nil {
+		getResponse: &rookeryv1.Disk{DeletionState: "deleting"}}, 1, time.Millisecond, time.Millisecond, false); err == nil {
 		t.Fatal("poll timeout was ignored")
+	}
+
+	timeoutClient := &fakeDiskClient{deleteResponse: &rookeryv1.DeleteDiskResponse{Accepted: true},
+		getResponse: &rookeryv1.Disk{DeletionState: "deleting"}, forceResponse: &rookeryv1.DeleteDiskResponse{}}
+	if err := deleteDiskAsync(ctx, timeoutClient, 8, time.Millisecond, time.Millisecond, true); err != nil {
+		t.Fatalf("forced timeout = %v", err)
+	}
+	if len(timeoutClient.deleteRequests) != 2 || !timeoutClient.deleteRequests[1].GetForce() {
+		t.Fatalf("force-on-timeout requests = %+v", timeoutClient.deleteRequests)
+	}
+
+	forceClient := &fakeDiskClient{deleteResponse: &rookeryv1.DeleteDiskResponse{Accepted: true},
+		forceResponse: &rookeryv1.DeleteDiskResponse{},
+		getResponse:   &rookeryv1.Disk{DeletionState: "delete_failed", DeletionError: "failed"}}
+	if err := deleteDiskAsync(ctx, forceClient, 9, time.Second, time.Millisecond, true); err != nil {
+		t.Fatalf("forced delete_failed = %v", err)
+	}
+	if len(forceClient.deleteRequests) != 2 || !forceClient.deleteRequests[1].GetForce() {
+		t.Fatalf("force requests = %+v", forceClient.deleteRequests)
+	}
+	errorClient := &fakeDiskClient{deleteErr: errors.New("boom"), forceResponse: &rookeryv1.DeleteDiskResponse{}}
+	if err := deleteDiskAsync(ctx, errorClient, 10, time.Second, time.Millisecond, true); err != nil {
+		t.Fatalf("forced delete error = %v", err)
+	}
+	if len(errorClient.deleteRequests) != 2 || !errorClient.deleteRequests[1].GetForce() {
+		t.Fatalf("force-on-error requests = %+v", errorClient.deleteRequests)
+	}
+	ignoredClient := &fakeDiskClient{deleteResponse: &rookeryv1.DeleteDiskResponse{Accepted: true},
+		getResponse: &rookeryv1.Disk{DeletionState: "delete_failed", DeletionError: "failed"}}
+	if err := deleteDiskAsync(ctx, ignoredClient, 11, time.Second, time.Millisecond, true); err == nil {
+		t.Fatal("ignored force option was accepted")
 	}
 }
 

@@ -1063,8 +1063,12 @@ func (x *UpdateDiskRequest) GetReadOnly() bool {
 }
 
 type DeleteDiskRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	// force removes the inventory record immediately when an asynchronous
+	// backend deletion is still pending or has failed. The remote volume is not
+	// cleaned up by this call and may need manual removal on the backend.
+	Force         bool `protobuf:"varint,2,opt,name=force,proto3" json:"force,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1104,6 +1108,13 @@ func (x *DeleteDiskRequest) GetId() int64 {
 		return x.Id
 	}
 	return 0
+}
+
+func (x *DeleteDiskRequest) GetForce() bool {
+	if x != nil {
+		return x.Force
+	}
+	return false
 }
 
 var File_rookery_v1_disk_proto protoreflect.FileDescriptor
@@ -1241,9 +1252,10 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\x15_provisioning_timeoutB\x14\n" +
 	"\x12_throttle_class_idB\f\n" +
 	"\n" +
-	"_read_onlyJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aR\bread_bpsR\twrite_bps\",\n" +
+	"_read_onlyJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aR\bread_bpsR\twrite_bps\"B\n" +
 	"\x11DeleteDiskRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id2\xdb\x03\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x12\x14\n" +
+	"\x05force\x18\x02 \x01(\bR\x05force2\xdb\x03\n" +
 	"\vDiskService\x12c\n" +
 	"\tListDisks\x12\x1c.rookery.v1.ListDisksRequest\x1a\x1d.rookery.v1.ListDisksResponse\"\x19\x82\xd3\xe4\x93\x02\x13b\x05disks\x12\n" +
 	"/api/disks\x12P\n" +

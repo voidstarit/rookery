@@ -70,6 +70,71 @@ func TestDiskDeletionNotFoundBranches(t *testing.T) {
 	}
 }
 
+func TestForceDeleteDisk(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+
+	if err := st.ForceDeleteDisk(ctx, 99999); !errors.Is(err, store.ErrDiskNotFound) {
+		t.Fatalf("ForceDeleteDisk(missing) = %v", err)
+	}
+
+	ready := createDisk(t, st, "force-ready")
+	if err := st.ForceDeleteDisk(ctx, ready.ID); !errors.Is(err, store.ErrDiskDeletionNotQueued) {
+		t.Fatalf("ForceDeleteDisk(ready) = %v", err)
+	}
+	if _, err := st.GetDisk(ctx, ready.ID); err != nil {
+		t.Fatalf("ready disk was removed: %v", err)
+	}
+
+	attached := createDisk(t, st, "force-attached")
+	if _, err := st.CreateVM(ctx, store.VM{
+		Name: "force-vm", VCPUs: 1, MemoryMB: 256, DiskIDs: []int64{attached.ID},
+	}); err != nil {
+		t.Fatalf("create vm: %v", err)
+	}
+	if err := st.ForceDeleteDisk(ctx, attached.ID); !errors.Is(err, store.ErrDiskInUse) {
+		t.Fatalf("ForceDeleteDisk(attached) = %v", err)
+	}
+
+	provisioning, err := st.CreateDisk(ctx, store.Disk{
+		Name: "force-provisioning", SizeGB: 5, Source: store.DiskSourceKouja,
+		Protocol:              string(blockdev.ProtocolISCSI),
+		DeletionState:         store.DiskDeletionProvisioning,
+		DeletionNextAttemptAt: time.Now().Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("create provisioning disk: %v", err)
+	}
+	if err := st.ForceDeleteDisk(ctx, provisioning.ID); !errors.Is(err, store.ErrDiskDeletionNotQueued) {
+		t.Fatalf("ForceDeleteDisk(provisioning) = %v", err)
+	}
+	if _, err := st.GetDisk(ctx, provisioning.ID); err != nil {
+		t.Fatalf("provisioning disk was removed: %v", err)
+	}
+
+	for _, failed := range []bool{false, true} {
+		name := "force-queued"
+		if failed {
+			name = "force-failed"
+		}
+		disk := createDisk(t, st, name)
+		if err := st.MarkDiskDeleting(ctx, disk.ID); err != nil {
+			t.Fatalf("mark %s deleting: %v", name, err)
+		}
+		if failed {
+			if err := st.SetDiskDeleteFailed(ctx, disk.ID, "backend refused"); err != nil {
+				t.Fatalf("fail %s: %v", name, err)
+			}
+		}
+		if err := st.ForceDeleteDisk(ctx, disk.ID); err != nil {
+			t.Fatalf("ForceDeleteDisk(%s) = %v", name, err)
+		}
+		if _, err := st.GetDisk(ctx, disk.ID); !errors.Is(err, store.ErrDiskNotFound) {
+			t.Fatalf("%s disk still exists: %v", name, err)
+		}
+	}
+}
+
 func TestFinalizeProvisioningValidationAndMissing(t *testing.T) {
 	ctx := context.Background()
 	st := newTestStore(t)

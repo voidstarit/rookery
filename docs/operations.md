@@ -204,7 +204,11 @@ the start automatically after the previous QEMU session drains. The client certi
 `spiffe://kouja/caller/<name>` URI SAN; keep that identity stable across
 certificate rotation. Kouja disks are exported directly to QEMU;
 the host does not create an `iscsiadm` session. Queue a kouja disk delete and
-let the reclaimer finish it; `delete_failed` rows can be retried. Disk
+let the reclaimer finish it; `delete_failed` rows can be retried. If cleanup is
+stuck, select **Force remove** in the Disks tab (or call
+`DELETE /api/disks/{id}?force=true`) to drop the inventory record while cleanup
+is still pending or has failed; the remote volume may remain and must be removed
+on the storage backend. Disk
 throughput and IOPS limits are configured through reusable throttling classes
 in the Disks UI, and QEMU applies them at the next VM start. A class edit does
 not modify a running QEMU process. Deleting a class is blocked while disks use

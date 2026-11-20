@@ -149,6 +149,11 @@ QEMU attaches it read-only for every guest; a read-write disk remains
 single-owner. The disk must be detached before `read_only` can change, and
 templates cannot be read-only.
 
+Kouja disk cleanup is asynchronous. Set `force_delete = true` to remove the
+inventory record when cleanup fails, instead of leaving the resource in state
+with a `delete_failed` error. The remote volume may remain and must be removed
+on the storage backend.
+
 `rookery_disk` templates can set `provisioning_script` and
 `provisioning_timeout`. Clones created with `template_disk_id` can pass
 `provisioning_json = jsonencode({...})`; the object is sent to the template
