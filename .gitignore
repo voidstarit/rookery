@@ -21,6 +21,9 @@
 # Downloaded LightVM virtiofsd artifact
 /extra/virtiofsd/virtiofsd
 
+# Downloaded kernel build artifacts
+/extra/linux-kernel/docker-images/*.tar
+
 # Terraform provider build output and local state
 /terraform-provider-rookery
 /cmd/terraform-provider-rookery/terraform-provider-rookery

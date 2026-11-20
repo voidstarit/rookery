@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
 func diskPlanModel(class types.Int64, isTemplate bool) diskModel {
@@ -88,5 +89,22 @@ func TestDiskResourceCreateAndUpdateThrottleClassErrors(t *testing.T) {
 	}, &updateResponse)
 	if !updateResponse.Diagnostics.HasError() {
 		t.Fatal("update with unresolved class accepted")
+	}
+}
+
+func TestDiskResourceModifyPlanDestroy(t *testing.T) {
+	ctx := context.Background()
+	value := &diskResource{}
+	schema := resourceSchema(t, value)
+	nullPlan := tfsdk.Plan{Schema: schema, Raw: tftypes.NewValue(schema.Type().TerraformType(ctx), nil)}
+	nullConfig := tfsdk.Config{Schema: schema, Raw: tftypes.NewValue(schema.Type().TerraformType(ctx), nil)}
+	response := resource.ModifyPlanResponse{Plan: nullPlan}
+	value.ModifyPlan(ctx, resource.ModifyPlanRequest{
+		Plan:   nullPlan,
+		Config: nullConfig,
+		State:  tfsdk.State{Schema: schema, Raw: tftypes.NewValue(schema.Type().TerraformType(ctx), nil)},
+	}, &response)
+	if response.Diagnostics.HasError() {
+		t.Fatalf("destroy modify plan: %v", response.Diagnostics)
 	}
 }

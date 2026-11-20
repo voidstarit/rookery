@@ -40,6 +40,7 @@ func (d *vmDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, res
 			"vcpus":           dschema.Int64Attribute{Computed: true},
 			"memory_mb":       dschema.Int64Attribute{Computed: true},
 			"disk_ids":        dschema.ListAttribute{Computed: true, ElementType: types.Int64Type},
+			"disk_serials":    dschema.MapAttribute{Computed: true, ElementType: types.StringType},
 			"interface_ids":   dschema.ListAttribute{Computed: true, ElementType: types.Int64Type},
 			"boot_media_id":   dschema.Int64Attribute{Computed: true},
 			"console_enabled": dschema.BoolAttribute{Computed: true},

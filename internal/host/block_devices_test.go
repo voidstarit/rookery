@@ -68,20 +68,28 @@ func TestSameBlockDeviceFollowsLinks(t *testing.T) {
 func TestBlockDeviceKind(t *testing.T) {
 	cases := []struct {
 		name    string
+		dirName string
 		prepare func(string)
 		want    string
 	}{
-		{name: "partition", prepare: func(base string) { _ = os.WriteFile(filepath.Join(base, "partition"), nil, 0o600) }, want: BlockDevicePartition},
-		{name: "lv", prepare: func(base string) {
+		{name: "partition", dirName: "sda1", prepare: func(base string) { _ = os.WriteFile(filepath.Join(base, "partition"), nil, 0o600) }, want: BlockDevicePartition},
+		{name: "lv", dirName: "dm-0", prepare: func(base string) {
 			_ = os.MkdirAll(filepath.Join(base, "dm"), 0o755)
 			_ = os.WriteFile(filepath.Join(base, "dm", "name"), []byte("vg-lv"), 0o600)
 		}, want: BlockDeviceLV},
-		{name: "raid", prepare: func(base string) { _ = os.MkdirAll(filepath.Join(base, "md"), 0o755) }, want: BlockDeviceRAID},
-		{name: "disk", prepare: func(string) {}, want: BlockDeviceDisk},
+		{name: "raid", dirName: "md0", prepare: func(base string) { _ = os.MkdirAll(filepath.Join(base, "md"), 0o755) }, want: BlockDeviceRAID},
+		{name: "loop", dirName: "loop0", prepare: func(string) {}, want: BlockDeviceLoop},
+		{name: "loop-partition", dirName: "loop0p1", prepare: func(base string) { _ = os.WriteFile(filepath.Join(base, "partition"), nil, 0o600) }, want: BlockDevicePartition},
+		{name: "ram", dirName: "ram0", prepare: func(string) {}, want: BlockDeviceRAM},
+		{name: "zram", dirName: "zram0", prepare: func(string) {}, want: BlockDeviceZRAM},
+		{name: "disk", dirName: "sda", prepare: func(string) {}, want: BlockDeviceDisk},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-			base := t.TempDir()
+			base := filepath.Join(t.TempDir(), test.dirName)
+			if err := os.MkdirAll(base, 0o755); err != nil {
+				t.Fatal(err)
+			}
 			test.prepare(base)
 			if got := blockDeviceKind(base); got != test.want {
 				t.Fatalf("blockDeviceKind = %q, want %q", got, test.want)
@@ -164,12 +172,18 @@ func TestBlockDeviceBusyReason(t *testing.T) {
 }
 
 func TestBlockDeviceHelpers(t *testing.T) {
-	if skipBlockDevice("loop0") != true || skipBlockDevice("sda") != false || skipBlockDevice("dm-0") != false {
+	if skipBlockDevice("loop0") || skipBlockDevice("ram0") || skipBlockDevice("zram0") {
+		t.Fatal("virtual block devices should be listed")
+	}
+	if !skipBlockDevice("fd0") || !skipBlockDevice("sr0") || skipBlockDevice("sda") || skipBlockDevice("dm-0") {
 		t.Fatal("skipBlockDevice returned unexpected results")
 	}
 	if blockKindOrder(BlockDeviceDisk) >= blockKindOrder(BlockDevicePartition) ||
 		blockKindOrder(BlockDevicePartition) >= blockKindOrder(BlockDeviceLV) ||
-		blockKindOrder(BlockDeviceLV) >= blockKindOrder(BlockDeviceRAID) {
+		blockKindOrder(BlockDeviceLV) >= blockKindOrder(BlockDeviceRAID) ||
+		blockKindOrder(BlockDeviceRAID) >= blockKindOrder(BlockDeviceLoop) ||
+		blockKindOrder(BlockDeviceLoop) >= blockKindOrder(BlockDeviceRAM) ||
+		blockKindOrder(BlockDeviceRAM) >= blockKindOrder(BlockDeviceZRAM) {
 		t.Fatal("block kind order is not stable")
 	}
 	if major, minor, ok := parseDeviceNumber("8:16"); !ok || major != 8 || minor != 16 {
@@ -312,7 +326,7 @@ func TestSysfsDeviceNumbersMissing(t *testing.T) {
 }
 
 func TestBlockKindOrderDefault(t *testing.T) {
-	if blockKindOrder("other") != 4 {
-		t.Fatalf("default order = %d, want 4", blockKindOrder("other"))
+	if blockKindOrder("other") != 7 {
+		t.Fatalf("default order = %d, want 7", blockKindOrder("other"))
 	}
 }

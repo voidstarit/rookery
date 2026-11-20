@@ -93,6 +93,7 @@ func TestLightVMRoutes(t *testing.T) {
 		"vcpus":           2,
 		"memory_mb":       1024,
 		"console_enabled": true,
+		"ephemeral":       true,
 		"kernel_id":       kernel.ID,
 		"initramfs_id":    initramfs.ID,
 		"image":           "alpine:3.20",
@@ -126,7 +127,7 @@ func TestLightVMRoutes(t *testing.T) {
 	if created["kernel_name"] != "vmlinuz-6.12" || created["initramfs_name"] != "initramfs-6.12" {
 		t.Fatalf("created references = %+v", created)
 	}
-	if created["console_enabled"] != true || created["image"] != "alpine:3.20" {
+	if created["console_enabled"] != true || created["image"] != "alpine:3.20" || created["ephemeral"] != true {
 		t.Fatalf("created fields = %+v", created)
 	}
 	if created["append"] != store.DefaultLightVMAppend {
@@ -148,6 +149,11 @@ func TestLightVMRoutes(t *testing.T) {
 	response, fetched := request(http.MethodGet, "/api/lightvm/instances/"+id, nil)
 	if response.StatusCode != http.StatusOK || fetched["name"] != "app-01" {
 		t.Fatalf("get status = %d, body = %+v", response.StatusCode, fetched)
+	}
+
+	response, _ = request(http.MethodGet, "/api/lightvm/instances/"+id+"/metrics", nil)
+	if response.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("metrics without runtime status = %d", response.StatusCode)
 	}
 
 	listResponse, err := http.Get(server.URL + "/api/lightvm/instances")
@@ -174,6 +180,7 @@ func TestLightVMRoutes(t *testing.T) {
 		"vcpus":           4,
 		"memory_mb":       2048,
 		"console_enabled": false,
+		"ephemeral":       false,
 		"kernel_id":       kernel.ID,
 		"initramfs_id":    initramfs.ID,
 		"image":           "alpine:3.21",
@@ -188,6 +195,9 @@ func TestLightVMRoutes(t *testing.T) {
 	}
 	if updated["append"] != "console=ttyS0 rdinit=/sbin/init" {
 		t.Fatalf("updated append = %+v", updated["append"])
+	}
+	if value, ok := updated["ephemeral"]; ok && value != false {
+		t.Fatalf("updated ephemeral = %+v", value)
 	}
 	updatedInterfaces, _ := updated["interfaces"].([]any)
 	if len(updatedInterfaces) != 0 {

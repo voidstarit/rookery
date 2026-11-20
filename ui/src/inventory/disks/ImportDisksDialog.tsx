@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
+import { formatByteSize } from "../../shared/format";
 import type { Disk, ImportableDisk, StorageBackend } from "../types";
 
 type ImportDisksDialogProps = {
@@ -142,7 +143,7 @@ export function ImportDisksDialog({ backend, onClose, onImported }: ImportDisksD
                 <span class="import-disk-copy">
                   <span class="import-disk-name">{item.name}</span>
                   <span class="import-disk-meta">
-                    {item.size_gb} GB ·{" "}
+                    {formatByteSize(item.size_bytes || item.size_gb * 1024 ** 3)} ·{" "}
                     {item.registered
                       ? item.attached_vm_name
                         ? `already imported · attached to ${item.attached_vm_name}`

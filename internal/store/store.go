@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -44,10 +45,20 @@ var (
 	ErrDiskInUse = errors.New("disk is attached to a workload")
 	// ErrDiskIsTemplate is returned when a template disk is attached to a workload.
 	ErrDiskIsTemplate = errors.New("template disks cannot be attached to a workload")
+	// ErrDiskReadOnlyTemplate is returned when a template is marked read-only.
+	ErrDiskReadOnlyTemplate = errors.New("template disks cannot be read-only")
 	// ErrDiskDeleting is returned when a disk is provisioning or being deleted.
 	ErrDiskDeleting = errors.New("disk is provisioning or being deleted")
+	// ErrDiskDeletionNotQueued is returned when a forced delete is requested for
+	// a disk that has no pending or failed asynchronous deletion.
+	ErrDiskDeletionNotQueued = errors.New("disk deletion is not queued")
 	// ErrInvalidDiskIDs is returned when disk IDs are malformed.
 	ErrInvalidDiskIDs = errors.New("invalid disk ids")
+	// ErrInvalidDiskSerials is returned when a per-disk serial is malformed.
+	ErrInvalidDiskSerials = errors.New("invalid disk serials")
+	// ErrLightVMRootRequired is returned when a LightVM has neither a container
+	// image nor an attached disk to boot from.
+	ErrLightVMRootRequired = errors.New("lightvm container image or disk is required")
 	// ErrLightVMDeviceLimit is returned when a LightVM exceeds the combined
 	// disk, interface, and virtiofs-share device limit.
 	ErrLightVMDeviceLimit = errors.New("lightvm device limit exceeded")
@@ -101,14 +112,18 @@ const MaxLightVMDevices = 24
 
 // DiskInUseError names the workload that owns a disk.
 type DiskInUseError struct {
-	OwnerKind string
-	OwnerID   string
-	OwnerName string
+	OwnerKind       string
+	OwnerID         string
+	OwnerName       string
+	AttachmentCount int
 }
 
 func (e *DiskInUseError) Error() string {
 	if e == nil {
 		return ErrDiskInUse.Error()
+	}
+	if e.AttachmentCount > 1 {
+		return fmt.Sprintf("disk is attached to %d workloads", e.AttachmentCount)
 	}
 	switch {
 	case e.OwnerName != "" && e.OwnerKind != "":
@@ -131,15 +146,19 @@ const (
 	StatusStopping = "stopping"
 	StatusPaused   = "paused"
 	StatusError    = "error"
+	// StatusTerminated marks an ephemeral LightVM whose guest exited and whose
+	// runtime resources were reaped automatically.
+	StatusTerminated = "terminated"
 )
 
 var validStatuses = map[string]struct{}{
-	StatusStopped:  {},
-	StatusStarting: {},
-	StatusRunning:  {},
-	StatusStopping: {},
-	StatusPaused:   {},
-	StatusError:    {},
+	StatusStopped:    {},
+	StatusStarting:   {},
+	StatusRunning:    {},
+	StatusStopping:   {},
+	StatusPaused:     {},
+	StatusError:      {},
+	StatusTerminated: {},
 }
 
 // ValidStatus reports whether s is a status understood by the API.
@@ -157,6 +176,7 @@ func Statuses() []string {
 		StatusStopping,
 		StatusPaused,
 		StatusError,
+		StatusTerminated,
 	}
 }
 
@@ -194,24 +214,25 @@ func ValidDesiredState(s string) bool {
 
 // VM is a virtual machine record.
 type VM struct {
-	ID             string        `json:"id"`
-	Name           string        `json:"name"`
-	Description    string        `json:"description"`
-	Status         string        `json:"status"`
-	DesiredState   string        `json:"desired_state"`
-	VCPUs          int           `json:"vcpus"`
-	MemoryMB       int           `json:"memory_mb"`
-	DiskID         *int64        `json:"disk_id,omitempty"`
-	Disk           *VMDisk       `json:"disk,omitempty"`
-	DiskIDs        []int64       `json:"disk_ids,omitempty"`
-	Disks          []VMDisk      `json:"disks,omitempty"`
-	BootMediaID    *int64        `json:"boot_media_id,omitempty"`
-	BootMedia      *VMMedia      `json:"boot_media,omitempty"`
-	Interfaces     []VMInterface `json:"interfaces,omitempty"`
-	ConsoleEnabled bool          `json:"console_enabled"`
-	CgroupClass    string        `json:"cgroup_class,omitempty"`
-	CreatedAt      time.Time     `json:"created_at"`
-	UpdatedAt      time.Time     `json:"updated_at"`
+	ID             string           `json:"id"`
+	Name           string           `json:"name"`
+	Description    string           `json:"description"`
+	Status         string           `json:"status"`
+	DesiredState   string           `json:"desired_state"`
+	VCPUs          int              `json:"vcpus"`
+	MemoryMB       int              `json:"memory_mb"`
+	DiskID         *int64           `json:"disk_id,omitempty"`
+	Disk           *VMDisk          `json:"disk,omitempty"`
+	DiskIDs        []int64          `json:"disk_ids,omitempty"`
+	DiskSerials    map[int64]string `json:"-"`
+	Disks          []VMDisk         `json:"disks,omitempty"`
+	BootMediaID    *int64           `json:"boot_media_id,omitempty"`
+	BootMedia      *VMMedia         `json:"boot_media,omitempty"`
+	Interfaces     []VMInterface    `json:"interfaces,omitempty"`
+	ConsoleEnabled bool             `json:"console_enabled"`
+	CgroupClass    string           `json:"cgroup_class,omitempty"`
+	CreatedAt      time.Time        `json:"created_at"`
+	UpdatedAt      time.Time        `json:"updated_at"`
 }
 
 // VMDisk is the disk summary returned with a VM.
@@ -227,6 +248,8 @@ type VMDisk struct {
 	Device             string               `json:"device"`
 	Source             string               `json:"source"`
 	Protocol           string               `json:"protocol"`
+	Serial             string               `json:"serial,omitempty"`
+	ReadOnly           bool                 `json:"read_only,omitempty"`
 	ThrottleClassID    *int64               `json:"throttle_class_id,omitempty"`
 	ThrottleClassName  string               `json:"throttle_class_name,omitempty"`
 	Throttle           *diskthrottle.Limits `json:"-"`
@@ -488,6 +511,15 @@ type VMInterface struct {
 	EgressACLName  string `json:"egress_acl_name,omitempty"`
 }
 
+// DiskAttachment names one workload that has a disk attached.
+type DiskAttachment struct {
+	WorkloadKind string `json:"workload_kind"`
+	WorkloadID   string `json:"workload_id"`
+	WorkloadName string `json:"workload_name"`
+	Position     int    `json:"position"`
+	ReadOnly     bool   `json:"read_only"`
+}
+
 // Disk is a provisioned or passthrough disk that can be attached to a VM.
 type Disk struct {
 	ID                    int64               `json:"id"`
@@ -501,6 +533,8 @@ type Disk struct {
 	Device                string              `json:"device"`
 	Source                string              `json:"source"`
 	Protocol              string              `json:"protocol"`
+	ReadOnly              bool                `json:"read_only,omitempty"`
+	Attachments           []DiskAttachment    `json:"attachments,omitempty"`
 	ThrottleClassID       *int64              `json:"throttle_class_id,omitempty"`
 	ThrottleClassName     string              `json:"throttle_class_name,omitempty"`
 	BackendMetadata       DiskBackendMetadata `json:"backend_metadata,omitempty"`
@@ -527,6 +561,8 @@ type Disk struct {
 type ImportDisk struct {
 	Name   string
 	SizeGB int
+	// SizeBytes is the exact volume size; it is zero when unknown.
+	SizeBytes uint64
 }
 
 // Media is a read-only installation file (usually an ISO) on the host.
@@ -712,6 +748,10 @@ func (s *Store) CreateVM(ctx context.Context, vm VM) (VM, error) {
 	if err != nil {
 		return VM{}, err
 	}
+	serials, err := normalizeDiskSerials(diskIDs, vm.DiskSerials)
+	if err != nil {
+		return VM{}, err
+	}
 	for _, diskID := range diskIDs {
 		if err := s.checkDiskAvailableForAttach(ctx, diskID, "vm", vm.ID); err != nil {
 			return VM{}, err
@@ -721,6 +761,7 @@ func (s *Store) CreateVM(ctx context.Context, vm VM) (VM, error) {
 		return VM{}, err
 	}
 	vm.DiskIDs = diskIDs
+	vm.DiskSerials = serials
 	if vm.DesiredState == "" {
 		vm.DesiredState = DesiredStopped
 	}
@@ -742,11 +783,8 @@ func (s *Store) CreateVM(ctx context.Context, vm VM) (VM, error) {
 		return VM{}, fmt.Errorf("insert vm: %w", err)
 	}
 	for position, diskID := range diskIDs {
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position) VALUES (?, NULL, ?, ?)`,
-			vm.ID, diskID, position,
-		); err != nil {
-			return VM{}, s.workloadDiskAttachError(ctx, tx, err, diskID)
+		if err := s.insertWorkloadDisk(ctx, tx, vm.ID, nil, diskID, position, serials[diskID]); err != nil {
+			return VM{}, err
 		}
 	}
 	if err := tx.Commit(); err != nil {
@@ -757,10 +795,20 @@ func (s *Store) CreateVM(ctx context.Context, vm VM) (VM, error) {
 
 // SetVMDisks replaces the disks attached to a stopped VM.
 func (s *Store) SetVMDisks(ctx context.Context, vmID string, diskIDs []int64) (VM, error) {
+	return s.SetVMDisksWithSerials(ctx, vmID, diskIDs, nil)
+}
+
+// SetVMDisksWithSerials replaces the disks attached to a stopped VM and sets
+// the guest-visible serial for each attachment.
+func (s *Store) SetVMDisksWithSerials(ctx context.Context, vmID string, diskIDs []int64, serials map[int64]string) (VM, error) {
 	if _, err := s.GetVM(ctx, vmID); err != nil {
 		return VM{}, err
 	}
 	diskIDs, err := normalizeDiskIDs(diskIDs)
+	if err != nil {
+		return VM{}, err
+	}
+	serials, err = normalizeDiskSerials(diskIDs, serials)
 	if err != nil {
 		return VM{}, err
 	}
@@ -779,11 +827,8 @@ func (s *Store) SetVMDisks(ctx context.Context, vmID string, diskIDs []int64) (V
 		return VM{}, fmt.Errorf("clear vm disks: %w", err)
 	}
 	for position, diskID := range diskIDs {
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position) VALUES (?, NULL, ?, ?)`,
-			vmID, diskID, position,
-		); err != nil {
-			return VM{}, s.workloadDiskAttachError(ctx, tx, err, diskID)
+		if err := s.insertWorkloadDisk(ctx, tx, vmID, nil, diskID, position, serials[diskID]); err != nil {
+			return VM{}, err
 		}
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE vms SET updated_at = ? WHERE id = ?`,
@@ -795,6 +840,65 @@ func (s *Store) SetVMDisks(ctx context.Context, vmID string, diskIDs []int64) (V
 		return VM{}, fmt.Errorf("commit update vm disks: %w", err)
 	}
 	return s.GetVM(ctx, vmID)
+}
+
+// MaxDiskSerialLength is the virtio-blk serial field size. QEMU truncates
+// longer values, so reject them instead of silently changing the guest-visible
+// serial.
+const MaxDiskSerialLength = 20
+
+var diskSerialPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]*$`)
+
+// NormalizeDiskSerial trims and validates a guest-visible disk serial. An
+// empty serial means the disk has no explicit serial.
+func NormalizeDiskSerial(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	if len(value) > MaxDiskSerialLength {
+		return "", fmt.Errorf("%w: serial %q is longer than %d bytes", ErrInvalidDiskSerials, value, MaxDiskSerialLength)
+	}
+	if !diskSerialPattern.MatchString(value) {
+		return "", fmt.Errorf("%w: serial %q may contain only letters, digits, '.', '_', ':', and '-'", ErrInvalidDiskSerials, value)
+	}
+	return value, nil
+}
+
+// normalizeDiskSerials validates a disk ID to serial mapping and returns only
+// the non-empty serials. Every key must reference a disk in diskIDs, and
+// serials must be unique within the workload.
+func normalizeDiskSerials(diskIDs []int64, serials map[int64]string) (map[int64]string, error) {
+	if len(serials) == 0 {
+		return nil, nil
+	}
+	allowed := make(map[int64]struct{}, len(diskIDs))
+	for _, diskID := range diskIDs {
+		allowed[diskID] = struct{}{}
+	}
+	normalized := make(map[int64]string, len(serials))
+	owners := make(map[string]int64, len(serials))
+	for diskID, raw := range serials {
+		if _, ok := allowed[diskID]; !ok {
+			return nil, fmt.Errorf("%w: disk %d is not attached to this workload", ErrInvalidDiskSerials, diskID)
+		}
+		serial, err := NormalizeDiskSerial(raw)
+		if err != nil {
+			return nil, err
+		}
+		if serial == "" {
+			continue
+		}
+		if owner, ok := owners[serial]; ok {
+			return nil, fmt.Errorf("%w: serial %q is used by disks %d and %d", ErrInvalidDiskSerials, serial, owner, diskID)
+		}
+		owners[serial] = diskID
+		normalized[diskID] = serial
+	}
+	if len(normalized) == 0 {
+		return nil, nil
+	}
+	return normalized, nil
 }
 
 func normalizeDiskIDs(ids []int64) ([]int64, error) {
@@ -1057,6 +1161,9 @@ func (s *Store) CreateDisk(ctx context.Context, disk Disk) (Disk, error) {
 	if !disk.IsTemplate && (disk.ProvisioningScript != "" || disk.ProvisioningTimeout != "") {
 		return Disk{}, errors.New("provisioning settings require a template disk")
 	}
+	if disk.ReadOnly && disk.IsTemplate {
+		return Disk{}, ErrDiskReadOnlyTemplate
+	}
 	backendMetadata, err := EncodeDiskBackendMetadata(disk.BackendMetadata)
 	if err != nil {
 		return Disk{}, err
@@ -1087,13 +1194,13 @@ func (s *Store) CreateDisk(ctx context.Context, disk Disk) (Disk, error) {
 			attachment_protocol, backend_metadata, throttle_class_id,
 			deletion_state, deletion_error, deletion_attempts, deletion_next_attempt_at, deletion_claimed_at,
 			is_template, template_disk_id, provisioning_script, provisioning_timeout, prepared_by_script,
-			created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			read_only, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		disk.Name, disk.SizeGB, disk.VG, disk.ThinPool, disk.StorageBackendID, disk.Source,
 		disk.Device, disk.SizeBytes, disk.Protocol, backendMetadata, disk.ThrottleClassID,
 		disk.DeletionState, disk.DeletionError, disk.DeletionAttempts, nextAttempt, claimedAt,
 		disk.IsTemplate, disk.TemplateDiskID,
-		disk.ProvisioningScript, disk.ProvisioningTimeout, disk.PreparedByScript, now, now,
+		disk.ProvisioningScript, disk.ProvisioningTimeout, disk.PreparedByScript, disk.ReadOnly, now, now,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -1132,9 +1239,9 @@ func (s *Store) ImportDisks(ctx context.Context, backendID int64, vg, thinPool s
 			return nil, fmt.Errorf("disk %q must be at least 1 GB", item.Name)
 		}
 		res, err := tx.ExecContext(ctx, `
-			INSERT INTO disks (name, size_gb, vg, thin_pool, storage_backend_id, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			item.Name, item.SizeGB, vg, thinPool, backendID, now, now,
+			INSERT INTO disks (name, size_gb, vg, thin_pool, storage_backend_id, size_bytes, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			item.Name, item.SizeGB, vg, thinPool, backendID, item.SizeBytes, now, now,
 		)
 		if err != nil {
 			if isUniqueViolation(err) {
@@ -1173,15 +1280,28 @@ func (s *Store) ListDisks(ctx context.Context) ([]Disk, error) {
 	defer rows.Close()
 
 	disks := make([]Disk, 0)
+	ids := make([]int64, 0)
 	for rows.Next() {
 		disk, err := scanDisk(rows)
 		if err != nil {
 			return nil, err
 		}
 		disks = append(disks, disk)
+		ids = append(ids, disk.ID)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate disks: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close disks: %w", err)
+	}
+
+	attachments, err := s.loadDiskAttachments(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range disks {
+		applyDiskAttachments(&disks[i], attachments[disks[i].ID])
 	}
 
 	return disks, nil
@@ -1199,6 +1319,9 @@ func (s *Store) GetDisk(ctx context.Context, id int64) (Disk, error) {
 	if err != nil {
 		return Disk{}, err
 	}
+	if err := s.attachDiskAttachments(ctx, &disk); err != nil {
+		return Disk{}, err
+	}
 	return disk, nil
 }
 
@@ -1214,7 +1337,99 @@ func (s *Store) GetDiskByName(ctx context.Context, name string) (Disk, error) {
 	if err != nil {
 		return Disk{}, err
 	}
+	if err := s.attachDiskAttachments(ctx, &disk); err != nil {
+		return Disk{}, err
+	}
 	return disk, nil
+}
+
+// loadDiskAttachments returns the attachments for a set of disks in one
+// query, keyed by disk ID.
+func (s *Store) loadDiskAttachments(ctx context.Context, diskIDs []int64) (map[int64][]DiskAttachment, error) {
+	result := make(map[int64][]DiskAttachment, len(diskIDs))
+	if len(diskIDs) == 0 {
+		return result, nil
+	}
+	placeholders := make([]string, len(diskIDs))
+	args := make([]any, len(diskIDs))
+	for i, id := range diskIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT wd.disk_id, wd.vm_id, v.name, wd.lightvm_id, lv.name, wd.position, wd.read_only
+		FROM workload_disks AS wd
+		LEFT JOIN vms AS v ON v.id = wd.vm_id
+		LEFT JOIN lightvms AS lv ON lv.id = wd.lightvm_id
+		WHERE wd.disk_id IN (`+strings.Join(placeholders, ",")+`)
+		ORDER BY wd.disk_id, wd.position, wd.vm_id, wd.lightvm_id`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query disk attachments: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			diskID      int64
+			vmID        sql.NullString
+			vmName      sql.NullString
+			lightVMID   sql.NullString
+			lightVMName sql.NullString
+			position    int
+			readOnly    int64
+		)
+		if err := rows.Scan(&diskID, &vmID, &vmName, &lightVMID, &lightVMName, &position, &readOnly); err != nil {
+			return nil, err
+		}
+		attachment := DiskAttachment{Position: position, ReadOnly: readOnly != 0}
+		if vmID.Valid {
+			attachment.WorkloadKind = "vm"
+			attachment.WorkloadID = vmID.String
+			attachment.WorkloadName = vmName.String
+		} else if lightVMID.Valid {
+			attachment.WorkloadKind = "lightvm"
+			attachment.WorkloadID = lightVMID.String
+			attachment.WorkloadName = lightVMName.String
+		} else {
+			continue
+		}
+		result[diskID] = append(result[diskID], attachment)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate disk attachments: %w", err)
+	}
+	return result, nil
+}
+
+func (s *Store) attachDiskAttachments(ctx context.Context, disk *Disk) error {
+	attachments, err := s.loadDiskAttachments(ctx, []int64{disk.ID})
+	if err != nil {
+		return err
+	}
+	applyDiskAttachments(disk, attachments[disk.ID])
+	return nil
+}
+
+// applyDiskAttachments stores the full attachment list and keeps the legacy
+// single-owner fields populated only when exactly one workload owns the disk.
+func applyDiskAttachments(disk *Disk, attachments []DiskAttachment) {
+	disk.Attachments = attachments
+	disk.AttachedVMID = nil
+	disk.AttachedVMName = ""
+	disk.AttachedLightVMID = nil
+	disk.AttachedLightVMName = ""
+	if len(attachments) != 1 {
+		return
+	}
+	attachment := attachments[0]
+	id := attachment.WorkloadID
+	switch attachment.WorkloadKind {
+	case "vm":
+		disk.AttachedVMID = &id
+		disk.AttachedVMName = attachment.WorkloadName
+	case "lightvm":
+		disk.AttachedLightVMID = &id
+		disk.AttachedLightVMName = attachment.WorkloadName
+	}
 }
 
 // SetDiskTemplate marks or unmarks an unattached disk as a template.
@@ -1225,6 +1440,9 @@ func (s *Store) SetDiskTemplate(ctx context.Context, id int64, isTemplate bool) 
 	}
 	if disk.Source != DiskSourceLVMThin {
 		return Disk{}, errors.New("only LVM thin disks can be templates")
+	}
+	if isTemplate && disk.ReadOnly {
+		return Disk{}, ErrDiskReadOnlyTemplate
 	}
 	if err := s.checkDiskOwnership(ctx, disk, "", ""); err != nil {
 		return Disk{}, err
@@ -1254,6 +1472,32 @@ func (s *Store) SetDiskTemplate(ctx context.Context, id int64, isTemplate bool) 
 			WHERE id = ?`, now, id); err != nil {
 			return Disk{}, fmt.Errorf("update disk template flag: %w", err)
 		}
+	}
+	return s.GetDisk(ctx, id)
+}
+
+// SetDiskReadOnly changes the disk's read-only flag. The flag may only change
+// while the disk is detached, so a running read-write QEMU cannot become a
+// shared read-only image.
+func (s *Store) SetDiskReadOnly(ctx context.Context, id int64, readOnly bool) (Disk, error) {
+	disk, err := s.GetDisk(ctx, id)
+	if err != nil {
+		return Disk{}, err
+	}
+	if disk.ReadOnly == readOnly {
+		return disk, nil
+	}
+	if readOnly && disk.IsTemplate {
+		return Disk{}, ErrDiskReadOnlyTemplate
+	}
+	if err := s.checkDiskOwnership(ctx, disk, "", ""); err != nil {
+		return Disk{}, err
+	}
+	now := time.Now().UTC().UnixMilli()
+	if _, err := s.db.ExecContext(ctx, `
+		UPDATE disks SET read_only = ?, updated_at = ? WHERE id = ?`,
+		readOnly, now, id); err != nil {
+		return Disk{}, fmt.Errorf("update disk read-only flag: %w", err)
 	}
 	return s.GetDisk(ctx, id)
 }
@@ -1322,9 +1566,61 @@ func (s *Store) DeleteDisk(ctx context.Context, id int64) error {
 	return nil
 }
 
-// DiskAttachedToAnyWorkload reports whether either owner column is set.
+// diskAttachments returns the attachment list, falling back to the legacy
+// single-owner fields for Disk values built without a query.
+func diskAttachments(disk Disk) []DiskAttachment {
+	if len(disk.Attachments) > 0 {
+		return disk.Attachments
+	}
+	if disk.AttachedVMID != nil {
+		return []DiskAttachment{{
+			WorkloadKind: "vm", WorkloadID: *disk.AttachedVMID,
+			WorkloadName: disk.AttachedVMName, ReadOnly: disk.ReadOnly,
+		}}
+	}
+	if disk.AttachedLightVMID != nil {
+		return []DiskAttachment{{
+			WorkloadKind: "lightvm", WorkloadID: *disk.AttachedLightVMID,
+			WorkloadName: disk.AttachedLightVMName, ReadOnly: disk.ReadOnly,
+		}}
+	}
+	return nil
+}
+
+// diskHasAttachment reports whether a specific workload owns the disk.
+func diskHasAttachment(disk Disk, kind, id string) bool {
+	for _, attachment := range diskAttachments(disk) {
+		if attachment.WorkloadKind == kind && attachment.WorkloadID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// DiskAttachedToAnyWorkload reports whether the disk has any workload owner.
 func DiskAttachedToAnyWorkload(disk Disk) bool {
-	return disk.AttachedVMID != nil || disk.AttachedLightVMID != nil
+	return len(diskAttachments(disk)) > 0
+}
+
+// insertWorkloadDisk inserts one attachment. The read-only snapshot comes
+// from the disk row in the same statement so it cannot drift from the flag.
+func (s *Store) insertWorkloadDisk(ctx context.Context, tx *sql.Tx, vmID any, lightVMID any, diskID int64, position int, serial string) error {
+	res, err := tx.ExecContext(ctx, `
+		INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position, serial, read_only)
+		SELECT ?, ?, id, ?, ?, read_only FROM disks WHERE id = ?`,
+		vmID, lightVMID, position, serial, diskID,
+	)
+	if err != nil {
+		return s.workloadDiskAttachError(ctx, tx, err, diskID)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read inserted workload disk rows: %w", err)
+	}
+	if affected == 0 {
+		return ErrDiskNotFound
+	}
+	return nil
 }
 
 func (s *Store) workloadDiskAttachError(ctx context.Context, tx *sql.Tx, err error, diskID int64) error {
@@ -1349,17 +1645,17 @@ func (s *Store) workloadDiskAttachError(ctx context.Context, tx *sql.Tx, err err
 }
 
 func (s *Store) checkDiskOwnership(_ context.Context, disk Disk, ownerKind, ownerID string) error {
-	if disk.AttachedVMID != nil {
-		if ownerKind == "vm" && ownerID == *disk.AttachedVMID {
-			return nil
+	attachments := diskAttachments(disk)
+	for _, attachment := range attachments {
+		if ownerKind != "" && attachment.WorkloadKind == ownerKind && attachment.WorkloadID == ownerID {
+			continue
 		}
-		return &DiskInUseError{OwnerKind: "vm", OwnerID: *disk.AttachedVMID, OwnerName: disk.AttachedVMName}
-	}
-	if disk.AttachedLightVMID != nil {
-		if ownerKind == "lightvm" && ownerID == *disk.AttachedLightVMID {
-			return nil
+		return &DiskInUseError{
+			OwnerKind:       attachment.WorkloadKind,
+			OwnerID:         attachment.WorkloadID,
+			OwnerName:       attachment.WorkloadName,
+			AttachmentCount: len(attachments),
 		}
-		return &DiskInUseError{OwnerKind: "lightvm", OwnerID: *disk.AttachedLightVMID, OwnerName: disk.AttachedLightVMName}
 	}
 	return nil
 }
@@ -1376,16 +1672,16 @@ func (s *Store) checkDiskAvailableForAttach(ctx context.Context, diskID int64, o
 	if err != nil {
 		return err
 	}
-	if err := s.checkDiskOwnership(ctx, disk, ownerKind, ownerID); err != nil {
-		return err
-	}
 	if err := checkDiskNotDeleting(disk); err != nil {
 		return err
 	}
 	if disk.IsTemplate {
 		return ErrDiskIsTemplate
 	}
-	return nil
+	if disk.ReadOnly {
+		return nil
+	}
+	return s.checkDiskOwnership(ctx, disk, ownerKind, ownerID)
 }
 
 // CreateMedia inserts an installation media record and returns it.
@@ -2348,7 +2644,7 @@ func (s *Store) loadWorkloadDisks(ctx context.Context, ownerKind string, ownerID
 	query := `
 		SELECT ` + ownerColumn + `, d.id, d.name, d.size_gb, d.vg, d.thin_pool,
 		       d.storage_backend_id, sb.name, d.source, d.device, d.size_bytes,
-		       d.attachment_protocol,
+		       d.attachment_protocol, wd.serial, wd.read_only,
 		       d.throttle_class_id, dtc.name, dtc.limits
 		FROM workload_disks AS wd
 		JOIN disks AS d ON d.id = wd.disk_id
@@ -2374,12 +2670,14 @@ func (s *Store) loadWorkloadDisks(ctx context.Context, ownerKind string, ownerID
 			classID     sql.NullInt64
 			className   sql.NullString
 			classLimits sql.NullString
+			readOnly    int64
 		)
 		if err := rows.Scan(&vmID, &disk.ID, &disk.Name, &disk.SizeGB, &vg, &pool,
-			&backend, &backendName, &disk.Source, &device, &sizeBytes, &disk.Protocol,
+			&backend, &backendName, &disk.Source, &device, &sizeBytes, &disk.Protocol, &disk.Serial, &readOnly,
 			&classID, &className, &classLimits); err != nil {
 			return nil, err
 		}
+		disk.ReadOnly = readOnly != 0
 		disk.VG = vg
 		disk.ThinPool = pool
 		disk.SizeBytes = uint64(sizeBytes)
@@ -2643,14 +2941,11 @@ const diskSelect = `
 	       d.deletion_next_attempt_at, d.deletion_claimed_at,
 	       d.is_template, d.template_disk_id,
 	       d.provisioning_script, d.provisioning_timeout, d.prepared_by_script,
-	       td.name, v.id, v.name, lv.id, lv.name, d.created_at, d.updated_at
+	       td.name, d.read_only, d.created_at, d.updated_at
 	FROM disks AS d
 	LEFT JOIN storage_backends AS sb ON sb.id = d.storage_backend_id
 	LEFT JOIN disk_throttle_classes AS dtc ON dtc.id = d.throttle_class_id
-	LEFT JOIN disks AS td ON td.id = d.template_disk_id
-	LEFT JOIN workload_disks AS wd ON wd.disk_id = d.id
-	LEFT JOIN vms AS v ON v.id = wd.vm_id
-	LEFT JOIN lightvms AS lv ON lv.id = wd.lightvm_id`
+	LEFT JOIN disks AS td ON td.id = d.template_disk_id`
 
 func scanVM(s scanner) (VM, error) {
 	var (
@@ -2741,10 +3036,7 @@ func scanDisk(s scanner) (Disk, error) {
 		provisioningTimeout   string
 		preparedByScript      int64
 		templateName          sql.NullString
-		vmID                  sql.NullString
-		vmName                sql.NullString
-		lightVMID             sql.NullString
-		lightVMName           sql.NullString
+		readOnly              int64
 		createdAt             int64
 		updatedAt             int64
 	)
@@ -2774,10 +3066,7 @@ func scanDisk(s scanner) (Disk, error) {
 		&provisioningTimeout,
 		&preparedByScript,
 		&templateName,
-		&vmID,
-		&vmName,
-		&lightVMID,
-		&lightVMName,
+		&readOnly,
 		&createdAt,
 		&updatedAt,
 	); err != nil {
@@ -2819,6 +3108,7 @@ func scanDisk(s scanner) (Disk, error) {
 		disk.DeletionClaimedAt = time.UnixMilli(deletionClaimedAt).UTC()
 	}
 	disk.IsTemplate = isTemplate != 0
+	disk.ReadOnly = readOnly != 0
 	disk.ProvisioningScript = provisioningScript
 	disk.ProvisioningTimeout = provisioningTimeout
 	disk.PreparedByScript = preparedByScript != 0
@@ -2835,20 +3125,6 @@ func scanDisk(s scanner) (Disk, error) {
 	}
 	if backend.Valid {
 		disk.StorageBackendName = backend.String
-	}
-	if vmID.Valid {
-		id := vmID.String
-		disk.AttachedVMID = &id
-	}
-	if vmName.Valid {
-		disk.AttachedVMName = vmName.String
-	}
-	if lightVMID.Valid {
-		id := lightVMID.String
-		disk.AttachedLightVMID = &id
-	}
-	if lightVMName.Valid {
-		disk.AttachedLightVMName = lightVMName.String
 	}
 	disk.CreatedAt = time.UnixMilli(createdAt).UTC()
 	disk.UpdatedAt = time.UnixMilli(updatedAt).UTC()

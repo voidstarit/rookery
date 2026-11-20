@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -19,6 +20,10 @@ import (
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 )
+
+// lightVMExitPollInterval is how often wait_for_exit checks whether the
+// LightVM is still running. It is a variable so tests can shorten the wait.
+var lightVMExitPollInterval = time.Second
 
 var (
 	_ resource.Resource                = (*lightVMResource)(nil)
@@ -40,6 +45,8 @@ type lightVMModel struct {
 	VCPUs            types.Int64  `tfsdk:"vcpus"`
 	MemoryMB         types.Int64  `tfsdk:"memory_mb"`
 	ConsoleEnabled   types.Bool   `tfsdk:"console_enabled"`
+	Ephemeral        types.Bool   `tfsdk:"ephemeral"`
+	WaitForExit      types.Bool   `tfsdk:"wait_for_exit"`
 	CgroupClass      types.String `tfsdk:"cgroup_class"`
 	KernelID         types.Int64  `tfsdk:"kernel_id"`
 	KernelName       types.String `tfsdk:"kernel_name"`
@@ -47,12 +54,14 @@ type lightVMModel struct {
 	InitramfsName    types.String `tfsdk:"initramfs_name"`
 	Image            types.String `tfsdk:"image"`
 	Env              types.List   `tfsdk:"env"`
+	ConfigFiles      types.List   `tfsdk:"config_files"`
 	ExecutablePath   types.String `tfsdk:"executable_path"`
 	ExecutableScript types.String `tfsdk:"executable_script"`
 	ExecutableArgs   types.List   `tfsdk:"executable_args"`
 	Append           types.String `tfsdk:"append"`
 	InterfaceIDs     types.List   `tfsdk:"interface_ids"`
 	DiskIDs          types.List   `tfsdk:"disk_ids"`
+	DiskSerials      types.Map    `tfsdk:"disk_serials"`
 	VirtioFSShares   types.List   `tfsdk:"virtiofs_shares"`
 	Consoles         types.List   `tfsdk:"consoles"`
 	Status           types.String `tfsdk:"status"`
@@ -65,6 +74,11 @@ type lightVMModel struct {
 type lightVMEnvModel struct {
 	Name  types.String `tfsdk:"name"`
 	Value types.String `tfsdk:"value"`
+}
+
+type lightVMConfigFileModel struct {
+	Name    types.String `tfsdk:"name"`
+	Content types.String `tfsdk:"content"`
 }
 
 type lightVMConsoleModel struct {
@@ -108,6 +122,17 @@ func (r *lightVMResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Optional: true, Computed: true, Description: "Allow access to the virtio console.",
 				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
+			"ephemeral": schema.BoolAttribute{
+				Optional: true, Computed: true,
+				Description:   "Terminate QEMU, virtiofsd, and the attempt container when the guest exits (reboot, panic, or poweroff). Attached disks and interfaces remain.",
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+			},
+			"wait_for_exit": schema.BoolAttribute{
+				Optional: true,
+				Description: "Block the create until the LightVM is no longer running. Intended for one-shot workloads together with ephemeral = true: " +
+					"the server deletes the definition after the guest exits, so a later plan removes the resource and a later apply starts a new run. " +
+					"The wait has no built-in limit; cancel Terraform to stop waiting. It only affects creation.",
+			},
 			"cgroup_class": schema.StringAttribute{
 				Optional: true, Computed: true, Description: "Optional leaf cgroup class name.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
@@ -122,24 +147,39 @@ func (r *lightVMResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Computed: true, Description: "Initramfs record name.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
-			"image": schema.StringAttribute{Required: true, Description: "Container image used to prepare the root filesystem."},
+			"image": schema.StringAttribute{
+				Optional:      true,
+				Computed:      true,
+				Description:   "Optional container image used to prepare the root filesystem. Omit for a disk-backed LightVM with disk_ids.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
 			"env": schema.ListNestedAttribute{
 				Optional:      true,
 				Computed:      true,
-				Description:   "Environment variables written to the root filesystem .env file.",
+				Description:   "Environment variables. Image-backed LightVMs receive them in the root filesystem .env file; disk-backed LightVMs receive them in the rookery-config virtio-blk device tar archive.",
 				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
 				NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 					"name":  schema.StringAttribute{Required: true, Description: "Variable name."},
 					"value": schema.StringAttribute{Optional: true, Computed: true, Description: "Variable value."},
 				}},
 			},
+			"config_files": schema.ListNestedAttribute{
+				Optional:      true,
+				Computed:      true,
+				Description:   "User-supplied files included in the rookery-config tar for disk-backed LightVMs. Names are relative to /run/rookery.",
+				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
+				NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
+					"name":    schema.StringAttribute{Required: true, Description: "Relative file name."},
+					"content": schema.StringAttribute{Required: true, Description: "File content."},
+				}},
+			},
 			"executable_path": schema.StringAttribute{
 				Optional:    true,
-				Description: "Absolute executable path written to the guest entrypoint. Mutually exclusive with executable_script.",
+				Description: "Absolute executable path. Image-backed LightVMs receive it in /.entrypoint; disk-backed LightVMs receive it in rookery-config.tar. Mutually exclusive with executable_script.",
 			},
 			"executable_script": schema.StringAttribute{
 				Optional:    true,
-				Description: "Inline script content written to /.entrypoint and executed on LightVM startup. Mutually exclusive with executable_path.",
+				Description: "Inline startup script. Image-backed LightVMs receive it in /.entrypoint; disk-backed LightVMs receive it in rookery-config.tar. Mutually exclusive with executable_path.",
 			},
 			"executable_args": schema.ListAttribute{
 				Optional: true, Computed: true, ElementType: types.StringType, Description: "Executable arguments.",
@@ -161,6 +201,12 @@ func (r *lightVMResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				ElementType:   types.Int64Type,
 				Description:   "Attached disk ids, in attachment order.",
 				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
+			},
+			"disk_serials": schema.MapAttribute{
+				Optional:    true,
+				Computed:    true,
+				ElementType: types.StringType,
+				Description: "Guest-visible virtio-blk serials keyed by disk id. Serials are at most 20 bytes and may contain letters, digits, '.', '_', ':', and '-'.",
 			},
 			"virtiofs_shares": schema.ListNestedAttribute{
 				Optional:      true,
@@ -237,6 +283,14 @@ func (r *lightVMResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 	plan.Labels = labels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if plan.WaitForExit.ValueBool() {
+		if err := waitForLightVMExit(ctx, client, vm.GetId(), vm.GetEphemeral()); err != nil {
+			resp.Diagnostics.AddError("Wait for LightVM exit", err.Error())
+		}
+	}
 }
 
 func (r *lightVMResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -326,17 +380,48 @@ func (r *lightVMResource) ImportState(ctx context.Context, req resource.ImportSt
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
+// waitForLightVMExit polls the LightVM's live process metrics until the guest
+// has exited. A deleted definition also counts as exited: an ephemeral LightVM
+// is removed by the server once its run terminates. For an ephemeral LightVM
+// the wait keeps polling until the definition is gone, so the apply only
+// returns after its disk and interface attachments are released.
+func waitForLightVMExit(ctx context.Context, client *Client, id string, ephemeral bool) error {
+	ticker := time.NewTicker(lightVMExitPollInterval)
+	defer ticker.Stop()
+	for {
+		callCtx, cancel := context.WithTimeout(ctx, client.Timeout())
+		metrics, err := client.LightVMs.GetLightVMMetrics(callCtx, &rookeryv1.GetLightVMMetricsRequest{Id: id})
+		cancel()
+		switch {
+		case isNotFound(err):
+			return nil
+		case err != nil:
+			return err
+		case !metrics.GetRunning() && !ephemeral:
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
 func validateLightVMExecution(plan lightVMModel, args []string) diag.Diagnostics {
 	var diags diag.Diagnostics
 	executablePath := strings.TrimSpace(plan.ExecutablePath.ValueString())
 	executableScript := strings.TrimSpace(plan.ExecutableScript.ValueString())
+	image := strings.TrimSpace(plan.Image.ValueString())
 	switch {
-	case executablePath == "" && executableScript == "":
-		diags.AddError("Invalid LightVM executable", "exactly one of executable_path or executable_script is required")
 	case executablePath != "" && executableScript != "":
 		diags.AddError("Invalid LightVM executable", "executable_path and executable_script are mutually exclusive")
 	case executableScript != "" && len(args) > 0:
 		diags.AddError("Invalid LightVM executable", "executable_args cannot be used with executable_script")
+	case len(args) > 0 && executablePath == "":
+		diags.AddError("Invalid LightVM executable", "executable_args requires executable_path")
+	case image != "" && executablePath == "" && executableScript == "":
+		diags.AddError("Invalid LightVM executable", "exactly one of executable_path or executable_script is required")
 	}
 	return diags
 }
@@ -345,12 +430,19 @@ func lightVMCreateRequest(ctx context.Context, plan lightVMModel) (*rookeryv1.Cr
 	var diags diag.Diagnostics
 	env, envDiags := lightVMEnvFromModel(ctx, plan.Env)
 	diags.Append(envDiags...)
+	configFiles, configFileDiags := lightVMConfigFilesFromModel(ctx, plan.ConfigFiles)
+	diags.Append(configFileDiags...)
+	if strings.TrimSpace(plan.Image.ValueString()) != "" && len(configFiles) > 0 {
+		diags.AddError("Invalid LightVM config files", "config_files can only be used with a disk-backed LightVM")
+	}
 	consoles, consoleDiags := lightVMConsolesFromModel(ctx, plan.Consoles)
 	diags.Append(consoleDiags...)
 	shares, shareDiags := lightVMVirtioFSFromModel(ctx, plan.VirtioFSShares)
 	diags.Append(shareDiags...)
 	args, argDiags := stringListValues(ctx, plan.ExecutableArgs)
 	diags.Append(argDiags...)
+	diskSerials, serialDiags := diskSerialsFromModel(ctx, plan.DiskSerials)
+	diags.Append(serialDiags...)
 	diags.Append(validateLightVMExecution(plan, args)...)
 	if diags.HasError() {
 		return nil, diags
@@ -361,11 +453,13 @@ func lightVMCreateRequest(ctx context.Context, plan lightVMModel) (*rookeryv1.Cr
 		Vcpus:            int32Pointer(plan.VCPUs),
 		MemoryMb:         int32Pointer(plan.MemoryMB),
 		ConsoleEnabled:   boolPointer(plan.ConsoleEnabled),
+		Ephemeral:        boolPointer(plan.Ephemeral),
 		CgroupClass:      plan.CgroupClass.ValueString(),
 		KernelId:         plan.KernelID.ValueInt64(),
 		InitramfsId:      plan.InitramfsID.ValueInt64(),
 		Image:            plan.Image.ValueString(),
 		Env:              env,
+		ConfigFiles:      configFiles,
 		ExecutablePath:   plan.ExecutablePath.ValueString(),
 		ExecutableScript: plan.ExecutableScript.ValueString(),
 		ExecutableArgs:   args,
@@ -373,6 +467,7 @@ func lightVMCreateRequest(ctx context.Context, plan lightVMModel) (*rookeryv1.Cr
 		Append:           stringPointer(plan.Append),
 		Consoles:         consoles,
 		DiskIds:          lightVMInt64Values(ctx, plan.DiskIDs),
+		DiskSerials:      diskSerials,
 		VirtiofsShares:   shares,
 	}, diags
 }
@@ -381,12 +476,19 @@ func lightVMUpdateRequest(ctx context.Context, plan lightVMModel) (*rookeryv1.Up
 	var diags diag.Diagnostics
 	env, envDiags := lightVMEnvFromModel(ctx, plan.Env)
 	diags.Append(envDiags...)
+	configFiles, configFileDiags := lightVMConfigFilesFromModel(ctx, plan.ConfigFiles)
+	diags.Append(configFileDiags...)
+	if strings.TrimSpace(plan.Image.ValueString()) != "" && len(configFiles) > 0 {
+		diags.AddError("Invalid LightVM config files", "config_files can only be used with a disk-backed LightVM")
+	}
 	consoles, consoleDiags := lightVMConsolesFromModel(ctx, plan.Consoles)
 	diags.Append(consoleDiags...)
 	shares, shareDiags := lightVMVirtioFSFromModel(ctx, plan.VirtioFSShares)
 	diags.Append(shareDiags...)
 	args, argDiags := stringListValues(ctx, plan.ExecutableArgs)
 	diags.Append(argDiags...)
+	diskSerials, serialDiags := diskSerialsFromModel(ctx, plan.DiskSerials)
+	diags.Append(serialDiags...)
 	diags.Append(validateLightVMExecution(plan, args)...)
 	if diags.HasError() {
 		return nil, diags
@@ -398,11 +500,13 @@ func lightVMUpdateRequest(ctx context.Context, plan lightVMModel) (*rookeryv1.Up
 		Vcpus:            int32(plan.VCPUs.ValueInt64()),
 		MemoryMb:         int32(plan.MemoryMB.ValueInt64()),
 		ConsoleEnabled:   plan.ConsoleEnabled.ValueBool(),
+		Ephemeral:        plan.Ephemeral.ValueBool(),
 		CgroupClass:      plan.CgroupClass.ValueString(),
 		KernelId:         plan.KernelID.ValueInt64(),
 		InitramfsId:      plan.InitramfsID.ValueInt64(),
 		Image:            plan.Image.ValueString(),
 		Env:              env,
+		ConfigFiles:      configFiles,
 		ExecutablePath:   plan.ExecutablePath.ValueString(),
 		ExecutableScript: plan.ExecutableScript.ValueString(),
 		ExecutableArgs:   args,
@@ -410,6 +514,7 @@ func lightVMUpdateRequest(ctx context.Context, plan lightVMModel) (*rookeryv1.Up
 		Append:           plan.Append.ValueString(),
 		Consoles:         consoles,
 		DiskIds:          lightVMInt64Values(ctx, plan.DiskIDs),
+		DiskSerials:      diskSerials,
 		ReplaceDiskIds:   proto.Bool(true),
 		VirtiofsShares:   shares,
 	}, diags
@@ -423,6 +528,7 @@ func setLightVMState(ctx context.Context, state *lightVMModel, vm *rookeryv1.Lig
 	state.VCPUs = types.Int64Value(int64(vm.GetVcpus()))
 	state.MemoryMB = types.Int64Value(int64(vm.GetMemoryMb()))
 	state.ConsoleEnabled = types.BoolValue(vm.GetConsoleEnabled())
+	state.Ephemeral = types.BoolValue(vm.GetEphemeral())
 	state.CgroupClass = optionalStringValue(vm.GetCgroupClass())
 	state.KernelID = types.Int64Value(vm.GetKernelId())
 	state.KernelName = types.StringValue(vm.GetKernelName())
@@ -440,6 +546,9 @@ func setLightVMState(ctx context.Context, state *lightVMModel, vm *rookeryv1.Lig
 	env, envDiags := types.ListValueFrom(ctx, types.ObjectType{AttrTypes: lightVMEnvAttrTypes()}, lightVMEnvValues(vm.GetEnv()))
 	diags.Append(envDiags...)
 	state.Env = env
+	configFiles, configFileDiags := types.ListValueFrom(ctx, types.ObjectType{AttrTypes: lightVMConfigFileAttrTypes()}, lightVMConfigFileValues(vm.GetConfigFiles()))
+	diags.Append(configFileDiags...)
+	state.ConfigFiles = configFiles
 	consoles, consoleDiags := types.ListValueFrom(ctx, types.ObjectType{AttrTypes: lightVMConsoleAttrTypes()}, lightVMConsoleValues(vm.GetConsoles()))
 	diags.Append(consoleDiags...)
 	state.Consoles = consoles
@@ -459,6 +568,9 @@ func setLightVMState(ctx context.Context, state *lightVMModel, vm *rookeryv1.Lig
 	diskList, diskDiags := int64List(ctx, append([]int64{}, vm.GetDiskIds()...))
 	diags.Append(diskDiags...)
 	state.DiskIDs = diskList
+	diskSerials, serialDiags := diskSerialsValue(ctx, vm.GetDisks())
+	diags.Append(serialDiags...)
+	state.DiskSerials = diskSerials
 	return diags
 }
 
@@ -471,6 +583,22 @@ func lightVMEnvFromModel(ctx context.Context, list types.List) ([]*rookeryv1.Lig
 	result := make([]*rookeryv1.LightVMEnvVar, 0, len(values))
 	for _, value := range values {
 		result = append(result, &rookeryv1.LightVMEnvVar{Name: value.Name.ValueString(), Value: value.Value.ValueString()})
+	}
+	return result, diags
+}
+
+func lightVMConfigFilesFromModel(ctx context.Context, list types.List) ([]*rookeryv1.LightVMConfigFile, diag.Diagnostics) {
+	if list.IsNull() || list.IsUnknown() {
+		return nil, nil
+	}
+	var values []lightVMConfigFileModel
+	diags := list.ElementsAs(ctx, &values, false)
+	result := make([]*rookeryv1.LightVMConfigFile, 0, len(values))
+	for _, value := range values {
+		result = append(result, &rookeryv1.LightVMConfigFile{
+			Name:    value.Name.ValueString(),
+			Content: value.Content.ValueString(),
+		})
 	}
 	return result, diags
 }
@@ -521,6 +649,13 @@ func lightVMEnvAttrTypes() map[string]attr.Type {
 	}
 }
 
+func lightVMConfigFileAttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"name":    types.StringType,
+		"content": types.StringType,
+	}
+}
+
 func lightVMConsoleAttrTypes() map[string]attr.Type {
 	return map[string]attr.Type{
 		"id":        types.Int64Type,
@@ -545,6 +680,17 @@ func lightVMEnvValues(values []*rookeryv1.LightVMEnvVar) []lightVMEnvModel {
 		result = append(result, lightVMEnvModel{
 			Name:  types.StringValue(value.GetName()),
 			Value: types.StringValue(value.GetValue()),
+		})
+	}
+	return result
+}
+
+func lightVMConfigFileValues(values []*rookeryv1.LightVMConfigFile) []lightVMConfigFileModel {
+	result := make([]lightVMConfigFileModel, 0, len(values))
+	for _, value := range values {
+		result = append(result, lightVMConfigFileModel{
+			Name:    types.StringValue(value.GetName()),
+			Content: types.StringValue(value.GetContent()),
 		})
 	}
 	return result

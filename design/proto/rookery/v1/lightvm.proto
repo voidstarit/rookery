@@ -8,6 +8,7 @@ import "google/protobuf/timestamp.proto";
 import "validate/validate.proto";
 import "rookery/v1/interface.proto";
 import "rookery/v1/disk.proto";
+import "rookery/v1/vm.proto";
 
 option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
 
@@ -121,11 +122,33 @@ service LightVMService {
   rpc StopLightVM(StopLightVMRequest) returns (LightVM) {
     option (google.api.http) = {post: "/api/lightvm/instances/{id}/stop"};
   }
+
+  rpc GetLightVMMetrics(GetLightVMMetricsRequest) returns (LightVMMetrics) {
+    option (google.api.http) = {get: "/api/lightvm/instances/{id}/metrics"};
+  }
+
+  // CreateLightVMConsoleAccess issues a time-limited bearer token that a
+  // client can use directly against the console WebSocket without the
+  // browser UI.
+  rpc CreateLightVMConsoleAccess(CreateLightVMConsoleAccessRequest) returns (LightVMConsoleAccess) {
+    option (google.api.http) = {
+      post: "/api/lightvm/instances/{id}/console-access"
+      body: "*"
+    };
+  }
 }
 
 message LightVMEnvVar {
   string name = 1 [(validate.rules).string = {min_len: 1, max_len: 128}];
   string value = 2 [(validate.rules).string = {max_len: 4096}];
+}
+
+// LightVMConfigFile is one user-supplied file in the rookery-config tar for a
+// disk-backed LightVM. Names are relative to /run/rookery in the guest; the
+// system reserves "env" and "startup-cmd" at the archive root.
+message LightVMConfigFile {
+  string name = 1 [(validate.rules).string = {min_len: 1, max_len: 255}];
+  string content = 2 [(validate.rules).string = {max_len: 1048576}];
 }
 
 message LightVMConsole {
@@ -177,6 +200,11 @@ message LightVM {
   optional string run_state = 27;
   repeated LightVMVirtioFSShare virtiofs_shares = 28;
   string executable_script = 29;
+  repeated LightVMConfigFile config_files = 30;
+  // ephemeral makes the LightVM one-shot: when the guest exits (reboot,
+  // panic, or poweroff) Rookery stops QEMU, virtiofsd, and the attempt
+  // container automatically. Attached disks and interfaces remain.
+  bool ephemeral = 31;
 }
 
 message ListLightVMsRequest {}
@@ -202,7 +230,9 @@ message CreateLightVMRequest {
   string cgroup_class = 6 [(validate.rules).string = {max_len: 200}];
   int64 kernel_id = 7 [(validate.rules).int64 = {gt: 0}];
   int64 initramfs_id = 8 [(validate.rules).int64 = {gt: 0}];
-  string image = 9 [(validate.rules).string = {min_len: 1, max_len: 512}];
+  // image is optional when at least one disk is attached; disk-backed
+  // LightVMs boot the kernel/initramfs from their disks.
+  string image = 9 [(validate.rules).string = {max_len: 512}];
   repeated LightVMEnvVar env = 10 [(validate.rules).repeated = {max_items: 64}];
   string executable_path = 11 [(validate.rules).string = {max_len: 4096}];
   repeated string executable_args = 12 [(validate.rules).repeated = {
@@ -223,6 +253,15 @@ message CreateLightVMRequest {
     max_items: 24
   }];
   string executable_script = 18 [(validate.rules).string = {max_len: 1048576}];
+  map<int64, string> disk_serials = 19 [(validate.rules).map = {
+    max_pairs: 32
+    keys: {int64: {gt: 0}}
+    values: {string: {max_len: 20, pattern: "^[A-Za-z0-9._:-]*$"}}
+  }];
+  repeated LightVMConfigFile config_files = 20 [(validate.rules).repeated = {max_items: 64}];
+  // ephemeral terminates the runtime when the guest exits while keeping the
+  // definition's disks and interfaces attached.
+  optional bool ephemeral = 21;
 }
 
 message UpdateLightVMRequest {
@@ -239,7 +278,8 @@ message UpdateLightVMRequest {
   string cgroup_class = 7 [(validate.rules).string = {max_len: 200}];
   int64 kernel_id = 8 [(validate.rules).int64 = {gt: 0}];
   int64 initramfs_id = 9 [(validate.rules).int64 = {gt: 0}];
-  string image = 10 [(validate.rules).string = {min_len: 1, max_len: 512}];
+  // image is optional when at least one disk is attached.
+  string image = 10 [(validate.rules).string = {max_len: 512}];
   repeated LightVMEnvVar env = 11 [(validate.rules).repeated = {max_items: 64}];
   string executable_path = 12 [(validate.rules).string = {max_len: 4096}];
   repeated string executable_args = 13 [(validate.rules).repeated = {
@@ -261,6 +301,15 @@ message UpdateLightVMRequest {
     max_items: 24
   }];
   string executable_script = 20 [(validate.rules).string = {max_len: 1048576}];
+  map<int64, string> disk_serials = 21 [(validate.rules).map = {
+    max_pairs: 32
+    keys: {int64: {gt: 0}}
+    values: {string: {max_len: 20, pattern: "^[A-Za-z0-9._:-]*$"}}
+  }];
+  repeated LightVMConfigFile config_files = 22 [(validate.rules).repeated = {max_items: 64}];
+  // ephemeral terminates the runtime when the guest exits while keeping the
+  // definition's disks and interfaces attached.
+  bool ephemeral = 23;
 }
 
 message DeleteLightVMRequest {
@@ -273,6 +322,56 @@ message StartLightVMRequest {
 
 message StopLightVMRequest {
   string id = 1 [(validate.rules).string.uuid = true];
+}
+
+message GetLightVMMetricsRequest {
+  string id = 1 [(validate.rules).string.uuid = true];
+}
+
+message CreateLightVMConsoleAccessRequest {
+  string id = 1 [(validate.rules).string.uuid = true];
+  // console_id selects a console port; 0 uses the first console.
+  int64 console_id = 2 [(validate.rules).int64 = {gte: 0}];
+  // ttl_seconds bounds how long the returned WebSocket access remains valid.
+  uint32 ttl_seconds = 3 [(validate.rules).uint32 = {gte: 1, lte: 86400}];
+}
+
+message LightVMConsoleAccess {
+  int64 id = 1;
+  string lightvm_id = 2;
+  int64 console_id = 3;
+  string console_name = 4;
+  // token is returned only when the access is issued.
+  string token = 5;
+  // websocket_path is the absolute path to append to a Rookery listener's
+  // ws:// or wss:// base URL.
+  string websocket_path = 6;
+  // websocket_url is a ready-to-use ws:// or wss:// URL when the request
+  // arrived through the HTTP gateway.
+  string websocket_url = 7;
+  google.protobuf.Timestamp expires_at = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
+message LightVMMetrics {
+  bool running = 1;
+  int32 pid = 2;
+  uint64 uptime_seconds = 3;
+  double cpu_seconds_total = 4;
+  uint64 memory_rss_bytes = 5;
+  uint64 memory_virtual_bytes = 6;
+  uint64 disk_read_bytes_total = 7;
+  uint64 disk_write_bytes_total = 8;
+  string lightvm_id = 9;
+  string name = 10;
+  int32 vcpus = 11;
+  int32 memory_mb = 12;
+  uint64 network_rx_bytes_total = 13;
+  uint64 network_tx_bytes_total = 14;
+  uint64 network_rx_packets_total = 15;
+  uint64 network_tx_packets_total = 16;
+  google.protobuf.Timestamp sampled_at = 17;
+  repeated BlockDeviceMetrics block_devices = 18;
 }
 
 message LightVMKernel {

@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
@@ -104,11 +105,11 @@ func (r *lightVMArtifactResource) Schema(_ context.Context, _ resource.SchemaReq
 			},
 			"size_bytes": schema.Int64Attribute{
 				Computed: true, Description: "Server-derived file size.",
-				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
+				PlanModifiers: []planmodifier.Int64{artifactSizePlanModifier{}},
 			},
 			"managed": schema.BoolAttribute{
 				Computed: true, Description: "Whether Rookery manages and may delete the file.",
-				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+				PlanModifiers: []planmodifier.Bool{artifactManagedPlanModifier{}},
 			},
 		},
 	}
@@ -299,6 +300,99 @@ func (artifactPathPlanModifier) PlanModifyString(ctx context.Context, request pl
 		}
 	}
 	response.PlanValue = types.StringUnknown()
+}
+
+// artifactSizePlanModifier and artifactManagedPlanModifier keep the previous
+// server-derived value across updates that leave the artifact file alone, but
+// mark it unknown when the plan replaces the file.
+//
+// size_bytes and managed are computed by the server from the file at the
+// planned path. A re-upload of a rebuilt kernel or initramfs can produce a
+// different size (a few bytes from timestamps, or a whole different image),
+// and switching between a source_path upload and a host path flips managed.
+// Carrying the previous value into such a plan would make the applied state
+// disagree with the plan ("provider produced inconsistent result after apply"),
+// so the value must be unknown and resolved during apply.
+type artifactSizePlanModifier struct{}
+
+func (artifactSizePlanModifier) Description(context.Context) string {
+	return "Use the current file size unless the plan replaces the artifact file."
+}
+
+func (artifactSizePlanModifier) MarkdownDescription(ctx context.Context) string {
+	return artifactSizePlanModifier{}.Description(ctx)
+}
+
+func (m artifactSizePlanModifier) PlanModifyInt64(ctx context.Context, request planmodifier.Int64Request, response *planmodifier.Int64Response) {
+	replaced, diags := artifactFileReplaced(ctx, request.Config, request.State)
+	response.Diagnostics.Append(diags...)
+	if response.Diagnostics.HasError() {
+		return
+	}
+	if replaced {
+		response.PlanValue = types.Int64Unknown()
+		return
+	}
+	response.PlanValue = request.StateValue
+}
+
+type artifactManagedPlanModifier struct{}
+
+func (artifactManagedPlanModifier) Description(context.Context) string {
+	return "Use the current managed flag unless the plan replaces the artifact file."
+}
+
+func (artifactManagedPlanModifier) MarkdownDescription(ctx context.Context) string {
+	return artifactManagedPlanModifier{}.Description(ctx)
+}
+
+func (m artifactManagedPlanModifier) PlanModifyBool(ctx context.Context, request planmodifier.BoolRequest, response *planmodifier.BoolResponse) {
+	replaced, diags := artifactFileReplaced(ctx, request.Config, request.State)
+	response.Diagnostics.Append(diags...)
+	if response.Diagnostics.HasError() {
+		return
+	}
+	if replaced {
+		response.PlanValue = types.BoolUnknown()
+		return
+	}
+	response.PlanValue = request.StateValue
+}
+
+// artifactFileReplaced reports whether applying the plan changes the file that
+// backs the artifact: a new create, a new source_path or source_hash upload, or
+// a different configured host path.
+//
+// It compares the raw configuration with the prior state rather than the whole
+// plan, because attribute plan modifiers run in no particular order and path
+// may still be an unresolved unknown when the size/managed modifiers run.
+func artifactFileReplaced(ctx context.Context, config tfsdk.Config, state tfsdk.State) (bool, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	if state.Raw.IsNull() {
+		return true, diags
+	}
+	var configured, current lightVMArtifactModel
+	diags.Append(config.Get(ctx, &configured)...)
+	diags.Append(state.Get(ctx, &current)...)
+	if diags.HasError() {
+		return true, diags
+	}
+	if !configured.SourcePath.Equal(current.SourcePath) || !configured.SourceHash.Equal(current.SourceHash) {
+		return true, diags
+	}
+	// A source_path upload leaves path unset in configuration; the managed path
+	// lives in state. A registered host path is configured explicitly, so a
+	// changed value means a different file. An unknown path cannot be compared
+	// yet, so treat it as replaced; that is safe because the attribute is
+	// server-derived.
+	switch {
+	case configured.Path.IsUnknown():
+		return true, diags
+	case configured.Path.IsNull():
+		return false, diags
+	default:
+		return !configured.Path.Equal(current.Path), diags
+	}
 }
 
 func capitalize(value string) string {

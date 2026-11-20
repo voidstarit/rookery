@@ -128,14 +128,20 @@ func (s *Server) handleDeleteLightVMUpload(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// LightVMStartDeadline extends the response deadline for LightVM start
-// requests, which may include a first-time buildah image pull. It must wrap
-// the gateway handler so the deadline is raised before the RPC runs.
+// LightVMStartDeadline extends the response deadline for LightVM create and
+// start requests, which boot QEMU and may include a first-time buildah image
+// pull. Creating a LightVM starts it, so the create endpoint needs the same
+// extension as an explicit start. It must wrap the gateway handler so the
+// deadline is raised before the RPC runs.
 func LightVMStartDeadline(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost &&
-			strings.HasPrefix(r.URL.Path, "/api/lightvm/instances/") &&
-			strings.HasSuffix(r.URL.Path, "/start") {
+		if r.Method != http.MethodPost {
+			next.ServeHTTP(w, r)
+			return
+		}
+		path := r.URL.Path
+		if path == "/api/lightvm/instances" ||
+			(strings.HasPrefix(path, "/api/lightvm/instances/") && strings.HasSuffix(path, "/start")) {
 			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(15 * time.Minute))
 		}
 		next.ServeHTTP(w, r)

@@ -335,6 +335,21 @@ func TestKoujaDiskValidationAndCreateFailure(t *testing.T) {
 	if err != nil || failed.DeletionState != store.DiskDeletionDeleting {
 		t.Fatalf("failed disk = %+v, %v", failed, err)
 	}
+	forceRequest, err := http.NewRequest(http.MethodDelete, server.URL+"/api/disks/"+jsonNumber(failed.ID)+"?force=true", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forced, err := http.DefaultClient.Do(forceRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if forced.StatusCode != http.StatusNoContent {
+		t.Fatalf("force delete status = %d, %s", forced.StatusCode, readBody(t, forced))
+	}
+	_ = forced.Body.Close()
+	if _, err := st.GetDisk(ctx, failed.ID); !errors.Is(err, store.ErrDiskNotFound) {
+		t.Fatalf("force-deleted disk still exists: %v", err)
+	}
 }
 
 func TestKoujaOnlyBackendSelection(t *testing.T) {

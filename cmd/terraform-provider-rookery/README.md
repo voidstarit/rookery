@@ -118,6 +118,10 @@ Rookery also persists the desired power state, so VMs that were running come
 back after an API restart or host reboot, while explicitly stopped VMs stay
 down.
 Changing `disk_ids` or `interface_ids` requires the VM to be stopped.
+`rookery_vm` and `rookery_lightvm` also accept `disk_serials`, a map from disk
+ID (as a string key) to the guest-visible virtio-blk serial. Serials are at
+most 20 bytes, use `[A-Za-z0-9._:-]`, and must be unique within the workload.
+The guest can read them from `/sys/block/vdX/serial` or udev's `ID_SERIAL`.
 `rookery_media` and `rookery_route_table` are immutable and replaced when
 changed. `rookery_network` names remain immutable, but its `ipv4_cidr` and
 `ipv6_cidr` can be updated while the network has no VNFs, host taps, or BVI.
@@ -139,6 +143,16 @@ removes only the inventory record. Passthrough disks cannot be templates or
 template clones. Use `GET /api/host/block-devices/attachable` (or the UI) to
 see candidate devices and whether they are mounted, in use, or already
 registered.
+
+Set `read_only = true` to make a disk shareable by multiple VMs and LightVMs.
+QEMU attaches it read-only for every guest; a read-write disk remains
+single-owner. The disk must be detached before `read_only` can change, and
+templates cannot be read-only.
+
+Kouja disk cleanup is asynchronous. Set `force_delete = true` to remove the
+inventory record when cleanup fails, instead of leaving the resource in state
+with a `delete_failed` error. The remote volume may remain and must be removed
+on the storage backend.
 
 `rookery_disk` templates can set `provisioning_script` and
 `provisioning_timeout`. Clones created with `template_disk_id` can pass
@@ -180,12 +194,50 @@ Uploaded files are marked `managed = true`; destroying the resource removes
 them. Host-path registrations are not deleted by Rookery. `source_hash` is
 optional but should be set to a local file hash when uploads are used, because
 Terraform otherwise cannot detect that the file contents changed without a
-configuration change.
+configuration change. `size_bytes` and `managed` are derived by the server from
+the stored file, so plans that upload a new or rebuilt file show both as
+`(known after apply)`; the applied state reflects the new file's size.
 
-`rookery_lightvm` manages the definition only; start and stop through the
-Rookery UI or API. The LightVM must be stopped before changing it. Disks,
+`rookery_lightvm` creates the definition and starts it, like the VM resource;
+stop it through the Rookery UI or API. A first create of an image-backed
+LightVM may pull the container image, so raise the provider `timeout` (for
+example `timeout = "10m"`) when that can take longer than the default 30s. The
+LightVM must be stopped before changing it. Disks,
 interfaces, shares, and consoles are replaced from their configured sets on
-each update; set an explicit empty list to clear one.
+each update; set an explicit empty list to clear one. `image` is optional when
+`disk_ids` is non-empty: a LightVM without an image is disk-backed and boots
+from its disks via the kernel and initramfs. A disk-backed LightVM may still set
+`env`, `executable_path` plus `executable_args`, or `executable_script`; Rookery
+publishes them in a read-only `rookery-config` virtio-blk tar device for the
+guest init to consume. Set `ephemeral = true` for a one-shot LightVM: when the
+guest exits (reboot, panic, or poweroff), Rookery stops QEMU, virtiofsd, and
+the attempt container, deletes the definition, and releases its disk and
+interface attachments so other workloads can use them. The disk and network
+records themselves are kept. Ephemeral definitions are not auto-started after a
+restart.
+
+Set `wait_for_exit = true` to keep the apply blocked until the LightVM stops
+running. Combined with `ephemeral = true` this makes the resource behave like a
+one-shot job: the apply waits for the guest to exit, and Rookery deletes the
+definition and releases its disk and interface attachments. The resource then
+disappears from Terraform state on the next plan, and a later apply starts a new
+run. With `ephemeral = false` the definition remains and the wait only waits for
+its QEMU process to end. The wait has no built-in time limit, so cancel
+Terraform (or bound the CI job) if the guest may never exit. `wait_for_exit`
+only affects creation.
+
+```hcl
+resource "rookery_lightvm" "one_shot" {
+  name            = "migration-01"
+  kernel_id       = rookery_lightvm_kernel.app.id
+  initramfs_id    = rookery_lightvm_initramfs.app.id
+  image           = "alpine:3.20"
+  executable_path = "/usr/local/bin/migrate"
+  ephemeral       = true
+  wait_for_exit   = true
+  disk_ids        = [rookery_disk.data.id]
+}
+```
 
 ```hcl
 resource "rookery_lightvm" "app" {
@@ -201,6 +253,8 @@ resource "rookery_lightvm" "app" {
   executable_args = ["serve"]
   append          = "console=hvc0 rdinit=/init"
   console_enabled = true
+  # Optional: tear down the runtime when the guest exits.
+  ephemeral       = true
   labels          = ["app", "lightvm"]
 
   env = [
@@ -224,10 +278,25 @@ resource "rookery_lightvm" "app" {
 }
 ```
 
+`config_files` is only valid for disk-backed LightVMs. Each entry is a
+`{ name, content }` object added to the `rookery-config` tar at the given
+relative path; the guest initramfs extracts it under `/run/rookery`. Content is
+text. Names must
+be unique, relative, and free of `.`/`..` components, and the root names `env`
+and `startup-cmd` are reserved. Up to 64 files are allowed, each at most 1 MiB
+with 4 MiB combined content. Typical usage reads a local file:
+
+```hcl
+config_files = [
+  { name = "app/config.yaml", content = file("${path.module}/config.yaml") },
+]
+```
+
 Set `executable_script` instead of `executable_path` to supply an inline
 entrypoint script. Rookery writes it to `/.entrypoint` in the image root and
 adds `#!/bin/sh` when the content does not start with a shebang. Script mode
-does not accept `executable_args`.
+does not accept `executable_args`. For a disk-backed LightVM the same content is
+written to the `startup-cmd` file in the `rookery-config` tar archive instead.
 
 ```hcl
 resource "rookery_lightvm" "scripted" {

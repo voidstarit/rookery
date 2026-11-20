@@ -55,12 +55,14 @@ type diskModel struct {
 	AttachedVMName      types.String `tfsdk:"attached_vm_name"`
 	AttachedLightVMID   types.String `tfsdk:"attached_lightvm_id"`
 	AttachedLightVMName types.String `tfsdk:"attached_lightvm_name"`
+	ReadOnly            types.Bool   `tfsdk:"read_only"`
 	IsTemplate          types.Bool   `tfsdk:"is_template"`
 	TemplateDiskID      types.Int64  `tfsdk:"template_disk_id"`
 	TemplateDiskName    types.String `tfsdk:"template_disk_name"`
 	ProvisioningScript  types.String `tfsdk:"provisioning_script"`
 	ProvisioningTimeout types.String `tfsdk:"provisioning_timeout"`
 	ProvisioningJSON    types.String `tfsdk:"provisioning_json"`
+	ForceDelete         types.Bool   `tfsdk:"force_delete"`
 	Labels              types.Set    `tfsdk:"labels"`
 }
 
@@ -123,6 +125,12 @@ func (r *diskResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 			"attached_vm_name":      schema.StringAttribute{Computed: true},
 			"attached_lightvm_id":   schema.StringAttribute{Computed: true},
 			"attached_lightvm_name": schema.StringAttribute{Computed: true},
+			"read_only": schema.BoolAttribute{
+				Optional:      true,
+				Computed:      true,
+				Description:   "Attach the disk read-only and allow it to be shared by multiple VMs and LightVMs. Changing this requires the disk to be detached.",
+				PlanModifiers: []planmodifier.Bool{boolUseState()},
+			},
 			"is_template": schema.BoolAttribute{
 				Optional:      true,
 				Computed:      true,
@@ -149,6 +157,11 @@ func (r *diskResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				Optional:      true,
 				Description:   "JSON object passed to a template clone provisioning script.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+			},
+			"force_delete": schema.BoolAttribute{
+				Optional: true,
+				Description: "Remove the disk inventory record when asynchronous backend cleanup fails. " +
+					"The remote volume may remain on the storage backend and require manual cleanup.",
 			},
 		},
 	}
@@ -193,6 +206,7 @@ func (r *diskResource) Create(ctx context.Context, req resource.CreateRequest, r
 		Provisioning:        provisioning,
 		HostDevice:          plan.HostDevice.ValueString(),
 		ThrottleClassId:     classID,
+		ReadOnly:            boolPointer(plan.ReadOnly),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Create disk", err.Error())
@@ -291,16 +305,21 @@ func (r *diskResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	}
 	callCtx, cancel := context.WithTimeout(ctx, 4*time.Hour)
 	defer cancel()
-	if err := deleteDiskAsync(callCtx, client.Disks, state.ID.ValueInt64(), 4*time.Hour, 2*time.Second); err != nil {
+	if err := deleteDiskAsync(callCtx, client.Disks, state.ID.ValueInt64(), 4*time.Hour, 2*time.Second, state.ForceDelete.ValueBool()); err != nil {
 		resp.Diagnostics.AddError("Delete disk", err.Error())
 	}
 }
 
-func deleteDiskAsync(ctx context.Context, client rookeryv1.DiskServiceClient, id int64, timeout, poll time.Duration) error {
+func deleteDiskAsync(ctx context.Context, client rookeryv1.DiskServiceClient, id int64, timeout, poll time.Duration, force bool) error {
 	deleted, err := client.DeleteDisk(ctx, &rookeryv1.DeleteDiskRequest{Id: id})
 	if err != nil {
 		if isNotFound(err) {
 			return nil
+		}
+		if force {
+			if forceErr := forceDeleteDisk(ctx, client, id); forceErr == nil {
+				return nil
+			}
 		}
 		return err
 	}
@@ -322,13 +341,40 @@ func deleteDiskAsync(ctx context.Context, client rookeryv1.DiskServiceClient, id
 			return readErr
 		}
 		if disk.GetDeletionState() == "delete_failed" {
+			if force {
+				return forceDeleteDisk(ctx, client, id)
+			}
 			return fmt.Errorf("%s", disk.GetDeletionError())
 		}
 		if disk.GetDeletionState() == "" {
 			return nil
 		}
 	}
+	if force {
+		// The surrounding context normally expires with the same 4h budget, so
+		// use a short detached context for the final forced removal.
+		forceCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		return forceDeleteDisk(forceCtx, client, id)
+	}
 	return fmt.Errorf("timed out waiting for asynchronous disk deletion")
+}
+
+// forceDeleteDisk removes the inventory record even though an asynchronous
+// backend cleanup is pending or failed. The remote volume may remain.
+func forceDeleteDisk(ctx context.Context, client rookeryv1.DiskServiceClient, id int64) error {
+	deleted, err := client.DeleteDisk(ctx, &rookeryv1.DeleteDiskRequest{Id: id, Force: true})
+	if err != nil {
+		if isNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	if deleted.GetAccepted() {
+		// An older server ignored the force option and only queued cleanup.
+		return fmt.Errorf("server did not honor the forced disk deletion")
+	}
+	return nil
 }
 
 func (r *diskResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -336,6 +382,11 @@ func (r *diskResource) ImportState(ctx context.Context, req resource.ImportState
 }
 
 func (r *diskResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// A destroy plan has a null plan and config. Reading either into the model
+	// fails with a "Value Conversion Error", which aborts the whole destroy.
+	if req.Plan.Raw.IsNull() {
+		return
+	}
 	var plan diskModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -407,6 +458,7 @@ func buildDiskUpdateRequest(plan diskModel, configClass types.Int64) (*rookeryv1
 		ProvisioningScript:  stringPointer(plan.ProvisioningScript),
 		ProvisioningTimeout: stringPointer(plan.ProvisioningTimeout),
 		ThrottleClassId:     classID,
+		ReadOnly:            boolPointer(plan.ReadOnly),
 	}, nil
 }
 
@@ -436,6 +488,7 @@ func setDiskState(state *diskModel, disk *rookeryv1.Disk) {
 	state.AttachedVMName = optionalStringValue(disk.GetAttachedVmName())
 	state.AttachedLightVMID = optionalStringValue(disk.GetAttachedLightvmId())
 	state.AttachedLightVMName = optionalStringValue(disk.GetAttachedLightvmName())
+	state.ReadOnly = types.BoolValue(disk.GetReadOnly())
 	state.IsTemplate = types.BoolValue(disk.GetIsTemplate())
 	state.TemplateDiskID = optionalInt64Value(disk.TemplateDiskId)
 	state.TemplateDiskName = optionalStringValue(disk.GetTemplateDiskName())

@@ -145,6 +145,7 @@ func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMReq
 	// caller explicitly requests replacement.
 	changeInterfaces := request.GetReplaceInterfaceIds() || len(request.GetInterfaceIds()) > 0
 	changeDisks := request.GetReplaceDiskIds() || len(request.GetDiskIds()) > 0
+	changeSerials := len(request.GetDiskSerials()) > 0
 	var interfaceIDs, diskIDs []int64
 	if changeInterfaces {
 		interfaceIDs, err = normalizeGatewayIDs(request.GetInterfaceIds(), gatewayMaxVMInterfaces, "interface_ids")
@@ -152,7 +153,11 @@ func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMReq
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
 	}
-	if changeDisks {
+	if changeSerials && !changeDisks {
+		// Reuse the current attachment order when only serials change.
+		diskIDs = append([]int64(nil), existing.DiskIDs...)
+		changeDisks = true
+	} else if changeDisks {
 		diskIDs, err = normalizeGatewayIDs(request.GetDiskIds(), gatewayMaxVMDisks, "disk_ids")
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -192,7 +197,7 @@ func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMReq
 			}
 			return nil, status.Error(codes.Internal, "could not read disk")
 		}
-		if (disk.AttachedVMID != nil && *disk.AttachedVMID != existing.ID) || disk.AttachedLightVMID != nil {
+		if !disk.ReadOnly && ((disk.AttachedVMID != nil && *disk.AttachedVMID != existing.ID) || disk.AttachedLightVMID != nil) {
 			ownerErr := &store.DiskInUseError{}
 			if disk.AttachedLightVMID != nil {
 				ownerErr = &store.DiskInUseError{OwnerKind: "lightvm", OwnerID: *disk.AttachedLightVMID, OwnerName: disk.AttachedLightVMName}
@@ -230,7 +235,7 @@ func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMReq
 		}
 	}
 	if changeDisks {
-		updated, err = s.store.SetVMDisks(ctx, existing.ID, diskIDs)
+		updated, err = s.store.SetVMDisksWithSerials(ctx, existing.ID, diskIDs, request.GetDiskSerials())
 		if err != nil {
 			return nil, vmStoreError(err, "update disks")
 		}
@@ -314,6 +319,7 @@ func vmFromCreateRequest(request *rookeryv1.CreateVMRequest) (store.VM, error) {
 	}
 	vm.DiskIDs = normalized
 	vm.DiskID = &normalized[0]
+	vm.DiskSerials = request.GetDiskSerials()
 	return vm, nil
 }
 
@@ -460,6 +466,8 @@ func vmStoreError(err error, operation string) error {
 		return status.Error(codes.AlreadyExists, "a VM with that name already exists")
 	case errors.Is(err, store.ErrDiskNotFound):
 		return status.Error(codes.InvalidArgument, "disk not found")
+	case errors.Is(err, store.ErrInvalidDiskSerials):
+		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, store.ErrDiskInUse):
 		return diskInUseError(err)
 	case errors.Is(err, store.ErrDiskIsTemplate):

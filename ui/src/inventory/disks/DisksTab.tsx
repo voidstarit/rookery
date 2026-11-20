@@ -7,12 +7,11 @@ import { DiskDialog } from "./DiskDialog";
 import { DiskThrottleAssignmentDialog } from "./DiskThrottleAssignmentDialog";
 import { DiskThrottleClassDialog } from "./DiskThrottleClassDialog";
 import { formatThrottleFamilySummary, formatThrottleSummary } from "./throttle";
+import { formatByteSize } from "../../shared/format";
 import { ImportDisksDialog } from "./ImportDisksDialog";
 import { StorageBackendDialog } from "./StorageBackendDialog";
 import { TemplateProvisioningDialog } from "./TemplateProvisioningDialog";
 import { navigate, useRoute } from "../router";
-
-const numberFormat = new Intl.NumberFormat();
 
 function formatDate(value: string | undefined): string {
   if (!value) {
@@ -26,20 +25,8 @@ function formatDate(value: string | undefined): string {
 }
 
 function formatDiskSize(disk: Disk): string {
-  const bytes = Number(disk.size_bytes) || 0;
-  if (bytes <= 0) {
-    return `${numberFormat.format(disk.size_gb)} GB`;
-  }
-  if (bytes >= 1024 ** 4) {
-    return `${(bytes / 1024 ** 4).toFixed(bytes % 1024 ** 4 === 0 ? 0 : 1)} TB`;
-  }
-  if (bytes >= 1024 ** 3) {
-    return `${(bytes / 1024 ** 3).toFixed(bytes % 1024 ** 3 === 0 ? 0 : 1)} GB`;
-  }
-  if (bytes >= 1024 ** 2) {
-    return `${(bytes / 1024 ** 2).toFixed(bytes % 1024 ** 2 === 0 ? 0 : 1)} MB`;
-  }
-  return `${numberFormat.format(bytes)} B`;
+  const bytes = Number(disk.size_bytes) || Number(disk.size_gb) * 1024 ** 3;
+  return formatByteSize(bytes);
 }
 
 export function DisksTab() {
@@ -202,23 +189,54 @@ export function DisksTab() {
     }
   }, [disks.length]);
 
-  const diskAttached = (disk: Disk) => Boolean(disk.attached_vm_id || disk.attached_lightvm_id);
-  const diskOwner = (disk: Disk) =>
-    disk.attached_vm_id
+  const diskAttachments = (disk: Disk) => disk.attachments ?? [];
+  const diskAttached = (disk: Disk) =>
+    diskAttachments(disk).length > 0 || Boolean(disk.attached_vm_id || disk.attached_lightvm_id);
+  const diskDeletionPending = (disk: Disk) =>
+    disk.deletion_state === "deleting" || disk.deletion_state === "delete_failed";
+  const diskOwner = (disk: Disk) => {
+    const attachments = diskAttachments(disk);
+    if (attachments.length === 1) {
+      return attachments[0].workload_name || attachments[0].workload_id;
+    }
+    if (attachments.length > 1) {
+      return `${attachments.length} workloads · ${attachments
+        .map((attachment) => attachment.workload_name || attachment.workload_id)
+        .join(", ")}`;
+    }
+    return disk.attached_vm_id
       ? disk.attached_vm_name || disk.attached_vm_id
       : disk.attached_lightvm_id
         ? disk.attached_lightvm_name || disk.attached_lightvm_id
         : "";
+  };
+  const toggleReadOnly = async (disk: Disk) => {
+    if (diskAttached(disk)) {
+      showToast(`Detach ${disk.name} from ${diskOwner(disk) || "its workloads"} before changing read-only mode.`, true);
+      return;
+    }
+    try {
+      const updated = await api<Disk>(`/api/disks/${disk.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ read_only: !disk.read_only }),
+      });
+      publishDisks(disks.map((item) => (item.id === updated.id ? updated : item)));
+      showToast(updated.read_only ? `${updated.name} is now read-only and shareable` : `${updated.name} is read-write`);
+      setDiskError("");
+    } catch (err) {
+      setDiskError(`Could not update ${disk.name}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
   const deleteDisk = async (disk: Disk) => {
     if (diskAttached(disk)) {
-      showToast(`Detach ${disk.name} from ${disk.attached_lightvm_id ? "its LightVM" : "its VM"} before deleting it.`, true);
+      showToast(`Detach ${disk.name} from ${diskOwner(disk) || "its workloads"} before deleting it.`, true);
       return;
     }
     const confirmed = window.confirm(
       disk.source === "host-device"
         ? `Delete disk "${disk.name}"?\n\nThis removes only the inventory record. The host block device ${disk.device} is not modified.`
         : disk.source === "kouja"
-          ? `Delete disk "${disk.name}"?\n\nThis queues the kouja volume for unexport and deletion. The disk stays visible until cleanup finishes.`
+          ? `Delete disk "${disk.name}"?\n\nThis queues the kouja volume for unexport and deletion. The disk stays visible until cleanup finishes; use Force remove to drop the record while cleanup is pending.`
           : `Delete disk "${disk.name}"?\n\nThis removes the LVM thin volume and its inventory record.`
     );
     if (!confirmed) {
@@ -237,6 +255,29 @@ export function DisksTab() {
       void loadBackends(false);
     } catch (err) {
       setDiskError(`Could not delete ${disk.name}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+  const forceDeleteDisk = async (disk: Disk) => {
+    if (diskAttached(disk)) {
+      showToast(`Detach ${disk.name} from ${diskOwner(disk) || "its workloads"} before deleting it.`, true);
+      return;
+    }
+    const confirmed = window.confirm(
+      `Force-remove disk "${disk.name}"?\n\nThis deletes the inventory record immediately, even though the ${
+        disk.source === "kouja" ? "kouja volume" : "backend volume"
+      } may not have been cleaned up. Any remaining volume on the storage backend must be removed there manually.`
+    );
+    if (!confirmed) {
+      return;
+    }
+    try {
+      await api(`/api/disks/${disk.id}?force=true`, { method: "DELETE" });
+      publishDisks(disks.filter((item) => item.id !== disk.id));
+      showToast(`Force-removed disk ${disk.name}`);
+      setDiskError("");
+      void loadBackends(false);
+    } catch (err) {
+      setDiskError(`Could not force-remove ${disk.name}: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -501,6 +542,7 @@ export function DisksTab() {
                     <td>
                       <span class="vm-name">{disk.name}</span>
                       {disk.is_template ? <span class="import-disk-badge">template</span> : null}
+                      {disk.read_only ? <span class="import-disk-badge">read-only</span> : null}
                       {disk.source === "host-device" ? (
                         <span class="import-disk-badge">passthrough</span>
                       ) : null}
@@ -586,6 +628,21 @@ export function DisksTab() {
                           </button>
                         )}
                         <button
+                          class="row-action"
+                          type="button"
+                          disabled={diskAttached(disk) || Boolean(disk.deletion_state)}
+                          title={
+                            diskAttached(disk)
+                              ? `Detach ${disk.name} before changing read-only mode.`
+                              : disk.read_only
+                                ? "Make this disk read-write and single-owner again."
+                                : "Make this disk read-only and shareable across workloads."
+                          }
+                          onClick={() => void toggleReadOnly(disk)}
+                        >
+                          {disk.read_only ? "Read-write" : "Read-only"}
+                        </button>
+                        <button
                           class="row-action danger"
                           type="button"
                           disabled={diskAttached(disk)}
@@ -598,6 +655,21 @@ export function DisksTab() {
                         >
                           Delete
                         </button>
+                        {diskDeletionPending(disk) ? (
+                          <button
+                            class="row-action danger"
+                            type="button"
+                            disabled={diskAttached(disk)}
+                            title={
+                              diskAttached(disk)
+                                ? `Detach ${disk.name} from ${diskOwner(disk) || "its workload"} before deleting it.`
+                                : "Remove the inventory record now, even if backend cleanup is still pending or failed."
+                            }
+                            onClick={() => void forceDeleteDisk(disk)}
+                          >
+                            Force remove
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

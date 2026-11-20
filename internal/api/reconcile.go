@@ -204,11 +204,32 @@ func (s *Server) reconcileLightVMStatuses(ctx context.Context) error {
 	}
 	for _, vm := range vms {
 		running := s.lightvms.RunningLightVM(vm.ID)
+		if vm.Ephemeral {
+			if running {
+				if vm.Status != store.StatusRunning {
+					if _, err := s.store.SetLightVMStatus(ctx, vm.ID, store.StatusRunning); err != nil {
+						return fmt.Errorf("update LightVM %s status: %w", vm.ID, err)
+					}
+				}
+				continue
+			}
+			if s.lightvmCoordinator != nil && s.lightvmCoordinator.Busy(vm.ID) {
+				continue
+			}
+			// A one-shot run that is not alive is finished: clean it up and
+			// delete its definition so its disk/interface attachments are
+			// released. Failed starts are kept by terminateEphemeralLightVM.
+			if err := s.terminateEphemeralLightVM(ctx, vm); err != nil {
+				s.logger.Warn().Err(err).Str("lightvm_id", vm.ID).
+					Msg("could not terminate ephemeral LightVM during reconciliation")
+			}
+			continue
+		}
 		target := vm.Status
 		switch {
 		case running && vm.Status != store.StatusRunning:
 			target = store.StatusRunning
-		case !running && vm.Status == store.StatusRunning:
+		case !running && (vm.Status == store.StatusRunning || vm.Status == store.StatusStarting):
 			target = store.StatusStopped
 		}
 		if target == vm.Status {
@@ -241,6 +262,18 @@ func (s *Server) autostartLightVMs(ctx context.Context) {
 	}
 	for _, vm := range vms {
 		if vm.DesiredState != store.DesiredRunning {
+			continue
+		}
+		if vm.Ephemeral {
+			// A one-shot LightVM runs at most once. If QEMU survived the API
+			// restart, keep it running; otherwise delete the finished run
+			// instead of auto-starting a new one.
+			if s.lightvms.RunningLightVM(vm.ID) {
+				s.startAutostartLightVM(ctx, vm)
+			} else if err := s.terminateEphemeralLightVM(ctx, vm); err != nil {
+				s.logger.Warn().Err(err).Str("lightvm_id", vm.ID).
+					Msg("could not terminate ephemeral LightVM during auto-start reconciliation")
+			}
 			continue
 		}
 		s.startAutostartLightVM(ctx, vm)

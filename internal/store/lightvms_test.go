@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/voidstarit/rookery/internal/store"
@@ -131,6 +132,101 @@ func TestLightVMCRUD(t *testing.T) {
 	}
 	if err := st.DeleteLightVM(ctx, created.ID); !errors.Is(err, store.ErrLightVMNotFound) {
 		t.Fatalf("delete missing lightvm error = %v, want ErrLightVMNotFound", err)
+	}
+}
+
+func TestLightVMConfigFiles(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	kernel := createKernel(t, st, "vmlinuz-config")
+	initramfs := createInitramfs(t, st, "initramfs-config")
+
+	created, err := st.CreateLightVM(ctx, store.LightVM{
+		Name: "config-files", VCPUs: 1, MemoryMB: 128,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID, Image: "alpine",
+		ExecutablePath: "/bin/app",
+		ConfigFiles: []store.LightVMConfigFile{
+			{Name: "app/config.yaml", Content: "key: value\n"},
+			{Name: "empty", Content: ""},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create lightvm: %v", err)
+	}
+	if len(created.ConfigFiles) != 2 || created.ConfigFiles[0].Name != "app/config.yaml" ||
+		created.ConfigFiles[0].Content != "key: value\n" || created.ConfigFiles[1].Name != "empty" {
+		t.Fatalf("created config files = %+v", created.ConfigFiles)
+	}
+	got, err := st.GetLightVM(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("get lightvm: %v", err)
+	}
+	if len(got.ConfigFiles) != 2 || got.ConfigFiles[0].Content != "key: value\n" {
+		t.Fatalf("get config files = %+v", got.ConfigFiles)
+	}
+
+	updated, err := st.UpdateLightVM(ctx, store.LightVM{
+		ID: created.ID, Name: "config-files", VCPUs: 1, MemoryMB: 128,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID, Image: "alpine",
+		ExecutablePath: "/bin/app",
+		ConfigFiles:    []store.LightVMConfigFile{{Name: "new.txt", Content: "new"}},
+	})
+	if err != nil {
+		t.Fatalf("update lightvm: %v", err)
+	}
+	if len(updated.ConfigFiles) != 1 || updated.ConfigFiles[0].Name != "new.txt" {
+		t.Fatalf("updated config files = %+v", updated.ConfigFiles)
+	}
+}
+
+func TestNormalizeLightVMConfigFiles(t *testing.T) {
+	valid, err := store.NormalizeLightVMConfigFiles([]store.LightVMConfigFile{
+		{Name: " app/config.yaml ", Content: "key: value"},
+		{Name: "run.sh", Content: "#!/bin/sh\n"},
+	})
+	if err != nil {
+		t.Fatalf("valid config files: %v", err)
+	}
+	if valid[0].Name != "app/config.yaml" || valid[1].Name != "run.sh" {
+		t.Fatalf("normalized config files = %+v", valid)
+	}
+
+	tooMany := make([]store.LightVMConfigFile, store.MaxLightVMConfigFiles+1)
+	for index := range tooMany {
+		tooMany[index] = store.LightVMConfigFile{Name: fmt.Sprintf("file-%d.conf", index)}
+	}
+	oversizedTotal := make([]store.LightVMConfigFile, 5)
+	for index := range oversizedTotal {
+		oversizedTotal[index] = store.LightVMConfigFile{
+			Name:    fmt.Sprintf("total-%d.conf", index),
+			Content: strings.Repeat("x", store.MaxLightVMConfigFileBytes),
+		}
+	}
+
+	for _, testCase := range []struct {
+		name  string
+		files []store.LightVMConfigFile
+	}{
+		{name: "reserved env", files: []store.LightVMConfigFile{{Name: "env"}}},
+		{name: "reserved startup", files: []store.LightVMConfigFile{{Name: "startup-cmd"}}},
+		{name: "absolute", files: []store.LightVMConfigFile{{Name: "/etc/passwd"}}},
+		{name: "traversal", files: []store.LightVMConfigFile{{Name: "../escape"}}},
+		{name: "empty component", files: []store.LightVMConfigFile{{Name: "a//b"}}},
+		{name: "missing name", files: []store.LightVMConfigFile{{Name: "  "}}},
+		{name: "too many files", files: tooMany},
+		{name: "combined size too large", files: oversizedTotal},
+		{name: "too long", files: []store.LightVMConfigFile{{Name: strings.Repeat("a", 256)}}},
+		{name: "trailing slash", files: []store.LightVMConfigFile{{Name: "app/"}}},
+		{name: "multi-line name", files: []store.LightVMConfigFile{{Name: "app\nconf"}}},
+		{name: "duplicate", files: []store.LightVMConfigFile{{Name: "a"}, {Name: "a"}}},
+		{name: "path conflict", files: []store.LightVMConfigFile{{Name: "a"}, {Name: "a/b"}}},
+		{name: "too large", files: []store.LightVMConfigFile{{Name: "big", Content: strings.Repeat("x", store.MaxLightVMConfigFileBytes+1)}}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if _, err := store.NormalizeLightVMConfigFiles(testCase.files); err == nil {
+				t.Fatalf("%+v was accepted", testCase.files)
+			}
+		})
 	}
 }
 
@@ -593,5 +689,97 @@ func TestLightVMExecutableScriptPersistence(t *testing.T) {
 	}
 	if loaded.ExecutableScript != "#!/bin/sh\necho updated" {
 		t.Fatalf("loaded script = %q", loaded.ExecutableScript)
+	}
+}
+
+func TestLightVMRootRequirement(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	kernel := createKernel(t, st, "root-kernel")
+	initramfs := createInitramfs(t, st, "root-initramfs")
+
+	base := store.LightVM{
+		Name: "root-required", VCPUs: 1, MemoryMB: 128,
+		KernelID: kernel.ID, InitramfsID: initramfs.ID,
+	}
+	if _, err := st.CreateLightVM(ctx, base); !errors.Is(err, store.ErrLightVMRootRequired) {
+		t.Fatalf("no image/no disk error = %v", err)
+	}
+
+	disk := createDisk(t, st, "root-disk")
+	base.Name = "disk-backed"
+	base.DiskIDs = []int64{disk.ID}
+	vm, err := st.CreateLightVM(ctx, base)
+	if err != nil {
+		t.Fatalf("disk-backed create: %v", err)
+	}
+	if vm.Image != "" || len(vm.Disks) != 1 {
+		t.Fatalf("disk-backed LightVM = %+v", vm)
+	}
+
+	update := vm
+	update.DiskIDs = nil
+	update.ReplaceDiskIDs = true
+	if _, err := st.UpdateLightVM(ctx, update); !errors.Is(err, store.ErrLightVMRootRequired) {
+		t.Fatalf("clearing disks without image error = %v", err)
+	}
+}
+
+func TestLightVMEphemeral(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	kernel := createKernel(t, st, "vmlinuz-ephemeral")
+	initramfs := createInitramfs(t, st, "initramfs-ephemeral")
+
+	created, err := st.CreateLightVM(ctx, store.LightVM{
+		Name:           "once",
+		VCPUs:          1,
+		MemoryMB:       256,
+		KernelID:       kernel.ID,
+		InitramfsID:    initramfs.ID,
+		Image:          "alpine:3.20",
+		ExecutablePath: "/bin/app",
+		Ephemeral:      true,
+	})
+	if err != nil {
+		t.Fatalf("create ephemeral lightvm: %v", err)
+	}
+	if !created.Ephemeral {
+		t.Fatalf("created ephemeral = false, want true")
+	}
+	got, err := st.GetLightVM(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("get ephemeral lightvm: %v", err)
+	}
+	if !got.Ephemeral {
+		t.Fatalf("get ephemeral = false, want true")
+	}
+	if _, err := st.SetLightVMStatus(ctx, created.ID, store.StatusRunning); err != nil {
+		t.Fatalf("set ephemeral status: %v", err)
+	}
+	running, err := st.ListReapableEphemeralLightVMs(ctx)
+	if err != nil {
+		t.Fatalf("list running ephemeral lightvms: %v", err)
+	}
+	if len(running) != 1 || running[0].ID != created.ID || running[0].Name != created.Name {
+		t.Fatalf("running ephemeral lightvms = %+v", running)
+	}
+
+	updated, err := st.UpdateLightVM(ctx, store.LightVM{
+		ID:             created.ID,
+		Name:           "once",
+		VCPUs:          1,
+		MemoryMB:       256,
+		KernelID:       kernel.ID,
+		InitramfsID:    initramfs.ID,
+		Image:          "alpine:3.20",
+		ExecutablePath: "/bin/app",
+		Ephemeral:      false,
+	})
+	if err != nil {
+		t.Fatalf("update ephemeral lightvm: %v", err)
+	}
+	if updated.Ephemeral {
+		t.Fatalf("updated ephemeral = true, want false")
 	}
 }

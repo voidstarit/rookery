@@ -1763,9 +1763,9 @@ func TestStorageBackendImportDisks(t *testing.T) {
 	registered := decode[store.Disk](t, recorder)
 
 	env.provisioner.thinVolumes = []host.ThinVolume{
-		{Name: "legacy-root", SizeGB: 20},
-		{Name: "already-registered", SizeGB: 10},
-		{Name: "legacy-data", SizeGB: 6},
+		{Name: "legacy-root", SizeGB: 20, SizeBytes: 20 << 30},
+		{Name: "already-registered", SizeGB: 10, SizeBytes: 10 << 30},
+		{Name: "legacy-data", SizeGB: 1, SizeBytes: 512 << 20},
 	}
 	recorder = do(t, handler, http.MethodGet, fmt.Sprintf("/api/storage-backends/%d/importable-disks", backend.ID), nil)
 	if recorder.Code != http.StatusOK {
@@ -1774,6 +1774,7 @@ func TestStorageBackendImportDisks(t *testing.T) {
 	importable := decode[[]struct {
 		Name               string `json:"name"`
 		SizeGB             int    `json:"size_gb"`
+		SizeBytes          uint64 `json:"size_bytes"`
 		Registered         bool   `json:"registered"`
 		DiskID             *int64 `json:"disk_id"`
 		StorageBackendName string `json:"storage_backend_name"`
@@ -1786,7 +1787,8 @@ func TestStorageBackendImportDisks(t *testing.T) {
 		importable[0].StorageBackendName != backend.Name {
 		t.Fatalf("registered importable disk = %+v", importable[0])
 	}
-	if importable[1].Name != "legacy-data" || importable[1].SizeGB != 6 || importable[1].Registered {
+	if importable[1].Name != "legacy-data" || importable[1].SizeGB != 1 ||
+		importable[1].SizeBytes != (512<<20) || importable[1].Registered {
 		t.Fatalf("legacy-data = %+v", importable[1])
 	}
 	if importable[2].Name != "legacy-root" || importable[2].SizeGB != 20 || importable[2].Registered {
@@ -1804,9 +1806,13 @@ func TestStorageBackendImportDisks(t *testing.T) {
 		t.Fatalf("imported = %+v, want two", imported)
 	}
 	if imported[0].Name != "legacy-root" || imported[0].SizeGB != 20 ||
+		imported[0].SizeBytes != (20<<30) ||
 		imported[0].StorageBackendID == nil || *imported[0].StorageBackendID != backend.ID ||
 		imported[0].VG != "vg-import" || imported[0].ThinPool != "import-pool" {
 		t.Fatalf("imported root = %+v", imported[0])
+	}
+	if imported[1].Name != "legacy-data" || imported[1].SizeGB != 1 || imported[1].SizeBytes != (512<<20) {
+		t.Fatalf("imported data = %+v", imported[1])
 	}
 	if len(env.provisioner.created) != 1 {
 		t.Fatalf("import created host volumes: %+v", env.provisioner.created)
@@ -5033,7 +5039,7 @@ func TestHealthAndEmbeddedUI(t *testing.T) {
 		t.Fatal("Content-Security-Policy header is missing")
 	}
 
-	for _, asset := range []string{"/build/app.js", "/style.css", "/icon.png", "/console.html", "/build/console.js", "/console.css", "/lightvm-console.html", "/build/lightvmConsole.js", "/build/lightvmConsole.css", "/novnc/core/rfb.js", "/novnc/LICENSE.txt"} {
+	for _, asset := range []string{"/build/app.js", "/style.css", "/icon.png", "/console.html", "/build/console.js", "/console.css", "/lightvm-console.html", "/build/lightvmConsole.js", "/build/lightvmConsole.css", "/monitor.html", "/build/monitor.js", "/novnc/core/rfb.js", "/novnc/LICENSE.txt"} {
 		recorder = do(t, handler, http.MethodGet, asset, nil)
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("%s status = %d", asset, recorder.Code)

@@ -9,9 +9,10 @@ import type {
   VirtualInterface,
   VM,
 } from "../types";
-import { formatMemory } from "./monitor";
+import { formatMemory } from "../monitor";
+import { formatByteSize } from "../../shared/format";
 import { VMDialog } from "./VMDialog";
-import { VMMonitorDialog } from "./VMMonitorDialog";
+import { WorkloadMonitorDialog } from "../WorkloadMonitorDialog";
 import { diskNeedsThinPool } from "./disk-predicates";
 import { navigate, useRoute } from "../router";
 
@@ -231,7 +232,9 @@ export function VMsTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route.path]);
 
-  const freeDisks = disks.filter((disk) => !disk.attached_vm_id && !disk.is_template && !disk.deletion_state);
+  const freeDisks = disks.filter(
+    (disk) => (disk.read_only || !disk.attached_vm_id) && !disk.is_template && !disk.deletion_state
+  );
   const hasProvisionableDisk = freeDisks.some((disk) => !diskNeedsThinPool(disk));
 
   useEffect(() => {
@@ -426,7 +429,12 @@ export function VMsTab() {
                         title={
                           disksForVM.length
                             ? disksForVM
-                                .map((disk) => `${disk.name} · ${numberFormat.format(disk.size_gb)} GB`)
+                                .map(
+                                  (disk) =>
+                                    `${disk.name} · ${formatByteSize(
+                                      disk.size_bytes || disk.size_gb * 1024 ** 3
+                                    )}`
+                                )
                                 .join(", ")
                             : undefined
                         }
@@ -548,9 +556,12 @@ export function VMsTab() {
       ) : null}
 
       {monitorVM ? (
-        <VMMonitorDialog
+        <WorkloadMonitorDialog
           key={`monitor-${monitorVM.id}`}
-          vm={monitorVM}
+          kind="VM"
+          id={monitorVM.id}
+          name={monitorVM.name}
+          memoryMB={monitorVM.memory_mb}
           onClose={() => {
             setMonitorVM(null);
             navigate("/vms", true);

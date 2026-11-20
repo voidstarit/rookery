@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { api } from "../../shared/api";
-import type { VM, VMMetrics } from "../types";
+import { api } from "../shared/api";
+import type { WorkloadMetrics } from "./types";
 import {
   drawMetricChart,
   formatBytes,
@@ -9,9 +9,19 @@ import {
   type MonitorSample,
 } from "./monitor";
 
-type VMMonitorDialogProps = {
-  vm: VM;
+export type WorkloadKind = "VM" | "LightVM";
+
+type WorkloadMonitorDialogProps = {
+  kind: WorkloadKind;
+  id: string;
+  name: string;
+  memoryMB: number;
   onClose: () => void;
+};
+
+type WorkloadMonitorPageProps = {
+  kind: WorkloadKind;
+  id: string;
 };
 
 type BlockRate = {
@@ -28,29 +38,49 @@ type LastSample = {
   netWrite: number;
 };
 
-export function VMMonitorDialog({ vm, onClose }: VMMonitorDialogProps) {
-  const [data, setData] = useState<VMMetrics | null>(null);
+type MonitorState = {
+  data: WorkloadMetrics | null;
+  samples: MonitorSample[];
+  blockRates: Record<string, BlockRate>;
+  error: string;
+  loading: boolean;
+  load: () => Promise<void>;
+};
+
+function metricsEndpoint(kind: WorkloadKind, id: string): string {
+  const encoded = encodeURIComponent(id);
+  return kind === "VM"
+    ? `/api/vms/${encoded}/metrics`
+    : `/api/lightvm/instances/${encoded}/metrics`;
+}
+
+function monitorPageHref(kind: WorkloadKind, id: string): string {
+  const workloadKind = kind === "VM" ? "vm" : "lightvm";
+  return `/monitor.html?kind=${workloadKind}&id=${encodeURIComponent(id)}`;
+}
+
+function useMonitor(kind: WorkloadKind, id: string): MonitorState {
+  const [data, setData] = useState<WorkloadMetrics | null>(null);
   const [samples, setSamples] = useState<MonitorSample[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [blockRates, setBlockRates] = useState<Record<string, BlockRate>>({});
   const loadingRef = useRef(false);
-  const dialogRef = useRef<HTMLDialogElement | null>(null);
   const lastRef = useRef<LastSample | null>(null);
   const lastBlocksRef = useRef<Record<string, { at: number; read: number; write: number }>>({});
-  const [blockRates, setBlockRates] = useState<Record<string, BlockRate>>({});
-  const cpuCanvas = useRef<HTMLCanvasElement | null>(null);
-  const memoryCanvas = useRef<HTMLCanvasElement | null>(null);
-  const ioCanvas = useRef<HTMLCanvasElement | null>(null);
-  const networkCanvas = useRef<HTMLCanvasElement | null>(null);
 
   const load = async () => {
+    if (!id) {
+      setError("No workload selected.");
+      return;
+    }
     if (loadingRef.current) {
       return;
     }
     loadingRef.current = true;
     setLoading(true);
     try {
-      const next = await api<VMMetrics>(`/api/vms/${encodeURIComponent(vm.id)}/metrics`);
+      const next = await api<WorkloadMetrics>(metricsEndpoint(kind, id));
       const now = Date.now();
       const cpuTotal = Number(next.cpu_seconds_total) || 0;
       const readTotal = Number(next.disk_read_bytes_total) || 0;
@@ -133,7 +163,7 @@ export function VMMonitorDialog({ vm, onClose }: VMMonitorDialogProps) {
       setData(next);
       setError("");
     } catch (err) {
-      setError(`Could not read VM metrics: ${err instanceof Error ? err.message : String(err)}`);
+      setError(`Could not read ${kind} metrics: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       loadingRef.current = false;
       setLoading(false);
@@ -141,7 +171,10 @@ export function VMMonitorDialog({ vm, onClose }: VMMonitorDialogProps) {
   };
 
   useEffect(() => {
-    dialogRef.current?.showModal();
+    if (!id) {
+      setError("No workload selected.");
+      return;
+    }
     void load();
     const timer = window.setInterval(() => {
       if (!document.hidden) {
@@ -151,9 +184,36 @@ export function VMMonitorDialog({ vm, onClose }: VMMonitorDialogProps) {
     return () => {
       window.clearInterval(timer);
     };
-    // The dialog is remounted for each VM.
+    // The monitor is remounted for each workload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [kind, id]);
+
+  return { data, samples, blockRates, error, loading, load };
+}
+
+type WorkloadMonitorBodyProps = {
+  kind: WorkloadKind;
+  monitor: MonitorState;
+  memoryMB: number;
+  layout: "dialog" | "page";
+  expanded: boolean;
+};
+
+function WorkloadMonitorBody({
+  kind,
+  monitor,
+  memoryMB,
+  layout,
+  expanded,
+}: WorkloadMonitorBodyProps) {
+  const { data, samples, blockRates } = monitor;
+  const cpuCanvas = useRef<HTMLCanvasElement | null>(null);
+  const memoryCanvas = useRef<HTMLCanvasElement | null>(null);
+  const ioCanvas = useRef<HTMLCanvasElement | null>(null);
+  const networkCanvas = useRef<HTMLCanvasElement | null>(null);
+  const large = layout === "page" || expanded;
+  const chartHeight = layout === "page" ? 240 : expanded ? 210 : 150;
+  const configuredMemory = Number(data?.memory_mb) || memoryMB;
 
   useEffect(() => {
     const cpuValues = samples.map((sample) => sample.cpu);
@@ -170,16 +230,18 @@ export function VMMonitorDialog({ vm, onClose }: VMMonitorDialogProps) {
     const finiteNet = [...netReadValues, ...netWriteValues].filter((value): value is number =>
       Number.isFinite(value)
     );
-    const configuredBytes = Math.max(0, Number(vm.memory_mb || 0) * 1024 * 1024);
+    const configuredBytes = Math.max(0, Number(configuredMemory || 0) * 1024 * 1024);
 
     drawMetricChart(cpuCanvas.current, [{ values: cpuValues, color: "#60a5fa" }], {
       max: Math.max(100, finiteCPU.length ? Math.max(...finiteCPU) * 1.15 : 0),
       format: (value) => `${Math.round(value)}%`,
+      height: chartHeight,
     });
     drawMetricChart(memoryCanvas.current, [{ values: memoryValues, color: "#34d399" }], {
       max: Math.max(configuredBytes, finiteMemory.length ? Math.max(...finiteMemory) * 1.15 : 0),
       marker: configuredBytes,
       format: formatBytes,
+      height: chartHeight,
     });
     drawMetricChart(
       ioCanvas.current,
@@ -190,6 +252,7 @@ export function VMMonitorDialog({ vm, onClose }: VMMonitorDialogProps) {
       {
         max: finiteIO.length ? Math.max(...finiteIO) * 1.15 : 0,
         format: (value) => `${formatBytes(value)}/s`,
+        height: chartHeight,
       }
     );
     drawMetricChart(
@@ -201,43 +264,19 @@ export function VMMonitorDialog({ vm, onClose }: VMMonitorDialogProps) {
       {
         max: finiteNet.length ? Math.max(...finiteNet) * 1.15 : 0,
         format: (value) => `${formatBytes(value)}/s`,
+        height: chartHeight,
       }
     );
-  }, [samples, vm.memory_mb]);
-
-  const close = () => {
-    dialogRef.current?.close();
-  };
+  }, [samples, configuredMemory, chartHeight]);
 
   const current = data;
   const running = Boolean(current?.running);
 
   return (
-    <dialog
-      ref={dialogRef}
-      id="vm-monitor-dialog"
-      aria-labelledby="vm-monitor-title"
-      onClose={onClose}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          close();
-        }
-      }}
-    >
-      <header class="dialog-head">
-        <div>
-          <p class="eyebrow">Live telemetry</p>
-          <h2 id="vm-monitor-title">VM monitor · {vm.name}</h2>
-        </div>
-        <button class="icon-button" type="button" aria-label="Close monitor" onClick={close}>
-          ×
-        </button>
-      </header>
-
-      <p class="dialog-lede">QEMU process metrics</p>
-      {error ? (
+    <>
+      {monitor.error ? (
         <div class="banner" role="alert">
-          {error}
+          {monitor.error}
         </div>
       ) : null}
 
@@ -321,6 +360,13 @@ export function VMMonitorDialog({ vm, onClose }: VMMonitorDialogProps) {
           </strong>
           <span class="metric-detail">since QEMU started</span>
         </section>
+        {large ? (
+          <section class="monitor-card">
+            <span class="metric-label">Block devices</span>
+            <strong class="metric-value">{current?.block_devices?.length ?? 0}</strong>
+            <span class="metric-detail">reported by QEMU blockstats</span>
+          </section>
+        ) : null}
       </div>
 
       <div class="monitor-charts">
@@ -377,6 +423,8 @@ export function VMMonitorDialog({ vm, onClose }: VMMonitorDialogProps) {
           ></canvas>
         </section>
       </div>
+
+      {large ? <MonitorDetails kind={kind} data={current} /> : null}
 
       <section class="monitor-block-devices">
         <div class="chart-head">
@@ -447,17 +495,196 @@ export function VMMonitorDialog({ vm, onClose }: VMMonitorDialogProps) {
       <p class="field-hint">
         {current && running
           ? `Sampled ${new Date(current.sampled_at).toLocaleTimeString()}`
-          : "VM is not running."}
+          : `${kind} is not running.`}
       </p>
+    </>
+  );
+}
+
+function MonitorDetails({ kind, data }: { kind: WorkloadKind; data: WorkloadMetrics | null }) {
+  if (!data) {
+    return null;
+  }
+  const running = Boolean(data.running);
+  const details = [
+    { label: "Workload", value: data.name ? `${kind} ${data.name}` : kind },
+    { label: "State", value: running ? "running" : "stopped" },
+    { label: "PID", value: data.pid ? String(data.pid) : "—" },
+    { label: "vCPUs", value: String(data.vcpus) },
+    { label: "Configured memory", value: formatMemory(data.memory_mb) },
+    { label: "Uptime", value: running ? formatDuration(Number(data.uptime_seconds) || 0) : "—" },
+    { label: "CPU time", value: `${(Number(data.cpu_seconds_total) || 0).toFixed(2)} s` },
+    { label: "RSS", value: formatBytes(Number(data.memory_rss_bytes) || 0) },
+    { label: "Virtual memory", value: formatBytes(Number(data.memory_virtual_bytes) || 0) },
+    { label: "Disk read", value: formatBytes(Number(data.disk_read_bytes_total) || 0) },
+    { label: "Disk write", value: formatBytes(Number(data.disk_write_bytes_total) || 0) },
+    {
+      label: "Network RX",
+      value: `${formatBytes(Number(data.network_rx_bytes_total) || 0)} · ${Number(data.network_rx_packets_total) || 0} packets`,
+    },
+    {
+      label: "Network TX",
+      value: `${formatBytes(Number(data.network_tx_bytes_total) || 0)} · ${Number(data.network_tx_packets_total) || 0} packets`,
+    },
+    { label: "Block devices", value: String(data.block_devices?.length ?? 0) },
+    { label: "Sampled", value: new Date(data.sampled_at).toLocaleString() },
+  ];
+  return (
+    <section class="monitor-details" aria-labelledby="monitor-details-heading">
+      <div class="chart-head">
+        <span id="monitor-details-heading">All counters</span>
+        <span class="chart-note">cumulative values since QEMU started</span>
+      </div>
+      <dl class="monitor-detail-grid">
+        {details.map((item) => (
+          <div class="monitor-detail" key={item.label}>
+            <dt>{item.label}</dt>
+            <dd class="mono">{item.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+export function WorkloadMonitorDialog({
+  kind,
+  id,
+  name,
+  memoryMB,
+  onClose,
+}: WorkloadMonitorDialogProps) {
+  const monitor = useMonitor(kind, id);
+  const [expanded, setExpanded] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+
+  useEffect(() => {
+    dialogRef.current?.showModal();
+  }, []);
+
+  const close = () => {
+    dialogRef.current?.close();
+  };
+
+  return (
+    <dialog
+      ref={dialogRef}
+      id="workload-monitor-dialog"
+      aria-labelledby="workload-monitor-title"
+      data-expanded={expanded ? "true" : "false"}
+      onClose={onClose}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          close();
+        }
+      }}
+    >
+      <header class="dialog-head">
+        <div>
+          <p class="eyebrow">Live telemetry</p>
+          <h2 id="workload-monitor-title">
+            {kind} monitor · {name}
+          </h2>
+        </div>
+        <div class="actions monitor-head-actions">
+          <button
+            class="button ghost"
+            type="button"
+            aria-pressed={expanded}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? "Compact" : "Expand"}
+          </button>
+          <a
+            class="button ghost"
+            href={monitorPageHref(kind, id)}
+            target="_blank"
+            rel="noopener"
+          >
+            Full page
+          </a>
+          <button class="icon-button" type="button" aria-label="Close monitor" onClick={close}>
+            ×
+          </button>
+        </div>
+      </header>
+
+      <p class="dialog-lede">QEMU process metrics · not guest-OS metrics</p>
+      <WorkloadMonitorBody
+        kind={kind}
+        monitor={monitor}
+        memoryMB={memoryMB}
+        layout="dialog"
+        expanded={expanded}
+      />
 
       <footer class="dialog-actions">
-        <button class="button ghost" type="button" disabled={loading} onClick={() => void load()}>
-          {loading ? "Refreshing…" : "Refresh"}
+        <button
+          class="button ghost"
+          type="button"
+          disabled={monitor.loading}
+          onClick={() => void monitor.load()}
+        >
+          {monitor.loading ? "Refreshing…" : "Refresh"}
         </button>
         <button class="button primary" type="button" onClick={close}>
           Close
         </button>
       </footer>
     </dialog>
+  );
+}
+
+export function WorkloadMonitorPage({ kind, id }: WorkloadMonitorPageProps) {
+  const monitor = useMonitor(kind, id);
+  const name = monitor.data?.name || "";
+  const memoryMB = Number(monitor.data?.memory_mb) || 0;
+
+  useEffect(() => {
+    document.title = `${kind} monitor · rookery`;
+  }, [kind]);
+
+  return (
+    <main class="monitor-page">
+      <header class="monitor-page-head">
+        <div>
+          <p class="eyebrow">Live telemetry</p>
+          <h1>
+            {kind} monitor{name ? ` · ${name}` : ""}
+          </h1>
+          <p class="field-hint">
+            Process- and interface-level QEMU metrics, not guest-OS metrics. Unavailable workload or
+            runtime details are shown below.
+          </p>
+        </div>
+        <div class="actions">
+          <button
+            class="button ghost"
+            type="button"
+            disabled={monitor.loading}
+            onClick={() => void monitor.load()}
+          >
+            {monitor.loading ? "Refreshing…" : "Refresh"}
+          </button>
+          <a class="button primary" href={kind === "VM" ? "/vms" : "/lightvm/instances"}>
+            Back to inventory
+          </a>
+        </div>
+      </header>
+
+      {!id ? (
+        <div class="banner" role="alert">
+          No workload selected. Open the monitor from a VM or LightVM row.
+        </div>
+      ) : (
+        <WorkloadMonitorBody
+          kind={kind}
+          monitor={monitor}
+          memoryMB={memoryMB}
+          layout="page"
+          expanded
+        />
+      )}
+    </main>
   );
 }

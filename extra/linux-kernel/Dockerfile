@@ -9,6 +9,7 @@ RUN apt-get update \
         cpio \
         curl \
         diffutils \
+        e2fsprogs \
         flex \
         gcc \
         gzip \

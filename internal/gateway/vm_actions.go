@@ -254,6 +254,10 @@ func (s *vmService) CtrlAltDel(ctx context.Context, request *rookeryv1.CtrlAltDe
 }
 
 func blockDeviceToProto(vm store.VM, stat qemu.BlockDeviceStats) *rookeryv1.BlockDeviceMetrics {
+	return blockDeviceToProtoForDisks(vm.Disks, stat)
+}
+
+func blockDeviceToProtoForDisks(disks []store.VMDisk, stat qemu.BlockDeviceStats) *rookeryv1.BlockDeviceMetrics {
 	result := &rookeryv1.BlockDeviceMetrics{
 		Device:    stat.Device,
 		ReadBytes: stat.ReadBytes, WriteBytes: stat.WriteBytes,
@@ -265,7 +269,7 @@ func blockDeviceToProto(vm store.VM, stat qemu.BlockDeviceStats) *rookeryv1.Bloc
 	if strings.HasPrefix(stat.Device, prefix) {
 		if id, err := strconv.ParseInt(strings.TrimPrefix(stat.Device, prefix), 10, 64); err == nil {
 			result.DiskId = id
-			for _, disk := range vm.Disks {
+			for _, disk := range disks {
 				if disk.ID == id {
 					result.Name = disk.Name
 					break

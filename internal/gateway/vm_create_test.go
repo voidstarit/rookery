@@ -50,7 +50,7 @@ func TestVMCreateAndUpdate(t *testing.T) {
 	server := httptest.NewServer(gw.Handler)
 	t.Cleanup(server.Close)
 
-	created, err := http.Post(server.URL+"/api/vms", "application/json", strings.NewReader(`{"name":"vm-1","description":"first","vcpus":2,"memory_mb":1024,"disk_ids":[`+itoa(disk.ID)+`]}`))
+	created, err := http.Post(server.URL+"/api/vms", "application/json", strings.NewReader(`{"name":"vm-1","description":"first","vcpus":2,"memory_mb":1024,"disk_ids":[`+itoa(disk.ID)+`],"disk_serials":{"`+itoa(disk.ID)+`":"root"}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,6 +65,10 @@ func TestVMCreateAndUpdate(t *testing.T) {
 	}
 	if vm["status"] != store.StatusRunning {
 		t.Fatalf("created status = %v, want %s", vm["status"], store.StatusRunning)
+	}
+	createdDisks, _ := vm["disks"].([]any)
+	if len(createdDisks) != 1 || createdDisks[0].(map[string]any)["serial"] != "root" {
+		t.Fatalf("created disks = %+v", vm["disks"])
 	}
 
 	// Changing disks or interfaces requires a stopped VM, and stopping one is
@@ -95,6 +99,39 @@ func TestVMCreateAndUpdate(t *testing.T) {
 	if updatedVM["name"] != "vm-1b" || updatedVM["vcpus"].(float64) != 4 || updatedVM["memory_mb"].(float64) != 1024 {
 		t.Fatalf("updated vm = %+v", updatedVM)
 	}
+
+	request, err = http.NewRequest(http.MethodPut, server.URL+"/api/vms/"+id, strings.NewReader(`{"disk_serials":{"`+itoa(disk.ID)+`":"os"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	serialUpdated, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if serialUpdated.StatusCode != http.StatusOK {
+		t.Fatalf("update serial status = %d, body = %s", serialUpdated.StatusCode, readBody(t, serialUpdated))
+	}
+	var serialVM map[string]any
+	decodeBody(t, serialUpdated, &serialVM)
+	serialDisks, _ := serialVM["disks"].([]any)
+	if len(serialDisks) != 1 || serialDisks[0].(map[string]any)["serial"] != "os" {
+		t.Fatalf("serial-updated disks = %+v", serialVM["disks"])
+	}
+
+	request, err = http.NewRequest(http.MethodPut, server.URL+"/api/vms/"+id, strings.NewReader(`{"disk_serials":{"999999":"bad"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	badSerial, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if badSerial.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid serial status = %d, want 400", badSerial.StatusCode)
+	}
+	_ = badSerial.Body.Close()
 
 	request, err = http.NewRequest(http.MethodPut, server.URL+"/api/vms/"+id, strings.NewReader(`{"interface_ids":[`+itoa(iface.ID)+`]}`))
 	if err != nil {

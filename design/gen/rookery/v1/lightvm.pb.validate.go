@@ -160,6 +160,130 @@ var _ interface {
 	ErrorName() string
 } = LightVMEnvVarValidationError{}
 
+// Validate checks the field values on LightVMConfigFile with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *LightVMConfigFile) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on LightVMConfigFile with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// LightVMConfigFileMultiError, or nil if none found.
+func (m *LightVMConfigFile) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *LightVMConfigFile) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if l := utf8.RuneCountInString(m.GetName()); l < 1 || l > 255 {
+		err := LightVMConfigFileValidationError{
+			field:  "Name",
+			reason: "value length must be between 1 and 255 runes, inclusive",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if utf8.RuneCountInString(m.GetContent()) > 1048576 {
+		err := LightVMConfigFileValidationError{
+			field:  "Content",
+			reason: "value length must be at most 1048576 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return LightVMConfigFileMultiError(errors)
+	}
+
+	return nil
+}
+
+// LightVMConfigFileMultiError is an error wrapping multiple validation errors
+// returned by LightVMConfigFile.ValidateAll() if the designated constraints
+// aren't met.
+type LightVMConfigFileMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m LightVMConfigFileMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m LightVMConfigFileMultiError) AllErrors() []error { return m }
+
+// LightVMConfigFileValidationError is the validation error returned by
+// LightVMConfigFile.Validate if the designated constraints aren't met.
+type LightVMConfigFileValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e LightVMConfigFileValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e LightVMConfigFileValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e LightVMConfigFileValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e LightVMConfigFileValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e LightVMConfigFileValidationError) ErrorName() string {
+	return "LightVMConfigFileValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e LightVMConfigFileValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sLightVMConfigFile.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = LightVMConfigFileValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = LightVMConfigFileValidationError{}
+
 // Validate checks the field values on LightVMConsole with the rules defined in
 // the proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.
@@ -707,6 +831,42 @@ func (m *LightVM) validate(all bool) error {
 
 	// no validation rules for ExecutableScript
 
+	for idx, item := range m.GetConfigFiles() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, LightVMValidationError{
+						field:  fmt.Sprintf("ConfigFiles[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, LightVMValidationError{
+						field:  fmt.Sprintf("ConfigFiles[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return LightVMValidationError{
+					field:  fmt.Sprintf("ConfigFiles[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	// no validation rules for Ephemeral
+
 	if m.RunState != nil {
 		// no validation rules for RunState
 	}
@@ -1236,10 +1396,10 @@ func (m *CreateLightVMRequest) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
-	if l := utf8.RuneCountInString(m.GetImage()); l < 1 || l > 512 {
+	if utf8.RuneCountInString(m.GetImage()) > 512 {
 		err := CreateLightVMRequestValidationError{
 			field:  "Image",
-			reason: "value length must be between 1 and 512 runes, inclusive",
+			reason: "value length must be at most 512 runes",
 		}
 		if !all {
 			return err
@@ -1485,6 +1645,110 @@ func (m *CreateLightVMRequest) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
+	if len(m.GetDiskSerials()) > 32 {
+		err := CreateLightVMRequestValidationError{
+			field:  "DiskSerials",
+			reason: "value must contain no more than 32 pair(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	{
+		sorted_keys := make([]int64, len(m.GetDiskSerials()))
+		i := 0
+		for key := range m.GetDiskSerials() {
+			sorted_keys[i] = key
+			i++
+		}
+		sort.Slice(sorted_keys, func(i, j int) bool { return sorted_keys[i] < sorted_keys[j] })
+		for _, key := range sorted_keys {
+			val := m.GetDiskSerials()[key]
+			_ = val
+
+			if key <= 0 {
+				err := CreateLightVMRequestValidationError{
+					field:  fmt.Sprintf("DiskSerials[%v]", key),
+					reason: "value must be greater than 0",
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			}
+
+			if utf8.RuneCountInString(val) > 20 {
+				err := CreateLightVMRequestValidationError{
+					field:  fmt.Sprintf("DiskSerials[%v]", key),
+					reason: "value length must be at most 20 runes",
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			}
+
+			if !_CreateLightVMRequest_DiskSerials_Pattern.MatchString(val) {
+				err := CreateLightVMRequestValidationError{
+					field:  fmt.Sprintf("DiskSerials[%v]", key),
+					reason: "value does not match regex pattern \"^[A-Za-z0-9._:-]*$\"",
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			}
+
+		}
+	}
+
+	if len(m.GetConfigFiles()) > 64 {
+		err := CreateLightVMRequestValidationError{
+			field:  "ConfigFiles",
+			reason: "value must contain no more than 64 item(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	for idx, item := range m.GetConfigFiles() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, CreateLightVMRequestValidationError{
+						field:  fmt.Sprintf("ConfigFiles[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, CreateLightVMRequestValidationError{
+						field:  fmt.Sprintf("ConfigFiles[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return CreateLightVMRequestValidationError{
+					field:  fmt.Sprintf("ConfigFiles[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
 	if m.Vcpus != nil {
 
 		if val := m.GetVcpus(); val < 1 || val > 128 {
@@ -1532,6 +1796,10 @@ func (m *CreateLightVMRequest) validate(all bool) error {
 			errors = append(errors, err)
 		}
 
+	}
+
+	if m.Ephemeral != nil {
+		// no validation rules for Ephemeral
 	}
 
 	if len(errors) > 0 {
@@ -1615,6 +1883,8 @@ var _ interface {
 } = CreateLightVMRequestValidationError{}
 
 var _CreateLightVMRequest_Name_Pattern = regexp.MustCompile("^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+var _CreateLightVMRequest_DiskSerials_Pattern = regexp.MustCompile("^[A-Za-z0-9._:-]*$")
 
 // Validate checks the field values on UpdateLightVMRequest with the rules
 // defined in the proto definition for this message. If any rules are
@@ -1740,10 +2010,10 @@ func (m *UpdateLightVMRequest) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
-	if l := utf8.RuneCountInString(m.GetImage()); l < 1 || l > 512 {
+	if utf8.RuneCountInString(m.GetImage()) > 512 {
 		err := UpdateLightVMRequestValidationError{
 			field:  "Image",
-			reason: "value length must be between 1 and 512 runes, inclusive",
+			reason: "value length must be at most 512 runes",
 		}
 		if !all {
 			return err
@@ -2000,6 +2270,112 @@ func (m *UpdateLightVMRequest) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
+	if len(m.GetDiskSerials()) > 32 {
+		err := UpdateLightVMRequestValidationError{
+			field:  "DiskSerials",
+			reason: "value must contain no more than 32 pair(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	{
+		sorted_keys := make([]int64, len(m.GetDiskSerials()))
+		i := 0
+		for key := range m.GetDiskSerials() {
+			sorted_keys[i] = key
+			i++
+		}
+		sort.Slice(sorted_keys, func(i, j int) bool { return sorted_keys[i] < sorted_keys[j] })
+		for _, key := range sorted_keys {
+			val := m.GetDiskSerials()[key]
+			_ = val
+
+			if key <= 0 {
+				err := UpdateLightVMRequestValidationError{
+					field:  fmt.Sprintf("DiskSerials[%v]", key),
+					reason: "value must be greater than 0",
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			}
+
+			if utf8.RuneCountInString(val) > 20 {
+				err := UpdateLightVMRequestValidationError{
+					field:  fmt.Sprintf("DiskSerials[%v]", key),
+					reason: "value length must be at most 20 runes",
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			}
+
+			if !_UpdateLightVMRequest_DiskSerials_Pattern.MatchString(val) {
+				err := UpdateLightVMRequestValidationError{
+					field:  fmt.Sprintf("DiskSerials[%v]", key),
+					reason: "value does not match regex pattern \"^[A-Za-z0-9._:-]*$\"",
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			}
+
+		}
+	}
+
+	if len(m.GetConfigFiles()) > 64 {
+		err := UpdateLightVMRequestValidationError{
+			field:  "ConfigFiles",
+			reason: "value must contain no more than 64 item(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	for idx, item := range m.GetConfigFiles() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, UpdateLightVMRequestValidationError{
+						field:  fmt.Sprintf("ConfigFiles[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, UpdateLightVMRequestValidationError{
+						field:  fmt.Sprintf("ConfigFiles[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return UpdateLightVMRequestValidationError{
+					field:  fmt.Sprintf("ConfigFiles[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	// no validation rules for Ephemeral
+
 	if m.ReplaceDiskIds != nil {
 		// no validation rules for ReplaceDiskIds
 	}
@@ -2093,6 +2469,8 @@ var _ interface {
 } = UpdateLightVMRequestValidationError{}
 
 var _UpdateLightVMRequest_Name_Pattern = regexp.MustCompile("^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+var _UpdateLightVMRequest_DiskSerials_Pattern = regexp.MustCompile("^[A-Za-z0-9._:-]*$")
 
 // Validate checks the field values on DeleteLightVMRequest with the rules
 // defined in the proto definition for this message. If any rules are
@@ -2459,6 +2837,644 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = StopLightVMRequestValidationError{}
+
+// Validate checks the field values on GetLightVMMetricsRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *GetLightVMMetricsRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetLightVMMetricsRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// GetLightVMMetricsRequestMultiError, or nil if none found.
+func (m *GetLightVMMetricsRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetLightVMMetricsRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if err := m._validateUuid(m.GetId()); err != nil {
+		err = GetLightVMMetricsRequestValidationError{
+			field:  "Id",
+			reason: "value must be a valid UUID",
+			cause:  err,
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return GetLightVMMetricsRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+func (m *GetLightVMMetricsRequest) _validateUuid(uuid string) error {
+	if matched := _lightvm_uuidPattern.MatchString(uuid); !matched {
+		return errors.New("invalid uuid format")
+	}
+
+	return nil
+}
+
+// GetLightVMMetricsRequestMultiError is an error wrapping multiple validation
+// errors returned by GetLightVMMetricsRequest.ValidateAll() if the designated
+// constraints aren't met.
+type GetLightVMMetricsRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetLightVMMetricsRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetLightVMMetricsRequestMultiError) AllErrors() []error { return m }
+
+// GetLightVMMetricsRequestValidationError is the validation error returned by
+// GetLightVMMetricsRequest.Validate if the designated constraints aren't met.
+type GetLightVMMetricsRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetLightVMMetricsRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetLightVMMetricsRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetLightVMMetricsRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetLightVMMetricsRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetLightVMMetricsRequestValidationError) ErrorName() string {
+	return "GetLightVMMetricsRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e GetLightVMMetricsRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetLightVMMetricsRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetLightVMMetricsRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetLightVMMetricsRequestValidationError{}
+
+// Validate checks the field values on CreateLightVMConsoleAccessRequest with
+// the rules defined in the proto definition for this message. If any rules
+// are violated, the first error encountered is returned, or nil if there are
+// no violations.
+func (m *CreateLightVMConsoleAccessRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on CreateLightVMConsoleAccessRequest
+// with the rules defined in the proto definition for this message. If any
+// rules are violated, the result is a list of violation errors wrapped in
+// CreateLightVMConsoleAccessRequestMultiError, or nil if none found.
+func (m *CreateLightVMConsoleAccessRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *CreateLightVMConsoleAccessRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if err := m._validateUuid(m.GetId()); err != nil {
+		err = CreateLightVMConsoleAccessRequestValidationError{
+			field:  "Id",
+			reason: "value must be a valid UUID",
+			cause:  err,
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if m.GetConsoleId() < 0 {
+		err := CreateLightVMConsoleAccessRequestValidationError{
+			field:  "ConsoleId",
+			reason: "value must be greater than or equal to 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if val := m.GetTtlSeconds(); val < 1 || val > 86400 {
+		err := CreateLightVMConsoleAccessRequestValidationError{
+			field:  "TtlSeconds",
+			reason: "value must be inside range [1, 86400]",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return CreateLightVMConsoleAccessRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+func (m *CreateLightVMConsoleAccessRequest) _validateUuid(uuid string) error {
+	if matched := _lightvm_uuidPattern.MatchString(uuid); !matched {
+		return errors.New("invalid uuid format")
+	}
+
+	return nil
+}
+
+// CreateLightVMConsoleAccessRequestMultiError is an error wrapping multiple
+// validation errors returned by
+// CreateLightVMConsoleAccessRequest.ValidateAll() if the designated
+// constraints aren't met.
+type CreateLightVMConsoleAccessRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m CreateLightVMConsoleAccessRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m CreateLightVMConsoleAccessRequestMultiError) AllErrors() []error { return m }
+
+// CreateLightVMConsoleAccessRequestValidationError is the validation error
+// returned by CreateLightVMConsoleAccessRequest.Validate if the designated
+// constraints aren't met.
+type CreateLightVMConsoleAccessRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e CreateLightVMConsoleAccessRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e CreateLightVMConsoleAccessRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e CreateLightVMConsoleAccessRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e CreateLightVMConsoleAccessRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e CreateLightVMConsoleAccessRequestValidationError) ErrorName() string {
+	return "CreateLightVMConsoleAccessRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e CreateLightVMConsoleAccessRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sCreateLightVMConsoleAccessRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = CreateLightVMConsoleAccessRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = CreateLightVMConsoleAccessRequestValidationError{}
+
+// Validate checks the field values on LightVMConsoleAccess with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *LightVMConsoleAccess) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on LightVMConsoleAccess with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// LightVMConsoleAccessMultiError, or nil if none found.
+func (m *LightVMConsoleAccess) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *LightVMConsoleAccess) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Id
+
+	// no validation rules for LightvmId
+
+	// no validation rules for ConsoleId
+
+	// no validation rules for ConsoleName
+
+	// no validation rules for Token
+
+	// no validation rules for WebsocketPath
+
+	// no validation rules for WebsocketUrl
+
+	if all {
+		switch v := interface{}(m.GetExpiresAt()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, LightVMConsoleAccessValidationError{
+					field:  "ExpiresAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, LightVMConsoleAccessValidationError{
+					field:  "ExpiresAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetExpiresAt()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return LightVMConsoleAccessValidationError{
+				field:  "ExpiresAt",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if all {
+		switch v := interface{}(m.GetCreatedAt()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, LightVMConsoleAccessValidationError{
+					field:  "CreatedAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, LightVMConsoleAccessValidationError{
+					field:  "CreatedAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetCreatedAt()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return LightVMConsoleAccessValidationError{
+				field:  "CreatedAt",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return LightVMConsoleAccessMultiError(errors)
+	}
+
+	return nil
+}
+
+// LightVMConsoleAccessMultiError is an error wrapping multiple validation
+// errors returned by LightVMConsoleAccess.ValidateAll() if the designated
+// constraints aren't met.
+type LightVMConsoleAccessMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m LightVMConsoleAccessMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m LightVMConsoleAccessMultiError) AllErrors() []error { return m }
+
+// LightVMConsoleAccessValidationError is the validation error returned by
+// LightVMConsoleAccess.Validate if the designated constraints aren't met.
+type LightVMConsoleAccessValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e LightVMConsoleAccessValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e LightVMConsoleAccessValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e LightVMConsoleAccessValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e LightVMConsoleAccessValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e LightVMConsoleAccessValidationError) ErrorName() string {
+	return "LightVMConsoleAccessValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e LightVMConsoleAccessValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sLightVMConsoleAccess.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = LightVMConsoleAccessValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = LightVMConsoleAccessValidationError{}
+
+// Validate checks the field values on LightVMMetrics with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *LightVMMetrics) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on LightVMMetrics with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in LightVMMetricsMultiError,
+// or nil if none found.
+func (m *LightVMMetrics) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *LightVMMetrics) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Running
+
+	// no validation rules for Pid
+
+	// no validation rules for UptimeSeconds
+
+	// no validation rules for CpuSecondsTotal
+
+	// no validation rules for MemoryRssBytes
+
+	// no validation rules for MemoryVirtualBytes
+
+	// no validation rules for DiskReadBytesTotal
+
+	// no validation rules for DiskWriteBytesTotal
+
+	// no validation rules for LightvmId
+
+	// no validation rules for Name
+
+	// no validation rules for Vcpus
+
+	// no validation rules for MemoryMb
+
+	// no validation rules for NetworkRxBytesTotal
+
+	// no validation rules for NetworkTxBytesTotal
+
+	// no validation rules for NetworkRxPacketsTotal
+
+	// no validation rules for NetworkTxPacketsTotal
+
+	if all {
+		switch v := interface{}(m.GetSampledAt()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, LightVMMetricsValidationError{
+					field:  "SampledAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, LightVMMetricsValidationError{
+					field:  "SampledAt",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetSampledAt()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return LightVMMetricsValidationError{
+				field:  "SampledAt",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	for idx, item := range m.GetBlockDevices() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, LightVMMetricsValidationError{
+						field:  fmt.Sprintf("BlockDevices[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, LightVMMetricsValidationError{
+						field:  fmt.Sprintf("BlockDevices[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return LightVMMetricsValidationError{
+					field:  fmt.Sprintf("BlockDevices[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return LightVMMetricsMultiError(errors)
+	}
+
+	return nil
+}
+
+// LightVMMetricsMultiError is an error wrapping multiple validation errors
+// returned by LightVMMetrics.ValidateAll() if the designated constraints
+// aren't met.
+type LightVMMetricsMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m LightVMMetricsMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m LightVMMetricsMultiError) AllErrors() []error { return m }
+
+// LightVMMetricsValidationError is the validation error returned by
+// LightVMMetrics.Validate if the designated constraints aren't met.
+type LightVMMetricsValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e LightVMMetricsValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e LightVMMetricsValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e LightVMMetricsValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e LightVMMetricsValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e LightVMMetricsValidationError) ErrorName() string { return "LightVMMetricsValidationError" }
+
+// Error satisfies the builtin error interface
+func (e LightVMMetricsValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sLightVMMetrics.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = LightVMMetricsValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = LightVMMetricsValidationError{}
 
 // Validate checks the field values on LightVMKernel with the rules defined in
 // the proto definition for this message. If any rules are violated, the first

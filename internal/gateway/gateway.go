@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
@@ -372,8 +373,8 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	}
 	artifacts := &lightVMArtifactService{storage: artifactStorage}
 	lightvms := &lightVMService{
-		store: st, runtime: options.lightvmRuntime, mu: options.vmMutex,
-		resourceMu: options.diskMutex, planner: options.startPlanner,
+		store: st, runtime: options.lightvmRuntime, counters: options.interfaceCounters,
+		mu: options.vmMutex, resourceMu: options.diskMutex, planner: options.startPlanner,
 		startCoordinator: options.lightvmCoordinator,
 	}
 	rookeryv1.RegisterSystemServiceServer(server, system)
@@ -432,6 +433,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 		runtime.WithErrorHandler(errorHandler),
 		runtime.WithForwardResponseOption(httpResponseStatus),
 		runtime.WithForwardResponseRewriter(rewriteNativeResponses),
+		runtime.WithMetadata(consoleAccessRequestMetadata),
 	)
 	ctx := context.Background()
 	registrations := []func(context.Context, *runtime.ServeMux, *grpc.ClientConn) error{
@@ -533,6 +535,21 @@ func rewriteNativeResponses(ctx context.Context, response proto.Message) (interf
 		}
 	}
 	return response, nil
+}
+
+// forwardedProtoMetadataKey carries the scheme of the HTTP request into the
+// in-process gRPC handlers so responses can include absolute WebSocket URLs.
+const forwardedProtoMetadataKey = "x-rookery-forwarded-proto"
+
+func consoleAccessRequestMetadata(_ context.Context, req *http.Request) metadata.MD {
+	scheme := "http"
+	if req.TLS != nil {
+		scheme = "https"
+	}
+	if forwarded := strings.TrimSpace(req.Header.Get("X-Forwarded-Proto")); forwarded == "http" || forwarded == "https" {
+		scheme = forwarded
+	}
+	return metadata.Pairs(forwardedProtoMetadataKey, scheme)
 }
 
 func errorHandler(_ context.Context, _ *runtime.ServeMux, _ runtime.Marshaler, w http.ResponseWriter, _ *http.Request, err error) {
@@ -708,6 +725,7 @@ func vmDiskToProto(disk store.VMDisk) *rookeryv1.VMDisk {
 		Id: disk.ID, Name: disk.Name, SizeGb: int32(disk.SizeGB), SizeBytes: disk.SizeBytes,
 		StorageBackendId: disk.StorageBackendID, StorageBackendName: disk.StorageBackendName,
 		Vg: disk.VG, ThinPool: disk.ThinPool, Device: disk.Device, Source: disk.Source,
-		Protocol: disk.Protocol, ThrottleClassId: classID, ThrottleClassName: disk.ThrottleClassName,
+		Protocol: disk.Protocol, Serial: disk.Serial, ReadOnly: disk.ReadOnly,
+		ThrottleClassId: classID, ThrottleClassName: disk.ThrottleClassName,
 	}
 }

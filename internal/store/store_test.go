@@ -458,8 +458,8 @@ func TestImportDisks(t *testing.T) {
 	}
 
 	imported, err := st.ImportDisks(ctx, backend.ID, "vg0", "rookery", []store.ImportDisk{
-		{Name: "old-root", SizeGB: 20},
-		{Name: "old-data", SizeGB: 5},
+		{Name: "old-root", SizeGB: 20, SizeBytes: 20 << 30},
+		{Name: "old-data", SizeGB: 1, SizeBytes: 512 << 20},
 	})
 	if err != nil {
 		t.Fatalf("import disks: %v", err)
@@ -472,6 +472,9 @@ func TestImportDisks(t *testing.T) {
 	}
 	if imported[0].VG != "vg0" || imported[0].ThinPool != "rookery" || imported[0].Device != "/dev/vg0/old-root" {
 		t.Fatalf("first imported location = %+v", imported[0])
+	}
+	if imported[0].SizeBytes != (20<<30) || imported[1].SizeBytes != (512<<20) {
+		t.Fatalf("imported sizes = %+v", imported)
 	}
 
 	_, err = st.ImportDisks(ctx, backend.ID, "vg0", "rookery", []store.ImportDisk{

@@ -54,6 +54,7 @@ func (d *diskDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 			"attached_vm_name":      dschema.StringAttribute{Computed: true},
 			"attached_lightvm_id":   dschema.StringAttribute{Computed: true},
 			"attached_lightvm_name": dschema.StringAttribute{Computed: true},
+			"read_only":             dschema.BoolAttribute{Computed: true},
 			"is_template":           dschema.BoolAttribute{Computed: true},
 			"template_disk_id":      dschema.Int64Attribute{Computed: true},
 			"template_disk_name":    dschema.StringAttribute{Computed: true},

@@ -118,6 +118,54 @@ func (c *StartCoordinator) Begin(ctx context.Context, id string) (context.Contex
 	return startCtx, done, nil
 }
 
+// Busy reports whether a start currently holds the lifecycle slot for id.
+// Reconciliation uses it to avoid retiring a LightVM while a start is in
+// flight.
+func (c *StartCoordinator) Busy(id string) bool {
+	if c == nil {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry := c.entries[id]
+	return entry != nil && entry.busy
+}
+
+// ReserveForCleanup increments the lifecycle reservation for id. When no
+// start currently holds the slot it also cancels an in-flight preparation.
+// The busy result reports whether a start already held the slot, in which case
+// the caller should leave it alone. Callers must invoke release when cleanup
+// finishes.
+func (c *StartCoordinator) ReserveForCleanup(id string) (release func(), busy bool) {
+	if c == nil {
+		return func() {}, false
+	}
+	entry := c.entry(id)
+	c.mu.Lock()
+	entry.reserved++
+	// A held reservation means another lifecycle operation (start, update,
+	// delete, or stop) is in progress; do not clean up under it.
+	busy = entry.busy || entry.reserved > 1
+	if !busy && entry.cancel != nil {
+		entry.cancel()
+	}
+	c.signalReserved(entry)
+	c.mu.Unlock()
+
+	var once sync.Once
+	release = func() {
+		once.Do(func() {
+			c.mu.Lock()
+			if entry.reserved > 0 {
+				entry.reserved--
+			}
+			c.signalReserved(entry)
+			c.mu.Unlock()
+		})
+	}
+	return release, busy
+}
+
 // Reserve increments the lifecycle reservation for id and returns an
 // idempotent release. Begin waits while any reservation is held.
 func (c *StartCoordinator) Reserve(id string) func() {

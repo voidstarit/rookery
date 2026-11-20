@@ -3,8 +3,11 @@
 # to it with switch_root.
 #
 # switch_root is the initramfs-aware way to change root: it moves the new root
-# to /, removes the old initramfs, and executes the workload as PID 1. Unlike
-# pivot_root, it works directly from the kernel's initial rootfs.
+# to /, removes the old initramfs, and execs the workload as PID 1. The
+# workload is never supervised by an init: when /.entrypoint exits, PID 1
+# exits, the kernel panics, and an ephemeral LightVM (panic=-1 plus QEMU
+# -no-reboot) ends instead of lingering with a live supervisor. Unlike
+# pivot_root, switch_root works directly from the kernel's initial rootfs.
 PATH=/bin:/sbin
 export PATH
 
@@ -148,22 +151,30 @@ if [ -z "$chosen" ]; then
 	exec /bin/sh
 fi
 
+# Copy the initramfs BusyBox into the new root. It is a static binary that the
+# DHCP renewal helper and the workload's shell scripts can use; it is not an
+# init, because the workload itself is exec'd as PID 1.
+renew_dir=/newroot/.rookery
+if [ -x /bin/busybox ]; then
+	mkdir -p "$renew_dir"
+	if cp /bin/busybox "$renew_dir/busybox"; then
+		chmod 0755 "$renew_dir/busybox"
+	fi
+fi
+
 # Keep a DHCP client alive after switch_root. The initramfs udhcpc exits after
 # the initial lease, so install a static BusyBox and renewal script inside the
 # new root and start one background client per Ethernet interface before
-# exec'ing the workload. Disable this with lightvm.dhcp_renew=0.
-if [ "$dhcp" = 1 ] && [ "$dhcp_renew" = 1 ] && [ -x /bin/busybox ]; then
-	renew_dir=/newroot/.rookery
-	mkdir -p "$renew_dir"
-	if cp /bin/busybox "$renew_dir/busybox" \
-		&& ln -sf /.rookery/busybox "$renew_dir/ip" \
+# running the workload. Disable this with lightvm.dhcp_renew=0.
+if [ "$dhcp" = 1 ] && [ "$dhcp_renew" = 1 ] && [ -x "$renew_dir/busybox" ]; then
+	if ln -sf /.rookery/busybox "$renew_dir/ip" \
 		&& ln -sf /.rookery/busybox "$renew_dir/hostname" \
 		&& sed '1s|^#!/bin/sh$|#!/.rookery/busybox sh|' \
 			/etc/udhcpc/default.script > "$renew_dir/udhcpc.script" \
-		&& chmod 0755 "$renew_dir/busybox" "$renew_dir/udhcpc.script"; then
+		&& chmod 0755 "$renew_dir/udhcpc.script"; then
 		printf '%s\n' "$chosen" > "$renew_dir/entry"
 		cat > "$renew_dir/start" <<'EOF'
-#!/.rookery/busybox sh
+#!/bin/sh
 # Start a persistent DHCP client for every Ethernet interface, then run the
 # LightVM workload. The clients use the static BusyBox copied into this root.
 for path in /sys/class/net/*; do
@@ -198,6 +209,21 @@ fi
 # mount: some init binaries misbehave when the console mount is moved.
 mount -t proc proc /newroot/proc 2>/dev/null || true
 mount -t sysfs sysfs /newroot/sys 2>/dev/null || true
+
+# Mount cgroup v2 for systemd and nested container runtimes. The kernel does
+# not mount it on its own; nsdelegate enables delegated cgroup namespaces and
+# memory_recursiveprot matches systemd's default. Fall back when an option is
+# unsupported so an older kernel still boots.
+mkdir -p /newroot/sys/fs/cgroup 2>/dev/null || true
+mount -t cgroup2 -o nsdelegate,memory_recursiveprot \
+	cgroup2 /newroot/sys/fs/cgroup 2>/dev/null \
+	|| mount -t cgroup2 -o nsdelegate cgroup2 /newroot/sys/fs/cgroup 2>/dev/null \
+	|| mount -t cgroup2 cgroup2 /newroot/sys/fs/cgroup 2>/dev/null \
+	|| true
+if grep -q ' /newroot/sys/fs/cgroup cgroup2 ' /proc/mounts 2>/dev/null; then
+	echo "lightvm: cgroup2 mounted"
+fi
+
 mount -t devtmpfs devtmpfs /newroot/dev 2>/dev/null || true
 mkdir -p /newroot/dev/pts /newroot/dev/shm
 mount -t devpts devpts /newroot/dev/pts 2>/dev/null || true
@@ -205,6 +231,26 @@ mount -t tmpfs tmpfs /newroot/dev/shm 2>/dev/null || true
 mount -t tmpfs tmpfs /newroot/run 2>/dev/null || true
 mount -t tmpfs -o mode=1777 tmpfs /newroot/tmp 2>/dev/null || true
 
+# Hand off to the workload as PID 1. The kernel starts PID 1 outside any
+# session: its process group and session are the idle task's (0), so PID 1 owns
+# no controlling terminal. A shell run as init then reports "can't access tty;
+# job control turned off", its children never become a foreground process
+# group, and the tty line discipline drops SIGINT, so Ctrl+C on the LightVM
+# console does nothing. Become a session leader and make /dev/console the
+# controlling terminal before the handoff: setsid() is allowed for PID 1 (it is
+# not a process group leader, so BusyBox setsid execs in place instead of
+# forking) and the -c ioctl resolves /dev/console to the preferred console
+# device (hvc0, ttyS0). /dev/console stays stdin/stdout/stderr, so console
+# output is still mirrored to every kernel console.
+#
+# switch_root execs the chosen path, and the renewal wrapper ends with
+# exec "$entrypoint" too, so the workload itself is PID 1. Nothing is left to
+# supervise or restart it: an entrypoint exit is a guest exit, which is what
+# the ephemeral reaper relies on. Do not chain an init (BusyBox init, a shell
+# that waits, ...) between PID 1 and the entrypoint.
+if [ -x /bin/busybox ]; then
+	echo "lightvm: switch_root /newroot $chosen"
+	exec /bin/busybox setsid -c /bin/switch_root /newroot "$chosen"
+fi
 echo "lightvm: switch_root /newroot $chosen"
-# Use the absolute initramfs path: loading /.env may replace PATH before this.
 exec /bin/switch_root /newroot "$chosen"

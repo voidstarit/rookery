@@ -45,8 +45,13 @@ type VMDisk struct {
 	Protocol          string `protobuf:"bytes,12,opt,name=protocol,proto3" json:"protocol,omitempty"`
 	ThrottleClassId   int64  `protobuf:"varint,15,opt,name=throttle_class_id,json=throttleClassId,proto3" json:"throttle_class_id,omitempty"`
 	ThrottleClassName string `protobuf:"bytes,16,opt,name=throttle_class_name,json=throttleClassName,proto3" json:"throttle_class_name,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// serial is the guest-visible virtio-blk serial for this attachment.
+	Serial string `protobuf:"bytes,17,opt,name=serial,proto3" json:"serial,omitempty"`
+	// read_only is true when QEMU attaches this disk read-only. Such a disk may
+	// be attached to multiple VMs and LightVMs.
+	ReadOnly      bool `protobuf:"varint,18,opt,name=read_only,json=readOnly,proto3" json:"read_only,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *VMDisk) Reset() {
@@ -177,6 +182,98 @@ func (x *VMDisk) GetThrottleClassName() string {
 	return ""
 }
 
+func (x *VMDisk) GetSerial() string {
+	if x != nil {
+		return x.Serial
+	}
+	return ""
+}
+
+func (x *VMDisk) GetReadOnly() bool {
+	if x != nil {
+		return x.ReadOnly
+	}
+	return false
+}
+
+// DiskAttachment names one workload that has the disk attached.
+type DiskAttachment struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// workload_kind is "vm" or "lightvm".
+	WorkloadKind  string `protobuf:"bytes,1,opt,name=workload_kind,json=workloadKind,proto3" json:"workload_kind,omitempty"`
+	WorkloadId    string `protobuf:"bytes,2,opt,name=workload_id,json=workloadId,proto3" json:"workload_id,omitempty"`
+	WorkloadName  string `protobuf:"bytes,3,opt,name=workload_name,json=workloadName,proto3" json:"workload_name,omitempty"`
+	Position      int32  `protobuf:"varint,4,opt,name=position,proto3" json:"position,omitempty"`
+	ReadOnly      bool   `protobuf:"varint,5,opt,name=read_only,json=readOnly,proto3" json:"read_only,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DiskAttachment) Reset() {
+	*x = DiskAttachment{}
+	mi := &file_rookery_v1_disk_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DiskAttachment) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DiskAttachment) ProtoMessage() {}
+
+func (x *DiskAttachment) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_disk_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DiskAttachment.ProtoReflect.Descriptor instead.
+func (*DiskAttachment) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *DiskAttachment) GetWorkloadKind() string {
+	if x != nil {
+		return x.WorkloadKind
+	}
+	return ""
+}
+
+func (x *DiskAttachment) GetWorkloadId() string {
+	if x != nil {
+		return x.WorkloadId
+	}
+	return ""
+}
+
+func (x *DiskAttachment) GetWorkloadName() string {
+	if x != nil {
+		return x.WorkloadName
+	}
+	return ""
+}
+
+func (x *DiskAttachment) GetPosition() int32 {
+	if x != nil {
+		return x.Position
+	}
+	return 0
+}
+
+func (x *DiskAttachment) GetReadOnly() bool {
+	if x != nil {
+		return x.ReadOnly
+	}
+	return false
+}
+
 type Disk struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	Id                  int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -212,13 +309,19 @@ type Disk struct {
 	ThrottleClassName   string  `protobuf:"bytes,27,opt,name=throttle_class_name,json=throttleClassName,proto3" json:"throttle_class_name,omitempty"`
 	AttachedLightvmId   *string `protobuf:"bytes,28,opt,name=attached_lightvm_id,json=attachedLightvmId,proto3,oneof" json:"attached_lightvm_id,omitempty"`
 	AttachedLightvmName string  `protobuf:"bytes,29,opt,name=attached_lightvm_name,json=attachedLightvmName,proto3" json:"attached_lightvm_name,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// read_only means QEMU attaches the disk read-only and multiple workloads
+	// may own it.
+	ReadOnly bool `protobuf:"varint,30,opt,name=read_only,json=readOnly,proto3" json:"read_only,omitempty"`
+	// attachments lists every workload owner. The attached_* fields above are
+	// populated only when exactly one workload owns the disk.
+	Attachments   []*DiskAttachment `protobuf:"bytes,31,rep,name=attachments,proto3" json:"attachments,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Disk) Reset() {
 	*x = Disk{}
-	mi := &file_rookery_v1_disk_proto_msgTypes[1]
+	mi := &file_rookery_v1_disk_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -230,7 +333,7 @@ func (x *Disk) String() string {
 func (*Disk) ProtoMessage() {}
 
 func (x *Disk) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_disk_proto_msgTypes[1]
+	mi := &file_rookery_v1_disk_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -243,7 +346,7 @@ func (x *Disk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Disk.ProtoReflect.Descriptor instead.
 func (*Disk) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{1}
+	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Disk) GetId() int64 {
@@ -435,24 +538,41 @@ func (x *Disk) GetAttachedLightvmName() string {
 	return ""
 }
 
+func (x *Disk) GetReadOnly() bool {
+	if x != nil {
+		return x.ReadOnly
+	}
+	return false
+}
+
+func (x *Disk) GetAttachments() []*DiskAttachment {
+	if x != nil {
+		return x.Attachments
+	}
+	return nil
+}
+
 type ImportableDisk struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	Name                string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	SizeGb              int32                  `protobuf:"varint,2,opt,name=size_gb,json=sizeGb,proto3" json:"size_gb,omitempty"`
-	Registered          bool                   `protobuf:"varint,3,opt,name=registered,proto3" json:"registered,omitempty"`
-	DiskId              *int64                 `protobuf:"varint,4,opt,name=disk_id,json=diskId,proto3,oneof" json:"disk_id,omitempty"`
-	AttachedVmId        *string                `protobuf:"bytes,5,opt,name=attached_vm_id,json=attachedVmId,proto3,oneof" json:"attached_vm_id,omitempty"`
-	AttachedVmName      string                 `protobuf:"bytes,6,opt,name=attached_vm_name,json=attachedVmName,proto3" json:"attached_vm_name,omitempty"`
-	StorageBackendName  string                 `protobuf:"bytes,7,opt,name=storage_backend_name,json=storageBackendName,proto3" json:"storage_backend_name,omitempty"`
-	AttachedLightvmId   *string                `protobuf:"bytes,8,opt,name=attached_lightvm_id,json=attachedLightvmId,proto3,oneof" json:"attached_lightvm_id,omitempty"`
-	AttachedLightvmName string                 `protobuf:"bytes,9,opt,name=attached_lightvm_name,json=attachedLightvmName,proto3" json:"attached_lightvm_name,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// size_gb is the volume size rounded up to whole gigabytes.
+	SizeGb              int32   `protobuf:"varint,2,opt,name=size_gb,json=sizeGb,proto3" json:"size_gb,omitempty"`
+	Registered          bool    `protobuf:"varint,3,opt,name=registered,proto3" json:"registered,omitempty"`
+	DiskId              *int64  `protobuf:"varint,4,opt,name=disk_id,json=diskId,proto3,oneof" json:"disk_id,omitempty"`
+	AttachedVmId        *string `protobuf:"bytes,5,opt,name=attached_vm_id,json=attachedVmId,proto3,oneof" json:"attached_vm_id,omitempty"`
+	AttachedVmName      string  `protobuf:"bytes,6,opt,name=attached_vm_name,json=attachedVmName,proto3" json:"attached_vm_name,omitempty"`
+	StorageBackendName  string  `protobuf:"bytes,7,opt,name=storage_backend_name,json=storageBackendName,proto3" json:"storage_backend_name,omitempty"`
+	AttachedLightvmId   *string `protobuf:"bytes,8,opt,name=attached_lightvm_id,json=attachedLightvmId,proto3,oneof" json:"attached_lightvm_id,omitempty"`
+	AttachedLightvmName string  `protobuf:"bytes,9,opt,name=attached_lightvm_name,json=attachedLightvmName,proto3" json:"attached_lightvm_name,omitempty"`
+	// size_bytes is the exact volume size reported by LVM.
+	SizeBytes     uint64 `protobuf:"varint,10,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ImportableDisk) Reset() {
 	*x = ImportableDisk{}
-	mi := &file_rookery_v1_disk_proto_msgTypes[2]
+	mi := &file_rookery_v1_disk_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -464,7 +584,7 @@ func (x *ImportableDisk) String() string {
 func (*ImportableDisk) ProtoMessage() {}
 
 func (x *ImportableDisk) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_disk_proto_msgTypes[2]
+	mi := &file_rookery_v1_disk_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -477,7 +597,7 @@ func (x *ImportableDisk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportableDisk.ProtoReflect.Descriptor instead.
 func (*ImportableDisk) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{2}
+	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ImportableDisk) GetName() string {
@@ -543,6 +663,13 @@ func (x *ImportableDisk) GetAttachedLightvmName() string {
 	return ""
 }
 
+func (x *ImportableDisk) GetSizeBytes() uint64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
 type ListDisksRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -551,7 +678,7 @@ type ListDisksRequest struct {
 
 func (x *ListDisksRequest) Reset() {
 	*x = ListDisksRequest{}
-	mi := &file_rookery_v1_disk_proto_msgTypes[3]
+	mi := &file_rookery_v1_disk_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -563,7 +690,7 @@ func (x *ListDisksRequest) String() string {
 func (*ListDisksRequest) ProtoMessage() {}
 
 func (x *ListDisksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_disk_proto_msgTypes[3]
+	mi := &file_rookery_v1_disk_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -576,7 +703,7 @@ func (x *ListDisksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDisksRequest.ProtoReflect.Descriptor instead.
 func (*ListDisksRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{3}
+	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{4}
 }
 
 type ListDisksResponse struct {
@@ -588,7 +715,7 @@ type ListDisksResponse struct {
 
 func (x *ListDisksResponse) Reset() {
 	*x = ListDisksResponse{}
-	mi := &file_rookery_v1_disk_proto_msgTypes[4]
+	mi := &file_rookery_v1_disk_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -600,7 +727,7 @@ func (x *ListDisksResponse) String() string {
 func (*ListDisksResponse) ProtoMessage() {}
 
 func (x *ListDisksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_disk_proto_msgTypes[4]
+	mi := &file_rookery_v1_disk_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -613,7 +740,7 @@ func (x *ListDisksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDisksResponse.ProtoReflect.Descriptor instead.
 func (*ListDisksResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{4}
+	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ListDisksResponse) GetDisks() []*Disk {
@@ -632,7 +759,7 @@ type GetDiskRequest struct {
 
 func (x *GetDiskRequest) Reset() {
 	*x = GetDiskRequest{}
-	mi := &file_rookery_v1_disk_proto_msgTypes[5]
+	mi := &file_rookery_v1_disk_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -644,7 +771,7 @@ func (x *GetDiskRequest) String() string {
 func (*GetDiskRequest) ProtoMessage() {}
 
 func (x *GetDiskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_disk_proto_msgTypes[5]
+	mi := &file_rookery_v1_disk_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -657,7 +784,7 @@ func (x *GetDiskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDiskRequest.ProtoReflect.Descriptor instead.
 func (*GetDiskRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{5}
+	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *GetDiskRequest) GetId() int64 {
@@ -684,13 +811,16 @@ type CreateDiskRequest struct {
 	// throttle_class_id is allowed.
 	HostDevice      string `protobuf:"bytes,9,opt,name=host_device,json=hostDevice,proto3" json:"host_device,omitempty"`
 	ThrottleClassId int64  `protobuf:"varint,12,opt,name=throttle_class_id,json=throttleClassId,proto3" json:"throttle_class_id,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// read_only marks the disk as shared read-only. Templates cannot be
+	// read-only.
+	ReadOnly      *bool `protobuf:"varint,13,opt,name=read_only,json=readOnly,proto3,oneof" json:"read_only,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateDiskRequest) Reset() {
 	*x = CreateDiskRequest{}
-	mi := &file_rookery_v1_disk_proto_msgTypes[6]
+	mi := &file_rookery_v1_disk_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -702,7 +832,7 @@ func (x *CreateDiskRequest) String() string {
 func (*CreateDiskRequest) ProtoMessage() {}
 
 func (x *CreateDiskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_disk_proto_msgTypes[6]
+	mi := &file_rookery_v1_disk_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -715,7 +845,7 @@ func (x *CreateDiskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateDiskRequest.ProtoReflect.Descriptor instead.
 func (*CreateDiskRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{6}
+	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *CreateDiskRequest) GetName() string {
@@ -788,6 +918,13 @@ func (x *CreateDiskRequest) GetThrottleClassId() int64 {
 	return 0
 }
 
+func (x *CreateDiskRequest) GetReadOnly() bool {
+	if x != nil && x.ReadOnly != nil {
+		return *x.ReadOnly
+	}
+	return false
+}
+
 type DeleteDiskResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Accepted      bool                   `protobuf:"varint,1,opt,name=accepted,proto3" json:"accepted,omitempty"`
@@ -798,7 +935,7 @@ type DeleteDiskResponse struct {
 
 func (x *DeleteDiskResponse) Reset() {
 	*x = DeleteDiskResponse{}
-	mi := &file_rookery_v1_disk_proto_msgTypes[7]
+	mi := &file_rookery_v1_disk_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -810,7 +947,7 @@ func (x *DeleteDiskResponse) String() string {
 func (*DeleteDiskResponse) ProtoMessage() {}
 
 func (x *DeleteDiskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_disk_proto_msgTypes[7]
+	mi := &file_rookery_v1_disk_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -823,7 +960,7 @@ func (x *DeleteDiskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteDiskResponse.ProtoReflect.Descriptor instead.
 func (*DeleteDiskResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{7}
+	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *DeleteDiskResponse) GetAccepted() bool {
@@ -847,13 +984,15 @@ type UpdateDiskRequest struct {
 	ProvisioningScript  *string                `protobuf:"bytes,3,opt,name=provisioning_script,json=provisioningScript,proto3,oneof" json:"provisioning_script,omitempty"`
 	ProvisioningTimeout *string                `protobuf:"bytes,4,opt,name=provisioning_timeout,json=provisioningTimeout,proto3,oneof" json:"provisioning_timeout,omitempty"`
 	ThrottleClassId     *int64                 `protobuf:"varint,7,opt,name=throttle_class_id,json=throttleClassId,proto3,oneof" json:"throttle_class_id,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// read_only may change only while the disk has no attachments.
+	ReadOnly      *bool `protobuf:"varint,8,opt,name=read_only,json=readOnly,proto3,oneof" json:"read_only,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpdateDiskRequest) Reset() {
 	*x = UpdateDiskRequest{}
-	mi := &file_rookery_v1_disk_proto_msgTypes[8]
+	mi := &file_rookery_v1_disk_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -865,7 +1004,7 @@ func (x *UpdateDiskRequest) String() string {
 func (*UpdateDiskRequest) ProtoMessage() {}
 
 func (x *UpdateDiskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_disk_proto_msgTypes[8]
+	mi := &file_rookery_v1_disk_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -878,7 +1017,7 @@ func (x *UpdateDiskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateDiskRequest.ProtoReflect.Descriptor instead.
 func (*UpdateDiskRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{8}
+	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *UpdateDiskRequest) GetId() int64 {
@@ -916,16 +1055,27 @@ func (x *UpdateDiskRequest) GetThrottleClassId() int64 {
 	return 0
 }
 
+func (x *UpdateDiskRequest) GetReadOnly() bool {
+	if x != nil && x.ReadOnly != nil {
+		return *x.ReadOnly
+	}
+	return false
+}
+
 type DeleteDiskRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	// force removes the inventory record immediately when an asynchronous
+	// backend deletion is still pending or has failed. The remote volume is not
+	// cleaned up by this call and may need manual removal on the backend.
+	Force         bool `protobuf:"varint,2,opt,name=force,proto3" json:"force,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DeleteDiskRequest) Reset() {
 	*x = DeleteDiskRequest{}
-	mi := &file_rookery_v1_disk_proto_msgTypes[9]
+	mi := &file_rookery_v1_disk_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -937,7 +1087,7 @@ func (x *DeleteDiskRequest) String() string {
 func (*DeleteDiskRequest) ProtoMessage() {}
 
 func (x *DeleteDiskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_disk_proto_msgTypes[9]
+	mi := &file_rookery_v1_disk_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -950,7 +1100,7 @@ func (x *DeleteDiskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteDiskRequest.ProtoReflect.Descriptor instead.
 func (*DeleteDiskRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{9}
+	return file_rookery_v1_disk_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *DeleteDiskRequest) GetId() int64 {
@@ -960,12 +1110,19 @@ func (x *DeleteDiskRequest) GetId() int64 {
 	return 0
 }
 
+func (x *DeleteDiskRequest) GetForce() bool {
+	if x != nil {
+		return x.Force
+	}
+	return false
+}
+
 var File_rookery_v1_disk_proto protoreflect.FileDescriptor
 
 const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\n" +
 	"\x15rookery/v1/disk.proto\x12\n" +
-	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\xf0\x03\n" +
+	"rookery.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17validate/validate.proto\"\xa5\x04\n" +
 	"\x06VMDisk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
@@ -982,8 +1139,17 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\alocator\x18\v \x01(\tR\alocator\x12\x1a\n" +
 	"\bprotocol\x18\f \x01(\tR\bprotocol\x12*\n" +
 	"\x11throttle_class_id\x18\x0f \x01(\x03R\x0fthrottleClassId\x12.\n" +
-	"\x13throttle_class_name\x18\x10 \x01(\tR\x11throttleClassNameB\x15\n" +
-	"\x13_storage_backend_idJ\x04\b\r\x10\x0eJ\x04\b\x0e\x10\x0fR\bread_bpsR\twrite_bps\"\x92\t\n" +
+	"\x13throttle_class_name\x18\x10 \x01(\tR\x11throttleClassName\x12\x16\n" +
+	"\x06serial\x18\x11 \x01(\tR\x06serial\x12\x1b\n" +
+	"\tread_only\x18\x12 \x01(\bR\breadOnlyB\x15\n" +
+	"\x13_storage_backend_idJ\x04\b\r\x10\x0eJ\x04\b\x0e\x10\x0fR\bread_bpsR\twrite_bps\"\xb4\x01\n" +
+	"\x0eDiskAttachment\x12#\n" +
+	"\rworkload_kind\x18\x01 \x01(\tR\fworkloadKind\x12\x1f\n" +
+	"\vworkload_id\x18\x02 \x01(\tR\n" +
+	"workloadId\x12#\n" +
+	"\rworkload_name\x18\x03 \x01(\tR\fworkloadName\x12\x1a\n" +
+	"\bposition\x18\x04 \x01(\x05R\bposition\x12\x1b\n" +
+	"\tread_only\x18\x05 \x01(\bR\breadOnly\"\xed\t\n" +
 	"\x04Disk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
@@ -1016,11 +1182,13 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\x11throttle_class_id\x18\x1a \x01(\x03R\x0fthrottleClassId\x12.\n" +
 	"\x13throttle_class_name\x18\x1b \x01(\tR\x11throttleClassName\x123\n" +
 	"\x13attached_lightvm_id\x18\x1c \x01(\tH\x03R\x11attachedLightvmId\x88\x01\x01\x122\n" +
-	"\x15attached_lightvm_name\x18\x1d \x01(\tR\x13attachedLightvmNameB\x15\n" +
+	"\x15attached_lightvm_name\x18\x1d \x01(\tR\x13attachedLightvmName\x12\x1b\n" +
+	"\tread_only\x18\x1e \x01(\bR\breadOnly\x12<\n" +
+	"\vattachments\x18\x1f \x03(\v2\x1a.rookery.v1.DiskAttachmentR\vattachmentsB\x15\n" +
 	"\x13_storage_backend_idB\x11\n" +
 	"\x0f_attached_vm_idB\x13\n" +
 	"\x11_template_disk_idB\x16\n" +
-	"\x14_attached_lightvm_idJ\x04\b\x18\x10\x19J\x04\b\x19\x10\x1aR\bread_bpsR\twrite_bps\"\xa2\x03\n" +
+	"\x14_attached_lightvm_idJ\x04\b\x18\x10\x19J\x04\b\x19\x10\x1aR\bread_bpsR\twrite_bps\"\xc1\x03\n" +
 	"\x0eImportableDisk\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x17\n" +
 	"\asize_gb\x18\x02 \x01(\x05R\x06sizeGb\x12\x1e\n" +
@@ -1032,7 +1200,10 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\x10attached_vm_name\x18\x06 \x01(\tR\x0eattachedVmName\x120\n" +
 	"\x14storage_backend_name\x18\a \x01(\tR\x12storageBackendName\x123\n" +
 	"\x13attached_lightvm_id\x18\b \x01(\tH\x02R\x11attachedLightvmId\x88\x01\x01\x122\n" +
-	"\x15attached_lightvm_name\x18\t \x01(\tR\x13attachedLightvmNameB\n" +
+	"\x15attached_lightvm_name\x18\t \x01(\tR\x13attachedLightvmName\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\n" +
+	" \x01(\x04R\tsizeBytesB\n" +
 	"\n" +
 	"\b_disk_idB\x11\n" +
 	"\x0f_attached_vm_idB\x16\n" +
@@ -1041,7 +1212,7 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\x11ListDisksResponse\x12&\n" +
 	"\x05disks\x18\x01 \x03(\v2\x10.rookery.v1.DiskR\x05disks\")\n" +
 	"\x0eGetDiskRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\x9b\x05\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\xcb\x05\n" +
 	"\x11CreateDiskRequest\x12;\n" +
 	"\x04name\x18\x01 \x01(\tB'\xfaB$r\"\x10\x01\x18\x7f2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$R\x04name\x12)\n" +
 	"\asize_gb\x18\x02 \x01(\x05B\v\xfaB\b\x1a\x06\x18\x80\x80\x04(\x01H\x00R\x06sizeGb\x88\x01\x01\x12:\n" +
@@ -1055,29 +1226,36 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\fprovisioning\x18\b \x01(\v2\x17.google.protobuf.StructR\fprovisioning\x12,\n" +
 	"\vhost_device\x18\t \x01(\tB\v\xfaB\br\x06\x18\x80 \xd0\x01\x01R\n" +
 	"hostDevice\x123\n" +
-	"\x11throttle_class_id\x18\f \x01(\x03B\a\xfaB\x04\"\x02(\x00R\x0fthrottleClassIdB\n" +
+	"\x11throttle_class_id\x18\f \x01(\x03B\a\xfaB\x04\"\x02(\x00R\x0fthrottleClassId\x12 \n" +
+	"\tread_only\x18\r \x01(\bH\x04R\breadOnly\x88\x01\x01B\n" +
 	"\n" +
 	"\b_size_gbB\x15\n" +
 	"\x13_storage_backend_idB\x13\n" +
 	"\x11_template_disk_idB\x0e\n" +
-	"\f_is_templateJ\x04\b\n" +
+	"\f_is_templateB\f\n" +
+	"\n" +
+	"_read_onlyJ\x04\b\n" +
 	"\x10\vJ\x04\b\v\x10\fR\bread_bpsR\twrite_bps\"F\n" +
 	"\x12DeleteDiskResponse\x12\x1a\n" +
 	"\baccepted\x18\x01 \x01(\bR\baccepted\x12\x14\n" +
-	"\x05state\x18\x02 \x01(\tR\x05state\"\x85\x03\n" +
+	"\x05state\x18\x02 \x01(\tR\x05state\"\xb5\x03\n" +
 	"\x11UpdateDiskRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x12$\n" +
 	"\vis_template\x18\x02 \x01(\bH\x00R\n" +
 	"isTemplate\x88\x01\x01\x12>\n" +
 	"\x13provisioning_script\x18\x03 \x01(\tB\b\xfaB\x05r\x03\x18\x80 H\x01R\x12provisioningScript\x88\x01\x01\x12?\n" +
 	"\x14provisioning_timeout\x18\x04 \x01(\tB\a\xfaB\x04r\x02\x18 H\x02R\x13provisioningTimeout\x88\x01\x01\x128\n" +
-	"\x11throttle_class_id\x18\a \x01(\x03B\a\xfaB\x04\"\x02(\x00H\x03R\x0fthrottleClassId\x88\x01\x01B\x0e\n" +
+	"\x11throttle_class_id\x18\a \x01(\x03B\a\xfaB\x04\"\x02(\x00H\x03R\x0fthrottleClassId\x88\x01\x01\x12 \n" +
+	"\tread_only\x18\b \x01(\bH\x04R\breadOnly\x88\x01\x01B\x0e\n" +
 	"\f_is_templateB\x16\n" +
 	"\x14_provisioning_scriptB\x17\n" +
 	"\x15_provisioning_timeoutB\x14\n" +
-	"\x12_throttle_class_idJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aR\bread_bpsR\twrite_bps\",\n" +
+	"\x12_throttle_class_idB\f\n" +
+	"\n" +
+	"_read_onlyJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aR\bread_bpsR\twrite_bps\"B\n" +
 	"\x11DeleteDiskRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id2\xdb\x03\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x12\x14\n" +
+	"\x05force\x18\x02 \x01(\bR\x05force2\xdb\x03\n" +
 	"\vDiskService\x12c\n" +
 	"\tListDisks\x12\x1c.rookery.v1.ListDisksRequest\x1a\x1d.rookery.v1.ListDisksResponse\"\x19\x82\xd3\xe4\x93\x02\x13b\x05disks\x12\n" +
 	"/api/disks\x12P\n" +
@@ -1102,41 +1280,43 @@ func file_rookery_v1_disk_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_disk_proto_rawDescData
 }
 
-var file_rookery_v1_disk_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_rookery_v1_disk_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_rookery_v1_disk_proto_goTypes = []any{
 	(*VMDisk)(nil),                // 0: rookery.v1.VMDisk
-	(*Disk)(nil),                  // 1: rookery.v1.Disk
-	(*ImportableDisk)(nil),        // 2: rookery.v1.ImportableDisk
-	(*ListDisksRequest)(nil),      // 3: rookery.v1.ListDisksRequest
-	(*ListDisksResponse)(nil),     // 4: rookery.v1.ListDisksResponse
-	(*GetDiskRequest)(nil),        // 5: rookery.v1.GetDiskRequest
-	(*CreateDiskRequest)(nil),     // 6: rookery.v1.CreateDiskRequest
-	(*DeleteDiskResponse)(nil),    // 7: rookery.v1.DeleteDiskResponse
-	(*UpdateDiskRequest)(nil),     // 8: rookery.v1.UpdateDiskRequest
-	(*DeleteDiskRequest)(nil),     // 9: rookery.v1.DeleteDiskRequest
-	(*timestamppb.Timestamp)(nil), // 10: google.protobuf.Timestamp
-	(*structpb.Struct)(nil),       // 11: google.protobuf.Struct
+	(*DiskAttachment)(nil),        // 1: rookery.v1.DiskAttachment
+	(*Disk)(nil),                  // 2: rookery.v1.Disk
+	(*ImportableDisk)(nil),        // 3: rookery.v1.ImportableDisk
+	(*ListDisksRequest)(nil),      // 4: rookery.v1.ListDisksRequest
+	(*ListDisksResponse)(nil),     // 5: rookery.v1.ListDisksResponse
+	(*GetDiskRequest)(nil),        // 6: rookery.v1.GetDiskRequest
+	(*CreateDiskRequest)(nil),     // 7: rookery.v1.CreateDiskRequest
+	(*DeleteDiskResponse)(nil),    // 8: rookery.v1.DeleteDiskResponse
+	(*UpdateDiskRequest)(nil),     // 9: rookery.v1.UpdateDiskRequest
+	(*DeleteDiskRequest)(nil),     // 10: rookery.v1.DeleteDiskRequest
+	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
+	(*structpb.Struct)(nil),       // 12: google.protobuf.Struct
 }
 var file_rookery_v1_disk_proto_depIdxs = []int32{
-	10, // 0: rookery.v1.Disk.created_at:type_name -> google.protobuf.Timestamp
-	10, // 1: rookery.v1.Disk.updated_at:type_name -> google.protobuf.Timestamp
-	1,  // 2: rookery.v1.ListDisksResponse.disks:type_name -> rookery.v1.Disk
-	11, // 3: rookery.v1.CreateDiskRequest.provisioning:type_name -> google.protobuf.Struct
-	3,  // 4: rookery.v1.DiskService.ListDisks:input_type -> rookery.v1.ListDisksRequest
-	5,  // 5: rookery.v1.DiskService.GetDisk:input_type -> rookery.v1.GetDiskRequest
-	6,  // 6: rookery.v1.DiskService.CreateDisk:input_type -> rookery.v1.CreateDiskRequest
-	8,  // 7: rookery.v1.DiskService.UpdateDisk:input_type -> rookery.v1.UpdateDiskRequest
-	9,  // 8: rookery.v1.DiskService.DeleteDisk:input_type -> rookery.v1.DeleteDiskRequest
-	4,  // 9: rookery.v1.DiskService.ListDisks:output_type -> rookery.v1.ListDisksResponse
-	1,  // 10: rookery.v1.DiskService.GetDisk:output_type -> rookery.v1.Disk
-	1,  // 11: rookery.v1.DiskService.CreateDisk:output_type -> rookery.v1.Disk
-	1,  // 12: rookery.v1.DiskService.UpdateDisk:output_type -> rookery.v1.Disk
-	7,  // 13: rookery.v1.DiskService.DeleteDisk:output_type -> rookery.v1.DeleteDiskResponse
-	9,  // [9:14] is the sub-list for method output_type
-	4,  // [4:9] is the sub-list for method input_type
-	4,  // [4:4] is the sub-list for extension type_name
-	4,  // [4:4] is the sub-list for extension extendee
-	0,  // [0:4] is the sub-list for field type_name
+	11, // 0: rookery.v1.Disk.created_at:type_name -> google.protobuf.Timestamp
+	11, // 1: rookery.v1.Disk.updated_at:type_name -> google.protobuf.Timestamp
+	1,  // 2: rookery.v1.Disk.attachments:type_name -> rookery.v1.DiskAttachment
+	2,  // 3: rookery.v1.ListDisksResponse.disks:type_name -> rookery.v1.Disk
+	12, // 4: rookery.v1.CreateDiskRequest.provisioning:type_name -> google.protobuf.Struct
+	4,  // 5: rookery.v1.DiskService.ListDisks:input_type -> rookery.v1.ListDisksRequest
+	6,  // 6: rookery.v1.DiskService.GetDisk:input_type -> rookery.v1.GetDiskRequest
+	7,  // 7: rookery.v1.DiskService.CreateDisk:input_type -> rookery.v1.CreateDiskRequest
+	9,  // 8: rookery.v1.DiskService.UpdateDisk:input_type -> rookery.v1.UpdateDiskRequest
+	10, // 9: rookery.v1.DiskService.DeleteDisk:input_type -> rookery.v1.DeleteDiskRequest
+	5,  // 10: rookery.v1.DiskService.ListDisks:output_type -> rookery.v1.ListDisksResponse
+	2,  // 11: rookery.v1.DiskService.GetDisk:output_type -> rookery.v1.Disk
+	2,  // 12: rookery.v1.DiskService.CreateDisk:output_type -> rookery.v1.Disk
+	2,  // 13: rookery.v1.DiskService.UpdateDisk:output_type -> rookery.v1.Disk
+	8,  // 14: rookery.v1.DiskService.DeleteDisk:output_type -> rookery.v1.DeleteDiskResponse
+	10, // [10:15] is the sub-list for method output_type
+	5,  // [5:10] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_rookery_v1_disk_proto_init() }
@@ -1145,17 +1325,17 @@ func file_rookery_v1_disk_proto_init() {
 		return
 	}
 	file_rookery_v1_disk_proto_msgTypes[0].OneofWrappers = []any{}
-	file_rookery_v1_disk_proto_msgTypes[1].OneofWrappers = []any{}
 	file_rookery_v1_disk_proto_msgTypes[2].OneofWrappers = []any{}
-	file_rookery_v1_disk_proto_msgTypes[6].OneofWrappers = []any{}
-	file_rookery_v1_disk_proto_msgTypes[8].OneofWrappers = []any{}
+	file_rookery_v1_disk_proto_msgTypes[3].OneofWrappers = []any{}
+	file_rookery_v1_disk_proto_msgTypes[7].OneofWrappers = []any{}
+	file_rookery_v1_disk_proto_msgTypes[9].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_disk_proto_rawDesc), len(file_rookery_v1_disk_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

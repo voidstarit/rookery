@@ -571,6 +571,13 @@
             "required": true,
             "type": "string",
             "format": "int64"
+          },
+          {
+            "name": "force",
+            "description": "force removes the inventory record immediately when an asynchronous\nbackend deletion is still pending or has failed. The remote volume is not\ncleaned up by this call and may need manual removal on the backend.",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -1579,6 +1586,75 @@
             "schema": {
               "$ref": "#/definitions/LightVMServiceUpdateLightVMBody"
             }
+          }
+        ],
+        "tags": [
+          "LightVMService"
+        ]
+      }
+    },
+    "/api/lightvm/instances/{id}/console-access": {
+      "post": {
+        "summary": "CreateLightVMConsoleAccess issues a time-limited bearer token that a\nclient can use directly against the console WebSocket without the\nbrowser UI.",
+        "operationId": "LightVMService_CreateLightVMConsoleAccess",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMConsoleAccess"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/LightVMServiceCreateLightVMConsoleAccessBody"
+            }
+          }
+        ],
+        "tags": [
+          "LightVMService"
+        ]
+      }
+    },
+    "/api/lightvm/instances/{id}/metrics": {
+      "get": {
+        "operationId": "LightVMService_GetLightVMMetrics",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMMetrics"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
           }
         ],
         "tags": [
@@ -4050,6 +4126,10 @@
         "throttle_class_id": {
           "type": "string",
           "format": "int64"
+        },
+        "read_only": {
+          "type": "boolean",
+          "description": "read_only may change only while the disk has no attachments."
         }
       }
     },
@@ -4173,6 +4253,21 @@
         }
       }
     },
+    "LightVMServiceCreateLightVMConsoleAccessBody": {
+      "type": "object",
+      "properties": {
+        "console_id": {
+          "type": "string",
+          "format": "int64",
+          "description": "console_id selects a console port; 0 uses the first console."
+        },
+        "ttl_seconds": {
+          "type": "integer",
+          "format": "int64",
+          "description": "ttl_seconds bounds how long the returned WebSocket access remains valid."
+        }
+      }
+    },
     "LightVMServiceUpdateLightVMBody": {
       "type": "object",
       "properties": {
@@ -4205,7 +4300,8 @@
           "format": "int64"
         },
         "image": {
-          "type": "string"
+          "type": "string",
+          "description": "image is optional when at least one disk is attached."
         },
         "env": {
           "type": "array",
@@ -4259,6 +4355,23 @@
         },
         "executable_script": {
           "type": "string"
+        },
+        "disk_serials": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "config_files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMConfigFile"
+          }
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "ephemeral terminates the runtime when the guest exits while keeping the\ndefinition's disks and interfaces attached."
         }
       }
     },
@@ -4517,6 +4630,12 @@
         },
         "cgroup_class": {
           "type": "string"
+        },
+        "disk_serials": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },
@@ -5041,6 +5160,10 @@
         "throttle_class_id": {
           "type": "string",
           "format": "int64"
+        },
+        "read_only": {
+          "type": "boolean",
+          "description": "read_only marks the disk as shared read-only. Templates cannot be\nread-only."
         }
       }
     },
@@ -5154,7 +5277,8 @@
           "format": "int64"
         },
         "image": {
-          "type": "string"
+          "type": "string",
+          "description": "image is optional when at least one disk is attached; disk-backed\nLightVMs boot the kernel/initramfs from their disks."
         },
         "env": {
           "type": "array",
@@ -5205,6 +5329,23 @@
         },
         "executable_script": {
           "type": "string"
+        },
+        "disk_serials": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "config_files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMConfigFile"
+          }
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "ephemeral terminates the runtime when the guest exits while keeping the\ndefinition's disks and interfaces attached."
         }
       }
     },
@@ -5328,6 +5469,12 @@
         },
         "cgroup_class": {
           "type": "string"
+        },
+        "disk_serials": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },
@@ -5525,8 +5672,43 @@
         },
         "attached_lightvm_name": {
           "type": "string"
+        },
+        "read_only": {
+          "type": "boolean",
+          "description": "read_only means QEMU attaches the disk read-only and multiple workloads\nmay own it."
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1DiskAttachment"
+          },
+          "description": "attachments lists every workload owner. The attached_* fields above are\npopulated only when exactly one workload owns the disk."
         }
       }
+    },
+    "v1DiskAttachment": {
+      "type": "object",
+      "properties": {
+        "workload_kind": {
+          "type": "string",
+          "description": "workload_kind is \"vm\" or \"lightvm\"."
+        },
+        "workload_id": {
+          "type": "string"
+        },
+        "workload_name": {
+          "type": "string"
+        },
+        "position": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "read_only": {
+          "type": "boolean"
+        }
+      },
+      "description": "DiskAttachment names one workload that has the disk attached."
     },
     "v1DiskThrottleClass": {
       "type": "object",
@@ -5744,7 +5926,7 @@
         },
         "kind": {
           "type": "string",
-          "description": "kind is \"disk\", \"partition\", \"lv\", or \"raid\"."
+          "description": "kind is \"disk\", \"partition\", \"lv\", \"raid\", \"loop\", \"ram\", or \"zram\"."
         },
         "model": {
           "type": "string"
@@ -5934,7 +6116,8 @@
         },
         "size_gb": {
           "type": "integer",
-          "format": "int32"
+          "format": "int32",
+          "description": "size_gb is the volume size rounded up to whole gigabytes."
         },
         "registered": {
           "type": "boolean"
@@ -5957,6 +6140,11 @@
         },
         "attached_lightvm_name": {
           "type": "string"
+        },
+        "size_bytes": {
+          "type": "string",
+          "format": "uint64",
+          "description": "size_bytes is the exact volume size reported by LVM."
         }
       }
     },
@@ -6164,8 +6352,31 @@
         },
         "executable_script": {
           "type": "string"
+        },
+        "config_files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMConfigFile"
+          }
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "ephemeral makes the LightVM one-shot: when the guest exits (reboot,\npanic, or poweroff) Rookery stops QEMU, virtiofsd, and the attempt\ncontainer automatically. Attached disks and interfaces remain."
         }
       }
+    },
+    "v1LightVMConfigFile": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        }
+      },
+      "description": "LightVMConfigFile is one user-supplied file in the rookery-config tar for a\ndisk-backed LightVM. Names are relative to /run/rookery in the guest; the\nsystem reserves \"env\" and \"startup-cmd\" at the archive root."
     },
     "v1LightVMConsole": {
       "type": "object",
@@ -6182,6 +6393,45 @@
         },
         "socket": {
           "type": "string"
+        }
+      }
+    },
+    "v1LightVMConsoleAccess": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "lightvm_id": {
+          "type": "string"
+        },
+        "console_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "console_name": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string",
+          "description": "token is returned only when the access is issued."
+        },
+        "websocket_path": {
+          "type": "string",
+          "description": "websocket_path is the absolute path to append to a Rookery listener's\nws:// or wss:// base URL."
+        },
+        "websocket_url": {
+          "type": "string",
+          "description": "websocket_url is a ready-to-use ws:// or wss:// URL when the request\narrived through the HTTP gateway."
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
         }
       }
     },
@@ -6265,6 +6515,83 @@
         "updated_at": {
           "type": "string",
           "format": "date-time"
+        }
+      }
+    },
+    "v1LightVMMetrics": {
+      "type": "object",
+      "properties": {
+        "running": {
+          "type": "boolean"
+        },
+        "pid": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "uptime_seconds": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "cpu_seconds_total": {
+          "type": "number",
+          "format": "double"
+        },
+        "memory_rss_bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "memory_virtual_bytes": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "disk_read_bytes_total": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "disk_write_bytes_total": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "lightvm_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "vcpus": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "memory_mb": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "network_rx_bytes_total": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "network_tx_bytes_total": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "network_rx_packets_total": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "network_tx_packets_total": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "sampled_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "block_devices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1BlockDeviceMetrics"
+          }
         }
       }
     },
@@ -7539,6 +7866,14 @@
         },
         "throttle_class_name": {
           "type": "string"
+        },
+        "serial": {
+          "type": "string",
+          "description": "serial is the guest-visible virtio-blk serial for this attachment."
+        },
+        "read_only": {
+          "type": "boolean",
+          "description": "read_only is true when QEMU attaches this disk read-only. Such a disk may\nbe attached to multiple VMs and LightVMs."
         }
       }
     },

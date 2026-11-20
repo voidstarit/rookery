@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -146,4 +147,40 @@ func TestLightVMUploadRejectsInvalidRequests(t *testing.T) {
 		t.Fatalf("large upload status = %d", response.StatusCode)
 	}
 	_ = response.Body.Close()
+}
+
+// deadlineWriter records an extended response write deadline.
+type deadlineWriter struct {
+	httptest.ResponseRecorder
+	extended bool
+}
+
+func (w *deadlineWriter) SetWriteDeadline(time.Time) error {
+	w.extended = true
+	return nil
+}
+
+// TestLightVMStartDeadline covers the create and start routes that can pull a
+// container image and boot QEMU, which outlives the server-wide write timeout.
+func TestLightVMStartDeadline(t *testing.T) {
+	cases := []struct {
+		method string
+		path   string
+		want   bool
+	}{
+		{http.MethodPost, "/api/lightvm/instances", true},
+		{http.MethodPost, "/api/lightvm/instances/6f1c1e60-9d16-4b1e-9f43-2b0f7f3f6a11/start", true},
+		{http.MethodPost, "/api/lightvm/instances/6f1c1e60-9d16-4b1e-9f43-2b0f7f3f6a11/stop", false},
+		{http.MethodGet, "/api/lightvm/instances", false},
+		{http.MethodPost, "/api/vms", false},
+	}
+	for _, tc := range cases {
+		recorder := &deadlineWriter{}
+		request := httptest.NewRequest(tc.method, tc.path, nil)
+		api.LightVMStartDeadline(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).
+			ServeHTTP(recorder, request)
+		if recorder.extended != tc.want {
+			t.Errorf("%s %s extended deadline = %v, want %v", tc.method, tc.path, recorder.extended, tc.want)
+		}
+	}
 }
