@@ -3,8 +3,11 @@
 # to it with switch_root.
 #
 # switch_root is the initramfs-aware way to change root: it moves the new root
-# to /, removes the old initramfs, and executes the workload as PID 1. Unlike
-# pivot_root, it works directly from the kernel's initial rootfs.
+# to /, removes the old initramfs, and execs the workload as PID 1. The
+# workload is never supervised by an init: when /.entrypoint exits, PID 1
+# exits, the kernel panics, and an ephemeral LightVM (panic=-1 plus QEMU
+# -no-reboot) ends instead of lingering with a live supervisor. Unlike
+# pivot_root, switch_root works directly from the kernel's initial rootfs.
 PATH=/bin:/sbin
 export PATH
 
@@ -148,9 +151,9 @@ if [ -z "$chosen" ]; then
 	exec /bin/sh
 fi
 
-# Copy the initramfs BusyBox into the new root. BusyBox init uses it to run
-# the workload as a child with a controlling console; PID 1 itself ignores
-# keyboard signals such as SIGINT (Ctrl+C).
+# Copy the initramfs BusyBox into the new root. It is a static binary that the
+# DHCP renewal helper and the workload's shell scripts can use; it is not an
+# init, because the workload itself is exec'd as PID 1.
 renew_dir=/newroot/.rookery
 if [ -x /bin/busybox ]; then
 	mkdir -p "$renew_dir"
@@ -228,28 +231,26 @@ mount -t tmpfs tmpfs /newroot/dev/shm 2>/dev/null || true
 mount -t tmpfs tmpfs /newroot/run 2>/dev/null || true
 mount -t tmpfs -o mode=1777 tmpfs /newroot/tmp 2>/dev/null || true
 
-# Run the workload from BusyBox init: it creates a child process with the
-# console as its controlling tty, so the line discipline can deliver SIGINT
-# (Ctrl+C) to the workload instead of ignoring it for PID 1. /etc/inittab is
-# data, so writing it here is safe.
-if [ -x /newroot/.rookery/busybox ]; then
-	# init's run() already calls setsid() for the action's child, leaving it
-	# a session leader with no controlling terminal, so BusyBox setsid forks;
-	# the grandchild makes the console its controlling tty and execs the
-	# entrypoint (or DHCP renewal helper) as that session's leader. SIGINT from
-	# Ctrl+C then reaches the workload.
-	printf '%s\n' "::once:/.rookery/busybox setsid -c $chosen" > /newroot/etc/inittab
-else
-	printf '%s\n' "::once:$chosen" > /newroot/etc/inittab
-fi
-init=/bin/busybox
-if [ ! -x "/newroot$init" ]; then
-	init=/.rookery/busybox
-fi
-if [ -x "/newroot$init" ]; then
-	echo "lightvm: switch_root /newroot $init init"
-	# Use the absolute initramfs path: loading /.env may replace PATH.
-	exec /bin/switch_root /newroot "$init" init
+# Hand off to the workload as PID 1. The kernel starts PID 1 outside any
+# session: its process group and session are the idle task's (0), so PID 1 owns
+# no controlling terminal. A shell run as init then reports "can't access tty;
+# job control turned off", its children never become a foreground process
+# group, and the tty line discipline drops SIGINT, so Ctrl+C on the LightVM
+# console does nothing. Become a session leader and make /dev/console the
+# controlling terminal before the handoff: setsid() is allowed for PID 1 (it is
+# not a process group leader, so BusyBox setsid execs in place instead of
+# forking) and the -c ioctl resolves /dev/console to the preferred console
+# device (hvc0, ttyS0). /dev/console stays stdin/stdout/stderr, so console
+# output is still mirrored to every kernel console.
+#
+# switch_root execs the chosen path, and the renewal wrapper ends with
+# exec "$entrypoint" too, so the workload itself is PID 1. Nothing is left to
+# supervise or restart it: an entrypoint exit is a guest exit, which is what
+# the ephemeral reaper relies on. Do not chain an init (BusyBox init, a shell
+# that waits, ...) between PID 1 and the entrypoint.
+if [ -x /bin/busybox ]; then
+	echo "lightvm: switch_root /newroot $chosen"
+	exec /bin/busybox setsid -c /bin/switch_root /newroot "$chosen"
 fi
 echo "lightvm: switch_root /newroot $chosen"
 exec /bin/switch_root /newroot "$chosen"

@@ -52,7 +52,7 @@ The builder produces four initramfs images:
 | Image | Purpose |
 | ----- | ------- |
 | `initramfs-lightvm` | Debug/test image. Mounts proc/sys/dev/cgroup2, optionally runs DHCP, prints device information, and idles or opens a shell. |
-| `initramfs-lightvm-virtiofs` | Container-root image. Brings up networking and DHCP, mounts the `rootfs` virtio-fs tag, loads `/rootfs/.env`, and runs `/rootfs/.entrypoint` (or `lightvm.init=`) under BusyBox init. |
+| `initramfs-lightvm-virtiofs` | Container-root image. Brings up networking and DHCP, mounts the `rootfs` virtio-fs tag, loads `/rootfs/.env`, and execs `/rootfs/.entrypoint` (or `lightvm.init=`) as PID 1. |
 | `initramfs-lightvm-disk-rootfs` | Generic image for an existing Linux root filesystem. Finds a virtio-fs tag `root`/`rootfs`, then the `root=` device, then a block device whose virtio-blk serial is `root`/`rootfs`; mounts it and switch_roots into `init=` (or `/init`, `/sbin/init`, `/bin/init`). |
 | `initramfs-lightvm-overlay-rootfs` | Writable overlay image. Layered `overlay=<N>` disks become lower/upper layers, the upper is mounted with `index=off,metacopy=off,redirect_dir=nofollow,uuid=null`, and the merged root is switch_rooted. |
 

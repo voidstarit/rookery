@@ -501,9 +501,10 @@ func lightVMAppend(vm store.LightVM) string {
 		}
 	}
 	// A one-shot LightVM must not sit halted after its workload exits with a
-	// kernel panic. panic=-1 reboots immediately; -no-reboot then makes QEMU
-	// exit so the reaper can tear the machine down. An explicit panic= value
-	// supplied by the caller is preserved.
+	// kernel panic. The virtiofs initramfs execs .entrypoint as PID 1, so an
+	// entrypoint exit is exactly that panic. panic=-1 reboots immediately;
+	// -no-reboot then makes QEMU exit so the reaper can tear the machine down.
+	// An explicit panic= value supplied by the caller is preserved.
 	if vm.Ephemeral && !hasPanic {
 		if appendValue == "" {
 			appendValue = "panic=-1"

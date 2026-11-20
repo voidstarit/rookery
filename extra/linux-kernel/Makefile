@@ -18,9 +18,11 @@
 # initramfs-for-disk-rootfs/ (overlay for the generic disk-root image), and
 # initramfs-for-overlay-rootfs/ (overlay for the writable overlay-root image).
 # The virtiofs image brings up Ethernet interfaces, runs DHCP, then mounts the
-# rootfs virtio-fs tag and switch_roots into it. It also leaves a static
-# BusyBox/udhcpc renewal helper in /.rookery inside the guest (disable with
-# lightvm.dhcp_renew=0).
+# rootfs virtio-fs tag and switch_roots into it. The guest's /.entrypoint is
+# exec'd as PID 1 in a new session with /dev/console as its controlling
+# terminal, so its exit is a guest exit (the kernel panics) instead of leaving
+# a supervisor running. It also leaves a static BusyBox/udhcpc renewal helper
+# in /.rookery inside the guest (disable with lightvm.dhcp_renew=0).
 # The disk-root image does not mount the container rootfs. It looks for a
 # virtio-fs tag "root"/"rootfs", then the root= device, then a block device
 # whose virtio-blk serial is "root"/"rootfs", mounts the filesystem, and
@@ -616,7 +618,8 @@ test: kernel-$(KERNEL_VARIANT) initramfs
 	fi
 
 # Boot the switch_root initramfs against a tiny writable virtiofs rootfs.
-# The test workload prints a marker, reads /hello, and powers the VM off.
+# The test workload prints a marker, checks that it is PID 1, reads /hello, and
+# powers the VM off.
 test-virtiofs: kernel-$(KERNEL_VARIANT) initramfs-virtiofs
 	@command -v qemu-system-x86_64 >/dev/null || { \
 		echo "error: qemu-system-x86_64 is required for make test-virtiofs" >&2; \
@@ -673,6 +676,7 @@ test-virtiofs: kernel-$(KERNEL_VARIANT) initramfs-virtiofs
 		> "$(VIRTIOFS_TEST_LOG)" 2>&1 || true; \
 	kill $$vfsd 2>/dev/null || true; wait $$vfsd 2>/dev/null || true; \
 	if grep -q 'LIGHTVM-ENTRYPOINT-OK' "$(VIRTIOFS_TEST_LOG)" \
+		&& grep -q 'lightvm: entrypoint is PID 1' "$(VIRTIOFS_TEST_LOG)" \
 		&& grep -q 'GREETING=hello from env' "$(VIRTIOFS_TEST_LOG)" \
 		&& grep -q 'WITH_EQUALS=a=b' "$(VIRTIOFS_TEST_LOG)" \
 		&& grep -q 'lightvm: cgroup2 mounted' "$(VIRTIOFS_TEST_LOG)" \
