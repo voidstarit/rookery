@@ -65,8 +65,9 @@ type LightVMVirtioFSShare struct {
 	Position int    `json:"position"`
 }
 
-// LightVM is a container-backed microVM definition. It is inventory-only until
-// a runtime is implemented; kernels and initramfs images must exist.
+// LightVM is a container-backed or disk-backed microVM definition. The store
+// records it stopped; the API starts it after creation. Kernels and initramfs
+// images must exist.
 type LightVM struct {
 	ID             string `json:"id"`
 	Name           string `json:"name"`

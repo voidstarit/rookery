@@ -207,7 +207,7 @@ labels in sync through the same API.
 | `PUT`    | `/api/lightvm/initramfs/{id}` | Update or replace an initramfs |
 | `DELETE` | `/api/lightvm/initramfs/{id}` | Delete an initramfs and its managed file |
 | `GET`    | `/api/lightvm/instances` | List LightVM definitions |
-| `POST`   | `/api/lightvm/instances` | Create a LightVM definition |
+| `POST`   | `/api/lightvm/instances` | Create and start a LightVM |
 | `GET`    | `/api/lightvm/instances/{id}` | Get one LightVM |
 | `PUT`    | `/api/lightvm/instances/{id}` | Replace a LightVM definition |
 | `DELETE` | `/api/lightvm/instances/{id}` | Delete a LightVM and release its disks and interfaces |
@@ -891,8 +891,11 @@ absolute existing host directory, `tag` must be unique and match
 `[A-Za-z0-9][A-Za-z0-9._-]*` (the tag `rootfs` is reserved), and `read_only`
 defaults to true. A LightVM may have at most 24 combined disks, interfaces, and
 host-directory shares for a new or growing definition; the kernel image remains
-mandatory. Creating a LightVM stores the definition
-with `status=stopped`; `POST .../start` uses buildah to pull `image` if missing,
+mandatory. Creating a LightVM stores the definition and starts it immediately,
+like VM creation; stopping it is always an explicit action. If the start fails,
+the definition is removed again, together with any partial runtime, so a failed
+create leaves no LightVM behind. An explicit `POST .../start` starts a stopped
+definition. Starting uses buildah to pull `image` if missing,
 creates an attempt-named ephemeral writable container, mounts its rootfs,
 writes the environment variables to `<rootfs>/.env` as one `NAME=value` line
 each and an executable `<rootfs>/.entrypoint` script. In path mode the script
@@ -904,8 +907,9 @@ read-only `rookery-config` config drive for disk-backed definitions with env or
 startup data, a `vhost-user-fs-pci` device tagged `rootfs`, one additional
 virtiofs device per host-directory share, one virtio console socket per
 configured console under the QEMU run directory, the cgroup class, and any
-vhost-user interfaces. The container-root initramfs mounts the `rootfs` tag; Rookery does not
-change `append`.
+vhost-user interfaces. The container-root initramfs mounts the `rootfs` tag and
+execs `/rootfs/.entrypoint` as PID 1, so its exit ends the guest; Rookery does
+not change `append`.
 `POST .../stop` terminates QEMU, stops virtiofsd, unmounts/removes the buildah
 container, and deleting a running LightVM stops it first. Guest writes live in
 the ephemeral container overlay and are discarded on stop.

@@ -348,9 +348,12 @@ has an optional per-disk serial field, matching the VM disk picker. Every defini
 console (up to 32); the first is exposed to the guest as
 `org.example.console`, and each additional console uses
 `org.example.console.<N>`. New definitions default the
-kernel command line to `console=hvc0 rdinit=/init`. **Start** launches QEMU
-with the kernel and initramfs, one virtio drive per attached disk in attachment
-order, one `vhost-user-fs-pci` device per host-directory share, one virtio
+kernel command line to `console=hvc0 rdinit=/init`. **Create** adds the
+definition and boots it right away, so a new LightVM appears running unless the
+start fails (in which case Rookery removes the definition again and reports the
+error). **Start** launches a stopped definition, running QEMU with the kernel
+and initramfs, one virtio drive per attached disk in attachment order, one
+`vhost-user-fs-pci` device per host-directory share, one virtio
 console Unix socket per configured console in the QEMU run directory, the
 selected cgroup class, and vhost-user interfaces. Rookery uses
 `-display none` rather than `-nographic` because QEMU does not allow
@@ -379,9 +382,12 @@ read-only `rookery-config` virtio-blk device described above. Each host-director
 gets its own attempt-scoped virtiofsd process/socket and QEMU device; the guest
 image chooses whether and where to mount each tag. Read-only shares start
 virtiofsd with `--readonly`. Parse failures, stopped
-containers, and stale attempt resources are cleaned up on the next stop/delete. The container-root initramfs is responsible for mounting that tag and can
-read `/rootfs/.env` and execute `/rootfs/.entrypoint`; Rookery does not modify
-`append`. In this mode the guest writes to its own rootfs overlay and those
+containers, and stale attempt resources are cleaned up on the next stop/delete. The
+container-root initramfs mounts that tag, loads `/rootfs/.env`, and execs
+`/rootfs/.entrypoint` as PID 1, so an entrypoint exit is a guest exit: the
+kernel panics, and `panic=-1` plus QEMU `-no-reboot` then end an ephemeral
+LightVM instead of leaving it running under a supervisor. Rookery does not
+modify `append`. In this mode the guest writes to its own rootfs overlay and those
 writes are discarded when the LightVM stops, because the container is unmounted
 and removed. The UI environment editor accepts one `NAME=value` per line; blank
 lines, `export ` prefixes, and `#` comments are ignored, and names must match

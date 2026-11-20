@@ -2,10 +2,12 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -13,7 +15,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/gateway"
@@ -403,6 +407,180 @@ func TestLightVMResourceCRUD(t *testing.T) {
 	value.Delete(ctx, resource.DeleteRequest{State: deleteState}, &again)
 	if again.Diagnostics.HasError() {
 		t.Fatalf("second delete: %v", again.Diagnostics)
+	}
+}
+
+// waitLightVMServiceClient fakes the live metrics queried by wait_for_exit.
+// GetLightVMMetrics reports running for the first runningPolls calls and then
+// not running. Calls after deletedAfter report NotFound to simulate an
+// ephemeral definition removed by the server; deleted reports NotFound at once.
+type waitLightVMServiceClient struct {
+	rookeryv1.LightVMServiceClient
+	runningPolls int
+	deletedAfter int
+	deleted      bool
+	calls        int
+}
+
+func (c *waitLightVMServiceClient) GetLightVMMetrics(_ context.Context, request *rookeryv1.GetLightVMMetricsRequest, _ ...grpc.CallOption) (*rookeryv1.LightVMMetrics, error) {
+	c.calls++
+	if c.deleted || (c.deletedAfter > 0 && c.calls > c.deletedAfter) {
+		return nil, status.Error(codes.NotFound, "lightvm not found")
+	}
+	return &rookeryv1.LightVMMetrics{
+		LightvmId: request.GetId(),
+		Running:   c.calls <= c.runningPolls,
+	}, nil
+}
+
+// TestLightVMResourceWaitsForExit covers the wait_for_exit option: a normal
+// LightVM completes when its process stops, while an ephemeral LightVM also
+// waits for the server to delete the definition.
+func TestLightVMResourceWaitsForExit(t *testing.T) {
+	previous := lightVMExitPollInterval
+	lightVMExitPollInterval = 5 * time.Millisecond
+	t.Cleanup(func() { lightVMExitPollInterval = previous })
+
+	ctx := context.Background()
+	api := newProviderTestAPI(t)
+	kernel, err := api.store.CreateLightVMKernel(ctx, store.LightVMKernel{
+		Name: "wait-kernel", Path: "/tmp/vmlinuz", FileName: "vmlinuz", SizeBytes: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	initramfs, err := api.store.CreateLightVMInitramfs(ctx, store.LightVMInitramfs{
+		Name: "wait-initramfs", Path: "/tmp/initramfs", FileName: "initramfs", SizeBytes: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name      string
+		ephemeral bool
+		stub      *waitLightVMServiceClient
+		wantCalls int
+	}{
+		{
+			name:      "running LightVM stops",
+			stub:      &waitLightVMServiceClient{runningPolls: 2},
+			wantCalls: 3,
+		},
+		{
+			name:      "ephemeral waits for deletion",
+			ephemeral: true,
+			stub:      &waitLightVMServiceClient{runningPolls: 1, deletedAfter: 2},
+			wantCalls: 3,
+		},
+		{
+			name:      "already deleted",
+			ephemeral: true,
+			stub:      &waitLightVMServiceClient{deleted: true},
+			wantCalls: 1,
+		},
+	}
+	for index, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := *api.client
+			tc.stub.LightVMServiceClient = api.client.LightVMs
+			client.LightVMs = tc.stub
+			value := &lightVMResource{configuredResource: configuredResource{client: &client}}
+			lightVMSchema := artifactSchema(t, value)
+
+			model := lightVMModel{
+				Name:           types.StringValue(fmt.Sprintf("wait-%d", index)),
+				KernelID:       types.Int64Value(kernel.ID),
+				InitramfsID:    types.Int64Value(initramfs.ID),
+				Image:          types.StringValue("alpine"),
+				ExecutablePath: types.StringValue("/bin/app"),
+				Ephemeral:      types.BoolValue(tc.ephemeral),
+				WaitForExit:    types.BoolValue(true),
+				Env:            types.ListNull(types.ObjectType{AttrTypes: lightVMEnvAttrTypes()}),
+				ConfigFiles:    types.ListNull(types.ObjectType{AttrTypes: lightVMConfigFileAttrTypes()}),
+				ExecutableArgs: types.ListNull(types.StringType),
+				InterfaceIDs:   types.ListNull(types.Int64Type),
+				DiskIDs:        types.ListNull(types.Int64Type),
+				DiskSerials:    types.MapNull(types.StringType),
+				Consoles:       types.ListNull(types.ObjectType{AttrTypes: lightVMConsoleAttrTypes()}),
+				VirtioFSShares: types.ListNull(types.ObjectType{AttrTypes: lightVMShareAttrTypes()}),
+				Labels:         types.SetNull(types.StringType),
+			}
+			plan := planForModel(t, lightVMSchema, &model)
+			response := resource.CreateResponse{State: tfsdk.State{Schema: lightVMSchema}}
+			value.Create(ctx, resource.CreateRequest{Plan: plan}, &response)
+			if response.Diagnostics.HasError() {
+				t.Fatalf("create: %v", response.Diagnostics)
+			}
+			if tc.stub.calls != tc.wantCalls {
+				t.Fatalf("metrics calls = %d, want %d", tc.stub.calls, tc.wantCalls)
+			}
+			var created lightVMModel
+			if diags := response.State.Get(ctx, &created); diags.HasError() {
+				t.Fatalf("created state: %v", diags)
+			}
+			if created.ID.ValueString() == "" || !created.WaitForExit.ValueBool() {
+				t.Fatalf("created = %+v", created)
+			}
+		})
+	}
+}
+
+// TestLightVMResourceWaitForExitCanceled verifies that an interrupted wait
+// reports the error but still records the created resource so it can be
+// inspected or destroyed.
+func TestLightVMResourceWaitForExitCanceled(t *testing.T) {
+	previous := lightVMExitPollInterval
+	lightVMExitPollInterval = 5 * time.Millisecond
+	t.Cleanup(func() { lightVMExitPollInterval = previous })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	api := newProviderTestAPI(t)
+	kernel, err := api.store.CreateLightVMKernel(ctx, store.LightVMKernel{
+		Name: "cancel-kernel", Path: "/tmp/vmlinuz", FileName: "vmlinuz", SizeBytes: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	initramfs, err := api.store.CreateLightVMInitramfs(ctx, store.LightVMInitramfs{
+		Name: "cancel-initramfs", Path: "/tmp/initramfs", FileName: "initramfs", SizeBytes: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stub := &waitLightVMServiceClient{runningPolls: 1 << 20}
+	stub.LightVMServiceClient = api.client.LightVMs
+	client := *api.client
+	client.LightVMs = stub
+	value := &lightVMResource{configuredResource: configuredResource{client: &client}}
+	lightVMSchema := artifactSchema(t, value)
+	model := lightVMModel{
+		Name:           types.StringValue("wait-canceled"),
+		KernelID:       types.Int64Value(kernel.ID),
+		InitramfsID:    types.Int64Value(initramfs.ID),
+		Image:          types.StringValue("alpine"),
+		ExecutablePath: types.StringValue("/bin/app"),
+		WaitForExit:    types.BoolValue(true),
+		Env:            types.ListNull(types.ObjectType{AttrTypes: lightVMEnvAttrTypes()}),
+		ConfigFiles:    types.ListNull(types.ObjectType{AttrTypes: lightVMConfigFileAttrTypes()}),
+		ExecutableArgs: types.ListNull(types.StringType),
+		InterfaceIDs:   types.ListNull(types.Int64Type),
+		DiskIDs:        types.ListNull(types.Int64Type),
+		DiskSerials:    types.MapNull(types.StringType),
+		Consoles:       types.ListNull(types.ObjectType{AttrTypes: lightVMConsoleAttrTypes()}),
+		VirtioFSShares: types.ListNull(types.ObjectType{AttrTypes: lightVMShareAttrTypes()}),
+		Labels:         types.SetNull(types.StringType),
+	}
+	response := resource.CreateResponse{State: tfsdk.State{Schema: lightVMSchema}}
+	value.Create(ctx, resource.CreateRequest{Plan: planForModel(t, lightVMSchema, &model)}, &response)
+	if !response.Diagnostics.HasError() {
+		t.Fatal("canceled wait did not report an error")
+	}
+	var created lightVMModel
+	if diags := response.State.Get(context.Background(), &created); diags.HasError() || created.ID.ValueString() == "" {
+		t.Fatalf("created state after canceled wait = %+v, %v", created, diags)
 	}
 }
 

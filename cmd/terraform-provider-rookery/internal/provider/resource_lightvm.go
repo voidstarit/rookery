@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -19,6 +20,10 @@ import (
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 )
+
+// lightVMExitPollInterval is how often wait_for_exit checks whether the
+// LightVM is still running. It is a variable so tests can shorten the wait.
+var lightVMExitPollInterval = time.Second
 
 var (
 	_ resource.Resource                = (*lightVMResource)(nil)
@@ -41,6 +46,7 @@ type lightVMModel struct {
 	MemoryMB         types.Int64  `tfsdk:"memory_mb"`
 	ConsoleEnabled   types.Bool   `tfsdk:"console_enabled"`
 	Ephemeral        types.Bool   `tfsdk:"ephemeral"`
+	WaitForExit      types.Bool   `tfsdk:"wait_for_exit"`
 	CgroupClass      types.String `tfsdk:"cgroup_class"`
 	KernelID         types.Int64  `tfsdk:"kernel_id"`
 	KernelName       types.String `tfsdk:"kernel_name"`
@@ -120,6 +126,12 @@ func (r *lightVMResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Optional: true, Computed: true,
 				Description:   "Terminate QEMU, virtiofsd, and the attempt container when the guest exits (reboot, panic, or poweroff). Attached disks and interfaces remain.",
 				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+			},
+			"wait_for_exit": schema.BoolAttribute{
+				Optional: true,
+				Description: "Block the create until the LightVM is no longer running. Intended for one-shot workloads together with ephemeral = true: " +
+					"the server deletes the definition after the guest exits, so a later plan removes the resource and a later apply starts a new run. " +
+					"The wait has no built-in limit; cancel Terraform to stop waiting. It only affects creation.",
 			},
 			"cgroup_class": schema.StringAttribute{
 				Optional: true, Computed: true, Description: "Optional leaf cgroup class name.",
@@ -271,6 +283,14 @@ func (r *lightVMResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 	plan.Labels = labels
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if plan.WaitForExit.ValueBool() {
+		if err := waitForLightVMExit(ctx, client, vm.GetId(), vm.GetEphemeral()); err != nil {
+			resp.Diagnostics.AddError("Wait for LightVM exit", err.Error())
+		}
+	}
 }
 
 func (r *lightVMResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -358,6 +378,34 @@ func (r *lightVMResource) Delete(ctx context.Context, req resource.DeleteRequest
 
 func (r *lightVMResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+// waitForLightVMExit polls the LightVM's live process metrics until the guest
+// has exited. A deleted definition also counts as exited: an ephemeral LightVM
+// is removed by the server once its run terminates. For an ephemeral LightVM
+// the wait keeps polling until the definition is gone, so the apply only
+// returns after its disk and interface attachments are released.
+func waitForLightVMExit(ctx context.Context, client *Client, id string, ephemeral bool) error {
+	ticker := time.NewTicker(lightVMExitPollInterval)
+	defer ticker.Stop()
+	for {
+		callCtx, cancel := context.WithTimeout(ctx, client.Timeout())
+		metrics, err := client.LightVMs.GetLightVMMetrics(callCtx, &rookeryv1.GetLightVMMetricsRequest{Id: id})
+		cancel()
+		switch {
+		case isNotFound(err):
+			return nil
+		case err != nil:
+			return err
+		case !metrics.GetRunning() && !ephemeral:
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 func validateLightVMExecution(plan lightVMModel, args []string) diag.Diagnostics {

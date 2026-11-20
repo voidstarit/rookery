@@ -193,8 +193,11 @@ configuration change. `size_bytes` and `managed` are derived by the server from
 the stored file, so plans that upload a new or rebuilt file show both as
 `(known after apply)`; the applied state reflects the new file's size.
 
-`rookery_lightvm` manages the definition only; start and stop through the
-Rookery UI or API. The LightVM must be stopped before changing it. Disks,
+`rookery_lightvm` creates the definition and starts it, like the VM resource;
+stop it through the Rookery UI or API. A first create of an image-backed
+LightVM may pull the container image, so raise the provider `timeout` (for
+example `timeout = "10m"`) when that can take longer than the default 30s. The
+LightVM must be stopped before changing it. Disks,
 interfaces, shares, and consoles are replaced from their configured sets on
 each update; set an explicit empty list to clear one. `image` is optional when
 `disk_ids` is non-empty: a LightVM without an image is disk-backed and boots
@@ -207,6 +210,29 @@ the attempt container, deletes the definition, and releases its disk and
 interface attachments so other workloads can use them. The disk and network
 records themselves are kept. Ephemeral definitions are not auto-started after a
 restart.
+
+Set `wait_for_exit = true` to keep the apply blocked until the LightVM stops
+running. Combined with `ephemeral = true` this makes the resource behave like a
+one-shot job: the apply waits for the guest to exit, and Rookery deletes the
+definition and releases its disk and interface attachments. The resource then
+disappears from Terraform state on the next plan, and a later apply starts a new
+run. With `ephemeral = false` the definition remains and the wait only waits for
+its QEMU process to end. The wait has no built-in time limit, so cancel
+Terraform (or bound the CI job) if the guest may never exit. `wait_for_exit`
+only affects creation.
+
+```hcl
+resource "rookery_lightvm" "one_shot" {
+  name            = "migration-01"
+  kernel_id       = rookery_lightvm_kernel.app.id
+  initramfs_id    = rookery_lightvm_initramfs.app.id
+  image           = "alpine:3.20"
+  executable_path = "/usr/local/bin/migrate"
+  ephemeral       = true
+  wait_for_exit   = true
+  disk_ids        = [rookery_disk.data.id]
+}
+```
 
 ```hcl
 resource "rookery_lightvm" "app" {

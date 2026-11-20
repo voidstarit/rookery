@@ -212,7 +212,7 @@ func TestLightVMLifecycleRoutes(t *testing.T) {
 		t.Fatalf("create status = %d, body = %+v", response.StatusCode, created)
 	}
 	id, _ := created["id"].(string)
-	if id == "" || created["status"] != "stopped" || created["desired_state"] != "stopped" {
+	if id == "" || created["status"] != "running" || created["desired_state"] != "running" {
 		t.Fatalf("created lifecycle = %+v", created)
 	}
 	createdConsoles, _ := created["consoles"].([]any)
@@ -224,26 +224,14 @@ func TestLightVMLifecycleRoutes(t *testing.T) {
 	if firstConsole["port_name"] != "org.example.console" || secondConsole["port_name"] != "org.example.console.2" {
 		t.Fatalf("created console ports = %+v", createdConsoles)
 	}
-
-	response, started := request(http.MethodPost, "/api/lightvm/instances/"+id+"/start", nil)
-	if response.StatusCode != http.StatusOK {
-		t.Fatalf("start status = %d, body = %+v", response.StatusCode, started)
+	if created["console_socket"] != "/tmp/"+id+"-1.console" {
+		t.Fatalf("created console socket = %+v", created["console_socket"])
 	}
-	if started["status"] != "running" || started["desired_state"] != "running" {
-		t.Fatalf("started lifecycle = %+v", started)
-	}
-	if started["console_socket"] != "/tmp/"+id+"-1.console" {
-		t.Fatalf("started console socket = %+v", started["console_socket"])
-	}
-	startedConsoles, _ := started["consoles"].([]any)
-	if len(startedConsoles) != 2 {
-		t.Fatalf("started consoles = %+v", started["consoles"])
-	}
-	for index, value := range startedConsoles {
+	for index, value := range createdConsoles {
 		console, _ := value.(map[string]any)
 		want := fmt.Sprintf("/tmp/%s-%d.console", id, index+1)
 		if console["socket"] != want {
-			t.Fatalf("started console %d socket = %+v, want %q", index, console["socket"], want)
+			t.Fatalf("created console %d socket = %+v, want %q", index, console["socket"], want)
 		}
 	}
 	if runtime.started.Append != store.DefaultLightVMAppend {
@@ -321,6 +309,88 @@ func (p *fakeLightVMPlanner) Plan(context.Context, store.VM) (qemu.StartPlan, er
 }
 func (p *fakeLightVMPlanner) PlanDisks(context.Context, []store.VMDisk) (qemu.StartPlan, error) {
 	return qemu.StartPlan{}, p.err
+}
+
+// TestLightVMCreateStartFailureRollsBack verifies that creating a LightVM
+// boots it and that a failed boot removes the definition and releases its
+// disk attachments.
+func TestLightVMCreateStartFailureRollsBack(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "lightvm-create-rollback.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	kernel, err := st.CreateLightVMKernel(ctx, store.LightVMKernel{
+		Name: "vmlinuz", Path: "/tmp/vmlinuz", FileName: "vmlinuz", SizeBytes: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	initramfs, err := st.CreateLightVMInitramfs(ctx, store.LightVMInitramfs{
+		Name: "initramfs", Path: "/tmp/initramfs", FileName: "initramfs", SizeBytes: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	disk, err := st.CreateDisk(ctx, store.Disk{Name: "boot", SizeGB: 1, VG: "vg0", ThinPool: "pool"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := &fakeLightVMRuntime{
+		running:  make(map[string]bool),
+		startErr: errors.New("container image pull failed"),
+	}
+	gw, err := gateway.New(st, fakeReadiness{}, gateway.WithLightVMRuntime(runtime))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	server := httptest.NewServer(gw.Handler)
+	t.Cleanup(server.Close)
+
+	create := func(name string) (*http.Response, map[string]any) {
+		t.Helper()
+		data, err := json.Marshal(map[string]any{
+			"name": name, "vcpus": 1, "memory_mb": 256,
+			"kernel_id": kernel.ID, "initramfs_id": initramfs.ID,
+			"image": "alpine", "executable_path": "/bin/app",
+			"disk_ids": []int64{disk.ID},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		response, err := http.Post(server.URL+"/api/lightvm/instances", "application/json", bytes.NewReader(data))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var decoded map[string]any
+		_ = json.NewDecoder(response.Body).Decode(&decoded)
+		_ = response.Body.Close()
+		return response, decoded
+	}
+
+	response, body := create("failed-boot")
+	if response.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("failed create status = %d, body = %+v", response.StatusCode, body)
+	}
+	vms, err := st.ListLightVMs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vms) != 0 {
+		t.Fatalf("failed create left %d definitions behind: %+v", len(vms), vms)
+	}
+
+	// The disk is free again, so a retry with a working runtime can attach it.
+	runtime.startErr = nil
+	response, created := create("retry")
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("retry create status = %d, body = %+v", response.StatusCode, created)
+	}
+	if created["status"] != "running" || created["desired_state"] != "running" {
+		t.Fatalf("retry lifecycle = %+v", created)
+	}
 }
 
 func TestLightVMLifecycleRuntimeErrors(t *testing.T) {
@@ -635,14 +705,10 @@ func TestLightVMEphemeralStopDeletesDefinition(t *testing.T) {
 		t.Fatalf("create status = %d, body = %+v", response.StatusCode, created)
 	}
 	id, _ := created["id"].(string)
-	if id == "" {
+	if id == "" || created["status"] != "running" {
 		t.Fatalf("created ephemeral LightVM = %+v", created)
 	}
 
-	response, _ = request(http.MethodPost, "/api/lightvm/instances/"+id+"/start", nil)
-	if response.StatusCode != http.StatusOK {
-		t.Fatalf("start status = %d", response.StatusCode)
-	}
 	response, stopped := request(http.MethodPost, "/api/lightvm/instances/"+id+"/stop", nil)
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("stop status = %d, body = %+v", response.StatusCode, stopped)

@@ -93,8 +93,13 @@ func (s *lightVMService) GetLightVM(ctx context.Context, request *rookeryv1.GetL
 	return s.toProto(ctx, vm), nil
 }
 
-// CreateLightVM inserts a LightVM definition. This is inventory-only: no
-// runtime process is started and no container image is pulled.
+// CreateLightVM inserts a LightVM definition and boots it. Creating a LightVM
+// starts it, mirroring VM creation; stopping is always an explicit action. A
+// definition that cannot start is removed again with a fresh context, together
+// with any partial QEMU process, virtiofsd container, or attempt container, so
+// callers never see a half-created LightVM and its disks and interfaces are
+// released for a retry. Gateways built without a LightVM runtime keep the
+// record as created (stopped).
 func (s *lightVMService) CreateLightVM(ctx context.Context, request *rookeryv1.CreateLightVMRequest) (*rookeryv1.LightVM, error) {
 	vm, err := lightVMFromCreateRequest(request)
 	if err != nil {
@@ -114,7 +119,21 @@ func (s *lightVMService) CreateLightVM(ctx context.Context, request *rookeryv1.C
 	if err != nil {
 		return nil, lightVMError(err, "create")
 	}
-	return s.toProto(ctx, created), nil
+	if s.runtime == nil {
+		return s.toProto(ctx, created), nil
+	}
+	started, err := s.StartLightVM(ctx, &rookeryv1.StartLightVMRequest{Id: created.ID})
+	if err != nil {
+		// StartLightVM already cleaned up whatever it launched. Remove the
+		// definition as well so a failed create leaves nothing behind.
+		cleanupCtx := context.WithoutCancel(ctx)
+		if _, cleanupErr := s.DeleteLightVM(cleanupCtx, &rookeryv1.DeleteLightVMRequest{Id: created.ID}); cleanupErr != nil {
+			log.Warn().Err(cleanupErr).Str("lightvm_id", created.ID).
+				Msg("could not remove LightVM after a failed create")
+		}
+		return nil, err
+	}
+	return started, nil
 }
 
 // UpdateLightVM replaces the editable fields and the full interface set.
