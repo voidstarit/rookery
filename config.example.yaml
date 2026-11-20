@@ -33,6 +33,20 @@ api:
   log_format: console
   mtls_addr: ":8443"
   pki_dir: /var/lib/rookery/pki
+  # managed: create the CA and server certificate, renewing the server
+  # certificate when SANs change. existing: load the files below and never
+  # write, rotate, or renew them. In existing mode the server certificate must
+  # be signed by the CA; the CA key is optional for serving but required by
+  # create-client-cert.
+  pki_mode: managed
+  pki_ca_cert: "" # default <pki_dir>/ca.pem
+  pki_ca_key: "" # default <pki_dir>/ca-key.pem
+  pki_server_cert: "" # default <pki_dir>/server.pem
+  pki_server_key: "" # default <pki_dir>/server-key.pem
+  # When set, mTLS accepts only client certificates whose public PEM is in
+  # this directory (recursively). Empty accepts any client certificate signed
+  # by the CA. Issued public certificates are written here.
+  pki_client_dir: ""
   mtls_sans: ""
   grpc_mtls_addr: ":9443"
 

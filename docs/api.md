@@ -13,11 +13,14 @@ generation notes are in [api-design.md](api-design.md).
 - `-grpc-mtls-addr` (default `:9443`, env `ROOKERY_GRPC_MTLS_ADDR`) serves the
   generated gRPC services, which is what the Terraform provider uses.
 
-Both require a client certificate signed by the server's CA. The UI, native
-routes, and certificate-management endpoints are not exposed on either
-listener. Set either address empty to disable that listener. Enabling either
-listener initializes the CA under `-pki-dir`; `serve` fails at startup if that
-directory cannot be created.
+Both require a client certificate signed by the server's CA and, when
+`-pki-client-dir` is set, present in the client certificate allowlist. The UI,
+native routes, and certificate-management endpoints are not exposed on either
+listener. Set either address empty to disable that listener. In the default
+`managed` PKI mode, enabling either listener initializes the CA under
+`-pki-dir`; `serve` fails at startup if that directory cannot be created. See
+[Existing CA and certificates](#existing-ca-and-certificates) for using
+certificates that were provisioned elsewhere.
 
 The **Client certificates** item in the left sidebar (under **Access**) issues
 client certificates:
@@ -38,11 +41,13 @@ sudo rookery create-client-cert \
   ops-laptop
 ```
 
-The command must use the same `-db` and `-pki-dir` as the running server; both
-can come from the YAML file. It requires an existing database and CA and does
-not create either. It writes `ops-laptop.crt`, `ops-laptop.key`, and
+The command must use the same `-db` and PKI configuration as the running
+server (`-pki-dir`, `-pki-mode`, the optional `-pki-ca-cert`/`-pki-ca-key`
+paths, and `-pki-client-dir`); all can come from the YAML file. It requires an existing database and
+CA private key and does not create either. It writes `ops-laptop.crt`, `ops-laptop.key`, and
 `ops-laptop-ca.crt`; the private key is created with mode `0600` and is never
-stored by Rookery. Use `-days` to change the default 365-day validity (maximum
+stored by Rookery. When `-pki-client-dir` is set, the public certificate is also
+written there so the running server accepts it. Use `-days` to change the default 365-day validity (maximum
 3650) and `-force` to overwrite existing files. `issue-client-cert` is an alias
 for the same command. The certificate is recorded in the database, so it
 appears in the UI list and can be revoked there, and it works immediately with
@@ -52,9 +57,62 @@ The CA and server keys live under `-pki-dir` (default `/var/lib/rookery/pki`,
 env `ROOKERY_PKI_DIR`) with `0700`/`0600` permissions. Protect and back up that
 directory: losing the CA invalidates every issued client certificate and
 changes the certificate clients must trust.
-The server certificate is generated for `localhost`, the hostname, all host IP
-addresses, and any comma-separated `-mtls-sans` (env `ROOKERY_MTLS_SANS`)
-entries; add public DNS names or IPs there if clients connect through them.
+In managed mode the server certificate is generated for `localhost`, the
+hostname, all host IP addresses, and any comma-separated `-mtls-sans` (env
+`ROOKERY_MTLS_SANS`) entries; add public DNS names or IPs there if clients
+connect through them.
+
+## Existing CA and certificates
+
+Set `-pki-mode existing` (env `ROOKERY_PKI_MODE`, YAML `api.pki_mode`) to load
+mTLS material that was provisioned outside Rookery. The default files are
+`ca.pem`, `ca-key.pem`, `server.pem`, and `server-key.pem` under `-pki-dir`.
+Point at other files with `-pki-ca-cert`, `-pki-ca-key`, `-pki-server-cert`,
+and `-pki-server-key` (env `ROOKERY_PKI_CA_CERT`, `ROOKERY_PKI_CA_KEY`,
+`ROOKERY_PKI_SERVER_CERT`, `ROOKERY_PKI_SERVER_KEY`; YAML `api.pki_ca_cert`,
+`api.pki_ca_key`, `api.pki_server_cert`, `api.pki_server_key`). Empty paths
+default to the standard names inside `-pki-dir`.
+
+In `existing` mode Rookery:
+
+- Loads the CA certificate and, when present, the CA private key.
+- Loads the server certificate and key and verifies that the certificate chains
+  to the CA and is valid for server authentication. The certificate must be
+  currently valid; expired or not-yet-valid material fails startup.
+- Never creates, renews, rotates, or overwrites any file, and does not extend
+  the server certificate for `-mtls-sans` or host IP changes.
+- Accepts any client certificate signed by the CA unless `-pki-client-dir` is
+  set, in which case only allowlisted public certificates are accepted. Client
+  certificates are still recorded in the database when issued through Rookery;
+  only recorded serials can be revoked from the UI/API.
+- Requires the CA private key only for `create-client-cert` and
+  `POST /api/pki/clients`. A server can run with `ca.pem` alone.
+
+The server certificate's SANs are the operator's responsibility in this mode.
+Include every DNS name and IP address clients use to reach the API. The
+`-mtls-sans` value is not used for renewal or validation.
+
+## Client certificate allowlist
+
+By default Rookery accepts any client certificate that chains to its CA and is
+not revoked. Set `-pki-client-dir` (env `ROOKERY_PKI_CLIENT_DIR`, YAML
+`api.pki_client_dir`) to accept only client certificates whose public
+certificate PEM exists under that directory. This applies in both PKI modes.
+
+- The directory is scanned recursively for `.crt`, `.pem`, and `.cer` files.
+  CA certificates and certificates without the client-auth usage are ignored.
+- The presented client certificate must still chain to the CA and pass the
+  revocation check. The allowlist is an additional requirement, not a
+  replacement for chain validation.
+- Certificates issued by Rookery (`POST /api/pki/clients` or
+  `rookery create-client-cert`) are written to the directory and trusted
+  immediately. The directory is reloaded when its mtime changes, so adding a
+  public certificate is picked up on the next handshake without a restart.
+  Replacing a file in place may not update the directory mtime; touch the
+  directory or restart the API in that case.
+- Leave the setting empty for the historical CA-wide client trust behavior.
+  Enabling it on an existing deployment requires adding the public
+  certificates of every client that should remain authorized.
 
 Example HTTPS client:
 

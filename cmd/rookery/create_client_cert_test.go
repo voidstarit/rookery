@@ -138,6 +138,106 @@ func TestCreateClientCertRequiresExistingCA(t *testing.T) {
 	}
 }
 
+func TestCreateClientCertUsesExistingCAFiles(t *testing.T) {
+	t.Setenv("ROOKERY_CONFIG", "")
+	root := t.TempDir()
+	dbPath := filepath.Join(root, "rookery.db")
+	managedDir := filepath.Join(root, "managed-pki")
+	st, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pki.New(managedDir, st, nil, zerolog.Nop()); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	customDir := filepath.Join(root, "custom")
+	if err := os.MkdirAll(customDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range []struct {
+		src  string
+		dest string
+	}{
+		{"ca.pem", "site-ca.crt"},
+		{"ca-key.pem", "site-ca.key"},
+	} {
+		data, err := os.ReadFile(filepath.Join(managedDir, file.src))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(customDir, file.dest), data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	outDir := filepath.Join(root, "out")
+	err = runCreateClientCert([]string{
+		"-db", dbPath,
+		"-pki-mode", "existing",
+		"-pki-dir", filepath.Join(root, "unused-pki"),
+		"-pki-ca-cert", filepath.Join(customDir, "site-ca.crt"),
+		"-pki-ca-key", filepath.Join(customDir, "site-ca.key"),
+		"-out-dir", outDir,
+		"existing-client",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(outDir, "existing-client.crt")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCreateClientCertWritesAllowlistFile(t *testing.T) {
+	t.Setenv("ROOKERY_CONFIG", "")
+	root := t.TempDir()
+	dbPath := filepath.Join(root, "rookery.db")
+	pkiDir := filepath.Join(root, "pki")
+	outDir := filepath.Join(root, "out")
+	clientDir := filepath.Join(root, "clients")
+	if err := os.MkdirAll(clientDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pki.New(pkiDir, st, nil, zerolog.Nop()); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runCreateClientCert([]string{
+		"-db", dbPath,
+		"-pki-dir", pkiDir,
+		"-pki-client-dir", clientDir,
+		"-out-dir", outDir,
+		"allowlisted",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(clientDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var certificates int
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".crt") {
+			certificates++
+		}
+	}
+	if certificates != 1 {
+		t.Fatalf("allowlist certificates = %d, want 1", certificates)
+	}
+}
+
 func TestCreateClientCertRequiresExistingDatabase(t *testing.T) {
 	t.Setenv("ROOKERY_CONFIG", "")
 	root := t.TempDir()
