@@ -414,9 +414,10 @@ curl -sS -X POST http://127.0.0.1:8080/api/storage-backends/1/import-disks \
 ```
 
 Import only adds inventory rows in a transaction; it never creates, copies, or
-resizes an LV. The list marks volumes that are already registered, and the
-reported size is rounded up to whole GB. Deleting an imported disk is still
-destructive: it removes the underlying thin volume.
+resizes an LV. The list marks volumes that are already registered and reports
+each volume's exact `size_bytes` alongside `size_gb` (rounded up to whole GB).
+Deleting an imported disk is still destructive: it removes the underlying thin
+volume.
 
 Existing host block devices can also be passed through to a VM without any
 LVM management. List candidates first; the response includes whole disks,

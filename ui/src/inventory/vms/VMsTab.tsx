@@ -10,6 +10,7 @@ import type {
   VM,
 } from "../types";
 import { formatMemory } from "../monitor";
+import { formatByteSize } from "../../shared/format";
 import { VMDialog } from "./VMDialog";
 import { WorkloadMonitorDialog } from "../WorkloadMonitorDialog";
 import { diskNeedsThinPool } from "./disk-predicates";
@@ -428,7 +429,12 @@ export function VMsTab() {
                         title={
                           disksForVM.length
                             ? disksForVM
-                                .map((disk) => `${disk.name} · ${numberFormat.format(disk.size_gb)} GB`)
+                                .map(
+                                  (disk) =>
+                                    `${disk.name} · ${formatByteSize(
+                                      disk.size_bytes || disk.size_gb * 1024 ** 3
+                                    )}`
+                                )
                                 .join(", ")
                             : undefined
                         }

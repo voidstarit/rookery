@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
 import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
+import { formatByteSize } from "../../shared/format";
 import type {
   CgroupSettings,
   Disk,
@@ -388,7 +389,7 @@ export function VMDialog({
                 <option value="">{availableDisks.length > 0 ? "Select a disk…" : "No disks available"}</option>
                 {availableDisks.map((disk) => (
                   <option value={String(disk.id)} key={disk.id}>
-                    {disk.name} · {formatBytes(disk.size_bytes || disk.size_gb * 1024 ** 3)}
+                    {disk.name} · {formatByteSize(disk.size_bytes || disk.size_gb * 1024 ** 3)}
                     {disk.source === "host-device" ? " · passthrough" : disk.source === "kouja" ? " · kouja" : ""}
                     {disk.read_only ? " · read-only" : ""}
                   </option>
@@ -412,7 +413,7 @@ export function VMDialog({
                     <span class="interface-list-name">
                       {disk.name}
                       <span class="interface-list-network">
-                        {formatBytes(disk.size_bytes || disk.size_gb * 1024 ** 3)}
+                        {formatByteSize(disk.size_bytes || disk.size_gb * 1024 ** 3)}
                         {disk.source === "host-device" ? " · passthrough" : disk.source === "kouja" ? " · kouja" : ""}
                         {disk.read_only ? " · read-only" : ""}
                         {index === 0 ? " · boot" : ""}
@@ -454,7 +455,7 @@ export function VMDialog({
               <option value="">Boot from disk</option>
               {media.map((item) => (
                 <option value={String(item.id)} key={item.id}>
-                  {item.name} · {formatBytes(item.size_bytes)}
+                  {item.name} · {formatByteSize(item.size_bytes)}
                 </option>
               ))}
             </select>
@@ -584,18 +585,4 @@ export function VMDialog({
       </form>
     </dialog>
   );
-}
-
-function formatBytes(bytes: number): string {
-  const value = Number(bytes) || 0;
-  if (value >= 1024 ** 3) {
-    return `${(value / 1024 ** 3).toFixed(value % 1024 ** 3 === 0 ? 0 : 1)} GB`;
-  }
-  if (value >= 1024 ** 2) {
-    return `${(value / 1024 ** 2).toFixed(value % 1024 ** 2 === 0 ? 0 : 1)} MB`;
-  }
-  if (value >= 1024) {
-    return `${(value / 1024).toFixed(value % 1024 === 0 ? 0 : 1)} KB`;
-  }
-  return `${value} B`;
 }

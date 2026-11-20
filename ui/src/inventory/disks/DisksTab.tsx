@@ -7,12 +7,11 @@ import { DiskDialog } from "./DiskDialog";
 import { DiskThrottleAssignmentDialog } from "./DiskThrottleAssignmentDialog";
 import { DiskThrottleClassDialog } from "./DiskThrottleClassDialog";
 import { formatThrottleFamilySummary, formatThrottleSummary } from "./throttle";
+import { formatByteSize } from "../../shared/format";
 import { ImportDisksDialog } from "./ImportDisksDialog";
 import { StorageBackendDialog } from "./StorageBackendDialog";
 import { TemplateProvisioningDialog } from "./TemplateProvisioningDialog";
 import { navigate, useRoute } from "../router";
-
-const numberFormat = new Intl.NumberFormat();
 
 function formatDate(value: string | undefined): string {
   if (!value) {
@@ -26,20 +25,8 @@ function formatDate(value: string | undefined): string {
 }
 
 function formatDiskSize(disk: Disk): string {
-  const bytes = Number(disk.size_bytes) || 0;
-  if (bytes <= 0) {
-    return `${numberFormat.format(disk.size_gb)} GB`;
-  }
-  if (bytes >= 1024 ** 4) {
-    return `${(bytes / 1024 ** 4).toFixed(bytes % 1024 ** 4 === 0 ? 0 : 1)} TB`;
-  }
-  if (bytes >= 1024 ** 3) {
-    return `${(bytes / 1024 ** 3).toFixed(bytes % 1024 ** 3 === 0 ? 0 : 1)} GB`;
-  }
-  if (bytes >= 1024 ** 2) {
-    return `${(bytes / 1024 ** 2).toFixed(bytes % 1024 ** 2 === 0 ? 0 : 1)} MB`;
-  }
-  return `${numberFormat.format(bytes)} B`;
+  const bytes = Number(disk.size_bytes) || Number(disk.size_gb) * 1024 ** 3;
+  return formatByteSize(bytes);
 }
 
 export function DisksTab() {

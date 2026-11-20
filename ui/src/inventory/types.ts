@@ -451,6 +451,7 @@ export type Disk = {
 export type ImportableDisk = {
   name: string;
   size_gb: number;
+  size_bytes?: number;
   registered: boolean;
   disk_id?: number;
   attached_vm_id?: string;

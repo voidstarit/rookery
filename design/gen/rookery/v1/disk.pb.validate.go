@@ -561,6 +561,8 @@ func (m *ImportableDisk) validate(all bool) error {
 
 	// no validation rules for AttachedLightvmName
 
+	// no validation rules for SizeBytes
+
 	if m.DiskId != nil {
 		// no validation rules for DiskId
 	}

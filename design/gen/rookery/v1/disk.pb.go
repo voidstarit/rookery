@@ -553,18 +553,21 @@ func (x *Disk) GetAttachments() []*DiskAttachment {
 }
 
 type ImportableDisk struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	Name                string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	SizeGb              int32                  `protobuf:"varint,2,opt,name=size_gb,json=sizeGb,proto3" json:"size_gb,omitempty"`
-	Registered          bool                   `protobuf:"varint,3,opt,name=registered,proto3" json:"registered,omitempty"`
-	DiskId              *int64                 `protobuf:"varint,4,opt,name=disk_id,json=diskId,proto3,oneof" json:"disk_id,omitempty"`
-	AttachedVmId        *string                `protobuf:"bytes,5,opt,name=attached_vm_id,json=attachedVmId,proto3,oneof" json:"attached_vm_id,omitempty"`
-	AttachedVmName      string                 `protobuf:"bytes,6,opt,name=attached_vm_name,json=attachedVmName,proto3" json:"attached_vm_name,omitempty"`
-	StorageBackendName  string                 `protobuf:"bytes,7,opt,name=storage_backend_name,json=storageBackendName,proto3" json:"storage_backend_name,omitempty"`
-	AttachedLightvmId   *string                `protobuf:"bytes,8,opt,name=attached_lightvm_id,json=attachedLightvmId,proto3,oneof" json:"attached_lightvm_id,omitempty"`
-	AttachedLightvmName string                 `protobuf:"bytes,9,opt,name=attached_lightvm_name,json=attachedLightvmName,proto3" json:"attached_lightvm_name,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// size_gb is the volume size rounded up to whole gigabytes.
+	SizeGb              int32   `protobuf:"varint,2,opt,name=size_gb,json=sizeGb,proto3" json:"size_gb,omitempty"`
+	Registered          bool    `protobuf:"varint,3,opt,name=registered,proto3" json:"registered,omitempty"`
+	DiskId              *int64  `protobuf:"varint,4,opt,name=disk_id,json=diskId,proto3,oneof" json:"disk_id,omitempty"`
+	AttachedVmId        *string `protobuf:"bytes,5,opt,name=attached_vm_id,json=attachedVmId,proto3,oneof" json:"attached_vm_id,omitempty"`
+	AttachedVmName      string  `protobuf:"bytes,6,opt,name=attached_vm_name,json=attachedVmName,proto3" json:"attached_vm_name,omitempty"`
+	StorageBackendName  string  `protobuf:"bytes,7,opt,name=storage_backend_name,json=storageBackendName,proto3" json:"storage_backend_name,omitempty"`
+	AttachedLightvmId   *string `protobuf:"bytes,8,opt,name=attached_lightvm_id,json=attachedLightvmId,proto3,oneof" json:"attached_lightvm_id,omitempty"`
+	AttachedLightvmName string  `protobuf:"bytes,9,opt,name=attached_lightvm_name,json=attachedLightvmName,proto3" json:"attached_lightvm_name,omitempty"`
+	// size_bytes is the exact volume size reported by LVM.
+	SizeBytes     uint64 `protobuf:"varint,10,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ImportableDisk) Reset() {
@@ -658,6 +661,13 @@ func (x *ImportableDisk) GetAttachedLightvmName() string {
 		return x.AttachedLightvmName
 	}
 	return ""
+}
+
+func (x *ImportableDisk) GetSizeBytes() uint64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
 }
 
 type ListDisksRequest struct {
@@ -1167,7 +1177,7 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\x13_storage_backend_idB\x11\n" +
 	"\x0f_attached_vm_idB\x13\n" +
 	"\x11_template_disk_idB\x16\n" +
-	"\x14_attached_lightvm_idJ\x04\b\x18\x10\x19J\x04\b\x19\x10\x1aR\bread_bpsR\twrite_bps\"\xa2\x03\n" +
+	"\x14_attached_lightvm_idJ\x04\b\x18\x10\x19J\x04\b\x19\x10\x1aR\bread_bpsR\twrite_bps\"\xc1\x03\n" +
 	"\x0eImportableDisk\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x17\n" +
 	"\asize_gb\x18\x02 \x01(\x05R\x06sizeGb\x12\x1e\n" +
@@ -1179,7 +1189,10 @@ const file_rookery_v1_disk_proto_rawDesc = "" +
 	"\x10attached_vm_name\x18\x06 \x01(\tR\x0eattachedVmName\x120\n" +
 	"\x14storage_backend_name\x18\a \x01(\tR\x12storageBackendName\x123\n" +
 	"\x13attached_lightvm_id\x18\b \x01(\tH\x02R\x11attachedLightvmId\x88\x01\x01\x122\n" +
-	"\x15attached_lightvm_name\x18\t \x01(\tR\x13attachedLightvmNameB\n" +
+	"\x15attached_lightvm_name\x18\t \x01(\tR\x13attachedLightvmName\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\n" +
+	" \x01(\x04R\tsizeBytesB\n" +
 	"\n" +
 	"\b_disk_idB\x11\n" +
 	"\x0f_attached_vm_idB\x16\n" +

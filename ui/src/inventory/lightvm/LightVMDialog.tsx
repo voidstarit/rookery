@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
-import { formatBytesIEC } from "../../shared/format";
+import { formatByteSize, formatBytesIEC } from "../../shared/format";
 import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
 import type {
   CgroupSettings,
@@ -1021,7 +1021,7 @@ export function LightVMDialog({
                 </option>
                 {availableDisks.map((disk) => (
                   <option value={String(disk.id)} key={disk.id}>
-                    {disk.name} · {disk.size_gb} GB{disk.read_only ? " · read-only" : ""}
+                    {disk.name} · {formatByteSize(disk.size_bytes || disk.size_gb * 1024 ** 3)}{disk.read_only ? " · read-only" : ""}
                   </option>
                 ))}
               </select>
@@ -1043,7 +1043,7 @@ export function LightVMDialog({
                     <span class="interface-list-name">
                       {disk.name}
                       <span class="interface-list-network">
-                        {disk.size_gb} GB · {disk.source || "lvm-thin"}
+                        {formatByteSize(disk.size_bytes || disk.size_gb * 1024 ** 3)} · {disk.source || "lvm-thin"}
                         {disk.read_only ? " · read-only" : ""}
                       </span>
                     </span>

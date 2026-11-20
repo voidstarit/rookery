@@ -79,8 +79,11 @@ func (l *LVM) ThinPool(ctx context.Context, vg, name string) (ThinPoolInfo, erro
 
 // ThinVolume describes a logical volume that belongs to a thin pool.
 type ThinVolume struct {
-	Name   string
+	Name string
+	// SizeGB is the volume size rounded up to whole gigabytes.
 	SizeGB int
+	// SizeBytes is the exact volume size reported by LVM.
+	SizeBytes uint64
 }
 
 // ListThinVolumes returns the existing thin volumes in a thin pool.
@@ -106,7 +109,7 @@ func (l *LVM) ListThinVolumes(ctx context.Context, vg, thinPool string) ([]ThinV
 	output, err := l.Runner.Run(ctx, "lvs",
 		"--noheadings", "--separator", "|",
 		"-o", "lv_name,lv_attr,lv_size,pool_lv",
-		"--units", "g", "--nosuffix", vg,
+		"--units", "b", "--nosuffix", vg,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list thin volumes in %s: %w", vg, err)
@@ -129,17 +132,22 @@ func (l *LVM) ListThinVolumes(ctx context.Context, vg, thinPool string) ([]ThinV
 			continue
 		}
 		sizeText := strings.TrimPrefix(strings.TrimSpace(parts[2]), "<")
-		sizeText = strings.TrimSuffix(sizeText, "g")
+		sizeText = strings.TrimSuffix(sizeText, "b")
+		sizeText = strings.TrimSuffix(sizeText, "B")
 		sizeText = strings.ReplaceAll(sizeText, ",", ".")
 		size, err := strconv.ParseFloat(sizeText, 64)
 		if err != nil {
 			return nil, fmt.Errorf("parse size of thin volume %s/%s (%q): %w", vg, name, parts[2], err)
 		}
-		sizeGB := int(math.Ceil(size))
+		if size < 0 {
+			return nil, fmt.Errorf("parse size of thin volume %s/%s (%q): negative size", vg, name, parts[2])
+		}
+		sizeBytes := uint64(math.Round(size))
+		sizeGB := int(math.Ceil(float64(sizeBytes) / (1 << 30)))
 		if sizeGB < 1 {
 			sizeGB = 1
 		}
-		volumes = append(volumes, ThinVolume{Name: name, SizeGB: sizeGB})
+		volumes = append(volumes, ThinVolume{Name: name, SizeGB: sizeGB, SizeBytes: sizeBytes})
 	}
 	sort.Slice(volumes, func(i, j int) bool {
 		left := strings.ToLower(volumes[i].Name)

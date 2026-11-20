@@ -3,6 +3,7 @@ import { api } from "../../shared/api";
 import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
 import type { Disk, DiskThrottleClass, HostAttachableBlockDevice, StorageBackend } from "../types";
 import { formatThrottleSummary } from "./throttle";
+import { formatByteSize } from "../../shared/format";
 
 type DiskDialogProps = {
   backends: StorageBackend[];
@@ -319,7 +320,7 @@ export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskD
                     <option value="">Select a template…</option>
                     {templates.map((disk) => (
                       <option value={String(disk.id)} key={disk.id}>
-                        {disk.name} · {disk.size_gb} GB{disk.provisioning_script ? " · provisioning" : ""}
+                        {disk.name} · {formatByteSize(disk.size_bytes || disk.size_gb * 1024 ** 3)}{disk.provisioning_script ? " · provisioning" : ""}
                       </option>
                     ))}
                   </select>
@@ -422,7 +423,7 @@ export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskD
                       key={`${device.kind}:${device.path}`}
                       disabled={!device.available}
                     >
-                      {deviceKindLabel(device.kind)} · {device.path} · {formatDeviceBytes(device.size_bytes)}
+                      {deviceKindLabel(device.kind)} · {device.path} · {formatByteSize(device.size_bytes)}
                       {device.available ? "" : ` · ${device.unavailable_reason || "unavailable"}`}
                     </option>
                   ))}
@@ -442,7 +443,7 @@ export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskD
                   <span class="field-label">Selected device</span>
                   <p class="field-hint">
                     {deviceKindLabel(hostDevice.kind)} · {hostDevice.path} ·{" "}
-                    {formatDeviceBytes(hostDevice.size_bytes)}
+                    {formatByteSize(hostDevice.size_bytes)}
                     {hostDevice.model ? ` · ${hostDevice.model}` : ""}
                   </p>
                   {hostDevice.available ? null : (
@@ -525,23 +526,6 @@ function deviceKindLabel(kind: string | undefined): string {
     default:
       return "Block device";
   }
-}
-
-function formatDeviceBytes(bytes: number | undefined): string {
-  const value = Number(bytes) || 0;
-  if (value >= 1024 ** 4) {
-    return `${(value / 1024 ** 4).toFixed(value % 1024 ** 4 === 0 ? 0 : 1)} TB`;
-  }
-  if (value >= 1024 ** 3) {
-    return `${(value / 1024 ** 3).toFixed(value % 1024 ** 3 === 0 ? 0 : 1)} GB`;
-  }
-  if (value >= 1024 ** 2) {
-    return `${(value / 1024 ** 2).toFixed(value % 1024 ** 2 === 0 ? 0 : 1)} MB`;
-  }
-  if (value >= 1024) {
-    return `${(value / 1024).toFixed(value % 1024 === 0 ? 0 : 1)} KB`;
-  }
-  return `${value} B`;
 }
 
 function defaultHostDiskName(device: HostAttachableBlockDevice): string {

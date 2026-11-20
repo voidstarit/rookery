@@ -558,6 +558,8 @@ type Disk struct {
 type ImportDisk struct {
 	Name   string
 	SizeGB int
+	// SizeBytes is the exact volume size; it is zero when unknown.
+	SizeBytes uint64
 }
 
 // Media is a read-only installation file (usually an ISO) on the host.
@@ -1234,9 +1236,9 @@ func (s *Store) ImportDisks(ctx context.Context, backendID int64, vg, thinPool s
 			return nil, fmt.Errorf("disk %q must be at least 1 GB", item.Name)
 		}
 		res, err := tx.ExecContext(ctx, `
-			INSERT INTO disks (name, size_gb, vg, thin_pool, storage_backend_id, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			item.Name, item.SizeGB, vg, thinPool, backendID, now, now,
+			INSERT INTO disks (name, size_gb, vg, thin_pool, storage_backend_id, size_bytes, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			item.Name, item.SizeGB, vg, thinPool, backendID, item.SizeBytes, now, now,
 		)
 		if err != nil {
 			if isUniqueViolation(err) {

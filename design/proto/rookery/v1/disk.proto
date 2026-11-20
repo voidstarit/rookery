@@ -125,6 +125,7 @@ message Disk {
 
 message ImportableDisk {
   string name = 1;
+  // size_gb is the volume size rounded up to whole gigabytes.
   int32 size_gb = 2;
   bool registered = 3;
   optional int64 disk_id = 4;
@@ -133,6 +134,8 @@ message ImportableDisk {
   string storage_backend_name = 7;
   optional string attached_lightvm_id = 8;
   string attached_lightvm_name = 9;
+  // size_bytes is the exact volume size reported by LVM.
+  uint64 size_bytes = 10;
 }
 
 message ListDisksRequest {}

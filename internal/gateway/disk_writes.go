@@ -675,7 +675,7 @@ func (s *storageBackendService) ListImportableDisks(ctx context.Context, request
 	}
 	items := make([]*rookeryv1.ImportableDisk, 0, len(volumes))
 	for _, volume := range volumes {
-		item := &rookeryv1.ImportableDisk{Name: volume.Name, SizeGb: int32(volume.SizeGB)}
+		item := &rookeryv1.ImportableDisk{Name: volume.Name, SizeGb: int32(volume.SizeGB), SizeBytes: volume.SizeBytes}
 		if disk, ok := registered[strings.ToLower(volume.Name)]; ok {
 			item.Registered = true
 			item.DiskId = &disk.ID
@@ -734,7 +734,7 @@ func (s *storageBackendService) ImportDisks(ctx context.Context, request *rooker
 		} else if !errors.Is(err, store.ErrDiskNotFound) {
 			return nil, status.Error(codes.Internal, "could not check disk name")
 		}
-		imports = append(imports, store.ImportDisk{Name: volume.Name, SizeGB: volume.SizeGB})
+		imports = append(imports, store.ImportDisk{Name: volume.Name, SizeGB: volume.SizeGB, SizeBytes: volume.SizeBytes})
 	}
 	created, err := s.store.ImportDisks(ctx, backend.ID, backend.Config.VG, backend.Config.ThinPool, imports)
 	if err != nil {

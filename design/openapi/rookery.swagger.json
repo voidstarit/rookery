@@ -6109,7 +6109,8 @@
         },
         "size_gb": {
           "type": "integer",
-          "format": "int32"
+          "format": "int32",
+          "description": "size_gb is the volume size rounded up to whole gigabytes."
         },
         "registered": {
           "type": "boolean"
@@ -6132,6 +6133,11 @@
         },
         "attached_lightvm_name": {
           "type": "string"
+        },
+        "size_bytes": {
+          "type": "string",
+          "format": "uint64",
+          "description": "size_bytes is the exact volume size reported by LVM."
         }
       }
     },
