@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 )
@@ -21,6 +22,7 @@ type fakeLVM struct {
 	createCalls      int
 	volumes          map[string]string
 	volumeSizes      map[string]float64
+	volumeBytes      map[string]int64
 	volumePools      map[string]string
 	calls            []string
 }
@@ -48,6 +50,14 @@ func (f *fakeLVM) Run(_ context.Context, name string, args ...string) ([]byte, e
 				pool := f.volumePools[volumeName]
 				if pool == "" {
 					pool = "rookery"
+				}
+				if argValue(args, "--units") == "b" {
+					bytes, ok := f.volumeBytes[volumeName]
+					if !ok {
+						bytes = int64(math.Round(size * 1024 * 1024 * 1024))
+					}
+					fmt.Fprintf(&output, "  %s|%s|%d.00|%s\n", volumeName, attribute, bytes, pool)
+					continue
 				}
 				fmt.Fprintf(&output, "  %s|%s|%.2f|%s\n", volumeName, attribute, size, pool)
 			}
@@ -308,8 +318,41 @@ func TestListThinVolumes(t *testing.T) {
 	if volumes[1].Name != "zdata" || volumes[1].SizeGB != 6 {
 		t.Fatalf("second volume = %+v", volumes[1])
 	}
-	if !runner.called("lvs --noheadings --separator | -o lv_name,lv_attr,lv_size,pool_lv --units g --nosuffix vg0") {
+	if volumes[0].SizeBytes != 10*(1<<30) || volumes[1].SizeBytes != 5583457485 {
+		t.Fatalf("volume sizes = %+v", volumes)
+	}
+	if !runner.called("lvs --noheadings --separator | -o lv_name,lv_attr,lv_size,pool_lv --units b --nosuffix vg0") {
 		t.Fatalf("unexpected calls: %v", runner.calls)
+	}
+}
+
+func TestListThinVolumesReportsExactSubGigabyteSizes(t *testing.T) {
+	runner := &fakeLVM{
+		vgExists:   true,
+		poolExists: true,
+		volumes: map[string]string{
+			"tiny":  "Vwi-a-tz--",
+			"micro": "Vwi-a-tz--",
+		},
+		volumeBytes: map[string]int64{
+			"tiny":  512 << 20,
+			"micro": 999 << 10,
+		},
+	}
+	lvm := &LVM{Runner: runner}
+
+	volumes, err := lvm.ListThinVolumes(context.Background(), "vg0", "rookery")
+	if err != nil {
+		t.Fatalf("ListThinVolumes: %v", err)
+	}
+	if len(volumes) != 2 {
+		t.Fatalf("volumes = %+v, want two", volumes)
+	}
+	if volumes[0].Name != "micro" || volumes[0].SizeGB != 1 || volumes[0].SizeBytes != 999<<10 {
+		t.Fatalf("micro volume = %+v", volumes[0])
+	}
+	if volumes[1].Name != "tiny" || volumes[1].SizeGB != 1 || volumes[1].SizeBytes != (512<<20) {
+		t.Fatalf("tiny volume = %+v", volumes[1])
 	}
 }
 

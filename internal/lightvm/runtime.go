@@ -34,11 +34,13 @@ const (
 
 // QEMURunner is the QEMU subset used by the LightVM runtime.
 type QEMURunner interface {
-	StartLightVMWithVirtioFSAndPlan(ctx context.Context, vm store.LightVM, rootfs qemu.LightVMVirtioFS, shares []qemu.LightVMVirtioFS, plan qemu.StartPlan) (bool, error)
+	StartLightVMWithVirtioFSAndPlan(ctx context.Context, vm store.LightVM, rootfs qemu.LightVMVirtioFS, shares []qemu.LightVMVirtioFS, configDrive qemu.LightVMConfigDrive, plan qemu.StartPlan) (bool, error)
 	LightVMRunState(ctx context.Context, id string) (string, error)
 	StopLightVM(ctx context.Context, id string) error
 	RunningLightVM(id string) bool
 	LightVMConsoleSocket(id string, consoleID int64) string
+	LightVMMetrics(id string) (qemu.Metrics, error)
+	LightVMBlockStats(ctx context.Context, id string) ([]qemu.BlockDeviceStats, error)
 }
 
 // Runtime orchestrates the ephemeral buildah container, virtiofsd, and QEMU
@@ -145,6 +147,16 @@ func (r *Runtime) RunningLightVM(id string) bool {
 // LightVMConsoleSocket returns the virtio-console Unix socket path.
 func (r *Runtime) LightVMConsoleSocket(id string, consoleID int64) string {
 	return r.qemuRunner.LightVMConsoleSocket(id, consoleID)
+}
+
+// LightVMMetrics returns process-level telemetry for the LightVM's QEMU process.
+func (r *Runtime) LightVMMetrics(id string) (qemu.Metrics, error) {
+	return r.qemuRunner.LightVMMetrics(id)
+}
+
+// LightVMBlockStats returns per-drive QEMU block statistics for a LightVM.
+func (r *Runtime) LightVMBlockStats(ctx context.Context, id string) ([]qemu.BlockDeviceStats, error) {
+	return r.qemuRunner.LightVMBlockStats(ctx, id)
 }
 
 // LightVMStatus reports whether the external LightVM tools are available.
@@ -304,30 +316,38 @@ func (r *Runtime) cleanupContainerBackground(id string) {
 }
 
 func writeLightVMEnvFile(rootfs string, values []store.LightVMEnvVar) error {
+	content, err := renderLightVMEnv(values)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(rootfs, ".env")
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
+
+func renderLightVMEnv(values []store.LightVMEnvVar) ([]byte, error) {
 	var content strings.Builder
 	seen := make(map[string]struct{}, len(values))
 	for _, item := range values {
 		name := strings.TrimSpace(item.Name)
 		if !validLightVMEnvName(name) {
-			return fmt.Errorf("environment variable %q must match [A-Za-z_][A-Za-z0-9_]*", name)
+			return nil, fmt.Errorf("environment variable %q must match [A-Za-z_][A-Za-z0-9_]*", name)
 		}
 		if _, ok := seen[name]; ok {
-			return fmt.Errorf("environment variable %q is duplicated", name)
+			return nil, fmt.Errorf("environment variable %q is duplicated", name)
 		}
 		seen[name] = struct{}{}
 		if strings.ContainsAny(item.Value, "\r\n\x00") {
-			return fmt.Errorf("environment variable %q must be a single line without NUL characters", name)
+			return nil, fmt.Errorf("environment variable %q must be a single line without NUL characters", name)
 		}
 		content.WriteString(name)
 		content.WriteByte('=')
 		content.WriteString(item.Value)
 		content.WriteByte('\n')
 	}
-	path := filepath.Join(rootfs, ".env")
-	if err := os.WriteFile(path, []byte(content.String()), 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
-	}
-	return nil
+	return []byte(content.String()), nil
 }
 
 func validLightVMEnvName(name string) bool {
@@ -347,15 +367,27 @@ func validLightVMEnvName(name string) bool {
 // writeLightVMEntrypointFile writes an executable /.entrypoint script at the
 // root of the mounted image. The LightVM init can execute it directly.
 func writeLightVMEntrypointFile(rootfs, executable string, args []string, script string) error {
+	content, err := renderLightVMEntrypoint(executable, args, script)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(rootfs, ".entrypoint")
+	if err := os.WriteFile(path, content, 0o755); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
+
+func renderLightVMEntrypoint(executable string, args []string, script string) ([]byte, error) {
 	if strings.TrimSpace(script) != "" {
-		return writeLightVMScriptEntrypoint(rootfs, script)
+		return renderLightVMScriptEntrypoint(script)
 	}
 	executable = strings.TrimSpace(executable)
 	if executable == "" {
-		return errors.New("executable path is required")
+		return nil, errors.New("executable path is required")
 	}
 	if strings.ContainsAny(executable, "\r\n\x00") {
-		return errors.New("executable path must be a single line without NUL characters")
+		return nil, errors.New("executable path must be a single line without NUL characters")
 	}
 	var content strings.Builder
 	content.WriteString("#!/bin/sh\n")
@@ -364,22 +396,18 @@ func writeLightVMEntrypointFile(rootfs, executable string, args []string, script
 	content.WriteString(shellQuote(executable))
 	for _, arg := range args {
 		if strings.ContainsRune(arg, 0) {
-			return errors.New("executable arguments cannot contain NUL characters")
+			return nil, errors.New("executable arguments cannot contain NUL characters")
 		}
 		content.WriteByte(' ')
 		content.WriteString(shellQuote(arg))
 	}
 	content.WriteByte('\n')
-	path := filepath.Join(rootfs, ".entrypoint")
-	if err := os.WriteFile(path, []byte(content.String()), 0o755); err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
-	}
-	return nil
+	return []byte(content.String()), nil
 }
 
-func writeLightVMScriptEntrypoint(rootfs, script string) error {
+func renderLightVMScriptEntrypoint(script string) ([]byte, error) {
 	if strings.ContainsRune(script, 0) {
-		return errors.New("executable script cannot contain NUL characters")
+		return nil, errors.New("executable script cannot contain NUL characters")
 	}
 	var content strings.Builder
 	if !strings.HasPrefix(script, "#!") {
@@ -389,11 +417,7 @@ func writeLightVMScriptEntrypoint(rootfs, script string) error {
 	if !strings.HasSuffix(script, "\n") {
 		content.WriteByte('\n')
 	}
-	path := filepath.Join(rootfs, ".entrypoint")
-	if err := os.WriteFile(path, []byte(content.String()), 0o755); err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
-	}
-	return nil
+	return []byte(content.String()), nil
 }
 
 func shellQuote(value string) string {

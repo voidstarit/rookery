@@ -1,6 +1,7 @@
 package lightvm_test
 
 import (
+	"archive/tar"
 	"context"
 	"errors"
 	"io"
@@ -22,22 +23,24 @@ type fakeLightVMQEMU struct {
 	running           bool
 	fs                qemu.LightVMVirtioFS
 	shares            []qemu.LightVMVirtioFS
+	configDrive       qemu.LightVMConfigDrive
 	startErr          error
 	stopErr           error
 	stopLeavesRunning bool
 }
 
 func (f *fakeLightVMQEMU) StartLightVMWithVirtioFS(_ context.Context, _ store.LightVM, rootfs qemu.LightVMVirtioFS) error {
-	_, err := f.StartLightVMWithVirtioFSAndPlan(context.Background(), store.LightVM{}, rootfs, nil, qemu.StartPlan{})
+	_, err := f.StartLightVMWithVirtioFSAndPlan(context.Background(), store.LightVM{}, rootfs, nil, qemu.LightVMConfigDrive{}, qemu.StartPlan{})
 	return err
 }
-func (f *fakeLightVMQEMU) StartLightVMWithVirtioFSAndPlan(_ context.Context, _ store.LightVM, rootfs qemu.LightVMVirtioFS, shares []qemu.LightVMVirtioFS, _ qemu.StartPlan) (bool, error) {
+func (f *fakeLightVMQEMU) StartLightVMWithVirtioFSAndPlan(_ context.Context, _ store.LightVM, rootfs qemu.LightVMVirtioFS, shares []qemu.LightVMVirtioFS, configDrive qemu.LightVMConfigDrive, _ qemu.StartPlan) (bool, error) {
 	if f.startErr != nil {
 		return false, f.startErr
 	}
 	f.running = true
 	f.fs = rootfs
 	f.shares = shares
+	f.configDrive = configDrive
 	return true, nil
 }
 func (f *fakeLightVMQEMU) LightVMRunState(context.Context, string) (string, error) {
@@ -58,6 +61,12 @@ func (f *fakeLightVMQEMU) StopLightVM(context.Context, string) error {
 func (f *fakeLightVMQEMU) RunningLightVM(string) bool { return f.running }
 func (f *fakeLightVMQEMU) LightVMConsoleSocket(id string, _ int64) string {
 	return "/tmp/" + id + ".console"
+}
+func (f *fakeLightVMQEMU) LightVMMetrics(string) (qemu.Metrics, error) {
+	return qemu.Metrics{Running: f.running}, nil
+}
+func (f *fakeLightVMQEMU) LightVMBlockStats(context.Context, string) ([]qemu.BlockDeviceStats, error) {
+	return nil, nil
 }
 
 // TestFakeVirtiofsdHelper is used as a stand-in virtiofsd process. It creates
@@ -303,7 +312,7 @@ func TestRuntimeTwoPhaseAttemptResources(t *testing.T) {
 	if !strings.HasPrefix(prepared.Container, "rookery-lightvm-"+vm.ID+"-") ||
 		!strings.Contains(prepared.AttemptToken, "0000000000000007") ||
 		!strings.HasSuffix(prepared.VirtiofsdSocket, ".virtiofs.sock") ||
-		prepared.VirtiofsdStarted || prepared.QEMUStarted {
+		prepared.ConfigDrivePath != "" || prepared.VirtiofsdStarted || prepared.QEMUStarted {
 		t.Fatalf("prepared handle = %+v", prepared)
 	}
 	if err := runtime.StartPreparedLightVM(context.Background(), &prepared, vm, qemu.StartPlan{}); err != nil {
@@ -642,6 +651,14 @@ func TestRuntimeWrappersPropagateErrors(t *testing.T) {
 	if err := runtime.StopLightVM(context.Background(), vm.ID); err == nil {
 		t.Fatal("StopLightVM ignored a stop error")
 	}
+	metrics, err := runtime.LightVMMetrics(vm.ID)
+	if err != nil || metrics.Running {
+		t.Fatalf("LightVMMetrics = %+v, %v", metrics, err)
+	}
+	stats, err := runtime.LightVMBlockStats(context.Background(), vm.ID)
+	if err != nil || stats != nil {
+		t.Fatalf("LightVMBlockStats = %+v, %v", stats, err)
+	}
 }
 
 func TestRuntimeVirtioFSShareHostPathValidation(t *testing.T) {
@@ -707,5 +724,145 @@ func TestRuntimeRejectsNULExecutableScript(t *testing.T) {
 	vm.ExecutableScript = "echo \x00bad"
 	if _, err := runtime.PrepareLightVM(context.Background(), vm); err == nil {
 		t.Fatal("NUL script was accepted")
+	}
+}
+
+func TestDiskBackedLightVMNeedsNoBuildahOrVirtiofsd(t *testing.T) {
+	runner := &fakeLightVMQEMU{}
+	dir := t.TempDir()
+	runtime, err := lightvm.NewRuntime(
+		runner,
+		filepath.Join(dir, "missing-buildah"),
+		filepath.Join(dir, "missing-virtiofsd"),
+		shortRuntimeDir(t),
+		zerolog.Nop(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm := store.LightVM{
+		ID: uuid.NewString(), Name: "disk-only",
+		Disks: []store.VMDisk{{ID: 1, Device: "/dev/vg0/root"}},
+	}
+	prepared, err := runtime.PrepareLightVM(context.Background(), vm)
+	if err != nil {
+		t.Fatalf("PrepareLightVM: %v", err)
+	}
+	if prepared.Container != "" || prepared.Rootfs != "" || prepared.VirtiofsdSocket != "" || prepared.ConfigDrivePath != "" {
+		t.Fatalf("disk-backed prepared handle = %+v", prepared)
+	}
+	if err := runtime.StartPreparedLightVM(context.Background(), &prepared, vm, qemu.StartPlan{}); err != nil {
+		t.Fatalf("StartPreparedLightVM: %v", err)
+	}
+	if !runner.running || runner.fs.SocketPath != "" {
+		t.Fatalf("running = %v, rootfs = %+v", runner.running, runner.fs)
+	}
+	if err := runtime.CleanupPreparedLightVM(context.Background(), prepared); err != nil {
+		t.Fatalf("CleanupPreparedLightVM: %v", err)
+	}
+	if _, err := runtime.PrepareLightVM(context.Background(), store.LightVM{ID: uuid.NewString(), Name: "rootless"}); err == nil {
+		t.Fatal("a LightVM with neither an image nor a disk was accepted")
+	}
+	runner.running = false
+	if err := runtime.CleanupStoppedLightVM(context.Background(), vm.ID); err != nil {
+		t.Fatalf("CleanupStoppedLightVM without buildah: %v", err)
+	}
+}
+
+func TestDiskBackedLightVMConfigDrive(t *testing.T) {
+	runner := &fakeLightVMQEMU{}
+	dir := t.TempDir()
+	runtime, err := lightvm.NewRuntime(
+		runner,
+		filepath.Join(dir, "missing-buildah"),
+		filepath.Join(dir, "missing-virtiofsd"),
+		shortRuntimeDir(t),
+		zerolog.Nop(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm := store.LightVM{
+		ID: uuid.NewString(), Name: "disk-config",
+		Disks:          []store.VMDisk{{ID: 1, Device: "/dev/vg0/root"}},
+		Env:            []store.LightVMEnvVar{{Name: "APP_ENV", Value: "production"}, {Name: "LOG_LEVEL", Value: "info"}},
+		ConfigFiles:    []store.LightVMConfigFile{{Name: "app/config.yaml", Content: "key: value\n"}},
+		ExecutablePath: "/sbin/init",
+		ExecutableArgs: []string{"--verbose"},
+	}
+	prepared, err := runtime.PrepareLightVM(context.Background(), vm)
+	if err != nil {
+		t.Fatalf("PrepareLightVM: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = runtime.CleanupPreparedLightVM(context.Background(), prepared)
+	})
+	if prepared.ConfigDrivePath == "" {
+		t.Fatal("config drive path is empty")
+	}
+	info, err := os.Stat(prepared.ConfigDrivePath)
+	if err != nil {
+		t.Fatalf("stat config drive: %v", err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("config drive mode = %o, want 600", info.Mode().Perm())
+	}
+	if info.Size()%4096 != 0 {
+		t.Fatalf("config drive size = %d, want a 4096-byte multiple", info.Size())
+	}
+
+	file, err := os.Open(prepared.ConfigDrivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	entries := make(map[string]struct {
+		mode int64
+		data string
+	})
+	reader := tar.NewReader(file)
+	for {
+		header, err := reader.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatalf("read config tar: %v", err)
+		}
+		data, err := io.ReadAll(reader)
+		if err != nil {
+			t.Fatalf("read %s: %v", header.Name, err)
+		}
+		entries[header.Name] = struct {
+			mode int64
+			data string
+		}{mode: header.Mode, data: string(data)}
+	}
+	if got := entries["env"]; got.mode != 0o644 || got.data != "APP_ENV=production\nLOG_LEVEL=info\n" {
+		t.Fatalf("env entry = %+v", got)
+	}
+	const wantStartup = "#!/bin/sh\n# Generated by Rookery from the LightVM definition.\nexec '/sbin/init' '--verbose'\n"
+	if got := entries["startup-cmd"]; got.mode != 0o755 || got.data != wantStartup {
+		t.Fatalf("startup-cmd entry = %+v", got)
+	}
+	if got := entries["app/config.yaml"]; got.mode != 0o644 || got.data != "key: value\n" {
+		t.Fatalf("user config entry = %+v", got)
+	}
+	if len(entries) != 3 {
+		t.Fatalf("config tar entries = %v", entries)
+	}
+
+	if err := runtime.StartPreparedLightVM(context.Background(), &prepared, vm, qemu.StartPlan{}); err != nil {
+		t.Fatalf("StartPreparedLightVM: %v", err)
+	}
+	if runner.configDrive.Path != prepared.ConfigDrivePath {
+		t.Fatalf("QEMU config drive = %q, want %q", runner.configDrive.Path, prepared.ConfigDrivePath)
+	}
+	configPath := prepared.ConfigDrivePath
+	if err := runtime.CleanupPreparedLightVM(context.Background(), prepared); err != nil {
+		t.Fatalf("CleanupPreparedLightVM: %v", err)
+	}
+	if _, err := os.Stat(configPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("config drive still exists after cleanup: %v", err)
 	}
 }

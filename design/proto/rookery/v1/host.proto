@@ -117,7 +117,7 @@ message ListHostBlockDevicesResponse {
 message HostAttachableBlockDevice {
   string name = 1;
   string path = 2;
-  // kind is "disk", "partition", "lv", or "raid".
+  // kind is "disk", "partition", "lv", "raid", "loop", "ram", or "zram".
   string kind = 3;
   string model = 4;
   uint64 size_bytes = 5;

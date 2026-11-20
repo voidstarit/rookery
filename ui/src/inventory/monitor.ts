@@ -52,7 +52,7 @@ export function formatDuration(seconds: number): string {
   return `${secs}s`;
 }
 
-function chartCanvas(canvas: HTMLCanvasElement | null) {
+function chartCanvas(canvas: HTMLCanvasElement | null, requestedHeight?: number) {
   if (!canvas || typeof canvas.getContext !== "function") {
     return null;
   }
@@ -62,7 +62,7 @@ function chartCanvas(canvas: HTMLCanvasElement | null) {
   }
   const dpr = window.devicePixelRatio || 1;
   const width = Math.max(280, Math.round(canvas.getBoundingClientRect().width || 620));
-  const height = 150;
+  const height = Math.max(120, Math.round(Number(requestedHeight) || 150));
   const pixelWidth = Math.round(width * dpr);
   const pixelHeight = Math.round(height * dpr);
   if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
@@ -80,9 +80,10 @@ export function drawMetricChart(
     max?: number;
     marker?: number;
     format?: (value: number) => string;
+    height?: number;
   } = {}
 ): void {
-  const prepared = chartCanvas(canvas);
+  const prepared = chartCanvas(canvas, options.height);
   if (!prepared) {
     return;
   }

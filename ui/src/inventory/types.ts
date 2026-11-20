@@ -169,6 +169,11 @@ export type LightVMEnvVar = {
   value: string;
 };
 
+export type LightVMConfigFile = {
+  name: string;
+  content: string;
+};
+
 export type LightVMConsole = {
   id: number;
   name: string;
@@ -191,6 +196,7 @@ export type LightVM = {
   vcpus: number;
   memory_mb: number;
   console_enabled: boolean;
+  ephemeral?: boolean;
   cgroup_class?: string;
   kernel_id: number;
   kernel_name: string;
@@ -198,6 +204,7 @@ export type LightVM = {
   initramfs_name: string;
   image: string;
   env?: LightVMEnvVar[];
+  config_files?: LightVMConfigFile[];
   executable_path?: string;
   executable_script?: string;
   executable_args?: string[];
@@ -261,6 +268,8 @@ export type VMDisk = {
   device: string;
   source?: string;
   protocol?: string;
+  serial?: string;
+  read_only?: boolean;
   locator?: string;
   throttle_class_id?: number;
   throttle_class_name?: string;
@@ -324,7 +333,7 @@ export type BlockDeviceMetrics = {
   invalid_write_operations: number;
 };
 
-export type VMMetrics = {
+export type WorkloadMetrics = {
   running: boolean;
   pid?: number;
   uptime_seconds: number;
@@ -333,7 +342,6 @@ export type VMMetrics = {
   memory_virtual_bytes: number;
   disk_read_bytes_total: number;
   disk_write_bytes_total: number;
-  vm_id: string;
   name: string;
   vcpus: number;
   memory_mb: number;
@@ -343,6 +351,14 @@ export type VMMetrics = {
   network_tx_packets_total: number;
   sampled_at: string;
   block_devices?: BlockDeviceMetrics[];
+};
+
+export type VMMetrics = WorkloadMetrics & {
+  vm_id: string;
+};
+
+export type LightVMMetrics = WorkloadMetrics & {
+  lightvm_id: string;
 };
 
 export type KoujaConfig = {
@@ -392,6 +408,14 @@ export type StorageBackend = {
   updated_at: string;
 };
 
+export type DiskAttachment = {
+  workload_kind: "vm" | "lightvm" | string;
+  workload_id: string;
+  workload_name: string;
+  position: number;
+  read_only?: boolean;
+};
+
 export type Disk = {
   id: number;
   name: string;
@@ -413,6 +437,8 @@ export type Disk = {
   attached_vm_name?: string;
   attached_lightvm_id?: string;
   attached_lightvm_name?: string;
+  read_only?: boolean;
+  attachments?: DiskAttachment[];
   is_template?: boolean;
   template_disk_id?: number;
   template_disk_name?: string;
@@ -425,6 +451,7 @@ export type Disk = {
 export type ImportableDisk = {
   name: string;
   size_gb: number;
+  size_bytes?: number;
   registered: boolean;
   disk_id?: number;
   attached_vm_id?: string;

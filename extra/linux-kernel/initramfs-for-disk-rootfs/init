@@ -1,0 +1,565 @@
+#!/bin/sh
+# LightVM initramfs for an ordinary (disk or virtio-fs) root filesystem.
+#
+# This image does not implement the container workload contract used by
+# initramfs-virtiofs (.env/.entrypoint). It finds an existing Linux root
+# filesystem, mounts it, and hands PID 1 to that root's init. A disk-backed
+# LightVM may also carry a read-only virtio-blk disk with serial
+# "rookery-config"; this image extracts its tar into /run/rookery, loads its
+# env file, and uses its startup-cmd as PID 1 when no explicit init= was set:
+#
+#   1. a virtio-fs device with the tag "root", then "rootfs";
+#   2. the root= device from the kernel command line;
+#   3. a block device whose virtio-blk serial is "root" or "rootfs". The whole
+#      disk and its partitions are tried, Linux filesystems only, so an EFI
+#      system partition cannot be mistaken for the root.
+#
+# init= (or lightvm.init=) selects the init inside the mounted root. When it
+# is absent, /init, /sbin/init, and /bin/init are tried in that order. An
+# explicit init= / lightvm.init= also overrides the rookery-config startup-cmd.
+# rootfstype=, rootflags=, ro, rw, rootdelay=, and rootwait are honored.
+# root= accepts /dev/..., UUID=, LABEL=, PARTUUID=, and PARTLABEL= (the last
+# two need the /dev/disk/by-* symlinks, normally created by udev).
+#
+# Pair this initramfs with the storage kernel variant when the root is ext4 or
+# XFS: the virtio kernel variant has no on-disk filesystem drivers.
+PATH=/bin:/sbin
+export PATH
+
+NEWROOT=/newroot
+
+# Progress goes to /dev/kmsg so it appears on every kernel console, including
+# a serial console that is separate from /dev/console. Fall back to stdout when
+# kmsg is unavailable (for example, before devtmpfs).
+log() {
+	if echo "lightvm: $*" > /dev/kmsg 2>/dev/null; then
+		return 0
+	fi
+	echo "lightvm: $*"
+}
+warn() {
+	if echo "lightvm: $*" > /dev/kmsg 2>/dev/null; then
+		return 0
+	fi
+	echo "lightvm: $*" >&2
+}
+
+mount -t proc proc /proc 2>/dev/null || true
+mount -t sysfs sysfs /sys 2>/dev/null || true
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
+mkdir -p /dev/pts /dev/shm /run /tmp 2>/dev/null || true
+mount -t devpts devpts /dev/pts 2>/dev/null || true
+mount -t tmpfs -o mode=1777 tmpfs /tmp 2>/dev/null || true
+mount -t tmpfs tmpfs /run 2>/dev/null || true
+
+# Parse the kernel command line. Disable pathname expansion while splitting so
+# values such as root=/dev/disk/by-uuid/* are not expanded against the initramfs.
+root_spec=
+root_type=
+root_flags=
+root_ro=
+root_wait=0
+root_delay=
+init_spec=
+set -f
+for arg in $(cat /proc/cmdline 2>/dev/null); do
+	case "$arg" in
+		root=*) root_spec=${arg#root=} ;;
+		rootfstype=*) root_type=${arg#rootfstype=} ;;
+		rootflags=*) root_flags=${arg#rootflags=} ;;
+		ro) root_ro=1 ;;
+		rw) root_ro= ;;
+		rootwait|rootwait=1) root_wait=1 ;;
+		rootdelay=*) root_delay=${arg#rootdelay=} ;;
+		init=*) init_spec=${arg#init=} ;;
+		lightvm.init=*) init_spec=${arg#lightvm.init=} ;;
+	esac
+done
+set +f
+
+[ "$root_type" = auto ] && root_type=
+
+mount_opts=
+if [ "$root_ro" = 1 ]; then
+	mount_opts=ro
+fi
+if [ -n "$root_flags" ]; then
+	if [ -n "$mount_opts" ]; then
+		mount_opts="$mount_opts,$root_flags"
+	else
+		mount_opts=$root_flags
+	fi
+fi
+
+# An explicit init= may carry arguments, as the kernel allows. Split it once
+# here; the first word is the path inside the new root.
+init_path=
+init_args=
+if [ -n "$init_spec" ]; then
+	set -f
+	set -- $init_spec
+	set +f
+	case "$1" in
+		/*)
+			init_path=$1
+			shift
+			init_args="$*"
+			;;
+		*)
+			warn "ignoring non-absolute init '$1'"
+			init_spec=
+			;;
+	esac
+fi
+
+log "root=${root_spec:-unset} rootfstype=${root_type:-auto} init=${init_path:-auto}"
+
+# Number of 0.2s polls to wait for a device. rootwait waits longer because
+# the hardware is allowed to take its time; the default is still generous
+# enough for virtio devices to finish probing.
+wait_polls() {
+	if [ "$root_wait" = 1 ]; then
+		echo 300
+	else
+		echo 50
+	fi
+}
+
+# Resolve a root= value to a device path. findfs handles UUID=/LABEL= without
+# udev; the by-* links cover PARTUUID=/PARTLABEL= when they exist.
+resolve_root() {
+	spec=$1
+	case "$spec" in
+		/dev/*)
+			printf '%s\n' "$spec"
+			return 0
+			;;
+		UUID=*|LABEL=*)
+			dev=$(findfs "$spec" 2>/dev/null)
+			if [ -n "$dev" ]; then
+				printf '%s\n' "$dev"
+				return 0
+			fi
+			;;
+	esac
+	case "$spec" in
+		UUID=*) dir=by-uuid; value=${spec#UUID=} ;;
+		LABEL=*) dir=by-label; value=${spec#LABEL=} ;;
+		PARTUUID=*) dir=by-partuuid; value=${spec#PARTUUID=} ;;
+		PARTLABEL=*) dir=by-partlabel; value=${spec#PARTLABEL=} ;;
+		*) return 1 ;;
+	esac
+	if [ -e "/dev/disk/$dir/$value" ]; then
+		printf '%s\n' "/dev/disk/$dir/$value"
+		return 0
+	fi
+	return 1
+}
+
+# Wait for root= to resolve to an existing block device. A device node can
+# appear after the virtio driver probes, so resolution is retried.
+wait_for_device() {
+	spec=$1
+	i=0
+	limit=$(wait_polls)
+	while [ "$i" -lt "$limit" ]; do
+		dev=$(resolve_root "$spec" 2>/dev/null)
+		if [ -n "$dev" ] && [ -b "$dev" ]; then
+			printf '%s\n' "$dev"
+			return 0
+		fi
+		sleep 0.2 2>/dev/null || sleep 1
+		i=$((i + 1))
+	done
+	return 1
+}
+
+# Mount a device at $NEWROOT. discover=1 restricts the attempt to Linux root
+# filesystems so an EFI or other data partition on a serial-matched disk is
+# not mistaken for the root. An explicit root= may use the wider list and
+# finally the kernel's own autodetection.
+mount_device() {
+	dev=$1
+	discover=${2:-0}
+	mkdir -p "$NEWROOT" 2>/dev/null || true
+	if [ -n "$root_type" ]; then
+		if [ -n "$mount_opts" ]; then
+			mount -t "$root_type" -o "$mount_opts" "$dev" "$NEWROOT" 2>/dev/null
+		else
+			mount -t "$root_type" "$dev" "$NEWROOT" 2>/dev/null
+		fi
+		return $?
+	fi
+	if [ "$discover" = 1 ]; then
+		types="ext4 ext3 ext2 xfs btrfs f2fs"
+	else
+		types="ext4 ext3 ext2 xfs btrfs f2fs vfat exfat ntfs3 ntfs iso9660 squashfs erofs"
+	fi
+	for fs in $types; do
+		if [ -n "$mount_opts" ]; then
+			mount -t "$fs" -o "$mount_opts" "$dev" "$NEWROOT" 2>/dev/null && return 0
+		else
+			mount -t "$fs" "$dev" "$NEWROOT" 2>/dev/null && return 0
+		fi
+	done
+	if [ "$discover" = 1 ]; then
+		return 1
+	fi
+	if [ -n "$mount_opts" ]; then
+		mount -o "$mount_opts" "$dev" "$NEWROOT" 2>/dev/null && return 0
+	else
+		mount "$dev" "$NEWROOT" 2>/dev/null && return 0
+	fi
+	return 1
+}
+
+# Pick the init inside the mounted root. init= is authoritative; without it,
+# fall back to the conventional paths in order.
+chosen=
+choose_init() {
+	if [ -n "$init_path" ]; then
+		if [ -f "$NEWROOT$init_path" ] && [ -x "$NEWROOT$init_path" ]; then
+			chosen=$init_path
+			return 0
+		fi
+		return 1
+	fi
+	for candidate in /init /sbin/init /bin/init; do
+		if [ -f "$NEWROOT$candidate" ] && [ -x "$NEWROOT$candidate" ]; then
+			chosen=$candidate
+			return 0
+		fi
+	done
+	return 1
+}
+
+read_serial() {
+	for attr in "$1/serial" "$1/device/serial"; do
+		[ -r "$attr" ] || continue
+		value=$(cat "$attr" 2>/dev/null | tr -d '[:space:]')
+		if [ -n "$value" ]; then
+			printf '%s\n' "$value"
+			return 0
+		fi
+	done
+	return 1
+}
+
+partitions_of() {
+	for entry in "$1"/*; do
+		[ -d "$entry" ] || continue
+		[ -r "$entry/partition" ] || continue
+		printf '/dev/%s\n' "${entry##*/}"
+	done
+}
+
+# LightVM config drive. Rookery attaches a read-only virtio-blk disk with the
+# serial "rookery-config" when a disk-backed definition has environment
+# variables or a startup command. The disk is an uncompressed tar with "env"
+# and/or "startup-cmd" at its root.
+CONFIG_SERIAL=rookery-config
+
+find_rookery_config() {
+	i=0
+	limit=5
+	while [ "$i" -lt "$limit" ]; do
+		for sysdev in /sys/block/*; do
+			[ -e "$sysdev" ] || continue
+			serial=$(read_serial "$sysdev")
+			[ "$serial" = "$CONFIG_SERIAL" ] || continue
+			name=${sysdev##*/}
+			[ -b "/dev/$name" ] || continue
+			printf '/dev/%s\n' "$name"
+			return 0
+		done
+		sleep 0.2 2>/dev/null || sleep 1
+		i=$((i + 1))
+	done
+	return 1
+}
+
+extract_rookery_config() {
+	config_dev=$(find_rookery_config) || return 0
+	log "found $CONFIG_SERIAL device $config_dev"
+	mkdir -p "$NEWROOT/run/rookery" 2>/dev/null || true
+	if ! tar -xf "$config_dev" -C "$NEWROOT/run/rookery" 2>/dev/null; then
+		warn "could not extract LightVM config from $config_dev"
+		rm -rf "$NEWROOT/run/rookery" 2>/dev/null || true
+		return 1
+	fi
+	[ -f "$NEWROOT/run/rookery/env" ] && chmod 0644 "$NEWROOT/run/rookery/env" 2>/dev/null || true
+	[ -f "$NEWROOT/run/rookery/startup-cmd" ] && chmod 0755 "$NEWROOT/run/rookery/startup-cmd" 2>/dev/null || true
+	log "extracted LightVM config to /run/rookery"
+	return 0
+}
+
+# Export NAME=value lines from the config drive. This runs before switch_root,
+# so the chosen PID 1 inherits them.
+load_rookery_env() {
+	env_file=$NEWROOT/run/rookery/env
+	[ -r "$env_file" ] || return 0
+	log "loading LightVM environment from /run/rookery/env"
+	while IFS= read -r env_line || [ -n "$env_line" ]; do
+		case "$env_line" in
+			''|'#'*) continue ;;
+		esac
+		export "$env_line" 2>/dev/null || true
+	done < "$env_file"
+}
+
+# A startup command can become PID 1 only when its shebang interpreter exists
+# in the new root. Otherwise fall back to the root's normal init.
+startup_command_usable() {
+	startup=$NEWROOT/run/rookery/startup-cmd
+	[ -f "$startup" ] || return 1
+	[ -s "$startup" ] || return 1
+	first_line=
+	IFS= read -r first_line < "$startup" || [ -n "$first_line" ] || return 1
+	case "$first_line" in
+		'#!'*) ;;
+		*)
+			warn "ignoring startup-cmd: missing #! interpreter"
+			return 1
+			;;
+	esac
+	saved_ifs=$IFS
+	IFS=' '
+	set -f
+	set -- ${first_line#??}
+	set +f
+	IFS=$saved_ifs
+	interpreter=$1
+	case "$interpreter" in
+		/*) ;;
+		*)
+			warn "ignoring startup-cmd: interpreter '$interpreter' is not absolute"
+			return 1
+			;;
+	esac
+	if [ ! -x "$NEWROOT$interpreter" ]; then
+		warn "ignoring startup-cmd: interpreter $interpreter is not executable in the new root"
+		return 1
+	fi
+	return 0
+}
+
+# Search every block device for a virtio-blk serial of root or rootfs. The
+# whole disk is tried first, then each partition, so a directly formatted disk
+# and a partitioned distribution image both work. A device that mounts but has
+# no init is remembered, so a slow device probe does not re-log it every poll.
+find_serial_root() {
+	i=0
+	limit=$(wait_polls)
+	seen=
+	tried=
+	while [ "$i" -lt "$limit" ]; do
+		for sysdev in /sys/block/*; do
+			[ -e "$sysdev" ] || continue
+			serial=$(read_serial "$sysdev")
+			case "$serial" in
+				root|rootfs) ;;
+				*) continue ;;
+			esac
+			name=${sysdev##*/}
+			case " $seen " in
+				*" $name "*) ;;
+				*)
+					log "found block device /dev/$name with serial $serial"
+					seen="$seen $name"
+					;;
+			esac
+			for dev in "/dev/$name" $(partitions_of "$sysdev"); do
+				[ -b "$dev" ] || continue
+				case " $tried " in
+					*" $dev "*) continue ;;
+				esac
+				if mount_device "$dev" 1; then
+					log "mounted $dev"
+					if choose_init; then
+						root_source="serial $serial on /dev/$name ($dev)"
+						return 0
+					fi
+					warn "mounted $dev but found no init in it"
+					umount "$NEWROOT" 2>/dev/null || true
+					tried="$tried $dev"
+				fi
+			done
+		done
+		sleep 0.2 2>/dev/null || sleep 1
+		i=$((i + 1))
+	done
+	return 1
+}
+
+root_source=
+explicit_mounted=0
+
+# Only try virtio-fs when the guest actually has a virtio-fs device. Mounting a
+# tag on a guest without one only produces kernel "tag not found" noise.
+virtiofs_available() {
+	for dev in /sys/bus/virtio/devices/*; do
+		[ -e "$dev" ] || continue
+		driver=$(readlink "$dev/driver" 2>/dev/null)
+		case "$driver" in
+			*virtiofs|*virtio_fs) return 0 ;;
+		esac
+	done
+	return 1
+}
+
+# 1. virtio-fs tags. Try "root" first: host-directory shares reserve "rootfs",
+#    so "root" is the natural tag for a shared distribution root.
+if virtiofs_available; then
+	for tag in root rootfs; do
+		mkdir -p "$NEWROOT" 2>/dev/null || true
+		if mount -t virtiofs "$tag" "$NEWROOT" 2>/dev/null; then
+			log "mounted virtio-fs tag $tag"
+			if choose_init; then
+				root_source="virtio-fs tag $tag"
+				break
+			fi
+			if [ -n "$init_path" ]; then
+				warn "virtio-fs tag $tag has no executable init $init_path"
+			else
+				warn "virtio-fs tag $tag has no /init, /sbin/init, or /bin/init"
+			fi
+			umount "$NEWROOT" 2>/dev/null || true
+		fi
+	done
+fi
+
+# 2. Explicit root= device.
+if [ -z "$root_source" ] && [ -n "$root_spec" ]; then
+	if [ -n "$root_delay" ]; then
+		case "$root_delay" in
+			*[!0-9]*) ;;
+			*) sleep "$root_delay" 2>/dev/null || true ;;
+		esac
+	fi
+	root_dev=$(wait_for_device "$root_spec")
+	if [ -n "$root_dev" ]; then
+		if mount_device "$root_dev" 0; then
+			log "mounted root device $root_dev"
+			if choose_init; then
+				root_source="root=$root_spec ($root_dev)"
+			else
+				warn "root device $root_dev mounted but has no init"
+				explicit_mounted=1
+			fi
+		else
+			warn "could not mount root device $root_dev"
+		fi
+	else
+		warn "root device $root_spec was not found"
+	fi
+fi
+
+# 3. Serial fallback: only after an explicit root= failed to mount (or was not
+#    supplied at all). If root= mounted but had no init, trust that choice and
+#    drop to a shell instead of booting another device.
+if [ -z "$root_source" ] && [ "$explicit_mounted" = 0 ]; then
+	if [ -n "$root_spec" ]; then
+		log "falling back to virtio-blk serial root or rootfs"
+	else
+		log "no root= supplied; looking for virtio-blk serial root or rootfs"
+	fi
+	find_serial_root || true
+fi
+
+if [ -z "$root_source" ]; then
+	warn "no usable root filesystem found"
+	warn "kernel command line: $(cat /proc/cmdline 2>/dev/null)"
+	warn "block devices:"
+	found=0
+	for dev in /dev/vd* /dev/sd* /dev/nvme* /dev/xvd* /dev/mmcblk*; do
+		[ -b "$dev" ] || continue
+		warn "  $dev"
+		found=1
+	done
+	[ "$found" = 1 ] || warn "  (none)"
+	warn "virtio-blk serials:"
+	found=0
+	for sysdev in /sys/block/*; do
+		[ -e "$sysdev" ] || continue
+		serial=$(read_serial "$sysdev")
+		[ -n "$serial" ] || continue
+		warn "  /dev/${sysdev##*/} $serial"
+		found=1
+	done
+	[ "$found" = 1 ] || warn "  (none)"
+	warn "dropping to the initramfs shell"
+	exec /bin/sh
+fi
+
+log "using $root_source, init $chosen"
+
+# Give the new root fresh pseudo filesystems. Do not move the active /dev
+# mount: some init binaries misbehave when the console mount is moved. Create
+# dev/pts and dev/shm after mounting devtmpfs, or the devtmpfs root hides them.
+mkdir -p "$NEWROOT/proc" "$NEWROOT/sys" "$NEWROOT/dev" "$NEWROOT/run" 2>/dev/null || true
+mount -t proc proc "$NEWROOT/proc" 2>/dev/null || true
+mount -t sysfs sysfs "$NEWROOT/sys" 2>/dev/null || true
+mount -t devtmpfs devtmpfs "$NEWROOT/dev" 2>/dev/null || true
+mkdir -p "$NEWROOT/dev/pts" "$NEWROOT/dev/shm" "$NEWROOT/run" 2>/dev/null || true
+mount -t devpts devpts "$NEWROOT/dev/pts" 2>/dev/null || true
+mount -t tmpfs tmpfs "$NEWROOT/dev/shm" 2>/dev/null || true
+mount -t tmpfs tmpfs "$NEWROOT/run" 2>/dev/null || true
+
+# Mount cgroup v2 for systemd and nested container runtimes. Fall back when
+# an option is unsupported so an older kernel still boots.
+mkdir -p "$NEWROOT/sys/fs/cgroup" 2>/dev/null || true
+mount -t cgroup2 -o nsdelegate,memory_recursiveprot \
+	cgroup2 "$NEWROOT/sys/fs/cgroup" 2>/dev/null \
+	|| mount -t cgroup2 -o nsdelegate cgroup2 "$NEWROOT/sys/fs/cgroup" 2>/dev/null \
+	|| mount -t cgroup2 cgroup2 "$NEWROOT/sys/fs/cgroup" 2>/dev/null \
+	|| true
+if grep -q " $NEWROOT/sys/fs/cgroup cgroup2 " /proc/mounts 2>/dev/null; then
+	log "cgroup2 mounted"
+fi
+
+# If devtmpfs was unavailable, at least provide the nodes PID 1 needs before
+# it can mount or create anything else.
+if [ ! -c "$NEWROOT/dev/console" ]; then
+	mknod "$NEWROOT/dev/console" c 5 1 2>/dev/null || true
+fi
+if [ ! -c "$NEWROOT/dev/null" ]; then
+	mknod "$NEWROOT/dev/null" c 1 3 2>/dev/null || true
+fi
+
+# Extract the optional rookery-config drive into /run/rookery inside the new
+# root, load its environment, and let its startup command become PID 1 unless
+# the caller supplied an explicit init= / lightvm.init=.
+extract_rookery_config || true
+if [ -z "$init_path" ] && startup_command_usable; then
+	chosen=/run/rookery/startup-cmd
+	log "using LightVM startup-cmd as PID 1"
+fi
+# Load the config environment after choosing the handoff target. The file is
+# user data, so protect the variables this script still needs and discard IFS;
+# every other NAME=value is inherited by PID 1.
+readonly NEWROOT chosen init_args
+load_rookery_env
+unset IFS
+
+log "switch_root $NEWROOT $chosen"
+set -f
+if [ -n "$init_args" ]; then
+	set -- "$chosen" $init_args
+else
+	set -- "$chosen"
+fi
+
+# The kernel starts PID 1 outside any session: its process group and session
+# are the idle task's (0), so PID 1 owns no controlling terminal. A shell run
+# as init then reports "can't access tty; job control turned off", its children
+# never become a foreground process group, and the tty line discipline drops
+# SIGINT, so Ctrl+C on the LightVM console does nothing. Become a session
+# leader and make /dev/console the controlling terminal before the handoff:
+# setsid() is allowed for PID 1 (it is not a process group leader, so BusyBox
+# setsid execs in place instead of forking) and the -c ioctl resolves
+# /dev/console to the preferred console device (hvc0, ttyS0). /dev/console
+# stays stdin/stdout/stderr, so console output is still mirrored to every
+# kernel console.
+exec /bin/busybox setsid -c /bin/switch_root "$NEWROOT" "$@"
+warn "switch_root failed"
+exec /bin/sh

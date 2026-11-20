@@ -5,6 +5,18 @@ export PATH
 
 mount -t proc proc /proc 2>/dev/null || true
 mount -t sysfs sysfs /sys 2>/dev/null || true
+
+# Mount cgroup v2 at the standard path for systemd and container runtimes.
+mkdir -p /sys/fs/cgroup 2>/dev/null || true
+mount -t cgroup2 -o nsdelegate,memory_recursiveprot \
+	cgroup2 /sys/fs/cgroup 2>/dev/null \
+	|| mount -t cgroup2 -o nsdelegate cgroup2 /sys/fs/cgroup 2>/dev/null \
+	|| mount -t cgroup2 cgroup2 /sys/fs/cgroup 2>/dev/null \
+	|| true
+if grep -q ' /sys/fs/cgroup cgroup2 ' /proc/mounts 2>/dev/null; then
+	echo "lightvm: cgroup2 mounted"
+fi
+
 mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
 mkdir -p /dev/pts /dev/shm /run /tmp
 mount -t devpts devpts /dev/pts 2>/dev/null || true

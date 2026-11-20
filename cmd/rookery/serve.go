@@ -269,13 +269,18 @@ func runServe(args []string) error {
 	defer gatewayRuntime.Close()
 	gatewayHandler := apiServer.LogRequests(api.SecurityHeaders(gatewayRuntime.Handler))
 	gatewayHandler = api.LightVMStartDeadline(gatewayHandler)
+	// The public gateway listeners do not expose the native UI handler, but
+	// they do expose the token-authenticated LightVM console WebSocket.
+	gatewayWebSocketHandler := apiServer.LogRequests(api.SecurityHeaders(
+		api.ConsoleWebSocketHandler(gatewayRuntime.Handler, apiServer.ConsoleAccessHandler())))
+	gatewayWebSocketHandler = api.LightVMStartDeadline(gatewayWebSocketHandler)
 	rateLimiter := api.NewPathRateLimiter(rateLimit)
 
 	var mtlsHTTP *http.Server
 	if pkiManager != nil && strings.TrimSpace(*mtlsAddr) != "" {
 		mtlsHTTP = &http.Server{
 			Addr:              *mtlsAddr,
-			Handler:           rateLimiter.Middleware(gatewayHandler),
+			Handler:           rateLimiter.Middleware(gatewayWebSocketHandler),
 			TLSConfig:         pkiManager.TLSConfig(),
 			ReadHeaderTimeout: 5 * time.Second,
 			ReadTimeout:       15 * time.Second,
@@ -288,7 +293,7 @@ func runServe(args []string) error {
 	if *gatewayAddr != "" {
 		gatewayHTTP = &http.Server{
 			Addr:              *gatewayAddr,
-			Handler:           rateLimiter.Middleware(gatewayHandler),
+			Handler:           rateLimiter.Middleware(gatewayWebSocketHandler),
 			ReadHeaderTimeout: 5 * time.Second,
 			ReadTimeout:       15 * time.Second,
 			WriteTimeout:      30 * time.Second,
@@ -310,6 +315,7 @@ func runServe(args []string) error {
 
 	go manager.Run(ctx)
 	go diskReclaimer.Run(ctx)
+	go apiServer.RunLightVMEphemeralReaper(ctx)
 	go apiServer.RunInfrastructureReconciler(ctx)
 
 	servers := []*http.Server{srv}

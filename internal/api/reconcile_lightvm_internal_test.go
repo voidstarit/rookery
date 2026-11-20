@@ -14,15 +14,18 @@ import (
 )
 
 type reconcileLightVMController struct {
-	running    map[string]bool
-	prepareErr error
-	startErr   error
-	stopErr    error
-	onPrepare  func(store.LightVM)
-	prepared   int
-	started    int
-	cleaned    int
-	stopped    int
+	running           map[string]bool
+	prepareErr        error
+	startErr          error
+	stopErr           error
+	stopKeepsRunning  bool
+	cleanupStoppedErr error
+	onPrepare         func(store.LightVM)
+	prepared          int
+	started           int
+	cleaned           int
+	cleanupStopped    int
+	stopped           int
 }
 
 func (f *reconcileLightVMController) PrepareLightVM(_ context.Context, vm store.LightVM) (lightvm.PreparedLightVM, error) {
@@ -55,9 +58,17 @@ func (f *reconcileLightVMController) CleanupPreparedLightVM(context.Context, lig
 	return nil
 }
 
+func (f *reconcileLightVMController) CleanupStoppedLightVM(_ context.Context, id string) error {
+	f.cleanupStopped++
+	return f.cleanupStoppedErr
+}
+
 func (f *reconcileLightVMController) StopQEMULightVM(_ context.Context, id string) error {
 	f.stopped++
 	if f.stopErr != nil {
+		if f.stopKeepsRunning {
+			f.running[id] = true
+		}
 		return f.stopErr
 	}
 	f.running[id] = false

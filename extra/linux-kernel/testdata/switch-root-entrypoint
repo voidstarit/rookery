@@ -3,6 +3,12 @@
 # PID 1 from .entrypoint inside the tiny virtiofs rootfs built by the test
 # target, with the variables from .env already exported.
 echo "LIGHTVM-ENTRYPOINT-OK"
+echo "lightvm: entrypoint pid $$ (ppid $PPID)"
+if [ "$$" = 1 ]; then
+	echo "lightvm: entrypoint is PID 1"
+else
+	echo "lightvm: entrypoint is not PID 1"
+fi
 echo "lightvm: GREETING=${GREETING:-}"
 echo "lightvm: WITH_EQUALS=${WITH_EQUALS:-}"
 if [ -x /.rookery/busybox ] && [ -x /.rookery/udhcpc.script ]; then

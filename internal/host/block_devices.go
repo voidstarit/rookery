@@ -23,6 +23,12 @@ const (
 	BlockDeviceLV = "lv"
 	// BlockDeviceRAID is a Linux software RAID array.
 	BlockDeviceRAID = "raid"
+	// BlockDeviceLoop is a loop device backed by a regular file.
+	BlockDeviceLoop = "loop"
+	// BlockDeviceRAM is a brd ramdisk.
+	BlockDeviceRAM = "ram"
+	// BlockDeviceZRAM is a compressed RAM block device.
+	BlockDeviceZRAM = "zram"
 )
 
 // BlockDevice describes a whole Linux block device for cgroup I/O limits.
@@ -36,9 +42,10 @@ type BlockDevice struct {
 	Rotational bool
 }
 
-// AttachableBlockDevice describes a host disk, partition, or logical volume
-// that can be passed through to a VM. Available is false when the device must
-// not be handed to a guest, for example because the host has it mounted.
+// AttachableBlockDevice describes a host disk, partition, logical volume,
+// RAID array, or virtual block device that can be passed through to a VM.
+// Available is false when the device must not be handed to a guest, for
+// example because the host has it mounted.
 type AttachableBlockDevice struct {
 	Name       string
 	Path       string
@@ -61,7 +68,7 @@ type attachCandidate struct {
 }
 
 // ListBlockDevices returns whole block devices from /sys/class/block. Partitions
-// and pseudo devices such as loop and zram are omitted.
+// are omitted; loop, ram, and zram devices are included.
 func ListBlockDevices() ([]BlockDevice, error) {
 	entries, err := os.ReadDir("/sys/class/block")
 	if err != nil {
@@ -327,8 +334,19 @@ func sysfsDeviceNumbers(base string) (uint32, uint32, bool) {
 }
 
 func blockDeviceKind(base string) string {
+	// Check partitions first so a partition of a loop/ram/zram device is still
+	// reported as a partition.
 	if _, err := os.Stat(filepath.Join(base, "partition")); err == nil {
 		return BlockDevicePartition
+	}
+	name := filepath.Base(base)
+	switch {
+	case strings.HasPrefix(name, "loop"):
+		return BlockDeviceLoop
+	case strings.HasPrefix(name, "zram"):
+		return BlockDeviceZRAM
+	case strings.HasPrefix(name, "ram"):
+		return BlockDeviceRAM
 	}
 	if _, err := os.Stat(filepath.Join(base, "dm/name")); err == nil {
 		return BlockDeviceLV
@@ -349,8 +367,14 @@ func blockKindOrder(kind string) int {
 		return 2
 	case BlockDeviceRAID:
 		return 3
-	default:
+	case BlockDeviceLoop:
 		return 4
+	case BlockDeviceRAM:
+		return 5
+	case BlockDeviceZRAM:
+		return 6
+	default:
+		return 7
 	}
 }
 
@@ -415,7 +439,10 @@ func readDirNames(path string) []string {
 }
 
 func skipBlockDevice(name string) bool {
-	for _, prefix := range []string{"loop", "ram", "zram", "fd", "sr"} {
+	// loop, ram, and zram are virtual devices but are still useful in the
+	// inventory (loop for file-backed images, ram/zram for memory-backed
+	// volumes), so they are listed instead of filtered out.
+	for _, prefix := range []string{"fd", "sr"} {
 		if strings.HasPrefix(name, prefix) {
 			return true
 		}

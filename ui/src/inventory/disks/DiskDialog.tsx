@@ -3,6 +3,7 @@ import { api } from "../../shared/api";
 import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
 import type { Disk, DiskThrottleClass, HostAttachableBlockDevice, StorageBackend } from "../types";
 import { formatThrottleSummary } from "./throttle";
+import { formatByteSize } from "../../shared/format";
 
 type DiskDialogProps = {
   backends: StorageBackend[];
@@ -28,6 +29,7 @@ export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskD
   const [source, setSource] = useState<"empty" | "template">("empty");
   const [templateID, setTemplateID] = useState("");
   const [markAsTemplate, setMarkAsTemplate] = useState(false);
+  const [readOnly, setReadOnly] = useState(false);
   const [provisioningScript, setProvisioningScript] = useState("");
   const [provisioningTimeout, setProvisioningTimeout] = useState("5m");
   const [provisioningJSON, setProvisioningJSON] = useState("{}");
@@ -51,7 +53,8 @@ export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskD
   const template = templates.find((disk) => String(disk.id) === templateID) || null;
   const hostDevice = hostDevices.find((device) => device.path === hostDevicePath) || null;
   const availableClasses = classes.filter((item) => !item.validation_error);
-  const classDisabled = storageKind === "lvm" && source === "empty" && markAsTemplate;
+  const creatingTemplate = storageKind === "lvm" && source === "empty" && markAsTemplate;
+  const classDisabled = creatingTemplate;
 
   useEffect(() => {
     if (!supportsTemplates) {
@@ -124,12 +127,13 @@ export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskD
       const classID = classDisabled ? 0 : Number(throttleClassID) || 0;
       const body =
         storageKind === "host"
-          ? { name: name.trim(), host_device: hostDevice?.path, throttle_class_id: classID }
+          ? { name: name.trim(), host_device: hostDevice?.path, throttle_class_id: classID, read_only: readOnly }
           : {
               name: name.trim(),
               size_gb: Number(sizeGB),
               storage_backend_id: Number(backendID),
               throttle_class_id: classID,
+              read_only: readOnly,
               ...(source === "template" && template ? { template_disk_id: template.id } : {}),
               ...(source === "template" && template?.provisioning_script && provisioning !== undefined
                 ? { provisioning }
@@ -316,7 +320,7 @@ export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskD
                     <option value="">Select a template…</option>
                     {templates.map((disk) => (
                       <option value={String(disk.id)} key={disk.id}>
-                        {disk.name} · {disk.size_gb} GB{disk.provisioning_script ? " · provisioning" : ""}
+                        {disk.name} · {formatByteSize(disk.size_bytes || disk.size_gb * 1024 ** 3)}{disk.provisioning_script ? " · provisioning" : ""}
                       </option>
                     ))}
                   </select>
@@ -333,6 +337,7 @@ export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskD
                         setMarkAsTemplate(checked);
                         if (checked) {
                           setThrottleClassID("0");
+                          setReadOnly(false);
                         }
                       }}
                     />
@@ -418,14 +423,14 @@ export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskD
                       key={`${device.kind}:${device.path}`}
                       disabled={!device.available}
                     >
-                      {deviceKindLabel(device.kind)} · {device.path} · {formatDeviceBytes(device.size_bytes)}
+                      {deviceKindLabel(device.kind)} · {device.path} · {formatByteSize(device.size_bytes)}
                       {device.available ? "" : ` · ${device.unavailable_reason || "unavailable"}`}
                     </option>
                   ))}
                 </select>
                 <span class="field-hint">
-                  Whole disks, partitions, and logical volumes are listed. Mounted, swap, and
-                  otherwise busy devices are disabled.
+                  Whole disks, partitions, logical volumes, RAID arrays, and loop/ram/zram
+                  devices are listed. Mounted, swap, and otherwise busy devices are disabled.
                 </span>
               </label>
               {hostDevicesError ? (
@@ -438,7 +443,7 @@ export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskD
                   <span class="field-label">Selected device</span>
                   <p class="field-hint">
                     {deviceKindLabel(hostDevice.kind)} · {hostDevice.path} ·{" "}
-                    {formatDeviceBytes(hostDevice.size_bytes)}
+                    {formatByteSize(hostDevice.size_bytes)}
                     {hostDevice.model ? ` · ${hostDevice.model}` : ""}
                   </p>
                   {hostDevice.available ? null : (
@@ -453,6 +458,22 @@ export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskD
               ) : null}
             </>
           )}
+          <label class="field field-wide checkbox-field">
+            <span class="field-label">Read-only</span>
+            <span class="checkbox-row">
+              <input
+                type="checkbox"
+                checked={readOnly}
+                disabled={saving || creatingTemplate}
+                onChange={(event) => setReadOnly(event.currentTarget.checked)}
+              />
+              <span>Attach this disk read-only and allow sharing by multiple VMs and LightVMs</span>
+            </span>
+            <span class="field-hint">
+              QEMU opens a read-only disk with write access disabled. Read-only disks may be
+              attached to any number of workloads; read-write disks remain single-owner.
+            </span>
+          </label>
           <div class="field field-wide">
             <LabelsInput labels={labels} onChange={setLabels} disabled={saving} />
           </div>
@@ -496,26 +517,15 @@ function deviceKindLabel(kind: string | undefined): string {
       return "Logical volume";
     case "raid":
       return "RAID array";
+    case "loop":
+      return "Loop device";
+    case "ram":
+      return "RAM disk";
+    case "zram":
+      return "ZRAM device";
     default:
       return "Block device";
   }
-}
-
-function formatDeviceBytes(bytes: number | undefined): string {
-  const value = Number(bytes) || 0;
-  if (value >= 1024 ** 4) {
-    return `${(value / 1024 ** 4).toFixed(value % 1024 ** 4 === 0 ? 0 : 1)} TB`;
-  }
-  if (value >= 1024 ** 3) {
-    return `${(value / 1024 ** 3).toFixed(value % 1024 ** 3 === 0 ? 0 : 1)} GB`;
-  }
-  if (value >= 1024 ** 2) {
-    return `${(value / 1024 ** 2).toFixed(value % 1024 ** 2 === 0 ? 0 : 1)} MB`;
-  }
-  if (value >= 1024) {
-    return `${(value / 1024).toFixed(value % 1024 === 0 ? 0 : 1)} KB`;
-  }
-  return `${value} B`;
 }
 
 function defaultHostDiskName(device: HostAttachableBlockDevice): string {

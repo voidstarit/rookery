@@ -1,6 +1,8 @@
 package lightvm
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/binary"
@@ -14,6 +16,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/store"
 )
@@ -24,6 +28,7 @@ type PreparedLightVM struct {
 	AttemptToken     string
 	Container        string
 	Rootfs           string
+	ConfigDrivePath  string
 	VirtiofsdSocket  string
 	VirtiofsdPID     int
 	VirtiofsdStarted bool
@@ -44,8 +49,9 @@ type PreparedVirtioFSShare struct {
 // PrepareLightVM pulls the image, creates an attempt-unique container, and
 // writes the guest files. It does not start virtiofsd or QEMU.
 func (r *Runtime) PrepareLightVM(ctx context.Context, vm store.LightVM) (PreparedLightVM, error) {
-	if strings.TrimSpace(vm.Image) == "" {
-		return PreparedLightVM{}, errors.New("lightvm container image is required")
+	diskBacked := strings.TrimSpace(vm.Image) == ""
+	if diskBacked && len(vm.Disks) == 0 {
+		return PreparedLightVM{}, errors.New("lightvm requires a container image or at least one disk")
 	}
 	if r.qemuRunner.RunningLightVM(vm.ID) {
 		return PreparedLightVM{}, qemu.ErrAlreadyRunning
@@ -59,17 +65,29 @@ func (r *Runtime) PrepareLightVM(ctx context.Context, vm store.LightVM) (Prepare
 		return PreparedLightVM{}, err
 	}
 	socket := filepath.Join(r.runDir, fmt.Sprintf("lightvm-%s-%s.virtiofs.sock", vm.ID, token))
-	if len(socket)+1 > 107 {
+	if !diskBacked && len(socket)+1 > 107 {
 		return PreparedLightVM{}, fmt.Errorf("virtiofs socket path is too long (%d bytes): shorten -run-dir", len(socket))
 	}
 	container := lightVMContainerPrefix + vm.ID + "-" + token
 	prepared := PreparedLightVM{
-		LightVMID:       vm.ID,
-		AttemptToken:    token,
-		Container:       container,
-		VirtiofsdSocket: socket,
+		LightVMID:    vm.ID,
+		AttemptToken: token,
+	}
+	if !diskBacked {
+		prepared.Container = container
+		prepared.VirtiofsdSocket = socket
 	}
 
+	if diskBacked {
+		if lightVMNeedsConfigDrive(vm) {
+			configPath := filepath.Join(r.runDir, fmt.Sprintf("lightvm-%s-%s.rookery-config.tar", vm.ID, token))
+			if err := writeLightVMConfigArchive(configPath, vm); err != nil {
+				return PreparedLightVM{}, fmt.Errorf("write LightVM config drive: %w", err)
+			}
+			prepared.ConfigDrivePath = configPath
+		}
+		return prepared, nil
+	}
 	if err := r.ensureImage(ctx, vm.Image); err != nil {
 		return PreparedLightVM{}, err
 	}
@@ -107,13 +125,23 @@ func (r *Runtime) StartPreparedLightVM(ctx context.Context, prepared *PreparedLi
 	if r.qemuRunner.RunningLightVM(vm.ID) {
 		return qemu.ErrAlreadyRunning
 	}
-	socket, pid, err := r.startVirtiofsdAt(ctx, vm.ID, prepared.AttemptToken, prepared.Rootfs, false)
-	if err != nil {
-		return err
+	if strings.TrimSpace(vm.Image) != "" && prepared.Rootfs == "" {
+		return errors.New("prepared LightVM rootfs is required for an image-backed LightVM")
 	}
-	prepared.VirtiofsdSocket = socket
-	prepared.VirtiofsdPID = pid
-	prepared.VirtiofsdStarted = true
+	rootfs := qemu.LightVMVirtioFS{}
+	if prepared.Rootfs != "" {
+		socket, pid, err := r.startVirtiofsdAt(ctx, vm.ID, prepared.AttemptToken, prepared.Rootfs, false)
+		if err != nil {
+			return err
+		}
+		prepared.VirtiofsdSocket = socket
+		prepared.VirtiofsdPID = pid
+		prepared.VirtiofsdStarted = true
+		rootfs = qemu.LightVMVirtioFS{
+			SocketPath: socket,
+			Tag:        RootfsTag,
+		}
+	}
 
 	shares := make([]qemu.LightVMVirtioFS, 0, len(vm.VirtioFSShares))
 	for index, share := range vm.VirtioFSShares {
@@ -140,17 +168,20 @@ func (r *Runtime) StartPreparedLightVM(ctx context.Context, prepared *PreparedLi
 		})
 	}
 
-	started, err := r.qemuRunner.StartLightVMWithVirtioFSAndPlan(ctx, vm, qemu.LightVMVirtioFS{
-		SocketPath: socket,
-		Tag:        RootfsTag,
-	}, shares, plan)
+	started, err := r.qemuRunner.StartLightVMWithVirtioFSAndPlan(ctx, vm, rootfs, shares, qemu.LightVMConfigDrive{Path: prepared.ConfigDrivePath}, plan)
 	prepared.QEMUStarted = started
 	return err
 }
 
-// CleanupPreparedLightVM removes exactly this attempt's virtiofsd and container.
+// CleanupPreparedLightVM removes exactly this attempt's virtiofsd, config
+// drive, and container.
 func (r *Runtime) CleanupPreparedLightVM(ctx context.Context, prepared PreparedLightVM) error {
 	var errs []error
+	if prepared.ConfigDrivePath != "" {
+		if err := os.Remove(prepared.ConfigDrivePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			errs = append(errs, fmt.Errorf("remove LightVM config drive: %w", err))
+		}
+	}
 	if prepared.VirtiofsdStarted {
 		if err := r.stopVirtiofsdAt(ctx, prepared.VirtiofsdSocket, prepared.VirtiofsdPID); err != nil {
 			errs = append(errs, err)
@@ -183,6 +214,12 @@ func (r *Runtime) CleanupStoppedLightVM(ctx context.Context, id string) error {
 		return fmt.Errorf("refusing to clean up lightvm %s while QEMU is running", id)
 	}
 	var errs []error
+	configs, _ := filepath.Glob(filepath.Join(r.runDir, "lightvm-"+id+"-*.rookery-config.tar"))
+	for _, config := range configs {
+		if err := os.Remove(config); err != nil && !errors.Is(err, os.ErrNotExist) {
+			errs = append(errs, fmt.Errorf("remove LightVM config drive: %w", err))
+		}
+	}
 	sockets := make(map[string]struct{})
 	for _, pattern := range []string{
 		filepath.Join(r.runDir, "lightvm-"+id+"*.virtiofs.sock"),
@@ -204,25 +241,30 @@ func (r *Runtime) CleanupStoppedLightVM(ctx context.Context, id string) error {
 	}
 	_ = r.stopVirtiofsd(ctx, id)
 
-	containers := map[string]struct{}{
-		lightVMContainerName(id): {},
-	}
-	if output, err := r.runCommand(ctx, 30*time.Second, r.buildahBinary, "containers", "--format", "{{.ContainerName}}"); err != nil {
-		errs = append(errs, fmt.Errorf("enumerate buildah containers: %w", err))
+	if _, err := exec.LookPath(r.buildahBinary); err != nil {
+		log.Warn().Err(err).Str("binary", r.buildahBinary).Str("lightvm_id", id).
+			Msg("buildah unavailable; skipping LightVM container cleanup")
 	} else {
-		for _, line := range strings.Split(output, "\n") {
-			name := strings.TrimSpace(line)
-			if name == "" {
-				continue
-			}
-			if strings.HasPrefix(name, lightVMContainerPrefix+id+"-") || name == lightVMContainerName(id) {
-				containers[name] = struct{}{}
+		containers := map[string]struct{}{
+			lightVMContainerName(id): {},
+		}
+		if output, err := r.runCommand(ctx, 30*time.Second, r.buildahBinary, "containers", "--format", "{{.ContainerName}}"); err != nil {
+			errs = append(errs, fmt.Errorf("enumerate buildah containers: %w", err))
+		} else {
+			for _, line := range strings.Split(output, "\n") {
+				name := strings.TrimSpace(line)
+				if name == "" {
+					continue
+				}
+				if strings.HasPrefix(name, lightVMContainerPrefix+id+"-") || name == lightVMContainerName(id) {
+					containers[name] = struct{}{}
+				}
 			}
 		}
-	}
-	for container := range containers {
-		if err := r.cleanupContainerByName(ctx, container); err != nil {
-			errs = append(errs, err)
+		for container := range containers {
+			if err := r.cleanupContainerByName(ctx, container); err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
 	return errors.Join(errs...)
@@ -367,4 +409,94 @@ func (r *Runtime) cleanupContainerBackgroundByName(container string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	_ = r.cleanupContainerByName(ctx, container)
+}
+
+// lightVMNeedsConfigDrive reports whether a disk-backed LightVM has config
+// data that cannot be written into a container rootfs.
+func lightVMNeedsConfigDrive(vm store.LightVM) bool {
+	if strings.TrimSpace(vm.Image) != "" {
+		return false
+	}
+	return len(vm.Env) > 0 ||
+		len(vm.ConfigFiles) > 0 ||
+		strings.TrimSpace(vm.ExecutablePath) != "" ||
+		strings.TrimSpace(vm.ExecutableScript) != ""
+}
+
+// writeLightVMConfigArchive writes a read-only, uncompressed tar archive for
+// the rookery-config virtio-blk device. The archive has at most two files:
+// env (NAME=value lines) and startup-cmd (an executable shell script).
+func writeLightVMConfigArchive(path string, vm store.LightVM) error {
+	type entry struct {
+		name string
+		mode int64
+		data []byte
+	}
+	var entries []entry
+	if len(vm.Env) > 0 {
+		data, err := renderLightVMEnv(vm.Env)
+		if err != nil {
+			return err
+		}
+		entries = append(entries, entry{name: "env", mode: 0o644, data: data})
+	}
+	if strings.TrimSpace(vm.ExecutablePath) != "" || strings.TrimSpace(vm.ExecutableScript) != "" {
+		data, err := renderLightVMEntrypoint(vm.ExecutablePath, vm.ExecutableArgs, vm.ExecutableScript)
+		if err != nil {
+			return err
+		}
+		entries = append(entries, entry{name: "startup-cmd", mode: 0o755, data: data})
+	}
+	configFiles, err := store.NormalizeLightVMConfigFiles(vm.ConfigFiles)
+	if err != nil {
+		return err
+	}
+	for _, item := range configFiles {
+		entries = append(entries, entry{name: item.Name, mode: 0o644, data: []byte(item.Content)})
+	}
+	if len(entries) == 0 {
+		return errors.New("config drive requires env, a startup command, or a config file")
+	}
+
+	var archive bytes.Buffer
+	writer := tar.NewWriter(&archive)
+	for _, item := range entries {
+		header := &tar.Header{
+			Name:     item.name,
+			Mode:     item.mode,
+			Size:     int64(len(item.data)),
+			Typeflag: tar.TypeReg,
+			Format:   tar.FormatUSTAR,
+			ModTime:  time.Unix(0, 0).UTC(),
+		}
+		if err := writer.WriteHeader(header); err != nil {
+			return fmt.Errorf("write %s tar header: %w", item.name, err)
+		}
+		if _, err := writer.Write(item.data); err != nil {
+			return fmt.Errorf("write %s tar content: %w", item.name, err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("close config tar: %w", err)
+	}
+	// A block device reports its size in 512-byte sectors. Pad the archive to
+	// 4 KiB so guest tools never see a truncated final block; tar stops at its
+	// end-of-archive marker and ignores the zero padding.
+	if remainder := archive.Len() % 4096; remainder != 0 {
+		archive.Write(make([]byte, 4096-remainder))
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", path, err)
+	}
+	if _, err := file.Write(archive.Bytes()); err != nil {
+		_ = file.Close()
+		_ = os.Remove(path)
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(path)
+		return fmt.Errorf("close %s: %w", path, err)
+	}
+	return nil
 }

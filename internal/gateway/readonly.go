@@ -67,7 +67,7 @@ func diskToProto(disk store.Disk) *rookeryv1.Disk {
 	if disk.ThrottleClassID != nil {
 		classID = *disk.ThrottleClassID
 	}
-	return &rookeryv1.Disk{
+	result := &rookeryv1.Disk{
 		Id: disk.ID, Name: disk.Name, SizeGb: int32(disk.SizeGB), SizeBytes: disk.SizeBytes,
 		StorageBackendId: disk.StorageBackendID, StorageBackendName: disk.StorageBackendName,
 		Vg: disk.VG, ThinPool: disk.ThinPool, Device: disk.Device, Source: disk.Source,
@@ -78,8 +78,19 @@ func diskToProto(disk store.Disk) *rookeryv1.Disk {
 		Locator: disk.BackendMetadata.Attachment.Locator(), Protocol: disk.Protocol,
 		ThrottleClassId: classID, ThrottleClassName: disk.ThrottleClassName,
 		DeletionState: disk.DeletionState, DeletionError: disk.DeletionError,
+		ReadOnly:  disk.ReadOnly,
 		CreatedAt: timestamp(disk.CreatedAt), UpdatedAt: timestamp(disk.UpdatedAt),
 	}
+	for _, attachment := range disk.Attachments {
+		result.Attachments = append(result.Attachments, &rookeryv1.DiskAttachment{
+			WorkloadKind: attachment.WorkloadKind,
+			WorkloadId:   attachment.WorkloadID,
+			WorkloadName: attachment.WorkloadName,
+			Position:     int32(attachment.Position),
+			ReadOnly:     attachment.ReadOnly,
+		})
+	}
+	return result
 }
 
 type mediaService struct {

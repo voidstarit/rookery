@@ -25,12 +25,27 @@ const (
 	// DefaultLightVMAppend is the kernel command line used when a LightVM
 	// definition does not set one.
 	DefaultLightVMAppend = "console=hvc0 rdinit=/init"
+
+	// MaxLightVMConfigFiles limits user-supplied files in the rookery-config
+	// drive.
+	MaxLightVMConfigFiles = 64
+	// MaxLightVMConfigFileBytes limits one user-supplied config file.
+	MaxLightVMConfigFileBytes = 1 << 20
+	// MaxLightVMConfigFilesBytes limits the combined user config content.
+	MaxLightVMConfigFilesBytes = 4 << 20
 )
 
 // LightVMEnvVar is one environment variable passed to a LightVM workload.
 type LightVMEnvVar struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
+}
+
+// LightVMConfigFile is one user-supplied file in the rookery-config tar for a
+// disk-backed LightVM. Names are relative to /run/rookery in the guest.
+type LightVMConfigFile struct {
+	Name    string `json:"name"`
+	Content string `json:"content"`
 }
 
 // LightVMConsole is one virtio-console port exposed by a LightVM.
@@ -50,15 +65,19 @@ type LightVMVirtioFSShare struct {
 	Position int    `json:"position"`
 }
 
-// LightVM is a container-backed microVM definition. It is inventory-only until
-// a runtime is implemented; kernels and initramfs images must exist.
+// LightVM is a container-backed or disk-backed microVM definition. The store
+// records it stopped; the API starts it after creation. Kernels and initramfs
+// images must exist.
 type LightVM struct {
-	ID                  string                 `json:"id"`
-	Name                string                 `json:"name"`
-	Description         string                 `json:"description"`
-	VCPUs               int                    `json:"vcpus"`
-	MemoryMB            int                    `json:"memory_mb"`
-	ConsoleEnabled      bool                   `json:"console_enabled"`
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Description    string `json:"description"`
+	VCPUs          int    `json:"vcpus"`
+	MemoryMB       int    `json:"memory_mb"`
+	ConsoleEnabled bool   `json:"console_enabled"`
+	// Ephemeral terminates the runtime when the guest exits and leaves the
+	// definition's disks and network interfaces attached.
+	Ephemeral           bool                   `json:"ephemeral"`
 	CgroupClass         string                 `json:"cgroup_class,omitempty"`
 	KernelID            int64                  `json:"kernel_id"`
 	KernelName          string                 `json:"kernel_name"`
@@ -66,6 +85,7 @@ type LightVM struct {
 	InitramfsName       string                 `json:"initramfs_name"`
 	Image               string                 `json:"image"`
 	Env                 []LightVMEnvVar        `json:"env"`
+	ConfigFiles         []LightVMConfigFile    `json:"config_files"`
 	ExecutablePath      string                 `json:"executable_path"`
 	ExecutableScript    string                 `json:"executable_script"`
 	ExecutableArgs      []string               `json:"executable_args"`
@@ -77,6 +97,7 @@ type LightVM struct {
 	KernelPath          string                 `json:"-"`
 	InitramfsPath       string                 `json:"-"`
 	DiskIDs             []int64                `json:"disk_ids,omitempty"`
+	DiskSerials         map[int64]string       `json:"-"`
 	Disks               []VMDisk               `json:"disks,omitempty"`
 	VirtioFSShares      []LightVMVirtioFSShare `json:"virtiofs_shares,omitempty"`
 	ReplaceDiskIDs      bool                   `json:"-"`
@@ -171,6 +192,76 @@ func normalizeLightVMVirtioFSShares(shares []LightVMVirtioFSShare) ([]LightVMVir
 	return out, nil
 }
 
+// NormalizeLightVMConfigFiles validates and trims user-supplied
+// rookery-config files. Names are relative to /run/rookery in the guest, and
+// "env" and "startup-cmd" are reserved for Rookery.
+func NormalizeLightVMConfigFiles(values []LightVMConfigFile) ([]LightVMConfigFile, error) {
+	if len(values) > MaxLightVMConfigFiles {
+		return nil, fmt.Errorf("at most %d config files are allowed", MaxLightVMConfigFiles)
+	}
+	out := make([]LightVMConfigFile, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	total := 0
+	for _, item := range values {
+		name := strings.TrimSpace(item.Name)
+		if err := validateLightVMConfigFileName(name); err != nil {
+			return nil, err
+		}
+		if _, ok := seen[name]; ok {
+			return nil, fmt.Errorf("config file %q is duplicated", name)
+		}
+		seen[name] = struct{}{}
+		if len(item.Content) > MaxLightVMConfigFileBytes {
+			return nil, fmt.Errorf("config file %q must be at most %d bytes", name, MaxLightVMConfigFileBytes)
+		}
+		total += len(item.Content)
+		out = append(out, LightVMConfigFile{Name: name, Content: item.Content})
+	}
+	if total > MaxLightVMConfigFilesBytes {
+		return nil, fmt.Errorf("config files must total at most %d bytes", MaxLightVMConfigFilesBytes)
+	}
+	for i := range out {
+		for j := range out {
+			if i == j {
+				continue
+			}
+			if strings.HasPrefix(out[j].Name, out[i].Name+"/") {
+				return nil, fmt.Errorf("config file %q conflicts with file %q", out[j].Name, out[i].Name)
+			}
+		}
+	}
+	return out, nil
+}
+
+func validateLightVMConfigFileName(name string) error {
+	if name == "" {
+		return errors.New("config file name is required")
+	}
+	if len(name) > 255 {
+		return fmt.Errorf("config file name %q is too long", name)
+	}
+	if strings.HasPrefix(name, "/") {
+		return fmt.Errorf("config file name %q must be relative", name)
+	}
+	if strings.HasSuffix(name, "/") {
+		return fmt.Errorf("config file name %q must not end with a slash", name)
+	}
+	if strings.ContainsAny(name, "\r\n\x00") {
+		return fmt.Errorf("config file name %q must be a single line without NUL characters", name)
+	}
+	parts := strings.Split(name, "/")
+	for _, part := range parts {
+		if part == "" || part == "." || part == ".." {
+			return fmt.Errorf("config file name %q has an invalid path component", name)
+		}
+	}
+	switch parts[0] {
+	case "env", "startup-cmd":
+		return fmt.Errorf("config file name %q is reserved for Rookery", name)
+	}
+	return nil
+}
+
 func validLightVMShareTag(tag string) bool {
 	if tag == "" || len(tag) > 64 {
 		return false
@@ -190,8 +281,8 @@ func validLightVMShareTag(tag string) bool {
 
 const lightVMSelect = `
 	SELECT l.id, l.name, l.description, l.vcpus, l.memory_mb, l.console_enabled,
-	       l.cgroup_class, l.kernel_id, k.name, k.path, l.initramfs_id, i.name,
-	       i.path, l.image, l.env, l.executable_path, l.executable_script,
+	       l.ephemeral, l.cgroup_class, l.kernel_id, k.name, k.path, l.initramfs_id, i.name,
+	       i.path, l.image, l.env, l.config_files, l.executable_path, l.executable_script,
 	       l.executable_args, l.append,
 	       l.status, l.desired_state, l.lifecycle_generation, l.created_at, l.updated_at
 	FROM lightvms AS l
@@ -228,6 +319,34 @@ func (s *Store) ListLightVMs(ctx context.Context) ([]LightVM, error) {
 	}
 	if err := s.loadLightVMVirtioFSShares(ctx, vms); err != nil {
 		return nil, err
+	}
+	return vms, nil
+}
+
+// ListReapableEphemeralLightVMs returns the minimal records for ephemeral
+// LightVMs that have exited or are waiting for cleanup. The ephemeral reaper
+// uses it instead of loading every attachment on each poll.
+func (s *Store) ListReapableEphemeralLightVMs(ctx context.Context) ([]LightVM, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, name, status, desired_state
+		FROM lightvms
+		WHERE ephemeral = 1 AND status IN (?, ?, ?)
+		ORDER BY id`, StatusRunning, StatusStarting, StatusTerminated)
+	if err != nil {
+		return nil, fmt.Errorf("query running ephemeral lightvms: %w", err)
+	}
+	defer rows.Close()
+
+	vms := make([]LightVM, 0)
+	for rows.Next() {
+		var vm LightVM
+		if err := rows.Scan(&vm.ID, &vm.Name, &vm.Status, &vm.DesiredState); err != nil {
+			return nil, err
+		}
+		vms = append(vms, vm)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate running ephemeral lightvms: %w", err)
 	}
 	return vms, nil
 }
@@ -288,6 +407,13 @@ func (s *Store) CreateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 	if err != nil {
 		return LightVM{}, err
 	}
+	serials, err := normalizeDiskSerials(diskIDs, vm.DiskSerials)
+	if err != nil {
+		return LightVM{}, err
+	}
+	if strings.TrimSpace(vm.Image) == "" && len(diskIDs) == 0 {
+		return LightVM{}, ErrLightVMRootRequired
+	}
 	for _, diskID := range diskIDs {
 		if err := s.checkDiskAvailableForAttach(ctx, diskID, "lightvm", vm.ID); err != nil {
 			return LightVM{}, err
@@ -304,6 +430,10 @@ func (s *Store) CreateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 	if err != nil {
 		return LightVM{}, err
 	}
+	configJSON, err := marshalLightVMConfigFiles(vm.ConfigFiles)
+	if err != nil {
+		return LightVM{}, err
+	}
 	argsJSON, err := marshalLightVMArgs(vm.ExecutableArgs)
 	if err != nil {
 		return LightVM{}, err
@@ -317,13 +447,13 @@ func (s *Store) CreateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO lightvms
-			(id, name, description, vcpus, memory_mb, console_enabled,
-			 cgroup_class, kernel_id, initramfs_id, image, env,
+			(id, name, description, vcpus, memory_mb, console_enabled, ephemeral,
+			 cgroup_class, kernel_id, initramfs_id, image, env, config_files,
 			 executable_path, executable_script, executable_args, append, status, desired_state,
 			 created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		vm.ID, vm.Name, vm.Description, vm.VCPUs, vm.MemoryMB, vm.ConsoleEnabled,
-		vm.CgroupClass, vm.KernelID, vm.InitramfsID, vm.Image, envJSON,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		vm.ID, vm.Name, vm.Description, vm.VCPUs, vm.MemoryMB, vm.ConsoleEnabled, vm.Ephemeral,
+		vm.CgroupClass, vm.KernelID, vm.InitramfsID, vm.Image, envJSON, configJSON,
 		vm.ExecutablePath, vm.ExecutableScript, argsJSON, vm.Append, vm.Status, vm.DesiredState, now, now,
 	); err != nil {
 		if isUniqueViolation(err) {
@@ -335,10 +465,8 @@ func (s *Store) CreateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 		return LightVM{}, err
 	}
 	for position, diskID := range diskIDs {
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position)
-			VALUES (NULL, ?, ?, ?)`, vm.ID, diskID, position); err != nil {
-			return LightVM{}, s.workloadDiskAttachError(ctx, tx, err, diskID)
+		if err := s.insertWorkloadDisk(ctx, tx, nil, vm.ID, diskID, position, serials[diskID]); err != nil {
+			return LightVM{}, err
 		}
 	}
 	if err := insertLightVMVirtioFSShares(ctx, tx, vm.ID, shares); err != nil {
@@ -376,6 +504,12 @@ func (s *Store) UpdateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 		return LightVM{}, err
 	}
 	replaceDisks := vm.ReplaceDiskIDs || len(vm.DiskIDs) > 0
+	if !replaceDisks && len(vm.DiskSerials) > 0 {
+		// A serial-only update still replaces the attachment rows so omitted
+		// serials are cleared consistently.
+		replaceDisks = true
+		diskIDs = append([]int64(nil), existing.DiskIDs...)
+	}
 	if replaceDisks {
 		for _, diskID := range diskIDs {
 			if err := s.checkDiskAvailableForAttach(ctx, diskID, "lightvm", vm.ID); err != nil {
@@ -389,10 +523,20 @@ func (s *Store) UpdateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 			if err != nil {
 				return LightVM{}, err
 			}
-			if err := s.checkDiskOwnership(ctx, disk, "lightvm", vm.ID); err != nil {
-				return LightVM{}, err
+			// Keeping the existing attachment set only needs to confirm each
+			// disk is still attached to this LightVM. Read-only disks may have
+			// other workload owners.
+			if !diskHasAttachment(disk, "lightvm", vm.ID) {
+				return LightVM{}, fmt.Errorf("disk %d is not attached to this lightvm", diskID)
 			}
 		}
+	}
+	serials, err := normalizeDiskSerials(diskIDs, vm.DiskSerials)
+	if err != nil {
+		return LightVM{}, err
+	}
+	if strings.TrimSpace(vm.Image) == "" && len(diskIDs) == 0 {
+		return LightVM{}, ErrLightVMRootRequired
 	}
 	shares, err := normalizeLightVMVirtioFSShares(vm.VirtioFSShares)
 	if err != nil {
@@ -403,6 +547,10 @@ func (s *Store) UpdateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 		return LightVM{}, err
 	}
 	envJSON, err := marshalLightVMEnv(vm.Env)
+	if err != nil {
+		return LightVM{}, err
+	}
+	configJSON, err := marshalLightVMConfigFiles(vm.ConfigFiles)
 	if err != nil {
 		return LightVM{}, err
 	}
@@ -419,14 +567,14 @@ func (s *Store) UpdateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 	res, err := tx.ExecContext(ctx, `
 		UPDATE lightvms
 		SET name = ?, description = ?, vcpus = ?, memory_mb = ?,
-		    console_enabled = ?, cgroup_class = ?, kernel_id = ?,
-		    initramfs_id = ?, image = ?, env = ?, executable_path = ?,
+		    console_enabled = ?, ephemeral = ?, cgroup_class = ?, kernel_id = ?,
+		    initramfs_id = ?, image = ?, env = ?, config_files = ?, executable_path = ?,
 		    executable_script = ?, executable_args = ?, append = ?, desired_state = ?,
 		    lifecycle_generation = lifecycle_generation + 1, updated_at = ?
 		WHERE id = ?`,
 		vm.Name, vm.Description, vm.VCPUs, vm.MemoryMB,
-		vm.ConsoleEnabled, vm.CgroupClass, vm.KernelID,
-		vm.InitramfsID, vm.Image, envJSON, vm.ExecutablePath, vm.ExecutableScript,
+		vm.ConsoleEnabled, vm.Ephemeral, vm.CgroupClass, vm.KernelID,
+		vm.InitramfsID, vm.Image, envJSON, configJSON, vm.ExecutablePath, vm.ExecutableScript,
 		argsJSON, vm.Append, DesiredStopped, time.Now().UTC().UnixMilli(), vm.ID,
 	)
 	if err != nil {
@@ -453,10 +601,8 @@ func (s *Store) UpdateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 			return LightVM{}, fmt.Errorf("clear lightvm disks: %w", err)
 		}
 		for position, diskID := range diskIDs {
-			if _, err := tx.ExecContext(ctx, `
-				INSERT INTO workload_disks (vm_id, lightvm_id, disk_id, position)
-				VALUES (NULL, ?, ?, ?)`, vm.ID, diskID, position); err != nil {
-				return LightVM{}, s.workloadDiskAttachError(ctx, tx, err, diskID)
+			if err := s.insertWorkloadDisk(ctx, tx, nil, vm.ID, diskID, position, serials[diskID]); err != nil {
+				return LightVM{}, err
 			}
 		}
 	}
@@ -820,17 +966,18 @@ func (s *Store) checkLightVMInterfaceUse(ctx context.Context, interfaceID int64,
 
 func scanLightVM(s scanner) (LightVM, error) {
 	var (
-		vm        LightVM
-		envJSON   string
-		argsJSON  string
-		createdAt int64
-		updatedAt int64
+		vm         LightVM
+		envJSON    string
+		configJSON string
+		argsJSON   string
+		createdAt  int64
+		updatedAt  int64
 	)
 	if err := s.Scan(
 		&vm.ID, &vm.Name, &vm.Description, &vm.VCPUs, &vm.MemoryMB,
-		&vm.ConsoleEnabled, &vm.CgroupClass, &vm.KernelID, &vm.KernelName,
+		&vm.ConsoleEnabled, &vm.Ephemeral, &vm.CgroupClass, &vm.KernelID, &vm.KernelName,
 		&vm.KernelPath, &vm.InitramfsID, &vm.InitramfsName, &vm.InitramfsPath,
-		&vm.Image, &envJSON, &vm.ExecutablePath, &vm.ExecutableScript, &argsJSON, &vm.Append,
+		&vm.Image, &envJSON, &configJSON, &vm.ExecutablePath, &vm.ExecutableScript, &argsJSON, &vm.Append,
 		&vm.Status, &vm.DesiredState, &vm.LifecycleGeneration, &createdAt, &updatedAt,
 	); err != nil {
 		return LightVM{}, err
@@ -838,11 +985,17 @@ func scanLightVM(s scanner) (LightVM, error) {
 	if err := json.Unmarshal([]byte(envJSON), &vm.Env); err != nil {
 		return LightVM{}, fmt.Errorf("decode lightvm environment: %w", err)
 	}
+	if err := json.Unmarshal([]byte(configJSON), &vm.ConfigFiles); err != nil {
+		return LightVM{}, fmt.Errorf("decode lightvm config files: %w", err)
+	}
 	if err := json.Unmarshal([]byte(argsJSON), &vm.ExecutableArgs); err != nil {
 		return LightVM{}, fmt.Errorf("decode lightvm arguments: %w", err)
 	}
 	if vm.Env == nil {
 		vm.Env = []LightVMEnvVar{}
+	}
+	if vm.ConfigFiles == nil {
+		vm.ConfigFiles = []LightVMConfigFile{}
 	}
 	if vm.ExecutableArgs == nil {
 		vm.ExecutableArgs = []string{}
@@ -859,6 +1012,17 @@ func marshalLightVMEnv(values []LightVMEnvVar) (string, error) {
 	data, err := json.Marshal(values)
 	if err != nil {
 		return "", fmt.Errorf("encode lightvm environment: %w", err)
+	}
+	return string(data), nil
+}
+
+func marshalLightVMConfigFiles(values []LightVMConfigFile) (string, error) {
+	if values == nil {
+		values = []LightVMConfigFile{}
+	}
+	data, err := json.Marshal(values)
+	if err != nil {
+		return "", fmt.Errorf("encode lightvm config files: %w", err)
 	}
 	return string(data), nil
 }

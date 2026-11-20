@@ -680,13 +680,15 @@ var LightVMArtifactService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	LightVMService_ListLightVMs_FullMethodName  = "/rookery.v1.LightVMService/ListLightVMs"
-	LightVMService_GetLightVM_FullMethodName    = "/rookery.v1.LightVMService/GetLightVM"
-	LightVMService_CreateLightVM_FullMethodName = "/rookery.v1.LightVMService/CreateLightVM"
-	LightVMService_UpdateLightVM_FullMethodName = "/rookery.v1.LightVMService/UpdateLightVM"
-	LightVMService_DeleteLightVM_FullMethodName = "/rookery.v1.LightVMService/DeleteLightVM"
-	LightVMService_StartLightVM_FullMethodName  = "/rookery.v1.LightVMService/StartLightVM"
-	LightVMService_StopLightVM_FullMethodName   = "/rookery.v1.LightVMService/StopLightVM"
+	LightVMService_ListLightVMs_FullMethodName               = "/rookery.v1.LightVMService/ListLightVMs"
+	LightVMService_GetLightVM_FullMethodName                 = "/rookery.v1.LightVMService/GetLightVM"
+	LightVMService_CreateLightVM_FullMethodName              = "/rookery.v1.LightVMService/CreateLightVM"
+	LightVMService_UpdateLightVM_FullMethodName              = "/rookery.v1.LightVMService/UpdateLightVM"
+	LightVMService_DeleteLightVM_FullMethodName              = "/rookery.v1.LightVMService/DeleteLightVM"
+	LightVMService_StartLightVM_FullMethodName               = "/rookery.v1.LightVMService/StartLightVM"
+	LightVMService_StopLightVM_FullMethodName                = "/rookery.v1.LightVMService/StopLightVM"
+	LightVMService_GetLightVMMetrics_FullMethodName          = "/rookery.v1.LightVMService/GetLightVMMetrics"
+	LightVMService_CreateLightVMConsoleAccess_FullMethodName = "/rookery.v1.LightVMService/CreateLightVMConsoleAccess"
 )
 
 // LightVMServiceClient is the client API for LightVMService service.
@@ -702,6 +704,11 @@ type LightVMServiceClient interface {
 	DeleteLightVM(ctx context.Context, in *DeleteLightVMRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	StartLightVM(ctx context.Context, in *StartLightVMRequest, opts ...grpc.CallOption) (*LightVM, error)
 	StopLightVM(ctx context.Context, in *StopLightVMRequest, opts ...grpc.CallOption) (*LightVM, error)
+	GetLightVMMetrics(ctx context.Context, in *GetLightVMMetricsRequest, opts ...grpc.CallOption) (*LightVMMetrics, error)
+	// CreateLightVMConsoleAccess issues a time-limited bearer token that a
+	// client can use directly against the console WebSocket without the
+	// browser UI.
+	CreateLightVMConsoleAccess(ctx context.Context, in *CreateLightVMConsoleAccessRequest, opts ...grpc.CallOption) (*LightVMConsoleAccess, error)
 }
 
 type lightVMServiceClient struct {
@@ -782,6 +789,26 @@ func (c *lightVMServiceClient) StopLightVM(ctx context.Context, in *StopLightVMR
 	return out, nil
 }
 
+func (c *lightVMServiceClient) GetLightVMMetrics(ctx context.Context, in *GetLightVMMetricsRequest, opts ...grpc.CallOption) (*LightVMMetrics, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LightVMMetrics)
+	err := c.cc.Invoke(ctx, LightVMService_GetLightVMMetrics_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *lightVMServiceClient) CreateLightVMConsoleAccess(ctx context.Context, in *CreateLightVMConsoleAccessRequest, opts ...grpc.CallOption) (*LightVMConsoleAccess, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LightVMConsoleAccess)
+	err := c.cc.Invoke(ctx, LightVMService_CreateLightVMConsoleAccess_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // LightVMServiceServer is the server API for LightVMService service.
 // All implementations must embed UnimplementedLightVMServiceServer
 // for forward compatibility.
@@ -795,6 +822,11 @@ type LightVMServiceServer interface {
 	DeleteLightVM(context.Context, *DeleteLightVMRequest) (*emptypb.Empty, error)
 	StartLightVM(context.Context, *StartLightVMRequest) (*LightVM, error)
 	StopLightVM(context.Context, *StopLightVMRequest) (*LightVM, error)
+	GetLightVMMetrics(context.Context, *GetLightVMMetricsRequest) (*LightVMMetrics, error)
+	// CreateLightVMConsoleAccess issues a time-limited bearer token that a
+	// client can use directly against the console WebSocket without the
+	// browser UI.
+	CreateLightVMConsoleAccess(context.Context, *CreateLightVMConsoleAccessRequest) (*LightVMConsoleAccess, error)
 	mustEmbedUnimplementedLightVMServiceServer()
 }
 
@@ -825,6 +857,12 @@ func (UnimplementedLightVMServiceServer) StartLightVM(context.Context, *StartLig
 }
 func (UnimplementedLightVMServiceServer) StopLightVM(context.Context, *StopLightVMRequest) (*LightVM, error) {
 	return nil, status.Error(codes.Unimplemented, "method StopLightVM not implemented")
+}
+func (UnimplementedLightVMServiceServer) GetLightVMMetrics(context.Context, *GetLightVMMetricsRequest) (*LightVMMetrics, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetLightVMMetrics not implemented")
+}
+func (UnimplementedLightVMServiceServer) CreateLightVMConsoleAccess(context.Context, *CreateLightVMConsoleAccessRequest) (*LightVMConsoleAccess, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateLightVMConsoleAccess not implemented")
 }
 func (UnimplementedLightVMServiceServer) mustEmbedUnimplementedLightVMServiceServer() {}
 func (UnimplementedLightVMServiceServer) testEmbeddedByValue()                        {}
@@ -973,6 +1011,42 @@ func _LightVMService_StopLightVM_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LightVMService_GetLightVMMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetLightVMMetricsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LightVMServiceServer).GetLightVMMetrics(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LightVMService_GetLightVMMetrics_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LightVMServiceServer).GetLightVMMetrics(ctx, req.(*GetLightVMMetricsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LightVMService_CreateLightVMConsoleAccess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateLightVMConsoleAccessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LightVMServiceServer).CreateLightVMConsoleAccess(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LightVMService_CreateLightVMConsoleAccess_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LightVMServiceServer).CreateLightVMConsoleAccess(ctx, req.(*CreateLightVMConsoleAccessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // LightVMService_ServiceDesc is the grpc.ServiceDesc for LightVMService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1007,6 +1081,14 @@ var LightVMService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StopLightVM",
 			Handler:    _LightVMService_StopLightVM_Handler,
+		},
+		{
+			MethodName: "GetLightVMMetrics",
+			Handler:    _LightVMService_GetLightVMMetrics_Handler,
+		},
+		{
+			MethodName: "CreateLightVMConsoleAccess",
+			Handler:    _LightVMService_CreateLightVMConsoleAccess_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

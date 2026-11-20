@@ -11,6 +11,7 @@ import type {
   VirtualInterface,
 } from "../types";
 import { navigate, useRoute } from "../router";
+import { WorkloadMonitorDialog } from "../WorkloadMonitorDialog";
 import {
   ArtifactDialog,
   type LightVMArtifact,
@@ -83,6 +84,7 @@ export function LightVMTab() {
     artifact: LightVMArtifact | null;
   } | null>(null);
   const [lightVMDialog, setLightVMDialog] = useState<{ vm: LightVM | null } | null>(null);
+  const [monitorVM, setMonitorVM] = useState<LightVM | null>(null);
   const kernelLabels = useEntityLabels("lightvm_kernel");
   const initramfsLabels = useEntityLabels("lightvm_initramfs");
   const lightVMLabels = useEntityLabels("lightvm");
@@ -218,6 +220,7 @@ export function LightVMTab() {
     if (root !== "lightvm") {
       setDialog(null);
       setLightVMDialog(null);
+      setMonitorVM(null);
       return;
     }
 
@@ -230,21 +233,33 @@ export function LightVMTab() {
     if (second === "instances") {
       setDialog(null);
       if (third === "new") {
+        setMonitorVM(null);
         setLightVMDialog({ vm: null });
         return;
       }
       if (third && fourth === "edit") {
         const vm = lightvms.find((item) => item.id === third);
         if (vm) {
+          setMonitorVM(null);
           setLightVMDialog({ vm });
           return;
         }
       }
+      if (third && fourth === "monitor") {
+        const vm = lightvms.find((item) => item.id === third);
+        if (vm) {
+          setLightVMDialog(null);
+          setMonitorVM(vm);
+          return;
+        }
+      }
       setLightVMDialog(null);
+      setMonitorVM(null);
       return;
     }
 
     setLightVMDialog(null);
+    setMonitorVM(null);
     if ((second === "kernels" || second === "initramfs") && third === "new") {
       setDialog({
         kind: second === "kernels" ? "kernel" : "initramfs",
@@ -330,15 +345,23 @@ export function LightVMTab() {
     }
   };
 
-  const stopLightVM = async (vm: LightVM) => {    const action = `stop:${vm.id}`;
+  const stopLightVM = async (vm: LightVM) => {
+    const action = `stop:${vm.id}`;
     setLightVMAction(action);
     setLightVMError("");
     try {
       const updated = await api<LightVM>(`/api/lightvm/instances/${vm.id}/stop`, {
         method: "POST",
       });
-      publishLightVMs(lightvms.map((item) => (item.id === updated.id ? updated : item)));
-      showToast(`Stopped LightVM ${updated.name}`);
+      if (updated.ephemeral && updated.status === "terminated") {
+        publishLightVMs(lightvms.filter((item) => item.id !== updated.id));
+        void loadInterfaces();
+        void loadDisks();
+        showToast(`Terminated ephemeral LightVM ${updated.name}`);
+      } else {
+        publishLightVMs(lightvms.map((item) => (item.id === updated.id ? updated : item)));
+        showToast(`Stopped LightVM ${updated.name}`);
+      }
     } catch (err) {
       setLightVMError(
         `Could not stop ${vm.name}: ${err instanceof Error ? err.message : String(err)}`
@@ -415,7 +438,8 @@ export function LightVMTab() {
         <div class="banner" role="alert">
           <strong>LightVM runtime unavailable.</strong>{" "}
           {runtimeStatus.detail ||
-            "Install buildah and virtiofsd before starting a LightVM."}
+            "Install buildah and virtiofsd before starting a container-image LightVM."}{" "}
+          Disk-backed LightVMs without host-directory shares can still start.
         </div>
       ) : null}
 
@@ -698,8 +722,15 @@ export function LightVMTab() {
         </div>
 
         <p class="field-hint">
-          A LightVM combines uploaded kernel and initramfs images with a container image, environment,
-          executable path, and arguments. Definitions are inventory-only until the runtime is added.
+          A LightVM combines uploaded kernel and initramfs images with an optional container
+          image or attached disks. Container-image LightVMs receive environment and startup
+          files in their mounted rootfs; disk-backed LightVMs receive them, plus any
+          user-supplied config files, on a read-only rookery-config virtio-blk device,
+          which the bundled disk-root and overlay-root initramfs images extract into
+          /run/rookery and run as PID 1. Mark a definition ephemeral to terminate its
+          QEMU, virtiofsd, and attempt container automatically when the guest exits,
+          delete the definition, and release its disks and network interfaces for
+          other workloads (the disk and network records themselves remain).
         </p>
 
         {lightVMError ? (
@@ -730,12 +761,16 @@ export function LightVMTab() {
                 {lightvms.map((vm) => {
                   const args = Array.isArray(vm.executable_args) ? vm.executable_args : [];
                   const env = Array.isArray(vm.env) ? vm.env : [];
+                  const configFiles = Array.isArray(vm.config_files) ? vm.config_files : [];
                   const attached = Array.isArray(vm.interfaces) ? vm.interfaces : [];
                   const consoles = Array.isArray(vm.consoles) ? vm.consoles : [];
                   const paused = Boolean(vm.run_state?.startsWith("paused"));
                   const running = vm.status === "running" || vm.status === "starting";
                   const starting = lightVMAction === `start:${vm.id}`;
                   const stopping = lightVMAction === `stop:${vm.id}`;
+                  const shares = Array.isArray(vm.virtiofs_shares) ? vm.virtiofs_shares : [];
+                  const needsRuntimeTools = Boolean(vm.image) || shares.length > 0;
+                  const runtimeBlocked = !runtimeReady && needsRuntimeTools;
                   return (
                     <tr key={vm.id}>
                       <td>
@@ -743,6 +778,14 @@ export function LightVMTab() {
                         {vm.description ? (
                           <span class="vm-description" title={vm.description}>
                             {vm.description}
+                          </span>
+                        ) : null}
+                        {vm.ephemeral ? (
+                          <span
+                            class="vm-description mono"
+                            title="When the guest exits, Rookery tears down QEMU, virtiofsd, and the attempt container, deletes this definition, and releases its disk/interface attachments."
+                          >
+                            ephemeral · one-shot
                           </span>
                         ) : null}
                         <EntityLabels
@@ -780,7 +823,7 @@ export function LightVMTab() {
                           {vm.append ? `append: ${vm.append}` : "append: none"}
                         </span>
                       </td>
-                      <td class="mono">{vm.image}</td>
+                      <td class="mono">{vm.image || "disk boot"}</td>
                       <td>
                         <span
                           class="vm-name mono"
@@ -790,13 +833,21 @@ export function LightVMTab() {
                         </span>
                         <span class="vm-description mono" title={args.join(" ")}>
                           {vm.executable_script
-                            ? "contents written to /.entrypoint"
+                            ? vm.image
+                              ? "contents written to /.entrypoint"
+                              : "startup-cmd in rookery-config"
                             : args.length
                               ? args.join(" ")
                               : "no arguments"}
                         </span>
                         <span class="vm-description">
                           {env.length} env var{env.length === 1 ? "" : "s"}
+                          {configFiles.length > 0
+                            ? ` · ${configFiles.length} config file${configFiles.length === 1 ? "" : "s"}`
+                            : ""}
+                          {!vm.image && (env.length > 0 || configFiles.length > 0 || vm.executable_path || vm.executable_script)
+                            ? " · rookery-config"
+                            : ""}
                         </span>
                       </td>
                       <td class={attached.length ? "mono" : "mono muted"} title={attached.map((item) => item.name).join(", ")}>
@@ -818,11 +869,11 @@ export function LightVMTab() {
                             <button
                               class="row-action"
                               type="button"
-                              disabled={starting || !runtimeReady}
+                              disabled={starting || runtimeBlocked}
                               title={
-                                !runtimeReady
+                                runtimeBlocked
                                   ? runtimeStatus?.detail ||
-                                    "Install buildah and virtiofsd before starting a LightVM."
+                                    "Install buildah and virtiofsd before starting this LightVM."
                                   : ""
                               }
                               onClick={() => void startLightVM(vm)}
@@ -844,6 +895,13 @@ export function LightVMTab() {
                             onClick={() => openLightVMConsole(vm)}
                           >
                             Console
+                          </button>
+                          <button
+                            class="row-action"
+                            type="button"
+                            onClick={() => navigate(`/lightvm/instances/${vm.id}/monitor`)}
+                          >
+                            Monitor
                           </button>
                           <button
                             class="row-action"
@@ -875,7 +933,7 @@ export function LightVMTab() {
               </div>
               <h3>No LightVMs yet</h3>
               <p>
-                Upload a kernel and initramfs, then define a container-backed LightVM.
+                Upload a kernel and initramfs, then define a container-image or disk-backed LightVM.
               </p>
               <button
                 class="button primary"
@@ -961,6 +1019,20 @@ export function LightVMTab() {
             setLightVMError("");
             void loadInterfaces();
             showToast(created ? `Created LightVM ${saved.name}` : `Saved LightVM ${saved.name}`);
+          }}
+        />
+      ) : null}
+
+      {monitorVM ? (
+        <WorkloadMonitorDialog
+          key={`monitor-${monitorVM.id}`}
+          kind="LightVM"
+          id={monitorVM.id}
+          name={monitorVM.name}
+          memoryMB={monitorVM.memory_mb}
+          onClose={() => {
+            setMonitorVM(null);
+            navigate("/lightvm/instances", true);
           }}
         />
       ) : null}

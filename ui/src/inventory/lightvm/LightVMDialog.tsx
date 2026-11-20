@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
+import { formatByteSize, formatBytesIEC } from "../../shared/format";
 import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
 import type {
   CgroupSettings,
   Disk,
   LightVM,
+  LightVMConfigFile,
   LightVMEnvVar,
   LightVMInitramfs,
   LightVMKernel,
@@ -114,8 +116,60 @@ function parseEnvText(text: string): { env: LightVMEnvVar[]; error: string } {
   return { env, error: "" };
 }
 
+const CONFIG_FILE_MAX = 64;
+const CONFIG_FILE_MAX_BYTES = 1 << 20;
+const CONFIG_FILES_MAX_BYTES = 4 << 20;
+
+function contentBytes(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+function configFileNameError(name: string, existing: LightVMConfigFile[]): string {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return "Config file name is required.";
+  }
+  if (trimmed.length > 255) {
+    return "Config file name must be at most 255 characters.";
+  }
+  if (trimmed.startsWith("/")) {
+    return "Config file name must be relative.";
+  }
+  if (trimmed.endsWith("/")) {
+    return "Config file name must not end with a slash.";
+  }
+  if (/[\r\n\x00]/.test(trimmed)) {
+    return "Config file name must be a single line without NUL characters.";
+  }
+  const parts = trimmed.split("/");
+  if (parts.some((part) => part === "" || part === "." || part === "..")) {
+    return "Config file name has an invalid path component.";
+  }
+  if (parts[0] === "env" || parts[0] === "startup-cmd") {
+    return `Config file name "${trimmed}" is reserved for Rookery.`;
+  }
+  if (existing.some((file) => file.name === trimmed)) {
+    return `Config file "${trimmed}" is already added.`;
+  }
+  if (existing.some((file) => file.name.startsWith(trimmed + "/") || trimmed.startsWith(file.name + "/"))) {
+    return `Config file "${trimmed}" conflicts with another file path.`;
+  }
+  return "";
+}
+
 function vmInterfaces(vm: LightVM | null): VMInterface[] {
   return Array.isArray(vm?.interfaces) ? vm.interfaces : [];
+}
+
+function diskSerialPayload(disks: VMDisk[]): Record<string, string> {
+  const serials: Record<string, string> = {};
+  for (const disk of disks) {
+    const serial = (disk.serial ?? "").trim();
+    if (serial) {
+      serials[String(disk.id)] = serial;
+    }
+  }
+  return serials;
 }
 
 export function LightVMDialog({
@@ -133,6 +187,7 @@ export function LightVMDialog({
   const [vcpus, setVCPUs] = useState(String(vm?.vcpus ?? 1));
   const [memoryMB, setMemoryMB] = useState(String(vm?.memory_mb ?? 512));
   const [consoleEnabled, setConsoleEnabled] = useState(Boolean(vm?.console_enabled));
+  const [ephemeral, setEphemeral] = useState(Boolean(vm?.ephemeral));
   const [cgroupSettings, setCgroupSettings] = useState<CgroupSettings | null>(null);
   const [cgroupClass, setCgroupClass] = useState(vm?.cgroup_class || "");
   const [kernelID, setKernelID] = useState(vm?.kernel_id ? String(vm.kernel_id) : "");
@@ -141,6 +196,11 @@ export function LightVMDialog({
   );
   const [image, setImage] = useState(vm?.image || "");
   const [environment, setEnvironment] = useState(() => envText(vm));
+  const [configFiles, setConfigFiles] = useState<LightVMConfigFile[]>(() =>
+    Array.isArray(vm?.config_files) ? vm.config_files : []
+  );
+  const [configFileName, setConfigFileName] = useState("");
+  const [configFileContent, setConfigFileContent] = useState("");
   const [consoles, setConsoles] = useState<ConsoleRow[]>(() => consoleRows(vm));
   const [executionMode, setExecutionMode] = useState<"path" | "script">(
     vm?.executable_script ? "script" : "path"
@@ -182,6 +242,10 @@ export function LightVMDialog({
   const availableDisks = disks.filter((disk) => {
     if (selectedDiskIDs.has(disk.id) || disk.is_template || disk.deletion_state) {
       return false;
+    }
+    if (disk.read_only) {
+      // Read-only disks are shareable across VMs and LightVMs.
+      return true;
     }
     if (disk.attached_vm_id) {
       return false;
@@ -270,6 +334,12 @@ export function LightVMDialog({
     setSelectedDisks((current) => current.filter((disk) => disk.id !== id));
   };
 
+  const setDiskSerial = (id: number, serial: string) => {
+    setSelectedDisks((current) =>
+      current.map((disk) => (disk.id === id ? { ...disk, serial } : disk))
+    );
+  };
+
   const addShare = () => {
     const path = sharePath.trim();
     const tag = shareTag.trim();
@@ -303,6 +373,84 @@ export function LightVMDialog({
     setShares((current) => current.filter((share) => share.tag !== tag));
   };
 
+  const configFilesTotalBytes = (files: LightVMConfigFile[]) =>
+    files.reduce((total, file) => total + contentBytes(file.content), 0);
+
+  const removeConfigFile = (name: string) => {
+    setConfigFiles((current) => current.filter((file) => file.name !== name));
+  };
+
+  const addConfigFile = () => {
+    const name = configFileName.trim();
+    if (configFiles.length >= CONFIG_FILE_MAX) {
+      setError(`At most ${CONFIG_FILE_MAX} config files are allowed.`);
+      return;
+    }
+    const nameError = configFileNameError(name, configFiles);
+    if (nameError) {
+      setError(nameError);
+      return;
+    }
+    const size = contentBytes(configFileContent);
+    if (size > CONFIG_FILE_MAX_BYTES) {
+      setError(`Config file "${name}" must be at most ${formatBytesIEC(CONFIG_FILE_MAX_BYTES)}.`);
+      return;
+    }
+    if (configFilesTotalBytes(configFiles) + size > CONFIG_FILES_MAX_BYTES) {
+      setError(`Config files must total at most ${formatBytesIEC(CONFIG_FILES_MAX_BYTES)}.`);
+      return;
+    }
+    setConfigFiles((current) => [...current, { name, content: configFileContent }]);
+    setConfigFileName("");
+    setConfigFileContent("");
+    setError("");
+  };
+
+  const uploadConfigFiles = async (event: Event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const selected = Array.from(input.files ?? []);
+    input.value = "";
+    if (selected.length === 0) {
+      return;
+    }
+    const next = [...configFiles];
+    let total = configFilesTotalBytes(next);
+    let failure = "";
+    for (const file of selected) {
+      if (next.length >= CONFIG_FILE_MAX) {
+        failure = `At most ${CONFIG_FILE_MAX} config files are allowed.`;
+        break;
+      }
+      if (file.size > CONFIG_FILE_MAX_BYTES) {
+        failure = `Config file "${file.name}" must be at most ${formatBytesIEC(CONFIG_FILE_MAX_BYTES)}.`;
+        continue;
+      }
+      const nameError = configFileNameError(file.name, next);
+      if (nameError) {
+        failure = nameError;
+        continue;
+      }
+      const content = await file.text();
+      const size = contentBytes(content);
+      if (size > CONFIG_FILE_MAX_BYTES) {
+        failure = `Config file "${file.name}" must be at most ${formatBytesIEC(CONFIG_FILE_MAX_BYTES)}.`;
+        continue;
+      }
+      if (total + size > CONFIG_FILES_MAX_BYTES) {
+        failure = `Config files must total at most ${formatBytesIEC(CONFIG_FILES_MAX_BYTES)}.`;
+        break;
+      }
+      next.push({ name: file.name.trim(), content });
+      total += size;
+    }
+    setConfigFiles(next);
+    if (failure) {
+      setError(failure);
+    } else {
+      setError("");
+    }
+  };
+
   const updateConsole = (index: number, name: string) => {
     setConsoles((current) =>
       current.map((console, position) => (position === index ? { ...console, name } : console))
@@ -320,6 +468,8 @@ export function LightVMDialog({
     ]);
   };
 
+  const diskBacked = image.trim() === "";
+
   const submit = async (event: Event) => {
     event.preventDefault();
     if (saving || !formRef.current?.reportValidity()) {
@@ -333,6 +483,17 @@ export function LightVMDialog({
     }
     if (consoles.length === 0) {
       setError("Add at least one console.");
+      return;
+    }
+    if (diskBacked && selectedDisks.length === 0) {
+      setError("Select at least one disk or provide a container image.");
+      return;
+    }
+    const serials = selectedDisks
+      .map((disk) => (disk.serial ?? "").trim())
+      .filter((serial) => serial.length > 0);
+    if (new Set(serials).size !== serials.length) {
+      setError("Disk serials must be unique within the LightVM.");
       return;
     }
     const normalizedConsoles: ConsoleRow[] = [];
@@ -360,6 +521,16 @@ export function LightVMDialog({
       .split("\n")
       .map((line) => line.replace(/\r$/, ""))
       .filter((line) => line.length > 0);
+    const startupPath = executionMode === "path" ? executablePath.trim() : "";
+    const startupScript = executionMode === "script" ? executableScript.trim() : "";
+    if (!diskBacked && !startupPath && !startupScript) {
+      setError("Provide an executable path or an inline script for a container-image LightVM.");
+      return;
+    }
+    if (executionMode === "path" && !startupPath && executableArgs.length > 0) {
+      setError("Add an executable path before adding arguments.");
+      return;
+    }
 
     const payload = {
       name: name.trim(),
@@ -367,11 +538,13 @@ export function LightVMDialog({
       vcpus: Number(vcpus),
       memory_mb: Number(memoryMB),
       console_enabled: consoleEnabled,
+      ephemeral,
       cgroup_class: cgroupClass,
       kernel_id: selectedKernel,
       initramfs_id: selectedInitramfs,
       image: image.trim(),
       env: parsedEnv.env,
+      config_files: diskBacked ? configFiles : [],
       executable_path: executionMode === "path" ? executablePath.trim() : "",
       executable_script: executionMode === "script" ? executableScript : "",
       executable_args: executionMode === "path" ? executableArgs : [],
@@ -379,7 +552,10 @@ export function LightVMDialog({
       consoles: normalizedConsoles,
       interface_ids: selectedInterfaces.map((iface) => iface.id),
       disk_ids: selectedDisks.map((disk) => disk.id),
-      replace_disk_ids: editing,
+      disk_serials: diskSerialPayload(selectedDisks),
+      // replace_disk_ids only exists on UpdateLightVMRequest. Sending it
+      // (even as false) to CreateLightVMRequest is rejected by protojson.
+      ...(editing ? { replace_disk_ids: true } : {}),
       virtiofs_shares: shares.map((share) => ({
         host_path: share.host_path,
         tag: share.tag,
@@ -538,7 +714,6 @@ export function LightVMDialog({
             <span class="field-label">Container image</span>
             <input
               type="text"
-              required
               maxlength={512}
               autocomplete="off"
               spellcheck={false}
@@ -546,7 +721,10 @@ export function LightVMDialog({
               value={image}
               onInput={(event) => setImage(event.currentTarget.value)}
             />
-            <span class="field-hint">Docker/OCI image reference used by the LightVM runtime.</span>
+            <span class="field-hint">
+              Optional Docker/OCI image reference. Leave empty to boot from the
+              selected disks with the kernel and initramfs.
+            </span>
           </label>
 
           <div class="field field-wide" role="radiogroup" aria-label="Startup command">
@@ -577,7 +755,7 @@ export function LightVMDialog({
                 <span class="field-label">Executable path</span>
                 <input
                   type="text"
-                  required
+                  required={!diskBacked}
                   maxlength={4096}
                   autocomplete="off"
                   spellcheck={false}
@@ -585,7 +763,11 @@ export function LightVMDialog({
                   value={executablePath}
                   onInput={(event) => setExecutablePath(event.currentTarget.value)}
                 />
-                <span class="field-hint">Absolute path to the executable inside the container image.</span>
+                <span class="field-hint">
+                  {diskBacked
+                    ? "Absolute path inside the guest root filesystem. Optional; the bundled disk-root/overlay-root initramfs runs the published startup-cmd as PID 1."
+                    : "Absolute path to the executable inside the container image."}
+                </span>
               </label>
 
               <label class="field field-wide">
@@ -598,8 +780,9 @@ export function LightVMDialog({
                   onInput={(event) => setArgsText(event.currentTarget.value)}
                 />
                 <span class="field-hint">
-                  One argument per line. Rookery writes the executable path and these
-                  arguments to an executable <code>.entrypoint</code> script at the image root.
+                  {diskBacked
+                    ? "One argument per line. Written with the executable path to the startup-cmd file in the rookery-config device."
+                    : "One argument per line. Rookery writes the executable path and these arguments to an executable .entrypoint script at the image root."}
                 </span>
               </label>
             </>
@@ -608,7 +791,7 @@ export function LightVMDialog({
               <span class="field-label">Executable script</span>
               <textarea
                 rows={12}
-                required
+                required={!diskBacked}
                 maxlength={1048576}
                 autocomplete="off"
                 spellcheck={false}
@@ -617,10 +800,9 @@ export function LightVMDialog({
                 onInput={(event) => setExecutableScript(event.currentTarget.value)}
               />
               <span class="field-hint">
-                Copied verbatim to <code>/.entrypoint</code> in the image root and made
-                executable. A <code>#!/bin/sh</code> header is added when the script
-                does not start with a shebang. Executable arguments are not used in
-                script mode.
+                {diskBacked
+                  ? "Written to the startup-cmd file in the rookery-config device. The bundled disk-root/overlay-root initramfs extracts it to /run/rookery and runs it as PID 1 unless an explicit init= is set."
+                  : "Copied verbatim to /.entrypoint in the image root and made executable. A #!/bin/sh header is added when the script does not start with a shebang. Executable arguments are not used in script mode."}
               </span>
             </label>
           )}
@@ -636,12 +818,91 @@ export function LightVMDialog({
               onInput={(event) => setEnvironment(event.currentTarget.value)}
             />
             <span class="field-hint">
-              One <code>NAME=value</code> per line. Rookery writes these to{" "}
-              <code>.env</code> at the root of the mounted image before starting the
-              LightVM. Blank lines, <code>export </code> prefixes, and lines beginning
-              with <code>#</code> are ignored.
+              {diskBacked
+                ? "One NAME=value per line. Rookery creates a read-only virtio-blk device with serial rookery-config containing an uncompressed tar with env and startup-cmd. The bundled disk-root/overlay-root initramfs extracts it to /run/rookery, loads env, and runs startup-cmd. Blank lines, export prefixes, and # comments are ignored."
+                : "One NAME=value per line. Rookery writes these to .env at the root of the mounted image before starting the LightVM. Blank lines, export prefixes, and lines beginning with # are ignored."}
             </span>
           </label>
+
+          {diskBacked ? (
+            <div class="field field-wide">
+              <span class="field-label">
+                Config files <em>optional</em>
+              </span>
+              <label class="field field-wide">
+                <span class="field-label">Upload files</span>
+                <input
+                  type="file"
+                  multiple
+                  disabled={saving}
+                  onChange={uploadConfigFiles}
+                />
+                <span class="field-hint">
+                  Text files are added to the rookery-config tar and extracted
+                  under /run/rookery by the bundled disk-root/overlay-root
+                  initramfs. The names env and startup-cmd are reserved.
+                </span>
+              </label>
+              <div class="form-grid">
+                <label class="field">
+                  <span class="field-label">File name</span>
+                  <input
+                    type="text"
+                    maxlength={255}
+                    autocomplete="off"
+                    spellcheck={false}
+                    placeholder="app/config.yaml"
+                    value={configFileName}
+                    onInput={(event) => setConfigFileName(event.currentTarget.value)}
+                  />
+                </label>
+                <label class="field field-wide">
+                  <span class="field-label">File content</span>
+                  <textarea
+                    rows={6}
+                    autocomplete="off"
+                    spellcheck={false}
+                    placeholder="key: value"
+                    value={configFileContent}
+                    onInput={(event) => setConfigFileContent(event.currentTarget.value)}
+                  />
+                </label>
+                <div class="field field-wide">
+                  <button
+                    class="button ghost"
+                    type="button"
+                    disabled={saving || configFiles.length >= CONFIG_FILE_MAX}
+                    onClick={addConfigFile}
+                  >
+                    Add config file
+                  </button>
+                </div>
+              </div>
+              <ul class="interface-list">
+                {configFiles.length === 0 ? (
+                  <li class="empty">No config files added</li>
+                ) : (
+                  configFiles.map((file) => (
+                    <li key={file.name}>
+                      <span class="interface-list-name">
+                        {file.name}
+                        <span class="interface-list-network">
+                          {formatBytesIEC(contentBytes(file.content))}
+                        </span>
+                      </span>
+                      <button
+                        class="row-action danger"
+                        type="button"
+                        onClick={() => removeConfigFile(file.name)}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+          ) : null}
 
           <div class="field field-wide">
             <span class="field-label">Consoles</span>
@@ -703,6 +964,25 @@ export function LightVMDialog({
             </span>
           </label>
 
+          <label class="field field-wide checkbox-field">
+            <span class="field-label">Ephemeral LightVM</span>
+            <span class="checkbox-row">
+              <input
+                type="checkbox"
+                checked={ephemeral}
+                onChange={(event) => setEphemeral(event.currentTarget.checked)}
+              />
+              <span>Terminate this LightVM when its guest exits</span>
+            </span>
+            <span class="field-hint">
+              When the guest kernel reboots, panics, or powers off, Rookery stops QEMU
+              and removes the virtiofsd process, attempt container, console sockets,
+              and config drive, then deletes this LightVM definition. Its disk and
+              network-interface attachments are released so other VMs can use them;
+              the disk and network records themselves are kept.
+            </span>
+          </label>
+
           <div class="field field-wide">
             <label class="field">
               <span class="field-label">
@@ -741,7 +1021,7 @@ export function LightVMDialog({
                 </option>
                 {availableDisks.map((disk) => (
                   <option value={String(disk.id)} key={disk.id}>
-                    {disk.name} · {disk.size_gb} GB
+                    {disk.name} · {formatByteSize(disk.size_bytes || disk.size_gb * 1024 ** 3)}{disk.read_only ? " · read-only" : ""}
                   </option>
                 ))}
               </select>
@@ -763,9 +1043,24 @@ export function LightVMDialog({
                     <span class="interface-list-name">
                       {disk.name}
                       <span class="interface-list-network">
-                        {disk.size_gb} GB · {disk.source || "lvm-thin"}
+                        {formatByteSize(disk.size_bytes || disk.size_gb * 1024 ** 3)} · {disk.source || "lvm-thin"}
+                        {disk.read_only ? " · read-only" : ""}
                       </span>
                     </span>
+                    <label class="disk-serial">
+                      <span class="sr-only">Serial for {disk.name}</span>
+                      <input
+                        type="text"
+                        maxlength={20}
+                        pattern="[A-Za-z0-9._:-]*"
+                        autocomplete="off"
+                        spellcheck={false}
+                        placeholder="serial (optional)"
+                        title="Guest-visible virtio-blk serial, up to 20 bytes"
+                        value={disk.serial ?? ""}
+                        onInput={(event) => setDiskSerial(disk.id, event.currentTarget.value)}
+                      />
+                    </label>
                     <button
                       class="row-action danger"
                       type="button"
@@ -778,8 +1073,12 @@ export function LightVMDialog({
               )}
             </ul>
             <span class="field-hint">
-              Disks are attached in this order. Root remains the container image; the
-              guest initramfs mounts additional disks.
+              Disks are attached in this order. With a container image, root remains the
+              image and the guest initramfs mounts additional disks. With no image, the
+              guest boots from these disks; set the kernel command line as needed. Set an
+              optional serial so the guest can identify each disk. A disk-backed LightVM
+              with environment variables or a startup command also receives a read-only
+              rookery-config device.
             </span>
           </div>
 

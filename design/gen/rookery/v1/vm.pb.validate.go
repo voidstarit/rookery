@@ -765,6 +765,65 @@ func (m *CreateVMRequest) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
+	if len(m.GetDiskSerials()) > 32 {
+		err := CreateVMRequestValidationError{
+			field:  "DiskSerials",
+			reason: "value must contain no more than 32 pair(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	{
+		sorted_keys := make([]int64, len(m.GetDiskSerials()))
+		i := 0
+		for key := range m.GetDiskSerials() {
+			sorted_keys[i] = key
+			i++
+		}
+		sort.Slice(sorted_keys, func(i, j int) bool { return sorted_keys[i] < sorted_keys[j] })
+		for _, key := range sorted_keys {
+			val := m.GetDiskSerials()[key]
+			_ = val
+
+			if key <= 0 {
+				err := CreateVMRequestValidationError{
+					field:  fmt.Sprintf("DiskSerials[%v]", key),
+					reason: "value must be greater than 0",
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			}
+
+			if utf8.RuneCountInString(val) > 20 {
+				err := CreateVMRequestValidationError{
+					field:  fmt.Sprintf("DiskSerials[%v]", key),
+					reason: "value length must be at most 20 runes",
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			}
+
+			if !_CreateVMRequest_DiskSerials_Pattern.MatchString(val) {
+				err := CreateVMRequestValidationError{
+					field:  fmt.Sprintf("DiskSerials[%v]", key),
+					reason: "value does not match regex pattern \"^[A-Za-z0-9._:-]*$\"",
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			}
+
+		}
+	}
+
 	if m.Status != nil {
 
 		if utf8.RuneCountInString(m.GetStatus()) > 32 {
@@ -924,6 +983,8 @@ var _ interface {
 
 var _CreateVMRequest_Name_Pattern = regexp.MustCompile("^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
+var _CreateVMRequest_DiskSerials_Pattern = regexp.MustCompile("^[A-Za-z0-9._:-]*$")
+
 // Validate checks the field values on UpdateVMRequest with the rules defined
 // in the proto definition for this message. If any rules are violated, the
 // first error encountered is returned, or nil if there are no violations.
@@ -956,6 +1017,65 @@ func (m *UpdateVMRequest) validate(all bool) error {
 			return err
 		}
 		errors = append(errors, err)
+	}
+
+	if len(m.GetDiskSerials()) > 32 {
+		err := UpdateVMRequestValidationError{
+			field:  "DiskSerials",
+			reason: "value must contain no more than 32 pair(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	{
+		sorted_keys := make([]int64, len(m.GetDiskSerials()))
+		i := 0
+		for key := range m.GetDiskSerials() {
+			sorted_keys[i] = key
+			i++
+		}
+		sort.Slice(sorted_keys, func(i, j int) bool { return sorted_keys[i] < sorted_keys[j] })
+		for _, key := range sorted_keys {
+			val := m.GetDiskSerials()[key]
+			_ = val
+
+			if key <= 0 {
+				err := UpdateVMRequestValidationError{
+					field:  fmt.Sprintf("DiskSerials[%v]", key),
+					reason: "value must be greater than 0",
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			}
+
+			if utf8.RuneCountInString(val) > 20 {
+				err := UpdateVMRequestValidationError{
+					field:  fmt.Sprintf("DiskSerials[%v]", key),
+					reason: "value length must be at most 20 runes",
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			}
+
+			if !_UpdateVMRequest_DiskSerials_Pattern.MatchString(val) {
+				err := UpdateVMRequestValidationError{
+					field:  fmt.Sprintf("DiskSerials[%v]", key),
+					reason: "value does not match regex pattern \"^[A-Za-z0-9._:-]*$\"",
+				}
+				if !all {
+					return err
+				}
+				errors = append(errors, err)
+			}
+
+		}
 	}
 
 	if m.Name != nil {
@@ -1173,6 +1293,8 @@ var _ interface {
 } = UpdateVMRequestValidationError{}
 
 var _UpdateVMRequest_Name_Pattern = regexp.MustCompile("^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+var _UpdateVMRequest_DiskSerials_Pattern = regexp.MustCompile("^[A-Za-z0-9._:-]*$")
 
 // Validate checks the field values on DeleteVMRequest with the rules defined
 // in the proto definition for this message. If any rules are violated, the

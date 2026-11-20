@@ -2,10 +2,12 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -13,7 +15,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/gateway"
@@ -299,9 +303,11 @@ func TestLightVMResourceCRUD(t *testing.T) {
 		Env: testList(t, ctx, envType, []lightVMEnvModel{
 			{Name: types.StringValue("APP_ENV"), Value: types.StringValue("test")},
 		}),
+		ConfigFiles:    types.ListNull(types.ObjectType{AttrTypes: lightVMConfigFileAttrTypes()}),
 		ExecutableArgs: testList(t, ctx, types.StringType, []string{"serve"}),
 		InterfaceIDs:   types.ListNull(types.Int64Type),
 		DiskIDs:        types.ListNull(types.Int64Type),
+		DiskSerials:    types.MapNull(types.StringType),
 		Consoles: testList(t, ctx, consoleType, []lightVMConsoleModel{
 			{Name: types.StringValue("serial")},
 		}),
@@ -404,6 +410,180 @@ func TestLightVMResourceCRUD(t *testing.T) {
 	}
 }
 
+// waitLightVMServiceClient fakes the live metrics queried by wait_for_exit.
+// GetLightVMMetrics reports running for the first runningPolls calls and then
+// not running. Calls after deletedAfter report NotFound to simulate an
+// ephemeral definition removed by the server; deleted reports NotFound at once.
+type waitLightVMServiceClient struct {
+	rookeryv1.LightVMServiceClient
+	runningPolls int
+	deletedAfter int
+	deleted      bool
+	calls        int
+}
+
+func (c *waitLightVMServiceClient) GetLightVMMetrics(_ context.Context, request *rookeryv1.GetLightVMMetricsRequest, _ ...grpc.CallOption) (*rookeryv1.LightVMMetrics, error) {
+	c.calls++
+	if c.deleted || (c.deletedAfter > 0 && c.calls > c.deletedAfter) {
+		return nil, status.Error(codes.NotFound, "lightvm not found")
+	}
+	return &rookeryv1.LightVMMetrics{
+		LightvmId: request.GetId(),
+		Running:   c.calls <= c.runningPolls,
+	}, nil
+}
+
+// TestLightVMResourceWaitsForExit covers the wait_for_exit option: a normal
+// LightVM completes when its process stops, while an ephemeral LightVM also
+// waits for the server to delete the definition.
+func TestLightVMResourceWaitsForExit(t *testing.T) {
+	previous := lightVMExitPollInterval
+	lightVMExitPollInterval = 5 * time.Millisecond
+	t.Cleanup(func() { lightVMExitPollInterval = previous })
+
+	ctx := context.Background()
+	api := newProviderTestAPI(t)
+	kernel, err := api.store.CreateLightVMKernel(ctx, store.LightVMKernel{
+		Name: "wait-kernel", Path: "/tmp/vmlinuz", FileName: "vmlinuz", SizeBytes: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	initramfs, err := api.store.CreateLightVMInitramfs(ctx, store.LightVMInitramfs{
+		Name: "wait-initramfs", Path: "/tmp/initramfs", FileName: "initramfs", SizeBytes: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name      string
+		ephemeral bool
+		stub      *waitLightVMServiceClient
+		wantCalls int
+	}{
+		{
+			name:      "running LightVM stops",
+			stub:      &waitLightVMServiceClient{runningPolls: 2},
+			wantCalls: 3,
+		},
+		{
+			name:      "ephemeral waits for deletion",
+			ephemeral: true,
+			stub:      &waitLightVMServiceClient{runningPolls: 1, deletedAfter: 2},
+			wantCalls: 3,
+		},
+		{
+			name:      "already deleted",
+			ephemeral: true,
+			stub:      &waitLightVMServiceClient{deleted: true},
+			wantCalls: 1,
+		},
+	}
+	for index, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := *api.client
+			tc.stub.LightVMServiceClient = api.client.LightVMs
+			client.LightVMs = tc.stub
+			value := &lightVMResource{configuredResource: configuredResource{client: &client}}
+			lightVMSchema := artifactSchema(t, value)
+
+			model := lightVMModel{
+				Name:           types.StringValue(fmt.Sprintf("wait-%d", index)),
+				KernelID:       types.Int64Value(kernel.ID),
+				InitramfsID:    types.Int64Value(initramfs.ID),
+				Image:          types.StringValue("alpine"),
+				ExecutablePath: types.StringValue("/bin/app"),
+				Ephemeral:      types.BoolValue(tc.ephemeral),
+				WaitForExit:    types.BoolValue(true),
+				Env:            types.ListNull(types.ObjectType{AttrTypes: lightVMEnvAttrTypes()}),
+				ConfigFiles:    types.ListNull(types.ObjectType{AttrTypes: lightVMConfigFileAttrTypes()}),
+				ExecutableArgs: types.ListNull(types.StringType),
+				InterfaceIDs:   types.ListNull(types.Int64Type),
+				DiskIDs:        types.ListNull(types.Int64Type),
+				DiskSerials:    types.MapNull(types.StringType),
+				Consoles:       types.ListNull(types.ObjectType{AttrTypes: lightVMConsoleAttrTypes()}),
+				VirtioFSShares: types.ListNull(types.ObjectType{AttrTypes: lightVMShareAttrTypes()}),
+				Labels:         types.SetNull(types.StringType),
+			}
+			plan := planForModel(t, lightVMSchema, &model)
+			response := resource.CreateResponse{State: tfsdk.State{Schema: lightVMSchema}}
+			value.Create(ctx, resource.CreateRequest{Plan: plan}, &response)
+			if response.Diagnostics.HasError() {
+				t.Fatalf("create: %v", response.Diagnostics)
+			}
+			if tc.stub.calls != tc.wantCalls {
+				t.Fatalf("metrics calls = %d, want %d", tc.stub.calls, tc.wantCalls)
+			}
+			var created lightVMModel
+			if diags := response.State.Get(ctx, &created); diags.HasError() {
+				t.Fatalf("created state: %v", diags)
+			}
+			if created.ID.ValueString() == "" || !created.WaitForExit.ValueBool() {
+				t.Fatalf("created = %+v", created)
+			}
+		})
+	}
+}
+
+// TestLightVMResourceWaitForExitCanceled verifies that an interrupted wait
+// reports the error but still records the created resource so it can be
+// inspected or destroyed.
+func TestLightVMResourceWaitForExitCanceled(t *testing.T) {
+	previous := lightVMExitPollInterval
+	lightVMExitPollInterval = 5 * time.Millisecond
+	t.Cleanup(func() { lightVMExitPollInterval = previous })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	api := newProviderTestAPI(t)
+	kernel, err := api.store.CreateLightVMKernel(ctx, store.LightVMKernel{
+		Name: "cancel-kernel", Path: "/tmp/vmlinuz", FileName: "vmlinuz", SizeBytes: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	initramfs, err := api.store.CreateLightVMInitramfs(ctx, store.LightVMInitramfs{
+		Name: "cancel-initramfs", Path: "/tmp/initramfs", FileName: "initramfs", SizeBytes: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stub := &waitLightVMServiceClient{runningPolls: 1 << 20}
+	stub.LightVMServiceClient = api.client.LightVMs
+	client := *api.client
+	client.LightVMs = stub
+	value := &lightVMResource{configuredResource: configuredResource{client: &client}}
+	lightVMSchema := artifactSchema(t, value)
+	model := lightVMModel{
+		Name:           types.StringValue("wait-canceled"),
+		KernelID:       types.Int64Value(kernel.ID),
+		InitramfsID:    types.Int64Value(initramfs.ID),
+		Image:          types.StringValue("alpine"),
+		ExecutablePath: types.StringValue("/bin/app"),
+		WaitForExit:    types.BoolValue(true),
+		Env:            types.ListNull(types.ObjectType{AttrTypes: lightVMEnvAttrTypes()}),
+		ConfigFiles:    types.ListNull(types.ObjectType{AttrTypes: lightVMConfigFileAttrTypes()}),
+		ExecutableArgs: types.ListNull(types.StringType),
+		InterfaceIDs:   types.ListNull(types.Int64Type),
+		DiskIDs:        types.ListNull(types.Int64Type),
+		DiskSerials:    types.MapNull(types.StringType),
+		Consoles:       types.ListNull(types.ObjectType{AttrTypes: lightVMConsoleAttrTypes()}),
+		VirtioFSShares: types.ListNull(types.ObjectType{AttrTypes: lightVMShareAttrTypes()}),
+		Labels:         types.SetNull(types.StringType),
+	}
+	response := resource.CreateResponse{State: tfsdk.State{Schema: lightVMSchema}}
+	value.Create(ctx, resource.CreateRequest{Plan: planForModel(t, lightVMSchema, &model)}, &response)
+	if !response.Diagnostics.HasError() {
+		t.Fatal("canceled wait did not report an error")
+	}
+	var created lightVMModel
+	if diags := response.State.Get(context.Background(), &created); diags.HasError() || created.ID.ValueString() == "" {
+		t.Fatalf("created state after canceled wait = %+v, %v", created, diags)
+	}
+}
+
 func TestLightVMResourceErrors(t *testing.T) {
 	ctx := context.Background()
 	value := &lightVMResource{}
@@ -412,8 +592,10 @@ func TestLightVMResourceErrors(t *testing.T) {
 	model := lightVMModel{
 		Name:           types.StringValue("missing-client"),
 		Env:            types.ListNull(types.ObjectType{AttrTypes: lightVMEnvAttrTypes()}),
+		ConfigFiles:    types.ListNull(types.ObjectType{AttrTypes: lightVMConfigFileAttrTypes()}),
 		ExecutableArgs: types.ListNull(types.StringType),
 		InterfaceIDs:   types.ListNull(types.Int64Type), DiskIDs: types.ListNull(types.Int64Type),
+		DiskSerials:    types.MapNull(types.StringType),
 		VirtioFSShares: types.ListNull(types.ObjectType{AttrTypes: lightVMShareAttrTypes()}),
 		Consoles:       types.ListNull(types.ObjectType{AttrTypes: lightVMConsoleAttrTypes()}),
 		Labels:         types.SetNull(types.StringType),
@@ -430,8 +612,10 @@ func TestLightVMResourceErrors(t *testing.T) {
 		Name: types.StringValue("bad-kernel"), KernelID: types.Int64Value(999), InitramfsID: types.Int64Value(999),
 		Image: types.StringValue("alpine"), ExecutablePath: types.StringValue("/bin/app"),
 		Env:            types.ListNull(types.ObjectType{AttrTypes: lightVMEnvAttrTypes()}),
+		ConfigFiles:    types.ListNull(types.ObjectType{AttrTypes: lightVMConfigFileAttrTypes()}),
 		ExecutableArgs: types.ListNull(types.StringType),
 		InterfaceIDs:   types.ListNull(types.Int64Type), DiskIDs: types.ListNull(types.Int64Type),
+		DiskSerials:    types.MapNull(types.StringType),
 		VirtioFSShares: types.ListNull(types.ObjectType{AttrTypes: lightVMShareAttrTypes()}),
 		Consoles:       types.ListNull(types.ObjectType{AttrTypes: lightVMConsoleAttrTypes()}),
 		Labels:         types.SetNull(types.StringType),
@@ -523,6 +707,119 @@ func TestArtifactPathPlanModifier(t *testing.T) {
 	}
 }
 
+func TestArtifactDerivedPlanModifiers(t *testing.T) {
+	ctx := context.Background()
+	value := &lightVMArtifactResource{kind: "kernel", typeName: "lightvm_kernel", entityType: "lightvm_kernel", noun: "kernel"}
+	schemaValue := artifactSchema(t, value)
+
+	configFor := func(model lightVMArtifactModel) tfsdk.Config {
+		t.Helper()
+		return tfsdk.Config{Schema: schemaValue, Raw: planForModel(t, schemaValue, &model).Raw}
+	}
+
+	// State left by an uploaded artifact: Rookery assigned the managed path.
+	uploadState := lightVMArtifactModel{
+		ID: types.Int64Value(7), Name: types.StringValue("kernel"),
+		SourcePath: types.StringValue("/local/kernel"), SourceHash: types.StringValue("one"),
+		Path: types.StringValue("/managed/one"), FileName: types.StringValue("kernel"),
+		SizeBytes: types.Int64Value(1070494), Managed: types.BoolValue(true),
+		Labels: types.SetNull(types.StringType),
+	}
+	// Matching configuration: path stays unset because the upload assigns it.
+	uploadConfig := lightVMArtifactModel{
+		Name:       types.StringValue("kernel"),
+		SourcePath: types.StringValue("/local/kernel"), SourceHash: types.StringValue("one"),
+		Labels: types.SetNull(types.StringType),
+	}
+	// State left by a host-path registration.
+	hostState := lightVMArtifactModel{
+		ID: types.Int64Value(8), Name: types.StringValue("host-kernel"),
+		Path: types.StringValue("/host/kernel"), FileName: types.StringValue("kernel"),
+		SizeBytes: types.Int64Value(4096), Managed: types.BoolValue(false),
+		Labels: types.SetNull(types.StringType),
+	}
+	hostConfig := lightVMArtifactModel{
+		Name: types.StringValue("host-kernel"), Path: types.StringValue("/host/kernel"),
+		Labels: types.SetNull(types.StringType),
+	}
+
+	check := func(t *testing.T, configModel, stateModel lightVMArtifactModel, wantSize types.Int64, wantManaged types.Bool) {
+		t.Helper()
+		state := stateForModel(t, schemaValue, &stateModel)
+		plan := planForModel(t, schemaValue, &stateModel)
+		sizeRequest := planmodifier.Int64Request{
+			Config: configFor(configModel), Plan: plan, State: state,
+			PlanValue: types.Int64Unknown(), StateValue: stateModel.SizeBytes,
+		}
+		sizeResponse := planmodifier.Int64Response{PlanValue: sizeRequest.PlanValue}
+		artifactSizePlanModifier{}.PlanModifyInt64(ctx, sizeRequest, &sizeResponse)
+		if sizeResponse.Diagnostics.HasError() {
+			t.Fatalf("size diagnostics: %v", sizeResponse.Diagnostics)
+		}
+		if !sizeResponse.PlanValue.Equal(wantSize) {
+			t.Fatalf("size = %v, want %v", sizeResponse.PlanValue, wantSize)
+		}
+		managedRequest := planmodifier.BoolRequest{
+			Config: configFor(configModel), Plan: plan, State: state,
+			PlanValue: types.BoolUnknown(), StateValue: stateModel.Managed,
+		}
+		managedResponse := planmodifier.BoolResponse{PlanValue: managedRequest.PlanValue}
+		artifactManagedPlanModifier{}.PlanModifyBool(ctx, managedRequest, &managedResponse)
+		if managedResponse.Diagnostics.HasError() {
+			t.Fatalf("managed diagnostics: %v", managedResponse.Diagnostics)
+		}
+		if !managedResponse.PlanValue.Equal(wantManaged) {
+			t.Fatalf("managed = %v, want %v", managedResponse.PlanValue, wantManaged)
+		}
+	}
+
+	// Updates that leave the file alone (labels, description, name) keep the
+	// server-derived values in the plan.
+	check(t, uploadConfig, uploadState, types.Int64Value(1070494), types.BoolValue(true))
+	check(t, hostConfig, hostState, types.Int64Value(4096), types.BoolValue(false))
+
+	// Re-uploading a rebuilt file changes its size, so the plan must defer both
+	// values to apply. A stale size in the plan is exactly what produced
+	// "provider produced inconsistent result after apply".
+	rebuilt := uploadConfig
+	rebuilt.SourceHash = types.StringValue("two")
+	check(t, rebuilt, uploadState, types.Int64Unknown(), types.BoolUnknown())
+
+	renamed := uploadConfig
+	renamed.SourcePath = types.StringValue("/local/kernel-2")
+	check(t, renamed, uploadState, types.Int64Unknown(), types.BoolUnknown())
+
+	// Switching from a managed upload to a host path flips managed and re-stats
+	// the file.
+	toHost := uploadConfig
+	toHost.SourcePath = types.StringNull()
+	toHost.SourceHash = types.StringNull()
+	toHost.Path = types.StringValue("/host/kernel")
+	check(t, toHost, uploadState, types.Int64Unknown(), types.BoolUnknown())
+
+	// A different registered host path is a different file.
+	movedHost := hostConfig
+	movedHost.Path = types.StringValue("/host/kernel-2")
+	check(t, movedHost, hostState, types.Int64Unknown(), types.BoolUnknown())
+
+	// An interpolated path cannot be compared at plan time, so defer to apply.
+	unknownHost := hostConfig
+	unknownHost.Path = types.StringUnknown()
+	check(t, unknownHost, hostState, types.Int64Unknown(), types.BoolUnknown())
+
+	// Create has no prior state, so the values stay unknown until apply.
+	createPlan := planForModel(t, schemaValue, &uploadConfig)
+	createRequest := planmodifier.Int64Request{
+		Config: configFor(uploadConfig), Plan: createPlan,
+		State: tfsdk.State{Schema: schemaValue}, PlanValue: types.Int64Unknown(),
+	}
+	createResponse := planmodifier.Int64Response{PlanValue: createRequest.PlanValue}
+	artifactSizePlanModifier{}.PlanModifyInt64(ctx, createRequest, &createResponse)
+	if createResponse.Diagnostics.HasError() || !createResponse.PlanValue.IsUnknown() {
+		t.Fatalf("create size = %v, %v", createResponse.PlanValue, createResponse.Diagnostics)
+	}
+}
+
 func TestLightVMScriptRequestConversion(t *testing.T) {
 	ctx := context.Background()
 	model := lightVMModel{
@@ -530,8 +827,10 @@ func TestLightVMScriptRequestConversion(t *testing.T) {
 		KernelID: types.Int64Value(1), InitramfsID: types.Int64Value(2), Image: types.StringValue("alpine"),
 		ExecutableScript: types.StringValue("echo hello"),
 		Env:              types.ListNull(types.ObjectType{AttrTypes: lightVMEnvAttrTypes()}),
+		ConfigFiles:      types.ListNull(types.ObjectType{AttrTypes: lightVMConfigFileAttrTypes()}),
 		ExecutableArgs:   types.ListNull(types.StringType),
 		InterfaceIDs:     types.ListNull(types.Int64Type), DiskIDs: types.ListNull(types.Int64Type),
+		DiskSerials:    types.MapNull(types.StringType),
 		VirtioFSShares: types.ListNull(types.ObjectType{AttrTypes: lightVMShareAttrTypes()}),
 		Consoles:       types.ListNull(types.ObjectType{AttrTypes: lightVMConsoleAttrTypes()}),
 		Labels:         types.SetNull(types.StringType),

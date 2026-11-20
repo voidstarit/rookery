@@ -758,6 +758,10 @@ VMDisk:
   string locator = 11;
   string protocol = 12;
 
+DeleteDiskRequest:
+  int64 id = 1;
+  bool force = 2;
+
 DeleteDiskResponse:
   bool accepted = 1;
   string state = 2;
@@ -767,6 +771,13 @@ DeleteDiskResponse:
 delete and for a `delete_failed` kouja retry reset; the gateway maps both to
 `202 Accepted`. A completed LVM delete returns `accepted=false`; the gateway
 maps it to `204 No Content`.
+
+`force=true` removes the inventory record when the disk is already `deleting`
+or `delete_failed`. It deliberately skips every backend call, so the remote
+volume may remain and need manual cleanup. Any other state is rejected with
+`FailedPrecondition`; callers must start a normal delete (or retry a failed
+one) first. The response is `accepted=false` and maps to `204 No Content`
+because the record is already gone.
 
 Store methods:
 
@@ -778,6 +789,7 @@ ClaimDueDiskDeletions(ctx, now time.Time, limit int) ([]Disk, error)
 ReleaseDiskDeletionClaim(ctx, id) error
 FinalizeProvisioning(ctx, id, metadata DiskBackendMetadata, sizeBytes uint64, device string, preparedByScript bool) (Disk, bool, error)
 ResetDiskDeletion(ctx, id) error
+ForceDeleteDisk(ctx, id) error
 ```
 
 `FinalizeProvisioning` returns `false` when the row is no longer
@@ -1066,6 +1078,12 @@ message ResumeVMResponse {
    schedules a retry. `DELETE` on a `delete_failed` LVM disk runs the
    synchronous LVM delete again; it stays `delete_failed` on another failure.
    The UI shows the error and offers Retry.
+9. `DELETE ...?force=true` on a `deleting` or `delete_failed` disk deletes the
+   inventory row without contacting the backend. It is the escape hatch for an
+   unreachable kouja endpoint or a stuck session; the remote volume may remain
+   and must be cleaned up on the backend. Any later reclaimer update for the
+   missing row is discarded. Force deletes of `provisioning` or ready disks are
+   rejected.
 
 Backoff: 30s, 1m, 5m, 15m, 30m, then 1h, capped at 8 attempts. The worker
 exposes backlog count and oldest due age for health/metrics.
@@ -1552,7 +1570,7 @@ all callers/fakes land in the same phase.
 |---|---|---|
 | `ui/src/inventory/types.ts` | Modify | Nested kouja config, `protocol`, `locator`, `deletion_state`/`error`, `run_state`, health protocols; no `in_use`. |
 | `ui/src/inventory/disks/StorageBackendDialog.tsx` | Modify | Kouja fields; Test connection for saved backend; Test data path kouja-only. |
-| `ui/src/inventory/disks/DisksTab.tsx` | Modify | Kouja/class/endpoint, locator, provisioning/deleting/delete_failed badges; template/import disabled for kouja; delete_failed Retry; refresh on kouja delete. |
+| `ui/src/inventory/disks/DisksTab.tsx` | Modify | Kouja/class/endpoint, locator, provisioning/deleting/delete_failed badges; template/import disabled for kouja; delete_failed Retry and Force remove for pending/failed cleanup; refresh on kouja delete. |
 | `ui/src/inventory/disks/DiskDialog.tsx` | Modify | Label "Provisioned storage (LVM thin or kouja)"; hide templates/provisioning for kouja. |
 | `ui/src/inventory/disks/ImportDisksDialog.tsx` | Modify | Reject kouja. |
 | `ui/src/inventory/vms/disk-predicates.ts` | Create | Shared `diskNeedsThinPool`/`diskIsDeleting`. |

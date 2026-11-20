@@ -29,9 +29,23 @@ func (q *QEMU) Metrics(vmID string) (Metrics, error) {
 	if err != nil {
 		return Metrics{}, err
 	}
+	return processMetrics(vmID, pidfile), nil
+}
+
+// LightVMMetrics returns runtime metrics for one LightVM. A stopped LightVM is
+// not an error; Running is false and the remaining values are zero.
+func (q *QEMU) LightVMMetrics(id string) (Metrics, error) {
+	_, pidfile, _, err := q.lightVMPaths(id)
+	if err != nil {
+		return Metrics{}, err
+	}
+	return processMetrics(id, pidfile), nil
+}
+
+func processMetrics(id, pidfile string) Metrics {
 	pid, ok := readPID(pidfile)
-	if !ok || !processAlive(pid) || !processMatches(pid, vmID, pidfile) {
-		return Metrics{Running: false}, nil
+	if !ok || !processAlive(pid) || !processMatches(pid, id, pidfile) {
+		return Metrics{Running: false}
 	}
 
 	result := Metrics{Running: true, PID: pid}
@@ -43,7 +57,7 @@ func (q *QEMU) Metrics(vmID string) (Metrics, error) {
 	result.CPUSecondsTotal = processCPUSeconds(pid)
 	result.RSSBytes, result.VirtualBytes = processMemory(pid)
 	result.ReadBytesTotal, result.WriteBytesTotal = processIO(pid)
-	return result, nil
+	return result
 }
 
 func processCPUSeconds(pid int) float64 {

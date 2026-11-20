@@ -82,6 +82,10 @@ func (m *VMDisk) validate(all bool) error {
 
 	// no validation rules for ThrottleClassName
 
+	// no validation rules for Serial
+
+	// no validation rules for ReadOnly
+
 	if m.StorageBackendId != nil {
 		// no validation rules for StorageBackendId
 	}
@@ -162,6 +166,116 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = VMDiskValidationError{}
+
+// Validate checks the field values on DiskAttachment with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *DiskAttachment) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on DiskAttachment with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in DiskAttachmentMultiError,
+// or nil if none found.
+func (m *DiskAttachment) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *DiskAttachment) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for WorkloadKind
+
+	// no validation rules for WorkloadId
+
+	// no validation rules for WorkloadName
+
+	// no validation rules for Position
+
+	// no validation rules for ReadOnly
+
+	if len(errors) > 0 {
+		return DiskAttachmentMultiError(errors)
+	}
+
+	return nil
+}
+
+// DiskAttachmentMultiError is an error wrapping multiple validation errors
+// returned by DiskAttachment.ValidateAll() if the designated constraints
+// aren't met.
+type DiskAttachmentMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m DiskAttachmentMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m DiskAttachmentMultiError) AllErrors() []error { return m }
+
+// DiskAttachmentValidationError is the validation error returned by
+// DiskAttachment.Validate if the designated constraints aren't met.
+type DiskAttachmentValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e DiskAttachmentValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e DiskAttachmentValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e DiskAttachmentValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e DiskAttachmentValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e DiskAttachmentValidationError) ErrorName() string { return "DiskAttachmentValidationError" }
+
+// Error satisfies the builtin error interface
+func (e DiskAttachmentValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sDiskAttachment.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = DiskAttachmentValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = DiskAttachmentValidationError{}
 
 // Validate checks the field values on Disk with the rules defined in the proto
 // definition for this message. If any rules are violated, the first error
@@ -283,6 +397,42 @@ func (m *Disk) validate(all bool) error {
 	// no validation rules for ThrottleClassName
 
 	// no validation rules for AttachedLightvmName
+
+	// no validation rules for ReadOnly
+
+	for idx, item := range m.GetAttachments() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DiskValidationError{
+						field:  fmt.Sprintf("Attachments[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DiskValidationError{
+						field:  fmt.Sprintf("Attachments[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DiskValidationError{
+					field:  fmt.Sprintf("Attachments[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
 
 	if m.StorageBackendId != nil {
 		// no validation rules for StorageBackendId
@@ -410,6 +560,8 @@ func (m *ImportableDisk) validate(all bool) error {
 	// no validation rules for StorageBackendName
 
 	// no validation rules for AttachedLightvmName
+
+	// no validation rules for SizeBytes
 
 	if m.DiskId != nil {
 		// no validation rules for DiskId
@@ -1026,6 +1178,10 @@ func (m *CreateDiskRequest) validate(all bool) error {
 		// no validation rules for IsTemplate
 	}
 
+	if m.ReadOnly != nil {
+		// no validation rules for ReadOnly
+	}
+
 	if len(errors) > 0 {
 		return CreateDiskRequestMultiError(errors)
 	}
@@ -1296,6 +1452,10 @@ func (m *UpdateDiskRequest) validate(all bool) error {
 
 	}
 
+	if m.ReadOnly != nil {
+		// no validation rules for ReadOnly
+	}
+
 	if len(errors) > 0 {
 		return UpdateDiskRequestMultiError(errors)
 	}
@@ -1408,6 +1568,8 @@ func (m *DeleteDiskRequest) validate(all bool) error {
 		}
 		errors = append(errors, err)
 	}
+
+	// no validation rules for Force
 
 	if len(errors) > 0 {
 		return DeleteDiskRequestMultiError(errors)

@@ -37,6 +37,7 @@ type vmModel struct {
 	VCPUs          types.Int64  `tfsdk:"vcpus"`
 	MemoryMB       types.Int64  `tfsdk:"memory_mb"`
 	DiskIDs        types.List   `tfsdk:"disk_ids"`
+	DiskSerials    types.Map    `tfsdk:"disk_serials"`
 	InterfaceIDs   types.List   `tfsdk:"interface_ids"`
 	BootMediaID    types.Int64  `tfsdk:"boot_media_id"`
 	ConsoleEnabled types.Bool   `tfsdk:"console_enabled"`
@@ -63,6 +64,12 @@ func (r *vmResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *r
 				Required:    true,
 				ElementType: types.Int64Type,
 				Description: "Disk ids attached to the VM, in boot order.",
+			},
+			"disk_serials": schema.MapAttribute{
+				Optional:    true,
+				Computed:    true,
+				ElementType: types.StringType,
+				Description: "Guest-visible virtio-blk serials keyed by disk id. Serials are at most 20 bytes and may contain letters, digits, '.', '_', ':', and '-'.",
 			},
 			"interface_ids": schema.ListAttribute{
 				Optional:    true,
@@ -119,6 +126,11 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		resp.Diagnostics.AddError("Create VM", err.Error())
 		return
 	}
+	diskSerials, serialDiags := diskSerialsFromModel(ctx, plan.DiskSerials)
+	resp.Diagnostics.Append(serialDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	vm, err := client.VMs.CreateVM(callCtx, &rookeryv1.CreateVMRequest{
 		Name:           plan.Name.ValueString(),
 		Description:    plan.Description.ValueString(),
@@ -128,6 +140,7 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		ConsoleEnabled: boolPointer(plan.ConsoleEnabled),
 		InterfaceIds:   interfaces,
 		DiskIds:        diskIDs,
+		DiskSerials:    diskSerials,
 		CgroupClass:    plan.CgroupClass.ValueString(),
 	})
 	if err != nil {
@@ -218,7 +231,25 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 	if !plan.CgroupClass.IsUnknown() && !plan.CgroupClass.Equal(state.CgroupClass) {
 		request.CgroupClass = proto.String(strings.TrimSpace(plan.CgroupClass.ValueString()))
 	}
-	if !plan.DiskIDs.Equal(state.DiskIDs) {
+	changeDisks := !plan.DiskIDs.Equal(state.DiskIDs)
+	changeSerials := !plan.DiskSerials.IsUnknown() && !plan.DiskSerials.Equal(state.DiskSerials)
+	if changeDisks || changeSerials {
+		if !plan.DiskSerials.IsUnknown() {
+			diskSerials, serialDiags := diskSerialsFromModel(ctx, plan.DiskSerials)
+			resp.Diagnostics.Append(serialDiags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			request.DiskSerials = diskSerials
+		}
+	}
+	if changeDisks {
+		request.DiskIds = diskIDs
+		request.ReplaceDiskIds = proto.Bool(true)
+	}
+	if changeSerials && len(request.GetDiskSerials()) == 0 && !request.GetReplaceDiskIds() {
+		// Clearing the last serial cannot be expressed by an empty map alone;
+		// replace the unchanged disk set to clear the rows.
 		request.DiskIds = diskIDs
 		request.ReplaceDiskIds = proto.Bool(true)
 	}
@@ -288,6 +319,9 @@ func setVMState(ctx context.Context, state *vmModel, vm *rookeryv1.VM) diag.Diag
 	diskList, diskDiags := int64List(ctx, diskIDs)
 	diags.Append(diskDiags...)
 	state.DiskIDs = diskList
+	diskSerials, serialDiags := diskSerialsValue(ctx, vm.GetDisks())
+	diags.Append(serialDiags...)
+	state.DiskSerials = diskSerials
 	interfaceIDs := make([]int64, 0, len(vm.GetInterfaces()))
 	for _, iface := range vm.GetInterfaces() {
 		interfaceIDs = append(interfaceIDs, iface.GetId())

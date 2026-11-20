@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
 import { LabelsInput, saveEntityLabelsWithToast, useEntityLabelDraft } from "../../shared/labels";
+import { formatByteSize } from "../../shared/format";
 import type {
   CgroupSettings,
   Disk,
@@ -43,6 +44,17 @@ function vmDisks(vm: VM | null): VMDisk[] {
 
 function vmInterfaces(vm: VM | null): VMInterface[] {
   return Array.isArray(vm?.interfaces) ? vm.interfaces : [];
+}
+
+function diskSerialPayload(disks: VMDisk[]): Record<string, string> {
+  const serials: Record<string, string> = {};
+  for (const disk of disks) {
+    const serial = (disk.serial ?? "").trim();
+    if (serial) {
+      serials[String(disk.id)] = serial;
+    }
+  }
+  return serials;
 }
 
 export function VMDialog({
@@ -98,6 +110,10 @@ export function VMDialog({
     if (disk.deletion_state) {
       return false;
     }
+    if (disk.read_only) {
+      // Read-only disks are shareable across VMs and LightVMs.
+      return true;
+    }
     if (disk.attached_lightvm_id) {
       return false;
     }
@@ -130,7 +146,7 @@ export function VMDialog({
     } else if (availableDisks.length === 0 && selectedDisks.length === 0) {
       setDiskHint("Create a disk on the Disks tab first.");
     } else {
-      setDiskHint("Choose a disk and click Add. The first disk is the boot disk. Remove disks with the buttons below.");
+      setDiskHint("Choose a disk and click Add. The first disk is the boot disk. Set an optional serial so the guest can identify each disk. Remove disks with the buttons below.");
     }
   }, [availableDisks.length, selectedDisks.length, running]);
 
@@ -170,6 +186,12 @@ export function VMDialog({
     setSelectedDisks((current) => current.filter((disk) => disk.id !== id));
   };
 
+  const setDiskSerial = (id: number, serial: string) => {
+    setSelectedDisks((current) =>
+      current.map((disk) => (disk.id === id ? { ...disk, serial } : disk))
+    );
+  };
+
   const addInterface = () => {
     const id = Number(interfaceChoice);
     if (!id || running) {
@@ -205,6 +227,13 @@ export function VMDialog({
       setError("Select at least one disk.");
       return;
     }
+    const serials = selectedDisks
+      .map((disk) => (disk.serial ?? "").trim())
+      .filter((serial) => serial.length > 0);
+    if (new Set(serials).size !== serials.length) {
+      setError("Disk serials must be unique within the VM.");
+      return;
+    }
     if (!editing) {
       const needsThinPool = selectedDisks.some((disk) => diskNeedsThinPool(disk));
       if (!vppReady) {
@@ -225,13 +254,18 @@ export function VMDialog({
       console_enabled: consoleEnabled,
     };
 
+    const diskSerials = diskSerialPayload(selectedDisks);
     if (!editing) {
       payload.disk_ids = selectedDisks.map((disk) => disk.id);
+      if (Object.keys(diskSerials).length > 0) {
+        payload.disk_serials = diskSerials;
+      }
       if (selectedInterfaces.length > 0) {
         payload.interface_ids = selectedInterfaces.map((iface) => iface.id);
       }
     } else if (!running) {
       payload.disk_ids = selectedDisks.map((disk) => disk.id);
+      payload.disk_serials = diskSerials;
       payload.interface_ids = selectedInterfaces.map((iface) => iface.id);
       // The gateway treats omitted repeated fields as unchanged; editing the
       // dialog is an explicit replacement, including an empty interface set.
@@ -355,8 +389,9 @@ export function VMDialog({
                 <option value="">{availableDisks.length > 0 ? "Select a disk…" : "No disks available"}</option>
                 {availableDisks.map((disk) => (
                   <option value={String(disk.id)} key={disk.id}>
-                    {disk.name} · {formatBytes(disk.size_bytes || disk.size_gb * 1024 ** 3)}
+                    {disk.name} · {formatByteSize(disk.size_bytes || disk.size_gb * 1024 ** 3)}
                     {disk.source === "host-device" ? " · passthrough" : disk.source === "kouja" ? " · kouja" : ""}
+                    {disk.read_only ? " · read-only" : ""}
                   </option>
                 ))}
               </select>
@@ -378,11 +413,27 @@ export function VMDialog({
                     <span class="interface-list-name">
                       {disk.name}
                       <span class="interface-list-network">
-                        {formatBytes(disk.size_bytes || disk.size_gb * 1024 ** 3)}
+                        {formatByteSize(disk.size_bytes || disk.size_gb * 1024 ** 3)}
                         {disk.source === "host-device" ? " · passthrough" : disk.source === "kouja" ? " · kouja" : ""}
+                        {disk.read_only ? " · read-only" : ""}
                         {index === 0 ? " · boot" : ""}
                       </span>
                     </span>
+                    <label class="disk-serial">
+                      <span class="sr-only">Serial for {disk.name}</span>
+                      <input
+                        type="text"
+                        maxlength={20}
+                        pattern="[A-Za-z0-9._:-]*"
+                        autocomplete="off"
+                        spellcheck={false}
+                        placeholder="serial (optional)"
+                        title="Guest-visible virtio-blk serial, up to 20 bytes"
+                        value={disk.serial ?? ""}
+                        disabled={running}
+                        onInput={(event) => setDiskSerial(disk.id, event.currentTarget.value)}
+                      />
+                    </label>
                     <button
                       class="row-action danger"
                       type="button"
@@ -404,7 +455,7 @@ export function VMDialog({
               <option value="">Boot from disk</option>
               {media.map((item) => (
                 <option value={String(item.id)} key={item.id}>
-                  {item.name} · {formatBytes(item.size_bytes)}
+                  {item.name} · {formatByteSize(item.size_bytes)}
                 </option>
               ))}
             </select>
@@ -534,18 +585,4 @@ export function VMDialog({
       </form>
     </dialog>
   );
-}
-
-function formatBytes(bytes: number): string {
-  const value = Number(bytes) || 0;
-  if (value >= 1024 ** 3) {
-    return `${(value / 1024 ** 3).toFixed(value % 1024 ** 3 === 0 ? 0 : 1)} GB`;
-  }
-  if (value >= 1024 ** 2) {
-    return `${(value / 1024 ** 2).toFixed(value % 1024 ** 2 === 0 ? 0 : 1)} MB`;
-  }
-  if (value >= 1024) {
-    return `${(value / 1024).toFixed(value % 1024 === 0 ? 0 : 1)} KB`;
-  }
-  return `${value} B`;
 }
