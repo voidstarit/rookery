@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
 	"github.com/voidstarit/rookery/internal/lightvm"
@@ -317,4 +320,127 @@ func TestAutostartSkipsEphemeralLightVM(t *testing.T) {
 	if controller.cleanupStopped != 1 {
 		t.Fatalf("cleanupStopped = %d, want 1", controller.cleanupStopped)
 	}
+}
+
+func TestRunLightVMEphemeralReaper(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// A server without a LightVM runtime or store must not start the loop.
+	var inert Server
+	inert.RunLightVMEphemeralReaper(ctx)
+
+	controller := &reconcileLightVMController{running: map[string]bool{}}
+	server, st, vm := newEphemeralTestServer(t, controller, true)
+	vm = setEphemeralLifecycle(t, st, vm, store.StatusRunning, store.DesiredRunning)
+
+	done := make(chan struct{})
+	go func() {
+		server.RunLightVMEphemeralReaper(ctx)
+		close(done)
+	}()
+
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		if _, err := st.GetLightVM(ctx, vm.ID); errors.Is(err, store.ErrLightVMNotFound) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("reaper did not terminate the finished ephemeral LightVM")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("reaper did not stop after cancellation")
+	}
+	if controller.stopped != 1 || controller.cleanupStopped != 1 {
+		t.Fatalf("stopped = %d, cleanupStopped = %d", controller.stopped, controller.cleanupStopped)
+	}
+}
+
+func TestTerminateEphemeralLightVMEdgeCases(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("missing definition is ignored", func(t *testing.T) {
+		controller := &reconcileLightVMController{running: map[string]bool{}}
+		server, _, _ := newEphemeralTestServer(t, controller, true)
+		if err := server.terminateEphemeralLightVM(ctx, store.LightVM{ID: uuid.NewString()}); err != nil {
+			t.Fatalf("terminate missing LightVM: %v", err)
+		}
+		if controller.stopped != 0 || controller.cleanupStopped != 0 {
+			t.Fatalf("missing LightVM was cleaned up: stopped = %d", controller.stopped)
+		}
+	})
+
+	t.Run("non-ephemeral definition is left alone", func(t *testing.T) {
+		controller := &reconcileLightVMController{running: map[string]bool{}}
+		server, st, vm := newEphemeralTestServer(t, controller, false)
+		vm = setEphemeralLifecycle(t, st, vm, store.StatusRunning, store.DesiredRunning)
+
+		if err := server.terminateEphemeralLightVM(ctx, vm); err != nil {
+			t.Fatalf("terminate non-ephemeral LightVM: %v", err)
+		}
+		current, err := st.GetLightVM(ctx, vm.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if current.Status != store.StatusRunning || controller.cleanupStopped != 0 {
+			t.Fatalf("non-ephemeral record changed = %+v", current)
+		}
+	})
+
+	t.Run("stopped definition that is not desired running is left alone", func(t *testing.T) {
+		controller := &reconcileLightVMController{running: map[string]bool{}}
+		server, st, vm := newEphemeralTestServer(t, controller, true)
+		vm = setEphemeralLifecycle(t, st, vm, store.StatusStopped, store.DesiredStopped)
+
+		if err := server.terminateEphemeralLightVM(ctx, vm); err != nil {
+			t.Fatalf("terminate stopped LightVM: %v", err)
+		}
+		current, err := st.GetLightVM(ctx, vm.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if current.Status != store.StatusStopped || controller.stopped != 0 || controller.cleanupStopped != 0 {
+			t.Fatalf("stopped record changed = %+v", current)
+		}
+	})
+
+	t.Run("surviving QEMU is reported", func(t *testing.T) {
+		controller := &reconcileLightVMController{
+			running:          map[string]bool{},
+			stopErr:          errors.New("stop failed"),
+			stopKeepsRunning: true,
+		}
+		server, st, vm := newEphemeralTestServer(t, controller, true)
+		vm = setEphemeralLifecycle(t, st, vm, store.StatusRunning, store.DesiredRunning)
+
+		err := server.terminateEphemeralLightVM(ctx, vm)
+		if err == nil || !strings.Contains(err.Error(), "QEMU is still running") {
+			t.Fatalf("terminate error = %v, want a QEMU-still-running error", err)
+		}
+		if _, getErr := st.GetLightVM(ctx, vm.ID); getErr != nil {
+			t.Fatalf("definition was deleted after a failed cleanup: %v", getErr)
+		}
+	})
+
+	t.Run("cleanup failure is reported", func(t *testing.T) {
+		controller := &reconcileLightVMController{
+			running:           map[string]bool{},
+			cleanupStoppedErr: errors.New("cleanup failed"),
+		}
+		server, st, vm := newEphemeralTestServer(t, controller, true)
+		vm = setEphemeralLifecycle(t, st, vm, store.StatusRunning, store.DesiredRunning)
+
+		err := server.terminateEphemeralLightVM(ctx, vm)
+		if err == nil || !strings.Contains(err.Error(), "clean up") {
+			t.Fatalf("terminate error = %v, want a cleanup error", err)
+		}
+		if _, getErr := st.GetLightVM(ctx, vm.ID); getErr != nil {
+			t.Fatalf("definition was deleted after a failed cleanup: %v", getErr)
+		}
+	})
 }

@@ -191,6 +191,18 @@ func TestNormalizeLightVMConfigFiles(t *testing.T) {
 		t.Fatalf("normalized config files = %+v", valid)
 	}
 
+	tooMany := make([]store.LightVMConfigFile, store.MaxLightVMConfigFiles+1)
+	for index := range tooMany {
+		tooMany[index] = store.LightVMConfigFile{Name: fmt.Sprintf("file-%d.conf", index)}
+	}
+	oversizedTotal := make([]store.LightVMConfigFile, 5)
+	for index := range oversizedTotal {
+		oversizedTotal[index] = store.LightVMConfigFile{
+			Name:    fmt.Sprintf("total-%d.conf", index),
+			Content: strings.Repeat("x", store.MaxLightVMConfigFileBytes),
+		}
+	}
+
 	for _, testCase := range []struct {
 		name  string
 		files []store.LightVMConfigFile
@@ -200,6 +212,12 @@ func TestNormalizeLightVMConfigFiles(t *testing.T) {
 		{name: "absolute", files: []store.LightVMConfigFile{{Name: "/etc/passwd"}}},
 		{name: "traversal", files: []store.LightVMConfigFile{{Name: "../escape"}}},
 		{name: "empty component", files: []store.LightVMConfigFile{{Name: "a//b"}}},
+		{name: "missing name", files: []store.LightVMConfigFile{{Name: "  "}}},
+		{name: "too many files", files: tooMany},
+		{name: "combined size too large", files: oversizedTotal},
+		{name: "too long", files: []store.LightVMConfigFile{{Name: strings.Repeat("a", 256)}}},
+		{name: "trailing slash", files: []store.LightVMConfigFile{{Name: "app/"}}},
+		{name: "multi-line name", files: []store.LightVMConfigFile{{Name: "app\nconf"}}},
 		{name: "duplicate", files: []store.LightVMConfigFile{{Name: "a"}, {Name: "a"}}},
 		{name: "path conflict", files: []store.LightVMConfigFile{{Name: "a"}, {Name: "a/b"}}},
 		{name: "too large", files: []store.LightVMConfigFile{{Name: "big", Content: strings.Repeat("x", store.MaxLightVMConfigFileBytes+1)}}},
