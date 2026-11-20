@@ -73,7 +73,13 @@ func runServe(args []string) error {
 	logFormat := fs.String("log-format", config.EnvString(apiCfg.LogFormat, "ROOKERY_LOG_FORMAT", "console"), "log format: console or json")
 	mtlsAddr := fs.String("mtls-addr", config.EnvString(apiCfg.MTLSAddr, "ROOKERY_MTLS_ADDR", ":8443"), "public mTLS API listen address (empty disables)")
 	pkiDir := fs.String("pki-dir", config.EnvString(apiCfg.PKIDir, "ROOKERY_PKI_DIR", "/var/lib/rookery/pki"), "directory for the mTLS CA and server certificate")
-	mtlsSANs := fs.String("mtls-sans", config.EnvString(apiCfg.MTLSSANs, "ROOKERY_MTLS_SANS", ""), "comma-separated extra DNS/IP SANs for the mTLS server certificate")
+	pkiMode := fs.String("pki-mode", config.EnvString(apiCfg.PKIMode, "ROOKERY_PKI_MODE", string(pki.ModeManaged)), "PKI mode: managed (create/renew) or existing (load provisioned files)")
+	pkiCACert := fs.String("pki-ca-cert", config.EnvString(apiCfg.PKICACert, "ROOKERY_PKI_CA_CERT", ""), "CA certificate file (default <pki-dir>/ca.pem)")
+	pkiCAKey := fs.String("pki-ca-key", config.EnvString(apiCfg.PKICAKey, "ROOKERY_PKI_CA_KEY", ""), "CA private key file (default <pki-dir>/ca-key.pem)")
+	pkiServerCert := fs.String("pki-server-cert", config.EnvString(apiCfg.PKIServerCert, "ROOKERY_PKI_SERVER_CERT", ""), "server certificate file (default <pki-dir>/server.pem)")
+	pkiServerKey := fs.String("pki-server-key", config.EnvString(apiCfg.PKIServerKey, "ROOKERY_PKI_SERVER_KEY", ""), "server private key file (default <pki-dir>/server-key.pem)")
+	pkiClientDir := fs.String("pki-client-dir", config.EnvString(apiCfg.PKIClientDir, "ROOKERY_PKI_CLIENT_DIR", ""), "directory of allowlisted client certificate PEM files (empty accepts any CA-signed client)")
+	mtlsSANs := fs.String("mtls-sans", config.EnvString(apiCfg.MTLSSANs, "ROOKERY_MTLS_SANS", ""), "comma-separated extra DNS/IP SANs for the mTLS server certificate (managed mode only)")
 	grpcMTLSAddr := fs.String("grpc-mtls-addr", config.EnvString(apiCfg.GRPCMTLSAddr, "ROOKERY_GRPC_MTLS_ADDR", ":9443"), "public mTLS gRPC listen address (empty disables)")
 
 	fs.Usage = func() {
@@ -202,7 +208,15 @@ func runServe(args []string) error {
 				extraSANs = append(extraSANs, san)
 			}
 		}
-		pkiManager, err = pki.New(*pkiDir, st, extraSANs, logger)
+		pkiManager, err = pki.Open(pki.Config{
+			Dir:            *pkiDir,
+			Mode:           pki.Mode(*pkiMode),
+			CACertFile:     *pkiCACert,
+			CAKeyFile:      *pkiCAKey,
+			ServerCertFile: *pkiServerCert,
+			ServerKeyFile:  *pkiServerKey,
+			ClientDir:      *pkiClientDir,
+		}, st, extraSANs, logger)
 		if err != nil {
 			return fmt.Errorf("prepare mTLS certificates: %w", err)
 		}
@@ -347,6 +361,7 @@ func runServe(args []string) error {
 		Str("mtls_addr", *mtlsAddr).
 		Str("grpc_mtls_addr", *grpcMTLSAddr).
 		Str("pki_dir", *pkiDir).
+		Str("pki_mode", *pkiMode).
 		Str("database", *dbPath).
 		Str("vg", vg).
 		Str("thin_pool", thinPool).

@@ -5,16 +5,19 @@
 package pki
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io/fs"
 	"math/big"
 	"net"
 	"os"
@@ -38,11 +41,76 @@ const (
 	clientValidity = 365 * 24 * time.Hour
 )
 
+// Mode selects how Rookery obtains its CA and server certificate.
+type Mode string
+
+const (
+	// ModeManaged creates and renews the CA and server certificate under the
+	// PKI directory. This is the historical behavior.
+	ModeManaged Mode = "managed"
+	// ModeExisting loads the CA and server certificate from provisioned files
+	// and never writes, rotates, or renews them. The CA certificate must be
+	// valid; the CA private key is optional for serving but is required to
+	// issue client certificates. The server certificate must be signed by the
+	// CA and valid for server authentication.
+	ModeExisting Mode = "existing"
+)
+
+// Config describes where the mTLS material lives and whether Rookery may
+// create it. Empty file fields default to the standard names inside Dir.
+type Config struct {
+	Dir            string
+	Mode           Mode
+	CACertFile     string
+	CAKeyFile      string
+	ServerCertFile string
+	ServerKeyFile  string
+	ClientDir      string
+}
+
+func (c Config) normalized() (Config, error) {
+	c.Dir = strings.TrimSpace(c.Dir)
+	if c.Dir == "" {
+		return c, errors.New("PKI directory is required")
+	}
+	mode := Mode(strings.ToLower(strings.TrimSpace(string(c.Mode))))
+	if mode == "" {
+		mode = ModeManaged
+	}
+	if mode != ModeManaged && mode != ModeExisting {
+		return c, fmt.Errorf("PKI mode %q is invalid; use %q or %q", c.Mode, ModeManaged, ModeExisting)
+	}
+	c.Mode = mode
+	c.CACertFile = pkiFilePath(c.Dir, c.CACertFile, caCertFile)
+	c.CAKeyFile = pkiFilePath(c.Dir, c.CAKeyFile, caKeyFile)
+	c.ServerCertFile = pkiFilePath(c.Dir, c.ServerCertFile, serverCertFile)
+	c.ServerKeyFile = pkiFilePath(c.Dir, c.ServerKeyFile, serverKeyFile)
+	return c, nil
+}
+
+func pkiFilePath(dir, value, name string) string {
+	if value = strings.TrimSpace(value); value != "" {
+		return value
+	}
+	return filepath.Join(dir, name)
+}
+
 // Manager owns the mTLS CA and certificates.
 type Manager struct {
-	dir    string
-	store  *store.Store
-	logger zerolog.Logger
+	dir            string
+	mode           Mode
+	caCertFile     string
+	caKeyFile      string
+	serverCertFile string
+	serverKeyFile  string
+	clientDir      string
+	store          *store.Store
+	logger         zerolog.Logger
+
+	clientMu         sync.RWMutex
+	clientReloadMu   sync.Mutex
+	clientAllowed    map[[sha256.Size]byte]struct{}
+	clientDirModTime time.Time
 
 	mu         sync.Mutex
 	caCert     *x509.Certificate
@@ -68,46 +136,102 @@ type IssuedClientCertificate struct {
 
 // New loads or creates the CA and server certificate under dir. extraSANs may
 // contain additional DNS names or IP addresses for the server certificate.
+// It uses ModeManaged and is equivalent to Open with the default file names.
 func New(dir string, st *store.Store, extraSANs []string, logger zerolog.Logger) (*Manager, error) {
-	dir = strings.TrimSpace(dir)
-	if dir == "" {
-		return nil, errors.New("PKI directory is required")
+	return Open(Config{Dir: dir, Mode: ModeManaged}, st, extraSANs, logger)
+}
+
+// Open loads the configured PKI material. In ModeManaged it creates and renews
+// the CA and server certificate as needed. In ModeExisting it loads provisioned
+// files, requires the server certificate to be signed by the CA, and never
+// writes to disk.
+func Open(cfg Config, st *store.Store, extraSANs []string, logger zerolog.Logger) (*Manager, error) {
+	cfg, err := cfg.normalized()
+	if err != nil {
+		return nil, err
 	}
 	if st == nil {
 		return nil, errors.New("PKI requires a store")
 	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	m := &Manager{
+		dir:            cfg.Dir,
+		mode:           cfg.Mode,
+		caCertFile:     cfg.CACertFile,
+		caKeyFile:      cfg.CAKeyFile,
+		serverCertFile: cfg.ServerCertFile,
+		serverKeyFile:  cfg.ServerKeyFile,
+		clientDir:      cfg.ClientDir,
+		store:          st,
+		logger:         logger,
+	}
+	m.logger.Info().Str("pki_mode", string(m.mode)).Msg("PKI configured")
+	if cfg.Mode == ModeExisting {
+		if err := m.loadExistingCA(); err != nil {
+			return nil, err
+		}
+		if err := m.loadExistingServer(); err != nil {
+			return nil, err
+		}
+		if err := m.loadClientAllowlist(); err != nil {
+			return nil, err
+		}
+		return m, nil
+	}
+
+	if err := os.MkdirAll(cfg.Dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create PKI directory: %w", err)
 	}
-	m := &Manager{dir: dir, store: st, logger: logger}
+	for _, path := range []string{cfg.CACertFile, cfg.CAKeyFile, cfg.ServerCertFile, cfg.ServerKeyFile} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			return nil, fmt.Errorf("create PKI file directory for %s: %w", path, err)
+		}
+	}
 	if err := m.loadOrCreateCA(); err != nil {
 		return nil, err
 	}
 	if err := m.loadOrCreateServer(extraSANs); err != nil {
 		return nil, err
 	}
+	if err := m.loadClientAllowlist(); err != nil {
+		return nil, err
+	}
 	return m, nil
 }
 
-// NewClientIssuer loads an existing CA so client certificates can be issued by
-// an administrative command. Unlike New, it never creates a CA or server
-// certificate; the server must have initialized dir first.
-func NewClientIssuer(dir string, st *store.Store, logger zerolog.Logger) (*Manager, error) {
-	dir = strings.TrimSpace(dir)
-	if dir == "" {
-		return nil, errors.New("PKI directory is required")
+// OpenClientIssuer loads an existing CA so client certificates can be issued by
+// an administrative command. It never creates a CA or server certificate.
+func OpenClientIssuer(cfg Config, st *store.Store, logger zerolog.Logger) (*Manager, error) {
+	cfg, err := cfg.normalized()
+	if err != nil {
+		return nil, err
 	}
 	if st == nil {
 		return nil, errors.New("PKI requires a store")
 	}
-	m := &Manager{dir: dir, store: st, logger: logger}
+	m := &Manager{
+		dir:        cfg.Dir,
+		mode:       cfg.Mode,
+		caCertFile: cfg.CACertFile,
+		caKeyFile:  cfg.CAKeyFile,
+		clientDir:  cfg.ClientDir,
+		store:      st,
+		logger:     logger,
+	}
 	if err := m.loadCA(); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("Rookery CA not found in %s; start rookery serve with -pki-dir %s first", dir, dir)
+			return nil, fmt.Errorf(
+				"Rookery CA not found or incomplete (certificate %s, key %s); start rookery serve with -pki-dir %s first",
+				cfg.CACertFile, cfg.CAKeyFile, cfg.Dir,
+			)
 		}
 		return nil, fmt.Errorf("load PKI CA: %w", err)
 	}
 	return m, nil
+}
+
+// NewClientIssuer loads an existing CA from the standard files in dir.
+func NewClientIssuer(dir string, st *store.Store, logger zerolog.Logger) (*Manager, error) {
+	return OpenClientIssuer(Config{Dir: dir, Mode: ModeManaged}, st, logger)
 }
 
 // CAPEM returns the PEM encoded CA certificate.
@@ -130,7 +254,7 @@ func (m *Manager) TLSConfig() *tls.Config {
 		ClientCAs:              pool,
 		SessionTicketsDisabled: true,
 		VerifyPeerCertificate: func(_ [][]byte, verifiedChains [][]*x509.Certificate) error {
-			if len(verifiedChains) == 0 {
+			if len(verifiedChains) == 0 || len(verifiedChains[0]) == 0 {
 				return errors.New("client certificate is required")
 			}
 			for _, chain := range verifiedChains {
@@ -147,9 +271,221 @@ func (m *Manager) TLSConfig() *tls.Config {
 					}
 				}
 			}
+			if m.clientDir != "" {
+				if err := m.refreshClientAllowlist(); err != nil {
+					return err
+				}
+				if !m.clientCertificateAllowed(verifiedChains[0][0]) {
+					return fmt.Errorf("client certificate is not allowlisted in %s", m.clientDir)
+				}
+			}
 			return nil
 		},
 	}
+}
+
+// loadClientAllowlist loads the public client certificates under
+// clientDir. It is a no-op when no client directory is configured.
+func (m *Manager) loadClientAllowlist() error {
+	if m.clientDir == "" {
+		return nil
+	}
+	m.clientReloadMu.Lock()
+	defer m.clientReloadMu.Unlock()
+	return m.loadClientAllowlistLocked()
+}
+
+// loadClientAllowlistLocked reloads the allowlist while clientReloadMu is held.
+func (m *Manager) loadClientAllowlistLocked() error {
+	info, err := os.Stat(m.clientDir)
+	if err != nil {
+		return fmt.Errorf("read client certificate directory %s: %w", m.clientDir, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("client certificate path %s is not a directory", m.clientDir)
+	}
+	allowed := make(map[[sha256.Size]byte]struct{})
+	skipped := 0
+	err = filepath.WalkDir(m.clientDir, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		extension := strings.ToLower(filepath.Ext(path))
+		if extension != ".crt" && extension != ".pem" && extension != ".cer" {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read client certificate %s: %w", path, err)
+		}
+		certs, err := parseCertificatesPEM(data)
+		if err != nil {
+			m.logger.Warn().Err(err).Str("file", path).Msg("skipping invalid client certificate")
+			skipped++
+			return nil
+		}
+		for _, cert := range certs {
+			if cert.IsCA || !certificateAllowsClientAuth(cert) {
+				continue
+			}
+			allowed[sha256.Sum256(cert.Raw)] = struct{}{}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("walk client certificate directory %s: %w", m.clientDir, err)
+	}
+	m.clientMu.Lock()
+	m.clientAllowed = allowed
+	m.clientMu.Unlock()
+	m.clientDirModTime = info.ModTime()
+	m.logger.Info().
+		Str("client_cert_dir", m.clientDir).
+		Int("allowed_clients", len(allowed)).
+		Int("skipped_files", skipped).
+		Msg("loaded client certificate allowlist")
+	return nil
+}
+
+// refreshClientAllowlist reloads the allowlist when the directory changed.
+// This lets an administrator or create-client-cert add a public certificate
+// without restarting the API.
+func (m *Manager) refreshClientAllowlist() error {
+	if m.clientDir == "" {
+		return nil
+	}
+	m.clientReloadMu.Lock()
+	defer m.clientReloadMu.Unlock()
+	info, err := os.Stat(m.clientDir)
+	if err != nil {
+		return fmt.Errorf("read client certificate directory %s: %w", m.clientDir, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("client certificate path %s is not a directory", m.clientDir)
+	}
+	if info.ModTime().Equal(m.clientDirModTime) {
+		return nil
+	}
+	return m.loadClientAllowlistLocked()
+}
+
+func (m *Manager) clientCertificateAllowed(cert *x509.Certificate) bool {
+	if cert == nil {
+		return false
+	}
+	fingerprint := sha256.Sum256(cert.Raw)
+	m.clientMu.RLock()
+	defer m.clientMu.RUnlock()
+	_, ok := m.clientAllowed[fingerprint]
+	return ok
+}
+
+func (m *Manager) allowClientCertificate(certPEM []byte) error {
+	certs, err := parseCertificatesPEM(certPEM)
+	if err != nil {
+		return err
+	}
+	m.clientMu.Lock()
+	defer m.clientMu.Unlock()
+	if m.clientAllowed == nil {
+		m.clientAllowed = make(map[[sha256.Size]byte]struct{})
+	}
+	for _, cert := range certs {
+		if cert.IsCA || !certificateAllowsClientAuth(cert) {
+			continue
+		}
+		m.clientAllowed[sha256.Sum256(cert.Raw)] = struct{}{}
+	}
+	return nil
+}
+
+// writeClientCertificateToAllowlist writes the public certificate for an issued
+// client into clientDir. It returns an empty path when no directory is set.
+func (m *Manager) writeClientCertificateToAllowlist(certPEM []byte, name string, serial *big.Int) (string, error) {
+	if m.clientDir == "" {
+		return "", nil
+	}
+	if err := os.MkdirAll(m.clientDir, 0o700); err != nil {
+		return "", fmt.Errorf("create client certificate directory %s: %w", m.clientDir, err)
+	}
+	filename := clientCertFileStem(name) + "-" + serial.Text(16) + ".crt"
+	path := filepath.Join(m.clientDir, filename)
+	if err := os.WriteFile(path, certPEM, 0o644); err != nil {
+		return "", fmt.Errorf("write client certificate %s: %w", path, err)
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		return "", fmt.Errorf("set client certificate permissions %s: %w", path, err)
+	}
+	return path, nil
+}
+
+func parseCertificatesPEM(data []byte) ([]*x509.Certificate, error) {
+	certs := make([]*x509.Certificate, 0)
+	for {
+		block, rest := pem.Decode(data)
+		if block == nil {
+			break
+		}
+		data = rest
+		if block.Type != "CERTIFICATE" {
+			continue
+		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("parse certificate: %w", err)
+		}
+		certs = append(certs, cert)
+	}
+	if len(certs) == 0 {
+		return nil, errors.New("no certificates found")
+	}
+	return certs, nil
+}
+
+func certificateAllowsClientAuth(cert *x509.Certificate) bool {
+	if cert == nil {
+		return false
+	}
+	if len(cert.ExtKeyUsage) == 0 && len(cert.UnknownExtKeyUsage) == 0 {
+		return true
+	}
+	for _, usage := range cert.ExtKeyUsage {
+		if usage == x509.ExtKeyUsageAny || usage == x509.ExtKeyUsageClientAuth {
+			return true
+		}
+	}
+	return false
+}
+
+func clientCertFileStem(name string) string {
+	var stem strings.Builder
+	lastDash := false
+	for _, char := range strings.TrimSpace(name) {
+		safe := char >= 'a' && char <= 'z' ||
+			char >= 'A' && char <= 'Z' ||
+			char >= '0' && char <= '9' ||
+			char == '.' || char == '_' || char == '-'
+		if safe {
+			stem.WriteRune(char)
+			lastDash = false
+			continue
+		}
+		if !lastDash {
+			stem.WriteByte('-')
+			lastDash = true
+		}
+	}
+	value := strings.Trim(stem.String(), ".-_")
+	if value == "" {
+		return "client"
+	}
+	if len(value) > 64 {
+		value = value[:64]
+	}
+	return value
 }
 
 // ListClientCertificates returns the issued certificate metadata.
@@ -181,6 +517,12 @@ func (m *Manager) IssueClientCertificate(ctx context.Context, name string, days 
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.caKey == nil {
+		return IssuedClientCertificate{}, fmt.Errorf(
+			"CA private key is not available at %s; client certificate issuance requires the CA key",
+			m.caKeyFile,
+		)
+	}
 
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -214,11 +556,23 @@ func (m *Manager) IssueClientCertificate(ctx context.Context, name string, days 
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
+	allowlistPath, err := m.writeClientCertificateToAllowlist(certPEM, name, serial)
+	if err != nil {
+		return IssuedClientCertificate{}, err
+	}
 	record, err := m.store.CreateClientCertificate(ctx, store.ClientCertificate{
 		Name: name, Serial: serial.Text(16), NotBefore: template.NotBefore, NotAfter: template.NotAfter,
 	})
 	if err != nil {
+		if allowlistPath != "" {
+			_ = os.Remove(allowlistPath)
+		}
 		return IssuedClientCertificate{}, err
+	}
+	if allowlistPath != "" {
+		if err := m.allowClientCertificate(certPEM); err != nil {
+			m.logger.Warn().Err(err).Str("file", allowlistPath).Msg("failed to add issued client certificate to the in-memory allowlist")
+		}
 	}
 	m.logger.Info().Str("client", name).Str("serial", record.Serial).Time("not_after", record.NotAfter).Msg("issued mTLS client certificate")
 	return IssuedClientCertificate{
@@ -229,12 +583,40 @@ func (m *Manager) IssueClientCertificate(ctx context.Context, name string, days 
 }
 
 func (m *Manager) loadCA() error {
-	certPEM, certErr := os.ReadFile(filepath.Join(m.dir, caCertFile))
-	keyPEM, keyErr := os.ReadFile(filepath.Join(m.dir, caKeyFile))
+	certPEM, certErr := os.ReadFile(m.caCertFile)
+	keyPEM, keyErr := os.ReadFile(m.caKeyFile)
 	if certErr != nil || keyErr != nil {
 		return errors.Join(certErr, keyErr)
 	}
 	return m.setCA(certPEM, keyPEM)
+}
+
+// loadExistingCA loads the provisioned CA. The CA key is optional so a server
+// can trust an offline CA, but client certificate issuance then fails.
+func (m *Manager) loadExistingCA() error {
+	certPEM, err := os.ReadFile(m.caCertFile)
+	if err != nil {
+		return fmt.Errorf("read CA certificate %s: %w", m.caCertFile, err)
+	}
+	keyPEM, keyErr := os.ReadFile(m.caKeyFile)
+	switch {
+	case keyErr == nil:
+		if err := m.setCA(certPEM, keyPEM); err != nil {
+			return fmt.Errorf("load existing CA: %w", err)
+		}
+	case errors.Is(keyErr, os.ErrNotExist):
+		cert, parsedPEM, der, err := parseCACertificate(certPEM)
+		if err != nil {
+			return fmt.Errorf("load existing CA: %w", err)
+		}
+		m.caCert, m.caKey, m.caPEM, m.caDER = cert, nil, parsedPEM, der
+		m.logger.Warn().
+			Str("ca_key", m.caKeyFile).
+			Msg("CA private key not found; client certificate issuance is disabled")
+	default:
+		return fmt.Errorf("read CA key %s: %w", m.caKeyFile, keyErr)
+	}
+	return nil
 }
 
 func (m *Manager) setCA(certPEM, keyPEM []byte) error {
@@ -247,8 +629,8 @@ func (m *Manager) setCA(certPEM, keyPEM []byte) error {
 }
 
 func (m *Manager) loadOrCreateCA() error {
-	certPath := filepath.Join(m.dir, caCertFile)
-	keyPath := filepath.Join(m.dir, caKeyFile)
+	certPath := m.caCertFile
+	keyPath := m.caKeyFile
 	certPEM, certErr := os.ReadFile(certPath)
 	keyPEM, keyErr := os.ReadFile(keyPath)
 	if certErr == nil && keyErr == nil {
@@ -308,8 +690,8 @@ func (m *Manager) loadOrCreateCA() error {
 }
 
 func (m *Manager) loadOrCreateServer(extraSANs []string) error {
-	certPath := filepath.Join(m.dir, serverCertFile)
-	keyPath := filepath.Join(m.dir, serverKeyFile)
+	certPath := m.serverCertFile
+	keyPath := m.serverKeyFile
 	certPEM, certErr := os.ReadFile(certPath)
 	keyPEM, keyErr := os.ReadFile(keyPath)
 	if certErr == nil && keyErr == nil {
@@ -384,12 +766,62 @@ func (m *Manager) loadOrCreateServer(extraSANs []string) error {
 	return nil
 }
 
-func parseCA(certPEM, keyPEM []byte) (*x509.Certificate, *ecdsa.PrivateKey, []byte, []byte, error) {
-	certBlock, _ := pem.Decode(certPEM)
-	if certBlock == nil || certBlock.Type != "CERTIFICATE" {
-		return nil, nil, nil, nil, errors.New("CA certificate PEM is invalid")
+// loadExistingServer loads a provisioned server certificate without renewing
+// it. The certificate must chain to the configured CA and be valid for server
+// authentication; the SANs are entirely the operator's responsibility.
+func (m *Manager) loadExistingServer() error {
+	certPEM, err := os.ReadFile(m.serverCertFile)
+	if err != nil {
+		return fmt.Errorf("read mTLS server certificate %s: %w", m.serverCertFile, err)
 	}
-	cert, err := x509.ParseCertificate(certBlock.Bytes)
+	keyPEM, err := os.ReadFile(m.serverKeyFile)
+	if err != nil {
+		return fmt.Errorf("read mTLS server key %s: %w", m.serverKeyFile, err)
+	}
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		return fmt.Errorf("load mTLS server certificate: %w", err)
+	}
+	leaf, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return fmt.Errorf("parse mTLS server certificate: %w", err)
+	}
+	if err := m.verifyServerCertificate(cert, leaf); err != nil {
+		return err
+	}
+	cert.Leaf = leaf
+	m.serverCert = cert
+	m.serverPEM = certPEM
+	m.logger.Info().
+		Str("certificate", m.serverCertFile).
+		Time("not_after", leaf.NotAfter).
+		Msg("loaded existing mTLS server certificate")
+	return nil
+}
+
+func (m *Manager) verifyServerCertificate(cert tls.Certificate, leaf *x509.Certificate) error {
+	roots := x509.NewCertPool()
+	roots.AddCert(m.caCert)
+	intermediates := x509.NewCertPool()
+	for _, der := range cert.Certificate[1:] {
+		parsed, err := x509.ParseCertificate(der)
+		if err != nil {
+			return fmt.Errorf("parse mTLS server certificate chain: %w", err)
+		}
+		intermediates.AddCert(parsed)
+	}
+	if _, err := leaf.Verify(x509.VerifyOptions{
+		Roots:         roots,
+		Intermediates: intermediates,
+		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}); err != nil {
+		return fmt.Errorf("verify mTLS server certificate %s against CA %s: %w", m.serverCertFile, m.caCertFile, err)
+	}
+	return nil
+}
+
+func parseCA(certPEM, keyPEM []byte) (*x509.Certificate, *ecdsa.PrivateKey, []byte, []byte, error) {
+	cert, parsedPEM, der, err := parseCACertificate(certPEM)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -401,10 +833,33 @@ func parseCA(certPEM, keyPEM []byte) (*x509.Certificate, *ecdsa.PrivateKey, []by
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	if !cert.IsCA {
-		return nil, nil, nil, nil, errors.New("stored CA certificate is not a CA")
+	certPublic, err := x509.MarshalPKIXPublicKey(cert.PublicKey)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("encode CA public key: %w", err)
 	}
-	return cert, key, certPEM, certBlock.Bytes, nil
+	keyPublic, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("encode CA private key public part: %w", err)
+	}
+	if !bytes.Equal(certPublic, keyPublic) {
+		return nil, nil, nil, nil, errors.New("CA private key does not match the CA certificate")
+	}
+	return cert, key, parsedPEM, der, nil
+}
+
+func parseCACertificate(certPEM []byte) (*x509.Certificate, []byte, []byte, error) {
+	certBlock, _ := pem.Decode(certPEM)
+	if certBlock == nil || certBlock.Type != "CERTIFICATE" {
+		return nil, nil, nil, errors.New("CA certificate PEM is invalid")
+	}
+	cert, err := x509.ParseCertificate(certBlock.Bytes)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if !cert.IsCA {
+		return nil, nil, nil, errors.New("stored CA certificate is not a CA")
+	}
+	return cert, certPEM, certBlock.Bytes, nil
 }
 
 func serverNeedsRenewal(cert *x509.Certificate, extraSANs []string) bool {

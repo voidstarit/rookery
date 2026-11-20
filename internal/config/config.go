@@ -46,6 +46,12 @@ type API struct {
 	LogFormat     *string  `yaml:"log_format"`
 	MTLSAddr      *string  `yaml:"mtls_addr"`
 	PKIDir        *string  `yaml:"pki_dir"`
+	PKIMode       *string  `yaml:"pki_mode"`
+	PKICACert     *string  `yaml:"pki_ca_cert"`
+	PKICAKey      *string  `yaml:"pki_ca_key"`
+	PKIServerCert *string  `yaml:"pki_server_cert"`
+	PKIServerKey  *string  `yaml:"pki_server_key"`
+	PKIClientDir  *string  `yaml:"pki_client_dir"`
 	MTLSSANs      *string  `yaml:"mtls_sans"`
 	GRPCMTLSAddr  *string  `yaml:"grpc_mtls_addr"`
 	InitSize      *string  `yaml:"init_size"`

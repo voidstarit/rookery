@@ -32,6 +32,10 @@ func runCreateClientCert(args []string) error {
 	fs.String("config", config.Path(args), "YAML configuration file (or ROOKERY_CONFIG)")
 	dbPath := fs.String("db", config.EnvString(apiCfg.DB, "ROOKERY_DB", "rookery.db"), "SQLite database path (must match the running server)")
 	pkiDir := fs.String("pki-dir", config.EnvString(apiCfg.PKIDir, "ROOKERY_PKI_DIR", "/var/lib/rookery/pki"), "directory containing the existing Rookery CA")
+	pkiMode := fs.String("pki-mode", config.EnvString(apiCfg.PKIMode, "ROOKERY_PKI_MODE", string(pki.ModeManaged)), "PKI mode: managed or existing")
+	pkiCACert := fs.String("pki-ca-cert", config.EnvString(apiCfg.PKICACert, "ROOKERY_PKI_CA_CERT", ""), "CA certificate file (default <pki-dir>/ca.pem)")
+	pkiCAKey := fs.String("pki-ca-key", config.EnvString(apiCfg.PKICAKey, "ROOKERY_PKI_CA_KEY", ""), "CA private key file (default <pki-dir>/ca-key.pem)")
+	pkiClientDir := fs.String("pki-client-dir", config.EnvString(apiCfg.PKIClientDir, "ROOKERY_PKI_CLIENT_DIR", ""), "directory where the issued public certificate is written")
 	days := fs.Int("days", 365, "certificate validity in days")
 	outDir := fs.String("out-dir", ".", "directory for the generated certificate files")
 	force := fs.Bool("force", false, "overwrite existing output files")
@@ -41,7 +45,7 @@ func runCreateClientCert(args []string) error {
 			"Issue an mTLS client certificate signed by the Rookery CA. Writes\n"+
 			"<name>.crt, <name>.key, and <name>-ca.crt. The private key is written\n"+
 			"with mode 0600 and is never stored by Rookery. The command must use\n"+
-			"the same database and PKI directory as the running server.\n\nFlags:\n")
+			"the same database and PKI configuration as the running server.\n\nFlags:\n")
 		fs.PrintDefaults()
 	}
 
@@ -110,7 +114,13 @@ func runCreateClientCert(args []string) error {
 	}
 	defer st.Close()
 
-	issuer, err := pki.NewClientIssuer(*pkiDir, st, zerolog.Nop())
+	issuer, err := pki.OpenClientIssuer(pki.Config{
+		Dir:        *pkiDir,
+		Mode:       pki.Mode(*pkiMode),
+		CACertFile: *pkiCACert,
+		CAKeyFile:  *pkiCAKey,
+		ClientDir:  *pkiClientDir,
+	}, st, zerolog.Nop())
 	if err != nil {
 		return err
 	}

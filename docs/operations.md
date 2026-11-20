@@ -579,6 +579,12 @@ and derives CPU cores and I/O rates from consecutive samples.
 | `-mtls-sans`      | `ROOKERY_MTLS_SANS`    | —                   | `serve`         | Extra comma-separated DNS/IP SANs for the mTLS server certificate |
 | `-grpc-mtls-addr` | `ROOKERY_GRPC_MTLS_ADDR` | `:9443`            | `serve`         | Public mTLS gRPC listen address; empty disables |
 | `-pki-dir`        | `ROOKERY_PKI_DIR`      | `/var/lib/rookery/pki` | `serve`, `create-client-cert` | PKI directory (CA and server certificate; also used for client issuance) |
+| `-pki-mode`       | `ROOKERY_PKI_MODE`     | `managed`           | `serve`, `create-client-cert` | `managed` creates/renews the CA and server certificate; `existing` loads provisioned files and never writes them |
+| `-pki-ca-cert`    | `ROOKERY_PKI_CA_CERT`  | `<pki-dir>/ca.pem`  | `serve`, `create-client-cert` | CA certificate file |
+| `-pki-ca-key`     | `ROOKERY_PKI_CA_KEY`   | `<pki-dir>/ca-key.pem` | `serve`, `create-client-cert` | CA private key file; optional for serving in `existing` mode |
+| `-pki-server-cert` | `ROOKERY_PKI_SERVER_CERT` | `<pki-dir>/server.pem` | `serve` | Server certificate file |
+| `-pki-server-key` | `ROOKERY_PKI_SERVER_KEY` | `<pki-dir>/server-key.pem` | `serve` | Server private key file |
+| `-pki-client-dir` | `ROOKERY_PKI_CLIENT_DIR` | — | `serve`, `create-client-cert` | Directory of allowlisted client certificate PEM files; empty accepts any CA-signed client |
 | `-grpc-addr`      | `ROOKERY_GRPC_ADDR`  | —                   | `serve`         | Optional gRPC listen address |
 | `-days`           | —                      | `365`               | `create-client-cert` | Client certificate validity in days (maximum 3650) |
 | `-out-dir`        | —                      | `.`                 | `create-client-cert` | Directory for `<name>.crt`, `<name>.key`, and `<name>-ca.crt` |
@@ -627,6 +633,16 @@ api:
   cgroup_root: /sys/fs/cgroup/rookery-cgroup
   log_level: info
   mtls_addr: ":8443"
+  # managed (default) creates/renews the CA and server certificate.
+  # existing loads provisioned files and never writes them.
+  pki_mode: managed
+  pki_ca_cert: ""
+  pki_ca_key: ""
+  pki_server_cert: ""
+  pki_server_key: ""
+  # Optional: only accept client certificates whose public PEM is in this
+  # directory. Empty keeps the CA-wide client trust behavior.
+  pki_client_dir: ""
 
 vnf:
   vpp_socket: /run/vpp/api.sock
