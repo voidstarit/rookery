@@ -15,7 +15,7 @@ require (
 	// Official Go memif implementation (extras/v0.1.x is retracted because the
 	// module path moved, but it is the only published module with gomemif).
 	go.fd.io/govpp/extras v0.1.1-0.20261019084134-c02eb51f8588
-	golang.org/x/net v0.61.0
+	golang.org/x/net v0.62.0
 	golang.org/x/sys v0.50.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20261104224025-d1e00e9f33ab
 	google.golang.org/grpc v1.85.0
@@ -24,10 +24,11 @@ require (
 )
 
 require (
+	github.com/hashicorp/terraform-plugin-go v0.31.0
 	github.com/miekg/dns v1.1.73
 	github.com/onsi/ginkgo/v2 v2.34.0
 	github.com/onsi/gomega v1.44.0
-	github.com/voidstarit/kouja v0.1.0
+	github.com/voidstarit/kouja v0.2.0
 )
 
 require (
@@ -45,7 +46,6 @@ require (
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
 	github.com/hashicorp/go-plugin v1.7.0 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
-	github.com/hashicorp/terraform-plugin-go v0.31.0 // indirect
 	github.com/hashicorp/terraform-plugin-log v0.10.0 // indirect
 	github.com/hashicorp/terraform-registry-address v0.4.0 // indirect
 	github.com/hashicorp/terraform-svchost v0.2.1 // indirect
