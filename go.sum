@@ -189,8 +189,8 @@ github.com/vmihailenco/msgpack/v5 v5.4.1 h1:cQriyiUvjTwOHg8QZaPihLWeRAAVoCpE00IU
 github.com/vmihailenco/msgpack/v5 v5.4.1/go.mod h1:GaZTsDaehaPpQVyxrf5mtQlH+pc21PIudVV/E3rRQok=
 github.com/vmihailenco/tagparser/v2 v2.0.0 h1:y09buUbR+b5aycVFQs/g70pqKVZNBmxwAhO7/IwNM9g=
 github.com/vmihailenco/tagparser/v2 v2.0.0/go.mod h1:Wri+At7QHww0WTrCBeu4J6bNtoV6mEfg5OIWRZA9qds=
-github.com/voidstarit/kouja v0.1.0 h1:rzeSIKyqpFB009MHCK4wOByfBoG8U8H4S2RiC143okI=
-github.com/voidstarit/kouja v0.1.0/go.mod h1:CQ3R8rO35OmoAAIxVd/GOOvY0yOnCTD86TpiVDnMcfg=
+github.com/voidstarit/kouja v0.2.0 h1:NhegjUT8fJjU2bwc5j6c4/yJN+0iDjoOsD4i8sQsh0U=
+github.com/voidstarit/kouja v0.2.0/go.mod h1:2TN/UFCXDW/z2tkYWtcAcNbSQvikxliE5nT0flpSy/k=
 github.com/x-cray/logrus-prefixed-formatter v0.5.2 h1:00txxvfBM9muc0jiLIEAkAcIMJzfthRT6usrui8uGmg=
 github.com/x-cray/logrus-prefixed-formatter v0.5.2/go.mod h1:2duySbKsL6M18s5GU7VPsoEPHyzalCE06qoARUCeBBE=
 go.fd.io/govpp v0.13.0 h1:MnjH9I5K+X0860CeeuBcMSu3uyUKA6X9AenKzdiGpnA=
