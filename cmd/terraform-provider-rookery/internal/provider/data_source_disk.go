@@ -61,6 +61,7 @@ func (d *diskDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 			"provisioning_script":   dschema.StringAttribute{Computed: true},
 			"provisioning_timeout":  dschema.StringAttribute{Computed: true},
 			"provisioning_json":     dschema.StringAttribute{Computed: true},
+			"force_delete":          dschema.BoolAttribute{Computed: true},
 		},
 	}
 }
