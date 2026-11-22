@@ -9,6 +9,7 @@ RUN apt-get update \
         cpio \
         curl \
         diffutils \
+        dwarves \
         e2fsprogs \
         flex \
         gcc \
@@ -19,6 +20,7 @@ RUN apt-get update \
         libssl-dev \
         make \
         perl \
+        python3 \
         xz-utils \
  && rm -rf /var/lib/apt/lists/*
 
