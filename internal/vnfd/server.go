@@ -39,6 +39,7 @@ type Manager interface {
 	Running(vnfID int64) bool
 	Healthy(vnfID int64) bool
 	Leases(ctx context.Context, vnfID int64) ([]store.VNFLease, error)
+	RemoveLeases(ctx context.Context, vnfID int64, clientIDs []string) (int, error)
 	DNSRecords(vnfID int64) []host.DNSRecordView
 	BGPStatus(ctx context.Context, vnfID int64) (host.BGPStatus, error)
 	CleanupLegacyNetwork(networkID int64)
@@ -308,6 +309,21 @@ func (s *Server) ListDNSRecords(_ context.Context, request *rookeryv1.ListDNSRec
 		})
 	}
 	return response, nil
+}
+
+// RemoveLeases drops specific DHCP leases from a VNF runtime.
+func (s *Server) RemoveLeases(ctx context.Context, request *rookeryv1.RemoveLeasesRequest) (*rookeryv1.RemoveLeasesResponse, error) {
+	s.logger.Trace().
+		Int64("vnf_id", request.GetId()).
+		Int("leases", len(request.GetClientIds())).
+		Msg("remove VNF leases requested")
+	s.opMu.Lock()
+	defer s.opMu.Unlock()
+	removed, err := s.manager.RemoveLeases(ctx, request.GetId(), request.GetClientIds())
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not remove VNF leases: "+err.Error())
+	}
+	return &rookeryv1.RemoveLeasesResponse{Removed: int64(removed)}, nil
 }
 
 // CleanupLegacyNetwork removes files left by the legacy per-network DHCP.

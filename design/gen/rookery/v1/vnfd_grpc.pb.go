@@ -26,6 +26,7 @@ const (
 	VNFDaemon_ListVNFStates_FullMethodName        = "/rookery.v1.VNFDaemon/ListVNFStates"
 	VNFDaemon_GetVNFState_FullMethodName          = "/rookery.v1.VNFDaemon/GetVNFState"
 	VNFDaemon_ListLeases_FullMethodName           = "/rookery.v1.VNFDaemon/ListLeases"
+	VNFDaemon_RemoveLeases_FullMethodName         = "/rookery.v1.VNFDaemon/RemoveLeases"
 	VNFDaemon_GetBGPStatus_FullMethodName         = "/rookery.v1.VNFDaemon/GetBGPStatus"
 	VNFDaemon_ListDNSRecords_FullMethodName       = "/rookery.v1.VNFDaemon/ListDNSRecords"
 	VNFDaemon_CleanupLegacyNetwork_FullMethodName = "/rookery.v1.VNFDaemon/CleanupLegacyNetwork"
@@ -51,6 +52,10 @@ type VNFDaemonClient interface {
 	ListVNFStates(ctx context.Context, in *ListVNFStatesRequest, opts ...grpc.CallOption) (*ListVNFStatesResponse, error)
 	GetVNFState(ctx context.Context, in *GetVNFStateRequest, opts ...grpc.CallOption) (*VNFState, error)
 	ListLeases(ctx context.Context, in *ListLeasesRequest, opts ...grpc.CallOption) (*ListLeasesResponse, error)
+	// RemoveLeases drops specific leases from a running DHCP runtime and its
+	// persisted lease file. Dynamic DNS records derived from those leases are
+	// removed by the daemon's normal lease reconciliation.
+	RemoveLeases(ctx context.Context, in *RemoveLeasesRequest, opts ...grpc.CallOption) (*RemoveLeasesResponse, error)
 	GetBGPStatus(ctx context.Context, in *GetBGPStatusRequest, opts ...grpc.CallOption) (*VNFBGPStatus, error)
 	ListDNSRecords(ctx context.Context, in *ListDNSRecordsRequest, opts ...grpc.CallOption) (*ListDNSRecordsResponse, error)
 	// CleanupLegacyNetwork removes DHCP runtime files left by the old
@@ -126,6 +131,16 @@ func (c *vNFDaemonClient) ListLeases(ctx context.Context, in *ListLeasesRequest,
 	return out, nil
 }
 
+func (c *vNFDaemonClient) RemoveLeases(ctx context.Context, in *RemoveLeasesRequest, opts ...grpc.CallOption) (*RemoveLeasesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveLeasesResponse)
+	err := c.cc.Invoke(ctx, VNFDaemon_RemoveLeases_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vNFDaemonClient) GetBGPStatus(ctx context.Context, in *GetBGPStatusRequest, opts ...grpc.CallOption) (*VNFBGPStatus, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(VNFBGPStatus)
@@ -176,6 +191,10 @@ type VNFDaemonServer interface {
 	ListVNFStates(context.Context, *ListVNFStatesRequest) (*ListVNFStatesResponse, error)
 	GetVNFState(context.Context, *GetVNFStateRequest) (*VNFState, error)
 	ListLeases(context.Context, *ListLeasesRequest) (*ListLeasesResponse, error)
+	// RemoveLeases drops specific leases from a running DHCP runtime and its
+	// persisted lease file. Dynamic DNS records derived from those leases are
+	// removed by the daemon's normal lease reconciliation.
+	RemoveLeases(context.Context, *RemoveLeasesRequest) (*RemoveLeasesResponse, error)
 	GetBGPStatus(context.Context, *GetBGPStatusRequest) (*VNFBGPStatus, error)
 	ListDNSRecords(context.Context, *ListDNSRecordsRequest) (*ListDNSRecordsResponse, error)
 	// CleanupLegacyNetwork removes DHCP runtime files left by the old
@@ -208,6 +227,9 @@ func (UnimplementedVNFDaemonServer) GetVNFState(context.Context, *GetVNFStateReq
 }
 func (UnimplementedVNFDaemonServer) ListLeases(context.Context, *ListLeasesRequest) (*ListLeasesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListLeases not implemented")
+}
+func (UnimplementedVNFDaemonServer) RemoveLeases(context.Context, *RemoveLeasesRequest) (*RemoveLeasesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveLeases not implemented")
 }
 func (UnimplementedVNFDaemonServer) GetBGPStatus(context.Context, *GetBGPStatusRequest) (*VNFBGPStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetBGPStatus not implemented")
@@ -347,6 +369,24 @@ func _VNFDaemon_ListLeases_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VNFDaemon_RemoveLeases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveLeasesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VNFDaemonServer).RemoveLeases(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VNFDaemon_RemoveLeases_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VNFDaemonServer).RemoveLeases(ctx, req.(*RemoveLeasesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VNFDaemon_GetBGPStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetBGPStatusRequest)
 	if err := dec(in); err != nil {
@@ -431,6 +471,10 @@ var VNFDaemon_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListLeases",
 			Handler:    _VNFDaemon_ListLeases_Handler,
+		},
+		{
+			MethodName: "RemoveLeases",
+			Handler:    _VNFDaemon_RemoveLeases_Handler,
 		},
 		{
 			MethodName: "GetBGPStatus",

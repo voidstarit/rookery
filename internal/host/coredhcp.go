@@ -214,6 +214,7 @@ func setupCoreDHCP(args ...string) (handler.Handler4, error) {
 	if err := state.loadLeases(); err != nil {
 		return nil, err
 	}
+	registerLeaseRuntime(args[5], state)
 	return state.handle, nil
 }
 
@@ -505,6 +506,25 @@ func (s *coreDHCPState) freeLocked(record *coreDHCPLease) {
 		return
 	}
 	_ = s.alloc.Free(net.IPNet{IP: record.Address, Mask: net.CIDRMask(32, 32)})
+}
+
+// removeLeases frees the requested client leases and persists the lease file.
+func (s *coreDHCPState) removeLeases(clientIDs []string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	removed := 0
+	for _, clientID := range clientIDs {
+		record, ok := s.leases[clientID]
+		if !ok {
+			continue
+		}
+		s.freeLocked(record)
+		removed++
+	}
+	if removed > 0 {
+		s.saveLocked()
+	}
+	return removed
 }
 
 func (s *coreDHCPState) inRange(ip net.IP) bool {

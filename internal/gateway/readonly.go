@@ -173,6 +173,7 @@ type interfaceService struct {
 	addresses   InterfaceAddressRuntime
 	vms         VMController
 	counters    InterfaceCounterSource
+	leases      LeaseCleaner
 	readiness   Readiness
 	resourceMu  *sync.Mutex
 	runMu       *sync.Mutex

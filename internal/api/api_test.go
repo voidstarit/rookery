@@ -490,15 +490,18 @@ type fakeVNFManager struct {
 	stopErr       error
 	leases        map[int64][]store.VNFLease
 	leaseErr      error
+	removedLeases map[int64][]string
+	removeErr     error
 	bgpStatus     map[int64]host.BGPStatus
 	sharedIfIDs   []uint32
 }
 
 func newFakeVNFManager() *fakeVNFManager {
 	return &fakeVNFManager{
-		running:   make(map[int64]bool),
-		leases:    make(map[int64][]store.VNFLease),
-		bgpStatus: make(map[int64]host.BGPStatus),
+		running:       make(map[int64]bool),
+		leases:        make(map[int64][]store.VNFLease),
+		removedLeases: make(map[int64][]string),
+		bgpStatus:     make(map[int64]host.BGPStatus),
 	}
 }
 
@@ -564,6 +567,14 @@ func (f *fakeVNFManager) Leases(_ context.Context, vnfID int64) ([]store.VNFLeas
 		return nil, f.leaseErr
 	}
 	return f.leases[vnfID], nil
+}
+
+func (f *fakeVNFManager) RemoveLeases(_ context.Context, vnfID int64, clientIDs []string) (int, error) {
+	if f.removeErr != nil {
+		return 0, f.removeErr
+	}
+	f.removedLeases[vnfID] = append(f.removedLeases[vnfID], clientIDs...)
+	return len(clientIDs), nil
 }
 
 func (f *fakeVNFManager) DNSRecords(context.Context, int64) ([]host.DNSRecordView, error) {

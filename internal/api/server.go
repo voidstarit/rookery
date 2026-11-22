@@ -136,6 +136,7 @@ type VNFManager interface {
 	Stop(ctx context.Context, vnfID int64, removeLeases bool) error
 	Running(ctx context.Context, vnfID int64) bool
 	Leases(ctx context.Context, vnfID int64) ([]store.VNFLease, error)
+	RemoveLeases(ctx context.Context, vnfID int64, clientIDs []string) (int, error)
 	DNSRecords(ctx context.Context, vnfID int64) ([]host.DNSRecordView, error)
 	BGPStatus(ctx context.Context, vnfID int64) (host.BGPStatus, error)
 	CleanupLegacyNetwork(networkID int64)

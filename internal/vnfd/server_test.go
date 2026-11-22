@@ -17,6 +17,7 @@ type fakeManager struct {
 	starts   []string
 	stopped  []int64
 	leases   map[int64][]store.VNFLease
+	removed  map[int64][]string
 	bgp      map[int64]host.BGPStatus
 	startErr error
 }
@@ -26,6 +27,7 @@ func newFakeManager() *fakeManager {
 		running: make(map[int64]bool),
 		healthy: true,
 		leases:  make(map[int64][]store.VNFLease),
+		removed: make(map[int64][]string),
 		bgp:     make(map[int64]host.BGPStatus),
 	}
 }
@@ -68,6 +70,11 @@ func (f *fakeManager) Healthy(int64) bool       { return f.healthy }
 
 func (f *fakeManager) Leases(_ context.Context, vnfID int64) ([]store.VNFLease, error) {
 	return f.leases[vnfID], nil
+}
+
+func (f *fakeManager) RemoveLeases(_ context.Context, vnfID int64, clientIDs []string) (int, error) {
+	f.removed[vnfID] = append(f.removed[vnfID], clientIDs...)
+	return len(clientIDs), nil
 }
 
 func (f *fakeManager) DNSRecords(int64) []host.DNSRecordView { return nil }
@@ -240,5 +247,22 @@ func TestLoadRestoresDesiredSpecs(t *testing.T) {
 	restarted.superviseOnce(ctx)
 	if !restartedManager.running[1] {
 		t.Fatal("persisted desired spec was not restored")
+	}
+}
+
+func TestRemoveLeases(t *testing.T) {
+	manager := newFakeManager()
+	server := NewServer(manager, t.TempDir(), zerolog.Nop())
+	response, err := server.RemoveLeases(context.Background(), &rookeryv1.RemoveLeasesRequest{
+		Id: 7, ClientIds: []string{"02:00:00:00:00:01", "02:00:00:00:00:02"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.GetRemoved() != 2 {
+		t.Fatalf("removed = %d, want 2", response.GetRemoved())
+	}
+	if got := manager.removed[7]; len(got) != 2 {
+		t.Fatalf("manager removed leases = %+v", got)
 	}
 }

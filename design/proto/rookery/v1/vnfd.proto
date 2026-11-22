@@ -24,6 +24,10 @@ service VNFDaemon {
   rpc ListVNFStates(ListVNFStatesRequest) returns (ListVNFStatesResponse);
   rpc GetVNFState(GetVNFStateRequest) returns (VNFState);
   rpc ListLeases(ListLeasesRequest) returns (ListLeasesResponse);
+  // RemoveLeases drops specific leases from a running DHCP runtime and its
+  // persisted lease file. Dynamic DNS records derived from those leases are
+  // removed by the daemon's normal lease reconciliation.
+  rpc RemoveLeases(RemoveLeasesRequest) returns (RemoveLeasesResponse);
   rpc GetBGPStatus(GetBGPStatusRequest) returns (VNFBGPStatus);
   rpc ListDNSRecords(ListDNSRecordsRequest) returns (ListDNSRecordsResponse);
   // CleanupLegacyNetwork removes DHCP runtime files left by the old
@@ -87,6 +91,19 @@ message ListLeasesResponse {
   int64 vnf_id = 1;
   string type = 2;
   repeated VNFLease leases = 3;
+}
+
+message RemoveLeasesRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  repeated string client_ids = 2 [(validate.rules).repeated = {
+    min_items: 1
+    max_items: 256
+    items: {string: {min_len: 1, max_len: 128}}
+  }];
+}
+
+message RemoveLeasesResponse {
+  int64 removed = 1;
 }
 
 message GetBGPStatusRequest {
