@@ -5,13 +5,17 @@
 #   virtio.config   minimal virtio guest kernel (virtio-fs, -pci, -net, ...)
 #   storage.config  virtio plus LVM, iSCSI initiator/target, NBD, ublk, and
 #                   the ext4/XFS on-disk filesystems
+#   k8s.config      storage plus Kubernetes prerequisites: HugeTLB cgroup,
+#                   IPVS, SCTP, ebtables, Geneve/IP-in-IP/GRE, and tc/eBPF
 #
-# Two variants are built independently:
+# Three variants are built independently:
 #   virtio   common + virtio
 #   storage  common + virtio + storage (a superset so it still boots the same
 #            LightVM images)
-# Each variant has its own object directory and artifact name, so the two
-# builds never share a .config or overwrite each other. See configs/README.md.
+#   k8s      common + virtio + storage + k8s (the storage kernel plus the
+#            kernel features Kubernetes expects)
+# Each variant has its own object directory and artifact name, so the builds
+# never share a .config or overwrite each other. See configs/README.md.
 #
 # Init scripts and extra initramfs files live in initramfs/ (copied into every
 # image), initramfs-virtiofs/ (overlay for the virtiofs switch_root image),
@@ -49,10 +53,11 @@
 # read-only root filesystem.
 #
 # Usage:
-#   make                 build both kernels and all four initramfs images
-#   make kernel          build both kernel variants
+#   make                 build all kernels and all four initramfs images
+#   make kernel          build every kernel variant
 #   make kernel-virtio   build only the virtio kernel
 #   make kernel-storage  build only the storage kernel
+#   make kernel-k8s      build only the Kubernetes kernel
 #   make initramfs       build the debug/test initramfs
 #   make initramfs-virtiofs  build the initramfs that switch_root's into virtiofs
 #   make initramfs-disk-rootfs  build the generic disk/distribution root initramfs
@@ -61,6 +66,7 @@
 #   make reconfigure     reset all kernel configs to the checked-in fragments
 #                        (KERNEL_VARIANT=storage resets only that variant)
 #   make test            boot the debug artifacts in QEMU (virtio variant)
+#   make test-k8s        boot the k8s kernel and verify its runtime features
 #   make test-virtiofs   boot the virtiofs/switch_root initramfs in QEMU
 #   make test-disk-rootfs  boot the disk-root initramfs with ext4 roots in QEMU
 #   make test-overlay-rootfs  boot the overlay-root initramfs with three layers
@@ -71,7 +77,7 @@
 # Overridable variables:
 #   KERNEL_VERSION=6.12.111
 #   KERNEL_VARIANT=virtio   variant used by menuconfig and the QEMU tests
-#   KERNEL_VARIANTS="virtio storage"  variants built by `make kernel`/`all`
+#   KERNEL_VARIANTS="virtio storage k8s"  variants built by `make kernel`/`all`
 #   KERNEL_URL=https://cdn.kernel.org/pub/linux/kernel/v6.x
 #   JOBS=16
 #   OUT_DIR=/path/to/artifacts
@@ -83,6 +89,7 @@
 # Artifacts:
 #   OUT_DIR/kernel-<version>-virtio
 #   OUT_DIR/kernel-<version>-storage
+#   OUT_DIR/kernel-<version>-k8s
 #   OUT_DIR/initramfs-lightvm-<version>.cpio.gz
 #   OUT_DIR/initramfs-lightvm-virtiofs-<version>.cpio.gz
 #   OUT_DIR/initramfs-lightvm-disk-rootfs-<version>.cpio.gz
@@ -106,13 +113,14 @@ JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 # Kernel variants. Each variant is a set of config fragments merged after
 # common.config; add an entry here and in KERNEL_FRAGMENTS_<variant> /
 # KERNEL_REQUIRED_CONFIG_<variant> to introduce another kernel.
-KERNEL_VARIANTS ?= virtio storage
+KERNEL_VARIANTS ?= virtio storage k8s
 # Variant used by single-variant targets such as menuconfig and the QEMU tests.
 KERNEL_VARIANT ?= virtio
 KERNEL_CONFIG_DIR := $(EXTRA_DIR)/configs
 
 KERNEL_FRAGMENTS_virtio := virtio.config
 KERNEL_FRAGMENTS_storage := virtio.config storage.config
+KERNEL_FRAGMENTS_k8s := virtio.config storage.config k8s.config
 
 # Options that must be =y in the final .config. merge_config.sh silently drops
 # options with unmet Kconfig dependencies, so fail the build instead of
@@ -154,6 +162,27 @@ KERNEL_REQUIRED_CONFIG_storage := \
 	CONFIG_ISCSI_TARGET CONFIG_BLK_DEV_NBD CONFIG_BLK_DEV_UBLK \
 	CONFIG_BLKDEV_UBLK_LEGACY_OPCODES \
 	CONFIG_EXT4_FS CONFIG_EXT4_USE_FOR_EXT2 CONFIG_XFS_FS
+KERNEL_REQUIRED_CONFIG_k8s := \
+	$(KERNEL_REQUIRED_CONFIG_storage) \
+	CONFIG_IKCONFIG CONFIG_IKCONFIG_PROC \
+	CONFIG_HUGETLBFS CONFIG_HUGETLB_PAGE CONFIG_CGROUP_HUGETLB \
+	CONFIG_IPV6 CONFIG_IP_VS CONFIG_IP_VS_IPV6 CONFIG_IP_VS_RR \
+	CONFIG_IP_VS_WRR CONFIG_IP_VS_SH CONFIG_IP_VS_NFCT \
+	CONFIG_IP_VS_PROTO_TCP CONFIG_IP_VS_PROTO_UDP CONFIG_IP_VS_PROTO_SCTP \
+	CONFIG_NETFILTER_XT_MATCH_IPVS CONFIG_NETFILTER_XT_MATCH_SCTP \
+	CONFIG_NETFILTER_XT_MATCH_REALM CONFIG_NETFILTER_XT_MATCH_STATISTIC \
+	CONFIG_IP_NF_MATCH_RPFILTER CONFIG_NF_CT_PROTO_SCTP \
+	CONFIG_BRIDGE_NF_EBTABLES CONFIG_BRIDGE_EBT_BROUTE \
+	CONFIG_BRIDGE_EBT_T_FILTER CONFIG_BRIDGE_EBT_T_NAT \
+	CONFIG_GENEVE CONFIG_NET_IPIP CONFIG_NET_IPGRE_DEMUX CONFIG_NET_IPGRE \
+	CONFIG_NET_SCHED CONFIG_NET_CLS_ACT CONFIG_NET_SCH_INGRESS \
+	CONFIG_NET_CLS_BPF CONFIG_NET_ACT_BPF \
+	CONFIG_PERF_EVENTS CONFIG_FTRACE CONFIG_TRACING \
+	CONFIG_UPROBE_EVENTS CONFIG_UPROBES CONFIG_BPF_EVENTS \
+	CONFIG_BPF_LSM CONFIG_SECURITY CONFIG_SECURITYFS \
+	CONFIG_SECURITY_NETWORK CONFIG_SECURITY_PATH CONFIG_SECURITY_YAMA \
+	CONFIG_DEBUG_KERNEL CONFIG_DEBUG_INFO CONFIG_DEBUG_INFO_DWARF4 \
+	CONFIG_DEBUG_INFO_BTF
 
 ifeq ($(strip $(KERNEL_VARIANT)),)
 $(error KERNEL_VARIANT must not be empty)
@@ -187,7 +216,7 @@ INITRAMFS_DISK_ROOTFS_DIR := $(EXTRA_DIR)/initramfs-for-disk-rootfs
 INITRAMFS_OVERLAY_ROOTFS_DIR := $(EXTRA_DIR)/initramfs-for-overlay-rootfs
 
 # Paths inside the builder container. The object directory is variant-specific
-# so the two kernels never share a .config or build tree; the kernel source
+# so the kernels never share a .config or build tree; the kernel source
 # tarball and its extracted tree are shared because they are read-only inputs.
 BUILD_DIR := /build
 DIST_DIR := /out
@@ -197,8 +226,8 @@ OBJ_DIR := $(BUILD_DIR)/obj-$(KERNEL_VERSION)-$(ARCH)-$(KERNEL_VARIANT)
 LINUX_TARBALL := $(BUILD_DIR)/linux-$(KERNEL_VERSION).tar.xz
 KERNEL_IMAGE := $(OBJ_DIR)/arch/x86/boot/bzImage
 
-# The variant is part of the artifact name and symlink so the virtio and
-# storage kernels can coexist in OUT_DIR.
+# The variant is part of the artifact name and symlink so the virtio, storage,
+# and k8s kernels can coexist in OUT_DIR.
 KERNEL_NAME := kernel-$(KERNEL_VERSION)-$(KERNEL_VARIANT)
 KERNEL_NAMES := $(foreach variant,$(KERNEL_VARIANTS),kernel-$(KERNEL_VERSION)-$(variant))
 KERNEL_LINK_NAMES := $(foreach variant,$(KERNEL_VARIANTS),kernel-lightvm-$(variant))
@@ -286,13 +315,13 @@ DOCKER_MAKE_TTY := $(DOCKER_RUN_BASE) -it $(DOCKER_IMAGE) make -C /work --no-pri
 	initramfs initramfs-virtiofs initramfs-disk-rootfs initramfs-for-disk-rootfs \
 	initramfs-overlay-rootfs initramfs-for-overlay-rootfs \
 	docker-image docker-volume menuconfig reconfigure shell \
-	test test-virtiofs test-disk-rootfs test-overlay-rootfs clean distclean help \
+	test test-k8s test-virtiofs test-disk-rootfs test-overlay-rootfs clean distclean help \
 	_configure _kernel _kernel-variant _reconfigure \
 	_initramfs _initramfs_common _initramfs_virtiofs _initramfs_disk_rootfs \
 	_initramfs_overlay_rootfs _initramfs_rootfs _menuconfig _shell
 
 # Kernel builds are memory-hungry and share one downloaded source tree; never
-# run two variant builds at once, even with `make -j ... kernel-virtio kernel-storage`.
+# run variant builds concurrently, even with `make -j ... kernel-virtio kernel-storage`.
 # The initramfs targets share $(ROOTFS_DIR), so they must not overlap either.
 .NOTPARALLEL: $(addprefix kernel-,$(KERNEL_VARIANTS)) initramfs initramfs-virtiofs \
 	initramfs-disk-rootfs initramfs-overlay-rootfs
@@ -617,6 +646,30 @@ test: kernel-$(KERNEL_VARIANT) initramfs
 		exit 1; \
 	fi
 
+# Boot the k8s kernel with the debug initramfs and check the runtime view of
+# the features kubeadm and eBPF LSM tooling depend on: the hugetlb cgroup
+# controller, an active "bpf" LSM, /sys/kernel/btf/vmlinux, and /proc/config.gz.
+# The kernel's required-config check already proves the options are built in;
+# this verifies what the guest actually exposes.
+test-k8s:
+	@command -v qemu-system-x86_64 >/dev/null || { \
+		echo "error: qemu-system-x86_64 is required for make test-k8s" >&2; \
+		exit 1; \
+	}
+	@$(MAKE) --no-print-directory test KERNEL_VARIANT=k8s
+	@if grep -q 'lightvm: cgroup controllers:.*hugetlb' "$(QEMU_LOG)" \
+		&& grep -q 'lightvm: hugetlb cgroup: hugetlb' "$(QEMU_LOG)" \
+		&& grep -q 'lightvm: active LSMs:.*bpf' "$(QEMU_LOG)" \
+		&& grep -q 'lightvm: vmlinux BTF present' "$(QEMU_LOG)" \
+		&& grep -q 'lightvm: /proc/config.gz present' "$(QEMU_LOG)"; then \
+		echo "k8s hugetlb, eBPF LSM, BTF, and kernel config test passed"; \
+	else \
+		echo "k8s hugetlb, eBPF LSM, BTF, and kernel config test failed:" >&2; \
+		grep 'lightvm: cgroup controllers:\|lightvm: hugetlb cgroup:\|lightvm: active LSMs:\|lightvm: vmlinux BTF\|lightvm: /proc/config.gz' \
+			"$(QEMU_LOG)" >&2 || true; \
+		exit 1; \
+	fi
+
 # Boot the switch_root initramfs against a tiny writable virtiofs rootfs.
 # The test workload prints a marker, checks that it is PID 1, reads /hello, and
 # powers the VM off.
@@ -760,10 +813,11 @@ distclean: clean
 help:
 	@echo "LightVM kernel builder (builds entirely in Docker)"
 	@echo ""
-	@echo "  make                    build both kernels and all initramfs images"
-	@echo "  make kernel             build both kernel variants"
+	@echo "  make                    build all kernels and all initramfs images"
+	@echo "  make kernel             build every kernel variant"
 	@echo "  make kernel-virtio      build the virtio-only kernel"
 	@echo "  make kernel-storage     build the virtio+storage kernel"
+	@echo "  make kernel-k8s         build the Kubernetes kernel"
 	@echo "  make initramfs          build the debug/test initramfs"
 	@echo "  make initramfs-virtiofs build the virtiofs switch_root initramfs"
 	@echo "  make initramfs-disk-rootfs build the disk/distribution root initramfs"
@@ -771,6 +825,7 @@ help:
 	@echo "  make menuconfig         edit one kernel configuration"
 	@echo "  make reconfigure        reset kernel configurations to configs/*.config"
 	@echo "  make test               boot the debug artifacts in QEMU"
+	@echo "  make test-k8s           boot k8s and check hugetlb, LSM, BTF, config"
 	@echo "  make test-virtiofs      test DHCP/renewal, virtiofs, and switch_root"
 	@echo "  make test-disk-rootfs   test ext4 root discovery and switch_root"
 	@echo "  make test-overlay-rootfs test overlay layers, order, and upper writes"

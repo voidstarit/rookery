@@ -331,9 +331,18 @@ udev. It does not implement the `.env`/`.entrypoint` contract or run DHCP.
 The selected init runs as PID 1 in a new session with `/dev/console` as its
 controlling terminal, so a console shell started with `init=/bin/sh` has job
 control and Ctrl+C signals its foreground job; `/dev/console` stays its
-standard input and output. Use it with the `storage` kernel variant when the
-root is ext4 or XFS; the
-minimal `virtio` kernel has no on-disk filesystem drivers. LVM, dm-crypt,
+standard input and output. Use it with the `storage` or `k8s` kernel variant
+when the root is ext4 or XFS; the
+minimal `virtio` kernel has no on-disk filesystem drivers. The builder also
+produces a `k8s` variant (`make -C extra/linux-kernel kernel-k8s`), which is the
+storage kernel plus Kubernetes prerequisites: `/proc/config.gz`
+(`CONFIG_IKCONFIG_PROC`, so kubeadm can parse the kernel config without
+`modprobe`), `CONFIG_CGROUP_HUGETLB` (fixing kubeadm's
+`CGROUPS_HUGETLB: missing` warning and exposing the cgroup v2 hugetlb
+controller), kube-proxy IPVS and iptables matches, SCTP, ebtables,
+Geneve/IP-in-IP/GRE plus tc/eBPF for CNI plugins, and an active eBPF LSM
+(`CONFIG_BPF_LSM` in `CONFIG_LSM`) with vmlinux BTF for LSM program loading.
+LVM, dm-crypt,
 MD/RAID, and iSCSI roots still need a distribution-specific initramfs with the
 matching tools. For a writable overlay root, use
 `initramfs-lightvm-overlay-rootfs` (`make -C extra/linux-kernel
@@ -344,9 +353,9 @@ The initramfs also accepts `overlay:<N>` and `overlay-<N>`, the forms Rookery's
 disk-serial validation allows. On the upper filesystem it uses `upper/` and
 `work/` (override with `overlay-upper-dir=`/`overlay-work-dir=`). The upper is
 mounted with `index=off,metacopy=off,redirect_dir=nofollow,uuid=null` so it can
-be reused with a different lower filesystem. Pair it with the `storage` kernel,
-and note that it hands the init the same console session as the disk-root
-image.
+be reused with a different lower filesystem. Pair it with the `storage` or
+`k8s` kernel, and note that it hands the init the same console session as the
+disk-root image.
 The LightVM disk picker also
 has an optional per-disk serial field, matching the VM disk picker. Every definition has at least one
 console (up to 32); the first is exposed to the guest as

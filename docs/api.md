@@ -936,7 +936,7 @@ device follows them and `vda`, `vdb`, ... keep their existing order. Set `append
 generic initramfs for this mode: it finds a virtio-fs tag `root`/`rootfs`, the
 `root=` device, or a virtio-blk disk with serial `root`/`rootfs`, mounts the
 filesystem, and runs `init=` (or `/init`, `/sbin/init`, `/bin/init`). Pair it
-with the storage kernel variant for ext4/XFS roots. For a writable overlay
+with the storage or k8s kernel variant for ext4/XFS roots. For a writable overlay
 root, use `initramfs-lightvm-overlay-rootfs` with `overlay-rootfs=true`; disks
 with serials `overlay=<N>`, `overlay:<N>`, or `overlay-<N>` become layers, the
 highest N is the writable upper, and the upper is mounted with

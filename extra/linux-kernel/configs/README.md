@@ -1,6 +1,6 @@
 # LightVM kernel configuration fragments
 
-The builder produces two independent kernels instead of one kernel with every
+The builder produces three independent kernels instead of one kernel with every
 feature enabled. Each variant is described by plain Kconfig fragments in this
 directory; nothing is embedded in the Makefile.
 
@@ -8,24 +8,34 @@ directory; nothing is embedded in the Makefile.
 | --------- | --------------------------------------------- | ------- |
 | `virtio`  | `common.config` + `virtio.config`             | Minimal LightVM guest: virtio-pci, virtio-fs, virtio-net, virtio-blk, virtio-scsi, virtio-console, vsock, 9p. The common base also enables namespaces, cgroup v2, eBPF, seccomp, overlayfs, and nested-container networking. |
 | `storage` | `common.config` + `virtio.config` + `storage.config` | The virtio kernel plus LVM (device-mapper + dm-thin-pool), the iSCSI initiator/target (open-iscsi, LIO/targetcli), NBD, ublk, and the ext4/XFS on-disk filesystems. |
+| `k8s`     | `common.config` + `virtio.config` + `storage.config` + `k8s.config` | The storage kernel plus Kubernetes prerequisites: HugeTLB pages and the cgroup v2 hugetlb controller, `/proc/config.gz`, kube-proxy IPVS and iptables matches, SCTP, ebtables, Geneve/IP-in-IP/GRE, tc/eBPF hooks, and eBPF LSM with vmlinux BTF. |
 
 `storage` deliberately includes the virtio fragments because it must still boot
-the same virtio-fs rootfs and virtio-net images as the `virtio` kernel. It is a
-superset, not a replacement.
+the same virtio-fs rootfs and virtio-net images as the `virtio` kernel. `k8s`
+includes both `virtio` and `storage` for the same reason. Each variant is a
+superset of the one above it, not a replacement.
+
+The `k8s` variant fixes kubeadm's optional
+`CGROUPS_HUGETLB: missing` warning by enabling `CONFIG_CGROUP_HUGETLB` (with
+`CONFIG_HUGETLBFS`/`CONFIG_HUGETLB_PAGE`), which adds `hugetlb` to
+`/sys/fs/cgroup/cgroup.controllers`. Its additional options are described under
+[Kubernetes](#kubernetes).
 
 ## Building
 
 From `extra/linux-kernel`:
 
 ```sh
-make                     # both kernels and all four initramfs images
-make kernel              # both kernels
+make                     # all kernels and all four initramfs images
+make kernel              # all kernel variants
 make kernel-virtio       # only kernel-<version>-virtio
 make kernel-storage      # only kernel-<version>-storage
+make kernel-k8s          # only kernel-<version>-k8s
 make initramfs-disk-rootfs  # generic disk/distribution root initramfs
 make initramfs-overlay-rootfs  # writable overlay-root initramfs
 make menuconfig KERNEL_VARIANT=storage
-make reconfigure         # reset both variants to these fragments
+make reconfigure         # reset all variants to these fragments
+make test-k8s            # boot k8s and verify hugetlb, LSM, BTF, config
 ```
 
 Artifacts land in `OUT_DIR` (default `dist/lightvm`):
@@ -33,8 +43,10 @@ Artifacts land in `OUT_DIR` (default `dist/lightvm`):
 ```
 kernel-<version>-virtio
 kernel-<version>-storage
+kernel-<version>-k8s
 kernel-lightvm-virtio -> kernel-<version>-virtio
 kernel-lightvm-storage -> kernel-<version>-storage
+kernel-lightvm-k8s -> kernel-<version>-k8s
 initramfs-lightvm-<version>.cpio.gz
 initramfs-lightvm-virtiofs-<version>.cpio.gz
 initramfs-lightvm-disk-rootfs-<version>.cpio.gz
@@ -43,7 +55,7 @@ initramfs-lightvm-overlay-rootfs-<version>.cpio.gz
 
 Each variant has its own build directory
 (`/build/obj-<version>-<arch>-<variant>`) and its own generated `.config`, so
-the two builds never share configuration state.
+the builds never share configuration state.
 
 ## Initramfs images
 
@@ -58,8 +70,8 @@ The builder produces four initramfs images:
 
 The disk-root image does not implement the `.env`/`.entrypoint` container
 contract and does not run DHCP; the distribution's own init owns the rest of
-boot. Pair it with the `storage` kernel when the root is ext4 or XFS, because
-the minimal `virtio` kernel has no on-disk filesystem drivers. Plain
+boot. Pair it with the `storage` or `k8s` kernel when the root is ext4 or XFS,
+because the minimal `virtio` kernel has no on-disk filesystem drivers. Plain
 filesystems on a disk or partition are supported; LVM, dm-crypt, MD/RAID, and
 iSCSI roots need a distribution-specific initramfs with the matching tools.
 
@@ -69,7 +81,8 @@ highest lower layer first in `lowerdir` so `overlay=2` overrides `overlay=1`.
 It also accepts `overlay:<N>` and `overlay-<N>`, the forms allowed by Rookery's
 disk-serial validation. On the upper filesystem it uses sibling `upper/` and
 `work/` directories (override with `overlay-upper-dir=` and
-`overlay-work-dir=`). Pair it with the `storage` kernel for ext4/XFS layers.
+`overlay-work-dir=`). Pair it with the `storage` or `k8s` kernel for ext4/XFS
+layers.
 
 ## How a variant is assembled
 
@@ -87,7 +100,8 @@ For each variant the build runs:
 
 1. Add `configs/<name>.config`.
 2. In the Makefile add `KERNEL_FRAGMENTS_<name>` (usually
-   `virtio.config <name>.config` if it must boot LightVM images) and
+   `virtio.config [storage.config] <name>.config` if it must boot LightVM
+   images and build on the storage features) and
    `KERNEL_REQUIRED_CONFIG_<name>`.
 3. Append `<name>` to `KERNEL_VARIANTS`.
 4. Build it with `make kernel-<name>`.
@@ -109,15 +123,64 @@ cgroup subtree, normally provided by systemd; the initramfs only provides the
 root hierarchy.
 
 The kernel does not ship a container runtime or its userland: the image must
-include Docker/Podman and the usual networking tools. Optional drivers such as
-Geneve, IP-in-IP, or Cilium's tc/eBPF data path are not enabled here.
+include Docker/Podman and the usual networking tools. The `virtio` and
+`storage` variants do not enable the optional overlay/CNI data paths; the `k8s`
+variant below adds Geneve, IP-in-IP, GRE, and Cilium's tc/eBPF hooks.
+
+## Kubernetes
+
+`k8s.config` builds on `storage.config` and adds the kernel features that
+kubeadm, kubelet, kube-proxy, containerd/CRI-O, and common CNI plugins expect:
+
+- **Kernel config parsing:** `CONFIG_IKCONFIG` and `CONFIG_IKCONFIG_PROC`
+  expose the running config at `/proc/config.gz`. kubeadm's kernel checks read
+  that file; without it, system-validators falls back to `modprobe configs`,
+  which fails in a kernel built without `CONFIG_MODULES` with
+  `failed to parse kernel config: unable to load kernel module: "configs"`.
+- **HugeTLB:** `CONFIG_HUGETLBFS`, `CONFIG_HUGETLB_PAGE`, and
+  `CONFIG_CGROUP_HUGETLB`. Without `CONFIG_CGROUP_HUGETLB`, kubeadm's
+  `SystemVerification` preflight reports the optional warning
+  `CGROUPS_HUGETLB: missing`; with it, `hugetlb` appears in
+  `/sys/fs/cgroup/cgroup.controllers`. Hugepage pools are still sized from the
+  guest, for example with `default_hugepagesz=2M hugepagesz=2M hugepages=512`
+  on the kernel command line or through `/proc/sys/vm/nr_hugepages`.
+- **kube-proxy IPVS mode:** `CONFIG_IP_VS`, the RR/WRR/SH schedulers, IPv6, and
+  IPVS connection tracking (`CONFIG_IP_VS_NFCT`).
+- **kube-proxy iptables mode:** SCTP, realm, statistic, and rpfilter matches,
+  plus SCTP connection tracking. Conntrack, NAT, REDIRECT, MASQUERADE,
+  multiport, and comment matching come from `common.config`.
+- **CNI and Services:** ebtables for bridge plugins; Geneve, IP-in-IP, and GRE
+  for overlay/tunnel modes; `NET_SCHED`, `NET_CLS_BPF`, and `NET_ACT_BPF` for
+  kube-proxy and eBPF-based CNIs. VXLAN is already enabled by `common.config`.
+- **eBPF LSM:** `CONFIG_BPF_LSM` plus the security core
+  (`CONFIG_SECURITY`, `CONFIG_SECURITY_NETWORK`, `CONFIG_SECURITY_PATH`) and a
+  default LSM list of `yama,bpf`, so `bpf` is active without a custom `lsm=`
+  kernel argument. `BPF_LSM` depends on `BPF_EVENTS`; because `common.config`
+  disables the tracing menus, the variant enables `CONFIG_FTRACE`,
+  `CONFIG_PERF_EVENTS`, and `CONFIG_UPROBE_EVENTS` to satisfy it. The variant
+  also builds vmlinux BTF (`CONFIG_DEBUG_INFO_BTF` with DWARF4), because
+  libbpf/bpftool resolve LSM hook IDs from `/sys/kernel/btf/vmlinux`.
+  Generating BTF requires pahole; the builder image installs the `dwarves`
+  package, and the resulting kernel is larger than the `virtio`/`storage`
+  variants.
+
+`/sys/kernel/security/lsm` lists the active LSMs (for example
+`capability,yama,bpf`). A caller-provided `lsm=` kernel argument still
+overrides `CONFIG_LSM`, so keep `bpf` in that list when customizing it.
+
+The `k8s` variant keeps the storage kernel's ext4/XFS, LVM, iSCSI, NBD, and
+ublk support, so it works for both container-root and disk-backed LightVMs. It
+also carries debug info for BTF generation and vmlinux BTF, so it is the
+largest of the three artifacts. It still does not ship a container runtime: the
+guest image must provide containerd/CRI-O, kubeadm/kubelet/kube-proxy, and the
+CNI binaries.
 
 ## On-disk filesystems
 
 The `virtio` variant has no on-disk filesystem drivers; it boots from
-virtio-fs or the initramfs. The `storage` variant adds ext4 and XFS, built
-into the kernel, so a guest can format and mount the LVM, iSCSI, NBD, and ublk
-volumes it manages. ext4 also handles ext2/ext3 through
+virtio-fs or the initramfs. The `storage` and `k8s` variants add ext4 and XFS,
+built into the kernel, so a guest can format and mount the LVM, iSCSI, NBD, and
+ublk volumes it manages. ext4 also handles ext2/ext3 through
 `CONFIG_EXT4_USE_FOR_EXT2`.
 
 The kernel only provides the drivers. `mkfs.ext4`, `mkfs.xfs`, `mount`, and
@@ -125,7 +188,7 @@ the other userland tools must still be present in the LightVM image.
 
 ## Built-in vs loadable modules
 
-Both variants are built without `CONFIG_MODULES`; the options above are `=y`
+All variants are built without `CONFIG_MODULES`; the options above are `=y`
 and baked into the `bzImage`. LightVM boots a kernel plus an initramfs, so a
 self-contained kernel avoids shipping and loading a module tree. If a variant
 ever needs loadable modules, it must also package and install the matching

@@ -100,6 +100,21 @@ if [ "$test_mode" = 1 ]; then
 	else
 		echo "lightvm: virtiofs rootfs not attached"
 	fi
+	echo "lightvm: cgroup controllers: $(cat /sys/fs/cgroup/cgroup.controllers 2>/dev/null)"
+	echo "lightvm: hugetlb cgroup: $(grep '^hugetlb' /proc/cgroups 2>/dev/null)"
+	mkdir -p /sys/kernel/security 2>/dev/null || true
+	mount -t securityfs securityfs /sys/kernel/security 2>/dev/null || true
+	echo "lightvm: active LSMs: $(cat /sys/kernel/security/lsm 2>/dev/null)"
+	if [ -r /sys/kernel/btf/vmlinux ]; then
+		echo "lightvm: vmlinux BTF present"
+	else
+		echo "lightvm: vmlinux BTF missing"
+	fi
+	if [ -r /proc/config.gz ]; then
+		echo "lightvm: /proc/config.gz present"
+	else
+		echo "lightvm: /proc/config.gz missing"
+	fi
 	echo "LIGHTVM-INITRAMFS-OK"
 	sync
 	poweroff -f
