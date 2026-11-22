@@ -156,14 +156,27 @@ func (m *VNFManager) syncDNSRecords() {
 			}
 			return target.entries[i].source < target.entries[j].source
 		})
-		claimed := make(map[string]struct{})
+		// usedNames keeps generated fallback names and reverse (PTR) names
+		// unique, but a preferred hostname may be shared by several active
+		// leases. That lets multiple DHCP clients (or the same host on IPv4
+		// and IPv6) resolve under one name instead of the later lease being
+		// renamed to its MAC address.
+		usedNames := make(map[string]struct{})
+		seenRecords := make(map[string]struct{})
 		records := make(map[int64][]store.DNSRecord, len(target.sources))
 		for _, entry := range target.entries {
 			forward, ok := leaseForwardName(entry.hostname, entry.domain)
-			if !ok || dnsNameClaimed(target.handler, claimed, forward) {
-				forward, ok = fallbackLeaseName(entry.clientID, entry.domain)
+			// Keep administrator-managed static names authoritative.
+			if ok && target.handler != nil && target.handler.StaticNameTaken(forward) {
+				ok = false
 			}
-			if !ok || dnsNameClaimed(target.handler, claimed, forward) {
+			if !ok {
+				forward, ok = fallbackLeaseName(entry.clientID, entry.domain)
+				if ok && dnsNameClaimed(target.handler, usedNames, forward) {
+					ok = false
+				}
+			}
+			if !ok {
 				log.Warn().
 					Int64("vnf_id", entry.source).
 					Str("client_id", entry.clientID).
@@ -179,17 +192,24 @@ func (m *VNFManager) syncDNSRecords() {
 			if address.Is4() {
 				recordType = "A"
 			}
-			record := store.DNSRecord{
-				Name: forward, Type: recordType, Value: address.String(), TTL: entry.ttl,
+			usedNames[forward] = struct{}{}
+			recordKey := forward + "\x00" + recordType + "\x00" + address.String()
+			if _, exists := seenRecords[recordKey]; !exists {
+				records[entry.source] = append(records[entry.source], store.DNSRecord{
+					Name: forward, Type: recordType, Value: address.String(), TTL: entry.ttl,
+				})
+				seenRecords[recordKey] = struct{}{}
 			}
-			records[entry.source] = append(records[entry.source], record)
-			claimed[forward] = struct{}{}
 			if reverse, err := dns.ReverseAddr(address.String()); err == nil {
-				if !dnsNameClaimed(target.handler, claimed, reverse) {
-					records[entry.source] = append(records[entry.source], store.DNSRecord{
-						Name: reverse, Type: "PTR", Value: dns.Fqdn(forward), TTL: entry.ttl,
-					})
-					claimed[reverse] = struct{}{}
+				if !dnsNameClaimed(target.handler, usedNames, reverse) {
+					ptrKey := reverse + "\x00PTR\x00" + dns.Fqdn(forward)
+					if _, exists := seenRecords[ptrKey]; !exists {
+						records[entry.source] = append(records[entry.source], store.DNSRecord{
+							Name: reverse, Type: "PTR", Value: dns.Fqdn(forward), TTL: entry.ttl,
+						})
+						seenRecords[ptrKey] = struct{}{}
+					}
+					usedNames[reverse] = struct{}{}
 				}
 			}
 		}

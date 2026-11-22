@@ -113,7 +113,7 @@ func TestDNSIntegrationFromDHCPLeases(t *testing.T) {
 	}
 }
 
-func TestDNSIntegrationUsesMACFallbackAndConflictSuffix(t *testing.T) {
+func TestDNSIntegrationSharesHostnameAcrossLeases(t *testing.T) {
 	manager, err := NewVNFManager(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -121,28 +121,91 @@ func TestDNSIntegrationUsesMACFallbackAndConflictSuffix(t *testing.T) {
 	t.Cleanup(func() { _ = manager.Close() })
 	handler := newDNSHandler(store.VNFConfig{})
 	manager.registerDNSRuntime(99, handler)
-	vnf := store.VNF{ID: 1, NetworkID: 10, Type: store.VNFTypeDHCPv4, Config: store.VNFConfig{
+	v4 := store.VNF{ID: 1, NetworkID: 10, Type: store.VNFTypeDHCPv4, Config: store.VNFConfig{
+		DNSVNFID: 99, DNSDomain: "lab.test", DNSTTL: 60,
+	}}
+	v6 := store.VNF{ID: 2, NetworkID: 10, Type: store.VNFTypeDHCPv6, Config: store.VNFConfig{
 		DNSVNFID: 99, DNSDomain: "lab.test", DNSTTL: 60,
 	}}
 	expires := time.Now().Add(time.Hour)
-	writeLeaseRecords(t, manager.leasePath(vnf.ID), []leaseRecord{
+	writeLeaseRecords(t, manager.leasePath(v4.ID), []leaseRecord{
 		{ClientID: "02:00:00:00:00:01", Address: "10.20.0.50", Expires: expires},
 		{ClientID: "02:00:00:00:00:02", Address: "10.20.0.51", Hostname: "web", Expires: expires},
 		{ClientID: "02:00:00:00:00:03", Address: "10.20.0.52", Hostname: "web", Expires: expires},
 	})
-	manager.registerDHCPConfig(vnf)
+	writeLeaseRecords(t, manager.leasePath(v6.ID), []leaseRecord{
+		{ClientID: "duid-02-00-00-00-00-04", Address: "fd00:20::53", Hostname: "web", Expires: expires},
+	})
+	manager.registerDHCPConfig(v4)
+	manager.registerDHCPConfig(v6)
 
+	// A lease without a hostname still gets the MAC-derived fallback.
 	response := dnsQuery(t, handler, "host-02-00-00-00-00-01.lab.test", dns.TypeA)
-	if len(response.Answer) != 1 {
+	if len(response.Answer) != 1 || response.Answer[0].(*dns.A).A.String() != "10.20.0.50" {
 		t.Fatalf("MAC fallback answer = %+v", response.Answer)
 	}
+
+	// All active leases that ask for "web" are added under the same name.
+	response = dnsQuery(t, handler, "web.lab.test", dns.TypeA)
+	got := map[string]bool{}
+	for _, answer := range response.Answer {
+		got[answer.(*dns.A).A.String()] = true
+	}
+	if len(response.Answer) != 2 || !got["10.20.0.51"] || !got["10.20.0.52"] {
+		t.Fatalf("shared hostname answers = %+v", response.Answer)
+	}
+	response = dnsQuery(t, handler, "web.lab.test", dns.TypeAAAA)
+	if len(response.Answer) != 1 || response.Answer[0].(*dns.AAAA).AAAA.String() != "fd00:20::53" {
+		t.Fatalf("shared IPv6 hostname answer = %+v", response.Answer)
+	}
+
+	// Both addresses reverse-resolve to the shared name.
+	response = dnsQuery(t, handler, "52.0.20.10.in-addr.arpa", dns.TypePTR)
+	if len(response.Answer) != 1 || response.Answer[0].(*dns.PTR).Ptr != "web.lab.test." {
+		t.Fatalf("shared hostname PTR = %+v", response.Answer)
+	}
+
+	// When one lease goes away only its record is removed.
+	writeLeaseRecords(t, manager.leasePath(v4.ID), []leaseRecord{
+		{ClientID: "02:00:00:00:00:01", Address: "10.20.0.50", Expires: expires},
+		{ClientID: "02:00:00:00:00:02", Address: "10.20.0.51", Hostname: "web", Expires: expires},
+	})
+	manager.syncDNSRecords()
 	response = dnsQuery(t, handler, "web.lab.test", dns.TypeA)
 	if len(response.Answer) != 1 || response.Answer[0].(*dns.A).A.String() != "10.20.0.51" {
-		t.Fatalf("first hostname answer = %+v", response.Answer)
+		t.Fatalf("remaining hostname answer = %+v", response.Answer)
 	}
-	response = dnsQuery(t, handler, "host-02-00-00-00-00-03.lab.test", dns.TypeA)
-	if len(response.Answer) != 1 || response.Answer[0].(*dns.A).A.String() != "10.20.0.52" {
-		t.Fatalf("conflict fallback answer = %+v", response.Answer)
+	response = dnsQuery(t, handler, "52.0.20.10.in-addr.arpa", dns.TypePTR)
+	if response.Rcode != dns.RcodeNameError {
+		t.Fatalf("removed lease PTR response = %+v", response)
+	}
+}
+
+func TestDNSIntegrationStaticNameStillWinsOverLease(t *testing.T) {
+	manager, err := NewVNFManager(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = manager.Close() })
+	handler := newDNSHandler(store.VNFConfig{DNSRecords: []store.DNSRecord{
+		{Name: "web.lab.test", Type: "A", Value: "10.20.0.200", TTL: 60},
+	}})
+	manager.registerDNSRuntime(99, handler)
+	vnf := store.VNF{ID: 1, NetworkID: 10, Type: store.VNFTypeDHCPv4, Config: store.VNFConfig{
+		DNSVNFID: 99, DNSDomain: "lab.test", DNSTTL: 60,
+	}}
+	writeLeaseRecords(t, manager.leasePath(vnf.ID), []leaseRecord{
+		{ClientID: "02:00:00:00:00:01", Address: "10.20.0.50", Hostname: "web", Expires: time.Now().Add(time.Hour)},
+	})
+	manager.registerDHCPConfig(vnf)
+
+	response := dnsQuery(t, handler, "web.lab.test", dns.TypeA)
+	if len(response.Answer) != 1 || response.Answer[0].(*dns.A).A.String() != "10.20.0.200" {
+		t.Fatalf("static hostname answer = %+v", response.Answer)
+	}
+	response = dnsQuery(t, handler, "host-02-00-00-00-00-01.lab.test", dns.TypeA)
+	if len(response.Answer) != 1 || response.Answer[0].(*dns.A).A.String() != "10.20.0.50" {
+		t.Fatalf("static conflict fallback answer = %+v", response.Answer)
 	}
 }
 
