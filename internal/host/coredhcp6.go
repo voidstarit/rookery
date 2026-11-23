@@ -149,6 +149,7 @@ func setupCoreDHCPv6(args ...string) (handler.Handler6, error) {
 	if err := state.loadLeases(); err != nil {
 		return nil, err
 	}
+	registerLeaseRuntime(args[4], state)
 	return state.handle, nil
 }
 
@@ -428,6 +429,25 @@ func (s *coreDHCPv6State) freeLocked(record *coreDHCPv6Lease) {
 		Msg("DHCPv6 lease freed")
 	delete(s.leases, record.ClientID)
 	delete(s.byIP, record.Address.String())
+}
+
+// removeLeases frees the requested client leases and persists the lease file.
+func (s *coreDHCPv6State) removeLeases(clientIDs []string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	removed := 0
+	for _, clientID := range clientIDs {
+		record, ok := s.leases[clientID]
+		if !ok {
+			continue
+		}
+		s.freeLocked(record)
+		removed++
+	}
+	if removed > 0 {
+		s.saveLocked()
+	}
+	return removed
 }
 
 func (s *coreDHCPv6State) inRange(addr netip.Addr) bool {

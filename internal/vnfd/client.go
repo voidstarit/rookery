@@ -147,6 +147,25 @@ func (c *Client) Leases(ctx context.Context, vnfID int64) ([]store.VNFLease, err
 	return leases, nil
 }
 
+// RemoveLeases drops specific DHCP leases from a VNF runtime.
+func (c *Client) RemoveLeases(ctx context.Context, vnfID int64, clientIDs []string) (int, error) {
+	callCtx, cancel := context.WithTimeout(ctx, statusTimeout)
+	defer cancel()
+	response, err := c.client.RemoveLeases(callCtx, &rookeryv1.RemoveLeasesRequest{
+		Id: vnfID, ClientIds: clientIDs,
+	})
+	if err != nil {
+		return 0, grpcError("remove VNF leases", err)
+	}
+	removed := int(response.GetRemoved())
+	c.logger.Trace().
+		Int64("vnf_id", vnfID).
+		Int("requested", len(clientIDs)).
+		Int("removed", removed).
+		Msg("VNF leases removed")
+	return removed, nil
+}
+
 // DNSRecords returns the dynamic DNS records registered for a DNS VNF.
 func (c *Client) DNSRecords(ctx context.Context, vnfID int64) ([]host.DNSRecordView, error) {
 	callCtx, cancel := context.WithTimeout(ctx, statusTimeout)

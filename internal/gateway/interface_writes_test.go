@@ -19,6 +19,17 @@ type fakeInterfaceRuntime struct {
 	deleted []uint32
 }
 
+type fakeLeaseCleaner struct {
+	networkIDs []int64
+	macs       []string
+}
+
+func (f *fakeLeaseCleaner) RemoveLeasesForInterface(_ context.Context, networkID int64, mac string) error {
+	f.networkIDs = append(f.networkIDs, networkID)
+	f.macs = append(f.macs, mac)
+	return nil
+}
+
 func (f *fakeInterfaceRuntime) CreateVhostUser(_ context.Context, name, _ string, _ uint32) (string, uint32, error) {
 	f.created = append(f.created, name)
 	return "/run/vpp/" + name + ".sock", 7, nil
@@ -44,9 +55,10 @@ func TestInterfaceWriteRoutes(t *testing.T) {
 	}
 
 	runtime := &fakeInterfaceRuntime{}
+	cleaner := &fakeLeaseCleaner{}
 	gw, err := gateway.New(st, fakeReadiness{status: readiness.Status{
 		Ready: true, VPP: readiness.VPPStatus{ComponentStatus: readiness.ComponentStatus{Ready: true}},
-	}}, gateway.WithInterfaceRuntime(runtime), gateway.WithVMController(&fakeVMController{}))
+	}}, gateway.WithInterfaceRuntime(runtime), gateway.WithVMController(&fakeVMController{}), gateway.WithLeaseCleaner(cleaner))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,6 +108,12 @@ func TestInterfaceWriteRoutes(t *testing.T) {
 	_ = deleted.Body.Close()
 	if len(runtime.deleted) != 1 || runtime.deleted[0] != 7 {
 		t.Fatalf("deleted interfaces = %+v", runtime.deleted)
+	}
+	if len(cleaner.networkIDs) != 1 || cleaner.networkIDs[0] != network.ID {
+		t.Fatalf("lease cleanup networks = %+v", cleaner.networkIDs)
+	}
+	if len(cleaner.macs) != 1 || cleaner.macs[0] != iface["mac"] {
+		t.Fatalf("lease cleanup MACs = %+v, interface = %+v", cleaner.macs, iface)
 	}
 }
 

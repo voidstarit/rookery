@@ -44,6 +44,10 @@ func (s *Server) RunInfrastructureReconciler(ctx context.Context) {
 	// can take longer or retry. The VPP script also runs on every reconnect.
 	go s.runRookeryStartupScriptOnce()
 	go s.runVPPStartupScript()
+	// DHCP leases for interfaces that no longer exist are reconciled in the
+	// background. The first pass runs after one interval so VMs have time to
+	// reconnect and renew after a restart.
+	go s.runLeaseCleanup(ctx)
 
 	// The initial reconciliation runs in the same background worker as later
 	// VPP-restart rebuilds so the watcher can detect another VPP restart while

@@ -403,6 +403,7 @@ func (m *VNFManager) stop(ctx context.Context, vnfID int64, removeLeases bool) e
 		m.mu.Unlock()
 		m.unregisterVNF(vnfID, managed.vnfType)
 	}
+	unregisterLeaseRuntime(m.leasePath(vnfID))
 
 	if removeLeases {
 		_ = os.Remove(m.leasePath(vnfID))
@@ -471,6 +472,46 @@ func (m *VNFManager) DNSRecords(vnfID int64) []DNSRecordView {
 		return []DNSRecordView{}
 	}
 	return handler.DynamicRecords()
+}
+
+// RemoveLeases drops individual leases from a DHCP VNF. Running runtimes are
+// updated in memory and persisted; when the VNF is not running the lease file
+// is edited directly so stale leases do not reappear on the next start. Dynamic
+// DNS records reconcile from the lease files automatically.
+func (m *VNFManager) RemoveLeases(_ context.Context, vnfID int64, clientIDs []string) (int, error) {
+	if vnfID < 1 {
+		return 0, errors.New("invalid VNF id")
+	}
+	ids := make([]string, 0, len(clientIDs))
+	seen := make(map[string]struct{}, len(clientIDs))
+	for _, clientID := range clientIDs {
+		clientID = strings.TrimSpace(clientID)
+		if clientID == "" {
+			continue
+		}
+		if _, ok := seen[clientID]; ok {
+			continue
+		}
+		seen[clientID] = struct{}{}
+		ids = append(ids, clientID)
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	path := m.leasePath(vnfID)
+	removed, live := removeRuntimeLeases(path, ids)
+	if !live {
+		var err error
+		removed, err = removeLeasesFromFile(path, ids)
+		if err != nil {
+			return 0, err
+		}
+	}
+	if removed > 0 {
+		m.syncDNSRecords()
+	}
+	return removed, nil
 }
 
 // Leases returns the persisted leases for a VNF and marks whether they are active.

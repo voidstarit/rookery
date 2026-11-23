@@ -23,6 +23,12 @@ type InterfaceRuntime interface {
 	SetInterfaceRouteTable(ctx context.Context, swIfIndex uint32, ipv6 bool, tableID uint32) error
 }
 
+// LeaseCleaner drops DHCP leases that belonged to a deleted interface. It is
+// optional; the API server also reconciles orphaned leases periodically.
+type LeaseCleaner interface {
+	RemoveLeasesForInterface(ctx context.Context, networkID int64, mac string) error
+}
+
 func (s *interfaceService) vppReady() error {
 	if s.attachments == nil {
 		return status.Error(codes.Unavailable, "VPP network runtime is not configured")
@@ -171,6 +177,11 @@ func (s *interfaceService) DeleteInterface(ctx context.Context, request *rookery
 		}
 	}
 	_ = s.store.DeleteVPPInterfaceAddresses(ctx, iface.Name)
+	// The interface is already gone; a cleanup failure is retried by the API's
+	// periodic orphaned-lease reconciliation.
+	if s.leases != nil {
+		_ = s.leases.RemoveLeasesForInterface(ctx, iface.NetworkID, iface.MAC)
+	}
 	return &emptypb.Empty{}, nil
 }
 

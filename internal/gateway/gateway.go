@@ -65,6 +65,7 @@ type options struct {
 	vmMutex            *sync.Mutex
 	interfaceRuntime   InterfaceRuntime
 	interfaceAddresses InterfaceAddressRuntime
+	leaseCleaner       LeaseCleaner
 	diagnostics        DiagnosticsRuntime
 	networkRuntime     NetworkRuntime
 	networkWriter      NetworkWriter
@@ -203,6 +204,14 @@ func WithVMMutex(mutex *sync.Mutex) Option {
 func WithInterfaceRuntime(runtime InterfaceRuntime) Option {
 	return func(opts *options) {
 		opts.interfaceRuntime = runtime
+	}
+}
+
+// WithLeaseCleaner enables immediate DHCP lease cleanup when an interface is
+// deleted.
+func WithLeaseCleaner(cleaner LeaseCleaner) Option {
+	return func(opts *options) {
+		opts.leaseCleaner = cleaner
 	}
 }
 
@@ -352,7 +361,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	diskThrottle := &diskThrottleService{store: st}
 	media := &mediaService{store: st}
 	networks := &networkService{store: st, runtime: options.networkRuntime, readiness: ready, writer: options.networkWriter, mu: options.diskMutex}
-	interfaces := &interfaceService{store: st, runtime: options.aclRuntime, attachments: options.interfaceRuntime, addresses: options.interfaceAddresses, vms: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, runMu: options.vmMutex}
+	interfaces := &interfaceService{store: st, runtime: options.aclRuntime, attachments: options.interfaceRuntime, addresses: options.interfaceAddresses, vms: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, runMu: options.vmMutex, leases: options.leaseCleaner}
 	acls := &aclService{store: st, runtime: options.aclRuntime, readiness: ready}
 	routeTables := &routeTableService{store: st, runtime: options.aclRuntime, readiness: ready}
 	vnfs := &vnfService{store: st, runtime: options.vnfRuntime, statusProvider: options.vnfStatusProvider, writer: options.vnfWriter}

@@ -1285,6 +1285,250 @@ var _ interface {
 	ErrorName() string
 } = ListLeasesResponseValidationError{}
 
+// Validate checks the field values on RemoveLeasesRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *RemoveLeasesRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on RemoveLeasesRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// RemoveLeasesRequestMultiError, or nil if none found.
+func (m *RemoveLeasesRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *RemoveLeasesRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetId() <= 0 {
+		err := RemoveLeasesRequestValidationError{
+			field:  "Id",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if l := len(m.GetClientIds()); l < 1 || l > 256 {
+		err := RemoveLeasesRequestValidationError{
+			field:  "ClientIds",
+			reason: "value must contain between 1 and 256 items, inclusive",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	for idx, item := range m.GetClientIds() {
+		_, _ = idx, item
+
+		if l := utf8.RuneCountInString(item); l < 1 || l > 128 {
+			err := RemoveLeasesRequestValidationError{
+				field:  fmt.Sprintf("ClientIds[%v]", idx),
+				reason: "value length must be between 1 and 128 runes, inclusive",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return RemoveLeasesRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// RemoveLeasesRequestMultiError is an error wrapping multiple validation
+// errors returned by RemoveLeasesRequest.ValidateAll() if the designated
+// constraints aren't met.
+type RemoveLeasesRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m RemoveLeasesRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m RemoveLeasesRequestMultiError) AllErrors() []error { return m }
+
+// RemoveLeasesRequestValidationError is the validation error returned by
+// RemoveLeasesRequest.Validate if the designated constraints aren't met.
+type RemoveLeasesRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e RemoveLeasesRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e RemoveLeasesRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e RemoveLeasesRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e RemoveLeasesRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e RemoveLeasesRequestValidationError) ErrorName() string {
+	return "RemoveLeasesRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e RemoveLeasesRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sRemoveLeasesRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = RemoveLeasesRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = RemoveLeasesRequestValidationError{}
+
+// Validate checks the field values on RemoveLeasesResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *RemoveLeasesResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on RemoveLeasesResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// RemoveLeasesResponseMultiError, or nil if none found.
+func (m *RemoveLeasesResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *RemoveLeasesResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Removed
+
+	if len(errors) > 0 {
+		return RemoveLeasesResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// RemoveLeasesResponseMultiError is an error wrapping multiple validation
+// errors returned by RemoveLeasesResponse.ValidateAll() if the designated
+// constraints aren't met.
+type RemoveLeasesResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m RemoveLeasesResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m RemoveLeasesResponseMultiError) AllErrors() []error { return m }
+
+// RemoveLeasesResponseValidationError is the validation error returned by
+// RemoveLeasesResponse.Validate if the designated constraints aren't met.
+type RemoveLeasesResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e RemoveLeasesResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e RemoveLeasesResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e RemoveLeasesResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e RemoveLeasesResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e RemoveLeasesResponseValidationError) ErrorName() string {
+	return "RemoveLeasesResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e RemoveLeasesResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sRemoveLeasesResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = RemoveLeasesResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = RemoveLeasesResponseValidationError{}
+
 // Validate checks the field values on GetBGPStatusRequest with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.

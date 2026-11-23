@@ -574,6 +574,102 @@ func (x *ListLeasesResponse) GetLeases() []*VNFLease {
 	return nil
 }
 
+type RemoveLeasesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	ClientIds     []string               `protobuf:"bytes,2,rep,name=client_ids,json=clientIds,proto3" json:"client_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveLeasesRequest) Reset() {
+	*x = RemoveLeasesRequest{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveLeasesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveLeasesRequest) ProtoMessage() {}
+
+func (x *RemoveLeasesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveLeasesRequest.ProtoReflect.Descriptor instead.
+func (*RemoveLeasesRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *RemoveLeasesRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *RemoveLeasesRequest) GetClientIds() []string {
+	if x != nil {
+		return x.ClientIds
+	}
+	return nil
+}
+
+type RemoveLeasesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Removed       int64                  `protobuf:"varint,1,opt,name=removed,proto3" json:"removed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveLeasesResponse) Reset() {
+	*x = RemoveLeasesResponse{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveLeasesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveLeasesResponse) ProtoMessage() {}
+
+func (x *RemoveLeasesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveLeasesResponse.ProtoReflect.Descriptor instead.
+func (*RemoveLeasesResponse) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *RemoveLeasesResponse) GetRemoved() int64 {
+	if x != nil {
+		return x.Removed
+	}
+	return 0
+}
+
 type GetBGPStatusRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -583,7 +679,7 @@ type GetBGPStatusRequest struct {
 
 func (x *GetBGPStatusRequest) Reset() {
 	*x = GetBGPStatusRequest{}
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[10]
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -595,7 +691,7 @@ func (x *GetBGPStatusRequest) String() string {
 func (*GetBGPStatusRequest) ProtoMessage() {}
 
 func (x *GetBGPStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[10]
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -608,7 +704,7 @@ func (x *GetBGPStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBGPStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetBGPStatusRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{10}
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetBGPStatusRequest) GetId() int64 {
@@ -627,7 +723,7 @@ type ListDNSRecordsRequest struct {
 
 func (x *ListDNSRecordsRequest) Reset() {
 	*x = ListDNSRecordsRequest{}
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[11]
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -639,7 +735,7 @@ func (x *ListDNSRecordsRequest) String() string {
 func (*ListDNSRecordsRequest) ProtoMessage() {}
 
 func (x *ListDNSRecordsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[11]
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -652,7 +748,7 @@ func (x *ListDNSRecordsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDNSRecordsRequest.ProtoReflect.Descriptor instead.
 func (*ListDNSRecordsRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{11}
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ListDNSRecordsRequest) GetId() int64 {
@@ -672,7 +768,7 @@ type ListDNSRecordsResponse struct {
 
 func (x *ListDNSRecordsResponse) Reset() {
 	*x = ListDNSRecordsResponse{}
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[12]
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -684,7 +780,7 @@ func (x *ListDNSRecordsResponse) String() string {
 func (*ListDNSRecordsResponse) ProtoMessage() {}
 
 func (x *ListDNSRecordsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[12]
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -697,7 +793,7 @@ func (x *ListDNSRecordsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDNSRecordsResponse.ProtoReflect.Descriptor instead.
 func (*ListDNSRecordsResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{12}
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ListDNSRecordsResponse) GetVnfId() int64 {
@@ -723,7 +819,7 @@ type CleanupLegacyNetworkRequest struct {
 
 func (x *CleanupLegacyNetworkRequest) Reset() {
 	*x = CleanupLegacyNetworkRequest{}
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[13]
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -735,7 +831,7 @@ func (x *CleanupLegacyNetworkRequest) String() string {
 func (*CleanupLegacyNetworkRequest) ProtoMessage() {}
 
 func (x *CleanupLegacyNetworkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[13]
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -748,7 +844,7 @@ func (x *CleanupLegacyNetworkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CleanupLegacyNetworkRequest.ProtoReflect.Descriptor instead.
 func (*CleanupLegacyNetworkRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{13}
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *CleanupLegacyNetworkRequest) GetNetworkId() int64 {
@@ -798,7 +894,13 @@ const file_rookery_v1_vnfd_proto_rawDesc = "" +
 	"\x12ListLeasesResponse\x12\x15\n" +
 	"\x06vnf_id\x18\x01 \x01(\x03R\x05vnfId\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12,\n" +
-	"\x06leases\x18\x03 \x03(\v2\x14.rookery.v1.VNFLeaseR\x06leases\".\n" +
+	"\x06leases\x18\x03 \x03(\v2\x14.rookery.v1.VNFLeaseR\x06leases\"c\n" +
+	"\x13RemoveLeasesRequest\x12\x17\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x123\n" +
+	"\n" +
+	"client_ids\x18\x02 \x03(\tB\x14\xfaB\x11\x92\x01\x0e\b\x01\x10\x80\x02\"\ar\x05\x10\x01\x18\x80\x01R\tclientIds\"0\n" +
+	"\x14RemoveLeasesResponse\x12\x18\n" +
+	"\aremoved\x18\x01 \x01(\x03R\aremoved\".\n" +
 	"\x13GetBGPStatusRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"0\n" +
 	"\x15ListDNSRecordsRequest\x12\x17\n" +
@@ -808,7 +910,7 @@ const file_rookery_v1_vnfd_proto_rawDesc = "" +
 	"\arecords\x18\x02 \x03(\v2\x18.rookery.v1.VNFDNSRecordR\arecords\"E\n" +
 	"\x1bCleanupLegacyNetworkRequest\x12&\n" +
 	"\n" +
-	"network_id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\tnetworkId2\xbd\x05\n" +
+	"network_id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\tnetworkId2\x90\x06\n" +
 	"\tVNFDaemon\x12?\n" +
 	"\tEnsureVNF\x12\x1c.rookery.v1.EnsureVNFRequest\x1a\x14.rookery.v1.VNFState\x12A\n" +
 	"\tRemoveVNF\x12\x1c.rookery.v1.RemoveVNFRequest\x1a\x16.google.protobuf.Empty\x12G\n" +
@@ -816,7 +918,8 @@ const file_rookery_v1_vnfd_proto_rawDesc = "" +
 	"\rListVNFStates\x12 .rookery.v1.ListVNFStatesRequest\x1a!.rookery.v1.ListVNFStatesResponse\x12C\n" +
 	"\vGetVNFState\x12\x1e.rookery.v1.GetVNFStateRequest\x1a\x14.rookery.v1.VNFState\x12K\n" +
 	"\n" +
-	"ListLeases\x12\x1d.rookery.v1.ListLeasesRequest\x1a\x1e.rookery.v1.ListLeasesResponse\x12I\n" +
+	"ListLeases\x12\x1d.rookery.v1.ListLeasesRequest\x1a\x1e.rookery.v1.ListLeasesResponse\x12Q\n" +
+	"\fRemoveLeases\x12\x1f.rookery.v1.RemoveLeasesRequest\x1a .rookery.v1.RemoveLeasesResponse\x12I\n" +
 	"\fGetBGPStatus\x12\x1f.rookery.v1.GetBGPStatusRequest\x1a\x18.rookery.v1.VNFBGPStatus\x12W\n" +
 	"\x0eListDNSRecords\x12!.rookery.v1.ListDNSRecordsRequest\x1a\".rookery.v1.ListDNSRecordsResponse\x12W\n" +
 	"\x14CleanupLegacyNetwork\x12'.rookery.v1.CleanupLegacyNetworkRequest\x1a\x16.google.protobuf.EmptyB?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
@@ -833,7 +936,7 @@ func file_rookery_v1_vnfd_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_vnfd_proto_rawDescData
 }
 
-var file_rookery_v1_vnfd_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_rookery_v1_vnfd_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_rookery_v1_vnfd_proto_goTypes = []any{
 	(*VNFSpec)(nil),                     // 0: rookery.v1.VNFSpec
 	(*EnsureVNFRequest)(nil),            // 1: rookery.v1.EnsureVNFRequest
@@ -845,42 +948,46 @@ var file_rookery_v1_vnfd_proto_goTypes = []any{
 	(*GetVNFStateRequest)(nil),          // 7: rookery.v1.GetVNFStateRequest
 	(*ListLeasesRequest)(nil),           // 8: rookery.v1.ListLeasesRequest
 	(*ListLeasesResponse)(nil),          // 9: rookery.v1.ListLeasesResponse
-	(*GetBGPStatusRequest)(nil),         // 10: rookery.v1.GetBGPStatusRequest
-	(*ListDNSRecordsRequest)(nil),       // 11: rookery.v1.ListDNSRecordsRequest
-	(*ListDNSRecordsResponse)(nil),      // 12: rookery.v1.ListDNSRecordsResponse
-	(*CleanupLegacyNetworkRequest)(nil), // 13: rookery.v1.CleanupLegacyNetworkRequest
-	(*VNFConfig)(nil),                   // 14: rookery.v1.VNFConfig
-	(*VNFLease)(nil),                    // 15: rookery.v1.VNFLease
-	(*VNFDNSRecord)(nil),                // 16: rookery.v1.VNFDNSRecord
-	(*emptypb.Empty)(nil),               // 17: google.protobuf.Empty
-	(*VNFBGPStatus)(nil),                // 18: rookery.v1.VNFBGPStatus
+	(*RemoveLeasesRequest)(nil),         // 10: rookery.v1.RemoveLeasesRequest
+	(*RemoveLeasesResponse)(nil),        // 11: rookery.v1.RemoveLeasesResponse
+	(*GetBGPStatusRequest)(nil),         // 12: rookery.v1.GetBGPStatusRequest
+	(*ListDNSRecordsRequest)(nil),       // 13: rookery.v1.ListDNSRecordsRequest
+	(*ListDNSRecordsResponse)(nil),      // 14: rookery.v1.ListDNSRecordsResponse
+	(*CleanupLegacyNetworkRequest)(nil), // 15: rookery.v1.CleanupLegacyNetworkRequest
+	(*VNFConfig)(nil),                   // 16: rookery.v1.VNFConfig
+	(*VNFLease)(nil),                    // 17: rookery.v1.VNFLease
+	(*VNFDNSRecord)(nil),                // 18: rookery.v1.VNFDNSRecord
+	(*emptypb.Empty)(nil),               // 19: google.protobuf.Empty
+	(*VNFBGPStatus)(nil),                // 20: rookery.v1.VNFBGPStatus
 }
 var file_rookery_v1_vnfd_proto_depIdxs = []int32{
-	14, // 0: rookery.v1.VNFSpec.config:type_name -> rookery.v1.VNFConfig
+	16, // 0: rookery.v1.VNFSpec.config:type_name -> rookery.v1.VNFConfig
 	0,  // 1: rookery.v1.EnsureVNFRequest.vnf:type_name -> rookery.v1.VNFSpec
 	4,  // 2: rookery.v1.ListVNFStatesResponse.vnfs:type_name -> rookery.v1.VNFState
-	15, // 3: rookery.v1.ListLeasesResponse.leases:type_name -> rookery.v1.VNFLease
-	16, // 4: rookery.v1.ListDNSRecordsResponse.records:type_name -> rookery.v1.VNFDNSRecord
+	17, // 3: rookery.v1.ListLeasesResponse.leases:type_name -> rookery.v1.VNFLease
+	18, // 4: rookery.v1.ListDNSRecordsResponse.records:type_name -> rookery.v1.VNFDNSRecord
 	1,  // 5: rookery.v1.VNFDaemon.EnsureVNF:input_type -> rookery.v1.EnsureVNFRequest
 	2,  // 6: rookery.v1.VNFDaemon.RemoveVNF:input_type -> rookery.v1.RemoveVNFRequest
 	3,  // 7: rookery.v1.VNFDaemon.ResetRuntime:input_type -> rookery.v1.ResetRuntimeRequest
 	5,  // 8: rookery.v1.VNFDaemon.ListVNFStates:input_type -> rookery.v1.ListVNFStatesRequest
 	7,  // 9: rookery.v1.VNFDaemon.GetVNFState:input_type -> rookery.v1.GetVNFStateRequest
 	8,  // 10: rookery.v1.VNFDaemon.ListLeases:input_type -> rookery.v1.ListLeasesRequest
-	10, // 11: rookery.v1.VNFDaemon.GetBGPStatus:input_type -> rookery.v1.GetBGPStatusRequest
-	11, // 12: rookery.v1.VNFDaemon.ListDNSRecords:input_type -> rookery.v1.ListDNSRecordsRequest
-	13, // 13: rookery.v1.VNFDaemon.CleanupLegacyNetwork:input_type -> rookery.v1.CleanupLegacyNetworkRequest
-	4,  // 14: rookery.v1.VNFDaemon.EnsureVNF:output_type -> rookery.v1.VNFState
-	17, // 15: rookery.v1.VNFDaemon.RemoveVNF:output_type -> google.protobuf.Empty
-	17, // 16: rookery.v1.VNFDaemon.ResetRuntime:output_type -> google.protobuf.Empty
-	6,  // 17: rookery.v1.VNFDaemon.ListVNFStates:output_type -> rookery.v1.ListVNFStatesResponse
-	4,  // 18: rookery.v1.VNFDaemon.GetVNFState:output_type -> rookery.v1.VNFState
-	9,  // 19: rookery.v1.VNFDaemon.ListLeases:output_type -> rookery.v1.ListLeasesResponse
-	18, // 20: rookery.v1.VNFDaemon.GetBGPStatus:output_type -> rookery.v1.VNFBGPStatus
-	12, // 21: rookery.v1.VNFDaemon.ListDNSRecords:output_type -> rookery.v1.ListDNSRecordsResponse
-	17, // 22: rookery.v1.VNFDaemon.CleanupLegacyNetwork:output_type -> google.protobuf.Empty
-	14, // [14:23] is the sub-list for method output_type
-	5,  // [5:14] is the sub-list for method input_type
+	10, // 11: rookery.v1.VNFDaemon.RemoveLeases:input_type -> rookery.v1.RemoveLeasesRequest
+	12, // 12: rookery.v1.VNFDaemon.GetBGPStatus:input_type -> rookery.v1.GetBGPStatusRequest
+	13, // 13: rookery.v1.VNFDaemon.ListDNSRecords:input_type -> rookery.v1.ListDNSRecordsRequest
+	15, // 14: rookery.v1.VNFDaemon.CleanupLegacyNetwork:input_type -> rookery.v1.CleanupLegacyNetworkRequest
+	4,  // 15: rookery.v1.VNFDaemon.EnsureVNF:output_type -> rookery.v1.VNFState
+	19, // 16: rookery.v1.VNFDaemon.RemoveVNF:output_type -> google.protobuf.Empty
+	19, // 17: rookery.v1.VNFDaemon.ResetRuntime:output_type -> google.protobuf.Empty
+	6,  // 18: rookery.v1.VNFDaemon.ListVNFStates:output_type -> rookery.v1.ListVNFStatesResponse
+	4,  // 19: rookery.v1.VNFDaemon.GetVNFState:output_type -> rookery.v1.VNFState
+	9,  // 20: rookery.v1.VNFDaemon.ListLeases:output_type -> rookery.v1.ListLeasesResponse
+	11, // 21: rookery.v1.VNFDaemon.RemoveLeases:output_type -> rookery.v1.RemoveLeasesResponse
+	20, // 22: rookery.v1.VNFDaemon.GetBGPStatus:output_type -> rookery.v1.VNFBGPStatus
+	14, // 23: rookery.v1.VNFDaemon.ListDNSRecords:output_type -> rookery.v1.ListDNSRecordsResponse
+	19, // 24: rookery.v1.VNFDaemon.CleanupLegacyNetwork:output_type -> google.protobuf.Empty
+	15, // [15:25] is the sub-list for method output_type
+	5,  // [5:15] is the sub-list for method input_type
 	5,  // [5:5] is the sub-list for extension type_name
 	5,  // [5:5] is the sub-list for extension extendee
 	0,  // [0:5] is the sub-list for field type_name
@@ -898,7 +1005,7 @@ func file_rookery_v1_vnfd_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_vnfd_proto_rawDesc), len(file_rookery_v1_vnfd_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

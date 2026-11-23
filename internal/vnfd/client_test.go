@@ -48,6 +48,13 @@ func TestClientServerRoundTrip(t *testing.T) {
 	if err != nil || len(leases) != 1 || leases[0].Address != "10.0.0.11" {
 		t.Fatalf("leases = %+v, err = %v", leases, err)
 	}
+	removed, err := client.RemoveLeases(ctx, 1, []string{"aa:bb"})
+	if err != nil || removed != 1 {
+		t.Fatalf("remove leases = %d, err = %v", removed, err)
+	}
+	if got := manager.removed[1]; len(got) != 1 || got[0] != "aa:bb" {
+		t.Fatalf("removed leases = %+v", got)
+	}
 	status, err := client.BGPStatus(ctx, 1)
 	if err != nil || status.SessionState != "SESSION_STATE_ACTIVE" {
 		t.Fatalf("bgp status = %+v, err = %v", status, err)
@@ -68,5 +75,8 @@ func TestClientUnavailableDaemonReportsStopped(t *testing.T) {
 	defer client.Close()
 	if client.Running(context.Background(), 1) {
 		t.Fatal("running = true without a daemon")
+	}
+	if _, err := client.RemoveLeases(context.Background(), 1, []string{"aa"}); err == nil {
+		t.Fatal("remove leases succeeded without a daemon")
 	}
 }
