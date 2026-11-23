@@ -14,13 +14,21 @@ import (
 )
 
 // leaseCleanupInterval is how often orphaned DHCP leases are reconciled
-// against the interfaces recorded for their network.
-const leaseCleanupInterval = time.Minute
+// against the interfaces recorded for their network. It is a variable so tests
+// can drive the loop without waiting a minute.
+var leaseCleanupInterval = time.Minute
 
 // leaseRuntime is the subset of the VNF manager used by orphaned-lease cleanup.
 type leaseRuntime interface {
 	Leases(ctx context.Context, vnfID int64) ([]store.VNFLease, error)
 	RemoveLeases(ctx context.Context, vnfID int64, clientIDs []string) (int, error)
+}
+
+// leaseCleanupStore is the subset of the store used by orphaned-lease cleanup.
+type leaseCleanupStore interface {
+	ListInterfaces(ctx context.Context) ([]store.VirtualInterface, error)
+	ListNetworks(ctx context.Context) ([]store.Network, error)
+	ListVNFsByNetwork(ctx context.Context, networkID int64) ([]store.VNF, error)
 }
 
 // runLeaseCleanup periodically drops DHCP leases whose client MAC no longer
@@ -46,6 +54,9 @@ func (s *Server) runLeaseCleanup(ctx context.Context) {
 // cleanupOrphanedLeases reconciles every enabled DHCPv4 VNF. Leases using an
 // address-family client ID other than a MAC (DHCPv6 DUIDs) are left untouched.
 func (s *Server) cleanupOrphanedLeases(ctx context.Context) {
+	if s.store == nil || s.vnfs == nil {
+		return
+	}
 	reconcileOrphanedLeases(ctx, s.store, s.vnfs, s.logger)
 }
 
@@ -53,6 +64,10 @@ func reconcileOrphanedLeases(ctx context.Context, st *store.Store, runtime lease
 	if st == nil || runtime == nil {
 		return
 	}
+	reconcileOrphanedLeasesFor(ctx, st, runtime, logger)
+}
+
+func reconcileOrphanedLeasesFor(ctx context.Context, st leaseCleanupStore, runtime leaseRuntime, logger zerolog.Logger) {
 	interfaces, err := st.ListInterfaces(ctx)
 	if err != nil {
 		logger.Warn().Err(err).Msg("DHCP lease cleanup could not list interfaces")
@@ -117,11 +132,15 @@ func (s *Server) RemoveLeasesForInterface(ctx context.Context, networkID int64, 
 	if networkID <= 0 || s.store == nil || s.vnfs == nil {
 		return nil
 	}
+	return removeLeasesForInterface(ctx, s.store, s.vnfs, networkID, mac)
+}
+
+func removeLeasesForInterface(ctx context.Context, st leaseCleanupStore, runtime leaseRuntime, networkID int64, mac string) error {
 	normalized, err := normalizeLeaseMAC(mac)
 	if err != nil {
 		return nil
 	}
-	interfaces, err := s.store.ListInterfaces(ctx)
+	interfaces, err := st.ListInterfaces(ctx)
 	if err != nil {
 		return err
 	}
@@ -133,7 +152,7 @@ func (s *Server) RemoveLeasesForInterface(ctx context.Context, networkID int64, 
 			return nil
 		}
 	}
-	vnfs, err := s.store.ListVNFsByNetwork(ctx, networkID)
+	vnfs, err := st.ListVNFsByNetwork(ctx, networkID)
 	if err != nil {
 		return err
 	}
@@ -142,7 +161,7 @@ func (s *Server) RemoveLeasesForInterface(ctx context.Context, networkID int64, 
 		if vnf.Type != store.VNFTypeDHCPv4 || !vnf.Enabled {
 			continue
 		}
-		if _, err := s.vnfs.RemoveLeases(ctx, vnf.ID, []string{normalized}); err != nil {
+		if _, err := runtime.RemoveLeases(ctx, vnf.ID, []string{normalized}); err != nil {
 			errs = append(errs, fmt.Errorf("vnf %d: %w", vnf.ID, err))
 		}
 	}

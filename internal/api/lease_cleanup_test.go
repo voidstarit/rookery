@@ -34,6 +34,14 @@ func TestRemoveLeasesForInterface(t *testing.T) {
 		{ClientID: "02:00:00:00:00:0b", Address: "10.20.0.101", Active: true, ExpiresAt: time.Now().Add(time.Hour)},
 	}
 
+	// Invalid requests are ignored so the periodic scan can retry them.
+	if err := ta.server.RemoveLeasesForInterface(ctx, 0, mac); err != nil {
+		t.Fatal(err)
+	}
+	if err := ta.server.RemoveLeasesForInterface(ctx, network.ID, "not-a-mac"); err != nil {
+		t.Fatal(err)
+	}
+
 	if err := ta.server.RemoveLeasesForInterface(ctx, network.ID, mac); err != nil {
 		t.Fatal(err)
 	}

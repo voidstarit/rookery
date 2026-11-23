@@ -2,6 +2,8 @@ package vnfd
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,14 +14,15 @@ import (
 )
 
 type fakeManager struct {
-	running  map[int64]bool
-	healthy  bool
-	starts   []string
-	stopped  []int64
-	leases   map[int64][]store.VNFLease
-	removed  map[int64][]string
-	bgp      map[int64]host.BGPStatus
-	startErr error
+	running   map[int64]bool
+	healthy   bool
+	starts    []string
+	stopped   []int64
+	leases    map[int64][]store.VNFLease
+	removed   map[int64][]string
+	bgp       map[int64]host.BGPStatus
+	startErr  error
+	removeErr error
 }
 
 func newFakeManager() *fakeManager {
@@ -73,6 +76,9 @@ func (f *fakeManager) Leases(_ context.Context, vnfID int64) ([]store.VNFLease, 
 }
 
 func (f *fakeManager) RemoveLeases(_ context.Context, vnfID int64, clientIDs []string) (int, error) {
+	if f.removeErr != nil {
+		return 0, f.removeErr
+	}
 	f.removed[vnfID] = append(f.removed[vnfID], clientIDs...)
 	return len(clientIDs), nil
 }
@@ -264,5 +270,17 @@ func TestRemoveLeases(t *testing.T) {
 	}
 	if got := manager.removed[7]; len(got) != 2 {
 		t.Fatalf("manager removed leases = %+v", got)
+	}
+}
+
+func TestRemoveLeasesError(t *testing.T) {
+	manager := newFakeManager()
+	manager.removeErr = errors.New("boom")
+	server := NewServer(manager, t.TempDir(), zerolog.Nop())
+	_, err := server.RemoveLeases(context.Background(), &rookeryv1.RemoveLeasesRequest{
+		Id: 7, ClientIds: []string{"02:00:00:00:00:01"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "could not remove VNF leases") {
+		t.Fatalf("error = %v", err)
 	}
 }
