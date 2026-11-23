@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -60,6 +61,9 @@ type koujaConfigModel struct {
 	CAFile         types.String `tfsdk:"ca_file"`
 	ClientCertFile types.String `tfsdk:"client_cert_file"`
 	ClientKeyFile  types.String `tfsdk:"client_key_file"`
+	CAPEM          types.String `tfsdk:"ca_pem"`
+	ClientCertPEM  types.String `tfsdk:"client_cert_pem"`
+	ClientKeyPEM   types.String `tfsdk:"client_key_pem"`
 	ServerName     types.String `tfsdk:"server_name"`
 	Portal         types.String `tfsdk:"portal"`
 }
@@ -73,6 +77,9 @@ var koujaConfigAttrTypes = map[string]attr.Type{
 	"ca_file":          types.StringType,
 	"client_cert_file": types.StringType,
 	"client_key_file":  types.StringType,
+	"ca_pem":           types.StringType,
+	"client_cert_pem":  types.StringType,
+	"client_key_pem":   types.StringType,
 	"server_name":      types.StringType,
 	"portal":           types.StringType,
 }
@@ -135,8 +142,23 @@ func (r *storageBackendResource) Schema(_ context.Context, _ resource.SchemaRequ
 							"ca_file":          schema.StringAttribute{Optional: true, Computed: true},
 							"client_cert_file": schema.StringAttribute{Optional: true, Computed: true},
 							"client_key_file":  schema.StringAttribute{Optional: true, Computed: true},
-							"server_name":      schema.StringAttribute{Optional: true, Computed: true},
-							"portal":           schema.StringAttribute{Optional: true, Computed: true},
+							"ca_pem": schema.StringAttribute{
+								Optional: true, Computed: true,
+								Description:   "CA certificate PEM. Takes precedence over ca_file when set.",
+								PlanModifiers: []planmodifier.String{trimSpaceStringPlanModifier{}},
+							},
+							"client_cert_pem": schema.StringAttribute{
+								Optional: true, Computed: true,
+								Description:   "Client certificate PEM. Takes precedence over client_cert_file when set.",
+								PlanModifiers: []planmodifier.String{trimSpaceStringPlanModifier{}},
+							},
+							"client_key_pem": schema.StringAttribute{
+								Optional: true, Computed: true, Sensitive: true,
+								Description:   "Client private key PEM. Takes precedence over client_key_file when set.",
+								PlanModifiers: []planmodifier.String{trimSpaceStringPlanModifier{}},
+							},
+							"server_name": schema.StringAttribute{Optional: true, Computed: true},
+							"portal":      schema.StringAttribute{Optional: true, Computed: true},
 						},
 					},
 				},
@@ -295,7 +317,9 @@ func setStorageBackendState(ctx context.Context, state *storageBackendModel, bac
 			StorageClass: types.StringValue(cfg.GetKouja().GetStorageClass()), Initiator: optionalStringValue(cfg.GetKouja().GetInitiator()),
 			HostNQN: optionalStringValue(cfg.GetKouja().GetHostNqn()), CAFile: types.StringValue(cfg.GetKouja().GetCaFile()),
 			ClientCertFile: types.StringValue(cfg.GetKouja().GetClientCertFile()), ClientKeyFile: types.StringValue(cfg.GetKouja().GetClientKeyFile()),
-			ServerName: optionalStringValue(cfg.GetKouja().GetServerName()), Portal: optionalStringValue(cfg.GetKouja().GetPortal()),
+			CAPEM: optionalStringValue(cfg.GetKouja().GetCaPem()), ClientCertPEM: optionalStringValue(cfg.GetKouja().GetClientCertPem()),
+			ClientKeyPEM: optionalStringValue(cfg.GetKouja().GetClientKeyPem()),
+			ServerName:   optionalStringValue(cfg.GetKouja().GetServerName()), Portal: optionalStringValue(cfg.GetKouja().GetPortal()),
 		}
 		object, objectDiags := types.ObjectValueFrom(ctx, koujaConfigAttrTypes, value)
 		diags.Append(objectDiags...)
@@ -341,8 +365,32 @@ func storageBackendConfigFromObject(ctx context.Context, object types.Object) (*
 			StorageClass: kouja.StorageClass.ValueString(), Initiator: kouja.Initiator.ValueString(),
 			HostNqn: kouja.HostNQN.ValueString(), CaFile: kouja.CAFile.ValueString(),
 			ClientCertFile: kouja.ClientCertFile.ValueString(), ClientKeyFile: kouja.ClientKeyFile.ValueString(),
-			ServerName: kouja.ServerName.ValueString(), Portal: kouja.Portal.ValueString(),
+			CaPem: kouja.CAPEM.ValueString(), ClientCertPem: kouja.ClientCertPEM.ValueString(),
+			ClientKeyPem: kouja.ClientKeyPEM.ValueString(),
+			ServerName:   kouja.ServerName.ValueString(), Portal: kouja.Portal.ValueString(),
 		}}
 	}
 	return result, diags
+}
+
+// trimSpaceStringPlanModifier normalizes PEM fields the way the Rookery server
+// does. The server trims leading and trailing whitespace before storing a kouja
+// backend config; without the same normalization in the plan, a PEM value with
+// a trailing newline fails Terraform's consistency check with "inconsistent
+// values for sensitive attribute".
+type trimSpaceStringPlanModifier struct{}
+
+func (trimSpaceStringPlanModifier) Description(context.Context) string {
+	return "Trims leading and trailing whitespace to match the server's storage normalization."
+}
+
+func (trimSpaceStringPlanModifier) MarkdownDescription(context.Context) string {
+	return "Trims leading and trailing whitespace to match the server's storage normalization."
+}
+
+func (trimSpaceStringPlanModifier) PlanModifyString(_ context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if req.PlanValue.IsNull() || req.PlanValue.IsUnknown() {
+		return
+	}
+	resp.PlanValue = types.StringValue(strings.TrimSpace(req.PlanValue.ValueString()))
 }

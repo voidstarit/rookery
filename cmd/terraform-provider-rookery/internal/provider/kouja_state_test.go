@@ -137,6 +137,7 @@ func TestStorageBackendKoujaRoundTrip(t *testing.T) {
 				Endpoint: "10.0.0.1:9443", Protocol: "iscsi", StorageClass: "nvme",
 				Initiator: "iqn.2026-11.io.example:rookery", HostNqn: "nqn.2026-11.io.example:rookery",
 				CaFile: "/etc/ca.crt", ClientCertFile: "/etc/client.crt", ClientKeyFile: "/etc/client.key",
+				CaPem: "CA-PEM", ClientCertPem: "CERT-PEM", ClientKeyPem: "KEY-PEM",
 				ServerName: "kouja", Portal: "10.0.0.1:3260",
 			},
 		}},
@@ -149,7 +150,9 @@ func TestStorageBackendKoujaRoundTrip(t *testing.T) {
 		t.Fatalf("storageBackendConfigFromObject: %v", diags)
 	}
 	if config.GetKouja().GetEndpoint() != "10.0.0.1:9443" || config.GetKouja().GetStorageClass() != "nvme" ||
-		config.GetKouja().GetClientKeyFile() != "/etc/client.key" {
+		config.GetKouja().GetClientKeyFile() != "/etc/client.key" ||
+		config.GetKouja().GetCaPem() != "CA-PEM" || config.GetKouja().GetClientCertPem() != "CERT-PEM" ||
+		config.GetKouja().GetClientKeyPem() != "KEY-PEM" {
 		t.Fatalf("config = %+v", config)
 	}
 	var lvmState storageBackendModel
