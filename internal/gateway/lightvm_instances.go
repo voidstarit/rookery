@@ -105,19 +105,9 @@ func (s *lightVMService) CreateLightVM(ctx context.Context, request *rookeryv1.C
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	if err := validateLightVMReferences(ctx, s.store, vm); err != nil {
-		return nil, err
-	}
-	if err := validateCgroupClassFor(ctx, s.store, vm.CgroupClass, "LightVM"); err != nil {
-		return nil, err
-	}
-	if s.resourceMu != nil {
-		s.resourceMu.Lock()
-		defer s.resourceMu.Unlock()
-	}
-	created, err := s.store.CreateLightVM(ctx, vm)
+	created, err := s.createLightVMDefinition(ctx, vm)
 	if err != nil {
-		return nil, lightVMError(err, "create")
+		return nil, err
 	}
 	if s.runtime == nil {
 		return s.toProto(ctx, created), nil
@@ -136,6 +126,27 @@ func (s *lightVMService) CreateLightVM(ctx context.Context, request *rookeryv1.C
 	return started, nil
 }
 
+// createLightVMDefinition validates and inserts a LightVM definition without
+// starting it. The resource lock covers attachment validation and the row
+// insert; callers start the workload after the lock is released.
+func (s *lightVMService) createLightVMDefinition(ctx context.Context, vm store.LightVM) (store.LightVM, error) {
+	if err := validateLightVMReferences(ctx, s.store, vm); err != nil {
+		return store.LightVM{}, err
+	}
+	if err := validateCgroupClassFor(ctx, s.store, vm.CgroupClass, "LightVM"); err != nil {
+		return store.LightVM{}, err
+	}
+	if s.resourceMu != nil {
+		s.resourceMu.Lock()
+		defer s.resourceMu.Unlock()
+	}
+	created, err := s.store.CreateLightVM(ctx, vm)
+	if err != nil {
+		return store.LightVM{}, lightVMError(err, "create")
+	}
+	return created, nil
+}
+
 // UpdateLightVM replaces the editable fields and the full interface set.
 func (s *lightVMService) UpdateLightVM(ctx context.Context, request *rookeryv1.UpdateLightVMRequest) (*rookeryv1.LightVM, error) {
 	if s.startCoordinator != nil {
@@ -152,6 +163,9 @@ func (s *lightVMService) UpdateLightVM(ctx context.Context, request *rookeryv1.U
 	existing, err := s.store.GetLightVM(ctx, request.GetId())
 	if err != nil {
 		return nil, lightVMError(err, "read")
+	}
+	if existing.GroupMemberID != nil {
+		return nil, status.Error(codes.FailedPrecondition, "group members are defined by their template version")
 	}
 	if s.runtime == nil {
 		if existing.Status != store.StatusStopped || existing.DesiredState != store.DesiredStopped {
@@ -242,6 +256,19 @@ func (s *lightVMService) StartLightVM(ctx context.Context, request *rookeryv1.St
 	vm, err := s.store.GetLightVM(ctx, request.GetId())
 	if err != nil {
 		return nil, lightVMError(err, "read")
+	}
+	if vm.GroupMemberID != nil {
+		member, memberErr := s.store.GetGroupMember(ctx, *vm.GroupMemberID)
+		if memberErr != nil {
+			return nil, status.Error(codes.Internal, "could not read group member")
+		}
+		group, groupErr := s.store.GetLightVMGroup(ctx, member.GroupID)
+		if groupErr != nil {
+			return nil, status.Error(codes.Internal, "could not read group")
+		}
+		if group.Paused || group.State == "deleting" {
+			return nil, status.Error(codes.FailedPrecondition, "group is paused or deleting")
+		}
 	}
 	if len(vm.Disks)+len(vm.Interfaces)+len(vm.VirtioFSShares) > store.MaxLightVMDevices {
 		return nil, status.Errorf(codes.FailedPrecondition,

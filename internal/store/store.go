@@ -484,6 +484,7 @@ type VirtualInterface struct {
 	AttachedVMName      string         `json:"attached_vm_name,omitempty"`
 	AttachedLightVMID   *string        `json:"attached_lightvm_id,omitempty"`
 	AttachedLightVMName string         `json:"attached_lightvm_name,omitempty"`
+	GroupMemberID       *int64         `json:"group_member_id,omitempty"`
 	IngressACLID        *int64         `json:"ingress_acl_id,omitempty"`
 	IngressACLName      string         `json:"ingress_acl_name,omitempty"`
 	EgressACLID         *int64         `json:"egress_acl_id,omitempty"`
@@ -548,6 +549,7 @@ type Disk struct {
 	AttachedVMName        string              `json:"attached_vm_name,omitempty"`
 	AttachedLightVMID     *string             `json:"attached_lightvm_id,omitempty"`
 	AttachedLightVMName   string              `json:"attached_lightvm_name,omitempty"`
+	GroupMemberID         *int64              `json:"group_member_id,omitempty"`
 	DeletionState         string              `json:"deletion_state,omitempty"`
 	DeletionError         string              `json:"deletion_error,omitempty"`
 	DeletionAttempts      int                 `json:"deletion_attempts,omitempty"`
@@ -753,7 +755,7 @@ func (s *Store) CreateVM(ctx context.Context, vm VM) (VM, error) {
 		return VM{}, err
 	}
 	for _, diskID := range diskIDs {
-		if err := s.checkDiskAvailableForAttach(ctx, diskID, "vm", vm.ID); err != nil {
+		if err := s.checkDiskAvailableForAttach(ctx, diskID, "vm", vm.ID, nil); err != nil {
 			return VM{}, err
 		}
 	}
@@ -813,7 +815,7 @@ func (s *Store) SetVMDisksWithSerials(ctx context.Context, vmID string, diskIDs 
 		return VM{}, err
 	}
 	for _, diskID := range diskIDs {
-		if err := s.checkDiskAvailableForAttach(ctx, diskID, "vm", vmID); err != nil {
+		if err := s.checkDiskAvailableForAttach(ctx, diskID, "vm", vmID, nil); err != nil {
 			return VM{}, err
 		}
 	}
@@ -1667,7 +1669,7 @@ func checkDiskNotDeleting(disk Disk) error {
 	return nil
 }
 
-func (s *Store) checkDiskAvailableForAttach(ctx context.Context, diskID int64, ownerKind, ownerID string) error {
+func (s *Store) checkDiskAvailableForAttach(ctx context.Context, diskID int64, ownerKind, ownerID string, targetMemberID *int64) error {
 	disk, err := s.GetDisk(ctx, diskID)
 	if err != nil {
 		return err
@@ -1677,6 +1679,9 @@ func (s *Store) checkDiskAvailableForAttach(ctx context.Context, diskID int64, o
 	}
 	if disk.IsTemplate {
 		return ErrDiskIsTemplate
+	}
+	if disk.GroupMemberID != nil && (targetMemberID == nil || *targetMemberID != *disk.GroupMemberID) {
+		return ErrDiskInUse
 	}
 	if disk.ReadOnly {
 		return nil
@@ -2427,13 +2432,17 @@ func (s *Store) loadInterfaceACLs(ctx context.Context, interfaces []VirtualInter
 
 // SetInterfaceAttachment attaches or detaches a virtual interface.
 func (s *Store) SetInterfaceAttachment(ctx context.Context, id int64, vmID *string) (VirtualInterface, error) {
-	if _, err := s.GetInterface(ctx, id); err != nil {
+	iface, err := s.GetInterface(ctx, id)
+	if err != nil {
 		return VirtualInterface{}, err
 	}
 	if vmID != nil && strings.TrimSpace(*vmID) == "" {
 		vmID = nil
 	}
 	if vmID != nil {
+		if iface.GroupMemberID != nil {
+			return VirtualInterface{}, ErrInterfaceInUse
+		}
 		if _, err := s.GetVM(ctx, *vmID); err != nil {
 			return VirtualInterface{}, err
 		}
@@ -2783,7 +2792,7 @@ const interfaceSelect = `
 	       i.ingress_acl_id, ai.name, i.egress_acl_id, ae.name,
 	       i.ipv4_table_id, COALESCE(r4.name, 'default'),
 	       i.ipv6_table_id, COALESCE(r6.name, 'default'),
-	       i.created_at, i.updated_at
+	       i.created_at, i.updated_at, i.group_member_id
 	FROM virtual_interfaces AS i
 	JOIN networks AS n ON n.id = i.network_id
 	LEFT JOIN vms AS v ON v.id = i.attached_vm_id
@@ -2860,20 +2869,21 @@ func scanVNF(s scanner) (VNF, error) {
 
 func scanInterface(s scanner) (VirtualInterface, error) {
 	var (
-		iface       VirtualInterface
-		swIf        int64
-		vmID        sql.NullString
-		vmName      sql.NullString
-		lightVMID   sql.NullString
-		lightVMName sql.NullString
-		ingressID   sql.NullInt64
-		ingress     sql.NullString
-		egressID    sql.NullInt64
-		egress      sql.NullString
-		ipv4Table   int64
-		ipv6Table   int64
-		createdAt   int64
-		updatedAt   int64
+		iface         VirtualInterface
+		swIf          int64
+		vmID          sql.NullString
+		vmName        sql.NullString
+		lightVMID     sql.NullString
+		lightVMName   sql.NullString
+		ingressID     sql.NullInt64
+		ingress       sql.NullString
+		egressID      sql.NullInt64
+		egress        sql.NullString
+		ipv4Table     int64
+		ipv6Table     int64
+		groupMemberID sql.NullInt64
+		createdAt     int64
+		updatedAt     int64
 	)
 	if err := s.Scan(
 		&iface.ID, &iface.Name, &iface.NetworkID, &iface.NetworkName,
@@ -2881,9 +2891,13 @@ func scanInterface(s scanner) (VirtualInterface, error) {
 		&lightVMID, &lightVMName,
 		&ingressID, &ingress, &egressID, &egress,
 		&ipv4Table, &iface.IPv4TableName, &ipv6Table, &iface.IPv6TableName,
-		&createdAt, &updatedAt,
+		&createdAt, &updatedAt, &groupMemberID,
 	); err != nil {
 		return VirtualInterface{}, err
+	}
+	if groupMemberID.Valid {
+		id := groupMemberID.Int64
+		iface.GroupMemberID = &id
 	}
 	iface.SwIfIndex = uint32(swIf)
 	iface.IPv4TableID = uint32(ipv4Table)
@@ -2941,7 +2955,7 @@ const diskSelect = `
 	       d.deletion_next_attempt_at, d.deletion_claimed_at,
 	       d.is_template, d.template_disk_id,
 	       d.provisioning_script, d.provisioning_timeout, d.prepared_by_script,
-	       td.name, d.read_only, d.created_at, d.updated_at
+	       td.name, d.read_only, d.created_at, d.updated_at, d.group_member_id
 	FROM disks AS d
 	LEFT JOIN storage_backends AS sb ON sb.id = d.storage_backend_id
 	LEFT JOIN disk_throttle_classes AS dtc ON dtc.id = d.throttle_class_id
@@ -3037,6 +3051,7 @@ func scanDisk(s scanner) (Disk, error) {
 		preparedByScript      int64
 		templateName          sql.NullString
 		readOnly              int64
+		groupMemberID         sql.NullInt64
 		createdAt             int64
 		updatedAt             int64
 	)
@@ -3069,8 +3084,13 @@ func scanDisk(s scanner) (Disk, error) {
 		&readOnly,
 		&createdAt,
 		&updatedAt,
+		&groupMemberID,
 	); err != nil {
 		return Disk{}, err
+	}
+	if groupMemberID.Valid {
+		id := groupMemberID.Int64
+		disk.GroupMemberID = &id
 	}
 
 	disk.SizeBytes = uint64(sizeBytes)

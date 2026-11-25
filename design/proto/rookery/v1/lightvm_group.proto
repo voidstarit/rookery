@@ -1,0 +1,154 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// LightVMGroupService manages a fleet of LightVMs from a pinned template
+// version. Member creation is asynchronous; list/get expose the reconciled
+// counts.
+service LightVMGroupService {
+  rpc ListLightVMGroups(ListLightVMGroupsRequest) returns (ListLightVMGroupsResponse) {
+    option (google.api.http) = {
+      get: "/api/lightvm/groups"
+      response_body: "groups"
+    };
+  }
+
+  rpc GetLightVMGroup(GetLightVMGroupRequest) returns (GetLightVMGroupResponse) {
+    option (google.api.http) = {
+      get: "/api/lightvm/groups/{id}"
+      response_body: "group"
+    };
+  }
+
+  rpc CreateLightVMGroup(CreateLightVMGroupRequest) returns (LightVMGroup) {
+    option (google.api.http) = {
+      post: "/api/lightvm/groups"
+      body: "*"
+    };
+  }
+
+  rpc UpdateLightVMGroup(UpdateLightVMGroupRequest) returns (LightVMGroup) {
+    option (google.api.http) = {
+      put: "/api/lightvm/groups/{id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteLightVMGroup(DeleteLightVMGroupRequest) returns (DeleteLightVMGroupResponse) {
+    option (google.api.http) = {delete: "/api/lightvm/groups/{id}"};
+  }
+
+  rpc StartLightVMGroupMember(StartLightVMGroupMemberRequest) returns (LightVMGroupMember) {
+    option (google.api.http) = {
+      post: "/api/lightvm/groups/{id}/members/{member_id}/start"
+    };
+  }
+
+  rpc StopLightVMGroupMember(StopLightVMGroupMemberRequest) returns (LightVMGroupMember) {
+    option (google.api.http) = {
+      post: "/api/lightvm/groups/{id}/members/{member_id}/stop"
+    };
+  }
+}
+
+message LightVMGroup {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+  int64 template_id = 4;
+  string template_name = 5;
+  int64 template_version_id = 6;
+  int32 template_version = 7;
+  uint32 desired_count = 8;
+  uint32 actual_count = 9;
+  uint32 running_count = 10;
+  uint32 provisioning_count = 11;
+  uint32 removing_count = 12;
+  int32 drift = 13;
+  bool converged = 14;
+  bool paused = 15;
+  string state = 16;
+  google.protobuf.Timestamp last_reconcile_at = 17;
+  string last_error = 18;
+  repeated LightVMGroupMember members = 19;
+  google.protobuf.Timestamp created_at = 20;
+  google.protobuf.Timestamp updated_at = 21;
+}
+
+message LightVMGroupMember {
+  int64 id = 1;
+  string name = 2;
+  string workload_id = 3;
+  string state = 4;
+  int32 template_version = 5;
+  string status = 6;
+  string desired_state = 7;
+  string last_error = 8;
+  google.protobuf.Timestamp next_retry_at = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+message ListLightVMGroupsRequest {}
+
+message ListLightVMGroupsResponse {
+  repeated LightVMGroup groups = 1;
+}
+
+message GetLightVMGroupRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message GetLightVMGroupResponse {
+  LightVMGroup group = 1;
+}
+
+message CreateLightVMGroupRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  string description = 2 [(validate.rules).string = {max_len: 2000}];
+  int64 template_version_id = 3 [(validate.rules).int64 = {gt: 0}];
+  uint32 desired_count = 4 [(validate.rules).uint32 = {lte: 1024}];
+  optional bool paused = 5;
+}
+
+message UpdateLightVMGroupRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  optional string name = 2 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  optional string description = 3 [(validate.rules).string = {max_len: 2000}];
+  optional int64 template_version_id = 4 [(validate.rules).int64 = {gt: 0}];
+  optional uint32 desired_count = 5 [(validate.rules).uint32 = {lte: 1024}];
+  optional bool paused = 6;
+}
+
+message DeleteLightVMGroupRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  bool force = 2;
+}
+
+message DeleteLightVMGroupResponse {
+  string state = 1;
+}
+
+message StartLightVMGroupMemberRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 member_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+
+message StopLightVMGroupMemberRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 member_id = 2 [(validate.rules).int64 = {gt: 0}];
+}

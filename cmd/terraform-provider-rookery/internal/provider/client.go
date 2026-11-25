@@ -52,6 +52,8 @@ type Client struct {
 	LightVMInitramfs    rookeryv1.LightVMInitramfsServiceClient
 	LightVMArtifacts    rookeryv1.LightVMArtifactServiceClient
 	LightVMs            rookeryv1.LightVMServiceClient
+	LightVMTemplates    rookeryv1.LightVMTemplateServiceClient
+	LightVMGroups       rookeryv1.LightVMGroupServiceClient
 
 	timeout       time.Duration
 	uploadTimeout time.Duration
@@ -144,6 +146,8 @@ func NewClient(config ClientConfig) (*Client, error) {
 		LightVMInitramfs:    rookeryv1.NewLightVMInitramfsServiceClient(conn),
 		LightVMArtifacts:    rookeryv1.NewLightVMArtifactServiceClient(conn),
 		LightVMs:            rookeryv1.NewLightVMServiceClient(conn),
+		LightVMTemplates:    rookeryv1.NewLightVMTemplateServiceClient(conn),
+		LightVMGroups:       rookeryv1.NewLightVMGroupServiceClient(conn),
 		timeout:             timeout,
 		uploadTimeout:       uploadTimeout,
 	}, nil

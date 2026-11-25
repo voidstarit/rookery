@@ -1,0 +1,168 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+import "rookery/v1/lightvm.proto";
+import "rookery/v1/template.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// LightVMTemplateService manages named LightVM specifications and immutable
+// versions. Metadata updates do not create versions; spec changes do.
+service LightVMTemplateService {
+  rpc ListLightVMTemplates(ListLightVMTemplatesRequest) returns (ListLightVMTemplatesResponse) {
+    option (google.api.http) = {
+      get: "/api/lightvm/templates"
+      response_body: "templates"
+    };
+  }
+
+  rpc GetLightVMTemplate(GetLightVMTemplateRequest) returns (LightVMTemplate) {
+    option (google.api.http) = {get: "/api/lightvm/templates/{id}"};
+  }
+
+  rpc CreateLightVMTemplate(CreateLightVMTemplateRequest) returns (LightVMTemplate) {
+    option (google.api.http) = {
+      post: "/api/lightvm/templates"
+      body: "*"
+    };
+  }
+
+  rpc UpdateLightVMTemplate(UpdateLightVMTemplateRequest) returns (LightVMTemplate) {
+    option (google.api.http) = {
+      put: "/api/lightvm/templates/{id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteLightVMTemplate(DeleteLightVMTemplateRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/lightvm/templates/{id}"};
+  }
+
+  rpc ListLightVMTemplateVersions(ListLightVMTemplateVersionsRequest) returns (ListLightVMTemplateVersionsResponse) {
+    option (google.api.http) = {
+      get: "/api/lightvm/templates/{id}/versions"
+      response_body: "versions"
+    };
+  }
+
+  rpc GetLightVMTemplateVersion(GetLightVMTemplateVersionRequest) returns (LightVMTemplateVersion) {
+    option (google.api.http) = {get: "/api/lightvm/templates/{id}/versions/{version_id}"};
+  }
+
+  rpc CreateLightVMTemplateVersion(CreateLightVMTemplateVersionRequest) returns (LightVMTemplateVersion) {
+    option (google.api.http) = {
+      post: "/api/lightvm/templates/{id}/versions"
+      body: "*"
+    };
+  }
+}
+
+message LightVMTemplateSpec {
+  int32 vcpus = 1 [(validate.rules).int32 = {gte: 1, lte: 128}];
+  int32 memory_mb = 2 [(validate.rules).int32 = {gte: 128, lte: 1048576}];
+  string cgroup_class = 3 [(validate.rules).string = {max_len: 200}];
+  int64 kernel_id = 4 [(validate.rules).int64 = {gt: 0}];
+  int64 initramfs_id = 5 [(validate.rules).int64 = {gt: 0}];
+  // image is required for group templates and must be digest-qualified.
+  string image = 6 [(validate.rules).string = {min_len: 1, max_len: 512}];
+  repeated LightVMEnvVar env = 7 [(validate.rules).repeated = {max_items: 64}];
+  string executable_path = 8 [(validate.rules).string = {max_len: 4096}];
+  repeated string executable_args = 9 [(validate.rules).repeated = {
+    max_items: 64
+    items: {string: {max_len: 4096}}
+  }];
+  string executable_script = 10 [(validate.rules).string = {max_len: 1048576}];
+  string append = 11 [(validate.rules).string = {max_len: 4096}];
+  bool console_enabled = 12;
+  repeated LightVMConsole consoles = 13 [(validate.rules).repeated = {max_items: 32}];
+  repeated LightVMVirtioFSShare virtiofs_shares = 14 [(validate.rules).repeated = {max_items: 24}];
+  repeated TemplateDiskEntry disks = 15 [(validate.rules).repeated = {max_items: 24}];
+  repeated TemplateInterfaceEntry interfaces = 16 [(validate.rules).repeated = {max_items: 24}];
+}
+
+message LightVMTemplate {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+  int32 latest_version = 4;
+  int64 latest_version_id = 5;
+  int32 version_count = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message LightVMTemplateVersion {
+  int64 id = 1;
+  int64 template_id = 2;
+  int32 version = 3;
+  LightVMTemplateSpec spec = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message LightVMTemplateVersionSummary {
+  int64 id = 1;
+  int64 template_id = 2;
+  int32 version = 3;
+  int32 vcpus = 4;
+  int32 memory_mb = 5;
+  int32 disk_count = 6;
+  int32 interface_count = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message ListLightVMTemplatesRequest {}
+
+message ListLightVMTemplatesResponse {
+  repeated LightVMTemplate templates = 1;
+}
+
+message GetLightVMTemplateRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateLightVMTemplateRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  string description = 2 [(validate.rules).string = {max_len: 2000}];
+  LightVMTemplateSpec spec = 3;
+}
+
+message UpdateLightVMTemplateRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  optional string name = 2 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  optional string description = 3 [(validate.rules).string = {max_len: 2000}];
+}
+
+message DeleteLightVMTemplateRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListLightVMTemplateVersionsRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListLightVMTemplateVersionsResponse {
+  repeated LightVMTemplateVersionSummary versions = 1;
+}
+
+message GetLightVMTemplateVersionRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 version_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateLightVMTemplateVersionRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  LightVMTemplateSpec spec = 2;
+}

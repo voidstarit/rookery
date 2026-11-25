@@ -8,7 +8,7 @@ directory; nothing is embedded in the Makefile.
 | --------- | --------------------------------------------- | ------- |
 | `virtio`  | `common.config` + `virtio.config`             | Minimal LightVM guest: virtio-pci, virtio-fs, virtio-net, virtio-blk, virtio-scsi, virtio-console, vsock, 9p. The common base also enables namespaces, cgroup v2, eBPF, seccomp, overlayfs, and nested-container networking. |
 | `storage` | `common.config` + `virtio.config` + `storage.config` | The virtio kernel plus LVM (device-mapper + dm-thin-pool), the iSCSI initiator/target (open-iscsi, LIO/targetcli), NBD, ublk, and the ext4/XFS on-disk filesystems. |
-| `k8s`     | `common.config` + `virtio.config` + `storage.config` + `k8s.config` | The storage kernel plus Kubernetes prerequisites: HugeTLB pages and the cgroup v2 hugetlb controller, `/proc/config.gz`, kube-proxy IPVS and iptables matches, SCTP, ebtables, Geneve/IP-in-IP/GRE, tc/eBPF hooks, and eBPF LSM with vmlinux BTF. |
+| `k8s`     | `common.config` + `virtio.config` + `storage.config` + `k8s.config` | The storage kernel plus Kubernetes prerequisites: HugeTLB pages and the cgroup v2 hugetlb controller, `/proc/config.gz`, kube-proxy IPVS and iptables matches, SCTP, the socket match/TPROXY with IPv4/IPv6 socket lookup, the CT/NOTRACK targets and conntrack zones, the XFRM/IPsec framework, ebtables, Geneve/IP-in-IP/GRE, dummy devices, ethtool netlink, tc/eBPF hooks with cgroup classid, FQ, and LWTUNNEL, policy routing (multiple FIB tables and rules), and eBPF LSM with vmlinux BTF. |
 
 `storage` deliberately includes the virtio fragments because it must still boot
 the same virtio-fs rootfs and virtio-net images as the `virtio` kernel. `k8s`
@@ -149,9 +149,42 @@ kubeadm, kubelet, kube-proxy, containerd/CRI-O, and common CNI plugins expect:
 - **kube-proxy iptables mode:** SCTP, realm, statistic, and rpfilter matches,
   plus SCTP connection tracking. Conntrack, NAT, REDIRECT, MASQUERADE,
   multiport, and comment matching come from `common.config`.
+- **Transparent proxying:** `CONFIG_NETFILTER_XT_MATCH_SOCKET` and
+  `CONFIG_NETFILTER_XT_TARGET_TPROXY`, with the IPv4/IPv6 socket-lookup
+  infrastructure (`CONFIG_NF_SOCKET_IPV4`/`CONFIG_NF_SOCKET_IPV6`) they
+  select. kube-proxy's IPVS mode and service meshes/CNIs use TPROXY to
+  redirect traffic to a transparent proxy without NAT.
+- **Raw-table CT/NOTRACK:** `CONFIG_NETFILTER_XT_TARGET_CT`,
+  `CONFIG_NETFILTER_XT_TARGET_NOTRACK`, and `CONFIG_NF_CONNTRACK_ZONES`.
+  CNIs and kube-proxy emit `-j CT --notrack` in the raw tables; without the CT
+  target the kernel rejects the rule with
+  `Extension CT revision 0 not supported`. `CONFIG_IP_NF_RAW` and
+  `CONFIG_IP6_NF_RAW` already come from `common.config`.
 - **CNI and Services:** ebtables for bridge plugins; Geneve, IP-in-IP, and GRE
   for overlay/tunnel modes; `NET_SCHED`, `NET_CLS_BPF`, and `NET_ACT_BPF` for
-  kube-proxy and eBPF-based CNIs. VXLAN is already enabled by `common.config`.
+  kube-proxy and eBPF-based CNIs; `CONFIG_CGROUP_NET_CLASSID` and
+  `CONFIG_NET_CLS_CGROUP` for `bpf_get_cgroup_classid()` and cgroup-based
+  packet classification; `NET_SCH_FQ` for the FQ qdisc that honours
+  TCP pacing and is used by Cilium's bandwidth manager;
+  `LWTUNNEL`/`LWTUNNEL_BPF` for BPF nexthop actions; `CONFIG_DUMMY` for CNI
+  plugins and load-balancer
+  implementations that create a dummy device to hold a stable address or VIP;
+  and `CONFIG_ETHTOOL_NETLINK` for modern link-feature queries. VXLAN and
+  `CONFIG_VETH` are already enabled by `common.config`.
+- **IPsec/XFRM:** `CONFIG_XFRM`, `CONFIG_XFRM_USER` (the netlink
+  configuration interface), and `CONFIG_XFRM_ALGO` (crypto algorithm
+  wrappers, selecting `CRYPTO_AEAD`/`CRYPTO_HASH`/`CRYPTO_SKCIPHER`). CNI
+  IPsec modes such as Calico's and some service meshes program SAs and
+  policies through this framework. Transport and tunnel modes are XFRM core
+  and always built with `CONFIG_XFRM`; the old
+  `CONFIG_INET_XFRM_MODE_TRANSPORT`/`CONFIG_INET_XFRM_MODE_TUNNEL` Kconfig
+  symbols no longer exist.
+- **Policy routing:** `CONFIG_IP_ADVANCED_ROUTER`,
+  `CONFIG_IP_MULTIPLE_TABLES`, `CONFIG_FIB_RULES`, and
+  `CONFIG_IPV6_MULTIPLE_TABLES`, so CNIs and kube-proxy can use `ip rule`
+  with multiple routing tables (including IPv6) for per-pod, per-interface,
+  and VRF-style steering. `CONFIG_FIB_RULES` selects the IPv4 options, but all
+  are listed so the required-config check catches a dropped dependency.
 - **eBPF LSM:** `CONFIG_BPF_LSM` plus the security core
   (`CONFIG_SECURITY`, `CONFIG_SECURITY_NETWORK`, `CONFIG_SECURITY_PATH`) and a
   default LSM list of `yama,bpf`, so `bpf` is active without a custom `lsm=`

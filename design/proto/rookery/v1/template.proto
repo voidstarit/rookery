@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "validate/validate.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// TemplateDiskEntry is one blank data disk created for each group member.
+message TemplateDiskEntry {
+  int64 storage_backend_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int32 size_gb = 2 [(validate.rules).int32 = {gte: 1, lte: 65536}];
+  optional int64 throttle_class_id = 3 [(validate.rules).int64 = {gt: 0}];
+  string serial = 4 [(validate.rules).string = {
+    max_len: 20
+    pattern: "^[A-Za-z0-9._:-]*$"
+  }];
+  // Response-only display fields; not stored in the template spec.
+  string storage_backend_name = 5;
+  string throttle_class_name = 6;
+}
+
+// TemplateInterfaceEntry is one vhost-user interface created for each member.
+message TemplateInterfaceEntry {
+  int64 network_id = 1 [(validate.rules).int64 = {gt: 0}];
+  repeated int64 ingress_acl_ids = 2 [(validate.rules).repeated = {
+    items: {int64: {gt: 0}}
+  }];
+  repeated int64 egress_acl_ids = 3 [(validate.rules).repeated = {
+    items: {int64: {gt: 0}}
+  }];
+  // Response-only display fields; not stored in the template spec.
+  string network_name = 4;
+  repeated string ingress_acl_names = 5;
+  repeated string egress_acl_names = 6;
+}

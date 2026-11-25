@@ -311,7 +311,11 @@ type LightVM struct {
 	// ephemeral makes the LightVM one-shot: when the guest exits (reboot,
 	// panic, or poweroff) Rookery stops QEMU, virtiofsd, and the attempt
 	// container automatically. Attached disks and interfaces remain.
-	Ephemeral     bool `protobuf:"varint,31,opt,name=ephemeral,proto3" json:"ephemeral,omitempty"`
+	Ephemeral bool `protobuf:"varint,31,opt,name=ephemeral,proto3" json:"ephemeral,omitempty"`
+	// group_id/group_name identify a managed group member; zero/empty for an
+	// unmanaged LightVM.
+	GroupId       int64  `protobuf:"varint,32,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	GroupName     string `protobuf:"bytes,33,opt,name=group_name,json=groupName,proto3" json:"group_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -561,6 +565,20 @@ func (x *LightVM) GetEphemeral() bool {
 		return x.Ephemeral
 	}
 	return false
+}
+
+func (x *LightVM) GetGroupId() int64 {
+	if x != nil {
+		return x.GroupId
+	}
+	return 0
+}
+
+func (x *LightVM) GetGroupName() string {
+	if x != nil {
+		return x.GroupName
+	}
+	return ""
 }
 
 type ListLightVMsRequest struct {
@@ -2680,7 +2698,7 @@ const file_rookery_v1_lightvm_proto_rawDesc = "" +
 	"\tread_only\x18\x04 \x01(\bH\x00R\breadOnly\x88\x01\x01\x12\x1a\n" +
 	"\bposition\x18\x05 \x01(\x05R\bpositionB\f\n" +
 	"\n" +
-	"_read_only\"\xc0\t\n" +
+	"_read_only\"\xfa\t\n" +
 	"\aLightVM\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -2718,7 +2736,10 @@ const file_rookery_v1_lightvm_proto_rawDesc = "" +
 	"\x0fvirtiofs_shares\x18\x1c \x03(\v2 .rookery.v1.LightVMVirtioFSShareR\x0evirtiofsShares\x12+\n" +
 	"\x11executable_script\x18\x1d \x01(\tR\x10executableScript\x12@\n" +
 	"\fconfig_files\x18\x1e \x03(\v2\x1d.rookery.v1.LightVMConfigFileR\vconfigFiles\x12\x1c\n" +
-	"\tephemeral\x18\x1f \x01(\bR\tephemeralB\f\n" +
+	"\tephemeral\x18\x1f \x01(\bR\tephemeral\x12\x19\n" +
+	"\bgroup_id\x18  \x01(\x03R\agroupId\x12\x1d\n" +
+	"\n" +
+	"group_name\x18! \x01(\tR\tgroupNameB\f\n" +
 	"\n" +
 	"_run_state\"\x15\n" +
 	"\x13ListLightVMsRequest\"G\n" +

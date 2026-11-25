@@ -339,9 +339,14 @@ storage kernel plus Kubernetes prerequisites: `/proc/config.gz`
 (`CONFIG_IKCONFIG_PROC`, so kubeadm can parse the kernel config without
 `modprobe`), `CONFIG_CGROUP_HUGETLB` (fixing kubeadm's
 `CGROUPS_HUGETLB: missing` warning and exposing the cgroup v2 hugetlb
-controller), kube-proxy IPVS and iptables matches, SCTP, ebtables,
-Geneve/IP-in-IP/GRE plus tc/eBPF for CNI plugins, and an active eBPF LSM
-(`CONFIG_BPF_LSM` in `CONFIG_LSM`) with vmlinux BTF for LSM program loading.
+controller), kube-proxy IPVS and iptables matches, SCTP, the socket
+match/TPROXY targets with IPv4/IPv6 socket lookup, raw-table CT/NOTRACK
+targets and conntrack zones, the XFRM/IPsec framework
+(`CONFIG_XFRM`/`CONFIG_XFRM_USER`/`CONFIG_XFRM_ALGO`), ebtables,
+Geneve/IP-in-IP/GRE plus tc/eBPF (cgroup classid, FQ, and LWTUNNEL) for CNI
+plugins, dummy net devices, ethtool netlink, multiple routing tables and FIB
+rules for policy routing, and an active eBPF LSM (`CONFIG_BPF_LSM` in
+`CONFIG_LSM`) with vmlinux BTF for LSM program loading.
 LVM, dm-crypt,
 MD/RAID, and iSCSI roots still need a distribution-specific initramfs with the
 matching tools. For a writable overlay root, use

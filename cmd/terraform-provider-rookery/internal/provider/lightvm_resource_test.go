@@ -64,6 +64,8 @@ func newProviderTestAPI(t *testing.T) *providerTestAPI {
 			LightVMInitramfs: rookeryv1.NewLightVMInitramfsServiceClient(conn),
 			LightVMArtifacts: rookeryv1.NewLightVMArtifactServiceClient(conn),
 			LightVMs:         rookeryv1.NewLightVMServiceClient(conn),
+			LightVMTemplates: rookeryv1.NewLightVMTemplateServiceClient(conn),
+			LightVMGroups:    rookeryv1.NewLightVMGroupServiceClient(conn),
 			Labels:           rookeryv1.NewLabelServiceClient(conn),
 		},
 		store:   st,

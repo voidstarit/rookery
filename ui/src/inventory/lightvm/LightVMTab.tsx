@@ -18,11 +18,15 @@ import {
   type LightVMArtifactKind,
 } from "./ArtifactDialog";
 import { LightVMDialog } from "./LightVMDialog";
+import { TemplatesTab } from "./TemplatesTab";
+import { GroupsTab } from "./GroupsTab";
 
 const SECTIONS = [
   { id: "kernels", label: "Kernels" },
   { id: "initramfs", label: "Initramfs" },
   { id: "instances", label: "LightVMs" },
+  { id: "templates", label: "Templates" },
+  { id: "groups", label: "Groups" },
 ] as const;
 
 type Section = (typeof SECTIONS)[number]["id"];
@@ -83,7 +87,10 @@ export function LightVMTab() {
     kind: LightVMArtifactKind;
     artifact: LightVMArtifact | null;
   } | null>(null);
-  const [lightVMDialog, setLightVMDialog] = useState<{ vm: LightVM | null } | null>(null);
+  const [lightVMDialog, setLightVMDialog] = useState<{
+    vm: LightVM | null;
+    readOnly: boolean;
+  } | null>(null);
   const [monitorVM, setMonitorVM] = useState<LightVM | null>(null);
   const kernelLabels = useEntityLabels("lightvm_kernel");
   const initramfsLabels = useEntityLabels("lightvm_initramfs");
@@ -234,14 +241,14 @@ export function LightVMTab() {
       setDialog(null);
       if (third === "new") {
         setMonitorVM(null);
-        setLightVMDialog({ vm: null });
+        setLightVMDialog({ vm: null, readOnly: false });
         return;
       }
-      if (third && fourth === "edit") {
+      if (third && (fourth === "edit" || fourth === "details")) {
         const vm = lightvms.find((item) => item.id === third);
         if (vm) {
           setMonitorVM(null);
-          setLightVMDialog({ vm });
+          setLightVMDialog({ vm, readOnly: fourth === "details" });
           return;
         }
       }
@@ -903,15 +910,24 @@ export function LightVMTab() {
                           >
                             Monitor
                           </button>
-                          <button
-                            class="row-action"
-                            type="button"
-                            disabled={running}
-                            title={running ? "Stop the LightVM before editing it." : ""}
-                            onClick={() => navigate(`/lightvm/instances/${vm.id}/edit`)}
-                          >
-                            Edit
-                          </button>
+                          {running ? (
+                            <button
+                              class="row-action"
+                              type="button"
+                              title="View this running LightVM's configuration without editing it."
+                              onClick={() => navigate(`/lightvm/instances/${vm.id}/details`)}
+                            >
+                              Details
+                            </button>
+                          ) : (
+                            <button
+                              class="row-action"
+                              type="button"
+                              onClick={() => navigate(`/lightvm/instances/${vm.id}/edit`)}
+                            >
+                              Edit
+                            </button>
+                          )}
                           <button
                             class="row-action danger"
                             type="button"
@@ -955,6 +971,14 @@ export function LightVMTab() {
         </div>
       </section>
 
+      <div hidden={section !== "templates"}>
+        <TemplatesTab kernels={kernels} initramfs={initramfs} />
+      </div>
+
+      <div hidden={section !== "groups"}>
+        <GroupsTab />
+      </div>
+
       {dialog ? (
         <ArtifactDialog
           key={`${dialog.kind}-${dialog.artifact ? dialog.artifact.id : "new"}`}
@@ -997,12 +1021,17 @@ export function LightVMTab() {
 
       {lightVMDialog ? (
         <LightVMDialog
-          key={lightVMDialog.vm ? lightVMDialog.vm.id : "new"}
+          key={
+            lightVMDialog.vm
+              ? `${lightVMDialog.readOnly ? "details" : "edit"}-${lightVMDialog.vm.id}`
+              : "new"
+          }
           vm={lightVMDialog.vm}
           kernels={kernels}
           initramfs={initramfs}
           interfaces={interfaces}
           disks={disks}
+          readOnly={lightVMDialog.readOnly}
           onClose={() => {
             setLightVMDialog(null);
             navigate("/lightvm/instances", true);

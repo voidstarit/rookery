@@ -205,6 +205,10 @@ message LightVM {
   // panic, or poweroff) Rookery stops QEMU, virtiofsd, and the attempt
   // container automatically. Attached disks and interfaces remain.
   bool ephemeral = 31;
+  // group_id/group_name identify a managed group member; zero/empty for an
+  // unmanaged LightVM.
+  int64 group_id = 32;
+  string group_name = 33;
 }
 
 message ListLightVMsRequest {}

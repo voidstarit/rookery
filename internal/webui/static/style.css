@@ -1219,6 +1219,23 @@ dialog form {
   gap: 1rem;
 }
 
+.dialog-form-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.dialog-note {
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.8rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--field);
+}
+
 .connection-section {
   grid-column: 1 / -1;
   min-width: 0;
@@ -3628,6 +3645,72 @@ body.route-page-mode #networks-panel .panel-spaced {
   .monitor-page .monitor-charts,
   #workload-monitor-dialog[data-expanded="true"] .monitor-grid,
   #workload-monitor-dialog[data-expanded="true"] .monitor-charts {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* LightVM templates and managed groups */
+.count-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.9rem 0;
+}
+
+.count-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.22rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--faint);
+  font-size: 0.72rem;
+}
+
+.count-chip strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.count-chip.good {
+  border-color: rgba(74, 222, 128, 0.35);
+  color: rgb(134, 239, 172);
+}
+
+.count-chip.warn {
+  border-color: rgba(251, 191, 36, 0.35);
+  color: rgb(253, 224, 71);
+}
+
+.template-row {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) 6rem minmax(10rem, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+
+.template-row select,
+.template-row input {
+  min-width: 0;
+}
+
+.compact-form {
+  max-width: 34rem;
+}
+
+.error-text {
+  color: rgb(248, 113, 113);
+}
+
+#lightvm-template-dialog,
+#lightvm-group-dialog {
+  width: min(860px, calc(100vw - 2rem));
+}
+
+@media (max-width: 760px) {
+  .template-row {
     grid-template-columns: 1fr;
   }
 }

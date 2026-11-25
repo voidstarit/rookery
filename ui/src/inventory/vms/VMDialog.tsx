@@ -20,6 +20,7 @@ type VMDialogProps = {
   interfaces: VirtualInterface[];
   thinPoolReady: boolean;
   vppReady: boolean;
+  readOnly?: boolean;
   onClose: () => void;
   onSaved: (vm: VM) => void;
 };
@@ -64,6 +65,7 @@ export function VMDialog({
   interfaces,
   thinPoolReady,
   vppReady,
+  readOnly = false,
   onClose,
   onSaved,
 }: VMDialogProps) {
@@ -217,7 +219,7 @@ export function VMDialog({
 
   const submit = async (event: Event) => {
     event.preventDefault();
-    if (saving) {
+    if (readOnly || saving) {
       return;
     }
     if (!formRef.current?.reportValidity()) {
@@ -316,15 +318,27 @@ export function VMDialog({
       <form ref={formRef} novalidate onSubmit={(event) => void submit(event)}>
         <header class="dialog-head">
           <div>
-            <p class="eyebrow">{editing ? "Edit instance" : "New instance"}</p>
-            <h2 id="dialog-title">{editing ? `Edit ${vm?.name}` : "Create VM"}</h2>
+            <p class="eyebrow">
+              {readOnly ? "Instance details" : editing ? "Edit instance" : "New instance"}
+            </p>
+            <h2 id="dialog-title">
+              {readOnly ? `${vm?.name} details` : editing ? `Edit ${vm?.name}` : "Create VM"}
+            </h2>
           </div>
           <button class="icon-button" type="button" aria-label="Close dialog" onClick={close}>
             ×
           </button>
         </header>
 
-        <div class="form-grid">
+        {readOnly ? (
+          <p class="dialog-note">
+            Read-only view of this instance's configuration. Close this view and use Edit
+            to change settings allowed while the VM is running; disks and network
+            interfaces can only be changed while the VM is stopped.
+          </p>
+        ) : null}
+
+        <fieldset class="form-grid dialog-form-fieldset" disabled={readOnly}>
           <label class="field field-wide">
             <span class="field-label">Name</span>
             <input
@@ -566,7 +580,7 @@ export function VMDialog({
           <div class="field field-wide">
             <LabelsInput labels={labels} onChange={setLabels} disabled={saving} />
           </div>
-        </div>
+        </fieldset>
 
         {error ? (
           <p class="form-error" role="alert">
@@ -576,11 +590,22 @@ export function VMDialog({
 
         <footer class="dialog-actions">
           <button class="button ghost" type="button" disabled={saving} onClick={close}>
-            Cancel
+            {readOnly ? "Close" : "Cancel"}
           </button>
-          <button class="button primary" type="submit" disabled={saving}>
-            {saving ? (editing ? "Saving…" : "Creating…") : editing ? "Save changes" : "Create VM"}
-          </button>
+          {readOnly ? (
+            <button
+              class="button primary"
+              type="button"
+              disabled
+              title="This is a read-only view. Close it and use Edit to make changes."
+            >
+              Edit
+            </button>
+          ) : (
+            <button class="button primary" type="submit" disabled={saving}>
+              {saving ? (editing ? "Saving…" : "Creating…") : editing ? "Save changes" : "Create VM"}
+            </button>
+          )}
         </footer>
       </form>
     </dialog>

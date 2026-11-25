@@ -94,6 +94,9 @@ type LightVM struct {
 	Status              string                 `json:"status"`
 	DesiredState        string                 `json:"desired_state"`
 	LifecycleGeneration int64                  `json:"lifecycle_generation"`
+	GroupMemberID       *int64                 `json:"group_member_id,omitempty"`
+	GroupID             *int64                 `json:"group_id,omitempty"`
+	GroupName           string                 `json:"group_name,omitempty"`
 	KernelPath          string                 `json:"-"`
 	InitramfsPath       string                 `json:"-"`
 	DiskIDs             []int64                `json:"disk_ids,omitempty"`
@@ -284,10 +287,13 @@ const lightVMSelect = `
 	       l.ephemeral, l.cgroup_class, l.kernel_id, k.name, k.path, l.initramfs_id, i.name,
 	       i.path, l.image, l.env, l.config_files, l.executable_path, l.executable_script,
 	       l.executable_args, l.append,
-	       l.status, l.desired_state, l.lifecycle_generation, l.created_at, l.updated_at
+	       l.status, l.desired_state, l.lifecycle_generation, l.created_at, l.updated_at,
+	       l.group_member_id, m.group_id, g.name
 	FROM lightvms AS l
 	JOIN lightvm_kernels AS k ON k.id = l.kernel_id
-	JOIN lightvm_initramfs AS i ON i.id = l.initramfs_id`
+	JOIN lightvm_initramfs AS i ON i.id = l.initramfs_id
+	LEFT JOIN lightvm_group_members AS m ON m.id = l.group_member_id
+	LEFT JOIN lightvm_groups AS g ON g.id = m.group_id`
 
 // ListLightVMs returns every LightVM ordered by name.
 func (s *Store) ListLightVMs(ctx context.Context) ([]LightVM, error) {
@@ -399,7 +405,7 @@ func (s *Store) CreateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 	if vm.DesiredState == "" {
 		vm.DesiredState = DesiredStopped
 	}
-	interfaceIDs, err := s.normalizeLightVMInterfaceIDs(ctx, vm.ID, vm.InterfaceIDs)
+	interfaceIDs, err := s.normalizeLightVMInterfaceIDs(ctx, vm.ID, vm.InterfaceIDs, vm.GroupMemberID)
 	if err != nil {
 		return LightVM{}, err
 	}
@@ -415,7 +421,7 @@ func (s *Store) CreateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 		return LightVM{}, ErrLightVMRootRequired
 	}
 	for _, diskID := range diskIDs {
-		if err := s.checkDiskAvailableForAttach(ctx, diskID, "lightvm", vm.ID); err != nil {
+		if err := s.checkDiskAvailableForAttach(ctx, diskID, "lightvm", vm.ID, vm.GroupMemberID); err != nil {
 			return LightVM{}, err
 		}
 	}
@@ -445,16 +451,21 @@ func (s *Store) CreateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 		return LightVM{}, fmt.Errorf("begin create lightvm: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	var groupMemberID any
+	if vm.GroupMemberID != nil {
+		groupMemberID = *vm.GroupMemberID
+	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO lightvms
 			(id, name, description, vcpus, memory_mb, console_enabled, ephemeral,
 			 cgroup_class, kernel_id, initramfs_id, image, env, config_files,
 			 executable_path, executable_script, executable_args, append, status, desired_state,
-			 created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 group_member_id, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		vm.ID, vm.Name, vm.Description, vm.VCPUs, vm.MemoryMB, vm.ConsoleEnabled, vm.Ephemeral,
 		vm.CgroupClass, vm.KernelID, vm.InitramfsID, vm.Image, envJSON, configJSON,
-		vm.ExecutablePath, vm.ExecutableScript, argsJSON, vm.Append, vm.Status, vm.DesiredState, now, now,
+		vm.ExecutablePath, vm.ExecutableScript, argsJSON, vm.Append, vm.Status, vm.DesiredState,
+		groupMemberID, now, now,
 	); err != nil {
 		if isUniqueViolation(err) {
 			return LightVM{}, fmt.Errorf("%w: %q", ErrLightVMNameTaken, vm.Name)
@@ -495,7 +506,7 @@ func (s *Store) UpdateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 		return LightVM{}, err
 	}
 	consoles := normalizeLightVMConsoles(vm.Consoles)
-	interfaceIDs, err := s.normalizeLightVMInterfaceIDs(ctx, vm.ID, vm.InterfaceIDs)
+	interfaceIDs, err := s.normalizeLightVMInterfaceIDs(ctx, vm.ID, vm.InterfaceIDs, existing.GroupMemberID)
 	if err != nil {
 		return LightVM{}, err
 	}
@@ -512,7 +523,7 @@ func (s *Store) UpdateLightVM(ctx context.Context, vm LightVM) (LightVM, error) 
 	}
 	if replaceDisks {
 		for _, diskID := range diskIDs {
-			if err := s.checkDiskAvailableForAttach(ctx, diskID, "lightvm", vm.ID); err != nil {
+			if err := s.checkDiskAvailableForAttach(ctx, diskID, "lightvm", vm.ID, existing.GroupMemberID); err != nil {
 				return LightVM{}, err
 			}
 		}
@@ -692,7 +703,7 @@ func (s *Store) DeleteLightVM(ctx context.Context, id string) error {
 // normalizeLightVMInterfaceIDs deduplicates interface IDs and validates that
 // each interface exists, is not attached to a VM, and is not owned by another
 // LightVM.
-func (s *Store) normalizeLightVMInterfaceIDs(ctx context.Context, lightVMID string, interfaceIDs []int64) ([]int64, error) {
+func (s *Store) normalizeLightVMInterfaceIDs(ctx context.Context, lightVMID string, interfaceIDs []int64, targetMemberID *int64) ([]int64, error) {
 	seen := make(map[int64]struct{}, len(interfaceIDs))
 	unique := make([]int64, 0, len(interfaceIDs))
 	for _, interfaceID := range interfaceIDs {
@@ -710,6 +721,9 @@ func (s *Store) normalizeLightVMInterfaceIDs(ctx context.Context, lightVMID stri
 			return nil, err
 		}
 		if iface.AttachedVMID != nil {
+			return nil, ErrInterfaceInUse
+		}
+		if iface.GroupMemberID != nil && (targetMemberID == nil || *targetMemberID != *iface.GroupMemberID) {
 			return nil, ErrInterfaceInUse
 		}
 		if err := s.checkLightVMInterfaceUse(ctx, interfaceID, lightVMID); err != nil {
@@ -973,14 +987,29 @@ func scanLightVM(s scanner) (LightVM, error) {
 		createdAt  int64
 		updatedAt  int64
 	)
+	var groupMemberID sql.NullInt64
+	var groupID sql.NullInt64
+	var groupName sql.NullString
 	if err := s.Scan(
 		&vm.ID, &vm.Name, &vm.Description, &vm.VCPUs, &vm.MemoryMB,
 		&vm.ConsoleEnabled, &vm.Ephemeral, &vm.CgroupClass, &vm.KernelID, &vm.KernelName,
 		&vm.KernelPath, &vm.InitramfsID, &vm.InitramfsName, &vm.InitramfsPath,
 		&vm.Image, &envJSON, &configJSON, &vm.ExecutablePath, &vm.ExecutableScript, &argsJSON, &vm.Append,
 		&vm.Status, &vm.DesiredState, &vm.LifecycleGeneration, &createdAt, &updatedAt,
+		&groupMemberID, &groupID, &groupName,
 	); err != nil {
 		return LightVM{}, err
+	}
+	if groupMemberID.Valid {
+		id := groupMemberID.Int64
+		vm.GroupMemberID = &id
+	}
+	if groupID.Valid {
+		id := groupID.Int64
+		vm.GroupID = &id
+	}
+	if groupName.Valid {
+		vm.GroupName = groupName.String
 	}
 	if err := json.Unmarshal([]byte(envJSON), &vm.Env); err != nil {
 		return LightVM{}, fmt.Errorf("decode lightvm environment: %w", err)

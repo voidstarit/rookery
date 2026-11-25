@@ -132,7 +132,8 @@ backends, disks, media, networks and network pipes, vhost and host interfaces,
 host taps, managed VPP addresses and interface route-table bindings, ACLs,
 route tables and routes, VNFs, VMs (with optional cgroup class assignment),
 host-wide cgroup settings and reusable classes, startup scripts,
-host-interface takeover, and LightVM kernels, initramfs images, and instances.
+host-interface takeover, and LightVM kernels, initramfs images, instances,
+templates, and managed groups.
 Kernel/initramfs resources can stream files from the Terraform host over mTLS
 or register files already present on the Rookery host. Matching data sources
 look up existing resources, and `rookery_status` exposes current readiness.
@@ -273,6 +274,22 @@ labels in sync through the same API.
 | `POST`   | `/api/lightvm/instances/{id}/stop` | Stop the LightVM QEMU process |
 | `GET`    | `/api/lightvm/instances/{id}/metrics` | LightVM QEMU process CPU/memory/I/O, per-drive blockstats, and VPP vhost RX/TX telemetry |
 | `POST`   | `/api/lightvm/instances/{id}/console-access` | Issue a time-limited WebSocket token for a LightVM console (maximum 24h) |
+| `GET`    | `/api/lightvm/templates` | List LightVM templates |
+| `POST`   | `/api/lightvm/templates` | Create a template and version 1 |
+| `GET`    | `/api/lightvm/templates/{id}` | Get one template |
+| `PUT`    | `/api/lightvm/templates/{id}` | Update template metadata |
+| `DELETE` | `/api/lightvm/templates/{id}` | Delete an unpinned template |
+| `GET`    | `/api/lightvm/templates/{id}/versions` | List template versions |
+| `POST`   | `/api/lightvm/templates/{id}/versions` | Create an immutable version |
+| `GET`    | `/api/lightvm/templates/{id}/versions/{version_id}` | Read one version |
+| `GET`    | `/api/lightvm/groups` | List managed LightVM groups |
+| `POST`   | `/api/lightvm/groups` | Create a group; members are asynchronous |
+| `GET`    | `/api/lightvm/groups/{id}` | Get a group with members and counts |
+| `PUT`    | `/api/lightvm/groups/{id}` | Update count, pause, version, or metadata |
+| `DELETE` | `/api/lightvm/groups/{id}` | Delete a group; 204 empty, 202 with members |
+| `DELETE` | `/api/lightvm/groups/{id}?force=true` | Force-delete a group |
+| `POST`   | `/api/lightvm/groups/{id}/members/{member_id}/start` | Set member power intent running |
+| `POST`   | `/api/lightvm/groups/{id}/members/{member_id}/stop` | Set member power intent stopped |
 | `GET`    | `/ws/lightvms/{id}/console?console=<id>` | Native WebSocket proxy to the selected virtio console socket, first console when omitted (local listener only) |
 | `GET`    | `/ws/lightvm-console/{token}` | Token-authenticated WebSocket proxy to a LightVM console; also exposed on the public mTLS HTTP listener |
 | `POST`   | `/api/lightvm/uploads` | Native multipart upload (`kind`, `file`); local listener only |

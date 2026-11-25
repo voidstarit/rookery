@@ -26,6 +26,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
+	"github.com/voidstarit/rookery/internal/fleet"
 	"github.com/voidstarit/rookery/internal/kouja"
 	"github.com/voidstarit/rookery/internal/lightvm"
 	"github.com/voidstarit/rookery/internal/qemu"
@@ -45,10 +46,11 @@ type Readiness interface {
 type Gateway struct {
 	Handler http.Handler
 
-	server         *grpc.Server
-	conn           *grpc.ClientConn
-	listener       net.Listener
-	extraListeners []net.Listener
+	server          *grpc.Server
+	conn            *grpc.ClientConn
+	listener        net.Listener
+	extraListeners  []net.Listener
+	fleetController fleet.Reconciler
 }
 
 // Option customizes the gateway's gRPC listener.
@@ -84,6 +86,7 @@ type options struct {
 	storageRegistry    *storage.Registry
 	startPlanner       StartPlanner
 	lightvmCoordinator *lightvm.StartCoordinator
+	fleetGuard         fleet.Guard
 	koujaClientFactory func(kouja.Config) (*kouja.Client, error)
 }
 
@@ -159,6 +162,13 @@ func WithStartPlanner(planner StartPlanner) Option {
 func WithLightVMStartCoordinator(coordinator *lightvm.StartCoordinator) Option {
 	return func(opts *options) {
 		opts.lightvmCoordinator = coordinator
+	}
+}
+
+// WithFleetGuard supplies the API-side VPP epoch guard to the fleet controller.
+func WithFleetGuard(guard fleet.Guard) Option {
+	return func(opts *options) {
+		opts.fleetGuard = guard
 	}
 }
 
@@ -386,6 +396,9 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 		mu: options.vmMutex, resourceMu: options.diskMutex, planner: options.startPlanner,
 		startCoordinator: options.lightvmCoordinator,
 	}
+	fleetController := newFleetController(st, options.fleetGuard, lightvms, disks, interfaces)
+	templates := &lightVMTemplateService{store: st}
+	groups := &lightVMGroupService{store: st, waker: fleetController}
 	rookeryv1.RegisterSystemServiceServer(server, system)
 	rookeryv1.RegisterVMServiceServer(server, vms)
 	rookeryv1.RegisterDiskServiceServer(server, disks)
@@ -405,6 +418,8 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	rookeryv1.RegisterLightVMInitramfsServiceServer(server, initramfs)
 	rookeryv1.RegisterLightVMArtifactServiceServer(server, artifacts)
 	rookeryv1.RegisterLightVMServiceServer(server, lightvms)
+	rookeryv1.RegisterLightVMTemplateServiceServer(server, templates)
+	rookeryv1.RegisterLightVMGroupServiceServer(server, groups)
 	healthServer := health.NewServer()
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 	healthpb.RegisterHealthServer(server, healthServer)
@@ -464,6 +479,8 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 		rookeryv1.RegisterLightVMKernelServiceHandler,
 		rookeryv1.RegisterLightVMInitramfsServiceHandler,
 		rookeryv1.RegisterLightVMServiceHandler,
+		rookeryv1.RegisterLightVMTemplateServiceHandler,
+		rookeryv1.RegisterLightVMGroupServiceHandler,
 	}
 	for _, register := range registrations {
 		if err := register(ctx, mux, conn); err != nil {
@@ -480,7 +497,16 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	return &Gateway{
 		Handler: mux, server: server, conn: conn,
 		listener: listener, extraListeners: options.grpcExtraListeners,
+		fleetController: fleetController,
 	}, nil
+}
+
+// FleetController returns the gateway fleet reconciler for the API worker.
+func (g *Gateway) FleetController() fleet.Reconciler {
+	if g == nil {
+		return nil
+	}
+	return g.fleetController
 }
 
 // GRPCAddress returns the address of the exposed gRPC listener.

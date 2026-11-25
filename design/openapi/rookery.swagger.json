@@ -43,6 +43,12 @@
       "name": "LightVMService"
     },
     {
+      "name": "LightVMGroupService"
+    },
+    {
+      "name": "LightVMTemplateService"
+    },
+    {
       "name": "MediaService"
     },
     {
@@ -1288,6 +1294,241 @@
         ]
       }
     },
+    "/api/lightvm/groups": {
+      "get": {
+        "operationId": "LightVMGroupService_ListLightVMGroups",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1LightVMGroup"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "LightVMGroupService"
+        ]
+      },
+      "post": {
+        "operationId": "LightVMGroupService_CreateLightVMGroup",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMGroup"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateLightVMGroupRequest"
+            }
+          }
+        ],
+        "tags": [
+          "LightVMGroupService"
+        ]
+      }
+    },
+    "/api/lightvm/groups/{id}": {
+      "get": {
+        "operationId": "LightVMGroupService_GetLightVMGroup",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMGroup"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "LightVMGroupService"
+        ]
+      },
+      "delete": {
+        "operationId": "LightVMGroupService_DeleteLightVMGroup",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteLightVMGroupResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "LightVMGroupService"
+        ]
+      },
+      "put": {
+        "operationId": "LightVMGroupService_UpdateLightVMGroup",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMGroup"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/LightVMGroupServiceUpdateLightVMGroupBody"
+            }
+          }
+        ],
+        "tags": [
+          "LightVMGroupService"
+        ]
+      }
+    },
+    "/api/lightvm/groups/{id}/members/{member_id}/start": {
+      "post": {
+        "operationId": "LightVMGroupService_StartLightVMGroupMember",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMGroupMember"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "member_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "LightVMGroupService"
+        ]
+      }
+    },
+    "/api/lightvm/groups/{id}/members/{member_id}/stop": {
+      "post": {
+        "operationId": "LightVMGroupService_StopLightVMGroupMember",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMGroupMember"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "member_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "LightVMGroupService"
+        ]
+      }
+    },
     "/api/lightvm/initramfs": {
       "get": {
         "operationId": "LightVMInitramfsService_ListInitramfs",
@@ -1873,6 +2114,270 @@
         ],
         "tags": [
           "LightVMKernelService"
+        ]
+      }
+    },
+    "/api/lightvm/templates": {
+      "get": {
+        "operationId": "LightVMTemplateService_ListLightVMTemplates",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1LightVMTemplate"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "LightVMTemplateService"
+        ]
+      },
+      "post": {
+        "operationId": "LightVMTemplateService_CreateLightVMTemplate",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMTemplate"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateLightVMTemplateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "LightVMTemplateService"
+        ]
+      }
+    },
+    "/api/lightvm/templates/{id}": {
+      "get": {
+        "operationId": "LightVMTemplateService_GetLightVMTemplate",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMTemplate"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "LightVMTemplateService"
+        ]
+      },
+      "delete": {
+        "operationId": "LightVMTemplateService_DeleteLightVMTemplate",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "LightVMTemplateService"
+        ]
+      },
+      "put": {
+        "operationId": "LightVMTemplateService_UpdateLightVMTemplate",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMTemplate"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/LightVMTemplateServiceUpdateLightVMTemplateBody"
+            }
+          }
+        ],
+        "tags": [
+          "LightVMTemplateService"
+        ]
+      }
+    },
+    "/api/lightvm/templates/{id}/versions": {
+      "get": {
+        "operationId": "LightVMTemplateService_ListLightVMTemplateVersions",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1LightVMTemplateVersionSummary"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "LightVMTemplateService"
+        ]
+      },
+      "post": {
+        "operationId": "LightVMTemplateService_CreateLightVMTemplateVersion",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMTemplateVersion"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/LightVMTemplateServiceCreateLightVMTemplateVersionBody"
+            }
+          }
+        ],
+        "tags": [
+          "LightVMTemplateService"
+        ]
+      }
+    },
+    "/api/lightvm/templates/{id}/versions/{version_id}": {
+      "get": {
+        "operationId": "LightVMTemplateService_GetLightVMTemplateVersion",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LightVMTemplateVersion"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "LightVMTemplateService"
         ]
       }
     },
@@ -4219,6 +4724,28 @@
         }
       }
     },
+    "LightVMGroupServiceUpdateLightVMGroupBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "template_version_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "desired_count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "paused": {
+          "type": "boolean"
+        }
+      }
+    },
     "LightVMInitramfsServiceUpdateInitramfsBody": {
       "type": "object",
       "properties": {
@@ -4372,6 +4899,25 @@
         "ephemeral": {
           "type": "boolean",
           "description": "ephemeral terminates the runtime when the guest exits while keeping the\ndefinition's disks and interfaces attached."
+        }
+      }
+    },
+    "LightVMTemplateServiceCreateLightVMTemplateVersionBody": {
+      "type": "object",
+      "properties": {
+        "spec": {
+          "$ref": "#/definitions/v1LightVMTemplateSpec"
+        }
+      }
+    },
+    "LightVMTemplateServiceUpdateLightVMTemplateBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
         }
       }
     },
@@ -5245,6 +5791,28 @@
         }
       }
     },
+    "v1CreateLightVMGroupRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "template_version_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "desired_count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "paused": {
+          "type": "boolean"
+        }
+      }
+    },
     "v1CreateLightVMRequest": {
       "type": "object",
       "properties": {
@@ -5346,6 +5914,20 @@
         "ephemeral": {
           "type": "boolean",
           "description": "ephemeral terminates the runtime when the guest exits while keeping the\ndefinition's disks and interfaces attached."
+        }
+      }
+    },
+    "v1CreateLightVMTemplateRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "spec": {
+          "$ref": "#/definitions/v1LightVMTemplateSpec"
         }
       }
     },
@@ -5570,6 +6152,14 @@
         "accepted": {
           "type": "boolean"
         },
+        "state": {
+          "type": "string"
+        }
+      }
+    },
+    "v1DeleteLightVMGroupResponse": {
+      "type": "object",
+      "properties": {
         "state": {
           "type": "string"
         }
@@ -5904,6 +6494,14 @@
             "type": "object",
             "$ref": "#/definitions/v1FIBPath"
           }
+        }
+      }
+    },
+    "v1GetLightVMGroupResponse": {
+      "type": "object",
+      "properties": {
+        "group": {
+          "$ref": "#/definitions/v1LightVMGroup"
         }
       }
     },
@@ -6363,6 +6961,14 @@
         "ephemeral": {
           "type": "boolean",
           "description": "ephemeral makes the LightVM one-shot: when the guest exits (reboot,\npanic, or poweroff) Rookery stops QEMU, virtiofsd, and the attempt\ncontainer automatically. Attached disks and interfaces remain."
+        },
+        "group_id": {
+          "type": "string",
+          "format": "int64",
+          "description": "group_id/group_name identify a managed group member; zero/empty for an\nunmanaged LightVM."
+        },
+        "group_name": {
+          "type": "string"
         }
       }
     },
@@ -6443,6 +7049,134 @@
         },
         "value": {
           "type": "string"
+        }
+      }
+    },
+    "v1LightVMGroup": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "template_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "template_name": {
+          "type": "string"
+        },
+        "template_version_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "template_version": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "desired_count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "actual_count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "running_count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "provisioning_count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "removing_count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "drift": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "converged": {
+          "type": "boolean"
+        },
+        "paused": {
+          "type": "boolean"
+        },
+        "state": {
+          "type": "string"
+        },
+        "last_reconcile_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "last_error": {
+          "type": "string"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMGroupMember"
+          }
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1LightVMGroupMember": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "workload_id": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "template_version": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "status": {
+          "type": "string"
+        },
+        "desired_state": {
+          "type": "string"
+        },
+        "last_error": {
+          "type": "string"
+        },
+        "next_retry_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
         }
       }
     },
@@ -6592,6 +7326,183 @@
             "type": "object",
             "$ref": "#/definitions/v1BlockDeviceMetrics"
           }
+        }
+      }
+    },
+    "v1LightVMTemplate": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "latest_version": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "latest_version_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "version_count": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1LightVMTemplateSpec": {
+      "type": "object",
+      "properties": {
+        "vcpus": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "memory_mb": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "cgroup_class": {
+          "type": "string"
+        },
+        "kernel_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "initramfs_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "image": {
+          "type": "string",
+          "description": "image is required for group templates and must be digest-qualified."
+        },
+        "env": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMEnvVar"
+          }
+        },
+        "executable_path": {
+          "type": "string"
+        },
+        "executable_args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "executable_script": {
+          "type": "string"
+        },
+        "append": {
+          "type": "string"
+        },
+        "console_enabled": {
+          "type": "boolean"
+        },
+        "consoles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMConsole"
+          }
+        },
+        "virtiofs_shares": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMVirtioFSShare"
+          }
+        },
+        "disks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1TemplateDiskEntry"
+          }
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1TemplateInterfaceEntry"
+          }
+        }
+      }
+    },
+    "v1LightVMTemplateVersion": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "template_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "version": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "spec": {
+          "$ref": "#/definitions/v1LightVMTemplateSpec"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1LightVMTemplateVersionSummary": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "template_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "version": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "vcpus": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "memory_mb": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "disk_count": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "interface_count": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
         }
       }
     },
@@ -6817,6 +7728,42 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1LightVMKernel"
+          }
+        }
+      }
+    },
+    "v1ListLightVMGroupsResponse": {
+      "type": "object",
+      "properties": {
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMGroup"
+          }
+        }
+      }
+    },
+    "v1ListLightVMTemplateVersionsResponse": {
+      "type": "object",
+      "properties": {
+        "versions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMTemplateVersionSummary"
+          }
+        }
+      }
+    },
+    "v1ListLightVMTemplatesResponse": {
+      "type": "object",
+      "properties": {
+        "templates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LightVMTemplate"
           }
         }
       }
@@ -7633,6 +8580,74 @@
           "format": "int64"
         }
       }
+    },
+    "v1TemplateDiskEntry": {
+      "type": "object",
+      "properties": {
+        "storage_backend_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "size_gb": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "throttle_class_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "serial": {
+          "type": "string"
+        },
+        "storage_backend_name": {
+          "type": "string",
+          "description": "Response-only display fields; not stored in the template spec."
+        },
+        "throttle_class_name": {
+          "type": "string"
+        }
+      },
+      "description": "TemplateDiskEntry is one blank data disk created for each group member."
+    },
+    "v1TemplateInterfaceEntry": {
+      "type": "object",
+      "properties": {
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "ingress_acl_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "int64"
+          }
+        },
+        "egress_acl_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "int64"
+          }
+        },
+        "network_name": {
+          "type": "string",
+          "description": "Response-only display fields; not stored in the template spec."
+        },
+        "ingress_acl_names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "egress_acl_names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "TemplateInterfaceEntry is one vhost-user interface created for each member."
     },
     "v1ThinPoolStatus": {
       "type": "object",
