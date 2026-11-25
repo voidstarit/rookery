@@ -56,46 +56,54 @@ func (s *Server) RunInfrastructureReconciler(ctx context.Context) {
 }
 
 func (s *Server) reconcileInfrastructure(ctx context.Context) error {
-	var errs []error
+	var vppErrs []error
+	var otherErrs []error
 	if err := s.ReconcileNetworks(ctx); err != nil {
-		errs = append(errs, err)
+		vppErrs = append(vppErrs, err)
 	}
 	if err := s.ReconcileNetworkPipes(ctx); err != nil {
-		errs = append(errs, err)
+		vppErrs = append(vppErrs, err)
 	}
 	if err := s.ReconcileNetworkHostTaps(ctx); err != nil {
-		errs = append(errs, err)
+		vppErrs = append(vppErrs, err)
 	}
 	if err := s.ReconcileVhostUsers(ctx); err != nil {
-		errs = append(errs, err)
+		vppErrs = append(vppErrs, err)
 	}
 	if err := s.ReconcileRouteTables(ctx); err != nil {
-		errs = append(errs, err)
+		vppErrs = append(vppErrs, err)
 	}
 	if err := s.ReconcileACLs(ctx); err != nil {
-		errs = append(errs, err)
+		vppErrs = append(vppErrs, err)
 	}
 	if err := s.ReconcileHostInterfaces(ctx); err != nil {
-		errs = append(errs, err)
-	}
-	if err := s.ReconcileNAT44s(ctx); err != nil {
-		errs = append(errs, err)
-	}
-	if err := s.ReconcileVNFs(ctx); err != nil {
-		errs = append(errs, err)
-	}
-	if err := s.reconcileVNFBindings(ctx); err != nil {
-		errs = append(errs, err)
+		vppErrs = append(vppErrs, err)
 	}
 	if err := s.ReconcileVPPInterfaceAddresses(ctx); err != nil {
-		errs = append(errs, err)
+		vppErrs = append(vppErrs, err)
 	}
 	if err := s.ReconcileVPPInterfaceRouteTables(ctx); err != nil {
-		errs = append(errs, err)
+		vppErrs = append(vppErrs, err)
+	}
+	if err := s.ReconcileNAT44s(ctx); err != nil {
+		otherErrs = append(otherErrs, err)
+	}
+	if err := s.ReconcileVNFs(ctx); err != nil {
+		otherErrs = append(otherErrs, err)
+	}
+	if err := s.reconcileVNFBindings(ctx); err != nil {
+		otherErrs = append(otherErrs, err)
 	}
 	s.autostartVMs(ctx)
 	s.autostartLightVMs(ctx)
-	return errors.Join(errs...)
+	if err := errors.Join(vppErrs...); err != nil {
+		s.fleetReady.Store(false)
+		s.fleetEpoch.Store(0)
+		return errors.Join(err, errors.Join(otherErrs...))
+	}
+	s.fleetReady.Store(true)
+	s.fleetEpoch.Add(1)
+	return errors.Join(otherErrs...)
 }
 
 // autostartVMs applies the persisted desired power state after an API restart
@@ -207,6 +215,11 @@ func (s *Server) reconcileLightVMStatuses(ctx context.Context) error {
 		return fmt.Errorf("list LightVMs: %w", err)
 	}
 	for _, vm := range vms {
+		if vm.GroupMemberID != nil {
+			// The fleet worker owns group-member status and liveness. Do not
+			// overwrite a start that the worker is driving.
+			continue
+		}
 		running := s.lightvms.RunningLightVM(vm.ID)
 		if vm.Ephemeral {
 			if running {
@@ -265,6 +278,9 @@ func (s *Server) autostartLightVMs(ctx context.Context) {
 		return
 	}
 	for _, vm := range vms {
+		if vm.GroupMemberID != nil {
+			continue
+		}
 		if vm.DesiredState != store.DesiredRunning {
 			continue
 		}
@@ -442,6 +458,8 @@ func (s *Server) watchVPP(ctx context.Context, initiallyDirty bool) {
 			healthy = false
 			pendingReconcile = true
 			pendingReset = true
+			s.fleetReady.Store(false)
+			s.fleetEpoch.Store(0)
 			// Let the current worker finish instead of canceling it. Canceling
 			// VPP API calls can leave half-created BVIs behind and race a new
 			// worker creating the same BVI in the restarted VPP.
@@ -461,6 +479,8 @@ func (s *Server) watchVPP(ctx context.Context, initiallyDirty bool) {
 					Msg("VPP restart detected; rebuilding VPP resources")
 				pendingReconcile = true
 				pendingReset = true
+				s.fleetReady.Store(false)
+				s.fleetEpoch.Store(0)
 				reconnected = true
 				// Do not cancel the in-flight worker here. Starting a second
 				// worker while the first can still receive VPP API responses

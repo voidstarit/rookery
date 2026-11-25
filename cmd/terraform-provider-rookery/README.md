@@ -86,6 +86,8 @@ provider "rookery" {
 | `rookery_lightvm_kernel` | Kernel image, either uploaded from Terraform or registered from a host path |
 | `rookery_lightvm_initramfs` | Initramfs image, either uploaded from Terraform or registered from a host path |
 | `rookery_lightvm` | Container-backed LightVM definition, disks, interfaces, virtiofs shares, consoles |
+| `rookery_lightvm_template` | Versioned image-backed LightVM specification (compute, kernel/initramfs, image, env, data disks, interfaces) |
+| `rookery_lightvm_group` | Managed fleet pinned to one template version, with desired count, pause, readiness wait, and force destroy |
 | `rookery_host_interface` | Take a physical NIC into VPP |
 | `rookery_startup_script` | Server-level Rookery or VPP reconnect script |
 | `rookery_cgroup_settings` | Host-wide cgroup limits and reusable VM classes |
@@ -126,6 +128,17 @@ The guest can read them from `/sys/block/vdX/serial` or udev's `ID_SERIAL`.
 changed. `rookery_network` names remain immutable, but its `ipv4_cidr` and
 `ipv6_cidr` can be updated while the network has no VNFs, host taps, or BVI.
 `rookery_route` is also immutable.
+
+Image-backed fleets use `rookery_lightvm_template` and
+`rookery_lightvm_group`. Changing the template `spec` creates a new immutable
+version and updates `current_version_id`; changing only metadata does not.
+`rookery_lightvm_group.template_version_id` is an explicit pin for new members,
+so moving it does not reconfigure existing members. Group creation returns
+immediately; set `wait_for_ready = true` to poll until the group is converged
+and `running_count == desired_count`. `force_destroy` passes `force=true` to
+group deletion and waits up to `destroy_timeout`. See
+[`docs/lightvm-templates.md`](../../docs/lightvm-templates.md) for the full
+contract.
 
 `rookery_disk` can register an existing host block device (a whole disk,
 partition, logical volume, or RAID array) instead of creating a thin volume:

@@ -13,9 +13,11 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/voidstarit/rookery/internal/fleet"
 	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/lightvm"
 	"github.com/voidstarit/rookery/internal/pki"
@@ -173,6 +175,10 @@ type Server struct {
 	startPlanner       StartPlanner
 	lightvmCoordinator *lightvm.StartCoordinator
 	lightVMStartCtx    context.Context
+
+	fleetController fleet.Reconciler
+	fleetEpoch      atomic.Uint64
+	fleetReady      atomic.Bool
 
 	// resourceMu serializes host provisioning (disks, bridge domains, vhost
 	// interfaces) with VM attachment so resources cannot be removed mid-operation.

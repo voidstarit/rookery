@@ -223,6 +223,111 @@ export type LightVM = {
   updated_at?: string;
 };
 
+export type LightVMTemplateDisk = {
+  storage_backend_id: number;
+  size_gb: number;
+  throttle_class_id?: number;
+  serial?: string;
+  storage_backend_name?: string;
+  throttle_class_name?: string;
+};
+
+export type LightVMTemplateInterface = {
+  network_id: number;
+  ingress_acl_ids?: number[];
+  egress_acl_ids?: number[];
+  network_name?: string;
+  ingress_acl_names?: string[];
+  egress_acl_names?: string[];
+};
+
+export type LightVMTemplateSpec = {
+  vcpus: number;
+  memory_mb: number;
+  cgroup_class?: string;
+  kernel_id: number;
+  initramfs_id: number;
+  image: string;
+  env?: LightVMEnvVar[];
+  executable_path?: string;
+  executable_args?: string[];
+  executable_script?: string;
+  append?: string;
+  console_enabled?: boolean;
+  consoles?: LightVMConsole[];
+  virtiofs_shares?: LightVMVirtioFSShare[];
+  disks?: LightVMTemplateDisk[];
+  interfaces?: LightVMTemplateInterface[];
+};
+
+export type LightVMTemplate = {
+  id: number;
+  name: string;
+  description: string;
+  latest_version: number;
+  latest_version_id: number;
+  version_count: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type LightVMTemplateVersion = {
+  id: number;
+  template_id: number;
+  version: number;
+  spec: LightVMTemplateSpec;
+  created_at?: string;
+};
+
+export type LightVMTemplateVersionSummary = {
+  id: number;
+  template_id: number;
+  version: number;
+  vcpus: number;
+  memory_mb: number;
+  disk_count: number;
+  interface_count: number;
+  created_at?: string;
+};
+
+export type LightVMGroupMember = {
+  id: number;
+  name: string;
+  workload_id?: string;
+  state: string;
+  template_version: number;
+  status: string;
+  desired_state: string;
+  last_error?: string;
+  next_retry_at?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type LightVMGroup = {
+  id: number;
+  name: string;
+  description: string;
+  template_id: number;
+  template_name: string;
+  template_version_id: number;
+  template_version: number;
+  desired_count: number;
+  actual_count: number;
+  running_count: number;
+  provisioning_count: number;
+  removing_count: number;
+  drift: number;
+  converged: boolean;
+  paused: boolean;
+  state: string;
+  last_reconcile_at?: string;
+  last_error?: string;
+  members?: LightVMGroupMember[];
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type DiskThrottleLimits = {
   bps_total?: number;
   bps_total_max?: number;

@@ -22,6 +22,7 @@ type LightVMDialogProps = {
   initramfs: LightVMInitramfs[];
   interfaces: VirtualInterface[];
   disks: Disk[];
+  readOnly?: boolean;
   onClose: () => void;
   onSaved: (vm: LightVM) => void;
 };
@@ -178,6 +179,7 @@ export function LightVMDialog({
   initramfs,
   interfaces,
   disks,
+  readOnly = false,
   onClose,
   onSaved,
 }: LightVMDialogProps) {
@@ -472,7 +474,7 @@ export function LightVMDialog({
 
   const submit = async (event: Event) => {
     event.preventDefault();
-    if (saving || !formRef.current?.reportValidity()) {
+    if (readOnly || saving || !formRef.current?.reportValidity()) {
       return;
     }
     const selectedKernel = Number(kernelID);
@@ -602,9 +604,11 @@ export function LightVMDialog({
       <form ref={formRef} novalidate onSubmit={(event) => void submit(event)}>
         <header class="dialog-head">
           <div>
-            <p class="eyebrow">{editing ? "Edit LightVM" : "New LightVM"}</p>
+            <p class="eyebrow">
+              {readOnly ? "LightVM details" : editing ? "Edit LightVM" : "New LightVM"}
+            </p>
             <h2 id="lightvm-dialog-title">
-              {editing ? `Edit ${vm?.name}` : "Create LightVM"}
+              {readOnly ? `${vm?.name} details` : editing ? `Edit ${vm?.name}` : "Create LightVM"}
             </h2>
           </div>
           <button class="icon-button" type="button" aria-label="Close dialog" onClick={close}>
@@ -612,7 +616,14 @@ export function LightVMDialog({
           </button>
         </header>
 
-        <div class="form-grid">
+        {readOnly ? (
+          <p class="dialog-note">
+            Read-only view of this LightVM's configuration. Stop the LightVM to change
+            its kernel, disks, interfaces, or other settings.
+          </p>
+        ) : null}
+
+        <fieldset class="form-grid dialog-form-fieldset" disabled={readOnly}>
           <label class="field field-wide">
             <span class="field-label">Name</span>
             <input
@@ -1219,7 +1230,7 @@ export function LightVMDialog({
           <div class="field field-wide">
             <LabelsInput labels={labels} onChange={setLabels} disabled={saving} />
           </div>
-        </div>
+        </fieldset>
 
         {error ? (
           <p class="form-error" role="alert">
@@ -1229,17 +1240,28 @@ export function LightVMDialog({
 
         <footer class="dialog-actions">
           <button class="button ghost" type="button" disabled={saving} onClick={close}>
-            Cancel
+            {readOnly ? "Close" : "Cancel"}
           </button>
-          <button class="button primary" type="submit" disabled={saving}>
-            {saving
-              ? editing
-                ? "Saving…"
-                : "Creating…"
-              : editing
-                ? "Save changes"
-                : "Create LightVM"}
-          </button>
+          {readOnly ? (
+            <button
+              class="button primary"
+              type="button"
+              disabled
+              title="This is a read-only view. Stop the LightVM before editing it."
+            >
+              Edit
+            </button>
+          ) : (
+            <button class="button primary" type="submit" disabled={saving}>
+              {saving
+                ? editing
+                  ? "Saving…"
+                  : "Creating…"
+                : editing
+                  ? "Save changes"
+                  : "Create LightVM"}
+            </button>
+          )}
         </footer>
       </form>
     </dialog>

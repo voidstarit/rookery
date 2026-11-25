@@ -867,6 +867,10 @@ func (m *LightVM) validate(all bool) error {
 
 	// no validation rules for Ephemeral
 
+	// no validation rules for GroupId
+
+	// no validation rules for GroupName
+
 	if m.RunState != nil {
 		// no validation rules for RunState
 	}

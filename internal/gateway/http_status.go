@@ -12,47 +12,51 @@ import (
 )
 
 var createdMethods = map[string]bool{
-	"/rookery.v1.VMService/CreateVM":                          true,
-	"/rookery.v1.DiskService/CreateDisk":                      true,
-	"/rookery.v1.DiskThrottleService/CreateDiskThrottleClass": true,
-	"/rookery.v1.MediaService/CreateMedia":                    true,
-	"/rookery.v1.NetworkService/CreateNetwork":                true,
-	"/rookery.v1.NetworkService/CreateNetworkPipe":            true,
-	"/rookery.v1.InterfaceService/CreateInterface":            true,
-	"/rookery.v1.ACLService/CreateACL":                        true,
-	"/rookery.v1.VNFService/CreateVNF":                        true,
-	"/rookery.v1.StorageBackendService/CreateStorageBackend":  true,
-	"/rookery.v1.StorageBackendService/ImportDisks":           true,
-	"/rookery.v1.CaptureService/StartCapture":                 true,
-	"/rookery.v1.RouteTableService/CreateRouteTable":          true,
-	"/rookery.v1.RouteTableService/CreateRoute":               true,
-	"/rookery.v1.HostService/CreateHostTap":                   true,
-	"/rookery.v1.LightVMKernelService/CreateKernel":           true,
-	"/rookery.v1.LightVMInitramfsService/CreateInitramfs":     true,
-	"/rookery.v1.LightVMService/CreateLightVM":                true,
+	"/rookery.v1.VMService/CreateVM":                                  true,
+	"/rookery.v1.DiskService/CreateDisk":                              true,
+	"/rookery.v1.DiskThrottleService/CreateDiskThrottleClass":         true,
+	"/rookery.v1.MediaService/CreateMedia":                            true,
+	"/rookery.v1.NetworkService/CreateNetwork":                        true,
+	"/rookery.v1.NetworkService/CreateNetworkPipe":                    true,
+	"/rookery.v1.InterfaceService/CreateInterface":                    true,
+	"/rookery.v1.ACLService/CreateACL":                                true,
+	"/rookery.v1.VNFService/CreateVNF":                                true,
+	"/rookery.v1.StorageBackendService/CreateStorageBackend":          true,
+	"/rookery.v1.StorageBackendService/ImportDisks":                   true,
+	"/rookery.v1.CaptureService/StartCapture":                         true,
+	"/rookery.v1.RouteTableService/CreateRouteTable":                  true,
+	"/rookery.v1.RouteTableService/CreateRoute":                       true,
+	"/rookery.v1.HostService/CreateHostTap":                           true,
+	"/rookery.v1.LightVMKernelService/CreateKernel":                   true,
+	"/rookery.v1.LightVMInitramfsService/CreateInitramfs":             true,
+	"/rookery.v1.LightVMService/CreateLightVM":                        true,
+	"/rookery.v1.LightVMTemplateService/CreateLightVMTemplate":        true,
+	"/rookery.v1.LightVMTemplateService/CreateLightVMTemplateVersion": true,
+	"/rookery.v1.LightVMGroupService/CreateLightVMGroup":              true,
 }
 
 var noContentMethods = map[string]bool{
-	"/rookery.v1.VMService/DeleteVM":                          true,
-	"/rookery.v1.DiskThrottleService/DeleteDiskThrottleClass": true,
-	"/rookery.v1.MediaService/DeleteMedia":                    true,
-	"/rookery.v1.NetworkService/DeleteNetwork":                true,
-	"/rookery.v1.NetworkService/DeleteNetworkPipe":            true,
-	"/rookery.v1.InterfaceService/DeleteInterface":            true,
-	"/rookery.v1.InterfaceService/ResetInterfaceCounters":     true,
-	"/rookery.v1.ACLService/DeleteACL":                        true,
-	"/rookery.v1.VNFService/DeleteVNF":                        true,
-	"/rookery.v1.StorageBackendService/DeleteStorageBackend":  true,
-	"/rookery.v1.CaptureService/DeleteCaptureFile":            true,
-	"/rookery.v1.TroubleshootService/ClearTrace":              true,
-	"/rookery.v1.RouteTableService/DeleteRouteTable":          true,
-	"/rookery.v1.RouteTableService/DeleteRoute":               true,
-	"/rookery.v1.HostService/DeleteHostTap":                   true,
-	"/rookery.v1.VMService/ResetVM":                           true,
-	"/rookery.v1.VMService/CtrlAltDel":                        true,
-	"/rookery.v1.LightVMKernelService/DeleteKernel":           true,
-	"/rookery.v1.LightVMInitramfsService/DeleteInitramfs":     true,
-	"/rookery.v1.LightVMService/DeleteLightVM":                true,
+	"/rookery.v1.VMService/DeleteVM":                           true,
+	"/rookery.v1.DiskThrottleService/DeleteDiskThrottleClass":  true,
+	"/rookery.v1.MediaService/DeleteMedia":                     true,
+	"/rookery.v1.NetworkService/DeleteNetwork":                 true,
+	"/rookery.v1.NetworkService/DeleteNetworkPipe":             true,
+	"/rookery.v1.InterfaceService/DeleteInterface":             true,
+	"/rookery.v1.InterfaceService/ResetInterfaceCounters":      true,
+	"/rookery.v1.ACLService/DeleteACL":                         true,
+	"/rookery.v1.VNFService/DeleteVNF":                         true,
+	"/rookery.v1.StorageBackendService/DeleteStorageBackend":   true,
+	"/rookery.v1.CaptureService/DeleteCaptureFile":             true,
+	"/rookery.v1.TroubleshootService/ClearTrace":               true,
+	"/rookery.v1.RouteTableService/DeleteRouteTable":           true,
+	"/rookery.v1.RouteTableService/DeleteRoute":                true,
+	"/rookery.v1.HostService/DeleteHostTap":                    true,
+	"/rookery.v1.VMService/ResetVM":                            true,
+	"/rookery.v1.VMService/CtrlAltDel":                         true,
+	"/rookery.v1.LightVMKernelService/DeleteKernel":            true,
+	"/rookery.v1.LightVMInitramfsService/DeleteInitramfs":      true,
+	"/rookery.v1.LightVMService/DeleteLightVM":                 true,
+	"/rookery.v1.LightVMTemplateService/DeleteLightVMTemplate": true,
 }
 
 func setLocationHeader(method string, response proto.Message, writer http.ResponseWriter) {
@@ -89,6 +93,12 @@ func setLocationHeader(method string, response proto.Message, writer http.Respon
 		writer.Header().Set("Location", fmt.Sprintf("/api/lightvm/initramfs/%d", value.GetId()))
 	case *rookeryv1.LightVM:
 		writer.Header().Set("Location", "/api/lightvm/instances/"+value.GetId())
+	case *rookeryv1.LightVMTemplate:
+		writer.Header().Set("Location", fmt.Sprintf("/api/lightvm/templates/%d", value.GetId()))
+	case *rookeryv1.LightVMTemplateVersion:
+		writer.Header().Set("Location", fmt.Sprintf("/api/lightvm/templates/%d/versions/%d", value.GetTemplateId(), value.GetId()))
+	case *rookeryv1.LightVMGroup:
+		writer.Header().Set("Location", fmt.Sprintf("/api/lightvm/groups/%d", value.GetId()))
 	}
 }
 
@@ -106,6 +116,13 @@ func httpResponseStatus(ctx context.Context, writer http.ResponseWriter, respons
 			writer.WriteHeader(http.StatusAccepted)
 		} else {
 			writer.WriteHeader(http.StatusNoContent)
+		}
+		return nil
+	case *rookeryv1.DeleteLightVMGroupResponse:
+		if value.GetState() == "deleted" {
+			writer.WriteHeader(http.StatusNoContent)
+		} else {
+			writer.WriteHeader(http.StatusAccepted)
 		}
 		return nil
 	}

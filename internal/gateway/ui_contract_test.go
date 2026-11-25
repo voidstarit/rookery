@@ -117,6 +117,7 @@ func TestUIContractRoutes(t *testing.T) {
 
 	for _, path := range []string{
 		"/api/media", "/api/interfaces", "/api/acls",
+		"/api/lightvm/templates", "/api/lightvm/groups",
 	} {
 		response := get(path)
 		var items []any

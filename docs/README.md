@@ -6,6 +6,7 @@
 | [Architecture](architecture.md) | System context, containers, components, data flows, storage model, C4 diagrams |
 | [Operations](operations.md) | Host prerequisites, install, initialize, run, configuration, logging, VM lifecycle |
 | [Networking](networking.md) | VPP networks, interfaces, addresses, ACLs, route tables, host taps, VNFs, NAT44, startup scripts |
+| [LightVM templates and groups](lightvm-templates.md) | Image-backed LightVM templates, immutable versions, managed groups, member lifecycle, Terraform |
 | [API and access](api.md) | mTLS HTTP/gRPC listeners, Terraform provider, protobuf design, endpoint reference |
 | [Development](development.md) | Build, test, UI, release, protobuf generation |
 | [API design](api-design.md) | Deep protobuf/API generation and validation notes |

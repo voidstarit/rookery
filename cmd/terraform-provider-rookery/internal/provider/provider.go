@@ -144,6 +144,8 @@ func (p *RookeryProvider) Resources(_ context.Context) []func() resource.Resourc
 		NewLightVMKernelResource,
 		NewLightVMInitramfsResource,
 		NewLightVMResource,
+		NewLightVMTemplateResource,
+		NewLightVMGroupResource,
 	}
 }
 

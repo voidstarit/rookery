@@ -45,7 +45,7 @@ export function VMsTab() {
   const [vppReady, setVppReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [dialog, setDialog] = useState<{ vm: VM | null } | null>(null);
+  const [dialog, setDialog] = useState<{ vm: VM | null; readOnly: boolean } | null>(null);
   const [monitorVM, setMonitorVM] = useState<VM | null>(null);
   const entityLabels = useEntityLabels("vm");
   const route = useRoute();
@@ -60,14 +60,14 @@ export function VMsTab() {
     const mode = route.segments[2];
     if (action === "new") {
       setMonitorVM(null);
-      setDialog({ vm: null });
+      setDialog({ vm: null, readOnly: false });
       return;
     }
     if (action && action !== "new") {
       const vm = vms.find((item) => item.id === action);
-      if (vm && mode === "edit") {
+      if (vm && (mode === "edit" || mode === "details")) {
         setMonitorVM(null);
-        setDialog({ vm });
+        setDialog({ vm, readOnly: mode === "details" });
         return;
       }
       if (vm && mode === "monitor") {
@@ -270,7 +270,7 @@ export function VMsTab() {
       showToast("The thin pool is not ready and no non-LVM disk is available.", true);
       return;
     }
-    setDialog({ vm: null });
+    setDialog({ vm: null, readOnly: false });
     navigate("/vms/new");
   };
 
@@ -494,6 +494,15 @@ export function VMsTab() {
                           <button class="row-action" type="button" onClick={() => navigate(`/vms/${vm.id}/monitor`)}>
                             Monitor
                           </button>
+                          {active ? (
+                            <button
+                              class="row-action"
+                              type="button"
+                              onClick={() => navigate(`/vms/${vm.id}/details`)}
+                            >
+                              Details
+                            </button>
+                          ) : null}
                           <button class="row-action" type="button" onClick={() => navigate(`/vms/${vm.id}/edit`)}>
                             Edit
                           </button>
@@ -534,13 +543,14 @@ export function VMsTab() {
 
       {dialog ? (
         <VMDialog
-          key={dialog.vm ? `edit-${dialog.vm.id}` : "new"}
+          key={dialog.vm ? `${dialog.readOnly ? "details" : "edit"}-${dialog.vm.id}` : "new"}
           vm={dialog.vm}
           disks={disks}
           media={media}
           interfaces={interfaces}
           thinPoolReady={thinPoolReady}
           vppReady={vppReady}
+          readOnly={dialog.readOnly}
           onClose={() => {
             setDialog(null);
             navigate("/vms", true);

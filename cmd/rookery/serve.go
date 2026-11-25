@@ -249,6 +249,7 @@ func runServe(args []string) error {
 		gateway.WithLightVMStorageDir(lightvmStorage.Dir()),
 		gateway.WithLightVMRuntime(lightvmRuntime),
 		gateway.WithLightVMStartCoordinator(lightvmCoordinator),
+		gateway.WithFleetGuard(apiServer),
 	}
 	var grpcListener net.Listener
 	if *grpcAddr != "" {
@@ -282,6 +283,7 @@ func runServe(args []string) error {
 		return fmt.Errorf("prepare grpc-gateway: %w", err)
 	}
 	defer gatewayRuntime.Close()
+	apiServer.SetFleetController(gatewayRuntime.FleetController())
 	gatewayHandler := apiServer.LogRequests(api.SecurityHeaders(gatewayRuntime.Handler))
 	gatewayHandler = api.LightVMStartDeadline(gatewayHandler)
 	// The public gateway listeners do not expose the native UI handler, but
@@ -332,6 +334,7 @@ func runServe(args []string) error {
 	go diskReclaimer.Run(ctx)
 	go apiServer.RunLightVMEphemeralReaper(ctx)
 	go apiServer.RunInfrastructureReconciler(ctx)
+	go apiServer.RunFleetReconciler(ctx)
 
 	servers := []*http.Server{srv}
 	if gatewayHTTP != nil {
