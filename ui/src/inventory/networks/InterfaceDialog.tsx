@@ -12,6 +12,11 @@ type InterfaceDialogProps = {
 
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
+/**
+ * InterfaceDialog renders the create-virtual-interface form for choosing a network, optionally
+ * attaching a VM, and editing labels; it posts the interface, saves the labels, and reports the
+ * created record through onSaved.
+ */
 export function InterfaceDialog({ networks, vms, onClose, onSaved }: InterfaceDialogProps) {
   const [name, setName] = useState("");
   const [networkID, setNetworkID] = useState(networks[0] ? String(networks[0].id) : "");

@@ -27,6 +27,10 @@ export type ThrottleDraft = {
   iopsSize: string;
 };
 
+/**
+ * emptyThrottleDraft creates a blank disk-throttle form draft with both the BPS and IOPS
+ * families disabled and every numeric field empty.
+ */
 export function emptyThrottleDraft(): ThrottleDraft {
   return {
     bpsMode: "none",
@@ -53,6 +57,11 @@ export function emptyThrottleDraft(): ThrottleDraft {
   };
 }
 
+/**
+ * inferMode derives the throttle mode for one family from stored limits: "total" when a total
+ * or total-burst limit is set, otherwise "directional" when read or write limits exist, and
+ * "none" when there are no limits or the input is undefined.
+ */
 export function inferMode(limits: DiskThrottleLimits | undefined, family: "bps" | "iops"): ThrottleMode {
   if (!limits) {
     return "none";
@@ -75,6 +84,11 @@ export function inferMode(limits: DiskThrottleLimits | undefined, family: "bps" 
   return "none";
 }
 
+/**
+ * draftFromLimits converts stored throttle limits into the string-valued form draft, inferring
+ * each family's mode and leaving zero or missing values blank; undefined limits yield an empty
+ * draft.
+ */
 export function draftFromLimits(limits: DiskThrottleLimits | undefined): ThrottleDraft {
   const draft = emptyThrottleDraft();
   if (!limits) {
@@ -107,6 +121,11 @@ export function draftFromLimits(limits: DiskThrottleLimits | undefined): Throttl
   };
 }
 
+/**
+ * validateDraft checks both throttle families and the shared I/O size field, returning the first
+ * user-facing error message or null when the draft is valid. At least one base limit is required,
+ * and an IOPS size without an IOPS limit is rejected.
+ */
 export function validateDraft(draft: ThrottleDraft): string | null {
   const bpsError = validateFamily(draft, "bps");
   if (bpsError) {
@@ -127,6 +146,10 @@ export function validateDraft(draft: ThrottleDraft): string | null {
   return null;
 }
 
+/**
+ * limitsFromDraft converts a form draft into the API's throttle limits object, emitting only the
+ * fields for each family's selected mode and dropping blank, zero, and non-positive values.
+ */
 export function limitsFromDraft(draft: ThrottleDraft): DiskThrottleLimits {
   const limits: DiskThrottleLimits = {};
   if (draft.bpsMode === "total") {
@@ -157,6 +180,10 @@ export function limitsFromDraft(draft: ThrottleDraft): DiskThrottleLimits {
   return limits;
 }
 
+/**
+ * formatThrottleSummary renders a compact one-line description of a disk's BPS and IOPS limits
+ * joined by " · ", appending the I/O size when set; undefined limits produce an empty string.
+ */
 export function formatThrottleSummary(limits: DiskThrottleLimits | undefined): string {
   if (!limits) {
     return "";
@@ -171,6 +198,10 @@ export function formatThrottleSummary(limits: DiskThrottleLimits | undefined): s
   return parts.join(" · ");
 }
 
+/**
+ * formatThrottleFamilySummary describes one throttle family, preferring the total limit over
+ * separate read and write limits; it returns an empty string when no limit of that family is set.
+ */
 export function formatThrottleFamilySummary(
   limits: DiskThrottleLimits | undefined,
   family: "bps" | "iops"
@@ -218,6 +249,10 @@ type FamilyValues = {
   writeMaxLength: string;
 };
 
+/**
+ * familyValues collects the mode, base, burst, and burst-length fields for one throttle family
+ * into a uniform record so validation and conversion can treat BPS and IOPS alike.
+ */
 function familyValues(draft: ThrottleDraft, family: "bps" | "iops"): FamilyValues {
   if (family === "bps") {
     return {
@@ -247,6 +282,11 @@ function familyValues(draft: ThrottleDraft, family: "bps" | "iops"): FamilyValue
   };
 }
 
+/**
+ * validateFamily validates one throttle family's active mode, rejecting negative values, a
+ * missing base limit, and inconsistent burst settings; it returns null when the mode is "none"
+ * or the values pass.
+ */
 function validateFamily(draft: ThrottleDraft, family: "bps" | "iops"): string | null {
   const values = familyValues(draft, family);
   const label = family === "bps" ? "BPS" : "IOPS";
@@ -273,6 +313,10 @@ function validateFamily(draft: ThrottleDraft, family: "bps" | "iops"): string | 
   );
 }
 
+/**
+ * validateBurst checks that a burst maximum has a base limit and is not below it, and that a
+ * burst length has a maximum of at least one second; it returns an error message or null.
+ */
 function validateBurst(label: string, base: number, max: number, length: number): string | null {
   if (max > 0 && base <= 0) {
     return `${label} burst maximum requires a base limit.`;
@@ -289,6 +333,10 @@ function validateBurst(label: string, base: number, max: number, length: number)
   return null;
 }
 
+/**
+ * familyBase reports whether a throttle family has a positive base limit in its active mode,
+ * returning false when the family is disabled or the limit is blank or zero.
+ */
 function familyBase(draft: ThrottleDraft, family: "bps" | "iops"): boolean {
   const values = familyValues(draft, family);
   if (values.mode === "total") {
@@ -300,6 +348,10 @@ function familyBase(draft: ThrottleDraft, family: "bps" | "iops"): boolean {
   return false;
 }
 
+/**
+ * baseAndBursts pairs the relevant draft fields with human-readable labels for the active mode,
+ * used to report which value is negative; a disabled family yields an empty list.
+ */
 function baseAndBursts(values: FamilyValues): Array<[string, string]> {
   if (values.mode === "total") {
     return [
@@ -321,6 +373,10 @@ function baseAndBursts(values: FamilyValues): Array<[string, string]> {
   return [];
 }
 
+/**
+ * setValue parses a draft text field and stores it on the limits object only when the result is
+ * positive, leaving the key unset for blank, zero, or unparseable input.
+ */
 function setValue(limits: DiskThrottleLimits, key: keyof DiskThrottleLimits, raw: string): void {
   const parsed = number(raw);
   if (parsed > 0) {
@@ -328,6 +384,10 @@ function setValue(limits: DiskThrottleLimits, key: keyof DiskThrottleLimits, raw
   }
 }
 
+/**
+ * number parses a draft text field into a truncated integer, mapping blank, NaN, and infinite
+ * input to 0 so validation arithmetic stays well defined.
+ */
 function number(raw: string): number {
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? Math.trunc(parsed) : 0;

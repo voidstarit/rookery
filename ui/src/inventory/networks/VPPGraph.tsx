@@ -78,11 +78,19 @@ type FocusGroup = {
   nodeIDs: string[];
 };
 
+/**
+ * interfaceGroupID collapses an interface node ID to its base group by stripping a trailing
+ * -output or -tx marker, including a -deleted suffix on either; other IDs pass through unchanged.
+ */
 function interfaceGroupID(nodeID: string) {
   const match = /^(.*?)-(?:output|tx)(?:-deleted)?$/.exec(nodeID);
   return match ? match[1] : nodeID;
 }
 
+/**
+ * interfaceGroupLabel converts an interface group ID into a display label, tagging deleted, VM,
+ * VNF tap, BVI, and host NIC groups; unknown IDs pass through unchanged.
+ */
 function interfaceGroupLabel(groupID: string) {
   if (groupID === "vhost-user-input") {
     return "vhost-user input";
@@ -114,6 +122,10 @@ function interfaceGroupLabel(groupID: string) {
   return groupID;
 }
 
+/**
+ * buildInterfaceGroups groups laid-out interface nodes by their base interface ID and returns
+ * focus groups sorted by label for the graph's interface picker.
+ */
 function buildInterfaceGroups(layout: Layout): FocusGroup[] {
   const groups = new Map<string, string[]>();
   for (const node of layout.nodes) {
@@ -133,6 +145,10 @@ function buildInterfaceGroups(layout: Layout): FocusGroup[] {
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
+/**
+ * buildFeatureGroups collects ACL plugin, NAT44, and DHCP nodes into focus groups for the node
+ * filter, omitting any feature that has no matching nodes in the graph.
+ */
 function buildFeatureGroups(layout: Layout): FocusGroup[] {
   const groups: FocusGroup[] = [];
   const add = (id: string, label: string, matches: (nodeID: string) => boolean) => {
@@ -147,6 +163,10 @@ function buildFeatureGroups(layout: Layout): FocusGroup[] {
   return groups;
 }
 
+/**
+ * buildAdjacency maps every node ID to itself plus its directly connected neighbors, which the
+ * graph uses to isolate hovered connections.
+ */
 function buildAdjacency(layout: Layout) {
   const neighbors = new Map<string, Set<string>>();
   for (const node of layout.nodes) {
@@ -159,6 +179,11 @@ function buildAdjacency(layout: Layout) {
   return neighbors;
 }
 
+/**
+ * layoutGraph converts a VPP graph payload into positioned nodes and edges, ranking nodes into
+ * layered columns, deduplicating edges, flagging backward and self-loop connections, and sizing
+ * the SVG canvas; a payload without nodes returns a fixed-size empty layout.
+ */
 function layoutGraph(graph: VPPGraph): Layout {
   const rawNodes = Array.isArray(graph.nodes) ? graph.nodes : [];
   const rawEdges = Array.isArray(graph.edges) ? graph.edges : [];
@@ -427,10 +452,19 @@ function layoutGraph(graph: VPPGraph): Layout {
   };
 }
 
+/**
+ * clamp limits a numeric value to the inclusive minimum and maximum range.
+ */
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+/**
+ * VPPGraphView renders the interactive VPP packet-processing graph as a ranked SVG with
+ * zoom/pan controls, hover-based neighbor isolation, and an interface or packet-feature focus
+ * filter; node size reflects cycles per packet, color reflects packets per call, interfaces get a
+ * ring, and an empty state is shown when no active nodes are available.
+ */
 export function VPPGraphView({ graph }: { graph: VPPGraph }) {
   const allLayout = useMemo(() => layoutGraph(graph), [graph]);
   const [selectedInterface, setSelectedInterface] = useState("");

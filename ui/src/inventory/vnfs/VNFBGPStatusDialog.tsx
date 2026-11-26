@@ -7,10 +7,19 @@ type VNFBGPStatusDialogProps = {
   onClose: () => void;
 };
 
+/**
+ * sessionLabel turns a BGP session-state constant such as SESSION_STATE_ESTABLISHED into a
+ * lower-case label like established.
+ */
 function sessionLabel(state: string): string {
   return state.replace(/^SESSION_STATE_/, "").toLowerCase();
 }
 
+/**
+ * VNFBGPStatusDialog renders a modal BGP monitor for one VNF with its session state and the
+ * advertised and received prefixes. It fetches /api/vnfs/{id}/bgp on mount and on Refresh,
+ * surfaces load errors in a banner, and closes on the backdrop or Close button.
+ */
 export function VNFBGPStatusDialog({ vnf, onClose }: VNFBGPStatusDialogProps) {
   const [status, setStatus] = useState<VNFBGPStatus | null>(null);
   const [error, setError] = useState("");

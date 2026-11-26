@@ -11,6 +11,11 @@ type HostTapDialogProps = {
 
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
+/**
+ * HostTapDialog renders the create-host-tap form with network selection, an optional Linux
+ * interface name, an optional host IPv4 CIDR, and labels; it posts to the host-taps endpoint
+ * and blocks submission while saving or when the form is invalid.
+ */
 export function HostTapDialog({ networks, onClose, onSaved }: HostTapDialogProps) {
   const [networkID, setNetworkID] = useState(networks[0] ? String(networks[0].id) : "");
   const [name, setName] = useState("");

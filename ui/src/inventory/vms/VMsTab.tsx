@@ -18,6 +18,10 @@ import { navigate, useRoute } from "../router";
 
 const numberFormat = new Intl.NumberFormat();
 
+/**
+ * formatDate renders an ISO timestamp as a localized medium date and short time, returning an
+ * em dash for missing or invalid values.
+ */
 function formatDate(value: string | undefined): string {
   if (!value) {
     return "—";
@@ -29,6 +33,10 @@ function formatDate(value: string | undefined): string {
   return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+/**
+ * vmDisks returns the VM's disks array, falling back to the legacy single disk object and
+ * otherwise an empty array.
+ */
 function vmDisks(vm: VM) {
   if (Array.isArray(vm.disks) && vm.disks.length > 0) {
     return vm.disks;
@@ -36,6 +44,12 @@ function vmDisks(vm: VM) {
   return vm.disk ? [vm.disk] : [];
 }
 
+/**
+ * VMsTab renders the VM inventory table with status, resource, disk, network, and console
+ * columns plus create, start, stop, resume, edit, monitor, and delete actions. It gates creation
+ * on VPP and thin-pool readiness, polls VMs every five seconds while the route is visible, and
+ * opens edit and monitor dialogs from the URL.
+ */
 export function VMsTab() {
   const [vms, setVms] = useState<VM[]>([]);
   const [disks, setDisks] = useState<Disk[]>([]);

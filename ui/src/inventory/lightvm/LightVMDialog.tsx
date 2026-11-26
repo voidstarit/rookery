@@ -32,6 +32,9 @@ const DEFAULT_APPEND = "console=hvc0 rdinit=/init";
 
 type ConsoleRow = { id: number; name: string };
 
+/**
+ * consoleRows returns the stored consoles of a LightVM, or one default console when it has none.
+ */
 function consoleRows(vm: LightVM | null): ConsoleRow[] {
   if (Array.isArray(vm?.consoles) && vm.consoles.length > 0) {
     return vm.consoles.map((console) => ({ id: console.id, name: console.name }));
@@ -39,6 +42,9 @@ function consoleRows(vm: LightVM | null): ConsoleRow[] {
   return [{ id: 0, name: "console" }];
 }
 
+/**
+ * nextConsoleName picks a console-N label that no existing console name (case-insensitively) uses.
+ */
 function nextConsoleName(current: ConsoleRow[]): string {
   if (current.length === 0) {
     return "console";
@@ -51,6 +57,9 @@ function nextConsoleName(current: ConsoleRow[]): string {
   return `console-${index}`;
 }
 
+/**
+ * envText renders a LightVM's environment as one NAME=value line per variable, empty when unset.
+ */
 function envText(vm: LightVM | null): string {
   if (!Array.isArray(vm?.env)) {
     return "";
@@ -58,6 +67,11 @@ function envText(vm: LightVM | null): string {
   return vm.env.map((item) => `${item.name}=${item.value}`).join("\n");
 }
 
+/**
+ * parseEnvText converts NAME=value editor text into environment variables, skipping blank and
+ * comment lines; invalid, duplicated, over-long, or NUL-bearing entries return an empty list and a
+ * message naming the offending line.
+ */
 function parseEnvText(text: string): { env: LightVMEnvVar[]; error: string } {
   const env: LightVMEnvVar[] = [];
   const seen = new Set<string>();
@@ -120,10 +134,17 @@ const CONFIG_FILE_MAX = 64;
 const CONFIG_FILE_MAX_BYTES = 1 << 20;
 const CONFIG_FILES_MAX_BYTES = 4 << 20;
 
+/**
+ * contentBytes returns the UTF-8 encoded size of a config file's text for the size-limit checks.
+ */
 function contentBytes(value: string): number {
   return new TextEncoder().encode(value).length;
 }
 
+/**
+ * configFileNameError validates a config file's relative path against the dialog's rules and the
+ * files already added; it returns an empty string when the name is acceptable.
+ */
 function configFileNameError(name: string, existing: LightVMConfigFile[]): string {
   const trimmed = name.trim();
   if (!trimmed) {
@@ -157,10 +178,16 @@ function configFileNameError(name: string, existing: LightVMConfigFile[]): strin
   return "";
 }
 
+/**
+ * vmInterfaces returns a LightVM's attached interfaces, or an empty list for a new instance.
+ */
 function vmInterfaces(vm: LightVM | null): VMInterface[] {
   return Array.isArray(vm?.interfaces) ? vm.interfaces : [];
 }
 
+/**
+ * diskSerialPayload maps each attached disk ID to its trimmed serial, omitting disks without one.
+ */
 function diskSerialPayload(disks: VMDisk[]): Record<string, string> {
   const serials: Record<string, string> = {};
   for (const disk of disks) {
@@ -172,6 +199,12 @@ function diskSerialPayload(disks: VMDisk[]): Record<string, string> {
   return serials;
 }
 
+/**
+ * LightVMDialog renders the LightVM create/edit modal: resources, kernel or container image,
+ * environment, config files, consoles, startup command, interfaces, disks, virtiofs shares, and
+ * labels; it loads cgroup classes on open, validates the form, then POSTs or PUTs and calls
+ * onSaved.
+ */
 export function LightVMDialog({
   vm,
   kernels,

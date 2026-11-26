@@ -13,6 +13,10 @@ type ACLDialogProps = {
 
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
+/**
+ * normalizeRules trims rule descriptions and addresses and coerces ports to numbers, zeroing
+ * every port field for protocols other than TCP and UDP.
+ */
 function normalizeRules(rules: ACLRule[]): ACLRule[] {
   return rules.map((rule) => {
     const portsEnabled = rule.protocol === "tcp" || rule.protocol === "udp";
@@ -30,6 +34,11 @@ function normalizeRules(rules: ACLRule[]): ACLRule[] {
   });
 }
 
+/**
+ * ACLDialog renders the create/edit ACL form with an inline rule editor and a live formatted
+ * preview; it refuses to submit when no rules remain or VPP is not ready, then saves the rules
+ * and labels before reporting the ACL back to the caller.
+ */
 export function ACLDialog({ acl, vppReady, onClose, onSaved }: ACLDialogProps) {
   const editing = acl !== null;
   const [name, setName] = useState(acl?.name ?? "");

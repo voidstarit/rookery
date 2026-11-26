@@ -23,6 +23,10 @@ const DEFAULT_FORM: CaptureForm = {
   snapLength: 2048,
 };
 
+/**
+ * formatBytes converts a byte count to a human-readable B, KiB, MiB, or GiB string with fixed
+ * decimals; undefined, non-finite, or negative values render as an em dash.
+ */
 function formatBytes(value: number | undefined): string {
   if (value === undefined || !Number.isFinite(value) || value < 0) {
     return "—";
@@ -39,6 +43,10 @@ function formatBytes(value: number | undefined): string {
   return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GiB`;
 }
 
+/**
+ * formatDate renders a capture timestamp with the browser locale, falling back to the raw string
+ * when it cannot be parsed and to an em dash when no value is provided.
+ */
 function formatDate(value?: string): string {
   if (!value) {
     return "—";
@@ -50,6 +58,10 @@ function formatDate(value?: string): string {
   return date.toLocaleString();
 }
 
+/**
+ * directionLabel maps a capture direction value to its display label such as RX only or RX + TX,
+ * falling back to the raw value and then to an em dash for unknown or missing input.
+ */
 function directionLabel(value?: string): string {
   switch (value) {
     case "rx":
@@ -64,10 +76,20 @@ function directionLabel(value?: string): string {
   }
 }
 
+/**
+ * captureDownloadURL builds the native capture-file endpoint for a filename, percent-encoding
+ * the name so it can be used for downloads and deletes.
+ */
 function captureDownloadURL(name: string): string {
   return `/api/troubleshoot/capture/files/${encodeURIComponent(name)}`;
 }
 
+/**
+ * PacketCapturePanel renders the troubleshooting packet-capture controls: the interface,
+ * direction, size, and snap-length form, live status badge, start/stop/delete actions, and the
+ * downloadable capture-file list; it loads state on mount and polls every 1.5 seconds while a
+ * capture is active.
+ */
 export function PacketCapturePanel() {
   const [interfaces, setInterfaces] = useState<VPPInterface[]>([]);
   const [status, setStatus] = useState<PacketCaptureStatus | null>(null);

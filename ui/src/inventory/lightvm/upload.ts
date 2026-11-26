@@ -8,6 +8,10 @@ export type UploadedLightVMFile = {
 
 type UploadKind = "kernel" | "initramfs";
 
+/**
+ * parseError extracts the API's error string from an upload response, falling back to the HTTP
+ * status.
+ */
 function parseError(xhr: XMLHttpRequest): string {
   const body = xhr.response;
   if (body && typeof body === "object" && "error" in body && typeof body.error === "string") {
@@ -16,9 +20,10 @@ function parseError(xhr: XMLHttpRequest): string {
   return xhr.statusText || `Upload failed (${xhr.status})`;
 }
 
-// Uploads stream through the native multipart endpoint. Retrying an upload
-// automatically could leave duplicate files, so failures are reported to the
-// caller instead of using the shared retry loop.
+/**
+ * uploadLightVMFile streams a kernel or initramfs through the native multipart endpoint and reports
+ * progress; because a retry could leave duplicate files, failures reject instead of being retried.
+ */
 export function uploadLightVMFile(
   kind: UploadKind,
   file: File,
@@ -50,6 +55,9 @@ export function uploadLightVMFile(
   });
 }
 
+/**
+ * removeUploadedLightVMFile deletes a previously uploaded file by path, ignoring an empty path.
+ */
 export async function removeUploadedLightVMFile(path: string): Promise<void> {
   if (!path) {
     return;

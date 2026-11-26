@@ -17,6 +17,11 @@ type DiskThrottleClassDialogProps = {
 
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
+/**
+ * DiskThrottleClassDialog renders the create/edit form for a disk throttling class, holding the
+ * name, description, and throttling limits in a draft validated by validateDraft before submit.
+ * It POSTs a new class or PUTs the existing one and surfaces validation or API errors inline.
+ */
 export function DiskThrottleClassDialog({ classItem, onClose, onSaved }: DiskThrottleClassDialogProps) {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const nameRef = useRef<HTMLInputElement | null>(null);
@@ -288,6 +293,10 @@ export function DiskThrottleClassDialog({ classItem, onClose, onSaved }: DiskThr
   );
 }
 
+/**
+ * LimitInput renders a labelled non-negative integer input for one throttling limit and passes the
+ * raw string value to onChange on every keystroke.
+ */
 function LimitInput({
   label,
   value,

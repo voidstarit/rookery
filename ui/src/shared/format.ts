@@ -1,11 +1,15 @@
 /**
- * Formats a proto3 numeric field. Proto3 JSON omits default/zero values, so an
- * absent counter is zero rather than missing data.
+ * formatCount formats a proto3 numeric field as a localized string. Proto3 JSON omits
+ * default/zero values, so an absent counter is zero rather than missing data.
  */
 export function formatCount(value: number | null | undefined): string {
   return (value ?? 0).toLocaleString();
 }
 
+/**
+ * formatBytesIEC formats a byte count in binary units (B through PiB), showing one decimal only
+ * for non-integral values and preserving the sign of negative counts.
+ */
 export function formatBytesIEC(value: number | null | undefined): string {
   const bytes = Number(value) || 0;
   const units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
@@ -20,12 +24,15 @@ export function formatBytesIEC(value: number | null | undefined): string {
   return `${sign}${scaled.toFixed(digits)} ${units[unit]}`;
 }
 
+/**
+ * formatRateIEC appends a per-second suffix to formatBytesIEC output for live traffic columns.
+ */
 export function formatRateIEC(value: number | null | undefined): string {
   return `${formatBytesIEC(value)}/s`;
 }
 
 /**
- * Formats a byte count using binary steps with short labels (B, KB, MB, GB…).
+ * formatByteSize formats a byte count using binary steps with short labels (B, KB, MB, GB…).
  * The largest unit that keeps the value at or above 1 is used, so sizes below a
  * gigabyte stay in MB/KB instead of being shown as a fraction of a GB, and
  * 999 KB is never rendered as 0.9 MB.
@@ -49,6 +56,10 @@ export function formatByteSize(value: number | null | undefined): string {
   return `${sign}${text} ${units[unit]}`;
 }
 
+/**
+ * formatScaledBytes renders an already-scaled byte value with 0, 1, or 2 decimals, trimming
+ * trailing zeros and rendering zero as "0".
+ */
 function formatScaledBytes(scaled: number): string {
   if (scaled === 0) {
     return "0";

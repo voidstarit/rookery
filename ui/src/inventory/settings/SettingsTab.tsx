@@ -4,6 +4,10 @@ import { showToast } from "../../shared/toast";
 import type { StartupScript } from "../types";
 import { CgroupSettingsPanel } from "./CgroupSettingsPanel";
 
+/**
+ * formatDate renders an ISO timestamp as a localized medium date and short time, returning an
+ * em dash for missing or invalid values.
+ */
 function formatDate(value: string | undefined): string {
   if (!value) {
     return "—";
@@ -15,6 +19,10 @@ function formatDate(value: string | undefined): string {
   return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+/**
+ * badgeStatus maps a startup-script status to the status-badge value that colors it, treating
+ * unknown or missing states as disabled.
+ */
 function badgeStatus(status: string | undefined): string {
   switch (status) {
     case "success":
@@ -41,6 +49,11 @@ type ScriptSectionProps = {
   spaced?: boolean;
 };
 
+/**
+ * ScriptSection renders one startup-script panel with an enable checkbox, script editor, save
+ * action, status badge, and the last run's output. It loads and saves through endpoint and
+ * refuses to enable an empty script.
+ */
 function ScriptSection({ kind, title, endpoint, description, placeholder, spaced }: ScriptSectionProps) {
   const [current, setCurrent] = useState<StartupScript | null>(null);
   const [enabled, setEnabled] = useState(false);
@@ -194,6 +207,10 @@ function ScriptSection({ kind, title, endpoint, description, placeholder, spaced
   );
 }
 
+/**
+ * SettingsTab renders the settings page: cgroup controls plus the Rookery and VPP
+ * startup-script sections.
+ */
 export function SettingsTab() {
   return (
     <>

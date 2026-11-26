@@ -40,10 +40,18 @@ import { VPPGraphView } from "./VPPGraph";
 import { aclAssignments, formatACLRuleText } from "./acl";
 import { navigate, useRoute } from "../router";
 
+/**
+ * pipeEndpointName formats the Linux interface name for one end of a VPP pipe pair as
+ * pipe<instance>.<endpoint>.
+ */
 function pipeEndpointName(pipe: NetworkPipe, endpoint: 0 | 1): string {
   return `pipe${pipe.instance}.${endpoint}`;
 }
 
+/**
+ * formatDate renders a timestamp as a medium date and short local time, returning an em dash for
+ * missing or unparsable values.
+ */
 function formatDate(value: string | undefined): string {
   if (!value) {
     return "—";
@@ -55,8 +63,10 @@ function formatDate(value: string | undefined): string {
   return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
-// Whole-number byte formatting for the live traffic columns; decimals like
-// "1.5 KB/s" are dropped so the values stay easy to scan.
+/**
+ * formatWholeBytes formats a byte count as a whole-number B, KB, MB, or GB string for the live
+ * traffic columns, truncating fractions and coercing non-numeric values to zero.
+ */
 function formatWholeBytes(bytes: number): string {
   const value = Math.trunc(Number(bytes) || 0);
   if (value >= 1024 ** 3) {
@@ -95,6 +105,11 @@ const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: "troubleshoot", label: "Troubleshoot" },
 ];
 
+/**
+ * NetworksTab renders the network inventory with sections for host interfaces and taps, networks,
+ * pipes, virtual interfaces, ACLs, route tables, and troubleshooting. It loads data on mount, polls
+ * interface counters while visible, and refreshes on rookery:* window events.
+ */
 export function NetworksTab() {
   const [networks, setNetworks] = useState<Network[]>([]);
   const [networkPipes, setNetworkPipes] = useState<NetworkPipe[]>([]);

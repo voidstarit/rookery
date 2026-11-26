@@ -7,6 +7,10 @@ type VNFDNSRecordsDialogProps = {
   onClose: () => void;
 };
 
+/**
+ * sourceLabel labels a DNS record's origin, showing static, a DHCP source VNF number, or the raw
+ * source string when it is neither and is non-empty.
+ */
 function sourceLabel(source: string, sourceVNFID?: number): string {
   if (source === "static") {
     return "static";
@@ -17,6 +21,11 @@ function sourceLabel(source: string, sourceVNFID?: number): string {
   return source || "—";
 }
 
+/**
+ * VNFDNSRecordsDialog renders a modal table of a DNS VNF's static and DHCP-derived records with
+ * name, type, value, TTL, and source. It loads /api/vnfs/{id}/dns-records on mount and Refresh,
+ * shows a separate banner when dynamic records are unavailable, and closes on backdrop click.
+ */
 export function VNFDNSRecordsDialog({ vnf, onClose }: VNFDNSRecordsDialogProps) {
   const [data, setData] = useState<VNFDNSRecordsResponse | null>(null);
   const [error, setError] = useState("");

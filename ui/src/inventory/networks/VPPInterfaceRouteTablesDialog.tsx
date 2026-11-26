@@ -10,6 +10,11 @@ type VPPInterfaceRouteTablesDialogProps = {
   onSaved: (tables: VPPInterfaceRouteTables) => void;
 };
 
+/**
+ * VPPInterfaceRouteTablesDialog loads an interface's current IPv4/IPv6 FIB bindings, offering the
+ * non-default tables of each family plus "default (0)", and PUTs the chosen table IDs back. An
+ * explicit binding, including 0, overrides any automatic network VRF for a host tap.
+ */
 export function VPPInterfaceRouteTablesDialog({
   name,
   label,

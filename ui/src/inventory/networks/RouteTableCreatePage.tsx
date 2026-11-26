@@ -9,6 +9,12 @@ type RouteTableCreatePageProps = {
   onSaved: (table: RouteTable) => void;
 };
 
+/**
+ * RouteTableCreatePage renders the create-route-table form, defaulting the table ID to one above
+ * the highest table in the supplied list that is not the default table. Submitting POSTs the name,
+ * ID, IPv6 flag, and labels, saves the label draft, then calls onSaved; the Create button stays
+ * disabled without a name or a positive ID.
+ */
 export function RouteTableCreatePage({ tables, onCancel, onSaved }: RouteTableCreatePageProps) {
   const nextID = Math.max(0, ...tables.filter((table) => !table.is_default).map((table) => table.table_id)) + 1;
   const [name, setName] = useState("");

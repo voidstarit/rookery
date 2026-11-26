@@ -14,6 +14,11 @@ type LeaseResponse = {
   leases: VNFLease[];
 };
 
+/**
+ * VNFLeasesDialog renders a modal lease table for an IPv4 or IPv6 DHCP VNF, showing client ID,
+ * address, hostname, expiry, and active state. It loads /api/vnfs/{id}/leases on mount and
+ * Refresh, displays an empty state when no clients have leases, and closes on backdrop click.
+ */
 export function VNFLeasesDialog({ vnf, onClose }: VNFLeasesDialogProps) {
   const [leases, setLeases] = useState<VNFLease[]>([]);
   const [error, setError] = useState("");

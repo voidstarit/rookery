@@ -9,6 +9,11 @@ type ImportDisksDialogProps = {
   onImported: (disks: Disk[]) => void;
 };
 
+/**
+ * ImportDisksDialog lists a backend's existing thin volumes on open, lets the operator select the
+ * unregistered ones, and POSTs their names to import-disks. Already-registered volumes are
+ * disabled, Refresh re-reads the list, and a successful import hands the new disks to onImported.
+ */
 export function ImportDisksDialog({ backend, onClose, onImported }: ImportDisksDialogProps) {
   const [items, setItems] = useState<ImportableDisk[]>([]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());

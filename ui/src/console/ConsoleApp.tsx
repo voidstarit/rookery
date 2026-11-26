@@ -30,10 +30,17 @@ type VirtualKeyboardProps = {
   onPress: (definition: KeyDefinition) => void;
 };
 
+/**
+ * delay resolves after the given number of milliseconds, pacing typed clipboard input.
+ */
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+/**
+ * keyClass builds the CSS class list for one virtual-keyboard key, adding width and modifier
+ * classes and marking the key active while its latch is held.
+ */
 function keyClass(definition: KeyDefinition, active: boolean): string {
   const classes = ["vk-key"];
   if (definition.modifier) {
@@ -52,6 +59,10 @@ function keyClass(definition: KeyDefinition, active: boolean): string {
   return classes.join(" ");
 }
 
+/**
+ * VirtualKeyboard renders the on-screen key rows for the console; modifier keys stay latched,
+ * keys are disabled while disconnected, and each press reports its key definition.
+ */
 function VirtualKeyboard({ connected, activeModifiers, onPress }: VirtualKeyboardProps) {
   return (
     <>
@@ -85,6 +96,12 @@ function VirtualKeyboard({ connected, activeModifiers, onPress }: VirtualKeyboar
   );
 }
 
+/**
+ * ConsoleApp renders the standalone VNC console for the VM named in the query string: it loads
+ * VM metadata, opens the noVNC session, and offers keyboard, clipboard, Ctrl+Alt+Del, reset, and
+ * reconnect controls. It reports missing VM IDs, disabled console access, and connection
+ * failures, and can type or paste clipboard text into the guest through VNC.
+ */
 export function ConsoleApp() {
   const [status, setStatus] = useState<Status>({ label: "connecting…", state: "pending" });
   const [error, setError] = useState("");

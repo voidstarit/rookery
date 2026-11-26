@@ -45,6 +45,9 @@ type ArtifactDialogProps = {
 
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
+/**
+ * formatBytes renders a byte count with one decimal in B, KB, MB, or GB, treating NaN as zero.
+ */
 function formatBytes(bytes: number): string {
   const value = Number(bytes) || 0;
   if (value >= 1024 ** 3) {
@@ -59,6 +62,10 @@ function formatBytes(bytes: number): string {
   return `${value} B`;
 }
 
+/**
+ * ArtifactDialog renders the modal for creating or editing a LightVM kernel or initramfs artifact,
+ * uploads the selected file on create, saves labels, and reports the result through onSaved.
+ */
 export function ArtifactDialog({ kind, artifact, onClose, onSaved }: ArtifactDialogProps) {
   const config = ARTIFACTS[kind];
   const editing = artifact !== null;
