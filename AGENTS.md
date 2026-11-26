@@ -88,6 +88,22 @@ diagnostics. If no language server is available, fall back to `rg -w` plus readi
 validate with `tsc`; do not claim symbol accuracy from text matches. Full recipes and fallback
 rules are in the [tooling note](docs/agent-notes/tooling.md).
 
+### Reading source files
+
+Navigation answers *where*; reading answers *what it does*. Do not pay for the second when the
+first is enough, and do not skip the outline before a large read.
+
+- Run `scripts/glance <file>` before reading a source file longer than 200 lines. It prints the Go
+  symbol map (`gopls symbols`, with line ranges) or the TypeScript top-level declarations, each
+  followed by the first sentence of its Go doc / JSDoc comment.
+- Read the ranges around the symbols the task names, plus about ten lines of context, rather than
+  the whole file. Read the whole file when it is 200 lines or fewer, or when the outline shows the
+  task really does touch most of it — say so in one line before doing it.
+- "Who calls this" and "where is this defined" are `gopls references`/`definition` questions,
+  never a full-file read.
+- Do not use `cat`/`head`/`tail`/`sed -n` on Go or TypeScript source: `read` is the only reader
+  that returns line numbers, honors `offset`/`limit`, and caps a single call at 2000 lines.
+
 ## Working standards
 
 ### Generated files and source-of-truth rules
@@ -263,7 +279,7 @@ events and lease log levels, are in [`docs/agent-notes/logging.md`](docs/agent-n
 | [Operations](docs/agent-notes/operations.md) | Readiness, mTLS/PKI, client allowlist, local-listener security, rate limits. |
 | [Terraform](docs/agent-notes/terraform.md) | Provider scope and disk force delete. |
 | [Logging](docs/agent-notes/logging.md) | zerolog setup, fields, levels, and trace-level events. |
-| [Tooling](docs/agent-notes/tooling.md) | gopls/TypeScript navigation (incl. call hierarchy and caveats), edit rules, sandbox cache workaround. |
+| [Tooling](docs/agent-notes/tooling.md) | gopls/TypeScript navigation (incl. call hierarchy and caveats), read protocol, edit rules, sandbox cache workaround. |
 
 ## Keeping these notes current
 

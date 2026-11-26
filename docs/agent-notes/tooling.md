@@ -22,6 +22,33 @@ Do not use `grep -rn SomeSymbol` to answer "where is this defined?" and do not u
 to edit source. Text search cannot see methods, interface dispatch, generated code, or build-tag
 variants, and scripted in-place edits bypass formatting and review.
 
+## Reading protocol
+
+Navigation tells you where a symbol is; only the body tells you what it does. Do both, in that
+order, and only as far as the task needs.
+
+- **Outline before reading.** For a source file longer than 200 lines, run `scripts/glance <file>`
+  (or `gopls symbols <file>` directly) and pick the symbols the task actually touches.
+- **Read ranges, not files.** Read the chosen symbols plus about ten lines of context. A `read`
+  call with `offset`/`limit` costs a fraction of a whole-file read and keeps unrelated code out of
+  context.
+- **Read whole files deliberately.** Allowed when the file is 200 lines or fewer, or when the
+  outline shows the task spans most of it; say which in one line so the choice is visible.
+- **Never use `cat`/`head`/`tail`/`sed -n` on source.** They return no line numbers, ignore the
+  read cap, and leave nothing for later range reads to anchor on.
+
+`scripts/glance` prints gopls symbol names, kinds, and ranges for Go, and the top-level
+declarations (types, functions, components, constants) for TypeScript/Preact. Each symbol carries
+the first sentence of its Go doc comment or JSDoc block, so the outline also summarizes what the
+symbol does; `--no-doc` drops the summaries. It retries with `/tmp` caches for sandboxed checkouts
+and falls back to a text outline when gopls is missing:
+
+```sh
+./scripts/glance internal/api/nat44.go               # Go: symbol map with doc summaries
+./scripts/glance ui/src/inventory/vnfs/VNFPage.tsx   # TS/Preact: declaration outline
+./scripts/glance --no-doc internal/store/store.go    # compact map, no docs
+```
+
 ## Go
 
 Run gopls from the repository root so it loads the module. Positions are 1-based
