@@ -63,6 +63,7 @@ gopls workspace_symbol -matcher fuzzy 'CreateNetworkHostTap'
 gopls symbols internal/api/host_taps.go
 gopls definition internal/api/host_taps.go:70:20
 gopls references internal/api/host_taps.go:70:20
+gopls call_hierarchy internal/api/host_taps.go:70:20
 gopls check internal/api/host_taps.go
 go doc ./internal/api Server
 ```
@@ -70,7 +71,9 @@ go doc ./internal/api Server
 If Go tooling reports a read-only cache in a sandbox (a gopls persistent-index error, or
 `go doc`/`go build` failing under `~/.cache`), point both caches at a writable directory:
 `XDG_CACHE_HOME=/tmp/rookery-gopls GOCACHE=/tmp/rookery-go-build gopls …`.
-`gopls mcp -instructions` describes the MCP surface for agents that can attach it.
+`gopls mcp -instructions` describes the MCP surface for agents that can attach it. References
+reflect only the active build configuration, so repeat with the relevant build tags/`GOOS` when a
+negative result matters.
 
 ```sh
 # TypeScript / Preact
@@ -260,7 +263,7 @@ events and lease log levels, are in [`docs/agent-notes/logging.md`](docs/agent-n
 | [Operations](docs/agent-notes/operations.md) | Readiness, mTLS/PKI, client allowlist, local-listener security, rate limits. |
 | [Terraform](docs/agent-notes/terraform.md) | Provider scope and disk force delete. |
 | [Logging](docs/agent-notes/logging.md) | zerolog setup, fields, levels, and trace-level events. |
-| [Tooling](docs/agent-notes/tooling.md) | gopls and TypeScript language-service navigation, edit rules, sandbox cache workaround. |
+| [Tooling](docs/agent-notes/tooling.md) | gopls/TypeScript navigation (incl. call hierarchy and caveats), edit rules, sandbox cache workaround. |
 
 ## Keeping these notes current
 
