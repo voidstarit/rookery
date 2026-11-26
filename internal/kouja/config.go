@@ -53,6 +53,9 @@ func ParseConnectionConfig(cfg store.StorageBackendConfig) (Config, error) {
 	return parseConfig(cfg, false)
 }
 
+// parseConfig validates the kouja backend config, defaulting the protocol to
+// iSCSI and requiring a storage class only when requested. It checks the
+// initiator or host NQN and accepts inline PEM or file paths.
 func parseConfig(cfg store.StorageBackendConfig, requireStorageClass bool) (Config, error) {
 	if cfg.Kouja == nil {
 		return Config{}, ErrNotConfigured
@@ -150,6 +153,8 @@ func ParseBackend(backend store.StorageBackend) (Config, error) {
 	return ParseConfig(backend.Config)
 }
 
+// validateEndpoint requires a TLS endpoint of the form host:port or
+// https://host:port, rejecting plaintext http, paths, and ports outside 1-65535.
 func validateEndpoint(value string) error {
 	if value == "" {
 		return errors.New("kouja endpoint is required")
@@ -179,6 +184,8 @@ func validateEndpoint(value string) error {
 	return nil
 }
 
+// validatePortal requires a data-path portal of the form host:port, rejects
+// loopback and unspecified IP addresses, and validates the port range.
 func validatePortal(value string) error {
 	host, port, err := net.SplitHostPort(value)
 	if err != nil || strings.TrimSpace(host) == "" {
@@ -194,14 +201,21 @@ func validatePortal(value string) error {
 	return nil
 }
 
+// isIQN reports whether value, ignoring case and surrounding space, starts with
+// the iSCSI qualified-name prefix "iqn.".
 func isIQN(value string) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(value)), "iqn.")
 }
 
+// isNQN reports whether value, ignoring case and surrounding space, starts with
+// the NVMe qualified-name prefix "nqn.".
 func isNQN(value string) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(value)), "nqn.")
 }
 
+// tlsConfigFromPEM builds a TLS 1.3 client configuration from PEM-encoded CA,
+// client certificate, and client key material, failing when the key pair or CA
+// cannot be parsed.
 func tlsConfigFromPEM(caPEM, certPEM, keyPEM string) (*tls.Config, error) {
 	certificate, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
 	if err != nil {
@@ -218,6 +232,8 @@ func tlsConfigFromPEM(caPEM, certPEM, keyPEM string) (*tls.Config, error) {
 	}, nil
 }
 
+// ownerFromCertificate loads the client certificate and key files and returns
+// the owner identity encoded in the certificate's URI SAN.
 func ownerFromCertificate(certFile, keyFile string) (string, error) {
 	pair, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
@@ -226,6 +242,8 @@ func ownerFromCertificate(certFile, keyFile string) (string, error) {
 	return ownerFromPair(pair)
 }
 
+// ownerFromPair returns the leaf certificate's spiffe://kouja/caller/<name> URI
+// SAN, requiring exactly one such URI SAN on the certificate.
 func ownerFromPair(pair tls.Certificate) (string, error) {
 	if len(pair.Certificate) == 0 {
 		return "", errors.New("kouja client certificate is empty")

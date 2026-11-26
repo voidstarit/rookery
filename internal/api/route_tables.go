@@ -61,6 +61,9 @@ func (s *Server) ReconcileRouteTables(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
+// routeSpecFromStore converts a stored route into a host.RouteSpec, resolving
+// optional next-hop and lookup table names and falling back to InterfaceName
+// when EgressInterface is empty.
 func (s *Server) routeSpecFromStore(ctx context.Context, route store.Route) (host.RouteSpec, error) {
 	egress := route.EgressInterface
 	if egress == "" {
@@ -90,6 +93,9 @@ func (s *Server) routeSpecFromStore(ctx context.Context, route store.Route) (hos
 	}, nil
 }
 
+// resolveRouteTableName resolves an optional route table name to its ID for the
+// given address family, returning nil without a lookup when name is nil and
+// wrapping errors with label.
 func (s *Server) resolveRouteTableName(ctx context.Context, name *string, ipv6 bool, label string) (*uint32, error) {
 	if name == nil {
 		return nil, nil

@@ -193,6 +193,8 @@ func (s *interfaceService) effectiveVPPInterfaceRouteTables(ctx context.Context,
 	return tables, nil
 }
 
+// routeTableName resolves a VPP route table ID to its stored name, returning "default" for 0
+// and a "table N" placeholder when the lookup fails.
 func (s *interfaceService) routeTableName(ctx context.Context, tableID uint32, ipv6 bool) string {
 	if tableID == 0 {
 		return "default"
@@ -204,6 +206,8 @@ func (s *interfaceService) routeTableName(ctx context.Context, tableID uint32, i
 	return table.Name
 }
 
+// validateGenericRouteTableTarget requires a non-empty, Rookery-managed, non-vhost-user
+// interface name, directing virtual interfaces to their own route-tables endpoint.
 func (s *interfaceService) validateGenericRouteTableTarget(ctx context.Context, name string) error {
 	if name == "" {
 		return status.Error(codes.InvalidArgument, "interface name is required")
@@ -225,6 +229,8 @@ func (s *interfaceService) validateGenericRouteTableTarget(ctx context.Context, 
 	return nil
 }
 
+// vppInterfaceRouteTablesToProto maps stored route-table IDs and names to proto, displaying
+// table 0 as "default" and unnamed tables as "table N".
 func vppInterfaceRouteTablesToProto(tables store.VPPInterfaceRouteTables) *rookeryv1.VPPInterfaceRouteTables {
 	ipv4Name := tables.IPv4TableName
 	if tables.IPv4TableID == 0 {

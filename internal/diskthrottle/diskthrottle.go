@@ -96,6 +96,8 @@ func (l Limits) Validate() error {
 	return nil
 }
 
+// validateFamily rejects combining a total limit with read/write limits and
+// validates either the total triple or the read and write burst triples.
 func validateFamily(name string, total, totalMax, totalLength, read, readMax, readLength, write, writeMax, writeLength int64) error {
 	totalSet := total > 0
 	directionalSet := read > 0 || readMax > 0 || readLength > 0 ||
@@ -120,6 +122,8 @@ func validateFamily(name string, total, totalMax, totalLength, read, readMax, re
 	return nil
 }
 
+// validateBurst enforces the value limits, base/max consistency, and QEMU's
+// burst-product cap on one throttling triple.
 func validateBurst(name string, base, max, length int64) error {
 	if base > ThrottleValueMax {
 		return fmt.Errorf("%s must not exceed %d", name, ThrottleValueMax)

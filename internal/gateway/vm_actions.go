@@ -52,6 +52,8 @@ type InterfaceCounterSource interface {
 	ResetInterfaceCounters(ctx context.Context) error
 }
 
+// vmStartStatusError converts a QEMU start failure into a gRPC error, flagging an active Kouja
+// iSCSI session as Unavailable with a retry hint and everything else as Internal.
 func vmStartStatusError(err error) error {
 	if errors.Is(err, kouja.ErrSessionActive) {
 		return status.Error(codes.Unavailable, "could not start VM: "+err.Error()+" (retrying after the previous iSCSI session closes usually succeeds)")
@@ -59,6 +61,8 @@ func vmStartStatusError(err error) error {
 	return status.Error(codes.Internal, "could not start VM: "+err.Error())
 }
 
+// vmToProto converts a VM and, for running VMs whose runtime exposes a state monitor, attaches the
+// live QEMU run state; monitor failures leave the field unset rather than failing the call.
 func (s *vmService) vmToProto(ctx context.Context, vm store.VM) *rookeryv1.VM {
 	result := vmToProto(vm)
 	if vm.Status == store.StatusRunning && s.runtime != nil {
@@ -71,6 +75,9 @@ func (s *vmService) vmToProto(ctx context.Context, vm store.VM) *rookeryv1.VM {
 	return result
 }
 
+// startVM launches QEMU through the configured planner and prepared-start path when available,
+// falling back to a plain runtime start; a planner naming attachments is rejected unless the
+// runtime supports them.
 func (s *vmService) startVM(ctx context.Context, vm store.VM) error {
 	if s.planner != nil {
 		plan, err := s.planner.Plan(ctx, vm)
@@ -87,6 +94,7 @@ func (s *vmService) startVM(ctx context.Context, vm store.VM) error {
 	return s.runtime.Start(ctx, vm)
 }
 
+// runtimeUnavailable returns Unavailable when no VM runtime is configured, otherwise nil.
 func (s *vmService) runtimeUnavailable() error {
 	if s.runtime == nil {
 		return status.Error(codes.Unavailable, "VM runtime is not configured")
@@ -94,6 +102,9 @@ func (s *vmService) runtimeUnavailable() error {
 	return nil
 }
 
+// StartVM starts a stopped VM and marks it running with desired state running. If QEMU is already
+// alive it repairs the stored status and returns AlreadyExists; a failed launch records the error
+// status and returns the start failure.
 func (s *vmService) StartVM(ctx context.Context, request *rookeryv1.StartVMRequest) (*rookeryv1.VM, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -136,6 +147,8 @@ func (s *vmService) StartVM(ctx context.Context, request *rookeryv1.StartVMReque
 	return s.vmToProto(ctx, updated), nil
 }
 
+// StopVM stops the QEMU process when it is running, then records the stopped status and desired
+// state stopped so autostart does not bring the VM back.
 func (s *vmService) StopVM(ctx context.Context, request *rookeryv1.StopVMRequest) (*rookeryv1.VM, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -163,6 +176,8 @@ func (s *vmService) StopVM(ctx context.Context, request *rookeryv1.StopVMRequest
 	return s.vmToProto(ctx, updated), nil
 }
 
+// ResumeVM unpauses a running VM through its QEMU monitor and returns the VM with the updated run
+// state; it fails with FailedPrecondition when the VM is not running or not paused.
 func (s *vmService) ResumeVM(ctx context.Context, request *rookeryv1.ResumeVMRequest) (*rookeryv1.VM, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -195,6 +210,8 @@ func (s *vmService) ResumeVM(ctx context.Context, request *rookeryv1.ResumeVMReq
 	return result, nil
 }
 
+// ResetVM asks the QEMU monitor to reset a running VM; if the monitor is unavailable it stops and
+// restarts the VM instead, recording an error status if the restart fails.
 func (s *vmService) ResetVM(ctx context.Context, request *rookeryv1.ResetVMRequest) (*rookeryv1.VM, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -229,6 +246,8 @@ func (s *vmService) ResetVM(ctx context.Context, request *rookeryv1.ResetVMReque
 	return s.getVM(ctx, vm.ID)
 }
 
+// CtrlAltDel sends Ctrl+Alt+Del to a running VM and returns its current state; a VM started
+// without a QEMU monitor yields Aborted with a remediation hint.
 func (s *vmService) CtrlAltDel(ctx context.Context, request *rookeryv1.CtrlAltDelRequest) (*rookeryv1.VM, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -253,10 +272,14 @@ func (s *vmService) CtrlAltDel(ctx context.Context, request *rookeryv1.CtrlAltDe
 	return s.getVM(ctx, request.GetId())
 }
 
+// blockDeviceToProto converts one QEMU block-device sample for a VM, resolving disk names from
+// vm.Disks.
 func blockDeviceToProto(vm store.VM, stat qemu.BlockDeviceStats) *rookeryv1.BlockDeviceMetrics {
 	return blockDeviceToProtoForDisks(vm.Disks, stat)
 }
 
+// blockDeviceToProtoForDisks maps a QEMU block-device sample, including failed and invalid
+// operation counters, to API metrics; a rookery-disk-<id> device also gets its disk ID and name.
 func blockDeviceToProtoForDisks(disks []store.VMDisk, stat qemu.BlockDeviceStats) *rookeryv1.BlockDeviceMetrics {
 	result := &rookeryv1.BlockDeviceMetrics{
 		Device:    stat.Device,
@@ -280,6 +303,9 @@ func blockDeviceToProtoForDisks(disks []store.VMDisk, stat qemu.BlockDeviceStats
 	return result
 }
 
+// GetVMMetrics samples QEMU metrics for a VM, adding per-device block statistics and summed VPP
+// interface counters when the VM is running; those optional sources are best effort, and the
+// result carries a fresh sample timestamp.
 func (s *vmService) GetVMMetrics(ctx context.Context, request *rookeryv1.GetVMMetricsRequest) (*rookeryv1.VMMetrics, error) {
 	if err := s.runtimeUnavailable(); err != nil {
 		return nil, err
@@ -336,6 +362,7 @@ func (s *vmService) GetVMMetrics(ctx context.Context, request *rookeryv1.GetVMMe
 	return result, nil
 }
 
+// getVM reloads a VM and returns its proto form, reporting any store read failure as Internal.
 func (s *vmService) getVM(ctx context.Context, id string) (*rookeryv1.VM, error) {
 	vm, err := s.store.GetVM(ctx, id)
 	if err != nil {
@@ -344,6 +371,8 @@ func (s *vmService) getVM(ctx context.Context, id string) (*rookeryv1.VM, error)
 	return s.vmToProto(ctx, vm), nil
 }
 
+// DeleteVM stops the VM's QEMU process when a runtime is configured, then deletes the record and
+// returns an empty response; a failed stop aborts the delete.
 func (s *vmService) DeleteVM(ctx context.Context, request *rookeryv1.DeleteVMRequest) (*emptypb.Empty, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

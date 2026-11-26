@@ -21,6 +21,8 @@ type diskThrottleService struct {
 	store *store.Store
 }
 
+// ListDiskThrottleClasses returns every stored throttle class converted to proto, or an
+// Internal status when they cannot be listed.
 func (s *diskThrottleService) ListDiskThrottleClasses(ctx context.Context, _ *rookeryv1.ListDiskThrottleClassesRequest) (*rookeryv1.ListDiskThrottleClassesResponse, error) {
 	classes, err := s.store.ListDiskThrottleClasses(ctx)
 	if err != nil {
@@ -35,6 +37,8 @@ func (s *diskThrottleService) ListDiskThrottleClasses(ctx context.Context, _ *ro
 	return response, nil
 }
 
+// GetDiskThrottleClass returns one throttle class by ID, mapping a missing class to
+// NotFound.
 func (s *diskThrottleService) GetDiskThrottleClass(ctx context.Context, request *rookeryv1.GetDiskThrottleClassRequest) (*rookeryv1.DiskThrottleClass, error) {
 	class, err := s.store.GetDiskThrottleClass(ctx, request.GetId())
 	if err != nil {
@@ -43,6 +47,8 @@ func (s *diskThrottleService) GetDiskThrottleClass(ctx context.Context, request 
 	return diskThrottleClassToProto(class), nil
 }
 
+// CreateDiskThrottleClass validates the requested limits and stores a new throttle class,
+// returning InvalidArgument for invalid limits and AlreadyExists for a duplicate name.
 func (s *diskThrottleService) CreateDiskThrottleClass(ctx context.Context, request *rookeryv1.CreateDiskThrottleClassRequest) (*rookeryv1.DiskThrottleClass, error) {
 	class := store.DiskThrottleClass{
 		Name:        request.GetName(),
@@ -59,6 +65,9 @@ func (s *diskThrottleService) CreateDiskThrottleClass(ctx context.Context, reque
 	return diskThrottleClassToProto(created), nil
 }
 
+// UpdateDiskThrottleClass applies any supplied name, description, or limits to an existing
+// class, refusing to leave a class with a stored validation error unrepaired and logging
+// the old and new limits.
 func (s *diskThrottleService) UpdateDiskThrottleClass(ctx context.Context, request *rookeryv1.UpdateDiskThrottleClassRequest) (*rookeryv1.DiskThrottleClass, error) {
 	class, err := s.store.GetDiskThrottleClass(ctx, request.GetId())
 	if err != nil {
@@ -91,6 +100,8 @@ func (s *diskThrottleService) UpdateDiskThrottleClass(ctx context.Context, reque
 	return diskThrottleClassToProto(updated), nil
 }
 
+// DeleteDiskThrottleClass removes a throttle class, returning an Aborted error that names
+// assigned disks when the class is still in use.
 func (s *diskThrottleService) DeleteDiskThrottleClass(ctx context.Context, request *rookeryv1.DeleteDiskThrottleClassRequest) (*emptypb.Empty, error) {
 	class, err := s.store.GetDiskThrottleClass(ctx, request.GetId())
 	if err != nil {
@@ -105,6 +116,8 @@ func (s *diskThrottleService) DeleteDiskThrottleClass(ctx context.Context, reque
 	return &emptypb.Empty{}, nil
 }
 
+// classInUseError builds the Aborted error for a class deletion blocked by disk
+// assignments, re-reading the class and listing up to five assigned disk names.
 func (s *diskThrottleService) classInUseError(ctx context.Context, class store.DiskThrottleClass) error {
 	current, err := s.store.GetDiskThrottleClass(ctx, class.ID)
 	if err == nil {
@@ -121,6 +134,8 @@ func (s *diskThrottleService) classInUseError(ctx context.Context, class store.D
 	return status.Error(codes.Aborted, message)
 }
 
+// diskThrottleClassToProto converts a stored throttle class into its proto form,
+// including limits, disk count, timestamps, and any validation error.
 func diskThrottleClassToProto(class store.DiskThrottleClass) *rookeryv1.DiskThrottleClass {
 	return &rookeryv1.DiskThrottleClass{
 		Id:              class.ID,
@@ -134,6 +149,8 @@ func diskThrottleClassToProto(class store.DiskThrottleClass) *rookeryv1.DiskThro
 	}
 }
 
+// limitsToProto copies throttle limits field-by-field into the proto message, including
+// the burst maxima and the IOPS size used for iops accounting.
 func limitsToProto(limits diskthrottle.Limits) *rookeryv1.DiskThrottleLimits {
 	return &rookeryv1.DiskThrottleLimits{
 		BpsTotal:           limits.BPSTotal,
@@ -158,6 +175,8 @@ func limitsToProto(limits diskthrottle.Limits) *rookeryv1.DiskThrottleLimits {
 	}
 }
 
+// limitsFromProto copies proto throttle limits into the diskthrottle type, returning zero
+// limits when the message is nil.
 func limitsFromProto(limits *rookeryv1.DiskThrottleLimits) diskthrottle.Limits {
 	if limits == nil {
 		return diskthrottle.Limits{}
@@ -185,6 +204,9 @@ func limitsFromProto(limits *rookeryv1.DiskThrottleLimits) diskthrottle.Limits {
 	}
 }
 
+// diskThrottleClassError maps store throttle class errors to gRPC statuses: NotFound,
+// AlreadyExists, Aborted for in-use or deleting disks, InvalidArgument for template or
+// invalid limits, and Internal otherwise.
 func diskThrottleClassError(err error) error {
 	switch {
 	case errors.Is(err, store.ErrDiskThrottleClassNotFound):

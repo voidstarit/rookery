@@ -37,7 +37,8 @@ func (s *lightVMInitramfsService) ListInitramfs(ctx context.Context, _ *rookeryv
 	return response, nil
 }
 
-// GetInitramfs returns one initramfs record.
+// GetInitramfs returns the initramfs record with the requested ID, reporting
+// NotFound when it is missing.
 func (s *lightVMInitramfsService) GetInitramfs(ctx context.Context, request *rookeryv1.GetInitramfsRequest) (*rookeryv1.LightVMInitramfs, error) {
 	image, err := s.store.GetLightVMInitramfs(ctx, request.GetId())
 	if err != nil {
@@ -96,6 +97,9 @@ func (s *lightVMInitramfsService) DeleteInitramfs(ctx context.Context, request *
 	return &emptypb.Empty{}, nil
 }
 
+// initramfsFromRequest validates the request fields and the initramfs file on disk, defaulting an
+// empty fileName to the path's base name and marking the file managed when it lives under
+// storageDir.
 func (s *lightVMInitramfsService) initramfsFromRequest(id int64, name, description, path, fileName string) (store.LightVMInitramfs, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -129,6 +133,8 @@ func (s *lightVMInitramfsService) initramfsFromRequest(id int64, name, descripti
 	}, nil
 }
 
+// lightVMInitramfsToProto converts a stored initramfs record into its API representation,
+// including the managed flag and creation/update timestamps.
 func lightVMInitramfsToProto(image store.LightVMInitramfs) *rookeryv1.LightVMInitramfs {
 	return &rookeryv1.LightVMInitramfs{
 		Id:          image.ID,
@@ -143,6 +149,9 @@ func lightVMInitramfsToProto(image store.LightVMInitramfs) *rookeryv1.LightVMIni
 	}
 }
 
+// lightVMInitramfsError maps store initramfs errors to gRPC statuses: not-found uses
+// notFoundMessage, while name conflicts, in-use images, and unexpected failures get their own
+// codes.
 func lightVMInitramfsError(err error, notFoundMessage string) error {
 	switch {
 	case errors.Is(err, store.ErrLightVMInitramfsNotFound):

@@ -8,6 +8,9 @@ import (
 	"github.com/voidstarit/rookery/internal/host"
 )
 
+// handleDownloadPacketCapture streams the named pcap file as a download,
+// returning 404 for an unknown capture and 503 when the VPP runtime is
+// unconfigured. Quotes are stripped from the observed filename.
 func (s *Server) handleDownloadPacketCapture(w http.ResponseWriter, r *http.Request) {
 	if s.networks == nil {
 		writeError(w, http.StatusServiceUnavailable, "VPP network runtime is not configured")
@@ -30,6 +33,8 @@ func (s *Server) handleDownloadPacketCapture(w http.ResponseWriter, r *http.Requ
 	http.ServeContent(w, r, info.Name, info.Modified, file)
 }
 
+// handleDeletePacketCapture deletes the named pcap file, returning 204 on
+// success, 404 when it is unknown, and 409 while the capture is still active.
 func (s *Server) handleDeletePacketCapture(w http.ResponseWriter, r *http.Request) {
 	if s.networks == nil {
 		writeError(w, http.StatusServiceUnavailable, "VPP network runtime is not configured")

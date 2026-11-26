@@ -129,6 +129,8 @@ func (s *Store) DeleteEntityLabels(ctx context.Context, entityType, entityID str
 	return nil
 }
 
+// validateEntityType trims entityType and returns it when the labels package recognises it,
+// otherwise reporting an unknown-entity-type error.
 func validateEntityType(entityType string) (string, error) {
 	entityType = strings.TrimSpace(entityType)
 	if !labels.ValidEntityType(entityType) {
@@ -137,6 +139,8 @@ func validateEntityType(entityType string) (string, error) {
 	return entityType, nil
 }
 
+// validateEntitySelector normalises an entity type and trimmed ID, rejecting unknown types and IDs
+// that are empty or longer than 200 bytes before any label query runs.
 func validateEntitySelector(entityType, entityID string) (string, string, error) {
 	entityType, err := validateEntityType(entityType)
 	if err != nil {

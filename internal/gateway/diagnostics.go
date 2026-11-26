@@ -29,6 +29,8 @@ type DiagnosticsRuntime interface {
 	DeletePacketCapture(name string) error
 }
 
+// ready reports Unavailable when no diagnostics runtime is configured or VPP is not ready, and nil
+// otherwise.
 func (s *troubleshootService) ready() error {
 	if s.runtime == nil {
 		return status.Error(codes.Unavailable, "VPP network runtime is not configured")
@@ -39,6 +41,8 @@ func (s *troubleshootService) ready() error {
 	return nil
 }
 
+// GetVPPGraph returns the VPP node graph with nodes, edges, and generation time converted to
+// protobuf, failing with Internal when the runtime cannot read it.
 func (s *troubleshootService) GetVPPGraph(ctx context.Context, _ *rookeryv1.GetVPPGraphRequest) (*rookeryv1.VPPGraph, error) {
 	if err := s.ready(); err != nil {
 		return nil, err
@@ -62,6 +66,8 @@ func (s *troubleshootService) GetVPPGraph(ctx context.Context, _ *rookeryv1.GetV
 	return result, nil
 }
 
+// ListACLInterfaceCounters returns per-interface ingress and egress ACL match counters from VPP,
+// failing with Internal when the runtime cannot read them.
 func (s *troubleshootService) ListACLInterfaceCounters(ctx context.Context, _ *rookeryv1.ListACLInterfaceCountersRequest) (*rookeryv1.ListACLInterfaceCountersResponse, error) {
 	if err := s.ready(); err != nil {
 		return nil, err
@@ -82,6 +88,7 @@ func (s *troubleshootService) ListACLInterfaceCounters(ctx context.Context, _ *r
 	return response, nil
 }
 
+// ListTraceNodes returns the node IDs that can be passed to StartTrace.
 func (s *troubleshootService) ListTraceNodes(ctx context.Context, _ *rookeryv1.ListTraceNodesRequest) (*rookeryv1.ListTraceNodesResponse, error) {
 	if err := s.ready(); err != nil {
 		return nil, err
@@ -97,6 +104,8 @@ func (s *troubleshootService) ListTraceNodes(ctx context.Context, _ *rookeryv1.L
 	return response, nil
 }
 
+// StartTrace clears any existing trace and captures count packets at node, returning the result;
+// an invalid node or a count outside 1-1000 is reported as InvalidArgument.
 func (s *troubleshootService) StartTrace(ctx context.Context, request *rookeryv1.StartTraceRequest) (*rookeryv1.TraceResult, error) {
 	if err := s.ready(); err != nil {
 		return nil, err
@@ -108,6 +117,8 @@ func (s *troubleshootService) StartTrace(ctx context.Context, request *rookeryv1
 	return traceResultToProto(result), nil
 }
 
+// GetTrace returns the most recent VPP packet trace result, failing with Internal when the runtime
+// cannot read it.
 func (s *troubleshootService) GetTrace(ctx context.Context, _ *rookeryv1.GetTraceRequest) (*rookeryv1.TraceResult, error) {
 	if err := s.ready(); err != nil {
 		return nil, err
@@ -119,6 +130,7 @@ func (s *troubleshootService) GetTrace(ctx context.Context, _ *rookeryv1.GetTrac
 	return traceResultToProto(result), nil
 }
 
+// ClearTrace discards the current VPP packet trace and returns an empty response.
 func (s *troubleshootService) ClearTrace(ctx context.Context, _ *rookeryv1.ClearTraceRequest) (*emptypb.Empty, error) {
 	if err := s.ready(); err != nil {
 		return nil, err
@@ -129,6 +141,7 @@ func (s *troubleshootService) ClearTrace(ctx context.Context, _ *rookeryv1.Clear
 	return &emptypb.Empty{}, nil
 }
 
+// traceResultToProto converts a host trace result, omitting CapturedAt when it is the zero time.
 func traceResultToProto(value host.TraceResult) *rookeryv1.TraceResult {
 	result := &rookeryv1.TraceResult{Node: value.Node, Count: value.Count, Raw: value.Raw}
 	if !value.CapturedAt.IsZero() {
@@ -137,6 +150,8 @@ func traceResultToProto(value host.TraceResult) *rookeryv1.TraceResult {
 	return result
 }
 
+// aclDirectionToProto converts one direction's ACL counters, copying the ACL index slice and every
+// per-rule counter.
 func aclDirectionToProto(value host.ACLDirectionCounters) *rookeryv1.ACLDirectionCounters {
 	result := &rookeryv1.ACLDirectionCounters{
 		Matched: value.Matched, Denied: value.Denied, Permitted: value.Permitted,
@@ -150,6 +165,8 @@ func aclDirectionToProto(value host.ACLDirectionCounters) *rookeryv1.ACLDirectio
 	return result
 }
 
+// ready reports Unavailable when no capture runtime is configured or VPP is not ready, and nil
+// otherwise.
 func (s *captureService) ready() error {
 	if s.runtime == nil {
 		return status.Error(codes.Unavailable, "VPP network runtime is not configured")
@@ -160,6 +177,8 @@ func (s *captureService) ready() error {
 	return nil
 }
 
+// ListCaptureInterfaces returns the VPP interfaces that can be targeted by StartCapture, including
+// their index, type, MAC, MTU, and link state.
 func (s *captureService) ListCaptureInterfaces(ctx context.Context, _ *rookeryv1.ListCaptureInterfacesRequest) (*rookeryv1.ListCaptureInterfacesResponse, error) {
 	if err := s.ready(); err != nil {
 		return nil, err
@@ -178,6 +197,8 @@ func (s *captureService) ListCaptureInterfaces(ctx context.Context, _ *rookeryv1
 	return response, nil
 }
 
+// GetCaptureOverview combines the current capture status with the list of capture files on disk,
+// failing with Internal if either runtime read fails.
 func (s *captureService) GetCaptureOverview(ctx context.Context, _ *rookeryv1.GetCaptureOverviewRequest) (*rookeryv1.PacketCaptureOverview, error) {
 	if err := s.ready(); err != nil {
 		return nil, err
@@ -196,6 +217,8 @@ func (s *captureService) GetCaptureOverview(ctx context.Context, _ *rookeryv1.Ge
 	}, nil
 }
 
+// StartCapture starts a packet capture with the requested interface, direction, byte limit, and
+// snap length; an already active capture is reported as Aborted.
 func (s *captureService) StartCapture(ctx context.Context, request *rookeryv1.StartCaptureRequest) (*rookeryv1.PacketCaptureStatus, error) {
 	if err := s.ready(); err != nil {
 		return nil, err
@@ -213,6 +236,8 @@ func (s *captureService) StartCapture(ctx context.Context, request *rookeryv1.St
 	return captureStatusToProto(statusValue), nil
 }
 
+// StopCapture stops the running packet capture and returns its final status, including file size
+// and packet count.
 func (s *captureService) StopCapture(ctx context.Context, _ *rookeryv1.StopCaptureRequest) (*rookeryv1.PacketCaptureStatus, error) {
 	if err := s.ready(); err != nil {
 		return nil, err
@@ -224,6 +249,8 @@ func (s *captureService) StopCapture(ctx context.Context, _ *rookeryv1.StopCaptu
 	return captureStatusToProto(statusValue), nil
 }
 
+// ListCaptureFiles returns the capture files on disk without requiring VPP readiness, failing with
+// Unavailable when no runtime is configured.
 func (s *captureService) ListCaptureFiles(_ context.Context, _ *rookeryv1.ListCaptureFilesRequest) (*rookeryv1.ListCaptureFilesResponse, error) {
 	if s.runtime == nil {
 		return nil, status.Error(codes.Unavailable, "VPP network runtime is not configured")
@@ -235,6 +262,8 @@ func (s *captureService) ListCaptureFiles(_ context.Context, _ *rookeryv1.ListCa
 	return &rookeryv1.ListCaptureFilesResponse{Files: captureFilesToProto(files)}, nil
 }
 
+// DeleteCaptureFile removes the named capture file, reporting NotFound when missing and Aborted
+// when it is the capture currently being written.
 func (s *captureService) DeleteCaptureFile(_ context.Context, request *rookeryv1.DeleteCaptureFileRequest) (*emptypb.Empty, error) {
 	if s.runtime == nil {
 		return nil, status.Error(codes.Unavailable, "VPP network runtime is not configured")
@@ -252,6 +281,8 @@ func (s *captureService) DeleteCaptureFile(_ context.Context, request *rookeryv1
 	return &emptypb.Empty{}, nil
 }
 
+// captureStatusToProto converts a host capture status, translating non-nil start and stop times to
+// protobuf timestamps.
 func captureStatusToProto(value host.PacketCaptureStatus) *rookeryv1.PacketCaptureStatus {
 	result := &rookeryv1.PacketCaptureStatus{
 		Active: value.Active, Interface: value.Interface, Direction: value.Direction, File: value.File,
@@ -267,6 +298,8 @@ func captureStatusToProto(value host.PacketCaptureStatus) *rookeryv1.PacketCaptu
 	return result
 }
 
+// captureFilesToProto converts capture file metadata to protobuf, preserving order and always
+// setting the modification time.
 func captureFilesToProto(files []host.PacketCaptureFile) []*rookeryv1.PacketCaptureFile {
 	result := make([]*rookeryv1.PacketCaptureFile, 0, len(files))
 	for _, file := range files {

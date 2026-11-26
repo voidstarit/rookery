@@ -23,10 +23,12 @@ func NewRouteTableDataSource() datasource.DataSource {
 	return &routeTableDataSource{}
 }
 
+// Metadata registers this data source under the provider-prefixed type name <provider>_route_table.
 func (d *routeTableDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_route_table"
 }
 
+// Schema defines the route table attributes for lookup by id, by table_id plus ipv6, or by name.
 func (d *routeTableDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a route table by id, by table_id plus ipv6, or by name. Use table_id 0 for a default table and set ipv6.",
@@ -45,6 +47,8 @@ func (d *routeTableDataSource) Schema(_ context.Context, _ datasource.SchemaRequ
 	}
 }
 
+// Read resolves a route table by exactly one of id, table_id, or name; table_id requires
+// ipv6 and duplicate matches get a disambiguation hint.
 func (d *routeTableDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config routeTableModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)

@@ -80,6 +80,10 @@ func newDHCPv4Handlers(vnf store.VNF, leasePath string, port int) ([]handler.Han
 	return handlers4, nil
 }
 
+// newMemifDHCPv4Stack builds a gVisor netstack with the IPv4 address from the
+// VNF bind IP (falling back to the gateway) and binds a broadcast DHCPv4 UDP
+// endpoint on port. It fails when the CIDR is missing or not IPv4, or when the
+// NIC or endpoint cannot be created.
 func newMemifDHCPv4Stack(vnf store.VNF, mac net.HardwareAddr, handlers []handler.Handler4, port int) (*memifDHCPv4, error) {
 	cidr := strings.TrimSpace(vnf.Config.BindIP)
 	if cidr == "" {
@@ -190,6 +194,9 @@ func startMemifDHCPv4(ctx context.Context, cfg memifDHCPv4Config) (*memifDHCPv4,
 	return server, nil
 }
 
+// serveDHCP reads DHCPv4 requests from the userspace UDP socket, writes each
+// reply, and closes m.done when it stops. Read errors end the loop, either
+// silently during shutdown or with a warning log.
 func (m *memifDHCPv4) serveDHCP(ctx context.Context) {
 	defer close(m.done)
 	buf := make([]byte, 64*1024)
@@ -212,6 +219,10 @@ func (m *memifDHCPv4) serveDHCP(ctx context.Context) {
 	}
 }
 
+// reply parses a DHCPv4 request, runs the configured handler chain to build a
+// response, and returns that response with the UDP destination chosen from the
+// request's addressing. Non-request packets, unsupported message types, and
+// handler rejections yield nil, nil.
 func (m *memifDHCPv4) reply(payload []byte) (*dhcpv4.DHCPv4, *net.UDPAddr) {
 	req, err := dhcpv4.FromBytes(payload)
 	if err != nil || req.OpCode != dhcpv4.OpcodeBootRequest {
@@ -269,6 +280,9 @@ func (m *memifDHCPv4) reply(payload []byte) (*dhcpv4.DHCPv4, *net.UDPAddr) {
 	}
 }
 
+// pumpMemifRX reads frames from the memif link and injects them into the
+// netstack, backing off for 100ms on transient errors so the receive path
+// survives. It returns when the context is canceled or the memif closes.
 func (m *memifDHCPv4) pumpMemifRX(ctx context.Context) {
 	for {
 		frame, err := m.memif.readFrame(ctx)
@@ -290,6 +304,9 @@ func (m *memifDHCPv4) pumpMemifRX(ctx context.Context) {
 	}
 }
 
+// pumpMemifTX drains packets produced by the netstack to the memif link,
+// retrying after a 100ms backoff on transient write errors. It returns when the
+// context is canceled or the memif closes.
 func (m *memifDHCPv4) pumpMemifTX(ctx context.Context) {
 	for {
 		pkt := m.link.ReadContext(ctx)
@@ -314,11 +331,16 @@ func (m *memifDHCPv4) pumpMemifTX(ctx context.Context) {
 	}
 }
 
+// injectFrame wraps frame in a packet buffer and injects it into the netstack
+// as inbound IPv4 traffic; the buffer takes ownership of the payload.
 func (m *memifDHCPv4) injectFrame(frame []byte) {
 	pkt := stack.NewPacketBuffer(stack.PacketBufferOptions{Payload: buffer.MakeWithData(frame)})
 	m.link.InjectInbound(header.IPv4ProtocolNumber, pkt)
 }
 
+// Close stops the DHCPv4 server once: it cancels the context, closes the UDP
+// connection and memif link, waits up to vnfStopTimeout for the serve loop, and
+// closes the netstack.
 func (m *memifDHCPv4) Close() {
 	m.closeOnce.Do(func() {
 		if m.cancel != nil {
@@ -341,6 +363,8 @@ func (m *memifDHCPv4) Close() {
 	})
 }
 
+// closeStack closes the gVisor netstack and waits for its goroutines to finish,
+// ignoring a nil stack.
 func (m *memifDHCPv4) closeStack() {
 	if m.stack != nil {
 		m.stack.Close()

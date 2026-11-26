@@ -185,6 +185,9 @@ func CPUModel() string {
 	return ""
 }
 
+// readCPUSetFile reads a cpuset file such as /sys/devices/system/cpu/online and
+// parses it into CPU or memory-node numbers. Read and parse failures are
+// returned to the caller.
 func readCPUSetFile(path string) ([]int, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

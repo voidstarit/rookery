@@ -37,6 +37,7 @@ func (s *systemService) UpdateStartupScript(ctx context.Context, request *rooker
 	return startupScriptToProto(script), nil
 }
 
+// timestampPtr converts an optional time to a protobuf timestamp, returning nil for nil input.
 func timestampPtr(value *time.Time) *timestamppb.Timestamp {
 	if value == nil {
 		return nil
@@ -44,6 +45,8 @@ func timestampPtr(value *time.Time) *timestamppb.Timestamp {
 	return timestamppb.New(*value)
 }
 
+// startupScriptToProto maps a stored startup script, including its last run output and exit
+// code, to the full API representation.
 func startupScriptToProto(script store.StartupScript) *rookeryv1.StartupScript {
 	return &rookeryv1.StartupScript{
 		Enabled:   script.Enabled,
@@ -56,6 +59,8 @@ func startupScriptToProto(script store.StartupScript) *rookeryv1.StartupScript {
 	}
 }
 
+// startupScriptStatus maps a stored script to the reduced status view reported by GetStatus,
+// omitting the script body and captured output.
 func startupScriptStatus(script store.StartupScript) *rookeryv1.StartupScriptStatus {
 	return &rookeryv1.StartupScriptStatus{
 		Enabled:  script.Enabled,

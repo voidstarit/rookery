@@ -46,10 +46,13 @@ type vnfModel struct {
 	Labels       types.Set    `tfsdk:"labels"`
 }
 
+// Metadata sets the resource type name to the provider name followed by "_vnf".
 func (r *vnfResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_vnf"
 }
 
+// Schema declares the rookery_vnf attributes for the network, type, enabled flag, sensitive
+// protobuf-JSON config, and computed status and tap fields.
 func (r *vnfResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A network function (DHCPv4, DHCPv6, NAT44, BGP, or DNS) attached to a Rookery network.",
@@ -84,6 +87,8 @@ func (r *vnfResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 	}
 }
 
+// Create adds the VNF to its network with the decoded config, applies labels, and stores the
+// returned VNF in state. Invalid config_json is reported before the API call.
 func (r *vnfResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan vnfModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -123,6 +128,8 @@ func (r *vnfResource) Create(ctx context.Context, req resource.CreateRequest, re
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read refreshes the VNF from the API and removes it from state when the server reports it is
+// gone. Labels are reloaded from the entity label store.
 func (r *vnfResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state vnfModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -155,6 +162,8 @@ func (r *vnfResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update changes the VNF name, enabled flag, and config, then reapplies labels. Clearing
+// config_json sends an empty config when one was previously set.
 func (r *vnfResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan, state vnfModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -197,6 +206,8 @@ func (r *vnfResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete removes the VNF through the API, treating an already-absent VNF as success and reporting
+// other errors through diagnostics.
 func (r *vnfResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state vnfModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -215,10 +226,13 @@ func (r *vnfResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 	}
 }
 
+// ImportState adopts an existing VNF by its integer id into Terraform state.
 func (r *vnfResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	importInt64ID(ctx, req, resp)
 }
 
+// vnfConfigFromJSON decodes config_json into a VNFConfig, returning nil for empty, null, or
+// unknown values. Malformed protobuf JSON is returned as an error.
 func vnfConfigFromJSON(value types.String) (*rookeryv1.VNFConfig, error) {
 	if value.IsNull() || value.IsUnknown() || strings.TrimSpace(value.ValueString()) == "" {
 		return nil, nil
@@ -230,13 +244,10 @@ func vnfConfigFromJSON(value types.String) (*rookeryv1.VNFConfig, error) {
 	return config, nil
 }
 
-// setVNFState copies the server's VNF into state. config_json is
-// Optional+Computed and sensitive, and Terraform requires an applied value that
-// was known during plan to match the planned value exactly. The server also
-// normalizes the config (derived bind_ip and gateway, default lease time), so
-// re-encoding it would neither match the plan nor stay stable across refreshes.
-// Keep the caller's JSON and only encode the server's config when there is no
-// value yet, such as after an import or for the data source.
+// setVNFState copies the server's VNF into state, preserving a known
+// config_json and encoding the server config only when no value exists, such as
+// after import or for the data source. Re-encoding normalized config would
+// break plan stability.
 func setVNFState(state *vnfModel, vnf *rookeryv1.VNF) diag.Diagnostics {
 	var diags diag.Diagnostics
 	state.ID = types.Int64Value(vnf.GetId())
@@ -258,6 +269,8 @@ func setVNFState(state *vnfModel, vnf *rookeryv1.VNF) diag.Diagnostics {
 	return diags
 }
 
+// encodeVNFConfig marshals a VNF config with protobuf field names, substituting "{}" for a nil
+// config. A marshal failure is reported as a diagnostic.
 func encodeVNFConfig(config *rookeryv1.VNFConfig) (types.String, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	if config == nil {

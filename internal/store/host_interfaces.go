@@ -110,6 +110,8 @@ func (s *Store) DeleteHostInterfaceRecord(ctx context.Context, nic string) error
 	return nil
 }
 
+// scanHostInterface decodes one takeover record, narrowing the stored sw_if_index to uint32 and
+// converting millisecond timestamps to UTC.
 func scanHostInterface(s scanner) (HostInterfaceRecord, error) {
 	var (
 		record    HostInterfaceRecord

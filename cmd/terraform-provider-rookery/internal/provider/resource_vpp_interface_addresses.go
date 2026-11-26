@@ -38,10 +38,14 @@ type vppInterfaceAddressesModel struct {
 	StatusDetail         types.String `tfsdk:"status_detail"`
 }
 
+// Metadata registers this resource as rookery_vpp_interface_addresses under the configured
+// provider type name.
 func (r *vppInterfaceAddressesResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_vpp_interface_addresses"
 }
 
+// Schema declares the interface name as the replacement key, the managed address set and IPv4
+// DHCP flag, and computed live addresses and DHCP status.
 func (r *vppInterfaceAddressesResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Manages Rookery-managed IPv4/IPv6 addresses and the IPv4 DHCP client on a vhost-user, host, host-tap, pipe, or VNF interface. Destroying this resource clears the managed addresses and disables DHCP.",
@@ -70,6 +74,8 @@ func (r *vppInterfaceAddressesResource) Schema(_ context.Context, _ resource.Sch
 	}
 }
 
+// Create replaces the interface's managed addresses and DHCP client setting with the planned
+// values and stores the live addresses and DHCP status reported by Rookery.
 func (r *vppInterfaceAddressesResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan vppInterfaceAddressesModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -101,6 +107,8 @@ func (r *vppInterfaceAddressesResource) Create(ctx context.Context, req resource
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read fetches the interface's configured addresses and DHCP status, removing the resource from
+// state when the interface is not found.
 func (r *vppInterfaceAddressesResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state vppInterfaceAddressesModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -127,6 +135,8 @@ func (r *vppInterfaceAddressesResource) Read(ctx context.Context, req resource.R
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update re-applies the planned address set and DHCP flag and records the server's live address
+// and DHCP status.
 func (r *vppInterfaceAddressesResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan vppInterfaceAddressesModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -158,6 +168,8 @@ func (r *vppInterfaceAddressesResource) Update(ctx context.Context, req resource
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete clears managed addresses and disables the DHCP client by sending an update with empty
+// fields, ignoring a not-found response.
 func (r *vppInterfaceAddressesResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state vppInterfaceAddressesModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -178,10 +190,13 @@ func (r *vppInterfaceAddressesResource) Delete(ctx context.Context, req resource
 	}
 }
 
+// ImportState imports an existing address configuration by VPP interface name.
 func (r *vppInterfaceAddressesResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), types.StringValue(req.ID))...)
 }
 
+// setVPPInterfaceAddressesState copies the interface name, configured address set, DHCP flags
+// and status, live addresses, and status detail into the Terraform model.
 func setVPPInterfaceAddressesState(ctx context.Context, state *vppInterfaceAddressesModel, response *rookeryv1.VPPInterfaceAddresses) diag.Diagnostics {
 	var diags diag.Diagnostics
 	state.Name = types.StringValue(response.GetName())

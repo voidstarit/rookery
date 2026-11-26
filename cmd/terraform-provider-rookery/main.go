@@ -12,6 +12,8 @@ import (
 
 var version = "dev"
 
+// main serves the Rookery provider over the Terraform plugin protocol, accepting
+// a -debug flag for debugger support and exiting when the server fails.
 func main() {
 	var debug bool
 	flag.BoolVar(&debug, "debug", false, "run the provider with debugger support")

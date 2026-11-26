@@ -48,6 +48,8 @@ type Service struct {
 	resourceMu *sync.Mutex
 }
 
+// New returns a Service that runs VNF and network operations against st and
+// backend, serializing mutating work with resourceMu.
 func New(st *store.Store, backend Backend, resourceMu *sync.Mutex) *Service {
 	return &Service{store: st, backend: backend, resourceMu: resourceMu}
 }
@@ -58,6 +60,8 @@ type VNFError struct {
 	Err     error
 }
 
+// Error returns Message when set, otherwise the wrapped error, falling back to
+// a generic VNF operation failure message.
 func (e *VNFError) Error() string {
 	if e.Message != "" {
 		return e.Message
@@ -67,7 +71,13 @@ func (e *VNFError) Error() string {
 	}
 	return "VNF operation failed"
 }
+
+// Unwrap returns the wrapped error so errors.Is and errors.As can inspect the
+// underlying cause.
 func (e *VNFError) Unwrap() error { return e.Err }
+
+// VNFStatus returns the HTTP status and client-facing message, replacing the
+// detail of server errors (status 500 and above) with a generic message.
 func (e *VNFError) VNFStatus() (int, string) {
 	if e.Status >= 500 {
 		return e.Status, "VNF operation failed"
@@ -81,6 +91,8 @@ type NetworkError struct {
 	Err     error
 }
 
+// Error returns Message when set, otherwise the wrapped error, falling back to
+// a generic network operation failure message.
 func (e *NetworkError) Error() string {
 	if e.Message != "" {
 		return e.Message
@@ -90,7 +102,13 @@ func (e *NetworkError) Error() string {
 	}
 	return "network operation failed"
 }
+
+// Unwrap returns the wrapped error so errors.Is and errors.As can inspect the
+// underlying cause.
 func (e *NetworkError) Unwrap() error { return e.Err }
+
+// NetworkStatus returns the HTTP status and client-facing message. Server
+// errors expose the wrapped error or Message, while client errors use Error.
 func (e *NetworkError) NetworkStatus() (int, string) {
 	if e.Status >= 500 {
 		if e.Err != nil {
@@ -106,19 +124,30 @@ func (e *NetworkError) NetworkStatus() (int, string) {
 
 var lvmNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
+// inputError wraps message in a VNFError with status 400 Bad Request.
 func inputError(message string) error {
 	return &VNFError{Status: http.StatusBadRequest, Message: message}
 }
+
+// conflictError wraps message in a VNFError with status 409 Conflict.
 func conflictError(message string) error {
 	return &VNFError{Status: http.StatusConflict, Message: message}
 }
+
+// unavailableError wraps message in a VNFError with status 503 Service
+// Unavailable.
 func unavailableError(message string) error {
 	return &VNFError{Status: http.StatusServiceUnavailable, Message: message}
 }
+
+// internalError wraps err in a VNFError with status 500 Internal Server Error.
 func internalError(err error) error {
 	return &VNFError{Status: http.StatusInternalServerError, Err: err}
 }
 
+// validateDHCPDNSIntegration checks that a DHCP VNF's dns_vnf_id references an
+// existing DNS VNF on the same network. A zero ID means no integration and
+// skips validation.
 func (s *Service) validateDHCPDNSIntegration(ctx context.Context, networkID int64, vnfType string, config store.VNFConfig) error {
 	if config.DNSVNFID == 0 {
 		return nil
@@ -142,6 +171,9 @@ func (s *Service) validateDHCPDNSIntegration(ctx context.Context, networkID int6
 	return nil
 }
 
+// CreateVNF validates the request, normalizes its config, and stores the VNF,
+// starting its runtime immediately when enabled. A failed start deletes the new
+// record; one VNF per type per network is enforced.
 func (s *Service) CreateVNF(ctx context.Context, request *rookeryv1.CreateVNFRequest) (store.VNF, error) {
 	name := strings.TrimSpace(request.GetName())
 	switch {
@@ -215,6 +247,9 @@ func (s *Service) CreateVNF(ctx context.Context, request *rookeryv1.CreateVNFReq
 	return created, nil
 }
 
+// UpdateVNF applies name, config, and enabled changes to an existing VNF,
+// stopping and reactivating its runtime as needed. A failed activation persists
+// the VNF as disabled before returning the runtime error.
 func (s *Service) UpdateVNF(ctx context.Context, request *rookeryv1.UpdateVNFRequest) (store.VNF, error) {
 	s.resourceMu.Lock()
 	defer s.resourceMu.Unlock()
@@ -311,6 +346,8 @@ func (s *Service) UpdateVNF(ctx context.Context, request *rookeryv1.UpdateVNFReq
 	return saved, nil
 }
 
+// DeleteVNF stops and deletes a VNF, refusing to delete a DNS VNF that a DHCP
+// VNF still references and cleaning up the network BVI after NAT44 removal.
 func (s *Service) DeleteVNF(ctx context.Context, request *rookeryv1.DeleteVNFRequest) error {
 	s.resourceMu.Lock()
 	defer s.resourceMu.Unlock()
@@ -353,6 +390,8 @@ func (s *Service) DeleteVNF(ctx context.Context, request *rookeryv1.DeleteVNFReq
 	return nil
 }
 
+// RestartVNF stops a VNF without dropping its leases and starts it again,
+// persisting Enabled=false when the restart fails.
 func (s *Service) RestartVNF(ctx context.Context, request *rookeryv1.RestartVNFRequest) (store.VNF, error) {
 	s.resourceMu.Lock()
 	defer s.resourceMu.Unlock()
@@ -392,6 +431,8 @@ func (s *Service) RestartVNF(ctx context.Context, request *rookeryv1.RestartVNFR
 	return activated, nil
 }
 
+// storeError maps store sentinel errors to typed VNFErrors: name conflicts to
+// 409, missing VNFs to 404, and everything else to 500.
 func storeError(err error) error {
 	switch {
 	case errors.Is(err, store.ErrVNFNameTaken):
@@ -403,10 +444,14 @@ func storeError(err error) error {
 	}
 }
 
+// networkInputError wraps message in a NetworkError with status 400 Bad Request.
 func networkInputError(message string) error {
 	return &NetworkError{Status: http.StatusBadRequest, Message: message}
 }
 
+// CreateNetwork validates the name and CIDRs, allocates a VPP bridge domain,
+// and creates the network record. Per-network VNF preparation runs last; its
+// failure rolls back the record, bridge domain, BVI, and route tables.
 func (s *Service) CreateNetwork(ctx context.Context, name, ipv4CIDR, ipv6CIDR string) (store.Network, error) {
 	name = strings.TrimSpace(name)
 	switch {
@@ -464,6 +509,10 @@ func (s *Service) CreateNetwork(ctx context.Context, name, ipv4CIDR, ipv6CIDR st
 	return prepared, nil
 }
 
+// DeleteNetwork removes a network and its VPP state, refusing when virtual
+// interfaces or bridge-domain pipes still reference it. It stops the network's
+// VNFs and deletes taps, BVI, route tables, and the bridge domain before
+// removing the record.
 func (s *Service) DeleteNetwork(ctx context.Context, id int64) error {
 	s.resourceMu.Lock()
 	defer s.resourceMu.Unlock()

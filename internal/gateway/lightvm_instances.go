@@ -64,6 +64,7 @@ type LightVMRuntime interface {
 	LightVMBlockStats(ctx context.Context, id string) ([]qemu.BlockDeviceStats, error)
 }
 
+// runtimeUnavailable returns Unavailable when no LightVM runtime is configured, otherwise nil.
 func (s *lightVMService) runtimeUnavailable() error {
 	if s.runtime == nil {
 		return status.Error(codes.Unavailable, "LightVM runtime is not configured")
@@ -84,7 +85,8 @@ func (s *lightVMService) ListLightVMs(ctx context.Context, _ *rookeryv1.ListLigh
 	return response, nil
 }
 
-// GetLightVM returns one LightVM definition.
+// GetLightVM returns the LightVM definition with the requested ID, reporting
+// NotFound when it is missing.
 func (s *lightVMService) GetLightVM(ctx context.Context, request *rookeryv1.GetLightVMRequest) (*rookeryv1.LightVM, error) {
 	vm, err := s.store.GetLightVM(ctx, request.GetId())
 	if err != nil {
@@ -93,13 +95,10 @@ func (s *lightVMService) GetLightVM(ctx context.Context, request *rookeryv1.GetL
 	return s.toProto(ctx, vm), nil
 }
 
-// CreateLightVM inserts a LightVM definition and boots it. Creating a LightVM
-// starts it, mirroring VM creation; stopping is always an explicit action. A
-// definition that cannot start is removed again with a fresh context, together
-// with any partial QEMU process, virtiofsd container, or attempt container, so
-// callers never see a half-created LightVM and its disks and interfaces are
-// released for a retry. Gateways built without a LightVM runtime keep the
-// record as created (stopped).
+// CreateLightVM validates and stores a LightVM definition, then boots it;
+// stopping is always explicit. A failed start removes the record and any
+// partial runtime so callers never see a half-created LightVM. Without a
+// LightVM runtime the record is kept stopped.
 func (s *lightVMService) CreateLightVM(ctx context.Context, request *rookeryv1.CreateLightVMRequest) (*rookeryv1.LightVM, error) {
 	vm, err := lightVMFromCreateRequest(request)
 	if err != nil {
@@ -234,7 +233,8 @@ func (s *lightVMService) DeleteLightVM(ctx context.Context, request *rookeryv1.D
 	return &emptypb.Empty{}, nil
 }
 
-// StartLightVM launches the definition's QEMU process.
+// StartLightVM boots the definition's QEMU process after enforcing the device
+// budget and runtime availability.
 func (s *lightVMService) StartLightVM(ctx context.Context, request *rookeryv1.StartLightVMRequest) (*rookeryv1.LightVM, error) {
 	if err := s.runtimeUnavailable(); err != nil {
 		return nil, err
@@ -384,7 +384,8 @@ func (s *lightVMService) StartLightVM(ctx context.Context, request *rookeryv1.St
 	return nil, status.Error(codes.Internal, "could not start LightVM")
 }
 
-// StopLightVM terminates the running QEMU process.
+// StopLightVM terminates the running QEMU process while serializing with
+// in-flight starts.
 func (s *lightVMService) StopLightVM(ctx context.Context, request *rookeryv1.StopLightVMRequest) (*rookeryv1.LightVM, error) {
 	if err := s.runtimeUnavailable(); err != nil {
 		return nil, err
@@ -485,6 +486,9 @@ func (s *lightVMService) CreateLightVMConsoleAccess(ctx context.Context, request
 	}, nil
 }
 
+// lightVMConsoleWebSocketURL builds a ws or wss URL from the x-forwarded-host and forwarded-proto
+// gRPC metadata, returning an empty string when either header is absent or the scheme is not
+// http/https.
 func lightVMConsoleWebSocketURL(ctx context.Context, path string) string {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -511,6 +515,8 @@ func lightVMConsoleWebSocketURL(ctx context.Context, path string) string {
 	return scheme + "://" + host + path
 }
 
+// lightVMConsoleForAccess returns the console with consoleID, or the first console when consoleID
+// is 0; it fails when the LightVM has no consoles or no console matches.
 func lightVMConsoleForAccess(vm store.LightVM, consoleID int64) (store.LightVMConsole, error) {
 	if len(vm.Consoles) == 0 {
 		return store.LightVMConsole{}, errors.New("LightVM has no consoles")
@@ -581,6 +587,8 @@ func (s *lightVMService) GetLightVMMetrics(ctx context.Context, request *rookery
 	return result, nil
 }
 
+// lightVMFromCreateRequest fills in the default VCPUs, memory, and append value, then validates
+// the create request through lightVMFromRequest and records the requested disk serials.
 func lightVMFromCreateRequest(request *rookeryv1.CreateLightVMRequest) (store.LightVM, error) {
 	vcpus := int(request.GetVcpus())
 	if vcpus == 0 {
@@ -610,6 +618,9 @@ func lightVMFromCreateRequest(request *rookeryv1.CreateLightVMRequest) (store.Li
 	return vm, nil
 }
 
+// lightVMFromUpdateRequest validates an update request, allowing an omitted image and disk list to
+// fall back to the existing disk count unless replace_disk_ids clears them, and carries over the
+// replace flag and disk serials.
 func lightVMFromUpdateRequest(existing store.LightVM, request *rookeryv1.UpdateLightVMRequest) (store.LightVM, error) {
 	existingDisks := len(existing.Disks)
 	if request.GetReplaceDiskIds() && len(request.GetDiskIds()) == 0 {
@@ -633,6 +644,9 @@ func lightVMFromUpdateRequest(existing store.LightVM, request *rookeryv1.UpdateL
 	return vm, nil
 }
 
+// lightVMFromRequest validates every LightVM field and returns the normalized store record: it
+// enforces name, size, and resource limits, the image-or-disk requirement, executable path/script
+// exclusivity, and normalized env, config files, consoles, args, and virtiofs shares.
 func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, console, ephemeral bool,
 	cgroupClass string, kernelID, initramfsID int64, image string,
 	env []*rookeryv1.LightVMEnvVar, configFiles []*rookeryv1.LightVMConfigFile,
@@ -769,6 +783,9 @@ func lightVMFromRequest(id, name, description string, vcpus, memoryMB int, conso
 	}, nil
 }
 
+// normalizeLightVMConsoles defaults an empty list to a single console named "console" and
+// otherwise trims each name, rejecting empty, over-long, multi-line, or case-insensitively
+// duplicated names.
 func normalizeLightVMConsoles(values []*rookeryv1.LightVMConsole) ([]store.LightVMConsole, error) {
 	if len(values) == 0 {
 		return []store.LightVMConsole{{Name: "console"}}, nil
@@ -796,6 +813,8 @@ func normalizeLightVMConsoles(values []*rookeryv1.LightVMConsole) ([]store.Light
 	return result, nil
 }
 
+// normalizeGatewayConfigFiles converts the requested config files and delegates validation of
+// their names and contents to the store.
 func normalizeGatewayConfigFiles(values []*rookeryv1.LightVMConfigFile) ([]store.LightVMConfigFile, error) {
 	files := make([]store.LightVMConfigFile, 0, len(values))
 	for _, item := range values {
@@ -807,6 +826,8 @@ func normalizeGatewayConfigFiles(values []*rookeryv1.LightVMConfigFile) ([]store
 	return store.NormalizeLightVMConfigFiles(files)
 }
 
+// normalizeLightVMEnv trims each environment variable name and rejects empty, over-long,
+// malformed, or duplicated names along with values that exceed 4096 runes or span lines.
 func normalizeLightVMEnv(values []*rookeryv1.LightVMEnvVar) ([]store.LightVMEnvVar, error) {
 	seen := make(map[string]struct{}, len(values))
 	result := make([]store.LightVMEnvVar, 0, len(values))
@@ -837,6 +858,8 @@ func normalizeLightVMEnv(values []*rookeryv1.LightVMEnvVar) ([]store.LightVMEnvV
 	return result, nil
 }
 
+// validLightVMEnvName reports whether name is a non-empty identifier usable as a shell variable:
+// it must start with a letter or underscore and contain only letters, digits, and underscores.
 func validLightVMEnvName(name string) bool {
 	for index, char := range name {
 		switch {
@@ -851,6 +874,8 @@ func validLightVMEnvName(name string) bool {
 	return name != ""
 }
 
+// normalizeLightVMArgs copies the executable arguments, rejecting any longer than 4096 runes or
+// containing NUL bytes.
 func normalizeLightVMArgs(values []string) ([]string, error) {
 	result := make([]string, 0, len(values))
 	for _, value := range values {
@@ -865,6 +890,8 @@ func normalizeLightVMArgs(values []string) ([]string, error) {
 	return result, nil
 }
 
+// validateLightVMReferences confirms the referenced kernel and initramfs exist, returning
+// InvalidArgument for missing IDs and Internal for other store failures.
 func validateLightVMReferences(ctx context.Context, st *store.Store, vm store.LightVM) error {
 	if _, err := st.GetLightVMKernel(ctx, vm.KernelID); err != nil {
 		if errors.Is(err, store.ErrLightVMKernelNotFound) {
@@ -881,6 +908,9 @@ func validateLightVMReferences(ctx context.Context, st *store.Store, vm store.Li
 	return nil
 }
 
+// toProto converts a LightVM and, when its runtime reports it running, fills in each console's
+// socket path and the run state (queried with a two-second timeout); run-state failures are only
+// logged.
 func (s *lightVMService) toProto(ctx context.Context, vm store.LightVM) *rookeryv1.LightVM {
 	result := lightVMToProto(vm)
 	if s.runtime != nil && s.runtime.RunningLightVM(vm.ID) {
@@ -902,6 +932,8 @@ func (s *lightVMService) toProto(ctx context.Context, vm store.LightVM) *rookery
 	return result
 }
 
+// lightVMToProto converts a stored LightVM into its API representation, including its env, config
+// files, consoles, disks, virtiofs shares, and interfaces, with slices copied rather than aliased.
 func lightVMToProto(vm store.LightVM) *rookeryv1.LightVM {
 	result := &rookeryv1.LightVM{
 		Id:               vm.ID,
@@ -964,6 +996,9 @@ func lightVMToProto(vm store.LightVM) *rookeryv1.LightVM {
 	return result
 }
 
+// lightVMStartStatusError converts a LightVM start failure into a gRPC error: an active iSCSI
+// session becomes a retryable Unavailable, cancellation Aborted, and an already-running QEMU
+// process AlreadyExists.
 func lightVMStartStatusError(err error) error {
 	switch {
 	case errors.Is(err, kouja.ErrSessionActive):
@@ -977,6 +1012,9 @@ func lightVMStartStatusError(err error) error {
 	}
 }
 
+// lightVMError maps LightVM store failures to gRPC statuses for missing records, name conflicts,
+// referenced kernels and initramfs, interfaces, disks, and device limits; unknown errors become
+// Internal using action in the message.
 func lightVMError(err error, action string) error {
 	switch {
 	case errors.Is(err, store.ErrLightVMNotFound):

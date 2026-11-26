@@ -117,6 +117,8 @@ func (s *Store) IsVirtualInterfaceName(ctx context.Context, name string) (bool, 
 	return true, nil
 }
 
+// scanVPPInterfaceRouteTables decodes one per-interface route-table row, narrowing both table IDs
+// to uint32 and marking the result Configured.
 func scanVPPInterfaceRouteTables(row scanner) (VPPInterfaceRouteTables, error) {
 	var (
 		tables VPPInterfaceRouteTables

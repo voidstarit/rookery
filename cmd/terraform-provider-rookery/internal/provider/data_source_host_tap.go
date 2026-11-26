@@ -24,10 +24,12 @@ func NewHostTapDataSource() datasource.DataSource {
 	return &hostTapDataSource{}
 }
 
+// Metadata registers this data source under the provider-prefixed type name <provider>_host_tap.
 func (d *hostTapDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_host_tap"
 }
 
+// Schema defines host tap attributes with optional id or name lookup keys and VPP addresses.
 func (d *hostTapDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a network host tap by id or name.",
@@ -44,6 +46,8 @@ func (d *hostTapDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 	}
 }
 
+// Read scans host taps for the configured id or case-insensitive name, rejecting missing
+// or ambiguous matches before storing state and labels.
 func (d *hostTapDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config hostTapModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)

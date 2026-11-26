@@ -191,6 +191,8 @@ func (m *Manager) Status() Status {
 	return m.status
 }
 
+// logTransition emits an info or warn line only when readiness, thin-pool
+// state, or VPP state differs between the two snapshots.
 func (m *Manager) logTransition(previous, next Status) {
 	if previous.Ready == next.Ready &&
 		previous.ThinPool.State == next.ThinPool.State &&

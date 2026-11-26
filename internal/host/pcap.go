@@ -85,6 +85,8 @@ type PacketCaptureFile struct {
 	Modified time.Time `json:"modified"`
 }
 
+// captureDir returns the configured directory for pcap files, falling back to
+// /tmp when no capture directory is set.
 func (v *VPPNetwork) captureDir() string {
 	if strings.TrimSpace(v.CaptureDir) == "" {
 		return "/tmp"
@@ -279,6 +281,10 @@ func (v *VPPNetwork) PacketCaptureStatus(ctx context.Context) (PacketCaptureStat
 	return v.packetCaptureStatusLocked(ctx)
 }
 
+// packetCaptureStatusLocked queries VPP's pcap trace status and fills fields VPP
+// omits from the last recorded capture, marking a stop time when an active capture
+// ended. It refreshes the file size from disk and caches the result; the caller
+// must hold captureMu.
 func (v *VPPNetwork) packetCaptureStatusLocked(ctx context.Context) (PacketCaptureStatus, error) {
 	out, err := v.runCLI(ctx, "pcap", "trace", "status")
 	if err != nil {
@@ -328,6 +334,9 @@ func (v *VPPNetwork) packetCaptureStatusLocked(ctx context.Context) (PacketCaptu
 	return status, nil
 }
 
+// parseCaptureStatus extracts the active state, direction, interface, file, and
+// packet counters from "pcap trace status" output. Fields absent from the output
+// are left at their zero values.
 func parseCaptureStatus(out string) PacketCaptureStatus {
 	status := PacketCaptureStatus{}
 	if captureOnPattern.MatchString(out) {
@@ -359,6 +368,9 @@ func parseCaptureStatus(out string) PacketCaptureStatus {
 	return status
 }
 
+// captureDirectionFromStatus scans status output for a combined or single
+// direction marker, returning "both", "rx", "tx", or an empty string when none
+// is present.
 func captureDirectionFromStatus(out string) string {
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.ToLower(line)
@@ -374,6 +386,8 @@ func captureDirectionFromStatus(out string) string {
 	return ""
 }
 
+// normalizeCaptureDirection canonicalizes a caller-supplied direction to "rx",
+// "tx", or "both", returning an empty string for unsupported values.
 func normalizeCaptureDirection(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "rx", "tx":

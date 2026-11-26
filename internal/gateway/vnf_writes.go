@@ -20,6 +20,7 @@ type VNFWriter interface {
 	RestartVNF(ctx context.Context, request *rookeryv1.RestartVNFRequest) (store.VNF, error)
 }
 
+// writeAvailable returns Unavailable when no native VNF writer is configured, and nil otherwise.
 func (s *vnfService) writeAvailable() error {
 	if s.writer == nil {
 		return status.Error(codes.Unavailable, "VNF write runtime is not configured")
@@ -27,6 +28,8 @@ func (s *vnfService) writeAvailable() error {
 	return nil
 }
 
+// CreateVNF delegates creation to the native VNF writer and returns the stored VNF with its
+// runtime status attached. Writer failures are mapped to gRPC codes.
 func (s *vnfService) CreateVNF(ctx context.Context, request *rookeryv1.CreateVNFRequest) (*rookeryv1.VNF, error) {
 	if err := s.writeAvailable(); err != nil {
 		return nil, err
@@ -38,6 +41,8 @@ func (s *vnfService) CreateVNF(ctx context.Context, request *rookeryv1.CreateVNF
 	return s.vnfView(ctx, vnf), nil
 }
 
+// UpdateVNF delegates the update to the native VNF writer and returns the refreshed VNF view.
+// Writer failures are mapped to gRPC codes.
 func (s *vnfService) UpdateVNF(ctx context.Context, request *rookeryv1.UpdateVNFRequest) (*rookeryv1.VNF, error) {
 	if err := s.writeAvailable(); err != nil {
 		return nil, err
@@ -49,6 +54,7 @@ func (s *vnfService) UpdateVNF(ctx context.Context, request *rookeryv1.UpdateVNF
 	return s.vnfView(ctx, vnf), nil
 }
 
+// DeleteVNF delegates removal to the native VNF writer and returns an empty response on success.
 func (s *vnfService) DeleteVNF(ctx context.Context, request *rookeryv1.DeleteVNFRequest) (*emptypb.Empty, error) {
 	if err := s.writeAvailable(); err != nil {
 		return nil, err
@@ -59,6 +65,8 @@ func (s *vnfService) DeleteVNF(ctx context.Context, request *rookeryv1.DeleteVNF
 	return &emptypb.Empty{}, nil
 }
 
+// RestartVNF asks the native VNF writer to restart a VNF and returns its view after the restart.
+// Writer failures are mapped to gRPC codes.
 func (s *vnfService) RestartVNF(ctx context.Context, request *rookeryv1.RestartVNFRequest) (*rookeryv1.VNF, error) {
 	if err := s.writeAvailable(); err != nil {
 		return nil, err
@@ -74,6 +82,8 @@ type vnfStatusError interface {
 	VNFStatus() (int, string)
 }
 
+// mapVNFWriteError converts an error carrying an HTTP status via VNFStatus into a gRPC status,
+// falling back to a generic Internal error for untyped errors or unknown statuses.
 func mapVNFWriteError(err error) error {
 	var operationError vnfStatusError
 	if !errors.As(err, &operationError) {

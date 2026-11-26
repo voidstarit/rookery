@@ -55,6 +55,8 @@ var noContentMethods = map[string]bool{
 	"/rookery.v1.LightVMService/DeleteLightVM":                true,
 }
 
+// setLocationHeader sets Location to the REST path of the created resource, deriving the
+// collection from the response type and ignoring types without a known path.
 func setLocationHeader(method string, response proto.Message, writer http.ResponseWriter) {
 	switch value := response.(type) {
 	case *rookeryv1.VM:
@@ -92,6 +94,9 @@ func setLocationHeader(method string, response proto.Message, writer http.Respon
 	}
 }
 
+// httpResponseStatus overrides the gateway status to 201 with a Location header for create
+// RPCs, 204 for deletes, and 202 or 204 for disk deletes depending on acceptance. Nil
+// responses and calls outside an RPC are left untouched.
 func httpResponseStatus(ctx context.Context, writer http.ResponseWriter, response proto.Message) error {
 	if response == nil {
 		return nil

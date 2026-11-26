@@ -23,10 +23,12 @@ func NewHostInterfaceDataSource() datasource.DataSource {
 	return &hostInterfaceDataSource{}
 }
 
+// Metadata registers the data source as <provider>_host_interface.
 func (d *hostInterfaceDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_host_interface"
 }
 
+// Schema defines the host interface lookup by required nic name plus VPP and label fields.
 func (d *hostInterfaceDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a physical host interface by NIC name.",
@@ -49,6 +51,8 @@ func (d *hostInterfaceDataSource) Schema(_ context.Context, _ datasource.SchemaR
 	}
 }
 
+// Read lists host interfaces and matches the configured nic by exact name, rejecting a
+// missing interface before storing labels and state.
 func (d *hostInterfaceDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config hostInterfaceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)

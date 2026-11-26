@@ -24,6 +24,10 @@ type memifLink struct {
 	closeOnce sync.Once
 }
 
+// newMemifLink creates a memif slave socket on socketPath, waits up to five
+// seconds for the master handshake, and returns the link with its RX/TX queues
+// ready. The socket is deleted on any failure; the MAC argument is unused
+// because VPP owns the peer address.
 func newMemifLink(socketPath string, ifID uint32, name string, _ net.HardwareAddr) (*memifLink, error) {
 	socket, err := memif.NewSocket("rookery-vnf", socketPath)
 	if err != nil {
@@ -99,6 +103,8 @@ func newMemifLink(socketPath string, ifID uint32, name string, _ net.HardwareAdd
 	return link, nil
 }
 
+// drainErrors logs control-channel errors until the link closes or the error
+// channel is closed, keeping the memif poller from blocking on a broken peer.
 func (l *memifLink) drainErrors(errCh <-chan error) {
 	for {
 		select {
@@ -113,6 +119,9 @@ func (l *memifLink) drainErrors(errCh <-chan error) {
 	}
 }
 
+// readFrame polls the RX queue for one packet and returns a copy of its bytes,
+// waiting at most a millisecond between empty polls. It returns errMemifClosed
+// when the context is done, the link is closed, or the peer disconnects.
 func (l *memifLink) readFrame(ctx context.Context) ([]byte, error) {
 	buf := make([]byte, memifDHCPBufferSize)
 	for {
@@ -147,6 +156,9 @@ func (l *memifLink) readFrame(ctx context.Context) ([]byte, error) {
 	}
 }
 
+// writeFrame copies frame into the TX queue, retrying for up to ten
+// milliseconds while the queue is full. It returns errMemifClosed when the link
+// is closed or disconnected, and an error if the queue stays full.
 func (l *memifLink) writeFrame(frame []byte) error {
 	select {
 	case <-l.closed:
@@ -169,6 +181,8 @@ func (l *memifLink) writeFrame(frame []byte) error {
 	return errors.New("memif tx queue is full")
 }
 
+// close shuts down the memif interface and socket exactly once, stopping
+// polling and releasing the VPP-side resources. It is safe to call repeatedly.
 func (l *memifLink) close() {
 	l.closeOnce.Do(func() {
 		close(l.closed)

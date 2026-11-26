@@ -126,6 +126,10 @@ func (p *Provisioner) Create(ctx context.Context, cfg Config, request CreateRequ
 	}, nil
 }
 
+// referenceFromExport builds the blockdev reference for the configured protocol
+// from the created volume and export. effectivePortal becomes the client-visible
+// portal while the export portal is retained for change detection, and protocols
+// other than iSCSI or NVMe/TCP return ErrUnsupportedProtocol.
 func referenceFromExport(cfg Config, volume *koujav1.Volume, export *koujav1.Export, effectivePortal string) (blockdev.Reference, error) {
 	switch cfg.Protocol {
 	case blockdev.ProtocolISCSI:
@@ -155,6 +159,8 @@ func referenceFromExport(cfg Config, volume *koujav1.Volume, export *koujav1.Exp
 	}
 }
 
+// validateProtocol returns nil for iSCSI and NVMe/TCP and a wrapped
+// ErrUnsupportedProtocol for any other protocol.
 func validateProtocol(protocol blockdev.Protocol) error {
 	switch protocol {
 	case blockdev.ProtocolISCSI, blockdev.ProtocolNVMeTCP:
@@ -164,6 +170,8 @@ func validateProtocol(protocol blockdev.Protocol) error {
 	}
 }
 
+// toKoujaProtocol maps a blockdev protocol to its kouja enum, defaulting anything
+// other than NVMe/TCP to iSCSI.
 func toKoujaProtocol(protocol blockdev.Protocol) koujav1.Protocol {
 	switch protocol {
 	case blockdev.ProtocolNVMeTCP:
@@ -173,6 +181,7 @@ func toKoujaProtocol(protocol blockdev.Protocol) koujav1.Protocol {
 	}
 }
 
+// maxInt64 returns value when it is at least floor, otherwise floor.
 func maxInt64(value, floor int64) int64 {
 	if value < floor {
 		return floor

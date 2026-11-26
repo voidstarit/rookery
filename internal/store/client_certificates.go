@@ -108,6 +108,8 @@ func (s *Store) IsClientCertificateRevoked(ctx context.Context, serial string) (
 	return revoked != 0, nil
 }
 
+// scanClientCertificate decodes one client-certificate row, mapping the integer revoked flag to a
+// bool and millisecond timestamps to UTC times.
 func scanClientCertificate(s scanner) (ClientCertificate, error) {
 	var (
 		cert      ClientCertificate

@@ -18,6 +18,10 @@ import (
 	"github.com/voidstarit/rookery/internal/store"
 )
 
+// runCreateClientCert issues an mTLS client certificate signed by the configured
+// CA and writes the certificate, a 0600 private key, and the CA certificate to
+// -out-dir. It requires an existing non-empty database matching the running
+// server and refuses to overwrite outputs unless -force is set.
 func runCreateClientCert(args []string) error {
 	file, err := config.Load(config.Path(args))
 	if err != nil {
@@ -157,6 +161,9 @@ func runCreateClientCert(args []string) error {
 	return nil
 }
 
+// writeClientCertificateFile writes data to path with the given mode, refusing
+// to replace an existing file unless force is set and removing the partial file
+// when a non-force write fails.
 func writeClientCertificateFile(path string, data []byte, mode os.FileMode, force bool) error {
 	flags := os.O_WRONLY | os.O_CREATE | os.O_EXCL
 	if force {
@@ -180,6 +187,9 @@ func writeClientCertificateFile(path string, data []byte, mode os.FileMode, forc
 	return file.Close()
 }
 
+// clientCertificateStem turns a client name into a filename-safe stem by
+// collapsing unsafe character runs into dashes and trimming separators,
+// defaulting to "client" when nothing usable remains.
 func clientCertificateStem(name string) string {
 	var stem strings.Builder
 	lastDash := false

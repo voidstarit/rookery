@@ -140,6 +140,9 @@ func (s *Server) handleLightVMConsoleAccessProxy(w http.ResponseWriter, r *http.
 	}, check)
 }
 
+// serveLightVMConsole dials the console's Unix socket with the LightVM dial
+// timeout and upgrades the request to a WebSocket that proxies the console,
+// returning 502 when the socket is unreachable.
 func (s *Server) serveLightVMConsole(w http.ResponseWriter, r *http.Request, lightVMID string, consoleID int64, socket string, handshake func(*websocket.Config, *http.Request) error, check func(context.Context) bool) {
 	conn, err := net.DialTimeout("unix", socket, lightVMConsoleDialTimeout)
 	if err != nil {
@@ -158,6 +161,9 @@ func (s *Server) serveLightVMConsole(w http.ResponseWriter, r *http.Request, lig
 	}.ServeHTTP(w, r)
 }
 
+// lightVMConsoleID resolves the console query parameter against vm.Consoles,
+// defaulting to the first console when the parameter is absent and rejecting
+// non-positive or unknown console IDs.
 func lightVMConsoleID(r *http.Request, vm store.LightVM) (int64, error) {
 	raw := strings.TrimSpace(r.URL.Query().Get("console"))
 	if raw == "" {
@@ -178,6 +184,9 @@ func lightVMConsoleID(r *http.Request, vm store.LightVM) (int64, error) {
 	return 0, fmt.Errorf("console %d not found", consoleID)
 }
 
+// proxyLightVMConsole copies bytes in both directions between ws and conn and
+// polls check once per second, closing both sides when console access is revoked
+// or the LightVM stops.
 func (s *Server) proxyLightVMConsole(ws *websocket.Conn, conn net.Conn, check func(context.Context) bool) {
 	done := make(chan error, 2)
 	stop := make(chan struct{})

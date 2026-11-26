@@ -644,6 +644,8 @@ func (v *VPPNetwork) DeleteTap(ctx context.Context, swIfIndex uint32) error {
 // hostTapTag marks VPP tap interfaces owned by the host-tap feature.
 const hostTapTagPrefix = "rookery-host-tap:"
 
+// hostTapTag returns the VPP interface tag that marks name as a
+// Rookery-owned host tap.
 func hostTapTag(name string) string {
 	return hostTapTagPrefix + name
 }
@@ -696,6 +698,10 @@ func (v *VPPNetwork) EnsureHostTap(ctx context.Context, name string, bdID uint32
 	return v.createHostTap(ctx, name, bdID, ipv4Address)
 }
 
+// createHostTap creates a VPP tap with a random MAC, names it, attaches it to
+// the bridge domain, and configures the Linux side. It deletes the tap if
+// naming, attachment, or Linux configuration fails and returns the new
+// sw_if_index on success.
 func (v *VPPNetwork) createHostTap(ctx context.Context, name string, bdID uint32, ipv4Address string) (uint32, error) {
 	conn, err := v.connect()
 	if err != nil {
@@ -750,6 +756,9 @@ func (v *VPPNetwork) createHostTap(ctx context.Context, name string, bdID uint32
 	return swIfIndex, nil
 }
 
+// setTapUpAndAttach sets the interface MTU and admin-up flag and attaches it to
+// the bridge domain as a normal L2 port. It returns an error identifying the
+// step that failed.
 func (v *VPPNetwork) setTapUpAndAttach(ctx context.Context, conn *core.Connection, swIfIndex uint32, bdID uint32) error {
 	if err := setInterfaceMTU(ctx, conn, swIfIndex, defaultInterfaceMTU); err != nil {
 		return fmt.Errorf("set host tap MTU: %w", err)
@@ -836,6 +845,8 @@ func configureHostTap(ctx context.Context, name, ipv4Address string) error {
 	return nil
 }
 
+// findInterfaceDetails dumps VPP interfaces and returns the details for name,
+// or errVPPInterfaceNotFound when the dump ends without a match.
 func findInterfaceDetails(ctx context.Context, conn *core.Connection, name string) (*interfaces.SwInterfaceDetails, error) {
 	client := interfaces.NewServiceClient(conn)
 	stream, err := client.SwInterfaceDump(ctx, &interfaces.SwInterfaceDump{})
@@ -1128,14 +1139,9 @@ func (v *VPPNetwork) SwIfIndexByName(ctx context.Context, name string) (uint32, 
 }
 
 // AddRoute installs a static route in an IP FIB/VRF table. swIfIndex may be 0
-// when VPP can resolve the next hop through a connected route in the table;
-// egressName selects a non-inventory interface (for example a BVI) by name.
-// An empty nextHop with an egress interface installs an attached (glean) route
-// that forwards directly into the interface's L2 domain.
-//
-// VPP decodes sw_if_index 0 as interface 0 (local0), not as "no interface";
-// a recursive path must send the ~0 sentinel and resolve its next hop in the
-// route's own table via the path table_id.
+// when VPP resolves the next hop through a connected route; egressName selects
+// a non-inventory interface such as a BVI. An empty nextHop with an egress
+// interface installs an attached (glean) route.
 func (v *VPPNetwork) AddRoute(ctx context.Context, tableID uint32, ipv6 bool, prefix, nextHop, egressName string, swIfIndex uint32, preference uint32) error {
 	parsedPrefix, err := ip_types.ParsePrefix(strings.TrimSpace(prefix))
 	if err != nil {
@@ -1199,6 +1205,9 @@ func (v *VPPNetwork) DeleteRoute(ctx context.Context, tableID uint32, ipv6 bool,
 	return nil
 }
 
+// changeRoute adds or deletes a route through the IP API, treating a missing
+// route on delete as success. It returns an error when the API call fails or
+// VPP reports a nonzero return value for an add.
 func (v *VPPNetwork) changeRoute(ctx context.Context, isAdd bool, route ipapi.IPRoute) error {
 	conn, err := v.connect()
 	if err != nil {
@@ -1246,6 +1255,8 @@ func (v *VPPNetwork) SetInterfaceRouteTable(ctx context.Context, swIfIndex uint3
 	return checkVPPRetval("set interface route table", reply.Retval)
 }
 
+// connect opens a new VPP API connection on the configured socket and returns
+// it for the caller to disconnect.
 func (v *VPPNetwork) connect() (*core.Connection, error) {
 	conn, err := govpp.Connect(v.Socket)
 	if err != nil {
@@ -1271,6 +1282,8 @@ func setInterfaceMTU(ctx context.Context, conn *core.Connection, swIfIndex uint3
 	return checkVPPRetval("set interface MTU", reply.Retval)
 }
 
+// setInterfaceMTUByName resolves name to a sw_if_index and applies mtu,
+// defaulting to the standard interface MTU when mtu is zero.
 func (v *VPPNetwork) setInterfaceMTUByName(ctx context.Context, name string, mtu uint32) error {
 	conn, err := v.connect()
 	if err != nil {
@@ -1284,6 +1297,8 @@ func (v *VPPNetwork) setInterfaceMTUByName(ctx context.Context, name string, mtu
 	return setInterfaceMTU(ctx, conn, swIfIndex, mtu)
 }
 
+// setInterfaceTag adds tag to the interface through the VPP tag API, returning
+// an error when the call or its return value fails.
 func setInterfaceTag(ctx context.Context, conn *core.Connection, swIfIndex uint32, tag string) error {
 	reply, err := interfaces.NewServiceClient(conn).SwInterfaceTagAddDel(ctx, &interfaces.SwInterfaceTagAddDel{
 		IsAdd:     true,
@@ -1296,6 +1311,8 @@ func setInterfaceTag(ctx context.Context, conn *core.Connection, swIfIndex uint3
 	return checkVPPRetval("set interface tag", reply.Retval)
 }
 
+// checkVPPRetval turns a nonzero VPP return value into an error prefixed with
+// operation, and returns nil for zero.
 func checkVPPRetval(operation string, retval int32) error {
 	if retval != 0 {
 		return fmt.Errorf("%s: VPP returned retval %d", operation, retval)
@@ -1303,10 +1320,14 @@ func checkVPPRetval(operation string, retval int32) error {
 	return nil
 }
 
+// isBridgeDomainExists reports whether err's message indicates the bridge
+// domain already exists.
 func isBridgeDomainExists(err error) bool {
 	return err != nil && strings.Contains(strings.ToLower(err.Error()), "already exists")
 }
 
+// isVPPNotFound reports whether err's message contains one of the VPP
+// not-found markers, used to tolerate missing objects after restarts.
 func isVPPNotFound(err error) bool {
 	if err == nil {
 		return false

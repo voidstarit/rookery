@@ -131,11 +131,9 @@ func (c *StartCoordinator) Busy(id string) bool {
 	return entry != nil && entry.busy
 }
 
-// ReserveForCleanup increments the lifecycle reservation for id. When no
-// start currently holds the slot it also cancels an in-flight preparation.
-// The busy result reports whether a start already held the slot, in which case
-// the caller should leave it alone. Callers must invoke release when cleanup
-// finishes.
+// ReserveForCleanup reserves the lifecycle slot for id and cancels any
+// in-flight preparation when no start holds it. The busy result reports an
+// existing start, and callers must release the slot when cleanup finishes.
 func (c *StartCoordinator) ReserveForCleanup(id string) (release func(), busy bool) {
 	if c == nil {
 		return func() {}, false
@@ -203,6 +201,8 @@ func (c *StartCoordinator) Cancel(id string) {
 	c.mu.Unlock()
 }
 
+// entry returns the startEntry for id, creating it with an initialized
+// reservedCh on first use. Callers must not hold c.mu.
 func (c *StartCoordinator) entry(id string) *startEntry {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -217,6 +217,8 @@ func (c *StartCoordinator) entry(id string) *startEntry {
 	return entry
 }
 
+// abortBegin cancels the start context and releases the entry's busy slot
+// after Begin fails, waking any waiter queued behind it.
 func (c *StartCoordinator) abortBegin(entry *startEntry, cancel context.CancelFunc) {
 	cancel()
 	c.mu.Lock()
@@ -225,6 +227,9 @@ func (c *StartCoordinator) abortBegin(entry *startEntry, cancel context.CancelFu
 	c.mu.Unlock()
 }
 
+// finishEntry marks the entry idle, clears its cancel function, and wakes
+// waiters blocked in Begin by closing and replacing the wait channel. Callers
+// must hold c.mu.
 func (c *StartCoordinator) finishEntry(entry *startEntry) {
 	entry.busy = false
 	entry.cancel = nil
@@ -234,6 +239,8 @@ func (c *StartCoordinator) finishEntry(entry *startEntry) {
 	entry.wait = make(chan struct{})
 }
 
+// signalReserved broadcasts a reservation-count change to Begin waiters by
+// closing and replacing reservedCh. Callers must hold c.mu.
 func (c *StartCoordinator) signalReserved(entry *startEntry) {
 	if entry.reservedCh != nil {
 		close(entry.reservedCh)

@@ -36,6 +36,8 @@ const networkPipeSelect = `
 	JOIN networks AS a ON a.id = p.network_a_id
 	JOIN networks AS b ON b.id = p.network_b_id`
 
+// ListNetworkPipes returns every network pipe ordered by ID with both network names resolved,
+// yielding an empty slice rather than nil when none exist.
 func (s *Store) ListNetworkPipes(ctx context.Context) ([]NetworkPipe, error) {
 	rows, err := s.db.QueryContext(ctx, networkPipeSelect+` ORDER BY p.id`)
 	if err != nil {
@@ -56,6 +58,8 @@ func (s *Store) ListNetworkPipes(ctx context.Context) ([]NetworkPipe, error) {
 	return pipes, nil
 }
 
+// GetNetworkPipe returns one pipe with its network names, translating sql.ErrNoRows into
+// ErrNetworkPipeNotFound.
 func (s *Store) GetNetworkPipe(ctx context.Context, id int64) (NetworkPipe, error) {
 	row := s.db.QueryRowContext(ctx, networkPipeSelect+` WHERE p.id = ?`, id)
 	pipe, err := scanNetworkPipe(row)
@@ -68,6 +72,9 @@ func (s *Store) GetNetworkPipe(ctx context.Context, id int64) (NetworkPipe, erro
 	return pipe, nil
 }
 
+// CreateNetworkPipe inserts a link between two distinct existing networks, ordering the pair so the
+// lower network ID is stored as A, and returns the stored record; a duplicate pair yields
+// ErrNetworkPipeExists.
 func (s *Store) CreateNetworkPipe(ctx context.Context, pipe NetworkPipe) (NetworkPipe, error) {
 	if pipe.NetworkAID == pipe.NetworkBID {
 		return NetworkPipe{}, errors.New("a pipe requires two different networks")
@@ -103,6 +110,9 @@ func (s *Store) CreateNetworkPipe(ctx context.Context, pipe NetworkPipe) (Networ
 	return s.GetNetworkPipe(ctx, id)
 }
 
+// SetNetworkPipeRuntime records the VPP instance and sw_if_index values for an existing pipe,
+// refreshing updated_at, and returns the reloaded pipe; a missing ID surfaces as
+// ErrNetworkPipeNotFound.
 func (s *Store) SetNetworkPipeRuntime(ctx context.Context, id int64, instance, parent, endpointA, endpointB uint32) (NetworkPipe, error) {
 	if _, err := s.db.ExecContext(ctx, `
 		UPDATE network_pipes SET instance = ?, parent_sw_if_index = ?,
@@ -115,6 +125,9 @@ func (s *Store) SetNetworkPipeRuntime(ctx context.Context, id int64, instance, p
 	return s.GetNetworkPipe(ctx, id)
 }
 
+// DeleteNetworkPipe removes a pipe and, in the same transaction, its two endpoints' stored VPP
+// addresses, DHCP clients, and route-table rows; it returns ErrNetworkPipeNotFound when no row
+// matched.
 func (s *Store) DeleteNetworkPipe(ctx context.Context, id int64) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -150,6 +163,8 @@ func (s *Store) DeleteNetworkPipe(ctx context.Context, id int64) error {
 	return nil
 }
 
+// CountNetworkPipesForNetwork returns how many pipes have networkID at either end, which callers
+// use to refuse deleting a network that still participates in a pipe.
 func (s *Store) CountNetworkPipesForNetwork(ctx context.Context, networkID int64) (int64, error) {
 	var count int64
 	if err := s.db.QueryRowContext(ctx, `
@@ -169,6 +184,8 @@ func NetworkPipeEndpointNames(instance uint32) [2]string {
 	}
 }
 
+// scanNetworkPipe decodes one joined pipe row, narrowing each sw_if_index to uint32 and converting
+// millisecond timestamps to UTC.
 func scanNetworkPipe(s scanner) (NetworkPipe, error) {
 	var (
 		pipe      NetworkPipe

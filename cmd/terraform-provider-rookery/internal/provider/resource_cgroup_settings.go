@@ -48,10 +48,14 @@ type cgroupSettingsModel struct {
 	UpdatedAt      types.String `tfsdk:"updated_at"`
 }
 
+// Metadata registers this resource as rookery_cgroup_settings under the configured provider type
+// name.
 func (r *cgroupSettingsResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_cgroup_settings"
 }
 
+// Schema declares the singleton cgroup settings: the enabled switch, optional cpuset, memory,
+// CPU weight, per-device I/O limits and nested classes, plus computed host capability fields.
 func (r *cgroupSettingsResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Manages the singleton host-wide cgroup v2 resource limits applied to QEMU. Only one resource should exist.",
@@ -96,6 +100,8 @@ func (r *cgroupSettingsResource) Schema(_ context.Context, _ resource.SchemaRequ
 	}
 }
 
+// Create converts the planned I/O limits and classes, validates the class tree, submits the
+// host-wide cgroup settings, and stores the applied state; invalid classes fail before any call.
 func (r *cgroupSettingsResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan cgroupSettingsModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -145,6 +151,8 @@ func (r *cgroupSettingsResource) Create(ctx context.Context, req resource.Create
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read fetches the singleton cgroup settings and refreshes state, preserving the previously
+// declared class order.
 func (r *cgroupSettingsResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state cgroupSettingsModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -167,6 +175,8 @@ func (r *cgroupSettingsResource) Read(ctx context.Context, req resource.ReadRequ
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update converts and validates the planned limits and classes, re-applies the host-wide
+// settings, and stores the applied state.
 func (r *cgroupSettingsResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan cgroupSettingsModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -216,6 +226,8 @@ func (r *cgroupSettingsResource) Update(ctx context.Context, req resource.Update
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete disables cgroup limits by submitting enabled=false, leaving the stored settings
+// otherwise untouched.
 func (r *cgroupSettingsResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state cgroupSettingsModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -234,10 +246,13 @@ func (r *cgroupSettingsResource) Delete(ctx context.Context, req resource.Delete
 	}
 }
 
+// ImportState ignores the supplied id and imports the singleton with the fixed id cgroup.
 func (r *cgroupSettingsResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), types.StringValue(cgroupSettingsID))...)
 }
 
+// setCgroupSettingsState copies the enabled flag, cpuset, memory, CPU weight, I/O limits,
+// classes, availability fields, online CPUs, CPU model, and update time into the model.
 func setCgroupSettingsState(ctx context.Context, state *cgroupSettingsModel, settings *rookeryv1.CgroupSettings) diag.Diagnostics {
 	var diags diag.Diagnostics
 	classOrder := cgroupClassNames(ctx, state.Classes)

@@ -300,6 +300,8 @@ func (s *Store) RouteTableInterfaceCount(ctx context.Context, tableID uint32, ip
 	return count, nil
 }
 
+// scanRouteTable decodes one route-table row, mapping the integer family flag to IPv6 and
+// converting millisecond timestamps to UTC.
 func scanRouteTable(s scanner) (RouteTable, error) {
 	var (
 		table     RouteTable

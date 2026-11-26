@@ -233,6 +233,8 @@ func (s *Store) SetInterfaceACLs(ctx context.Context, id int64, ingress, egress 
 	return s.GetInterface(ctx, id)
 }
 
+// uniqueACLIDs drops non-positive and repeated IDs while keeping the first-seen order, returning
+// nil for an empty or fully invalid input.
 func uniqueACLIDs(ids []int64) []int64 {
 	if len(ids) == 0 {
 		return nil
@@ -252,6 +254,8 @@ func uniqueACLIDs(ids []int64) []int64 {
 	return out
 }
 
+// firstACLID returns a pointer to the first ID in ids, or nil when the slice is empty; it does not
+// filter invalid values.
 func firstACLID(ids []int64) *int64 {
 	if len(ids) == 0 {
 		return nil
@@ -260,6 +264,8 @@ func firstACLID(ids []int64) *int64 {
 	return &id
 }
 
+// scanACL decodes one ACL row, unmarshalling its JSON rule list and converting millisecond
+// timestamps to UTC; it returns an error when the rules column is not valid JSON.
 func scanACL(s scanner) (ACL, error) {
 	var (
 		acl       ACL

@@ -27,10 +27,14 @@ func NewDiskThrottleClassResource() resource.Resource {
 	return &diskThrottleClassResource{}
 }
 
+// Metadata registers this resource as rookery_disk_throttle_class under the configured provider
+// type name.
 func (r *diskThrottleClassResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_disk_throttle_class"
 }
 
+// Schema builds the class attributes: id, name, optional description, computed validation_error
+// and disk_count, plus numeric throttle-limit attributes with generated descriptions.
 func (r *diskThrottleClassResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	attributes := map[string]schema.Attribute{
 		"id": schema.Int64Attribute{
@@ -70,6 +74,8 @@ func (r *diskThrottleClassResource) Schema(_ context.Context, _ resource.SchemaR
 	}
 }
 
+// Create validates the class name, description, and limits, creates the throttling class, and
+// stores the returned server copy, which may carry validation errors or a disk count.
 func (r *diskThrottleClassResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan diskThrottleClassModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -100,6 +106,8 @@ func (r *diskThrottleClassResource) Create(ctx context.Context, req resource.Cre
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Read fetches the class by id and replaces state with the server copy, removing the resource
+// when the class no longer exists.
 func (r *diskThrottleClassResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state diskThrottleClassModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -128,6 +136,8 @@ func (r *diskThrottleClassResource) Read(ctx context.Context, req resource.ReadR
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update validates the class name, description, and limits, then sends them; the returned class
+// replaces state.
 func (r *diskThrottleClassResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan diskThrottleClassModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -159,6 +169,7 @@ func (r *diskThrottleClassResource) Update(ctx context.Context, req resource.Upd
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Delete removes the class by id, treating a not-found response as success.
 func (r *diskThrottleClassResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state diskThrottleClassModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -179,6 +190,8 @@ func (r *diskThrottleClassResource) Delete(ctx context.Context, req resource.Del
 	}
 }
 
+// ImportState parses the Terraform import id as a positive integer and stores it as the class
+// id, reporting a diagnostic for invalid input.
 func (r *diskThrottleClassResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	value, err := parseInt64ID(req.ID)
 	if err != nil {
@@ -188,6 +201,7 @@ func (r *diskThrottleClassResource) ImportState(ctx context.Context, req resourc
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), value)...)
 }
 
+// parseInt64ID parses a base-10 id and rejects values that are non-numeric or less than one.
 func parseInt64ID(value string) (int64, error) {
 	parsed, err := strconv.ParseInt(value, 10, 64)
 	if err != nil || parsed <= 0 {
@@ -196,6 +210,8 @@ func parseInt64ID(value string) (int64, error) {
 	return parsed, nil
 }
 
+// diskThrottleNumericDescriptions returns schema descriptions for the BPS, IOPS, burst, and
+// I/O-size limit attributes, keyed by attribute name.
 func diskThrottleNumericDescriptions() map[string]string {
 	base := map[string]string{
 		"bps_total":             "Total BPS limit in bytes per second; 0 means unset.",

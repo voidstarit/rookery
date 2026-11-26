@@ -41,6 +41,8 @@ type diskThrottleClassModel struct {
 	DiskCount       types.Int64  `tfsdk:"disk_count"`
 }
 
+// diskThrottleClassModelFromProto maps an API disk throttle class and its limits
+// into Terraform state values.
 func diskThrottleClassModelFromProto(class *rookeryv1.DiskThrottleClass) diskThrottleClassModel {
 	limits := class.GetLimits()
 	return diskThrottleClassModel{
@@ -71,6 +73,8 @@ func diskThrottleClassModelFromProto(class *rookeryv1.DiskThrottleClass) diskThr
 	}
 }
 
+// diskThrottleLimitsFromModel converts state values to throttle limits, treating
+// null or unknown numbers as zero.
 func diskThrottleLimitsFromModel(model diskThrottleClassModel) diskthrottle.Limits {
 	value := func(item types.Int64) int64 {
 		if item.IsNull() || item.IsUnknown() {
@@ -101,6 +105,8 @@ func diskThrottleLimitsFromModel(model diskThrottleClassModel) diskthrottle.Limi
 	}
 }
 
+// validateDiskThrottleClassModel rejects an empty or malformed name, an
+// over-long description, and negative throttle limits.
 func validateDiskThrottleClassModel(model diskThrottleClassModel) error {
 	name := strings.TrimSpace(model.Name.ValueString())
 	if name == "" {
@@ -135,6 +141,8 @@ func validateDiskThrottleClassModel(model diskThrottleClassModel) error {
 	return nil
 }
 
+// diskThrottleClassModelDiagnostics returns an error diagnostic when the model
+// fails validation, for use by resource and data source logic.
 func diskThrottleClassModelDiagnostics(model diskThrottleClassModel) diag.Diagnostics {
 	var diagnostics diag.Diagnostics
 	if err := validateDiskThrottleClassModel(model); err != nil {
@@ -143,6 +151,8 @@ func diskThrottleClassModelDiagnostics(model diskThrottleClassModel) diag.Diagno
 	return diagnostics
 }
 
+// diskThrottleClassToProto converts a model to an API class, trimming the name
+// and description and carrying the disk count and validation error through.
 func diskThrottleClassToProto(model diskThrottleClassModel) *rookeryv1.DiskThrottleClass {
 	limits := diskThrottleLimitsFromModel(model)
 	return &rookeryv1.DiskThrottleClass{

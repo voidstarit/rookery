@@ -35,6 +35,10 @@ func (v *VPPNetwork) EnsurePipe(ctx context.Context, instance, bdA, bdB uint32) 
 	return v.ensurePipe(ctx, instance, true, bdA, bdB)
 }
 
+// ensurePipe finds or creates a VPP pipe and attaches both ends to distinct,
+// non-zero bridge domains, deleting a newly created pipe if attachment fails. When
+// findInstance is true it looks up the requested instance first, otherwise VPP
+// allocates one.
 func (v *VPPNetwork) ensurePipe(ctx context.Context, instance uint32, findInstance bool, bdA, bdB uint32) (PipeRuntime, error) {
 	if bdA == 0 || bdB == 0 {
 		return PipeRuntime{}, errors.New("two bridge domains are required")
@@ -102,6 +106,8 @@ func (v *VPPNetwork) ensurePipe(ctx context.Context, instance uint32, findInstan
 	return runtime, nil
 }
 
+// attachPipeEnd brings a pipe endpoint up with the default MTU and joins it to
+// bdID as a normal L2 bridge port, stopping at the first failing VPP operation.
 func attachPipeEnd(ctx context.Context, conn *core.Connection, swIfIndex, bdID uint32) error {
 	if err := setInterfaceMTU(ctx, conn, swIfIndex, defaultInterfaceMTU); err != nil {
 		return fmt.Errorf("set pipe end MTU: %w", err)
@@ -149,18 +155,24 @@ func (v *VPPNetwork) DeletePipe(ctx context.Context, instance, _ uint32) error {
 	return deletePipe(ctx, client, uint32(details.SwIfIndex))
 }
 
+// findPipeByInstance returns the dumped pipe whose user instance matches, with
+// false when no pipe has that instance.
 func findPipeByInstance(ctx context.Context, client pipe.RPCService, instance uint32) (pipe.PipeDetails, bool, error) {
 	return findPipeBy(ctx, client, func(details pipe.PipeDetails) bool {
 		return details.Instance == instance
 	})
 }
 
+// findPipeByParent returns the dumped pipe whose parent sw_if_index matches, with
+// false when no pipe has that parent.
 func findPipeByParent(ctx context.Context, client pipe.RPCService, parent uint32) (pipe.PipeDetails, bool, error) {
 	return findPipeBy(ctx, client, func(details pipe.PipeDetails) bool {
 		return uint32(details.SwIfIndex) == parent
 	})
 }
 
+// findPipeBy streams the VPP pipe dump and returns the first entry accepted by
+// match, reporting false when the dump ends without a match.
 func findPipeBy(ctx context.Context, client pipe.RPCService, match func(pipe.PipeDetails) bool) (pipe.PipeDetails, bool, error) {
 	stream, err := client.PipeDump(ctx, &pipe.PipeDump{})
 	if err != nil {
@@ -180,6 +192,8 @@ func findPipeBy(ctx context.Context, client pipe.RPCService, match func(pipe.Pip
 	}
 }
 
+// deletePipe removes the pipe whose parent is parent, treating an already-absent
+// pipe as success.
 func deletePipe(ctx context.Context, client pipe.RPCService, parent uint32) error {
 	reply, err := client.PipeDelete(ctx, &pipe.PipeDelete{SwIfIndex: interface_types.InterfaceIndex(parent)})
 	if err != nil {

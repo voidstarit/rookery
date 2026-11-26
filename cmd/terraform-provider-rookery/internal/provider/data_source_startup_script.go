@@ -19,10 +19,12 @@ func NewStartupScriptDataSource() datasource.DataSource {
 	return &startupScriptDataSource{}
 }
 
+// Metadata registers the data source as <provider>_startup_script.
 func (d *startupScriptDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_startup_script"
 }
 
+// Schema defines the startup script status fields and the required kind selector (rookery or vpp).
 func (d *startupScriptDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
 		Description: "Reads the Rookery startup script or VPP reconnect script status.",
@@ -39,6 +41,7 @@ func (d *startupScriptDataSource) Schema(_ context.Context, _ datasource.SchemaR
 	}
 }
 
+// Read fetches the startup or VPP reconnect script state for the configured kind and stores it.
 func (d *startupScriptDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config startupScriptModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)

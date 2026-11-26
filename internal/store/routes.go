@@ -214,6 +214,10 @@ func (s *Store) UpdateRoute(ctx context.Context, id int64, route Route) (Route, 
 	return s.GetRoute(ctx, id)
 }
 
+// validateRoute trims and canonicalises a route, rejecting prefixes whose address family disagrees
+// with the table, a missing forwarding action (next-hop, egress/rx interface, lookup option or
+// drop), out-of-range count, weight, or egress name, and resolving route-table names, table IDs,
+// and interface IDs against the store; it returns the normalised route.
 func (s *Store) validateRoute(ctx context.Context, route Route) (Route, error) {
 	route.Prefix = strings.TrimSpace(route.Prefix)
 	route.Description = strings.TrimSpace(route.Description)
@@ -323,6 +327,7 @@ func (s *Store) RouteCount(ctx context.Context, tableID uint32, ipv6 bool) (int6
 	return count, nil
 }
 
+// optionalUint32Value dereferences value, returning 0 when the optional field is unset.
 func optionalUint32Value(value *uint32) uint32 {
 	if value == nil {
 		return 0
@@ -330,6 +335,8 @@ func optionalUint32Value(value *uint32) uint32 {
 	return *value
 }
 
+// optionalStringValue converts an optional string into a database value: nil becomes SQL NULL and
+// a set value is trimmed.
 func optionalStringValue(value *string) any {
 	if value == nil {
 		return nil
@@ -337,6 +344,8 @@ func optionalStringValue(value *string) any {
 	return strings.TrimSpace(*value)
 }
 
+// optionalUint32Set returns 1 when value is set and 0 otherwise, for the companion *_set columns
+// that distinguish an explicit zero from an absent optional field.
 func optionalUint32Set(value *uint32) int {
 	if value == nil {
 		return 0
@@ -344,6 +353,8 @@ func optionalUint32Set(value *uint32) int {
 	return 1
 }
 
+// scanRoute decodes one joined route row, rebuilding pointers only for columns whose *_set flag is
+// present, parsing out-labels, and converting timestamps to UTC.
 func scanRoute(s scanner) (Route, error) {
 	var (
 		route            Route
@@ -430,6 +441,8 @@ func scanRoute(s scanner) (Route, error) {
 	return route, nil
 }
 
+// formatLabels renders MPLS out-labels as space-separated decimals, returning an empty string for
+// an empty list.
 func formatLabels(labels []uint32) string {
 	if len(labels) == 0 {
 		return ""
@@ -441,6 +454,8 @@ func formatLabels(labels []uint32) string {
 	return strings.Join(parts, " ")
 }
 
+// parseLabels parses whitespace-separated labels, silently skipping entries that are not uint32
+// values and returning an empty slice for blank input.
 func parseLabels(value string) []uint32 {
 	parts := strings.Fields(value)
 	labels := make([]uint32, 0, len(parts))

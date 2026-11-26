@@ -118,6 +118,8 @@ type DiskInUseError struct {
 	AttachmentCount int
 }
 
+// Error renders the owning workload details, or the bare ErrDiskInUse text when the receiver is nil
+// or carries no owner information; multiple attachments are reported as a count.
 func (e *DiskInUseError) Error() string {
 	if e == nil {
 		return ErrDiskInUse.Error()
@@ -137,6 +139,7 @@ func (e *DiskInUseError) Error() string {
 	}
 }
 
+// Unwrap exposes ErrDiskInUse so errors.Is reports any DiskInUseError as a disk-in-use failure.
 func (e *DiskInUseError) Unwrap() error { return ErrDiskInUse }
 
 const (
@@ -901,6 +904,8 @@ func normalizeDiskSerials(diskIDs []int64, serials map[int64]string) (map[int64]
 	return normalized, nil
 }
 
+// normalizeDiskIDs requires at least one positive disk ID, removes duplicates in first-seen order,
+// and caps the list at MaxWorkloadDisks, wrapping ErrInvalidDiskIDs when the cap is exceeded.
 func normalizeDiskIDs(ids []int64) ([]int64, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("at least one disk is required")
@@ -1400,6 +1405,8 @@ func (s *Store) loadDiskAttachments(ctx context.Context, diskIDs []int64) (map[i
 	return result, nil
 }
 
+// attachDiskAttachments loads the workload attachments for disk and writes them onto it in place,
+// leaving the attachment list empty when no workload references the disk.
 func (s *Store) attachDiskAttachments(ctx context.Context, disk *Disk) error {
 	attachments, err := s.loadDiskAttachments(ctx, []int64{disk.ID})
 	if err != nil {
@@ -1623,6 +1630,9 @@ func (s *Store) insertWorkloadDisk(ctx context.Context, tx *sql.Tx, vmID any, li
 	return nil
 }
 
+// workloadDiskAttachError translates a failed workload-disk insert: it rolls the transaction back
+// and re-reads the disk to return the conflicting owner as a DiskInUseError, ErrDiskNotFound for a
+// vanished disk or foreign-key failure, and a wrapped error for unrelated failures.
 func (s *Store) workloadDiskAttachError(ctx context.Context, tx *sql.Tx, err error, diskID int64) error {
 	if !isUniqueViolation(err) && !isForeignKeyViolation(err) {
 		return fmt.Errorf("attach workload disk: %w", err)
@@ -1644,6 +1654,8 @@ func (s *Store) workloadDiskAttachError(ctx context.Context, tx *sql.Tx, err err
 	return &DiskInUseError{}
 }
 
+// checkDiskOwnership returns nil when the disk has no attachments or every attachment matches the
+// supplied owner; otherwise it returns a DiskInUseError naming another owning workload.
 func (s *Store) checkDiskOwnership(_ context.Context, disk Disk, ownerKind, ownerID string) error {
 	attachments := diskAttachments(disk)
 	for _, attachment := range attachments {
@@ -1660,6 +1672,8 @@ func (s *Store) checkDiskOwnership(_ context.Context, disk Disk, ownerKind, owne
 	return nil
 }
 
+// checkDiskNotDeleting returns ErrDiskDeleting when the disk has entered any deletion state and nil
+// otherwise, so callers refuse operations on a disk being reclaimed.
 func checkDiskNotDeleting(disk Disk) error {
 	if disk.DeletionState != "" {
 		return ErrDiskDeleting
@@ -1667,6 +1681,9 @@ func checkDiskNotDeleting(disk Disk) error {
 	return nil
 }
 
+// checkDiskAvailableForAttach rejects a missing or deleting disk and templates, permits read-only
+// disks to be shared, and otherwise requires the disk to be unattached or owned only by ownerKind
+// and ownerID.
 func (s *Store) checkDiskAvailableForAttach(ctx context.Context, diskID int64, ownerKind, ownerID string) error {
 	disk, err := s.GetDisk(ctx, diskID)
 	if err != nil {
@@ -1781,6 +1798,8 @@ func (s *Store) DeleteMedia(ctx context.Context, id int64) error {
 	return nil
 }
 
+// checkBootMedia accepts a nil boot media, reports ErrMediaNotFound for non-positive IDs, and
+// otherwise confirms the referenced media row exists.
 func (s *Store) checkBootMedia(ctx context.Context, mediaID *int64) error {
 	if mediaID == nil {
 		return nil
@@ -2794,6 +2813,8 @@ const interfaceSelect = `
 	LEFT JOIN route_tables AS r4 ON r4.table_id = i.ipv4_table_id AND r4.is_ipv6 = 0
 	LEFT JOIN route_tables AS r6 ON r6.table_id = i.ipv6_table_id AND r6.is_ipv6 = 1`
 
+// scanNetwork decodes one joined network row, narrowing bridge-domain, tap, BVI, memif, and
+// route-table indexes to uint32, mapping the DHCP flag to a bool, and converting timestamps to UTC.
 func scanNetwork(s scanner) (Network, error) {
 	var (
 		network      Network
@@ -2828,6 +2849,9 @@ func scanNetwork(s scanner) (Network, error) {
 	return network, nil
 }
 
+// scanVNF decodes one joined VNF row, mapping the enabled flag and sw_if_index values and
+// unmarshalling the JSON config only when it is non-empty; malformed config yields an error naming
+// the VNF ID.
 func scanVNF(s scanner) (VNF, error) {
 	var (
 		vnf       VNF
@@ -2858,6 +2882,8 @@ func scanVNF(s scanner) (VNF, error) {
 	return vnf, nil
 }
 
+// scanInterface decodes one joined interface row, filling nullable VM, LightVM, and ACL columns as
+// pointers/names, narrowing table and sw_if_index values, and converting timestamps to UTC.
 func scanInterface(s scanner) (VirtualInterface, error) {
 	var (
 		iface       VirtualInterface
@@ -2947,6 +2973,8 @@ const diskSelect = `
 	LEFT JOIN disk_throttle_classes AS dtc ON dtc.id = d.throttle_class_id
 	LEFT JOIN disks AS td ON td.id = d.template_disk_id`
 
+// scanVM decodes one boot-media-joined VM row, mapping the console flag, trimming the cgroup class,
+// and populating BootMedia only when the joined media columns are present; timestamps become UTC.
 func scanVM(s scanner) (VM, error) {
 	var (
 		vm          VM
@@ -3000,6 +3028,9 @@ func scanVM(s scanner) (VM, error) {
 	return vm, nil
 }
 
+// applyVMDiskThrottle fills a disk's throttle class ID, name, and decoded limits from joined columns,
+// recording ThrottleError when the class row is missing or its stored limits are invalid; it is a
+// no-op for a nil disk or an unset class ID.
 func applyVMDiskThrottle(disk *VMDisk, classID sql.NullInt64, className, classLimits sql.NullString) {
 	if disk == nil || !classID.Valid {
 		return
@@ -3019,6 +3050,9 @@ func applyVMDiskThrottle(disk *VMDisk, classID sql.NullInt64, className, classLi
 	disk.Throttle = &limits
 }
 
+// scanDisk decodes one joined disk row, defaulting a blank source to LVM thin and deriving the
+// device path for thin volumes, decoding backend metadata (failing on malformed JSON), defaulting
+// the protocol, and converting optional deletion times and timestamps to UTC.
 func scanDisk(s scanner) (Disk, error) {
 	var (
 		disk                  Disk
@@ -3131,6 +3165,7 @@ func scanDisk(s scanner) (Disk, error) {
 	return disk, nil
 }
 
+// scanMedia decodes one media row, converting its millisecond timestamps to UTC.
 func scanMedia(s scanner) (Media, error) {
 	var (
 		media     Media
@@ -3152,10 +3187,14 @@ func scanMedia(s scanner) (Media, error) {
 	return media, nil
 }
 
+// devicePath returns the conventional LVM device path /dev/<vg>/<name> for a thin volume.
 func devicePath(vg, name string) string {
 	return "/dev/" + vg + "/" + name
 }
 
+// classifyVMCreateError maps a constraint failure during VM creation to ErrMediaNotFound or
+// ErrDiskNotFound for foreign keys (by referenced column) and to a quoted ErrNameTaken for a
+// uniqueness clash, returning nil when err is unrelated so callers can keep their own wrapping.
 func classifyVMCreateError(err error, name string) error {
 	if isForeignKeyViolation(err) {
 		if strings.Contains(strings.ToLower(err.Error()), "boot_media_id") {
@@ -3169,6 +3208,9 @@ func classifyVMCreateError(err error, name string) error {
 	return fmt.Errorf("%w: %q", ErrNameTaken, name)
 }
 
+// reportLegacyDiskConflicts warns about pre-version-53 vms.disk_id pointers that migration will not
+// carry over, skipping VMs that already have vm_disks rows, reference a missing disk, or point at a
+// disk owned by another VM; it only reads the database and logs.
 func reportLegacyDiskConflicts(ctx context.Context, db *sql.DB) error {
 	var version int
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
@@ -3242,6 +3284,8 @@ func reportLegacyDiskConflicts(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
+// migrate applies every embedded .sql migration whose numeric version exceeds PRAGMA user_version,
+// in filename order and each inside its own transaction that also records the new version.
 func migrate(ctx context.Context, db *sql.DB) error {
 	entries, err := fs.ReadDir(migrations, "migrations")
 	if err != nil {
@@ -3293,6 +3337,8 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
+// migrationVersion extracts the positive numeric version prefix before the first underscore of a
+// migration filename, rejecting names without a separator or with a non-numeric version.
 func migrationVersion(name string) (int, error) {
 	prefix, _, ok := strings.Cut(name, "_")
 	if !ok {
@@ -3312,6 +3358,7 @@ const (
 	sqliteConstraintForeignKey = 787
 )
 
+// isUniqueViolation reports whether err is a SQLite primary-key or unique-constraint violation.
 func isUniqueViolation(err error) bool {
 	var sqliteErr *sqlite.Error
 	if !errors.As(err, &sqliteErr) {
@@ -3325,6 +3372,7 @@ func isUniqueViolation(err error) bool {
 	}
 }
 
+// isForeignKeyViolation reports whether err is a SQLite foreign-key constraint violation.
 func isForeignKeyViolation(err error) bool {
 	var sqliteErr *sqlite.Error
 	if !errors.As(err, &sqliteErr) {

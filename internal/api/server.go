@@ -232,6 +232,8 @@ func (s *Server) SetVPPSocket(socket string) {
 	s.vppSocket = socket
 }
 
+// newServer builds a Server from the injected dependencies and initializes the
+// NAT44 running map, leaving the HTTP handler for the caller to install.
 func newServer(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMController, networks NetworkProvisioner, vnfs VNFManager, nat NAT44Provisioner, logger zerolog.Logger) *Server {
 	return &Server{store: st, readiness: ready, disks: disks, vms: vms, networks: networks, vnfs: vnfs, nat: nat, logger: logger, natRunning: make(map[int64]bool)}
 }
@@ -244,7 +246,7 @@ func New(st *store.Store, ready Readiness, disks DiskProvisioner, vms VMControll
 	return s
 }
 
-// ServeHTTP implements http.Handler.
+// ServeHTTP delegates API requests to the server's configured handler.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.handler.ServeHTTP(w, r)
 }
@@ -259,11 +261,15 @@ func redactRequestPath(path string) string {
 	return path
 }
 
+// internalError logs the request with its redacted path and replies with a
+// generic 500 so internal details are not exposed to the client.
 func (s *Server) internalError(w http.ResponseWriter, r *http.Request, err error) {
 	s.logger.Error().Str("method", r.Method).Str("path", redactRequestPath(r.URL.Path)).Err(err).Msg("request failed")
 	writeError(w, http.StatusInternalServerError, "internal server error")
 }
 
+// writeJSON sets the JSON content type, writes the status code, and encodes
+// payload; encode errors after the header are ignored.
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
@@ -274,6 +280,8 @@ type errorResponse struct {
 	Error string `json:"error"`
 }
 
+// writeError sends message in the standard JSON error envelope with the given
+// HTTP status.
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, errorResponse{Error: message})
 }
@@ -284,6 +292,9 @@ func SecurityHeaders(next http.Handler) http.Handler {
 	return securityHeaders(next)
 }
 
+// securityHeaders applies the CSP, frame, referrer, and content-type headers,
+// allowing inline styles only for the standalone LightVM console page, where
+// xterm.js needs them.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		styleSource := "'self'"
@@ -311,6 +322,8 @@ type responseRecorder struct {
 	bytes  int
 }
 
+// WriteHeader records the first status code and forwards it; later calls are
+// ignored so the logged status matches the wire status.
 func (r *responseRecorder) WriteHeader(status int) {
 	if r.status != 0 {
 		return
@@ -319,6 +332,8 @@ func (r *responseRecorder) WriteHeader(status int) {
 	r.ResponseWriter.WriteHeader(status)
 }
 
+// Write counts the bytes written and records an implicit 200 when no status was
+// set yet.
 func (r *responseRecorder) Write(p []byte) (int, error) {
 	if r.status == 0 {
 		r.status = http.StatusOK
@@ -328,6 +343,7 @@ func (r *responseRecorder) Write(p []byte) (int, error) {
 	return n, err
 }
 
+// Unwrap exposes the wrapped ResponseWriter for http.ResponseController.
 func (r *responseRecorder) Unwrap() http.ResponseWriter {
 	return r.ResponseWriter
 }
@@ -351,6 +367,8 @@ func (r *responseRecorder) Flush() {
 	}
 }
 
+// logRequests wraps next with a response recorder and emits one info log per
+// request with method, redacted path, status, bytes, and duration.
 func (s *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -372,6 +390,8 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 	})
 }
 
+// recoverPanic converts handler panics into a logged 500 response, re-panicking
+// http.ErrAbortHandler so deliberate streamed aborts stay silent.
 func (s *Server) recoverPanic(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {

@@ -15,6 +15,10 @@ import (
 	"github.com/voidstarit/rookery/internal/store"
 )
 
+// GetStorageBackendHealth reports readiness for one backend: lvm-thin reflects the thin-pool
+// readiness status, other drivers are probed through the registry with a sample disk, and the
+// result includes class capacities and the pending-deletion backlog. An unavailable driver or
+// failed probe is described in Detail instead of returned as an error.
 func (s *storageBackendService) GetStorageBackendHealth(ctx context.Context, request *rookeryv1.GetStorageBackendHealthRequest) (*rookeryv1.StorageBackendHealth, error) {
 	backend, err := s.store.GetStorageBackend(ctx, request.GetId())
 	if err != nil {
@@ -69,6 +73,10 @@ func (s *storageBackendService) GetStorageBackendHealth(ctx context.Context, req
 	return s.withDeletionBacklog(ctx, health)
 }
 
+// ProbeKoujaBackend validates the supplied Kouja connection config, connects with the configured
+// client factory (defaulting to kouja.NewClient), and reports readiness, protocols, and storage
+// class names. Invalid config yields InvalidArgument, while connection and RPC failures yield
+// Unavailable.
 func (s *storageBackendService) ProbeKoujaBackend(ctx context.Context, request *rookeryv1.ProbeKoujaBackendRequest) (*rookeryv1.ProbeKoujaBackendResponse, error) {
 	cfg := koujaConfigFromProto(request.GetConfig())
 	parsed, err := kouja.ParseConnectionConfig(store.StorageBackendConfig{Kouja: cfg})
@@ -117,10 +125,14 @@ func (s *storageBackendService) ProbeKoujaBackend(ctx context.Context, request *
 	return response, nil
 }
 
+// TestStorageBackendDataPath is not implemented and always returns Unimplemented.
 func (s *storageBackendService) TestStorageBackendDataPath(context.Context, *rookeryv1.TestStorageBackendDataPathRequest) (*rookeryv1.StorageBackendHealth, error) {
 	return nil, status.Error(codes.Unimplemented, "deep storage data-path testing is not implemented yet")
 }
 
+// withDeletionBacklog adds the count of due disk deletions and the oldest one's age in seconds to
+// health. A nil store or a lookup failure other than not-found leaves the backlog fields unset;
+// the call never fails the health response.
 func (s *storageBackendService) withDeletionBacklog(ctx context.Context, health *rookeryv1.StorageBackendHealth) (*rookeryv1.StorageBackendHealth, error) {
 	if s.store == nil {
 		return health, nil

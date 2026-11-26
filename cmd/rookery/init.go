@@ -11,6 +11,9 @@ import (
 	"github.com/voidstarit/rookery/internal/host"
 )
 
+// runInit idempotently creates the configured LVM thin pool and verifies the VPP
+// binary API socket with a control ping, printing the resulting serve command.
+// It validates the LVM names and VPP socket before touching the host.
 func runInit(args []string) error {
 	file, err := config.Load(config.Path(args))
 	if err != nil {

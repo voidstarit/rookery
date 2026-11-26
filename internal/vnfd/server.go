@@ -142,6 +142,8 @@ func (s *Server) Load() error {
 	return nil
 }
 
+// specHash returns the hex SHA-256 of spec's protojson encoding, or an empty
+// string when the spec cannot be marshaled.
 func specHash(spec *rookeryv1.VNFSpec) string {
 	data, err := protojson.Marshal(spec)
 	if err != nil {
@@ -151,10 +153,13 @@ func specHash(spec *rookeryv1.VNFSpec) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// specPath returns the file path where the desired spec for the VNF is stored.
 func (s *Server) specPath(id int64) string {
 	return filepath.Join(s.dir, fmt.Sprintf("desired-%d.json", id))
 }
 
+// persist atomically writes the desired spec as indented JSON with mode 0600
+// under the server directory, creating the directory when needed.
 func (s *Server) persist(spec *rookeryv1.VNFSpec) error {
 	if err := os.MkdirAll(s.dir, 0o755); err != nil {
 		return err
@@ -170,6 +175,7 @@ func (s *Server) persist(spec *rookeryv1.VNFSpec) error {
 	return os.Rename(tmp, s.specPath(spec.GetId()))
 }
 
+// forget removes the persisted desired spec for id, ignoring removal errors.
 func (s *Server) forget(id int64) {
 	_ = os.Remove(s.specPath(id))
 }
@@ -368,6 +374,8 @@ func (s *Server) GetVNFState(_ context.Context, request *rookeryv1.GetVNFStateRe
 	return s.state(request.GetId()), nil
 }
 
+// state snapshots id's remembered detail together with whether the manager
+// reports the runtime both running and healthy.
 func (s *Server) state(id int64) *rookeryv1.VNFState {
 	s.mu.Lock()
 	detail := s.details[id]
@@ -376,6 +384,8 @@ func (s *Server) state(id int64) *rookeryv1.VNFState {
 	return &rookeryv1.VNFState{Id: id, Running: running, Detail: detail}
 }
 
+// setDetail records a human-readable detail string for the VNF, replacing any
+// previous value under the server mutex.
 func (s *Server) setDetail(id int64, detail string) {
 	s.mu.Lock()
 	s.details[id] = detail
@@ -468,6 +478,9 @@ func (s *Server) Supervise(ctx context.Context) {
 	}
 }
 
+// superviseOnce runs one restart pass over desired specs whose runtime is not
+// running and healthy, skipping ids still within the restart backoff and doing
+// nothing while supervision is paused after a reset.
 func (s *Server) superviseOnce(ctx context.Context) {
 	s.mu.Lock()
 	paused := s.now().Before(s.pausedUntil)

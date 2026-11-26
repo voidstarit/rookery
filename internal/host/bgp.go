@@ -209,6 +209,10 @@ func (b *bgpInstance) Status(ctx context.Context) BGPStatus {
 	return status
 }
 
+// startBGPServer validates the BGP configuration, starts an embedded GoBGP
+// server and peer, and advertises the configured prefixes. It returns the
+// running instance with route and peer-state watchers, or an error after
+// stopping GoBGP when validation or startup fails.
 func startBGPServer(ctx context.Context, cfg bgpStartConfig) (*bgpInstance, error) {
 	if cfg.VNF.Type != store.VNFTypeBGP {
 		return nil, fmt.Errorf("BGP runtime only supports BGP VNFs, got %q", cfg.VNF.Type)
@@ -326,6 +330,9 @@ func startBGPServer(ctx context.Context, cfg bgpStartConfig) (*bgpInstance, erro
 	return instance, nil
 }
 
+// advertise adds each configured prefix to the global RIB with its next hop
+// (LocalIP unless overridden), using MP_REACH_NLRI or NEXT_HOP according to the
+// family. It is a no-op when no prefixes are configured.
 func (b *bgpInstance) advertise(ctx context.Context, cfg bgpStartConfig) error {
 	if len(cfg.Advertise) == 0 {
 		return nil
@@ -371,6 +378,9 @@ func (b *bgpInstance) advertise(ctx context.Context, cfg bgpStartConfig) error {
 	return nil
 }
 
+// watchRoutes streams the best paths from GoBGP's global table into handlePaths
+// until ctx is canceled or the watcher fails. It always releases the
+// instance's wait group slot.
 func (b *bgpInstance) watchRoutes(ctx context.Context) {
 	defer b.wg.Done()
 	err := b.server.WatchEvent(ctx, &api.WatchEventRequest{
@@ -410,6 +420,10 @@ func (b *bgpInstance) watchPeerState(ctx context.Context) {
 	}
 }
 
+// handlePaths filters a GoBGP table event down to IPv4/IPv6 unicast paths
+// learned from the configured neighbor, then installs or withdraws the
+// corresponding route. Paths that cannot be parsed or that belong to other
+// peers are skipped.
 func (b *bgpInstance) handlePaths(response *api.WatchEventResponse) {
 	table := response.GetTable()
 	if table == nil {
@@ -449,6 +463,9 @@ func (b *bgpInstance) handlePaths(response *api.WatchEventResponse) {
 	}
 }
 
+// bgpNextHop extracts the next-hop attribute from a BGP path and returns its
+// string form. It fails when the attributes cannot be decoded or no next hop is
+// present.
 func bgpNextHop(path *api.Path) (string, error) {
 	attrs, err := apiutil.GetNativePathAttributes(path)
 	if err != nil {
@@ -460,6 +477,10 @@ func bgpNextHop(path *api.Path) (string, error) {
 	return "", errors.New("missing BGP next-hop attribute")
 }
 
+// installRoute writes prefix with nextHop into the target VPP table through the
+// route writer, skipping the write when the same prefix already maps to that
+// next hop. The bookkeeping map is updated only after a successful write;
+// failures are logged rather than returned.
 func (b *bgpInstance) installRoute(ctx context.Context, prefix, nextHop string) {
 	if b.routeWriter == nil {
 		return
@@ -491,6 +512,9 @@ func (b *bgpInstance) installRoute(ctx context.Context, prefix, nextHop string) 
 	b.installedMu.Unlock()
 }
 
+// removeRoute deletes prefix from the target VPP table if this instance
+// installed it, then drops it from the bookkeeping map. Write failures are
+// logged and leave the entry in place so shutdown can retry.
 func (b *bgpInstance) removeRoute(ctx context.Context, prefix string) {
 	b.installedMu.Lock()
 	_, exists := b.installed[prefix]
@@ -519,6 +543,9 @@ func (b *bgpInstance) removeRoute(ctx context.Context, prefix string) {
 	b.installedMu.Unlock()
 }
 
+// Close stops the watchers and GoBGP server once and removes every route this
+// instance installed from VPP. Cleanup uses a 10-second timeout when ctx has no
+// deadline; failed deletions are logged and left behind.
 func (b *bgpInstance) Close(ctx context.Context) {
 	b.closeOnce.Do(func() {
 		if b.cancel != nil {
@@ -564,6 +591,8 @@ func (b *bgpInstance) Close(ctx context.Context) {
 	})
 }
 
+// bgpPrefixes parses each trimmed value as a CIDR and returns the network
+// forms, rejecting any value that is not a valid prefix.
 func bgpPrefixes(values []string) ([]*net.IPNet, error) {
 	prefixes := make([]*net.IPNet, 0, len(values))
 	for _, value := range values {
@@ -576,6 +605,9 @@ func bgpPrefixes(values []string) ([]*net.IPNet, error) {
 	return prefixes, nil
 }
 
+// startBGPTap configures the tap with the VNF's local address and peer route,
+// then starts a tap-transport GoBGP instance registered with the manager. It
+// rejects non-tap transports and malformed or mixed-family addresses.
 func (m *VNFManager) startBGPTap(ctx context.Context, vnf store.VNF, hostIf string) error {
 	if strings.TrimSpace(vnf.Config.Transport) != "tap" {
 		return errors.New("BGP transport is not tap")

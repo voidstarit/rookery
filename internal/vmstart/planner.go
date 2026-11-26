@@ -68,6 +68,8 @@ func (p *Planner) PlanDisks(ctx context.Context, disks []store.VMDisk) (qemu.Sta
 	return plan, nil
 }
 
+// vmDisks returns the VM's disk list, falling back to the deprecated single
+// Disk field and returning nil when neither is set.
 func vmDisks(vm store.VM) []store.VMDisk {
 	if len(vm.Disks) > 0 {
 		return vm.Disks

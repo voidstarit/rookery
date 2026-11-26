@@ -149,6 +149,9 @@ func (v *VPPNetwork) ACLInterfaceCounters(ctx context.Context) ([]ACLInterfaceCo
 	return result, nil
 }
 
+// parseACLLookupContexts parses "show acl-plugin lookup context" output into a map
+// keyed by lookup-context index, skipping lines that do not match the expected
+// format and silently dropping unparseable ACL indices.
 func parseACLLookupContexts(out string) map[uint32]aclLookupContext {
 	result := make(map[uint32]aclLookupContext)
 	for _, line := range strings.Split(out, "\n") {
@@ -173,6 +176,9 @@ func parseACLLookupContexts(out string) map[uint32]aclLookupContext {
 	return result
 }
 
+// parseACLHitCounters parses "show acl-plugin tables applied" output into per
+// lookup-context rule hits, attributing each hit to deny when its action is zero
+// and to permit otherwise. Rule lines appearing before any lc_index header are ignored.
 func parseACLHitCounters(out string) map[uint32]aclHitCounters {
 	result := make(map[uint32]aclHitCounters)
 	var current uint32

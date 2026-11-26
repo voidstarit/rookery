@@ -15,6 +15,8 @@ type memifDeleterByName interface {
 	DeleteMemifByName(ctx context.Context, hostName string) error
 }
 
+// memifSocketPath returns <memifDir>/<vnfID>.sock, defaulting the directory to
+// /run/rookery/memif when the server has none configured.
 func (s *Server) memifSocketPath(vnfID int64) string {
 	dir := strings.TrimSpace(s.memifDir)
 	if dir == "" {
@@ -23,6 +25,8 @@ func (s *Server) memifSocketPath(vnfID int64) string {
 	return filepath.Join(dir, fmt.Sprintf("%d.sock", vnfID))
 }
 
+// vnfInterfaceName returns the VNF's trimmed name, or vnf<ID> when the name is
+// empty.
 func vnfInterfaceName(vnf store.VNF) string {
 	if name := strings.TrimSpace(vnf.Name); name != "" {
 		return name
@@ -30,6 +34,8 @@ func vnfInterfaceName(vnf store.VNF) string {
 	return fmt.Sprintf("vnf%d", vnf.ID)
 }
 
+// vnfMemifDeleteName returns the recorded memif host interface name, falling
+// back to vnf<ID> when none was stored.
 func vnfMemifDeleteName(vnf store.VNF) string {
 	if name := strings.TrimSpace(vnf.MemifHostName); name != "" {
 		return name
@@ -83,6 +89,9 @@ func (s *Server) activateMemifVNF(ctx context.Context, vnf store.VNF, network st
 	return updated, nil
 }
 
+// deleteMemif removes a VNF memif by host interface name when the runtime
+// supports name deletion, otherwise by swIfIndex; it is a no-op without a
+// network runtime or any identifier.
 func (s *Server) deleteMemif(ctx context.Context, swIfIndex uint32, hostName string) error {
 	if s.networks == nil {
 		return nil

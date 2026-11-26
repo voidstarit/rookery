@@ -50,6 +50,8 @@ type bgpTCPProxy struct {
 	closeOnce  sync.Once
 }
 
+// Close closes the proxy listener exactly once; connections already accepted
+// are closed by their handlers.
 func (p *bgpTCPProxy) Close() {
 	p.closeOnce.Do(func() {
 		if p.listener != nil {
@@ -58,6 +60,8 @@ func (p *bgpTCPProxy) Close() {
 	})
 }
 
+// acceptLoop accepts proxy connections until the listener is closed, handing
+// each one to handle in its own goroutine.
 func (p *bgpTCPProxy) acceptLoop(ctx context.Context) {
 	for {
 		conn, err := p.listener.Accept()
@@ -68,6 +72,10 @@ func (p *bgpTCPProxy) acceptLoop(ctx context.Context) {
 	}
 }
 
+// handle connects an accepted connection to the BGP peer, dialing through the
+// gVisor stack when the proxy is active or the loopback GoBGP listener when it
+// is passive, then proxies bytes both ways. Dial failures are logged and the
+// accepted connection is closed.
 func (p *bgpTCPProxy) handle(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
 	var remote net.Conn
@@ -88,6 +96,8 @@ func (p *bgpTCPProxy) handle(ctx context.Context, conn net.Conn) {
 	proxyConnections(conn, remote)
 }
 
+// proxyConnections copies bytes in both directions between a and b and returns
+// as soon as either direction finishes, closing both sides on the way out.
 func proxyConnections(a, b net.Conn) {
 	done := make(chan struct{}, 2)
 	copyOne := func(dst, src net.Conn) {
@@ -308,6 +318,9 @@ func startBGPMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID u
 	return runtime, nil
 }
 
+// pumpRX reads frames from the BGP memif and injects them into the gVisor stack
+// as inbound IPv4, retrying after 100ms on transient errors. It returns when the
+// context is canceled or the memif closes.
 func (m *bgpMemifRuntime) pumpRX(ctx context.Context) {
 	for {
 		frame, err := m.memif.readFrame(ctx)
@@ -330,6 +343,9 @@ func (m *bgpMemifRuntime) pumpRX(ctx context.Context) {
 	}
 }
 
+// pumpTX drains packets from the gVisor stack to the BGP memif, retrying after
+// 100ms on transient write errors. It returns when the context is canceled or
+// the memif closes.
 func (m *bgpMemifRuntime) pumpTX(ctx context.Context) {
 	for {
 		pkt := m.link.ReadContext(ctx)
@@ -354,6 +370,9 @@ func (m *bgpMemifRuntime) pumpTX(ctx context.Context) {
 	}
 }
 
+// Close shuts the memif runtime down once: it cancels the pumps, closes the
+// proxy and GoBGP instance, releases the memif, link, and netstack, then closes
+// done to signal completion.
 func (m *bgpMemifRuntime) Close(ctx context.Context) {
 	m.closeOnce.Do(func() {
 		if m.cancel != nil {
@@ -380,6 +399,8 @@ func (m *bgpMemifRuntime) Close(ctx context.Context) {
 	})
 }
 
+// closeStack closes the memif link and gVisor netstack without touching the
+// GoBGP server, unwinding a partially started runtime.
 func (m *bgpMemifRuntime) closeStack() {
 	if m.memif != nil {
 		m.memif.close()
@@ -393,6 +414,8 @@ func (m *bgpMemifRuntime) closeStack() {
 	}
 }
 
+// freeTCPPort asks the kernel for an unused loopback TCP port by opening and
+// immediately closing a listener. It returns the port or the listen error.
 func freeTCPPort() (int, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

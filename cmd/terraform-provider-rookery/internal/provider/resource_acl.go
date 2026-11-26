@@ -65,10 +65,13 @@ var aclRuleAttrTypes = map[string]attr.Type{
 
 var aclRuleObjectType = types.ObjectType{AttrTypes: aclRuleAttrTypes}
 
+// Metadata registers the resource under the provider type name with the _acl suffix.
 func (r *aclResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_acl"
 }
 
+// Schema declares the ACL name, optional title/description, and an ordered rule list whose
+// protocol defaults to any and whose VPP index is computed.
 func (r *aclResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A named ordered VPP ACL rule set.",
@@ -100,6 +103,8 @@ func (r *aclResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 	}
 }
 
+// Create converts the planned rules to protobuf, creates the ACL, applies labels, and records the
+// server-assigned id and VPP index in state.
 func (r *aclResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan aclModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -138,6 +143,8 @@ func (r *aclResource) Create(ctx context.Context, req resource.CreateRequest, re
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read fetches the ACL by id, refreshes its computed fields and labels, and removes the resource
+// from state when the server reports it missing.
 func (r *aclResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state aclModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -170,6 +177,8 @@ func (r *aclResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update replaces the ACL's name, title, description, and rule set, applies labels, and refreshes
+// state from the response.
 func (r *aclResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan aclModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -209,6 +218,7 @@ func (r *aclResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete removes the ACL, treating a not-found response as success so destroys are idempotent.
 func (r *aclResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state aclModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -227,10 +237,13 @@ func (r *aclResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 	}
 }
 
+// ImportState adopts an existing ACL by its decimal id through the shared int64 import helper.
 func (r *aclResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	importInt64ID(ctx, req, resp)
 }
 
+// setACLState writes the ACL's identity, optional title/description, VPP index, and rules into the
+// model, returning diagnostics from rule conversion.
 func setACLState(ctx context.Context, state *aclModel, acl *rookeryv1.ACL) diag.Diagnostics {
 	var diags diag.Diagnostics
 	state.ID = types.Int64Value(acl.GetId())
@@ -244,12 +257,15 @@ func setACLState(ctx context.Context, state *aclModel, acl *rookeryv1.ACL) diag.
 	return diags
 }
 
+// aclRulesFromList decodes the planned rules list into rule models, returning diagnostics when the
+// list does not match the schema.
 func aclRulesFromList(ctx context.Context, list types.List) ([]aclRuleModel, diag.Diagnostics) {
 	var rules []aclRuleModel
 	diags := list.ElementsAs(ctx, &rules, false)
 	return rules, diags
 }
 
+// aclRulesToProto converts rule models into protobuf rules, narrowing int64 port bounds to int32.
 func aclRulesToProto(rules []aclRuleModel) []*rookeryv1.ACLRule {
 	result := make([]*rookeryv1.ACLRule, 0, len(rules))
 	for _, rule := range rules {
@@ -268,6 +284,8 @@ func aclRulesToProto(rules []aclRuleModel) []*rookeryv1.ACLRule {
 	return result
 }
 
+// aclRulesToList converts protobuf ACL rules into the Terraform list representation, mapping empty
+// description and protocol strings to null.
 func aclRulesToList(ctx context.Context, rules []*rookeryv1.ACLRule) (types.List, diag.Diagnostics) {
 	models := make([]aclRuleModel, 0, len(rules))
 	for _, rule := range rules {

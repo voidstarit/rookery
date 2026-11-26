@@ -23,10 +23,12 @@ func NewVNFDataSource() datasource.DataSource {
 	return &vnfDataSource{}
 }
 
+// Metadata registers this data source under the provider-prefixed type name <provider>_vnf.
 func (d *vnfDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_vnf"
 }
 
+// Schema defines the VNF attributes: network, tap, status, and sensitive config_json.
 func (d *vnfDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a network function by id or name.",
@@ -48,6 +50,7 @@ func (d *vnfDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, re
 	}
 }
 
+// Read resolves the network function by exactly one of id or name, storing its state and labels.
 func (d *vnfDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config vnfModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
@@ -91,6 +94,8 @@ func (d *vnfDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 
+// findVNF returns the single VNF whose name matches case-insensitively, failing on
+// duplicate matches or no match.
 func findVNF(vnfs []*rookeryv1.VNF, name string) (*rookeryv1.VNF, error) {
 	var found *rookeryv1.VNF
 	for _, vnf := range vnfs {

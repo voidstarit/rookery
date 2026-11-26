@@ -26,6 +26,8 @@ type InterfaceAddressRuntime interface {
 	VPPInterfaces(ctx context.Context) ([]host.VPPInterface, error)
 }
 
+// GetVPPInterfaceAddresses returns the stored addresses and DHCP state of a Rookery-managed VPP
+// interface together with live VPP state; an interface not managed by Rookery is NotFound.
 func (s *interfaceService) GetVPPInterfaceAddresses(ctx context.Context, request *rookeryv1.GetVPPInterfaceAddressesRequest) (*rookeryv1.VPPInterfaceAddresses, error) {
 	name := strings.TrimSpace(request.GetName())
 	managed, err := s.store.IsManagedVPPInterface(ctx, name)
@@ -46,6 +48,9 @@ func (s *interfaceService) GetVPPInterfaceAddresses(ctx context.Context, request
 	return s.vppInterfaceAddressResponse(ctx, name, addresses, dhcpEnabled), nil
 }
 
+// vppInterfaceAddressResponse builds the address view from stored configuration plus live VPP
+// state, recording a status detail instead of failing when the runtime is missing, VPP is not
+// ready, or a live query errors.
 func (s *interfaceService) vppInterfaceAddressResponse(ctx context.Context, name string, addresses []string, dhcpEnabled bool) *rookeryv1.VPPInterfaceAddresses {
 	response := &rookeryv1.VPPInterfaceAddresses{
 		Name: name, Addresses: addresses, DhcpClientEnabled: dhcpEnabled,
@@ -75,6 +80,9 @@ func (s *interfaceService) vppInterfaceAddressResponse(ctx context.Context, name
 	return response
 }
 
+// UpdateVPPInterfaceAddresses validates and normalizes the requested CIDRs, then reconciles live
+// VPP addresses and DHCP client state against the stored configuration. Applied changes are
+// rolled back when a later step or the store write fails.
 func (s *interfaceService) UpdateVPPInterfaceAddresses(ctx context.Context, request *rookeryv1.UpdateVPPInterfaceAddressesRequest) (*rookeryv1.VPPInterfaceAddresses, error) {
 	name := strings.TrimSpace(request.GetName())
 	if s.addresses == nil {
@@ -207,6 +215,8 @@ func (s *interfaceService) UpdateVPPInterfaceAddresses(ctx context.Context, requ
 	return s.vppInterfaceAddressResponse(ctx, name, addresses, dhcpEnabled), nil
 }
 
+// normalizeVPPAddresses trims, validates, deduplicates, and sorts CIDR strings, rejecting
+// addresses with a zero prefix length and lists longer than 32 entries.
 func normalizeVPPAddresses(values []string) ([]string, error) {
 	seen := make(map[string]bool, len(values))
 	addresses := make([]string, 0, len(values))

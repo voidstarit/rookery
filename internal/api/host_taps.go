@@ -21,6 +21,8 @@ type HostTapError struct {
 	Err     error
 }
 
+// Error returns Message when set, then the wrapped error, and finally a generic
+// host tap message.
 func (e *HostTapError) Error() string {
 	if e.Message != "" {
 		return e.Message
@@ -31,6 +33,8 @@ func (e *HostTapError) Error() string {
 	return "host tap operation failed"
 }
 
+// Unwrap returns the wrapped error so callers can match it with errors.Is or
+// errors.As.
 func (e *HostTapError) Unwrap() error { return e.Err }
 
 // HostTapStatus returns the HTTP status and message for the gateway.
@@ -47,18 +51,24 @@ func (e *HostTapError) HostTapStatus() (int, string) {
 	return e.Status, e.Error()
 }
 
+// hostTapInputError wraps message in a HostTapError that maps to HTTP 400 Bad Request.
 func hostTapInputError(message string) error {
 	return &HostTapError{Status: http.StatusBadRequest, Message: message}
 }
 
+// hostTapConflictError wraps message in a HostTapError that maps to HTTP 409 Conflict.
 func hostTapConflictError(message string) error {
 	return &HostTapError{Status: http.StatusConflict, Message: message}
 }
 
+// hostTapUnavailableError wraps message in a HostTapError that maps to HTTP 503
+// Service Unavailable.
 func hostTapUnavailableError(message string) error {
 	return &HostTapError{Status: http.StatusServiceUnavailable, Message: message}
 }
 
+// hostTapInternalError wraps err in a HostTapError that maps to HTTP 500 Internal
+// Server Error, keeping the cause available to HostTapStatus.
 func hostTapInternalError(err error) error {
 	return &HostTapError{Status: http.StatusInternalServerError, Err: err}
 }
@@ -312,6 +322,8 @@ func normalizeHostTapIPv4(network store.Network, value string) (string, error) {
 	return netip.PrefixFrom(addr, bits).String(), nil
 }
 
+// lastIPv4 returns the highest address in prefix, used to reject a host tap on
+// the subnet's broadcast address.
 func lastIPv4(prefix netip.Prefix) netip.Addr {
 	addr := prefix.Masked().Addr().As4()
 	bits := prefix.Bits()

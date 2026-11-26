@@ -32,6 +32,8 @@ type NetworkWriter interface {
 	DeleteNetworkPipe(ctx context.Context, id int64) error
 }
 
+// ready returns Unavailable when the network runtime is missing or readiness reports VPP as
+// not ready, and nil otherwise.
 func (s *networkService) ready() error {
 	if s.runtime == nil {
 		return status.Error(codes.Unavailable, "VPP network runtime is not configured")
@@ -42,6 +44,9 @@ func (s *networkService) ready() error {
 	return nil
 }
 
+// CreateNetwork validates the name and CIDRs, then either delegates to the lifecycle writer or
+// creates a VPP bridge domain and records the network. A failed store write deletes the new
+// bridge domain.
 func (s *networkService) CreateNetwork(ctx context.Context, request *rookeryv1.CreateNetworkRequest) (*rookeryv1.Network, error) {
 	name := strings.TrimSpace(request.GetName())
 	if name == "" {
@@ -136,6 +141,9 @@ func (s *networkService) UpdateNetwork(ctx context.Context, request *rookeryv1.U
 	return networkToProto(updated), nil
 }
 
+// DeleteNetwork removes a network after checking it has no interfaces, pipes, VNFs, or BVI,
+// deleting the bridge domain first; a configured lifecycle writer handles the whole operation
+// instead.
 func (s *networkService) DeleteNetwork(ctx context.Context, request *rookeryv1.DeleteNetworkRequest) (*emptypb.Empty, error) {
 	if s.writer != nil {
 		if err := s.writer.DeleteNetwork(ctx, request.GetId()); err != nil {
@@ -190,6 +198,8 @@ type networkStatusError interface {
 	NetworkStatus() (int, string)
 }
 
+// mapNetworkWriteError converts an error carrying an HTTP status via NetworkStatus into the
+// matching gRPC code, defaulting to Internal for untyped errors or unknown statuses.
 func mapNetworkWriteError(err error) error {
 	var operationError networkStatusError
 	if !errors.As(err, &operationError) {
@@ -300,6 +310,8 @@ func (s *networkService) DeleteNetworkPipe(ctx context.Context, request *rookery
 	return &emptypb.Empty{}, nil
 }
 
+// networkPipeToProto maps a stored bridge-domain pipe, including both network names and the
+// VPP endpoint indices, to its API form.
 func networkPipeToProto(pipe store.NetworkPipe) *rookeryv1.NetworkPipe {
 	return &rookeryv1.NetworkPipe{
 		Id: pipe.ID, NetworkAId: pipe.NetworkAID, NetworkAName: pipe.NetworkAName,

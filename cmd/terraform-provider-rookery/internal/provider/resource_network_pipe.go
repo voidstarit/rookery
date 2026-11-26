@@ -41,10 +41,13 @@ type networkPipeModel struct {
 	Labels             types.Set    `tfsdk:"labels"`
 }
 
+// Metadata registers the resource under the provider type name with the _network_pipe suffix.
 func (r *networkPipeResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_network_pipe"
 }
 
+// Schema declares replace-only network_a_id and network_b_id inputs and exposes the pipe
+// instance, parent interface index, and derived endpoint names as computed attributes.
 func (r *networkPipeResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A VPP pipe pair connecting two Rookery Networks at layer 2.",
@@ -73,6 +76,8 @@ func (r *networkPipeResource) Schema(_ context.Context, _ resource.SchemaRequest
 	}
 }
 
+// Create rejects equal network ids, creates the VPP pipe pair, applies labels, and stores the
+// returned pipe in state; if label application fails the pipe remains on the server without state.
 func (r *networkPipeResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan networkPipeModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -108,6 +113,8 @@ func (r *networkPipeResource) Create(ctx context.Context, req resource.CreateReq
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read lists network pipes, refreshes state and labels for the matching id, and removes the
+// resource from state when no pipe matches.
 func (r *networkPipeResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state networkPipeModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -142,6 +149,8 @@ func (r *networkPipeResource) Read(ctx context.Context, req resource.ReadRequest
 	resp.State.RemoveResource(ctx)
 }
 
+// Update applies only the planned labels, since the network ids are replace-only, and writes the
+// resulting label set back to state.
 func (r *networkPipeResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan networkPipeModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -164,6 +173,7 @@ func (r *networkPipeResource) Update(ctx context.Context, req resource.UpdateReq
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete removes the pipe, treating a not-found response as success so destroys are idempotent.
 func (r *networkPipeResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state networkPipeModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -182,10 +192,13 @@ func (r *networkPipeResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 }
 
+// ImportState adopts an existing pipe by its decimal id through the shared int64 import helper.
 func (r *networkPipeResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	importInt64ID(ctx, req, resp)
 }
 
+// setNetworkPipeState copies a pipe into the model and derives the pipe<instance>.0/.1 endpoint
+// names; preserveOrder swaps A and B when the API returns them opposite to the current state.
 func setNetworkPipeState(state *networkPipeModel, pipe *rookeryv1.NetworkPipe, preserveOrder bool) {
 	aID, aName := pipe.GetNetworkAId(), pipe.GetNetworkAName()
 	bID, bName := pipe.GetNetworkBId(), pipe.GetNetworkBName()

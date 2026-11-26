@@ -28,6 +28,8 @@ type VNFStatusProvider interface {
 	VNFDNSRecords(ctx context.Context, vnf store.VNF) ([]host.DNSRecordView, error)
 }
 
+// vnfView maps a stored VNF and, when a status provider is configured, fills in the runtime
+// status, detail, and lease count.
 func (s *vnfService) vnfView(ctx context.Context, vnf store.VNF) *rookeryv1.VNF {
 	result := vnfToProto(vnf)
 	if s.statusProvider != nil {
@@ -39,6 +41,9 @@ func (s *vnfService) vnfView(ctx context.Context, vnf store.VNF) *rookeryv1.VNF 
 	return result
 }
 
+// ListVNFLeases returns the DHCP leases the daemon reports for a VNF, keeping only addresses
+// inside its configured range; a missing VNF is NotFound and an absent runtime yields an empty
+// list.
 func (s *vnfService) ListVNFLeases(ctx context.Context, request *rookeryv1.ListVNFLeasesRequest) (*rookeryv1.ListVNFLeasesResponse, error) {
 	vnf, err := s.store.GetVNF(ctx, request.GetId())
 	if err != nil {
@@ -69,6 +74,8 @@ func (s *vnfService) ListVNFLeases(ctx context.Context, request *rookeryv1.ListV
 	return response, nil
 }
 
+// ListVNFSessions returns the NAT44 session table for a NAT44 VNF, rejecting other VNF types and
+// mapping provider failures to Internal.
 func (s *vnfService) ListVNFSessions(ctx context.Context, request *rookeryv1.ListVNFSessionsRequest) (*rookeryv1.ListVNFSessionsResponse, error) {
 	vnf, err := s.store.GetVNF(ctx, request.GetId())
 	if err != nil {
@@ -168,6 +175,8 @@ func (s *vnfService) ListVNFDNSRecords(ctx context.Context, request *rookeryv1.L
 	return response, nil
 }
 
+// leaseBelongsToVNF reports whether an address falls inside the DHCP range of an IPv4 or IPv6
+// VNF, returning false for other VNF types and for unparsable configuration or addresses.
 func leaseBelongsToVNF(vnf store.VNF, address string) bool {
 	switch vnf.Type {
 	case store.VNFTypeDHCPv4:
@@ -206,6 +215,8 @@ func leaseBelongsToVNF(vnf store.VNF, address string) bool {
 	}
 }
 
+// binaryBigEndianUint32 returns the numeric value of an IPv4 address in host byte order for
+// range comparisons; callers must pass an address whose To4 result is non-nil.
 func binaryBigEndianUint32(ip net.IP) uint32 {
 	ip4 := ip.To4()
 	return uint32(ip4[0])<<24 | uint32(ip4[1])<<16 | uint32(ip4[2])<<8 | uint32(ip4[3])

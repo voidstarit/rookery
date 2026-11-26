@@ -29,6 +29,8 @@ type LeaseCleaner interface {
 	RemoveLeasesForInterface(ctx context.Context, networkID int64, mac string) error
 }
 
+// vppReady returns Unavailable when the VPP attachment runtime is missing or readiness reports
+// VPP as not ready, and nil otherwise.
 func (s *interfaceService) vppReady() error {
 	if s.attachments == nil {
 		return status.Error(codes.Unavailable, "VPP network runtime is not configured")
@@ -39,6 +41,9 @@ func (s *interfaceService) vppReady() error {
 	return nil
 }
 
+// CreateInterface validates the name and network, refuses to attach to a running VM, and creates
+// a VPP vhost-user interface bound to the network bridge domain and VRF before recording it. VPP
+// objects are removed again if the VRF bind or the store write fails.
 func (s *interfaceService) CreateInterface(ctx context.Context, request *rookeryv1.CreateInterfaceRequest) (*rookeryv1.VirtualInterface, error) {
 	name := strings.TrimSpace(request.GetName())
 	if name == "" {
@@ -115,6 +120,8 @@ func (s *interfaceService) CreateInterface(ctx context.Context, request *rookery
 	return interfaceToProto(created), nil
 }
 
+// UpdateInterface changes the VM attachment of an existing interface, aborting the change when
+// the current or target VM is running so a live guest keeps its interface.
 func (s *interfaceService) UpdateInterface(ctx context.Context, request *rookeryv1.UpdateInterfaceRequest) (*rookeryv1.VirtualInterface, error) {
 	s.resourceMu.Lock()
 	defer s.resourceMu.Unlock()
@@ -149,6 +156,9 @@ func (s *interfaceService) UpdateInterface(ctx context.Context, request *rookery
 	return interfaceToProto(updated), nil
 }
 
+// DeleteInterface removes an unattached vhost-user interface from VPP and its record from the
+// store, then clears its addresses and requests best-effort DHCP lease cleanup. Interfaces still
+// attached to a VM are rejected.
 func (s *interfaceService) DeleteInterface(ctx context.Context, request *rookeryv1.DeleteInterfaceRequest) (*emptypb.Empty, error) {
 	if err := s.vppReady(); err != nil {
 		return nil, err
@@ -199,6 +209,8 @@ func (s *interfaceService) ResetInterfaceCounters(ctx context.Context, _ *rooker
 	return &emptypb.Empty{}, nil
 }
 
+// gatewayMAC returns a random locally administered unicast MAC address for a new vhost-user
+// interface.
 func gatewayMAC() (string, error) {
 	address := make([]byte, 6)
 	if _, err := rand.Read(address); err != nil {

@@ -208,6 +208,8 @@ func (d *KoujaDriver) Health(ctx context.Context, backend store.StorageBackend, 
 	return result, nil
 }
 
+// client returns the injected test client when present, otherwise a client
+// built by kouja.NewClient for cfg.
 func (d *KoujaDriver) client(cfg kouja.Config) (*kouja.Client, error) {
 	if d != nil && d.newClient != nil {
 		return d.newClient(cfg)
@@ -215,12 +217,16 @@ func (d *KoujaDriver) client(cfg kouja.Config) (*kouja.Client, error) {
 	return kouja.NewClient(cfg)
 }
 
+// koujav1UnexportRequest builds a non-forced unexport request with the
+// deterministic request ID "unexport-<volumeID>".
 func koujav1UnexportRequest(volumeID string) koujav1.UnexportVolumeRequest {
 	return koujav1.UnexportVolumeRequest{
 		VolumeId: volumeID, Force: false, RequestId: "unexport-" + volumeID,
 	}
 }
 
+// koujav1DeleteRequest builds a non-forced delete request with the
+// deterministic request ID "delete-<volumeID>".
 func koujav1DeleteRequest(volumeID string) koujav1.DeleteVolumeRequest {
 	return koujav1.DeleteVolumeRequest{
 		VolumeId: volumeID, Force: false, RequestId: "delete-" + volumeID,

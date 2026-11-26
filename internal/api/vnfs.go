@@ -108,6 +108,8 @@ type vnfView struct {
 	LeaseCount   int    `json:"lease_count"`
 }
 
+// toName validates the required VNF name, trimming whitespace and enforcing the
+// length and character rules, and returns the trimmed value.
 func (p vnfPayload) toName() (string, error) {
 	if p.Name == nil {
 		return "", errors.New("name is required")
@@ -124,6 +126,8 @@ func (p vnfPayload) toName() (string, error) {
 	return name, nil
 }
 
+// toType validates the required VNF type against the supported set and returns
+// the trimmed type.
 func (p vnfPayload) toType() (string, error) {
 	if p.Type == nil {
 		return "", errors.New("type is required")
@@ -135,6 +139,9 @@ func (p vnfPayload) toType() (string, error) {
 	return vnfType, nil
 }
 
+// toConfig validates and normalizes a VNF config for vnfType, rejecting fields
+// that do not belong to that type and returning the stored config with canonical
+// addresses, ranges, transport, and options.
 func (p vnfConfigPayload) toConfig(vnfType string) (store.VNFConfig, error) {
 	if vnfType != store.VNFTypeDHCPv4 && vnfType != store.VNFTypeDHCPv6 && len(p.DHCPOptions) > 0 {
 		return store.VNFConfig{}, errors.New("config.dhcp_options is supported for DHCP VNFs only")
@@ -238,6 +245,10 @@ func (p vnfConfigPayload) toConfig(vnfType string) (store.VNFConfig, error) {
 	}
 }
 
+// normalizeNAT44Config validates the NAT44 gateway, outside interface,
+// address/gateway, pool, and DNAT rules, returning the canonical config. It
+// rejects non-IPv4 gateways, prefixes longer than /30, and an outside gateway
+// outside the outside subnet.
 func normalizeNAT44Config(p vnfConfigPayload) (store.VNFConfig, error) {
 	gateway := strings.TrimSpace(p.Gateway)
 	gatewayIP, ipnet, err := net.ParseCIDR(gateway)
@@ -309,6 +320,9 @@ func normalizeNAT44Config(p vnfConfigPayload) (store.VNFConfig, error) {
 
 const maxDNATRules = 256
 
+// normalizeDNATRules validates up to 256 DNAT rules, requiring tcp or udp, a
+// usable local address inside subnet, unique external ports, and valid ports.
+// It returns nil for an empty payload.
 func normalizeDNATRules(payload []dnatRulePayload, subnet *net.IPNet) ([]store.DNATRule, error) {
 	if len(payload) > maxDNATRules {
 		return nil, fmt.Errorf("config.dnat_rules can contain at most %d rules", maxDNATRules)
@@ -357,6 +371,8 @@ func normalizeDNATRules(payload []dnatRulePayload, subnet *net.IPNet) ([]store.D
 	return rules, nil
 }
 
+// normalizeDHCPOptionsPayload converts DHCP option payloads and validates them
+// through host.NormalizeDHCPOptions for the given address family.
 func normalizeDHCPOptionsPayload(payload []dhcpOptionPayload, ipv6 bool) ([]store.DHCPOption, error) {
 	options := make([]store.DHCPOption, 0, len(payload))
 	for _, option := range payload {
@@ -365,6 +381,10 @@ func normalizeDHCPOptionsPayload(payload []dhcpOptionPayload, ipv6 bool) ([]stor
 	return host.NormalizeDHCPOptions(options, ipv6)
 }
 
+// normalizeDHCPv4StaticAssignments validates up to 256 MAC-to-IP reservations,
+// rejecting addresses outside the subnet, network/broadcast, the gateway, or the
+// DHCP bind address, as well as duplicate MACs or IPs, and returns normalized
+// entries.
 func normalizeDHCPv4StaticAssignments(payload []dhcpStaticAssignmentPayload, gateway net.IP, subnet *net.IPNet, bindIP string) ([]store.DHCPStaticAssignment, error) {
 	const maxStaticAssignments = 256
 	if len(payload) > maxStaticAssignments {
@@ -422,6 +442,8 @@ func normalizeDHCPv4StaticAssignments(payload []dhcpStaticAssignmentPayload, gat
 	return assignments, nil
 }
 
+// validNAT44Pool reports whether value is a single IPv4 address or an ascending
+// start-end IPv4 range.
 func validNAT44Pool(value string) bool {
 	if strings.Contains(value, "-") {
 		parts := strings.SplitN(value, "-", 2)
@@ -432,6 +454,9 @@ func validNAT44Pool(value string) bool {
 	return net.ParseIP(strings.TrimSpace(value)).To4() != nil
 }
 
+// normalizeDHCPBindIP validates an optional bind address as a CIDR inside the
+// gateway subnet with the same prefix and address family, returning it in
+// canonical form or an empty string when unset.
 func normalizeDHCPBindIP(bind, gatewayCIDR string, ipv6 bool) (string, error) {
 	bind = strings.TrimSpace(bind)
 	if bind == "" {
@@ -473,6 +498,8 @@ func normalizeDHCPBindIP(bind, gatewayCIDR string, ipv6 bool) (string, error) {
 	return fmt.Sprintf("%s/%d", ip.String(), bindOnes), nil
 }
 
+// normalizeLeaseTime parses a positive Go duration, defaulting to 12h when the
+// value is empty, and returns its compact form.
 func normalizeLeaseTime(value string) (string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -485,6 +512,8 @@ func normalizeLeaseTime(value string) (string, error) {
 	return compactDuration(duration), nil
 }
 
+// compactDuration renders duration in Go's format with trailing zero second and
+// minute units removed, so 1h0m0s becomes 1h.
 func compactDuration(duration time.Duration) string {
 	value := duration.String()
 	value = strings.TrimSuffix(value, "0s")
@@ -492,6 +521,9 @@ func compactDuration(duration time.Duration) string {
 	return value
 }
 
+// normalizeDHCPv4Config validates an IPv4 gateway CIDR and range, rejecting
+// addresses outside the subnet or overlapping the gateway, network, or broadcast
+// address and ranges over 65536 addresses, and returns canonical strings.
 func normalizeDHCPv4Config(gatewayCIDR, rangeStart, rangeEnd, dns string) (string, string, string, string, error) {
 	gateway, ipnet, err := net.ParseCIDR(gatewayCIDR)
 	if err != nil {
@@ -543,6 +575,9 @@ func normalizeDHCPv4Config(gatewayCIDR, rangeStart, rangeEnd, dns string) (strin
 	return fmt.Sprintf("%s/%d", gateway4.String(), ones), start.String(), end.String(), normalizedDNS, nil
 }
 
+// normalizeDHCPv6Config validates an IPv6 gateway prefix and range, rejecting
+// ranges outside the prefix, overlapping the gateway or subnet-router anycast
+// address, or exceeding 65536 addresses.
 func normalizeDHCPv6Config(gatewayCIDR, rangeStart, rangeEnd, dns string) (string, string, string, string, error) {
 	prefix, err := netip.ParsePrefix(gatewayCIDR)
 	if err != nil || !prefix.Addr().Is6() {
@@ -587,6 +622,9 @@ func normalizeDHCPv6Config(gatewayCIDR, rangeStart, rangeEnd, dns string) (strin
 	return prefix.String(), start.String(), end.String(), normalizedDNS, nil
 }
 
+// normalizeVNFDNS splits a comma-separated DNS list, trims and validates each
+// address for the requested family, and returns the joined result; empty input
+// yields an empty string.
 func normalizeVNFDNS(value string, ipv6 bool) (string, error) {
 	if strings.TrimSpace(value) == "" {
 		return "", nil
@@ -617,11 +655,15 @@ func normalizeVNFDNS(value string, ipv6 bool) (string, error) {
 	return strings.Join(out, ","), nil
 }
 
+// binaryBigEndianUint32 returns the IPv4 address as a host-order uint32 for
+// numeric comparisons.
 func binaryBigEndianUint32(ip net.IP) uint32 {
 	ip4 := ip.To4()
 	return uint32(ip4[0])<<24 | uint32(ip4[1])<<16 | uint32(ip4[2])<<8 | uint32(ip4[3])
 }
 
+// bytesCompareIPv4 compares two IPv4 addresses numerically and returns -1, 0,
+// or 1.
 func bytesCompareIPv4(a, b net.IP) int {
 	av := binaryBigEndianUint32(a)
 	bv := binaryBigEndianUint32(b)
@@ -635,6 +677,8 @@ func bytesCompareIPv4(a, b net.IP) int {
 	}
 }
 
+// vnfUpdateName validates a required replacement name for an update, applying
+// the same trimming, length, and character rules as creation.
 func vnfUpdateName(value *string) (string, error) {
 	if value == nil {
 		return "", errors.New("name is required")
@@ -651,6 +695,8 @@ func vnfUpdateName(value *string) (string, error) {
 	return name, nil
 }
 
+// leaseBelongsToVNF reports whether address falls inside the DHCP range of a
+// DHCPv4 or DHCPv6 VNF, returning false for other types or an unparsable config.
 func leaseBelongsToVNF(vnf store.VNF, address string) bool {
 	switch vnf.Type {
 	case store.VNFTypeDHCPv4:
@@ -689,6 +735,8 @@ func leaseBelongsToVNF(vnf store.VNF, address string) bool {
 	}
 }
 
+// viewVNF builds the API view for a VNF with disabled, running, or degraded
+// status and a count of active leases that fall inside its DHCP range.
 func (s *Server) viewVNF(ctx context.Context, vnf store.VNF) vnfView {
 	view := vnfView{VNF: vnf, Status: "disabled"}
 	if vnf.Enabled {
@@ -711,6 +759,8 @@ func (s *Server) viewVNF(ctx context.Context, vnf store.VNF) vnfView {
 	return view
 }
 
+// vnfRunning reports whether the VNF's runtime is up, consulting the tracked
+// NAT44 flag for NAT44 VNFs and the VNF manager for other types.
 func (s *Server) vnfRunning(ctx context.Context, vnf store.VNF) bool {
 	if vnf.Type == store.VNFTypeNAT44 {
 		s.natMu.Lock()
@@ -720,6 +770,8 @@ func (s *Server) vnfRunning(ctx context.Context, vnf store.VNF) bool {
 	return s.vnfs != nil && s.vnfs.Running(ctx, vnf.ID)
 }
 
+// setNAT44Running records or clears the running flag for a NAT44 VNF under
+// natMu, lazily creating the tracking map.
 func (s *Server) setNAT44Running(vnfID int64, running bool) {
 	s.natMu.Lock()
 	defer s.natMu.Unlock()
@@ -733,6 +785,10 @@ func (s *Server) setNAT44Running(vnfID int64, running bool) {
 	}
 }
 
+// applyNATGatewayToDHCPConfig rewrites a DHCPv4 config to use the network's NAT
+// gateway and service address, rejecting ranges or static assignments outside
+// the network CIDR or on reserved hosts. It is a no-op for non-DHCPv4 VNFs and
+// networks without an IPv4 gateway.
 func applyNATGatewayToDHCPConfig(network store.Network, vnfType string, config *store.VNFConfig) error {
 	if vnfType != store.VNFTypeDHCPv4 || network.IPv4Gateway == "" {
 		return nil
@@ -772,6 +828,10 @@ func applyNATGatewayToDHCPConfig(network store.Network, vnfType string, config *
 	return nil
 }
 
+// activateVNF validates the VNF's network, cleans up legacy per-network DHCP
+// state, and starts the runtime over the effective transport (shared or
+// dedicated memif, or tap). Enabled and the tap fields are stored only after the
+// runtime starts.
 func (s *Server) activateVNF(ctx context.Context, vnf store.VNF) (store.VNF, error) {
 	if s.vnfs == nil || s.networks == nil {
 		return vnf, errors.New("VNF runtime is not configured")
@@ -836,6 +896,9 @@ func (s *Server) activateVNF(ctx context.Context, vnf store.VNF) (store.VNF, err
 	return updated, nil
 }
 
+// stopVNF stops the VNF runtime and removes its tap and memif unless the memif
+// is shared with the network, optionally dropping the leases and joining the
+// per-step errors.
 func (s *Server) stopVNF(ctx context.Context, vnf store.VNF, removeLeases bool) error {
 	var errs []error
 	if s.vnfs != nil {
@@ -865,6 +928,8 @@ type tapDeleterByName interface {
 	DeleteTapByName(ctx context.Context, hostName string) error
 }
 
+// deleteTap deletes a VNF tap by host name when the network runtime supports
+// it, otherwise by software interface index; it is a no-op when both are unset.
 func (s *Server) deleteTap(ctx context.Context, swIfIndex uint32, hostName string) error {
 	if swIfIndex == 0 && strings.TrimSpace(hostName) == "" {
 		return nil
@@ -880,6 +945,9 @@ func (s *Server) deleteTap(ctx context.Context, swIfIndex uint32, hostName strin
 	return s.networks.DeleteTap(ctx, swIfIndex)
 }
 
+// cleanupLegacyNetworkVNF deletes the pre-VNF network DHCP tap, clears the
+// stored DHCP fields, and asks the VNF manager to drop legacy state for the
+// network.
 func (s *Server) cleanupLegacyNetworkVNF(ctx context.Context, network store.Network) error {
 	if network.DHCPTapSwIfIndex > 0 || network.DHCPTapHostName != "" {
 		if err := s.deleteTap(ctx, network.DHCPTapSwIfIndex, network.DHCPTapHostName); err != nil {
@@ -945,6 +1013,9 @@ func (s *Server) VNFSessions(ctx context.Context, vnf store.VNF) ([]string, erro
 	return sessions, nil
 }
 
+// normalizeDNSIntegration validates the DHCP-to-DNS integration fields,
+// defaulting the TTL to 300 and requiring a domain when a DNS VNF is set. It
+// returns zero values when integration is disabled.
 func normalizeDNSIntegration(vnfID int64, domain string, ttl uint32) (string, uint32, error) {
 	domain = strings.TrimSpace(domain)
 	if vnfID < 0 {
@@ -972,6 +1043,9 @@ func normalizeDNSIntegration(vnfID int64, domain string, ttl uint32) (string, ui
 	return normalized, ttl, nil
 }
 
+// normalizeDNSDomain trims a trailing dot, rejects wildcards, whitespace, and
+// the DNS root, and returns the canonical domain or an empty string for empty
+// input.
 func normalizeDNSDomain(value string) (string, error) {
 	value = strings.TrimSpace(strings.TrimSuffix(value, "."))
 	if value == "" {
@@ -990,6 +1064,9 @@ func normalizeDNSDomain(value string) (string, error) {
 	return strings.TrimSuffix(canonical, "."), nil
 }
 
+// normalizeDNSConfig validates DNS records and forwarders, enforcing the
+// supported record types, TTL bounds, CNAME exclusivity, duplicate detection,
+// and deduplication of forwarders.
 func normalizeDNSConfig(p vnfConfigPayload) (store.VNFConfig, error) {
 	if len(p.DNSRecords) > 1024 {
 		return store.VNFConfig{}, errors.New("config.dns_records supports at most 1024 records")
@@ -1063,6 +1140,8 @@ func normalizeDNSConfig(p vnfConfigPayload) (store.VNFConfig, error) {
 	}, nil
 }
 
+// normalizeDNSRecordName validates a DNS record owner name, allowing one
+// leading wildcard label (*.example.com), and returns the canonical name.
 func normalizeDNSRecordName(value string) (string, error) {
 	name := strings.TrimSpace(value)
 	if name == "" {
@@ -1094,6 +1173,9 @@ func normalizeDNSRecordName(value string) (string, error) {
 	return canonical, nil
 }
 
+// normalizeDNSRecordValue validates and canonicalizes a record value for its
+// type: A and AAAA addresses, CNAME and PTR names without wildcards, or TXT up
+// to 255 bytes.
 func normalizeDNSRecordValue(recordType, value string) (string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -1140,6 +1222,8 @@ func normalizeDNSRecordValue(recordType, value string) (string, error) {
 	}
 }
 
+// normalizeDNSForwarder accepts an IP address or IP:port, defaulting the port
+// to 53, and returns the canonical host:port form.
 func normalizeDNSForwarder(value string) (string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -1164,6 +1248,9 @@ func normalizeDNSForwarder(value string) (string, error) {
 	return net.JoinHostPort(addr.String(), strconv.Itoa(port)), nil
 }
 
+// normalizeBGPConfig validates BGP AS numbers, router ID, local and peer
+// addresses, transport, MD5 password rules, and advertised prefixes, returning
+// the canonical config.
 func normalizeBGPConfig(p vnfConfigPayload) (store.VNFConfig, error) {
 	transport := strings.ToLower(strings.TrimSpace(p.Transport))
 	if transport == "" {

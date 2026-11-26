@@ -88,6 +88,9 @@ func NormalizeDHCPOptions(options []store.DHCPOption, ipv6 bool) ([]store.DHCPOp
 	return normalized, nil
 }
 
+// validateDHCPOptionCode rejects option code zero, out-of-range DHCPv4 codes,
+// and codes that the DHCP server manages itself. It returns a descriptive
+// error naming the managed option, or nil when the user may set the code.
 func validateDHCPOptionCode(code uint16, ipv6 bool) error {
 	if code == 0 {
 		return errors.New("option code must be greater than zero")
@@ -107,6 +110,10 @@ func validateDHCPOptionCode(code uint16, ipv6 bool) error {
 	return nil
 }
 
+// normalizeDHCPOptionValue trims and canonicalizes value according to format,
+// which must be string, ipv4, ipv6, hex, uint8, uint16, uint32, or
+// domain-list. It enforces the DHCPv4/DHCPv6 length limits and rejects empty,
+// malformed, or wrong-family values.
 func normalizeDHCPOptionValue(format, value string, ipv6 bool) (string, error) {
 	value = strings.TrimSpace(value)
 	switch format {
@@ -175,6 +182,10 @@ func normalizeDHCPOptionValue(format, value string, ipv6 bool) (string, error) {
 	}
 }
 
+// normalizeDHCPIPList splits a comma-separated address list, skips empty
+// entries, and returns the canonical textual forms of the addresses matching
+// the requested family. It fails on any unparsable or wrong-family address and
+// when the result is empty.
 func normalizeDHCPIPList(value string, ipv6 bool) ([]string, error) {
 	parts := strings.Split(value, ",")
 	ips := make([]string, 0, len(parts))
@@ -205,6 +216,10 @@ func normalizeDHCPIPList(value string, ipv6 bool) ([]string, error) {
 	return ips, nil
 }
 
+// dhcpOptionData encodes a normalized option value into the wire bytes for its
+// format, using network byte order for integers and DNS wire format for domain
+// lists. It returns an error for unsupported formats or values that no longer
+// parse.
 func dhcpOptionData(option store.DHCPOption, ipv6 bool) ([]byte, error) {
 	switch option.Format {
 	case "string":
@@ -274,6 +289,9 @@ func dhcpOptionData(option store.DHCPOption, ipv6 bool) ([]byte, error) {
 	}
 }
 
+// parseDHCPOptionsJSON decodes a JSON array of DHCP options, normalizes it for
+// the given address family, and returns the encoded wire values. A blank or
+// whitespace-only string yields no options rather than an error.
 func parseDHCPOptionsJSON(raw string, ipv6 bool) ([]parsedDHCPOption, error) {
 	if strings.TrimSpace(raw) == "" {
 		return nil, nil

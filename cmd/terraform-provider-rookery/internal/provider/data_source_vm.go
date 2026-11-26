@@ -24,10 +24,12 @@ func NewVMDataSource() datasource.DataSource {
 	return &vmDataSource{}
 }
 
+// Metadata registers this data source under the provider-prefixed type name <provider>_vm.
 func (d *vmDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_vm"
 }
 
+// Schema defines the VM attributes: disks, interfaces, boot media, console, and cgroup class.
 func (d *vmDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a VM by id or name.",
@@ -49,6 +51,7 @@ func (d *vmDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, res
 	}
 }
 
+// Read resolves the VM by exactly one of its UUID id or name, storing its state and labels.
 func (d *vmDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config vmModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
@@ -92,6 +95,8 @@ func (d *vmDataSource) Read(ctx context.Context, req datasource.ReadRequest, res
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 
+// findVM returns the single VM whose name matches case-insensitively, failing on
+// duplicate matches or no match.
 func findVM(vms []*rookeryv1.VM, name string) (*rookeryv1.VM, error) {
 	var found *rookeryv1.VM
 	for _, vm := range vms {

@@ -39,10 +39,13 @@ type hostTapModel struct {
 	Labels       types.Set    `tfsdk:"labels"`
 }
 
+// Metadata registers this resource as rookery_host_tap under the configured provider type name.
 func (r *hostTapResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_host_tap"
 }
 
+// Schema declares network_id as replacement-triggering, optional name and ipv4_address fields
+// that also force replacement, and computed tap details, live VPP addresses, and labels.
 func (r *hostTapResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A persistent VPP tap connecting a Rookery Network to the Linux host.",
@@ -73,6 +76,8 @@ func (r *hostTapResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 	}
 }
 
+// Create creates a persistent VPP tap for the network, records its id, name, and live
+// addresses, then applies labels; the tap remains if label application fails.
 func (r *hostTapResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan hostTapModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -105,6 +110,8 @@ func (r *hostTapResource) Create(ctx context.Context, req resource.CreateRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read lists host taps and refreshes state from the one matching the stored id, removing the
+// resource from state when the tap no longer exists.
 func (r *hostTapResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state hostTapModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -139,6 +146,8 @@ func (r *hostTapResource) Read(ctx context.Context, req resource.ReadRequest, re
 	resp.State.RemoveResource(ctx)
 }
 
+// Update applies label changes only; tap identity fields force replacement, and the refreshed
+// labels are stored in state.
 func (r *hostTapResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan hostTapModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -161,6 +170,7 @@ func (r *hostTapResource) Update(ctx context.Context, req resource.UpdateRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete removes the VPP tap by id, treating a not-found response as success.
 func (r *hostTapResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state hostTapModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -179,10 +189,14 @@ func (r *hostTapResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 }
 
+// ImportState imports an existing host tap by numeric id, reporting a diagnostic when the id is
+// not a valid positive integer.
 func (r *hostTapResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	importInt64ID(ctx, req, resp)
 }
 
+// setHostTapState copies the tap id, network, interface name, switch interface index, optional
+// IPv4 address, and live VPP addresses into the Terraform model.
 func setHostTapState(ctx context.Context, state *hostTapModel, tap *rookeryv1.HostTap) diag.Diagnostics {
 	var diags diag.Diagnostics
 	state.ID = types.Int64Value(tap.GetId())

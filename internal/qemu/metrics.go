@@ -42,6 +42,9 @@ func (q *QEMU) LightVMMetrics(id string) (Metrics, error) {
 	return processMetrics(id, pidfile), nil
 }
 
+// processMetrics returns Running with PID, uptime (from the pidfile's mtime),
+// CPU seconds, memory, and I/O for a live, identity-matched QEMU process; it
+// returns a stopped zero value when the PID is gone or does not match.
 func processMetrics(id, pidfile string) Metrics {
 	pid, ok := readPID(pidfile)
 	if !ok || !processAlive(pid) || !processMatches(pid, id, pidfile) {
@@ -60,6 +63,9 @@ func processMetrics(id, pidfile string) Metrics {
 	return result
 }
 
+// processCPUSeconds sums per-task schedstat runtime for the process, falling
+// back to utime+stime from /proc stat (USER_HZ 100) when schedstat is
+// unavailable, and returns 0 if neither can be read.
 func processCPUSeconds(pid int) float64 {
 	tasksDir := filepath.Join("/proc", strconv.Itoa(pid), "task")
 	tasks, err := os.ReadDir(tasksDir)
@@ -106,6 +112,8 @@ func processCPUSeconds(pid int) float64 {
 	return float64(utime+stime) / 100
 }
 
+// processMemory returns RSS and virtual size in bytes from /proc status,
+// yielding zeros for an unreadable file or missing fields.
 func processMemory(pid int) (rss, virtual uint64) {
 	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "status"))
 	if err != nil {
@@ -130,6 +138,8 @@ func processMemory(pid int) (rss, virtual uint64) {
 	return rss, virtual
 }
 
+// processIO returns cumulative bytes read and written from /proc io, or zeros
+// when the file cannot be read.
 func processIO(pid int) (readBytes, writeBytes uint64) {
 	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "io"))
 	if err != nil {

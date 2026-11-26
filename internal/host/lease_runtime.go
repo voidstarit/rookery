@@ -21,6 +21,8 @@ var (
 	leaseRuntimes  = make(map[string]leaseRuntime)
 )
 
+// leaseRuntimeKey canonicalizes a lease file path so equivalent paths resolve to
+// the same registered runtime.
 func leaseRuntimeKey(path string) string {
 	return filepath.Clean(path)
 }
@@ -36,6 +38,8 @@ func registerLeaseRuntime(path string, runtime leaseRuntime) {
 	leaseRuntimeMu.Unlock()
 }
 
+// unregisterLeaseRuntime drops the live DHCP state registered for a lease file,
+// ignoring an empty path.
 func unregisterLeaseRuntime(path string) {
 	if path == "" {
 		return

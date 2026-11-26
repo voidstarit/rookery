@@ -23,10 +23,13 @@ func NewACLDataSource() datasource.DataSource {
 	return &aclDataSource{}
 }
 
+// Metadata registers this data source under the provider-prefixed type name <provider>_acl.
 func (d *aclDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_acl"
 }
 
+// Schema defines the ACL attributes (id, name, metadata, and ordered rule list) used
+// for id or name lookups.
 func (d *aclDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a named ACL and its ordered rules by id or name.",
@@ -57,6 +60,8 @@ func (d *aclDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, re
 	}
 }
 
+// Read resolves the ACL by exactly one of id or name, stores its state, then attaches
+// entity labels; failures become diagnostics.
 func (d *aclDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config aclModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
@@ -100,6 +105,8 @@ func (d *aclDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 
+// findACL returns the single ACL whose name matches case-insensitively, failing on
+// duplicate matches or no match.
 func findACL(acls []*rookeryv1.ACL, name string) (*rookeryv1.ACL, error) {
 	var found *rookeryv1.ACL
 	for _, acl := range acls {

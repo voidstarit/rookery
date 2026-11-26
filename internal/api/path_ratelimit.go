@@ -65,6 +65,9 @@ func (l *PathRateLimiter) Middleware(next http.Handler) http.Handler {
 	})
 }
 
+// limiterFor returns the token bucket for urlPath, creating it on first use and
+// evicting idle or least-recently-seen paths once the tracked map is full. It
+// returns nil when the limiter is disabled.
 func (l *PathRateLimiter) limiterFor(urlPath string) *RateLimiter {
 	if !l.Enabled() {
 		return nil

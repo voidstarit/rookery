@@ -17,6 +17,8 @@ import (
 	"github.com/voidstarit/rookery/internal/store"
 )
 
+// timestamp converts value to a protobuf timestamp, returning nil for the zero time so unset
+// fields stay absent in JSON.
 func timestamp(value time.Time) *timestamppb.Timestamp {
 	if value.IsZero() {
 		return nil
@@ -24,6 +26,8 @@ func timestamp(value time.Time) *timestamppb.Timestamp {
 	return timestamppb.New(value)
 }
 
+// storeReadError converts err into a gRPC status, mapping errors wrapping notFound to NotFound
+// and all others to Internal, both carrying message.
 func storeReadError(err error, notFound error, message string) error {
 	if errors.Is(err, notFound) {
 		return status.Error(codes.NotFound, message)
@@ -42,6 +46,8 @@ type diskService struct {
 	registry    *storage.Registry
 }
 
+// ListDisks returns every registered disk in protobuf form, failing with Internal when the store
+// query fails.
 func (s *diskService) ListDisks(ctx context.Context, _ *rookeryv1.ListDisksRequest) (*rookeryv1.ListDisksResponse, error) {
 	disks, err := s.store.ListDisks(ctx)
 	if err != nil {
@@ -54,6 +60,7 @@ func (s *diskService) ListDisks(ctx context.Context, _ *rookeryv1.ListDisksReque
 	return response, nil
 }
 
+// GetDisk returns the disk with the requested ID, reporting NotFound when no such disk exists.
 func (s *diskService) GetDisk(ctx context.Context, request *rookeryv1.GetDiskRequest) (*rookeryv1.Disk, error) {
 	disk, err := s.store.GetDisk(ctx, request.GetId())
 	if err != nil {
@@ -62,6 +69,8 @@ func (s *diskService) GetDisk(ctx context.Context, request *rookeryv1.GetDiskReq
 	return diskToProto(disk), nil
 }
 
+// diskToProto converts a store disk into its protobuf representation, flattening the attachment
+// locator and reporting a nil throttle class ID as zero.
 func diskToProto(disk store.Disk) *rookeryv1.Disk {
 	classID := int64(0)
 	if disk.ThrottleClassID != nil {
@@ -98,6 +107,8 @@ type mediaService struct {
 	store *store.Store
 }
 
+// ListMedia returns every media record in protobuf form, failing with Internal when the store
+// query fails.
 func (s *mediaService) ListMedia(ctx context.Context, _ *rookeryv1.ListMediaRequest) (*rookeryv1.ListMediaResponse, error) {
 	media, err := s.store.ListMedia(ctx)
 	if err != nil {
@@ -110,6 +121,8 @@ func (s *mediaService) ListMedia(ctx context.Context, _ *rookeryv1.ListMediaRequ
 	return response, nil
 }
 
+// GetMedia returns the media record with the requested ID, reporting NotFound when it does not
+// exist.
 func (s *mediaService) GetMedia(ctx context.Context, request *rookeryv1.GetMediaRequest) (*rookeryv1.Media, error) {
 	item, err := s.store.GetMedia(ctx, request.GetId())
 	if err != nil {
@@ -118,6 +131,7 @@ func (s *mediaService) GetMedia(ctx context.Context, request *rookeryv1.GetMedia
 	return mediaToProto(item), nil
 }
 
+// mediaToProto converts a store media record into its protobuf form with its timestamps.
 func mediaToProto(item store.Media) *rookeryv1.Media {
 	return &rookeryv1.Media{
 		Id: item.ID, Name: item.Name, Path: item.Path, SizeBytes: item.SizeBytes,
@@ -134,6 +148,8 @@ type networkService struct {
 	mu        *sync.Mutex
 }
 
+// ListNetworks returns every network with its bridge domain, gateway, and CIDR details, failing
+// with Internal when the store query fails.
 func (s *networkService) ListNetworks(ctx context.Context, _ *rookeryv1.ListNetworksRequest) (*rookeryv1.ListNetworksResponse, error) {
 	networks, err := s.store.ListNetworks(ctx)
 	if err != nil {
@@ -146,6 +162,8 @@ func (s *networkService) ListNetworks(ctx context.Context, _ *rookeryv1.ListNetw
 	return response, nil
 }
 
+// GetNetwork returns the network with the requested ID, reporting NotFound when no such network
+// exists.
 func (s *networkService) GetNetwork(ctx context.Context, request *rookeryv1.GetNetworkRequest) (*rookeryv1.Network, error) {
 	network, err := s.store.GetNetwork(ctx, request.GetId())
 	if err != nil {
@@ -154,6 +172,8 @@ func (s *networkService) GetNetwork(ctx context.Context, request *rookeryv1.GetN
 	return networkToProto(network), nil
 }
 
+// networkToProto converts a store network into its protobuf form, preserving bridge domain,
+// interface count, CIDR, and route-table fields.
 func networkToProto(network store.Network) *rookeryv1.Network {
 	return &rookeryv1.Network{
 		Id: network.ID, Name: network.Name, BridgeDomainId: network.BridgeDomainID,
@@ -179,6 +199,8 @@ type interfaceService struct {
 	runMu       *sync.Mutex
 }
 
+// ListInterfaces returns every registered virtual interface, including live VPP addresses when
+// the address runtime is configured and VPP is ready.
 func (s *interfaceService) ListInterfaces(ctx context.Context, _ *rookeryv1.ListInterfacesRequest) (*rookeryv1.ListInterfacesResponse, error) {
 	interfaces, err := s.store.ListInterfaces(ctx)
 	if err != nil {
@@ -230,6 +252,7 @@ func (s *interfaceService) ListInterfaceCounters(ctx context.Context, _ *rookery
 	return response, nil
 }
 
+// GetInterface returns the interface with the requested ID, reporting NotFound when it is missing.
 func (s *interfaceService) GetInterface(ctx context.Context, request *rookeryv1.GetInterfaceRequest) (*rookeryv1.VirtualInterface, error) {
 	iface, err := s.store.GetInterface(ctx, request.GetId())
 	if err != nil {
@@ -238,6 +261,8 @@ func (s *interfaceService) GetInterface(ctx context.Context, request *rookeryv1.
 	return s.interfaceToProto(ctx, iface), nil
 }
 
+// interfaceToProto converts iface to protobuf and attaches its live VPP addresses when an address
+// runtime is configured and VPP is ready; address lookup failures leave them unset.
 func (s *interfaceService) interfaceToProto(ctx context.Context, iface store.VirtualInterface) *rookeryv1.VirtualInterface {
 	result := interfaceToProto(iface)
 	if s.addresses != nil && (s.readiness == nil || s.readiness.Status().VPP.Ready) {
@@ -248,6 +273,8 @@ func (s *interfaceService) interfaceToProto(ctx context.Context, iface store.Vir
 	return result
 }
 
+// interfaceToProto converts a store interface into its protobuf form, expanding ingress and egress
+// ACL references into name lists.
 func interfaceToProto(iface store.VirtualInterface) *rookeryv1.VirtualInterface {
 	return &rookeryv1.VirtualInterface{
 		Id: iface.ID, Name: iface.Name, NetworkId: iface.NetworkID, NetworkName: iface.NetworkName,
@@ -263,6 +290,8 @@ func interfaceToProto(iface store.VirtualInterface) *rookeryv1.VirtualInterface 
 	}
 }
 
+// interfaceACLNames extracts the names from refs, returning an empty non-nil slice when there are
+// no references.
 func interfaceACLNames(refs []store.InterfaceACL) []string {
 	names := make([]string, 0, len(refs))
 	for _, ref := range refs {
@@ -278,6 +307,8 @@ type aclService struct {
 	readiness Readiness
 }
 
+// ListACLs returns every ACL with its rules in protobuf form, failing with Internal when the store
+// query fails.
 func (s *aclService) ListACLs(ctx context.Context, _ *rookeryv1.ListACLsRequest) (*rookeryv1.ListACLsResponse, error) {
 	acls, err := s.store.ListACLs(ctx)
 	if err != nil {
@@ -290,6 +321,7 @@ func (s *aclService) ListACLs(ctx context.Context, _ *rookeryv1.ListACLsRequest)
 	return response, nil
 }
 
+// GetACL returns the ACL with the requested ID, reporting NotFound when no such ACL exists.
 func (s *aclService) GetACL(ctx context.Context, request *rookeryv1.GetACLRequest) (*rookeryv1.ACL, error) {
 	acl, err := s.store.GetACL(ctx, request.GetId())
 	if err != nil {
@@ -298,6 +330,7 @@ func (s *aclService) GetACL(ctx context.Context, request *rookeryv1.GetACLReques
 	return aclToProto(acl), nil
 }
 
+// aclToProto converts a store ACL into its protobuf form, including every rule and the VPP index.
 func aclToProto(acl store.ACL) *rookeryv1.ACL {
 	rules := make([]*rookeryv1.ACLRule, 0, len(acl.Rules))
 	for _, rule := range acl.Rules {
@@ -323,6 +356,8 @@ type vnfService struct {
 	writer         VNFWriter
 }
 
+// ListVNFs returns the VNFs for the requested network, or all networks when the filter is unset,
+// adding legacy runtime status through vnfView when a status provider is configured.
 func (s *vnfService) ListVNFs(ctx context.Context, request *rookeryv1.ListVNFsRequest) (*rookeryv1.ListVNFsResponse, error) {
 	vnfs, err := s.store.ListVNFs(ctx, request.NetworkId)
 	if err != nil {
@@ -335,6 +370,8 @@ func (s *vnfService) ListVNFs(ctx context.Context, request *rookeryv1.ListVNFsRe
 	return response, nil
 }
 
+// GetVNF returns the VNF with the requested ID, reporting NotFound when it is missing and adding
+// runtime status through vnfView when available.
 func (s *vnfService) GetVNF(ctx context.Context, request *rookeryv1.GetVNFRequest) (*rookeryv1.VNF, error) {
 	vnf, err := s.store.GetVNF(ctx, request.GetId())
 	if err != nil {
@@ -343,6 +380,8 @@ func (s *vnfService) GetVNF(ctx context.Context, request *rookeryv1.GetVNFReques
 	return s.vnfView(ctx, vnf), nil
 }
 
+// vnfToProto converts a store VNF and its DHCP, DNAT, DNS, and BGP configuration into protobuf,
+// copying the advertise-prefix and DNS-forwarder slices so the result does not alias store memory.
 func vnfToProto(vnf store.VNF) *rookeryv1.VNF {
 	static := make([]*rookeryv1.DHCPStaticAssignment, 0, len(vnf.Config.StaticAssignments))
 	for _, assignment := range vnf.Config.StaticAssignments {
@@ -405,6 +444,8 @@ type storageBackendService struct {
 	newKoujaClient func(kouja.Config) (*kouja.Client, error)
 }
 
+// ListStorageBackends returns every storage backend with its driver configuration in protobuf
+// form, failing with Internal when the store query fails.
 func (s *storageBackendService) ListStorageBackends(ctx context.Context, _ *rookeryv1.ListStorageBackendsRequest) (*rookeryv1.ListStorageBackendsResponse, error) {
 	backends, err := s.store.ListStorageBackends(ctx)
 	if err != nil {
@@ -417,6 +458,8 @@ func (s *storageBackendService) ListStorageBackends(ctx context.Context, _ *rook
 	return response, nil
 }
 
+// GetStorageBackend returns the backend with the requested ID, reporting NotFound when it does not
+// exist.
 func (s *storageBackendService) GetStorageBackend(ctx context.Context, request *rookeryv1.GetStorageBackendRequest) (*rookeryv1.StorageBackend, error) {
 	backend, err := s.store.GetStorageBackend(ctx, request.GetId())
 	if err != nil {
@@ -425,6 +468,8 @@ func (s *storageBackendService) GetStorageBackend(ctx context.Context, request *
 	return storageBackendToProto(backend), nil
 }
 
+// backendConfigToProto converts a store backend configuration, adding the Kouja driver block only
+// when that driver is configured.
 func backendConfigToProto(config store.StorageBackendConfig) *rookeryv1.StorageBackendConfig {
 	result := &rookeryv1.StorageBackendConfig{
 		Vg: config.VG, ThinPool: config.ThinPool,
@@ -446,6 +491,9 @@ func backendConfigToProto(config store.StorageBackendConfig) *rookeryv1.StorageB
 	}
 	return result
 }
+
+// storageBackendToProto converts a store storage backend into its protobuf form, including its
+// disk count and timestamps.
 func storageBackendToProto(backend store.StorageBackend) *rookeryv1.StorageBackend {
 	return &rookeryv1.StorageBackend{
 		Id: backend.ID, Name: backend.Name, Title: backend.Title, Description: backend.Description,
@@ -467,6 +515,8 @@ type hostService struct {
 	readiness Readiness
 }
 
+// ListHostInterfaces returns the host's physical and virtual interfaces with VPP membership and
+// management state, wrapping any enumeration failure as Internal.
 func (s *hostService) ListHostInterfaces(ctx context.Context, _ *rookeryv1.ListHostInterfacesRequest) (*rookeryv1.ListHostInterfacesResponse, error) {
 	response, err := s.listInterfaces(ctx)
 	if err != nil {

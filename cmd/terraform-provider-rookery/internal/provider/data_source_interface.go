@@ -24,10 +24,12 @@ func NewInterfaceDataSource() datasource.DataSource {
 	return &interfaceDataSource{}
 }
 
+// Metadata registers this data source under the provider-prefixed type name <provider>_interface.
 func (d *interfaceDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_interface"
 }
 
+// Schema defines the interface's network, attachment, ACL, socket, and route-table fields.
 func (d *interfaceDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a vhost-user interface by id or name.",
@@ -54,6 +56,7 @@ func (d *interfaceDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 	}
 }
 
+// Read resolves the interface by exactly one of id or name, stores its state and entity labels.
 func (d *interfaceDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config interfaceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
@@ -97,6 +100,8 @@ func (d *interfaceDataSource) Read(ctx context.Context, req datasource.ReadReque
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 
+// findInterface returns the single interface whose name matches case-insensitively,
+// failing on duplicate matches or no match.
 func findInterface(interfaces []*rookeryv1.VirtualInterface, name string) (*rookeryv1.VirtualInterface, error) {
 	var found *rookeryv1.VirtualInterface
 	for _, iface := range interfaces {

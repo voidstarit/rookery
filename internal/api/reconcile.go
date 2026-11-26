@@ -55,6 +55,9 @@ func (s *Server) RunInfrastructureReconciler(ctx context.Context) {
 	s.watchVPP(ctx, true)
 }
 
+// reconcileInfrastructure rebuilds every VPP-backed resource in dependency
+// order, then applies VM and LightVM autostart, joining the error from each
+// stage so one failure does not skip the rest.
 func (s *Server) reconcileInfrastructure(ctx context.Context) error {
 	var errs []error
 	if err := s.ReconcileNetworks(ctx); err != nil {
@@ -98,10 +101,8 @@ func (s *Server) reconcileInfrastructure(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// autostartVMs applies the persisted desired power state after an API restart
-// or a host reboot. VMs the user started come back even when QEMU died with
-// the host; VMs the user stopped stay down. It runs after the VPP resources are
-// reconciled so attached vhost-user sockets exist before QEMU launches.
+// startVM starts one VM, preparing remote disk attachments through the
+// configured start planner when available and otherwise starting directly.
 func (s *Server) startVM(ctx context.Context, vm store.VM) error {
 	if s.startPlanner != nil {
 		plan, err := s.startPlanner.Plan(ctx, vm)
@@ -118,6 +119,9 @@ func (s *Server) startVM(ctx context.Context, vm store.VM) error {
 	return s.vms.Start(ctx, vm)
 }
 
+// autostartVMs starts every VM whose desired state is running, repairs stored
+// statuses for live VMs, and marks failed starts as error. It holds the run
+// mutex and skips VMs without a disk.
 func (s *Server) autostartVMs(ctx context.Context) {
 	if s.vms == nil {
 		return
@@ -284,6 +288,10 @@ func (s *Server) autostartLightVMs(ctx context.Context) {
 	}
 }
 
+// startAutostartLightVM starts one desired-running LightVM under the start
+// coordinator, rechecking the device limit, lifecycle generation, and desired
+// state before launch. Failures mark the record as error and release prepared
+// files unless QEMU could not be stopped.
 func (s *Server) startAutostartLightVM(ctx context.Context, vm store.LightVM) {
 	if s.lightvms.RunningLightVM(vm.ID) {
 		if vm.Status != store.StatusRunning {
@@ -363,6 +371,9 @@ func (s *Server) startAutostartLightVM(ctx context.Context, vm store.LightVM) {
 	s.logger.Info().Str("lightvm_id", current.ID).Str("lightvm", current.Name).Msg("LightVM auto-started from desired state")
 }
 
+// reconcileInfrastructureWithRetries retries a failed reconciliation up to
+// three times with five-second pauses, returning the last error or ctx.Err when
+// the context is canceled while waiting.
 func (s *Server) reconcileInfrastructureWithRetries(ctx context.Context) error {
 	var lastErr error
 	for attempt := 1; attempt <= 3; attempt++ {
@@ -499,6 +510,8 @@ func (s *Server) watchVPP(ctx context.Context, initiallyDirty bool) {
 	}
 }
 
+// waitForVPPReady polls readiness every 200ms until VPP reports ready, the
+// timeout expires, or ctx is canceled.
 func (s *Server) waitForVPPReady(ctx context.Context, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {
@@ -516,6 +529,9 @@ func (s *Server) waitForVPPReady(ctx context.Context, timeout time.Duration) err
 	}
 }
 
+// resetRuntimeForVPPRestart clears the tracked NAT44 running set and asks the
+// VNF manager to drop runtimes whose VPP state is gone. It holds resourceMu so
+// no provisioning overlaps the reset.
 func (s *Server) resetRuntimeForVPPRestart(ctx context.Context) {
 	s.resourceMu.Lock()
 	defer s.resourceMu.Unlock()
@@ -657,7 +673,7 @@ func (s *Server) ReconcileHostInterfaces(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// ReconcileNAT44s restores enabled NAT44 VNFs and their BVI/outside state.// ReconcileNAT44s restores enabled NAT44 VNFs and their BVI/outside state.
+// ReconcileNAT44s restores enabled NAT44 VNFs and their BVI/outside state.
 func (s *Server) ReconcileNAT44s(ctx context.Context) error {
 	if s.nat == nil {
 		return nil
@@ -681,6 +697,9 @@ func (s *Server) ReconcileNAT44s(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
+// reconcileNAT44 reactivates one enabled NAT44 VNF under resourceMu after
+// reloading it, so a concurrent disable or delete is respected. Missing VNFs
+// and VNFs that are already running are left alone.
 func (s *Server) reconcileNAT44(ctx context.Context, vnf store.VNF) error {
 	s.resourceMu.Lock()
 	defer s.resourceMu.Unlock()
@@ -778,6 +797,10 @@ func (s *Server) reconcileVNFBindings(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
+// reconcileVNF ensures one enabled VNF is running under resourceMu, reloading
+// it, repairing or migrating legacy tap/memif runtimes, and starting or
+// recreating it as needed. Existing runtimes are only re-synced when
+// ensureRunning is set.
 func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF, ensureRunning bool) error {
 	s.resourceMu.Lock()
 	defer s.resourceMu.Unlock()

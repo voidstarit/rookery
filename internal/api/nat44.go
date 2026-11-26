@@ -12,6 +12,10 @@ import (
 	"github.com/voidstarit/rookery/internal/store"
 )
 
+// activateNAT44 provisions NAT44 for a VNF: it validates the gateway against the
+// network BVI, creates the outside host interface and BVI, applies NAT44 and
+// static DNAT mappings, and rebinds DHCPv4 VNFs on the network. Partial VPP
+// state and the recorded BVI are rolled back when a step fails.
 func (s *Server) activateNAT44(ctx context.Context, vnf store.VNF) (store.VNF, error) {
 	if s.nat == nil {
 		return vnf, errors.New("NAT44 runtime is not configured")
@@ -104,6 +108,9 @@ func (s *Server) activateNAT44(ctx context.Context, vnf store.VNF) (store.VNF, e
 	return updated, nil
 }
 
+// stopNAT44 removes a NAT44 VNF's static mappings and NAT44 configuration and
+// marks it not running, returning early when the NAT runtime is unconfigured or
+// the network no longer exists.
 func (s *Server) stopNAT44(ctx context.Context, vnf store.VNF) error {
 	if s.nat == nil {
 		return nil
@@ -172,6 +179,9 @@ func (s *Server) cleanupNetworkBVIAfterNATDelete(ctx context.Context, networkID 
 	return nil
 }
 
+// recordHostInterface upserts a host interface takeover record for nic with VPP
+// name host-<nic>, filling in the sw_if_index when VPP reports it; a store
+// failure is logged rather than returned.
 func (s *Server) recordHostInterface(ctx context.Context, nic, purpose string) {
 	nic = strings.TrimSpace(nic)
 	if nic == "" || s.store == nil {
@@ -193,6 +203,10 @@ func (s *Server) recordHostInterface(ctx context.Context, nic, purpose string) {
 	}
 }
 
+// configureDHCPv4ForNAT rebinds every DHCPv4 VNF on network to the NAT gateway
+// and the service address after it, restarting enabled VNFs whose configuration
+// changed. It fails when a DHCP range falls outside the NAT subnet or contains
+// the service address.
 func (s *Server) configureDHCPv4ForNAT(ctx context.Context, network store.Network, natGateway string) error {
 	vnfs, err := s.store.ListVNFsByNetwork(ctx, network.ID)
 	if err != nil {
@@ -261,6 +275,9 @@ func (s *Server) configureDHCPv4ForNAT(ctx context.Context, network store.Networ
 	return nil
 }
 
+// nextIPv4CIDR returns the address immediately after gateway, in the same
+// subnet, as a CIDR for the NAT service bind address. It rejects non-IPv4
+// gateways, prefixes shorter than /30, and subnets without a usable address.
 func nextIPv4CIDR(gatewayCIDR string) (string, error) {
 	gateway, subnet, err := net.ParseCIDR(gatewayCIDR)
 	if err != nil {
@@ -286,6 +303,8 @@ func nextIPv4CIDR(gatewayCIDR string) (string, error) {
 	return fmt.Sprintf("%s/%d", ip.String(), ones), nil
 }
 
+// vnfTapCIDR returns the address a VNF should bind on its tap: the local IP for
+// BGP, otherwise the trimmed bind IP, falling back to the gateway.
 func vnfTapCIDR(vnf store.VNF) string {
 	if vnf.Type == store.VNFTypeBGP {
 		return strings.TrimSpace(vnf.Config.LocalIP)

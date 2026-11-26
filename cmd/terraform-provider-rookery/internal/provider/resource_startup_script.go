@@ -38,10 +38,13 @@ type startupScriptModel struct {
 	UpdatedAt types.String `tfsdk:"updated_at"`
 }
 
+// Metadata registers the resource under the provider type name with the _startup_script suffix.
 func (r *startupScriptResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_startup_script"
 }
 
+// Schema declares kind as a replace-only selector between the rookery and vpp scripts; enabled
+// and script are writable, while status, exit_code, output, and timestamps are computed.
 func (r *startupScriptResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Manages a server-level Rookery startup script. Set kind to rookery for the once-per-API-process script or vpp for the VPP reconnect script. Only one resource per kind should exist.",
@@ -62,6 +65,8 @@ func (r *startupScriptResource) Schema(_ context.Context, _ resource.SchemaReque
 	}
 }
 
+// Create writes the enabled flag and script for the planned kind, then stores the returned run
+// status; a kind other than rookery or vpp is rejected before any RPC is made.
 func (r *startupScriptResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan startupScriptModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -84,6 +89,8 @@ func (r *startupScriptResource) Create(ctx context.Context, req resource.CreateR
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read fetches the script for the stored kind and refreshes enabled, script, and last-run fields;
+// an unknown kind is reported as an error rather than as a missing resource.
 func (r *startupScriptResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state startupScriptModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -106,6 +113,8 @@ func (r *startupScriptResource) Read(ctx context.Context, req resource.ReadReque
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update re-sends enabled and script for the kind through the update RPC and refreshes all
+// computed run fields in state.
 func (r *startupScriptResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan startupScriptModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -128,6 +137,8 @@ func (r *startupScriptResource) Update(ctx context.Context, req resource.UpdateR
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete disables the script for its kind instead of deleting server state, so a later apply can
+// re-enable it.
 func (r *startupScriptResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state startupScriptModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -146,10 +157,14 @@ func (r *startupScriptResource) Delete(ctx context.Context, req resource.DeleteR
 	}
 }
 
+// ImportState adopts the script named by the import id, which must be rookery or vpp and is
+// written directly to the kind attribute.
 func (r *startupScriptResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("kind"), types.StringValue(req.ID))...)
 }
 
+// updateStartupScript sends enabled and script to the rookery or VPP update RPC and returns the
+// updated script, rejecting any other kind.
 func updateStartupScript(ctx context.Context, client *Client, kind string, enabled bool, script string) (*rookeryv1.StartupScript, error) {
 	switch kind {
 	case "rookery":
@@ -161,6 +176,7 @@ func updateStartupScript(ctx context.Context, client *Client, kind string, enabl
 	}
 }
 
+// getStartupScript fetches the rookery or VPP startup script, rejecting a kind that is neither.
 func getStartupScript(ctx context.Context, client *Client, kind string) (*rookeryv1.StartupScript, error) {
 	switch kind {
 	case "rookery":
@@ -172,6 +188,8 @@ func getStartupScript(ctx context.Context, client *Client, kind string) (*rooker
 	}
 }
 
+// setStartupScriptState copies the enabled flag, script, run status, exit code, output, and
+// timestamps into the model while leaving kind as stored.
 func setStartupScriptState(state *startupScriptModel, script *rookeryv1.StartupScript) {
 	state.Kind = types.StringValue(state.Kind.ValueString())
 	state.Enabled = types.BoolValue(script.GetEnabled())

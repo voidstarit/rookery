@@ -22,10 +22,12 @@ func NewCgroupSettingsDataSource() datasource.DataSource {
 	return &cgroupSettingsDataSource{}
 }
 
+// Metadata registers the data source as <provider>_cgroup_settings.
 func (d *cgroupSettingsDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_cgroup_settings"
 }
 
+// Schema defines the cgroup v2 settings, I/O limits, classes, and runtime availability.
 func (d *cgroupSettingsDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
 		Description: "Reads the host-wide cgroup v2 configuration and runtime status.",
@@ -60,6 +62,7 @@ func (d *cgroupSettingsDataSource) Schema(_ context.Context, _ datasource.Schema
 	}
 }
 
+// Read fetches host cgroup settings through the API client and stores them in state.
 func (d *cgroupSettingsDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config cgroupSettingsModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)

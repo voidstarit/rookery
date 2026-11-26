@@ -527,6 +527,8 @@ func errorLogInterceptor(logger zerolog.Logger) grpc.UnaryServerInterceptor {
 	}
 }
 
+// validationInterceptor rejects requests whose generated Validate method fails, mapping the
+// failure to codes.InvalidArgument before the handler runs.
 func validationInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	if validator, ok := req.(interface{ Validate() error }); ok {
 		if err := validator.Validate(); err != nil {
@@ -536,6 +538,8 @@ func validationInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo
 	return handler(ctx, req)
 }
 
+// rewriteNativeResponses replaces the response of the reset and Ctrl+Alt+Del RPCs with an
+// empty message, matching the native handlers that return no payload.
 func rewriteNativeResponses(ctx context.Context, response proto.Message) (interface{}, error) {
 	if method, ok := runtime.RPCMethod(ctx); ok {
 		switch method {
@@ -550,6 +554,9 @@ func rewriteNativeResponses(ctx context.Context, response proto.Message) (interf
 // in-process gRPC handlers so responses can include absolute WebSocket URLs.
 const forwardedProtoMetadataKey = "x-rookery-forwarded-proto"
 
+// consoleAccessRequestMetadata records the request scheme in gRPC metadata, preferring a
+// valid X-Forwarded-Proto header over the connection's TLS state so handlers can build
+// absolute WebSocket URLs.
 func consoleAccessRequestMetadata(_ context.Context, req *http.Request) metadata.MD {
 	scheme := "http"
 	if req.TLS != nil {
@@ -561,6 +568,8 @@ func consoleAccessRequestMetadata(_ context.Context, req *http.Request) metadata
 	return metadata.Pairs(forwardedProtoMetadataKey, scheme)
 }
 
+// errorHandler writes a JSON error body using the HTTP status for the gRPC code, mapping
+// Unimplemented to 405 and falling back to a generic message if marshaling fails.
 func errorHandler(_ context.Context, _ *runtime.ServeMux, _ runtime.Marshaler, w http.ResponseWriter, _ *http.Request, err error) {
 	st := status.Convert(err)
 	payload, marshalErr := json.Marshal(map[string]string{"error": st.Message()})
@@ -591,6 +600,8 @@ type LightVMStatusProvider interface {
 	LightVMStatus() (ready bool, state, detail string)
 }
 
+// GetHealth pings the database and reports "ok", returning Unavailable when the store cannot be
+// reached.
 func (s *systemService) GetHealth(ctx context.Context, _ *rookeryv1.GetHealthRequest) (*rookeryv1.HealthResponse, error) {
 	if err := s.store.Ping(ctx); err != nil {
 		return nil, status.Error(codes.Unavailable, "database unavailable")
@@ -598,6 +609,8 @@ func (s *systemService) GetHealth(ctx context.Context, _ *rookeryv1.GetHealthReq
 	return &rookeryv1.HealthResponse{Status: "ok"}, nil
 }
 
+// GetStatus returns the readiness snapshot with thin-pool, VPP, LightVM, and both startup script
+// statuses, marking a component unavailable when its provider is unset or its store read fails.
 func (s *systemService) GetStatus(ctx context.Context, _ *rookeryv1.GetStatusRequest) (*rookeryv1.StatusResponse, error) {
 	current := s.readiness.Status()
 	response := &rookeryv1.StatusResponse{Ready: current.Ready}
@@ -627,6 +640,8 @@ func (s *systemService) GetStatus(ctx context.Context, _ *rookeryv1.GetStatusReq
 	return response, nil
 }
 
+// thinPoolStatus converts a readiness thin-pool snapshot to proto, leaving CheckedAt unset
+// when the pool was never checked.
 func thinPoolStatus(value readiness.ThinPoolStatus) *rookeryv1.ThinPoolStatus {
 	result := &rookeryv1.ThinPoolStatus{
 		Ready: value.Ready, State: value.State, Detail: value.Detail,
@@ -638,6 +653,8 @@ func thinPoolStatus(value readiness.ThinPoolStatus) *rookeryv1.ThinPoolStatus {
 	return result
 }
 
+// vppStatus converts a readiness VPP snapshot to proto, leaving CheckedAt unset when VPP was
+// never checked.
 func vppStatus(value readiness.VPPStatus) *rookeryv1.VPPStatus {
 	result := &rookeryv1.VPPStatus{
 		Ready: value.Ready, State: value.State, Detail: value.Detail, Socket: value.Socket,
@@ -660,6 +677,8 @@ type vmService struct {
 	planner    StartPlanner
 }
 
+// ListVMs returns every VM with its attached disks and interfaces, mapping a store failure to
+// Internal.
 func (s *vmService) ListVMs(ctx context.Context, _ *rookeryv1.ListVMsRequest) (*rookeryv1.ListVMsResponse, error) {
 	vms, err := s.store.ListVMs(ctx)
 	if err != nil {
@@ -672,6 +691,8 @@ func (s *vmService) ListVMs(ctx context.Context, _ *rookeryv1.ListVMsRequest) (*
 	return response, nil
 }
 
+// GetVM returns one VM with its related records, mapping a missing VM to NotFound and other
+// store errors to Internal.
 func (s *vmService) GetVM(ctx context.Context, request *rookeryv1.GetVMRequest) (*rookeryv1.VM, error) {
 	vm, err := s.store.GetVM(ctx, request.GetId())
 	switch {
@@ -684,6 +705,8 @@ func (s *vmService) GetVM(ctx context.Context, request *rookeryv1.GetVMRequest) 
 	}
 }
 
+// vmToProto maps a stored VM and its attached disks, boot media, and interfaces to the API
+// representation, omitting zero timestamps.
 func vmToProto(vm store.VM) *rookeryv1.VM {
 	result := &rookeryv1.VM{
 		Id:             vm.ID,
@@ -725,6 +748,8 @@ func vmToProto(vm store.VM) *rookeryv1.VM {
 	return result
 }
 
+// vmDiskToProto converts one stored disk to proto, defaulting ThrottleClassId to 0 when no
+// throttle class is attached.
 func vmDiskToProto(disk store.VMDisk) *rookeryv1.VMDisk {
 	classID := int64(0)
 	if disk.ThrottleClassID != nil {

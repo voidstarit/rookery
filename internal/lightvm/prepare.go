@@ -275,6 +275,9 @@ func (r *Runtime) RunState(ctx context.Context, id string) (string, error) {
 	return r.qemuRunner.LightVMRunState(ctx, id)
 }
 
+// newAttemptToken returns an attempt identifier combining the LightVM generation
+// with four random bytes, so sockets and containers from older attempts never
+// collide with a new one.
 func newAttemptToken(generation int64) (string, error) {
 	var random [4]byte
 	if _, err := rand.Read(random[:]); err != nil {
@@ -283,6 +286,9 @@ func newAttemptToken(generation int64) (string, error) {
 	return fmt.Sprintf("%016x%08x", generation, binary.BigEndian.Uint32(random[:])), nil
 }
 
+// startVirtiofsdAt launches virtiofsd for rootfs on an attempt-scoped socket
+// and returns its path and pid. readOnly adds virtiofsd's readonly flag, and a
+// readiness failure stops the process and includes the log tail in the error.
 func (r *Runtime) startVirtiofsdAt(ctx context.Context, id, token, rootfs string, readOnly bool) (string, int, error) {
 	socket := filepath.Join(r.runDir, fmt.Sprintf("lightvm-%s-%s.virtiofs.sock", id, token))
 	if len(socket)+1 > 107 {
@@ -337,6 +343,10 @@ func (r *Runtime) startVirtiofsdAt(ctx context.Context, id, token, rootfs string
 	return socket, pid, nil
 }
 
+// stopVirtiofsdAt terminates the virtiofsd serving socket, matching pid when it
+// still references the socket plus any process found through /proc. Processes
+// that ignore SIGTERM are killed after virtiofsdStopTimeout, and the socket and
+// pid file are removed; an empty socket is a no-op.
 func (r *Runtime) stopVirtiofsdAt(ctx context.Context, socket string, pid int) error {
 	if socket == "" {
 		return nil
@@ -390,6 +400,9 @@ func (r *Runtime) stopVirtiofsdAt(ctx context.Context, socket string, pid int) e
 	return nil
 }
 
+// cleanupContainerByName unmounts and removes a named buildah container,
+// treating "not known"/"no such" removal errors as success. An empty name is a
+// no-op and unmount failures are ignored.
 func (r *Runtime) cleanupContainerByName(ctx context.Context, container string) error {
 	if container == "" {
 		return nil
@@ -405,6 +418,8 @@ func (r *Runtime) cleanupContainerByName(ctx context.Context, container string) 
 	return nil
 }
 
+// cleanupContainerBackgroundByName runs cleanupContainerByName under a
+// two-minute background timeout for deferred cleanup that discards errors.
 func (r *Runtime) cleanupContainerBackgroundByName(container string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()

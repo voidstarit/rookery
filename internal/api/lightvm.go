@@ -128,11 +128,9 @@ func (s *Server) handleDeleteLightVMUpload(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// LightVMStartDeadline extends the response deadline for LightVM create and
-// start requests, which boot QEMU and may include a first-time buildah image
-// pull. Creating a LightVM starts it, so the create endpoint needs the same
-// extension as an explicit start. It must wrap the gateway handler so the
-// deadline is raised before the RPC runs.
+// LightVMStartDeadline extends the HTTP write deadline for LightVM create and
+// start requests, which may build an image or boot QEMU. It must wrap the
+// gateway handler so the deadline is raised before the RPC runs.
 func LightVMStartDeadline(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -148,6 +146,8 @@ func LightVMStartDeadline(next http.Handler) http.Handler {
 	})
 }
 
+// tooLarge reports whether err is an http.MaxBytesError from a MaxBytesReader,
+// letting upload handlers map oversize requests to 413.
 func tooLarge(err error) bool {
 	var maxBytes *http.MaxBytesError
 	return errors.As(err, &maxBytes)

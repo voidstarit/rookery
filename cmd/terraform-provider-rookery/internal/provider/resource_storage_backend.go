@@ -94,10 +94,13 @@ var storageBackendConfigAttrTypes = map[string]attr.Type{
 	"kouja":                             types.ObjectType{AttrTypes: koujaConfigAttrTypes},
 }
 
+// Metadata registers the resource under the provider type name with the _storage_backend suffix.
 func (r *storageBackendResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_storage_backend"
 }
 
+// Schema declares the backend name, optional title/description, driver, and a nested config object
+// covering LVM and kouja mTLS fields; PEM strings are trimmed by plan modifiers.
 func (r *storageBackendResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A Rookery storage backend. Supports lvm-thin and kouja drivers.",
@@ -168,6 +171,8 @@ func (r *storageBackendResource) Schema(_ context.Context, _ resource.SchemaRequ
 	}
 }
 
+// Create converts the nested config to a protobuf config, creates the backend, applies labels, and
+// stores the server response in state.
 func (r *storageBackendResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan storageBackendModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -207,6 +212,8 @@ func (r *storageBackendResource) Create(ctx context.Context, req resource.Create
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read fetches the backend by id, refreshes its config, driver, disk count, and labels, and
+// removes the resource from state when the server reports it missing.
 func (r *storageBackendResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state storageBackendModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -239,6 +246,8 @@ func (r *storageBackendResource) Read(ctx context.Context, req resource.ReadRequ
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update converts the planned config, sends the full backend update, applies labels, and refreshes
+// state from the response.
 func (r *storageBackendResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan storageBackendModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -279,6 +288,7 @@ func (r *storageBackendResource) Update(ctx context.Context, req resource.Update
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete removes the backend, treating a not-found response as success so destroys are idempotent.
 func (r *storageBackendResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state storageBackendModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -297,10 +307,13 @@ func (r *storageBackendResource) Delete(ctx context.Context, req resource.Delete
 	}
 }
 
+// ImportState adopts an existing backend by its decimal id through the shared int64 import helper.
 func (r *storageBackendResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	importInt64ID(ctx, req, resp)
 }
 
+// setStorageBackendState copies the backend's identity, driver, disk count, and config into the
+// model, leaving the kouja object null when the server returns none.
 func setStorageBackendState(ctx context.Context, state *storageBackendModel, backend *rookeryv1.StorageBackend) diag.Diagnostics {
 	var diags diag.Diagnostics
 	state.ID = types.Int64Value(backend.GetId())
@@ -340,6 +353,8 @@ func setStorageBackendState(ctx context.Context, state *storageBackendModel, bac
 	return diags
 }
 
+// storageBackendConfigFromObject decodes the nested config object into a protobuf config and
+// attaches the kouja driver config only when that object is present, returning nil on decode errors.
 func storageBackendConfigFromObject(ctx context.Context, object types.Object) (*rookeryv1.StorageBackendConfig, diag.Diagnostics) {
 	var config storageBackendConfigModel
 	diags := object.As(ctx, &config, basetypes.ObjectAsOptions{})
@@ -380,14 +395,18 @@ func storageBackendConfigFromObject(ctx context.Context, object types.Object) (*
 // values for sensitive attribute".
 type trimSpaceStringPlanModifier struct{}
 
+// Description returns the plan modifier summary shown in Terraform diagnostics.
 func (trimSpaceStringPlanModifier) Description(context.Context) string {
 	return "Trims leading and trailing whitespace to match the server's storage normalization."
 }
 
+// MarkdownDescription returns the same summary as Description because the text has no Markdown.
 func (trimSpaceStringPlanModifier) MarkdownDescription(context.Context) string {
 	return "Trims leading and trailing whitespace to match the server's storage normalization."
 }
 
+// PlanModifyString trims surrounding whitespace from planned values to match server storage and
+// passes null or unknown values through unchanged.
 func (trimSpaceStringPlanModifier) PlanModifyString(_ context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
 	if req.PlanValue.IsNull() || req.PlanValue.IsUnknown() {
 		return

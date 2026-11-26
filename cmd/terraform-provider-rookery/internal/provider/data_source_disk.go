@@ -24,10 +24,12 @@ func NewDiskDataSource() datasource.DataSource {
 	return &diskDataSource{}
 }
 
+// Metadata registers this data source under the provider-prefixed type name <provider>_disk.
 func (d *diskDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_disk"
 }
 
+// Schema defines the disk attributes: backend, attachments, templates, and provisioning.
 func (d *diskDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a disk by id or name.",
@@ -66,6 +68,8 @@ func (d *diskDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 	}
 }
 
+// Read resolves the disk by exactly one of id or name, stores its state with
+// provisioning_json cleared, then attaches labels.
 func (d *diskDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config diskModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
@@ -110,6 +114,8 @@ func (d *diskDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 
+// findDisk returns the single disk whose name matches case-insensitively, failing on
+// duplicate matches or no match.
 func findDisk(disks []*rookeryv1.Disk, name string) (*rookeryv1.Disk, error) {
 	var found *rookeryv1.Disk
 	for _, disk := range disks {

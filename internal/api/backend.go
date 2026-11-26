@@ -44,30 +44,50 @@ func (s *Server) ApplyNATGatewayToDHCPConfig(ctx context.Context, networkID int6
 	return applyNATGatewayToDHCPConfig(network, vnfType, config)
 }
 
+// ActivateVNF provisions the VNF's interface, starts its runtime over the
+// effective transport, and returns the record updated with Enabled and the tap
+// or memif runtime fields. It fails when the runtime is unconfigured or VPP is
+// blocked.
 func (s *Server) ActivateVNF(ctx context.Context, vnf store.VNF) (store.VNF, error) {
 	return s.activateVNF(ctx, vnf)
 }
 
+// StopVNF stops the VNF runtime, removes its tap or memif (shared memifs are
+// left to the network), optionally drops its leases, and joins the per-step
+// errors.
 func (s *Server) StopVNF(ctx context.Context, vnf store.VNF, removeLeases bool) error {
 	return s.stopVNF(ctx, vnf, removeLeases)
 }
 
+// ActivateNAT44 wires the network BVI, outside host interface, NAT44
+// translation, DNAT rules, and DHCPv4 gateway for the VNF, returning the
+// updated record. It rolls the BVI and NAT44 state back when a later step fails.
 func (s *Server) ActivateNAT44(ctx context.Context, vnf store.VNF) (store.VNF, error) {
 	return s.activateNAT44(ctx, vnf)
 }
 
+// StopNAT44 removes the VNF's DNAT mappings and NAT44 translation and clears
+// its running flag, returning nil when NAT44 is unconfigured or the network was
+// already deleted.
 func (s *Server) StopNAT44(ctx context.Context, vnf store.VNF) error {
 	return s.stopNAT44(ctx, vnf)
 }
 
+// CleanupNetworkBVIAfterNATDelete deletes the network's NAT-owned BVI once no
+// NAT44 VNF or NAT-adjusted DHCPv4 VNF still depends on it, then clears the
+// stored BVI fields.
 func (s *Server) CleanupNetworkBVIAfterNATDelete(ctx context.Context, networkID int64) error {
 	return s.cleanupNetworkBVIAfterNATDelete(ctx, networkID)
 }
 
+// CleanupLegacyNetworkVNF removes the pre-VNF per-network DHCP tap and stored
+// DHCP fields, then asks the VNF manager to drop legacy state for the network.
 func (s *Server) CleanupLegacyNetworkVNF(ctx context.Context, network store.Network) error {
 	return s.cleanupLegacyNetworkVNF(ctx, network)
 }
 
+// DeleteBVI removes the named BVI interface and returns nil without contacting
+// VPP when the NAT44 runtime is not configured.
 func (s *Server) DeleteBVI(ctx context.Context, name string) error {
 	if s.nat == nil {
 		return nil
@@ -75,6 +95,9 @@ func (s *Server) DeleteBVI(ctx context.Context, name string) error {
 	return s.nat.DeleteBVIByName(ctx, name)
 }
 
+// CreateBridgeDomain creates a bridge domain with the given name while
+// avoiding the reserved IDs, and returns the new bridge-domain ID; it fails
+// when the network runtime is not configured.
 func (s *Server) CreateBridgeDomain(ctx context.Context, name string, reserved []uint32) (uint32, error) {
 	if s.networks == nil {
 		return 0, errors.New("VPP network runtime is not configured")
@@ -82,6 +105,8 @@ func (s *Server) CreateBridgeDomain(ctx context.Context, name string, reserved [
 	return s.networks.CreateBridgeDomain(ctx, name, reserved)
 }
 
+// DeleteBridgeDomain removes the VPP bridge domain with the given ID, returning
+// an error when the network runtime is not configured.
 func (s *Server) DeleteBridgeDomain(ctx context.Context, bdID uint32) error {
 	if s.networks == nil {
 		return errors.New("VPP network runtime is not configured")
@@ -89,6 +114,9 @@ func (s *Server) DeleteBridgeDomain(ctx context.Context, bdID uint32) error {
 	return s.networks.DeleteBridgeDomain(ctx, bdID)
 }
 
+// CreateNetworkPipe connects two bridge domains with a VPP pipe and returns the
+// created pipe's runtime details, or an error when the network runtime is not
+// configured.
 func (s *Server) CreateNetworkPipe(ctx context.Context, bdA, bdB uint32) (host.PipeRuntime, error) {
 	if s.networks == nil {
 		return host.PipeRuntime{}, errors.New("VPP network runtime is not configured")
@@ -96,6 +124,8 @@ func (s *Server) CreateNetworkPipe(ctx context.Context, bdA, bdB uint32) (host.P
 	return s.networks.CreatePipe(ctx, bdA, bdB)
 }
 
+// DeleteNetworkPipe removes the pipe identified by its instance and parent
+// software interface index, failing when the network runtime is not configured.
 func (s *Server) DeleteNetworkPipe(ctx context.Context, instance, parentSwIfIndex uint32) error {
 	if s.networks == nil {
 		return errors.New("VPP network runtime is not configured")
@@ -103,6 +133,9 @@ func (s *Server) DeleteNetworkPipe(ctx context.Context, instance, parentSwIfInde
 	return s.networks.DeletePipe(ctx, instance, parentSwIfIndex)
 }
 
+// vnfConfigPayloadFromProto converts a protobuf VNFConfig into the payload
+// struct, copying slice fields so later mutation does not alias the protobuf
+// message; it returns nil for a nil config.
 func vnfConfigPayloadFromProto(config *rookeryv1.VNFConfig) *vnfConfigPayload {
 	if config == nil {
 		return nil

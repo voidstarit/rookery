@@ -57,6 +57,8 @@ type Client struct {
 	uploadTimeout time.Duration
 }
 
+// Timeout returns the configured per-call timeout, defaulting to 30 seconds when
+// the client is nil or the timeout is unset.
 func (c *Client) Timeout() time.Duration {
 	if c == nil || c.timeout <= 0 {
 		return 30 * time.Second
@@ -149,6 +151,8 @@ func NewClient(config ClientConfig) (*Client, error) {
 	}, nil
 }
 
+// loadMaterial returns inline PEM when set, otherwise reads the file path or the
+// path from environment variable envFile, reporting which material is missing.
 func loadMaterial(name, file, envFile, inline string) ([]byte, error) {
 	if strings.TrimSpace(inline) != "" {
 		return []byte(inline), nil

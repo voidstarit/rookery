@@ -151,6 +151,8 @@ func (s *Store) DeleteLightVMInitramfs(ctx context.Context, id int64) (LightVMIn
 	return image, nil
 }
 
+// scanLightVMInitramfs decodes one initramfs row, converting its millisecond timestamps to UTC
+// times.
 func scanLightVMInitramfs(s scanner) (LightVMInitramfs, error) {
 	var (
 		image     LightVMInitramfs

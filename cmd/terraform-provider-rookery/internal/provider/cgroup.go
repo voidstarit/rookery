@@ -15,6 +15,8 @@ import (
 	"github.com/voidstarit/rookery/internal/cgroup"
 )
 
+// cgroupIOLimitSchemaAttributes returns the resource schema for one per-device
+// I/O limit, where zero values mean unlimited or inherited.
 func cgroupIOLimitSchemaAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"device":     schema.StringAttribute{Required: true, Description: "Block device path, for example /dev/mapper/vg-lv."},
@@ -26,6 +28,8 @@ func cgroupIOLimitSchemaAttributes() map[string]schema.Attribute {
 	}
 }
 
+// cgroupIOLimitDataSourceAttributes returns the read-only data source schema for
+// one per-device I/O limit.
 func cgroupIOLimitDataSourceAttributes() map[string]dschema.Attribute {
 	return map[string]dschema.Attribute{
 		"device":     dschema.StringAttribute{Computed: true},
@@ -57,6 +61,8 @@ var cgroupIOLimitAttrTypes = map[string]attr.Type{
 
 var cgroupIOLimitObjectType = types.ObjectType{AttrTypes: cgroupIOLimitAttrTypes}
 
+// cgroupIOLimitsFromList decodes a Terraform list into I/O limit models,
+// returning nil when the list is null or unknown.
 func cgroupIOLimitsFromList(ctx context.Context, list types.List) ([]cgroupIOLimitModel, diag.Diagnostics) {
 	if list.IsNull() || list.IsUnknown() {
 		return nil, nil
@@ -66,6 +72,8 @@ func cgroupIOLimitsFromList(ctx context.Context, list types.List) ([]cgroupIOLim
 	return limits, diags
 }
 
+// cgroupIOLimitsToProto converts I/O limit models to API messages, returning nil
+// for an empty slice.
 func cgroupIOLimitsToProto(limits []cgroupIOLimitModel) []*rookeryv1.CgroupIOLimit {
 	if len(limits) == 0 {
 		return nil
@@ -84,6 +92,8 @@ func cgroupIOLimitsToProto(limits []cgroupIOLimitModel) []*rookeryv1.CgroupIOLim
 	return result
 }
 
+// cgroupIOLimitsFromProto converts API I/O limits to a Terraform list, skipping
+// nil entries.
 func cgroupIOLimitsFromProto(ctx context.Context, limits []*rookeryv1.CgroupIOLimit) (types.List, diag.Diagnostics) {
 	models := make([]cgroupIOLimitModel, 0, len(limits))
 	for _, limit := range limits {
@@ -120,6 +130,8 @@ var cgroupClassAttrTypes = map[string]attr.Type{
 
 var cgroupClassObjectType = types.ObjectType{AttrTypes: cgroupClassAttrTypes}
 
+// cgroupClassSchemaAttributes returns the resource schema for cgroup classes and
+// their nested per-device I/O limits.
 func cgroupClassSchemaAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"name":             schema.StringAttribute{Required: true, Description: "Slash-separated class path, for example prod or prod/web."},
@@ -134,6 +146,8 @@ func cgroupClassSchemaAttributes() map[string]schema.Attribute {
 	}
 }
 
+// cgroupClassDataSourceAttributes returns the read-only data source schema for
+// cgroup classes and their I/O limits.
 func cgroupClassDataSourceAttributes() map[string]dschema.Attribute {
 	return map[string]dschema.Attribute{
 		"name":             dschema.StringAttribute{Computed: true},
@@ -147,6 +161,8 @@ func cgroupClassDataSourceAttributes() map[string]dschema.Attribute {
 	}
 }
 
+// cgroupClassesFromList decodes a Terraform list into class models, returning
+// nil when the list is null or unknown.
 func cgroupClassesFromList(ctx context.Context, list types.List) ([]cgroupClassModel, diag.Diagnostics) {
 	if list.IsNull() || list.IsUnknown() {
 		return nil, nil
@@ -156,6 +172,8 @@ func cgroupClassesFromList(ctx context.Context, list types.List) ([]cgroupClassM
 	return classes, diags
 }
 
+// cgroupClassesToProto converts class models to API messages, decoding nested
+// I/O limits and returning nil for an empty slice or on a decoding error.
 func cgroupClassesToProto(ctx context.Context, classes []cgroupClassModel) ([]*rookeryv1.CgroupClass, diag.Diagnostics) {
 	if len(classes) == 0 {
 		return nil, nil
@@ -179,6 +197,8 @@ func cgroupClassesToProto(ctx context.Context, classes []cgroupClassModel) ([]*r
 	return result, diags
 }
 
+// cgroupClassesFromProto converts API classes to a Terraform list in the order
+// the server returned them.
 func cgroupClassesFromProto(ctx context.Context, classes []*rookeryv1.CgroupClass) (types.List, diag.Diagnostics) {
 	return cgroupClassesFromProtoOrdered(ctx, classes, nil)
 }
@@ -233,6 +253,8 @@ func cgroupClassesFromProtoOrdered(ctx context.Context, classes []*rookeryv1.Cgr
 	return types.ListValueFrom(ctx, cgroupClassObjectType, models)
 }
 
+// cgroupClassNames extracts the trimmed class names from a Terraform list,
+// returning nil when the list is null, unknown, or undecodable.
 func cgroupClassNames(ctx context.Context, list types.List) []string {
 	if list.IsNull() || list.IsUnknown() {
 		return nil
@@ -309,6 +331,9 @@ func validateCgroupClassModels(ctx context.Context, classes []cgroupClassModel) 
 	return nil
 }
 
+// validateVMCgroupClass checks that className exists in the server's cgroup
+// settings and has no child classes, so a VM is assigned only to a leaf class;
+// an empty name skips the check.
 func validateVMCgroupClass(ctx context.Context, client *Client, className string) error {
 	className = strings.TrimSpace(className)
 	if className == "" {

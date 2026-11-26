@@ -26,6 +26,9 @@ const (
 	gatewayMaxVMInterfaces    = 32
 )
 
+// CreateVM validates the request and prerequisites, then creates the VM record with its
+// interfaces and starts it immediately under resourceMu; any failed start or attachment rolls the
+// record back. It returns InvalidArgument, Aborted, or Unavailable for rejected requests.
 func (s *vmService) CreateVM(ctx context.Context, request *rookeryv1.CreateVMRequest) (*rookeryv1.VM, error) {
 	vm, err := vmFromCreateRequest(request)
 	if err != nil {
@@ -86,11 +89,9 @@ func (s *vmService) CreateVM(ctx context.Context, request *rookeryv1.CreateVMReq
 	return s.vmToProto(ctx, created), nil
 }
 
-// startCreatedVM starts a freshly created VM. Rookery creates VMs running;
-// stopping one is always an explicit action. A VM that cannot start is removed
-// again, along with any partial QEMU process, so callers never see a
-// half-created VM and the disks are released for a retry. Gateways built
-// without a VM controller keep the record as created (stopped).
+// startCreatedVM starts a freshly created VM and rolls it back on failure so
+// callers never see a half-created VM. Without a VM controller it returns the
+// record stopped.
 func (s *vmService) startCreatedVM(ctx context.Context, vm store.VM) (store.VM, error) {
 	if s.runtime == nil {
 		return vm, nil
@@ -126,6 +127,9 @@ func (s *vmService) rollbackCreatedVM(vmID string) {
 	}
 }
 
+// UpdateVM applies the request's set fields to an existing VM; interface and disk sets change only
+// when supplied or explicitly replaced, and a running VM refuses those changes. Live cgroup limits
+// are reverted if the store update fails.
 func (s *vmService) UpdateVM(ctx context.Context, request *rookeryv1.UpdateVMRequest) (*rookeryv1.VM, error) {
 	existing, err := s.store.GetVM(ctx, request.GetId())
 	if err != nil {
@@ -278,6 +282,9 @@ func (s *vmService) checkVMCreatePrerequisites(ctx context.Context, diskIDs []in
 	return nil
 }
 
+// vmFromCreateRequest builds a stopped VM record from the request, applying defaults for VCPUs and
+// memory, validating optional fields, and normalizing disk IDs with the legacy disk_id fallback.
+// It requires a name and at least one disk.
 func vmFromCreateRequest(request *rookeryv1.CreateVMRequest) (store.VM, error) {
 	vm := store.VM{Status: store.StatusStopped, VCPUs: gatewayDefaultVCPUs, MemoryMB: gatewayDefaultMemoryMB}
 	if err := applyVMName(&vm, request.Name, true); err != nil {
@@ -323,6 +330,9 @@ func vmFromCreateRequest(request *rookeryv1.CreateVMRequest) (store.VM, error) {
 	return vm, nil
 }
 
+// vmFromUpdateRequest copies existing and applies the fields set in the request, leaving unset
+// name, description, status, VCPUs, memory, console, and cgroup values unchanged; boot media is
+// always replaced with the request value.
 func vmFromUpdateRequest(existing store.VM, request *rookeryv1.UpdateVMRequest) (store.VM, error) {
 	vm := existing
 	if request.Name != nil {
@@ -360,10 +370,14 @@ func vmFromUpdateRequest(existing store.VM, request *rookeryv1.UpdateVMRequest) 
 	return vm, nil
 }
 
+// validateCgroupClass reports whether className is an existing leaf cgroup class suitable for a VM,
+// treating an empty name as unset.
 func (s *vmService) validateCgroupClass(ctx context.Context, className string) error {
 	return validateCgroupClassFor(ctx, s.store, className, "VM")
 }
 
+// validateCgroupClassFor rejects a non-empty class name that is not configured or that has child
+// classes, since the subject must attach to a leaf; subject names the workload kind in the error.
 func validateCgroupClassFor(ctx context.Context, st *store.Store, className, subject string) error {
 	className = strings.TrimSpace(className)
 	if className == "" {
@@ -393,6 +407,8 @@ func validateCgroupClassFor(ctx context.Context, st *store.Store, className, sub
 	return nil
 }
 
+// applyVMName trims and stores value as the VM name, allowing an empty value to clear it unless
+// required, and rejecting names longer than 64 characters.
 func applyVMName(vm *store.VM, value string, required bool) error {
 	name := strings.TrimSpace(value)
 	switch {
@@ -407,6 +423,7 @@ func applyVMName(vm *store.VM, value string, required bool) error {
 	return nil
 }
 
+// applyVMDescription stores the trimmed description, rejecting values longer than 2000 runes.
 func applyVMDescription(vm *store.VM, value string) error {
 	description := strings.TrimSpace(value)
 	if utf8.RuneCountInString(description) > gatewayMaxDescriptionSize {
@@ -416,6 +433,7 @@ func applyVMDescription(vm *store.VM, value string) error {
 	return nil
 }
 
+// applyVMStatus stores value after confirming it is one of the store's valid VM statuses.
 func applyVMStatus(vm *store.VM, value string) error {
 	value = strings.TrimSpace(value)
 	if !store.ValidStatus(value) {
@@ -425,6 +443,7 @@ func applyVMStatus(vm *store.VM, value string) error {
 	return nil
 }
 
+// applyVMVCPUs stores value after checking it falls in the supported 1 to 128 vCPU range.
 func applyVMVCPUs(vm *store.VM, value int) error {
 	if value < 1 || value > gatewayMaxVCPUs {
 		return fmt.Errorf("vcpus must be between 1 and %d", gatewayMaxVCPUs)
@@ -433,6 +452,7 @@ func applyVMVCPUs(vm *store.VM, value int) error {
 	return nil
 }
 
+// applyVMMemory stores value after checking it falls in the supported 128 MiB to 1 TiB range.
 func applyVMMemory(vm *store.VM, value int) error {
 	if value < 128 || value > gatewayMaxMemoryMB {
 		return fmt.Errorf("memory_mb must be between 128 and %d", gatewayMaxMemoryMB)
@@ -441,6 +461,8 @@ func applyVMMemory(vm *store.VM, value int) error {
 	return nil
 }
 
+// normalizeGatewayIDs validates that ids contains at most max positive identifiers and returns them
+// deduplicated in first-seen order.
 func normalizeGatewayIDs(ids []int64, max int, field string) ([]int64, error) {
 	if len(ids) > max {
 		return nil, fmt.Errorf("at most %d values are allowed in %s", max, field)
@@ -460,6 +482,8 @@ func normalizeGatewayIDs(ids []int64, max int, field string) ([]int64, error) {
 	return out, nil
 }
 
+// vmStoreError maps VM store failures to gRPC statuses for name conflicts, disk and interface
+// problems, media, and missing VMs; other errors become Internal using operation in the message.
 func vmStoreError(err error, operation string) error {
 	switch {
 	case errors.Is(err, store.ErrNameTaken):
@@ -485,6 +509,8 @@ func vmStoreError(err error, operation string) error {
 	}
 }
 
+// vmCreationBlockedMessage lists the readiness problems blocking VM creation: the thin pool when
+// needsStorage is set, plus VPP, which is always required.
 func vmCreationBlockedMessage(status readiness.Status, needsStorage bool) string {
 	var problems []string
 	if needsStorage && !status.ThinPool.Ready {
@@ -499,6 +525,8 @@ func vmCreationBlockedMessage(status readiness.Status, needsStorage bool) string
 	return "VM creation is blocked: " + strings.Join(problems, "; ")
 }
 
+// componentReason returns the most specific readiness explanation available, preferring detail
+// over state and falling back to "not ready".
 func componentReason(status readiness.ComponentStatus) string {
 	if status.Detail != "" {
 		return status.Detail

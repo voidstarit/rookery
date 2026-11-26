@@ -123,6 +123,10 @@ func (v *VPPNetwork) SetInterfaceACLs(ctx context.Context, swIfIndex uint32, ing
 	return checkVPPRetval("set interface ACLs", reply.Retval)
 }
 
+// buildVPPACLRules converts store ACL rules into VPP ACL entries, falling back to
+// deny for any action other than "permit" and to match-any for an empty or "any"
+// protocol. It rejects unparseable or mixed address-family prefixes, unknown
+// protocols, and expands TCP/UDP zero port ranges to full range.
 func buildVPPACLRules(rules []store.ACLRule) ([]acl_types.ACLRule, error) {
 	result := make([]acl_types.ACLRule, 0, len(rules))
 	for i, rule := range rules {

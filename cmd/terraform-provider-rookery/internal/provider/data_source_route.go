@@ -23,10 +23,12 @@ func NewRouteDataSource() datasource.DataSource {
 	return &routeDataSource{}
 }
 
+// Metadata registers this data source under the provider-prefixed type name <provider>_route.
 func (d *routeDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_route"
 }
 
+// Schema defines route attributes; route_table_id and ipv6 are required alongside id or prefix.
 func (d *routeDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a route by id or prefix. route_table_id and ipv6 are required as lookup context; use 0 for the default table.",
@@ -60,6 +62,8 @@ func (d *routeDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 	}
 }
 
+// Read resolves the route by exactly one of id or prefix using route_table_id and ipv6;
+// prefix comparison is exact.
 func (d *routeDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config routeModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)

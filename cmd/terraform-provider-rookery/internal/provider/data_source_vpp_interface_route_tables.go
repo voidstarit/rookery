@@ -22,10 +22,12 @@ func NewVPPInterfaceRouteTablesDataSource() datasource.DataSource {
 	return &vppInterfaceRouteTablesDataSource{}
 }
 
+// Metadata registers the data source as <provider>_vpp_interface_route_tables.
 func (d *vppInterfaceRouteTablesDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_vpp_interface_route_tables"
 }
 
+// Schema defines the required interface name and the computed IPv4/IPv6 route-table bindings.
 func (d *vppInterfaceRouteTablesDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
 		Description: "Reads the effective IPv4/IPv6 route-table binding for a host interface, host tap, or pipe endpoint.",
@@ -39,6 +41,7 @@ func (d *vppInterfaceRouteTablesDataSource) Schema(_ context.Context, _ datasour
 	}
 }
 
+// Read fetches the effective IPv4/IPv6 route-table binding for the required interface name.
 func (d *vppInterfaceRouteTablesDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config vppInterfaceRouteTablesModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)

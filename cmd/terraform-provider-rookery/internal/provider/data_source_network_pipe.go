@@ -22,10 +22,12 @@ func NewNetworkPipeDataSource() datasource.DataSource {
 	return &networkPipeDataSource{}
 }
 
+// Metadata registers the data source as <provider>_network_pipe.
 func (d *networkPipeDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_network_pipe"
 }
 
+// Schema defines the pipe attributes and its two interchangeable endpoint networks.
 func (d *networkPipeDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a bridge-domain pipe by id or by its two network ids.",
@@ -46,6 +48,8 @@ func (d *networkPipeDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 	}
 }
 
+// Read finds the pipe by exactly one of id or the unordered network_a_id/network_b_id
+// pair, rejects ambiguity, and stores state plus labels.
 func (d *networkPipeDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config networkPipeModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)

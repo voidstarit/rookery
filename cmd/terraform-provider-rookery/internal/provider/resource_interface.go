@@ -51,10 +51,13 @@ type interfaceModel struct {
 	Labels         types.Set    `tfsdk:"labels"`
 }
 
+// Metadata sets the resource type name to the provider name followed by "_interface".
 func (r *interfaceResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_interface"
 }
 
+// Schema declares the rookery_interface attributes for its network, optional VM attachment,
+// ordered ACLs, route-table bindings, and live VPP data.
 func (r *interfaceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A Rookery vhost-user interface in a network bridge domain.",
@@ -100,6 +103,8 @@ func (r *interfaceResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 	}
 }
 
+// Create adds the vhost-user interface, applies any configured ACLs and route tables, then
+// stores it with labels in state.
 func (r *interfaceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan interfaceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -156,6 +161,8 @@ func (r *interfaceResource) Create(ctx context.Context, req resource.CreateReque
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read refreshes the interface from the API and removes it from state when the server reports it
+// is gone. Labels are reloaded from the entity label store.
 func (r *interfaceResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state interfaceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -188,6 +195,9 @@ func (r *interfaceResource) Read(ctx context.Context, req resource.ReadRequest, 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update changes the VM attachment, ACLs, and route tables only for fields that differ from
+// state, then reapplies labels. Route tables are sent only when both ids are known; the current
+// interface is read first so later updates merge into its latest revision.
 func (r *interfaceResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan, state interfaceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -254,6 +264,8 @@ func (r *interfaceResource) Update(ctx context.Context, req resource.UpdateReque
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete removes the interface through the API, treating an already-absent interface as success
+// and reporting other errors through diagnostics.
 func (r *interfaceResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state interfaceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -272,10 +284,14 @@ func (r *interfaceResource) Delete(ctx context.Context, req resource.DeleteReque
 	}
 }
 
+// ImportState adopts an existing interface by its integer id into Terraform state.
 func (r *interfaceResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	importInt64ID(ctx, req, resp)
 }
 
+// setInterfaceState copies the API interface into the Terraform model, falling back to the single
+// ACL name fields when the ACL lists are empty. It returns diagnostics from converting the ACL
+// and address lists.
 func setInterfaceState(ctx context.Context, state *interfaceModel, iface *rookeryv1.VirtualInterface) diag.Diagnostics {
 	var diags diag.Diagnostics
 	state.ID = types.Int64Value(iface.GetId())
@@ -313,6 +329,9 @@ func setInterfaceState(ctx context.Context, state *interfaceModel, iface *rooker
 	return diags
 }
 
+// interfaceACLsFromPlan returns the planned ACL names, substituting the previous state for a list
+// that is null or unknown. The bool reports whether either list was set, so callers skip the API
+// when neither is managed.
 func interfaceACLsFromPlan(ctx context.Context, plan, state interfaceModel) ([]string, []string, bool, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	ingress, ingressSet, ingressDiags := interfaceStringList(ctx, plan.IngressACLs)
@@ -334,6 +353,8 @@ func interfaceACLsFromPlan(ctx context.Context, plan, state interfaceModel) ([]s
 	return ingress, egress, ingressSet || egressSet, diags
 }
 
+// interfaceStringList converts a Terraform string list and reports whether it was set, treating
+// null and unknown lists as unset.
 func interfaceStringList(ctx context.Context, list types.List) ([]string, bool, diag.Diagnostics) {
 	if list.IsNull() || list.IsUnknown() {
 		return nil, false, nil
