@@ -33,7 +33,7 @@ PROTO_FILES := $(sort $(shell find $(PROTO_ROOT) -name '*.proto' -print))
 PROTO_TOOL_PATHS := $(PROTO_PLUGIN_BIN)/protoc-gen-go $(PROTO_PLUGIN_BIN)/protoc-gen-go-grpc $(PROTO_PLUGIN_BIN)/protoc-gen-grpc-gateway $(PROTO_PLUGIN_BIN)/protoc-gen-openapiv2 $(PROTO_PLUGIN_BIN)/protoc-gen-validate
 PROTO_TOOL_VERSIONS := google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12 google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2 github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.28.0 github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@v2.28.0 github.com/envoyproxy/protoc-gen-validate@v1.3.3
 
-.PHONY: all build ui-install ui-build ui-typecheck ui-watch test vet fmt clean release proto-tools proto-check-tools proto-generate proto-compile proto-check virtiofsd
+.PHONY: all build ui-install ui-build ui-typecheck ui-test ui-watch test vet fmt clean release proto-tools proto-check-tools proto-generate proto-compile proto-check virtiofsd
 
 all: build
 
@@ -47,6 +47,9 @@ ui-build: $(UI_STAMP)
 
 ui-typecheck: $(UI_STAMP)
 	cd $(UI_DIR) && npm run typecheck
+
+ui-test: $(UI_STAMP)
+	cd $(UI_DIR) && npm run test:payload
 
 ui-watch: $(UI_STAMP)
 	cd $(UI_DIR) && npm run watch
@@ -81,7 +84,7 @@ release: ui-build virtiofsd
 	cd $(RELEASE_DIR) && sha256sum $(RELEASE_NAME).tar.gz > $(RELEASE_NAME).tar.gz.sha256
 	@printf 'created %s\n' "$(RELEASE_ARCHIVE)"
 
-test: ui-build
+test: ui-build ui-test
 	go test ./...
 
 vet:

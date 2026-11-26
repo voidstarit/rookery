@@ -18,15 +18,15 @@ import type {
   VNFType,
 } from "../types";
 import { BGPAdvertisedPrefixesEditor } from "./BGPAdvertisedPrefixesEditor";
-import { BGPVNFForm, defaultBGPVNFForm, type BGPVNFFormState } from "./BGPVNFForm";
+import { BGPVNFForm, defaultBGPVNFForm } from "./BGPVNFForm";
 import { DHCPOptionsEditor } from "./DHCPOptionsEditor";
 import { DHCPStaticAssignmentsEditor } from "./DHCPStaticAssignmentsEditor";
-import { DHCPVNFForm, defaultDHCPVNFForm, type DHCPVNFFormState } from "./DHCPVNFForm";
+import { DHCPVNFForm, defaultDHCPVNFForm } from "./DHCPVNFForm";
 import { DNATRulesEditor } from "./DNATRulesEditor";
 import { DNSForwardersEditor } from "./DNSForwardersEditor";
 import { DNSRecordsEditor } from "./DNSRecordsEditor";
-import { DNSVNFForm, defaultDNSVNFForm, type DNSVNFFormState } from "./DNSVNFForm";
-import { NAT44VNFForm, defaultNAT44VNFForm, type NAT44VNFFormState } from "./NAT44VNFForm";
+import { DNSVNFForm, defaultDNSVNFForm } from "./DNSVNFForm";
+import { NAT44VNFForm, defaultNAT44VNFForm } from "./NAT44VNFForm";
 import {
   firstIPv4Host,
   tagBGPVNF,
@@ -36,6 +36,7 @@ import {
   vnfAPISlug,
   vnfTypeLabel,
 } from "./format";
+import { createPayload, updatePayload, type FormState } from "./payload";
 
 type VNFPageProps = {
   vnf: VNF | null;
@@ -46,17 +47,6 @@ type VNFPageProps = {
   initialType?: VNFType;
   onClose: () => void;
   onSaved: (vnf: VNF) => void;
-};
-
-type FormState = {
-  type: VNFType;
-  name: string;
-  networkID: number;
-  enabled: boolean;
-  dhcp: DHCPVNFFormState;
-  dns: DNSVNFFormState;
-  nat44: NAT44VNFFormState;
-  bgp: BGPVNFFormState;
 };
 
 type VNFRecord = DHCPVNFRecord | DNSVNFRecord | NAT44VNFRecord | BGPVNFRecord;
@@ -156,94 +146,6 @@ function tagRecord(type: VNFType, record: VNFRecord): VNF {
 }
 
 /**
- * scalarPayload builds the type-specific parent scalar fields shared by create and update; it never
- * includes child arrays, identity, or the enabled transition.
- */
-function scalarPayload(form: FormState): Record<string, unknown> {
-  switch (form.type) {
-    case "dhcpv4":
-    case "dhcpv6":
-      return {
-        gateway: form.dhcp.gateway.trim(),
-        range_start: form.dhcp.rangeStart.trim(),
-        range_end: form.dhcp.rangeEnd.trim(),
-        lease_time: form.dhcp.leaseTime.trim() || "12h",
-        dns: form.dhcp.dns.trim(),
-        bind_ip: form.dhcp.bindIP.trim(),
-        transport: form.dhcp.transport,
-        dns_vnf_id: form.dhcp.dnsVNFID,
-        dns_domain: form.dhcp.dnsDomain.trim(),
-        dns_ttl: Number(form.dhcp.dnsTTL) || 300,
-      };
-    case "dns":
-      return { forward: form.dns.forward };
-    case "nat44":
-      return {
-        gateway: form.nat44.gateway.trim(),
-        outside_interface: form.nat44.outsideInterface,
-        outside_address: form.nat44.outsideAddress.trim(),
-        outside_gateway: form.nat44.outsideGateway.trim(),
-        nat44_pool: form.nat44.nat44Pool.trim(),
-      };
-    case "bgp":
-      return {
-        transport: form.bgp.transport,
-        local_as: Number(form.bgp.localAS),
-        router_id: form.bgp.routerID.trim(),
-        peer_as: Number(form.bgp.peerAS),
-        peer_ip: form.bgp.peerIP.trim(),
-        local_ip: form.bgp.localIP.trim(),
-        peer_gateway: form.bgp.peerGateway.trim(),
-        multihop_ttl: Number(form.bgp.multihopTTL) || 64,
-        passive: form.bgp.passive,
-        target_table_id: Number(form.bgp.targetTableID) || 0,
-        next_hop: form.bgp.nextHop.trim(),
-        ...(form.bgp.transport === "tap" && form.bgp.password ? { password: form.bgp.password } : {}),
-      };
-  }
-}
-
-/**
- * createPayload wraps the parent scalars with identity and always creates the VNF disabled so the
- * child rows can be written before the single enabling start.
- */
-function createPayload(form: FormState): Record<string, unknown> {
-  const payload: Record<string, unknown> = {
-    name: form.name.trim(),
-    network_id: form.networkID,
-    enabled: false,
-    ...scalarPayload(form),
-  };
-  if (form.type === "dhcpv4" || form.type === "dhcpv6") {
-    payload.family = form.type;
-  }
-  return payload;
-}
-
-/**
- * updatePayload returns only the parent scalar fields that differ from the stored record; an
- * unchanged parent is skipped so it does not stop and start the runtime, and enabled is applied
- * separately after the child writes.
- */
-function updatePayload(form: FormState, base: VNF | null): Record<string, unknown> {
-  const payload: Record<string, unknown> = {};
-  const name = form.name.trim();
-  if (!base || name !== base.name) {
-    payload.name = name;
-  }
-  if (!base || base.type !== form.type) {
-    return { ...payload, ...scalarPayload(form) };
-  }
-  const stored = base as unknown as Record<string, unknown>;
-  for (const [key, value] of Object.entries(scalarPayload(form))) {
-    if (stored[key] !== value) {
-      payload[key] = value;
-    }
-  }
-  return payload;
-}
-
-/**
  * diffRows splits child drafts into the delete, update, and create operations of the per-item save
  * order, comparing rows by their server ID and natural-key signature.
  */
@@ -316,7 +218,7 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, initialType
   const formRef = useRef<HTMLFormElement | null>(null);
   const originals = useRef<ChildRows>({ ...EMPTY_CHILDREN });
 
-  const editing = vnf !== null;
+  const editing = vnf !== null || createdVNF !== null;
   const selectedNetwork = networks.find((item) => item.id === form.networkID);
   const family = form.type === "dhcpv6" ? "dhcpv6" : "dhcpv4";
 
@@ -799,6 +701,7 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, initialType
     setSaving(true);
     let parentID = vnf?.id ?? createdVNF?.id;
     let childPhase = false;
+    let createdParent = false;
     const wasEnabled = vnf?.enabled ?? createdVNF?.enabled ?? false;
     try {
       let lastParent: VNF;
@@ -808,6 +711,7 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, initialType
           body: JSON.stringify(createPayload(form)),
         }).then((record) => tagRecord(form.type, record));
         parentID = lastParent.id;
+        createdParent = true;
         setCreatedVNF(lastParent);
       } else {
         const payload = updatePayload(form, vnf ?? createdVNF);
@@ -838,7 +742,12 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, initialType
       await saveEntityLabelsWithToast("vnf", parentID, form.name.trim(), labels);
       onSaved(lastParent);
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      setFormError(
+        createdParent
+          ? `${message} The ${vnfTypeLabel(form.type)} VNF was created; fix the error and save again to finish it.`
+          : message
+      );
       if (parentID !== undefined && childPhase) {
         // A failure after child writes may follow successful operations; reload
         // so the next save diffs against the server rather than stale row IDs.

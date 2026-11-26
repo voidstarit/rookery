@@ -38,6 +38,7 @@ and the pinned plugins only when changing protos. Builds need no CGO.
 ```sh
 make ui-install     # npm ci
 make ui-typecheck   # tsc --noEmit
+make ui-test        # bundle and run the VNF payload unit tests
 make ui-build       # typecheck + esbuild into internal/webui/static/build
 make ui-watch       # rebuild the bundle while developing
 make build          # UI bundle + bin/{rookery,vnfs,terraform-provider-rookery}

@@ -34,6 +34,9 @@ jobs:
       - name: Build UI
         run: make ui-build
 
+      - name: Test UI payloads
+        run: make ui-test
+
       - name: Test with coverage
         run: go test -count=1 -coverpkg=./... -covermode=atomic -coverprofile=coverage.out ./...
 

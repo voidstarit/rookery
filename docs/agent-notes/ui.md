@@ -53,7 +53,13 @@ order, then sends the requested `enabled` transition once. Saving an edit sends 
 scalars, then the child diff, then the enabled transition if it changed. There is no
 disable/apply/enable cycle: each child write reloads the running runtime, and a failed child write
 reloads the child lists and shows the server's error while the server has restored the previous
-row and configuration.
+row and configuration. The parent diff compares protojson-omitted zeros and empty scalars as their
+form defaults, so an unchanged parent is not sent. If a child write fails after a create, the page
+keeps the new parent and switches to edit mode so the user can finish it instead of leaving an
+unreachable orphan.
+
+`make ui-test` bundles `ui/test/payload.test.ts` with esbuild and runs the create/update payload
+tests (DNS integration on/off, canonical parent diff, clearing integration, and BGP defaults).
 
 ## HTTP client
 

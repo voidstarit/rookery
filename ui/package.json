@@ -6,7 +6,8 @@
   "scripts": {
     "build": "npm run typecheck && node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
-    "watch": "node scripts/build.mjs --watch"
+    "watch": "node scripts/build.mjs --watch",
+    "test:payload": "node scripts/test-payload.mjs"
   },
   "dependencies": {
     "@fontsource/jetbrains-mono": "^5.3.0",
