@@ -1,5 +1,29 @@
 # Scripts
 
+## `glance`
+
+Prints a source file's symbol map so an agent can read only the ranges it needs
+instead of the whole file. Each symbol carries the first sentence of its doc
+comment, so the map also summarizes what the code does.
+
+```bash
+./scripts/glance internal/api/nat44.go
+./scripts/glance ui/src/inventory/vnfs/VNFPage.tsx
+./scripts/glance --no-doc internal/store/store.go   # compact symbol map only
+```
+
+- Go: `gopls symbols` output (names, kinds, line ranges), sorted by line, with
+  the first sentence of the `//` doc comment directly above each symbol. It
+  retries with `/tmp` caches when the default gopls cache is read-only and falls
+  back to a `grep` outline when gopls is missing (the fallback has no docs).
+- TypeScript/Preact: top-level `type`/`interface`/`class`/`function`/`const`
+  declarations, one truncated line each, with the first sentence of the
+  `/** ... */` JSDoc block or the adjacent `//` comment.
+- Exit status is 0 on success, 1 for a missing or unsupported file, 2 for usage.
+
+This is a reading aid, not a compiler: the TypeScript outline is textual, so use
+the language service when symbol accuracy matters.
+
 ## `lvm-thin-snapshot-disk.sh`
 
 Creates a disk as a thin-LVM snapshot of a template/source LV, or removes one.

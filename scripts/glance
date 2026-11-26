@@ -1,0 +1,198 @@
+#!/usr/bin/env bash
+#
+# glance: print a source file's symbol map before reading the file.
+#
+# Each symbol carries the first sentence of its doc comment (Go doc or JSDoc),
+# so the outline doubles as a summary of what the code does. Go files use gopls
+# for exact symbol kinds and ranges; TypeScript and Preact files use a
+# top-level declaration outline, because TypeScript ships no standalone
+# symbol-query CLI. Use the result to pick the line ranges worth reading
+# instead of pulling the whole file into context.
+#
+# Usage: scripts/glance [--no-doc] FILE...
+# Exit:  0 success, 1 unreadable or unsupported input, 2 usage.
+
+set -euo pipefail
+
+usage() {
+  local fd=2
+  [ "${1:-}" = 0 ] && fd=1
+  printf 'usage: %s [--no-doc] FILE...\n' "${0##*/}" >&"$fd"
+  printf 'Print symbols, line ranges, and doc summaries for Go and TypeScript sources.\n' >&"$fd"
+  exit "${1:-2}"
+}
+
+with_doc=1
+files=()
+for arg in "$@"; do
+  case "$arg" in
+    --no-doc) with_doc=0 ;;
+    -h | --help) usage 0 ;;
+    -*) printf 'glance: unknown option: %s\n' "$arg" >&2; usage ;;
+    *) files+=("$arg") ;;
+  esac
+done
+[ "${#files[@]}" -gt 0 ] || usage
+
+gopls_symbols() {
+  local file=$1 out
+  if out=$(gopls symbols "$file" 2>&1); then
+    printf '%s\n' "$out"
+    return 0
+  fi
+  # Sandboxed checkouts often have a read-only gopls cache; retry elsewhere.
+  if out=$(XDG_CACHE_HOME=/tmp/rookery-gopls GOCACHE=/tmp/rookery-go-build \
+      gopls symbols "$file" 2>/dev/null); then
+    printf '%s\n' "$out"
+    return 0
+  fi
+  printf 'glance: gopls symbols failed for %s: %s\n' "$file" "$out" >&2
+  return 1
+}
+
+go_outline() {
+  local file=$1 out formatted
+  if command -v gopls >/dev/null 2>&1; then
+    if out=$(gopls_symbols "$file" 2>/dev/null); then
+      if [ -z "$out" ]; then
+        printf 'glance: no symbols in %s\n' "$file" >&2
+        return 0
+      fi
+      # Sort by line before attaching docs: the doc text would otherwise become
+      # the last field the formatter sorts on. Buffer the whole result so a
+      # downstream `head` cannot break the formatter stages with SIGPIPE.
+      formatted=$(printf '%s\n' "$out" \
+        | awk '{ split($NF, r, ":"); print r[1]"\t"$0 }' \
+        | sort -n -k1,1 \
+        | cut -f2- \
+        | awk -v src="$file" -v with_doc="$with_doc" '
+          function summarize(text,   p) {
+            gsub(/[[:space:]]+/, " ", text)
+            sub(/^ /, "", text)
+            if (text == "") return ""
+            p = index(text, ". ")
+            if (p > 0) text = substr(text, 1, p)
+            if (length(text) > 160) text = substr(text, 1, 157) "..."
+            return text
+          }
+          function doc_above(start,   i, line, text) {
+            text = ""
+            for (i = start - 1; i >= 1; i--) {
+              line = L[i]
+              if (line !~ /^[[:space:]]*\/\//) break
+              sub(/^[[:space:]]*\/\/[[:space:]]?/, "", line)
+              if (line ~ /^(go:build|go:generate|go:embed|line |\+build|nolint)/) continue
+              text = (text == "" ? line : line " " text)
+            }
+            return summarize(text)
+          }
+          BEGIN { while ((getline l < src) > 0) { n++; L[n] = l } }
+          {
+            start = $NF
+            sub(/:.*/, "", start)
+            if (with_doc == 1) {
+              doc = doc_above(start + 0)
+              if (doc != "") { printf "%s — %s\n", $0, doc; next }
+            }
+            print
+          }
+        ')
+      printf '%s\n' "$formatted"
+      return 0
+    fi
+    printf 'glance: gopls symbols failed, falling back to a text outline\n' >&2
+  else
+    printf 'glance: gopls unavailable, falling back to a text outline\n' >&2
+  fi
+  grep -nE '^(func|type|var|const) ' "$file" || true
+}
+
+ts_outline() {
+  local formatted
+  formatted=$(awk -v src="$1" -v with_doc="$with_doc" '
+    function summarize(text,   p) {
+      gsub(/[[:space:]]+/, " ", text)
+      sub(/^ /, "", text)
+      if (text == "") return ""
+      p = index(text, ". ")
+      if (p > 0) text = substr(text, 1, p)
+      if (length(text) > 160) text = substr(text, 1, 157) "..."
+      return text
+    }
+    function doc_above(start,   i, line, text) {
+      text = ""
+      i = start - 1
+      # Single-line JSDoc: /** Summary. */
+      if (i >= 1 && L[i] ~ /^[[:space:]]*\/\*\*/ && L[i] ~ /\*\//) {
+        line = L[i]
+        sub(/^[[:space:]]*\/\*\*[[:space:]]*/, "", line)
+        sub(/[[:space:]]*\*\/[[:space:]]*$/, "", line)
+        return summarize(line)
+      }
+      if (i >= 1 && L[i] ~ /^[[:space:]]*\*\/[[:space:]]*$/) {
+        i--
+        while (i >= 1) {
+          line = L[i]
+          if (line ~ /^[[:space:]]*\/\*\*/) {
+            sub(/^[[:space:]]*\/\*\*[[:space:]]*/, "", line)
+            sub(/[[:space:]]*\*\/[[:space:]]*$/, "", line)
+            if (line != "") text = (text == "" ? line : line " " text)
+            break
+          }
+          sub(/^[[:space:]]*\*[[:space:]]?/, "", line)
+          if (line ~ /^@[a-zA-Z]/) { i--; continue }
+          text = (text == "" ? line : line " " text)
+          i--
+        }
+      } else {
+        while (i >= 1) {
+          line = L[i]
+          if (line !~ /^[[:space:]]*\/\//) break
+          sub(/^[[:space:]]*\/\/[[:space:]]?/, "", line)
+          if (line ~ /^(eslint|prettier-|@ts-)/) { i--; continue }
+          text = (text == "" ? line : line " " text)
+          i--
+        }
+      }
+      return summarize(text)
+    }
+    BEGIN { while ((getline l < src) > 0) { n++; L[n] = l } }
+    /^(export[[:space:]]+)?(default[[:space:]]+)?(declare[[:space:]]+)?(async[[:space:]]+)?(function|class|interface|type|enum)[[:space:]]+[A-Za-z_$]/ { hit = 1 }
+    /^(export[[:space:]]+)?(const|let|var)[[:space:]]+[A-Za-z_$]/ { hit = 1 }
+    !hit { next }
+    {
+      line = $0
+      sub(/[[:space:]]*\{[[:space:]]*$/, "", line)
+      if (length(line) > 110) line = substr(line, 1, 107) "..."
+      doc = ""
+      if (with_doc == 1) doc = doc_above(NR)
+      if (doc != "") printf "%s:%s — %s\n", NR, line, doc
+      else printf "%s:%s\n", NR, line
+      hit = 0
+    }
+  ' "$1")
+  printf '%s\n' "$formatted"
+}
+
+status=0
+for file in "${files[@]}"; do
+  if [ ! -f "$file" ]; then
+    printf 'glance: no such file: %s\n' "$file" >&2
+    status=1
+    continue
+  fi
+
+  lines=$(awk 'END { print NR }' "$file")
+  printf '\n%s (%s lines)\n' "$file" "$lines"
+
+  case "$file" in
+    *.go) go_outline "$file" ;;
+    *.ts | *.tsx | *.js | *.jsx | *.mjs) ts_outline "$file" ;;
+    *)
+      printf 'glance: unsupported file type (use read): %s\n' "$file" >&2
+      status=1
+      ;;
+  esac
+done
+
+exit "$status"
