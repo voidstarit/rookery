@@ -212,7 +212,7 @@ SELECT f.id,
        COALESCE(NULLIF(json_extract(f.config, '$.lease_time'), ''), '12h'),
        COALESCE(json_extract(f.config, '$.dns'), ''),
        COALESCE(json_extract(f.config, '$.bind_ip'), ''),
-       CASE json_extract(f.config, '$.transport')
+       CASE trim(json_extract(f.config, '$.transport'))
            WHEN 'memif' THEN 'dedicated'
            WHEN 'shared' THEN 'shared'
            WHEN 'dedicated' THEN 'dedicated'
@@ -257,7 +257,7 @@ INSERT INTO bgp_vnfs
     (vnf_id, transport, local_as, router_id, peer_as, peer_ip, local_ip,
      peer_gateway, multihop_ttl, password, passive, target_table_id, next_hop)
 SELECT f.id,
-       COALESCE(NULLIF(json_extract(f.config, '$.transport'), ''), 'memif'),
+       COALESCE(NULLIF(trim(json_extract(f.config, '$.transport')), ''), 'memif'),
        COALESCE(json_extract(f.config, '$.local_as'), 0),
        COALESCE(json_extract(f.config, '$.router_id'), ''),
        COALESCE(json_extract(f.config, '$.peer_as'), 0),
@@ -275,8 +275,8 @@ WHERE f.type = 'bgp';
 -- Backfill child rows. json_each yields no rows when the array is absent.
 INSERT INTO dhcpv4_static_assignments (vnf_id, mac, ip)
 SELECT f.id,
-       json_extract(j.value, '$.mac'),
-       json_extract(j.value, '$.ip')
+       trim(json_extract(j.value, '$.mac')),
+       trim(json_extract(j.value, '$.ip'))
 FROM vnfs AS f,
      json_each(CASE WHEN json_valid(f.config) THEN f.config ELSE '{}' END, '$.static_assignments') AS j
 WHERE f.type = 'dhcpv4'
@@ -285,7 +285,7 @@ WHERE f.type = 'dhcpv4'
 INSERT INTO dhcpv4_options (vnf_id, code, format, value)
 SELECT f.id,
        CAST(json_extract(j.value, '$.code') AS INTEGER),
-       COALESCE(NULLIF(json_extract(j.value, '$.format'), ''), 'string'),
+       COALESCE(NULLIF(trim(json_extract(j.value, '$.format')), ''), 'string'),
        COALESCE(json_extract(j.value, '$.value'), '')
 FROM vnfs AS f,
      json_each(CASE WHEN json_valid(f.config) THEN f.config ELSE '{}' END, '$.dhcp_options') AS j
@@ -295,7 +295,7 @@ WHERE f.type = 'dhcpv4'
 INSERT INTO dhcpv6_options (vnf_id, code, format, value)
 SELECT f.id,
        CAST(json_extract(j.value, '$.code') AS INTEGER),
-       COALESCE(NULLIF(json_extract(j.value, '$.format'), ''), 'string'),
+       COALESCE(NULLIF(trim(json_extract(j.value, '$.format')), ''), 'string'),
        COALESCE(json_extract(j.value, '$.value'), '')
 FROM vnfs AS f,
      json_each(CASE WHEN json_valid(f.config) THEN f.config ELSE '{}' END, '$.dhcp_options') AS j
@@ -305,7 +305,7 @@ WHERE f.type = 'dhcpv6'
 INSERT INTO dns_records (vnf_id, name, type, value, ttl)
 SELECT f.id,
        json_extract(j.value, '$.name'),
-       upper(json_extract(j.value, '$.type')),
+       upper(trim(json_extract(j.value, '$.type'))),
        json_extract(j.value, '$.value'),
        CASE
            WHEN COALESCE(json_extract(j.value, '$.ttl'), 0) = 0 THEN 300
@@ -318,7 +318,7 @@ WHERE f.type = 'dns'
 
 INSERT INTO dns_forwarders (vnf_id, address, position)
 SELECT f.id,
-       j.value,
+       trim(j.value),
        CAST(j.key AS INTEGER)
 FROM vnfs AS f,
      json_each(CASE WHEN json_valid(f.config) THEN f.config ELSE '{}' END, '$.dns_forwarders') AS j
@@ -328,9 +328,9 @@ WHERE f.type = 'dns'
 
 INSERT INTO nat44_dnat_rules (vnf_id, protocol, external_port, local_ip, local_port)
 SELECT f.id,
-       lower(json_extract(j.value, '$.protocol')),
+       lower(trim(json_extract(j.value, '$.protocol'))),
        CAST(json_extract(j.value, '$.external_port') AS INTEGER),
-       json_extract(j.value, '$.local_ip'),
+       trim(json_extract(j.value, '$.local_ip')),
        CAST(json_extract(j.value, '$.local_port') AS INTEGER)
 FROM vnfs AS f,
      json_each(CASE WHEN json_valid(f.config) THEN f.config ELSE '{}' END, '$.dnat_rules') AS j
@@ -338,7 +338,7 @@ WHERE f.type = 'nat44'
   AND j.type = 'object';
 
 INSERT INTO bgp_advertised_prefixes (vnf_id, prefix)
-SELECT f.id, j.value
+SELECT f.id, trim(j.value)
 FROM vnfs AS f,
      json_each(CASE WHEN json_valid(f.config) THEN f.config ELSE '{}' END, '$.advertise_prefixes') AS j
 WHERE f.type = 'bgp'

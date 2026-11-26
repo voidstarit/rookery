@@ -417,3 +417,84 @@ func TestVNFPreflightRejectsPreReleaseStamp(t *testing.T) {
 		t.Fatalf("preflight error = %q, want a pre-release 0061 repair message", err)
 	}
 }
+
+// TestMigration0061TrimsEnumAndChildValues proves the backfill trims values the
+// preflight validates after trimming, so whitespace cannot abort a CHECK.
+func TestMigration0061TrimsEnumAndChildValues(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "vnf-trims.db")
+	db := openRawDB(t, dbPath)
+	migrateToVersion(t, db, 60)
+	insertLegacyNetwork(t, db, 1, "lab")
+	insertLegacyVNF(t, db, 1, 1, "lab-dns", VNFTypeDNS, `{
+		"dns_records": [{"name": "spaced.lab", "type": " a ", "value": "1.2.3.4", "ttl": 60}],
+		"dns_forwarders": [" 1.1.1.1 "]
+	}`)
+	insertLegacyVNF(t, db, 2, 1, "lab-dhcpv4", VNFTypeDHCPv4, `{
+		"gateway": "10.20.0.1/24", "range_start": "10.20.0.100", "range_end": "10.20.0.200",
+		"static_assignments": [{"mac": " 02:00:00:00:00:01 ", "ip": " 10.20.0.50 "}],
+		"dhcp_options": [{"code": 15, "format": " string ", "value": "lab.test"}]
+	}`)
+	insertLegacyVNF(t, db, 3, 1, "lab-nat44", VNFTypeNAT44, `{
+		"gateway": "10.30.0.1/24", "outside_interface": "eth0",
+		"dnat_rules": [{"protocol": " TCP ", "external_port": 80, "local_ip": " 10.30.0.10 ", "local_port": 8080}]
+	}`)
+	insertLegacyVNF(t, db, 4, 1, "lab-bgp", VNFTypeBGP, `{
+		"transport": "tap", "local_as": 65000, "router_id": "10.40.0.1", "peer_as": 65001,
+		"peer_ip": "10.40.0.2", "local_ip": "10.40.0.1/24",
+		"advertise_prefixes": [" 10.50.0.0/24 "]
+	}`)
+	closeRawDB(t, db)
+
+	st, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("open migrated database: %v", err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+
+	records, err := st.ListDNSVNFRecords(ctx, 1)
+	if err != nil || len(records) != 1 || records[0].Type != "A" {
+		t.Fatalf("trimmed DNS records = %+v, err = %v", records, err)
+	}
+	forwarders, err := st.ListDNSVNFForwarders(ctx, 1)
+	if err != nil || len(forwarders) != 1 || forwarders[0].Address != "1.1.1.1" {
+		t.Fatalf("trimmed forwarders = %+v, err = %v", forwarders, err)
+	}
+	assignments, err := st.ListDHCPStaticAssignments(ctx, 2)
+	if err != nil || len(assignments) != 1 ||
+		assignments[0].MAC != "02:00:00:00:00:01" || assignments[0].IP != "10.20.0.50" {
+		t.Fatalf("trimmed assignments = %+v, err = %v", assignments, err)
+	}
+	options, err := st.ListDHCPOptions(ctx, 2)
+	if err != nil || len(options) != 1 || options[0].Format != "string" {
+		t.Fatalf("trimmed options = %+v, err = %v", options, err)
+	}
+	rules, err := st.ListNAT44DNATRules(ctx, 3)
+	if err != nil || len(rules) != 1 || rules[0].Protocol != "tcp" || rules[0].LocalIP != "10.30.0.10" {
+		t.Fatalf("trimmed DNAT rules = %+v, err = %v", rules, err)
+	}
+	prefixes, err := st.ListBGPVNFAdvertisedPrefixes(ctx, 4)
+	if err != nil || len(prefixes) != 1 || prefixes[0].Prefix != "10.50.0.0/24" {
+		t.Fatalf("trimmed prefixes = %+v, err = %v", prefixes, err)
+	}
+}
+
+// TestVNFPreflightRejectsIncompleteTypedSchema proves a database stamped with
+// version 61 but missing part of the typed schema is refused with a repair
+// message instead of starting with a partial schema.
+func TestVNFPreflightRejectsIncompleteTypedSchema(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "vnf-partial-61.db")
+	db := openRawDB(t, dbPath)
+	migrateToVersion(t, db, 61)
+	execSQL(t, db, `DROP TABLE dhcpv4_static_assignments`)
+	closeRawDB(t, db)
+
+	st, err := Open(dbPath)
+	if err == nil {
+		st.Close()
+		t.Fatal("Open succeeded with a partial typed schema")
+	}
+	if !strings.Contains(err.Error(), "missing tables") || !strings.Contains(err.Error(), "dhcpv4_static_assignments") {
+		t.Fatalf("preflight error = %q, want the missing table named", err)
+	}
+}

@@ -95,11 +95,14 @@ func preflightVNFMigration(ctx context.Context, db *sql.DB) error {
 	hasTypedTables := schemaTableExists(ctx, db, "dhcpv4_vnfs")
 
 	if version >= vnfMigrationVersion {
-		if hasConfig && !hasTypedTables {
-			return fmt.Errorf("database reports schema version %d but still has vnfs.config and no typed VNF tables; "+
-				"it carries a pre-release 0061 stamp. Restore the pre-upgrade backup before starting this build", version)
+		missing := missingTypedVNFTables(ctx, db)
+		if !hasConfig && hasTypedTables && len(missing) == 0 {
+			return nil
 		}
-		return nil
+		return fmt.Errorf("database reports schema version %d but does not have the typed VNF schema "+
+			"(vnfs.config present: %t, missing tables: %s); it carries a pre-release 0061 stamp or an "+
+			"incomplete schema. Restore the pre-upgrade backup before starting this build",
+			version, hasConfig, strings.Join(missing, ", "))
 	}
 	if !hasConfig {
 		return fmt.Errorf("database schema version %d has no vnfs.config column; "+
@@ -498,6 +501,26 @@ func validateLegacyAdvertisedPrefixes(row legacyVNFRow) []string {
 		}
 	}
 	return problems
+}
+
+// typedVNFTables are the parent and child tables migration 0061 creates. A
+// database stamped 61 must have all of them; a pre-release 0061 could have been
+// stamped without creating any.
+var typedVNFTables = []string{
+	"dhcpv4_vnfs", "dhcpv6_vnfs", "dns_vnfs", "nat44_vnfs", "bgp_vnfs",
+	"dhcpv4_static_assignments", "dhcpv4_options", "dhcpv6_options",
+	"dns_records", "dns_forwarders", "nat44_dnat_rules", "bgp_advertised_prefixes",
+}
+
+// missingTypedVNFTables returns the typed VNF tables the database lacks.
+func missingTypedVNFTables(ctx context.Context, db *sql.DB) []string {
+	missing := make([]string, 0)
+	for _, table := range typedVNFTables {
+		if !schemaTableExists(ctx, db, table) {
+			missing = append(missing, table)
+		}
+	}
+	return missing
 }
 
 // schemaTableExists reports whether a table exists in the database.
