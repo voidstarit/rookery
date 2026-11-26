@@ -34,6 +34,7 @@ import {
   tagDNSVNF,
   tagNAT44VNF,
   vnfAPISlug,
+  vnfTypeLabel,
 } from "./format";
 
 type VNFPageProps = {
@@ -41,6 +42,8 @@ type VNFPageProps = {
   networks: Network[];
   vppReady: boolean;
   initialNetworkID?: number;
+  /** initialType preselects and locks the type when the page is opened from a per-type add button. */
+  initialType?: VNFType;
   onClose: () => void;
   onSaved: (vnf: VNF) => void;
 };
@@ -111,9 +114,10 @@ function defaultForm(
   vnf: VNF | null,
   networks: Network[],
   vppReady: boolean,
-  initialNetworkID?: number
+  initialNetworkID?: number,
+  initialType?: VNFType
 ): FormState {
-  const type = vnf?.type ?? "dhcpv4";
+  const type = vnf?.type ?? initialType ?? "dhcpv4";
   const networkID = vnf?.network_id ?? initialNetworkID ?? networks[0]?.id ?? 0;
   const network = networks.find((item) => item.id === networkID);
   const family = type === "dhcpv6" ? "dhcpv6" : "dhcpv4";
@@ -289,8 +293,13 @@ const prefixSignature = (row: BGPPrefix) => row.prefix.trim().toLowerCase();
  * in delete-then-update-then-create order. A failing child write reloads the child lists because the
  * server has already restored the previous row and runtime.
  */
-export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, onSaved }: VNFPageProps) {
-  const [form, setForm] = useState<FormState>(() => defaultForm(vnf, networks, vppReady, initialNetworkID));
+export function VNFPage({ vnf, networks, vppReady, initialNetworkID, initialType, onClose, onSaved }: VNFPageProps) {
+  const [form, setForm] = useState<FormState>(() =>
+    defaultForm(vnf, networks, vppReady, initialNetworkID, initialType)
+  );
+  // A per-type add button fixes the type for the new VNF; editing always fixes
+  // the stored type, and the generic add page keeps the selector.
+  const fixedType = Boolean(initialType) && !vnf;
   const [createdVNF, setCreatedVNF] = useState<VNF | null>(null);
   const [staticAssignments, setStaticAssignments] = useState<DHCPStaticAssignment[]>([]);
   const [dhcpOptions, setDHCPOptions] = useState<DHCPOption[]>([]);
@@ -830,7 +839,13 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
               ← VNFs
             </button>
             <p class="eyebrow">Network function</p>
-            <h2 id="vnf-dialog-title">{editing ? `Edit ${vnf?.name ?? "VNF"}` : "Add VNF"}</h2>
+            <h2 id="vnf-dialog-title">
+              {editing
+                ? `Edit ${vnf?.name ?? "VNF"}`
+                : fixedType
+                  ? `Add ${vnfTypeLabel(form.type)} VNF`
+                  : "Add VNF"}
+            </h2>
           </div>
         </header>
 
@@ -870,18 +885,22 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, onClose, on
 
           <label class="field">
             <span class="field-label">Type</span>
-            <select
-              required
-              disabled={editing || saving}
-              value={form.type}
-              onChange={(event) => changeType(event.currentTarget.value as VNFType)}
-            >
-              <option value="dhcpv4">DHCPv4</option>
-              <option value="dhcpv6">DHCPv6</option>
-              <option value="dns">DNS</option>
-              <option value="nat44">NAT44</option>
-              <option value="bgp">BGP</option>
-            </select>
+            {fixedType ? (
+              <span class="mono">{vnfTypeLabel(form.type)}</span>
+            ) : (
+              <select
+                required
+                disabled={editing || saving}
+                value={form.type}
+                onChange={(event) => changeType(event.currentTarget.value as VNFType)}
+              >
+                <option value="dhcpv4">DHCPv4</option>
+                <option value="dhcpv6">DHCPv6</option>
+                <option value="dns">DNS</option>
+                <option value="nat44">NAT44</option>
+                <option value="bgp">BGP</option>
+              </select>
+            )}
             <span class="field-hint">{typeHint(form.type)}</span>
           </label>
         </div>

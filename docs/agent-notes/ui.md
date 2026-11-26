@@ -32,7 +32,10 @@ The **VNFs** tab fetches `/api/dhcp-vnfs`, `/api/dns-vnfs`, `/api/nat44-vnfs`, a
 name, and renders one table with one `rookery:vnfs-changed` event. A failing type keeps the
 previous rows for that type and shows a partial-list banner instead of blanking the tab. The event
 payload is the merged `VNF[]` list; `rookery:vnfs-data` accepts a pushed `VNF[]`, and
-`rookery:add-vnf` carries `{ networkId }` to open the create page for a network.
+`rookery:add-vnf` carries `{ networkId, type? }` to open the create page, scoped to a network
+and/or a type. The tab's header and empty state render one **Add** button per type
+(`dhcpv4`, `dhcpv6`, `dns`, `nat44`, `bgp`); each opens `/vnfs/new?type=<type>`, which preselects
+and locks the type. A generic `/vnfs/new` (no `type`) still shows the type selector.
 `NetworksTab.tsx` consumes the same merged list and re-fetches the four endpoints.
 
 Deep links stay `/vnfs/{id}/edit`, `/vnfs/{id}/leases`, `/vnfs/{id}/sessions`,

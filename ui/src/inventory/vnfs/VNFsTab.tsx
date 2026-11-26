@@ -14,6 +14,7 @@ import type {
   Network,
   StatusResponse,
   VNF,
+  VNFType,
 } from "../types";
 import {
   formatDate,
@@ -37,7 +38,22 @@ import { navigate, useRoute } from "../router";
 type DialogState = {
   vnf: VNF | null;
   networkID?: number;
+  type?: VNFType;
 };
+
+/** ADD_TYPES is the order of the per-type Add VNF buttons. */
+const ADD_TYPES: VNFType[] = ["dhcpv4", "dhcpv6", "dns", "nat44", "bgp"];
+
+/** isVNFType narrows an untrusted route/event value to a VNF type. */
+function isVNFType(value: string | null | undefined): value is VNFType {
+  return (
+    value === "dhcpv4" ||
+    value === "dhcpv6" ||
+    value === "dns" ||
+    value === "nat44" ||
+    value === "bgp"
+  );
+}
 
 /**
  * VNFsTab renders the merged VNF inventory table with status, per-type counts, and row actions for
@@ -74,11 +90,13 @@ export function VNFsTab() {
     const action = route.segments[1];
     if (action === "new") {
       const networkID = Number(route.query.get("network")) || undefined;
+      const requestedType = route.query.get("type");
+      const type = isVNFType(requestedType) ? requestedType : undefined;
       setLeasesVNF(null);
       setSessionsVNF(null);
       setBGPVNF(null);
       setDNSVNF(null);
-      setDialog({ vnf: null, networkID });
+      setDialog({ vnf: null, networkID, type });
       return;
     }
     if (action && action !== "new") {
@@ -201,8 +219,17 @@ export function VNFsTab() {
       }
     };
     const onAddVNF = (event: Event) => {
-      const networkID = (event as CustomEvent<{ networkId?: number }>).detail?.networkId;
-      navigate(networkID ? `/vnfs/new?network=${networkID}` : "/vnfs/new");
+      const detail = (event as CustomEvent<{ networkId?: number; type?: string }>).detail;
+      const networkID = detail?.networkId;
+      const params = new URLSearchParams();
+      if (isVNFType(detail?.type)) {
+        params.set("type", detail.type);
+      }
+      if (networkID) {
+        params.set("network", String(networkID));
+      }
+      const query = params.toString();
+      navigate(query ? `/vnfs/new?${query}` : "/vnfs/new");
     };
     const onRefreshNetworks = () => {
       void loadNetworks();
@@ -245,6 +272,15 @@ export function VNFsTab() {
 
   const refreshNetworksInLegacy = () => {
     window.dispatchEvent(new CustomEvent("rookery:refresh-networks"));
+  };
+
+  /** openAdd opens the typed add page, optionally scoped to a network. */
+  const openAdd = (type: VNFType, networkID?: number) => {
+    const params = new URLSearchParams({ type });
+    if (networkID) {
+      params.set("network", String(networkID));
+    }
+    navigate(`/vnfs/new?${params.toString()}`);
   };
 
   const handleSaved = (saved: VNF) => {
@@ -304,11 +340,16 @@ export function VNFsTab() {
   if (dialog) {
     return (
       <VNFPage
-        key={dialog.vnf ? `edit-${dialog.vnf.id}` : `new-${dialog.networkID ?? "default"}`}
+        key={
+          dialog.vnf
+            ? `edit-${dialog.vnf.id}`
+            : `new-${dialog.type ?? "any"}-${dialog.networkID ?? "default"}`
+        }
         vnf={dialog.vnf}
         networks={networks}
         vppReady={vppReady}
         initialNetworkID={dialog.networkID}
+        initialType={dialog.type}
         onClose={() => {
           setDialog(null);
           navigate("/vnfs", true);
@@ -335,22 +376,30 @@ export function VNFsTab() {
             <h2 id="vnfs-heading">Network functions</h2>
             <p class="panel-subtitle">{summary}</p>
           </div>
-          <div class="actions">
+          <div class="actions vnf-add-actions">
             <button class="button ghost" type="button" onClick={() => void refreshAll()}>
               Refresh
             </button>
-            <button
-              class="button primary"
-              type="button"
-              disabled={networks.length === 0}
-              title={networks.length === 0 ? "Create a Network first" : ""}
-              onClick={() => navigate("/vnfs/new")}
-            >
-              <span class="button-plus" aria-hidden="true">
-                +
-              </span>
-              Add VNF
-            </button>
+            {ADD_TYPES.map((type) => (
+              <button
+                class="button primary"
+                type="button"
+                key={type}
+                disabled={networks.length === 0}
+                aria-label={`Add a ${vnfTypeLabel(type)} VNF`}
+                title={
+                  networks.length === 0
+                    ? "Create a Network first"
+                    : `Add a ${vnfTypeLabel(type)} VNF`
+                }
+                onClick={() => openAdd(type)}
+              >
+                <span class="button-plus" aria-hidden="true">
+                  +
+                </span>
+                {vnfTypeLabel(type)}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -475,14 +524,19 @@ export function VNFsTab() {
               </div>
               <h3>No network functions yet</h3>
               <p>Add a DHCP, DNS, NAT44, or BGP function and attach it to a Network.</p>
-              <button
-                class="button primary"
-                type="button"
-                disabled={networks.length === 0}
-                onClick={() => navigate("/vnfs/new")}
-              >
-                Add a VNF
-              </button>
+              <div class="actions vnf-add-actions">
+                {ADD_TYPES.map((type) => (
+                  <button
+                    class="button primary"
+                    type="button"
+                    key={type}
+                    disabled={networks.length === 0}
+                    onClick={() => openAdd(type)}
+                  >
+                    Add {vnfTypeLabel(type)}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
