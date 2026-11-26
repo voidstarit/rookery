@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { VNF } from "../src/inventory/types";
+import type { DHCPVNF, VNF } from "../src/inventory/types";
+import { defaultDHCPVNFForm } from "../src/inventory/vnfs/DHCPVNFForm.tsx";
 import {
   createPayload,
   updatePayload,
@@ -133,4 +134,20 @@ test("BGP false and empty scalars omitted by protojson do not trigger a restart"
     multihop_ttl: 64,
   } as unknown as VNF;
   assert.deepEqual(updatePayload(form, stored), {});
+});
+
+test("editing a DHCP VNF with an omitted dns scalar keeps it empty", () => {
+  const stored = {
+    id: 7,
+    name: "lab",
+    type: "dhcpv4",
+    enabled: true,
+    gateway: "10.20.0.1/24",
+    range_start: "10.20.0.100",
+    range_end: "10.20.0.200",
+  } as unknown as DHCPVNF;
+  const form = defaultDHCPVNFForm(stored, undefined, "dhcpv4");
+  assert.equal(form.dns, "");
+  const payload = updatePayload({ ...baseForm(), name: stored.name, dhcp: { ...baseForm().dhcp, dns: form.dns } }, stored);
+  assert.equal(payload.dns, undefined);
 });

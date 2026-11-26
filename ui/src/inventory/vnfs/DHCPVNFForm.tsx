@@ -59,7 +59,9 @@ export function defaultDHCPVNFForm(
     rangeStart: vnf?.range_start ?? (family === "dhcpv6" ? "fd00:20::100" : "10.20.0.100"),
     rangeEnd: vnf?.range_end ?? (family === "dhcpv6" ? "fd00:20::200" : "10.20.0.200"),
     leaseTime: vnf?.lease_time ?? "12h",
-    dns: vnf?.dns ?? (family === "dhcpv6" ? "2001:4860:4860::8888" : "1.1.1.1"),
+    // Protojson omits an empty dns scalar; keep it empty when editing so an
+    // unchanged parent is not sent (and the runtime is not restarted).
+    dns: vnf ? (vnf.dns ?? "") : family === "dhcpv6" ? "2001:4860:4860::8888" : "1.1.1.1",
     bindIP: vnf?.bind_ip ?? "",
     transport: normalizeDHCPTransport(vnf?.transport, family),
     dnsVNFID: vnf?.dns_vnf_id ?? 0,
