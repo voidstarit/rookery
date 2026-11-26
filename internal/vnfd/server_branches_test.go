@@ -456,9 +456,16 @@ func TestRemoveBranches(t *testing.T) {
 	if _, err := server.RemoveDHCP(ctx, &rookeryv1.RemoveDHCPRequest{}); status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("remove without an id = %v", err)
 	}
+	if _, err := server.EnsureDHCP(ctx, &rookeryv1.EnsureDHCPRequest{Spec: dhcpSpec(1, "dhcpv4", "tap")}); err != nil {
+		t.Fatal(err)
+	}
 	manager.removeErr = errors.New("cannot stop")
 	if _, err := server.RemoveDHCP(ctx, &rookeryv1.RemoveDHCPRequest{Id: 1}); status.Code(err) != codes.Internal {
 		t.Fatalf("remove after a stop failure = %v", err)
+	}
+	manager.removeErr = nil
+	if _, err := server.RemoveDNS(ctx, &rookeryv1.RemoveDNSRequest{Id: 1}); status.Code(err) != codes.NotFound {
+		t.Fatalf("remove of a DHCP runtime through the DNS service = %v", err)
 	}
 	if _, err := server.RemoveDHCPLeases(ctx, &rookeryv1.RemoveDHCPLeasesRequest{}); status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("lease removal without an id = %v", err)

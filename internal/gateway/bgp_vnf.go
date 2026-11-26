@@ -131,7 +131,8 @@ func (s *vnfService) GetBGPVNFStatus(ctx context.Context, request *rookeryv1.Get
 	}
 	snapshot, err := s.statusProvider.VNFBGP(ctx, identityStatusRecord(vnf.ID, vnf.Name, vnf.NetworkID, store.VNFTypeBGP, vnf.Enabled))
 	if err != nil {
-		return nil, status.Error(codes.Internal, "could not read BGP status: "+err.Error())
+		s.logger.Error().Err(err).Int64("vnf_id", vnf.ID).Msg("could not read BGP status")
+		return nil, status.Error(codes.Internal, "could not read BGP status")
 	}
 	result.Running = snapshot.Running
 	result.Established = snapshot.Established

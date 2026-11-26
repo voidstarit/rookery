@@ -21,6 +21,7 @@ type fakeBackend struct {
 	reloadFailures int
 	reloadErr      error
 	natRules       int
+	notRunning     map[int64]bool
 
 	// Settable failures let the lifecycle tests exercise every error branch.
 	readyErr             error
@@ -137,6 +138,10 @@ func (f *fakeBackend) StopVNF(context.Context, store.VNF, bool) error {
 	}
 	f.stopped++
 	return nil
+}
+
+func (f *fakeBackend) Running(_ context.Context, vnf store.VNF) bool {
+	return !f.notRunning[vnf.ID]
 }
 
 func (f *fakeBackend) ReloadVNF(context.Context, store.VNF) error {

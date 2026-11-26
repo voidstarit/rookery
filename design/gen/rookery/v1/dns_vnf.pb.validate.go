@@ -2101,10 +2101,10 @@ func (m *CreateDNSVNFRecordRequest) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
-	if _, ok := _CreateDNSVNFRecordRequest_Type_InLookup[m.GetType()]; !ok {
+	if l := utf8.RuneCountInString(m.GetType()); l < 1 || l > 16 {
 		err := CreateDNSVNFRecordRequestValidationError{
 			field:  "Type",
-			reason: "value must be in list [A AAAA CNAME TXT PTR]",
+			reason: "value length must be between 1 and 16 runes, inclusive",
 		}
 		if !all {
 			return err
@@ -2214,14 +2214,6 @@ var _ interface {
 	ErrorName() string
 } = CreateDNSVNFRecordRequestValidationError{}
 
-var _CreateDNSVNFRecordRequest_Type_InLookup = map[string]struct{}{
-	"A":     {},
-	"AAAA":  {},
-	"CNAME": {},
-	"TXT":   {},
-	"PTR":   {},
-}
-
 // Validate checks the field values on UpdateDNSVNFRecordRequest with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
@@ -2277,10 +2269,10 @@ func (m *UpdateDNSVNFRecordRequest) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
-	if _, ok := _UpdateDNSVNFRecordRequest_Type_InLookup[m.GetType()]; !ok {
+	if l := utf8.RuneCountInString(m.GetType()); l < 1 || l > 16 {
 		err := UpdateDNSVNFRecordRequestValidationError{
 			field:  "Type",
-			reason: "value must be in list [A AAAA CNAME TXT PTR]",
+			reason: "value length must be between 1 and 16 runes, inclusive",
 		}
 		if !all {
 			return err
@@ -2389,14 +2381,6 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = UpdateDNSVNFRecordRequestValidationError{}
-
-var _UpdateDNSVNFRecordRequest_Type_InLookup = map[string]struct{}{
-	"A":     {},
-	"AAAA":  {},
-	"CNAME": {},
-	"TXT":   {},
-	"PTR":   {},
-}
 
 // Validate checks the field values on DeleteDNSVNFRecordRequest with the rules
 // defined in the proto definition for this message. If any rules are

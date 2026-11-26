@@ -229,7 +229,7 @@ message GetDNSVNFRecordRequest {
 message CreateDNSVNFRecordRequest {
   int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
   string name = 2 [(validate.rules).string = {min_len: 1, max_len: 255}];
-  string type = 3 [(validate.rules).string = {in: ["A", "AAAA", "CNAME", "TXT", "PTR"]}];
+  string type = 3 [(validate.rules).string = {min_len: 1, max_len: 16}];
   string value = 4 [(validate.rules).string = {min_len: 1, max_len: 512}];
   uint32 ttl = 5 [(validate.rules).uint32 = {lte: 86400}];
 }
@@ -238,7 +238,7 @@ message UpdateDNSVNFRecordRequest {
   int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
   int64 record_id = 2 [(validate.rules).int64 = {gt: 0}];
   string name = 3 [(validate.rules).string = {min_len: 1, max_len: 255}];
-  string type = 4 [(validate.rules).string = {in: ["A", "AAAA", "CNAME", "TXT", "PTR"]}];
+  string type = 4 [(validate.rules).string = {min_len: 1, max_len: 16}];
   string value = 5 [(validate.rules).string = {min_len: 1, max_len: 512}];
   uint32 ttl = 6 [(validate.rules).uint32 = {lte: 86400}];
 }

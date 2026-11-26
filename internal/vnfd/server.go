@@ -509,7 +509,11 @@ func (s *Server) reload(ctx context.Context, id int64, kind string, prepare func
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	if !s.manager.Running(id) {
-		s.logger.Trace().Int64("vnf_id", id).Msg("VNF runtime is not running; skipping reload")
+		// Persist the new spec even though the runtime is stopped, so supervision
+		// or a manual restart starts the configuration the API just committed
+		// instead of the previous one.
+		s.storeDesired(id, kind, spec)
+		s.logger.Trace().Int64("vnf_id", id).Msg("VNF runtime is not running; persisted the new desired spec")
 		return s.state(id), nil
 	}
 	if err := s.manager.Reload(ctx, vnf); err != nil {
@@ -517,6 +521,15 @@ func (s *Server) reload(ctx context.Context, id int64, kind string, prepare func
 		s.setDetail(id, err.Error())
 		return nil, status.Error(codes.Internal, "could not reload VNF: "+err.Error())
 	}
+	s.storeDesired(id, kind, spec)
+	s.logger.Trace().Int64("vnf_id", id).Msg("VNF runtime reloaded")
+	return s.state(id), nil
+}
+
+// storeDesired persists a prepared desired spec and publishes it in memory. A
+// persistence failure is logged and does not fail the runtime operation; the
+// in-memory spec still lets the supervisor restart the new configuration.
+func (s *Server) storeDesired(id int64, kind string, spec *rookeryv1.DesiredRuntime) {
 	if err := s.persist(spec); err != nil {
 		s.logger.Warn().Int64("vnf_id", id).Err(err).Msg("could not persist desired runtime")
 	}
@@ -524,33 +537,38 @@ func (s *Server) reload(ctx context.Context, id int64, kind string, prepare func
 	s.desired[id] = &desiredRuntime{kind: kind, hash: specHash(desiredMessage(spec)), spec: spec}
 	s.details[id] = ""
 	s.mu.Unlock()
-	s.logger.Trace().Int64("vnf_id", id).Msg("VNF runtime reloaded")
-	return s.state(id), nil
 }
 
 // RemoveDHCP stops a DHCP runtime and forgets its desired spec.
 func (s *Server) RemoveDHCP(ctx context.Context, request *rookeryv1.RemoveDHCPRequest) (*emptypb.Empty, error) {
-	return s.remove(ctx, request.GetId(), request.GetRemoveLeases())
+	return s.remove(ctx, request.GetId(), runtimeDHCP, request.GetRemoveLeases())
 }
 
 // RemoveDNS stops a DNS runtime and forgets its desired spec.
 func (s *Server) RemoveDNS(ctx context.Context, request *rookeryv1.RemoveDNSRequest) (*emptypb.Empty, error) {
-	return s.remove(ctx, request.GetId(), false)
+	return s.remove(ctx, request.GetId(), runtimeDNS, false)
 }
 
 // RemoveBGP stops a BGP runtime and forgets its desired spec.
 func (s *Server) RemoveBGP(ctx context.Context, request *rookeryv1.RemoveBGPRequest) (*emptypb.Empty, error) {
-	return s.remove(ctx, request.GetId(), false)
+	return s.remove(ctx, request.GetId(), runtimeBGP, false)
 }
 
-// remove stops a runtime and forgets its desired spec.
-func (s *Server) remove(ctx context.Context, id int64, removeLeases bool) (*emptypb.Empty, error) {
+// remove stops a runtime and forgets its desired spec. The stored runtime kind
+// must match the service that received the call.
+func (s *Server) remove(ctx context.Context, id int64, kind string, removeLeases bool) (*emptypb.Empty, error) {
 	if id <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "vnf id is required")
 	}
 	s.logger.Trace().Int64("vnf_id", id).Bool("remove_leases", removeLeases).Msg("remove VNF runtime requested")
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
+	s.mu.Lock()
+	desired := s.desired[id]
+	s.mu.Unlock()
+	if desired == nil || desired.kind != kind {
+		return nil, status.Error(codes.NotFound, "vnf is not managed by this daemon service")
+	}
 	if err := s.manager.Stop(ctx, id, removeLeases); err != nil {
 		s.setDetail(id, err.Error())
 		return nil, status.Error(codes.Internal, "could not stop VNF: "+err.Error())

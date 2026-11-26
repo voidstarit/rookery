@@ -103,22 +103,28 @@ DHCP swaps its handler, DNS swaps the record/forwarder handler behind its listen
 withdraws and re-advertises the path set on the running GoBGP server. A NAT44 DNAT write does not
 use the daemon; it replaces the VNF's VPP static mappings while NAT44 and the BVI stay up. A
 child write on a disabled parent only stores the row; the next enable loads every child row and
-starts once.
+starts once. A child write on an enabled parent whose runtime is stopped or unreachable also only
+stores the row and keeps the VNF `degraded`; the daemon still persists the prepared desired spec
+when it is reachable, so supervision or a manual restart starts the new configuration.
 
 A parent create with `enabled=true` starts after the insert (a failed start removes the new
 record). Any parent `PUT` stops and starts the enabled runtime, including a name-only or scalar
 change, a transport/tap/memif change, and an `enabled` transition; `POST /{id}/restart` is the
-manual stop/start and does not drop leases. The global `resourceMu` serializes parent and child
-writes with network and disk provisioning; a reload is shorter than a restart but still holds
-the lock.
+manual stop/start and does not drop leases. If the store write for a parent update fails after
+the old runtime was stopped (for example a duplicate name), the lifecycle re-activates the previous
+record and reports the original status; the row is never left `enabled=true` with a stopped
+runtime. The global `resourceMu` serializes parent and child writes with network and disk
+provisioning; a reload is shorter than a restart but still holds the lock.
 
 Reload failure handling: the daemon applies the manager change before replacing the desired spec,
 so a failed reload keeps the previous spec. The lifecycle restores the previous child row,
 reloads the previous configuration, and returns `500`. If that restore reload also fails, it sets
-the parent `enabled=false` and returns both errors. A reload on a runtime that is not running
-returns `running=false` without starting it, and the VNF stays degraded. Delete order stays:
+the parent `enabled=false` and returns a `500` message naming the reload, restore, and disable
+failures (also logged). A reload on a runtime that is not running returns `running=false` without
+starting it, persists the new desired spec, and leaves the VNF degraded. Delete order stays:
 stop the runtime, delete the identity row (cascade typed rows), then clean up the NAT44 BVI where
-applicable. Deleting a DNS VNF is rejected with `409` while a DHCP VNF references it.
+applicable. Each `Remove{DHCP,DNS,BGP}` first verifies that the stored desired runtime is of the
+service's type; a mismatched ID returns `NotFound`. Deleting a DNS VNF is rejected with `409` while a DHCP VNF references it.
 
 ## Transports and shared stack
 

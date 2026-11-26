@@ -128,6 +128,12 @@ func (s *Server) DeleteNetworkPipe(ctx context.Context, instance, parentSwIfInde
 	return s.networks.DeletePipe(ctx, instance, parentSwIfIndex)
 }
 
+// Running reports whether a VNF runtime is currently up, using the tracked
+// NAT44 flag for NAT44 and the daemon state for other types.
+func (s *Server) Running(ctx context.Context, vnf store.VNF) bool {
+	return s.vnfRunning(ctx, vnf)
+}
+
 // ReloadVNF swaps a running DHCP, DNS, or BGP runtime's configuration in place
 // through the daemon. NAT44 has no daemon runtime and is applied by the API.
 func (s *Server) ReloadVNF(ctx context.Context, vnf store.VNF) error {

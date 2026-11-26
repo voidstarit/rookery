@@ -518,3 +518,43 @@ func TestNAT44Reconcile(t *testing.T) {
 		t.Fatalf("NAT44 status = %+v", got)
 	}
 }
+
+// TestNAT44ActivationWithDegradedDHCPVNF proves NAT44 activation does not fail
+// when a DHCPv4 VNF on the network is enabled but its runtime is not running.
+// The new bindings are persisted and the next DHCP start uses them.
+func TestNAT44ActivationWithDegradedDHCPVNF(t *testing.T) {
+	env := newTestAPI(t)
+	handler := env.handler
+	network := createNetworkAPI(t, handler, "nat-lab")
+	dhcp := createDHCPVNFAPI(t, handler, "dhcpv4", network.ID, store.VNFTypeDHCPv4, true)
+	if err := env.store.SetDHCPVNFNetworkBindings(context.Background(), dhcp.ID, "10.20.0.254/24", "10.20.0.253/24"); err != nil {
+		t.Fatalf("seed pre-NAT bindings: %v", err)
+	}
+	// Enabled but stopped: Running returns false, so activation must persist
+	// the derived bindings without attempting a reload.
+	delete(env.vnfs.running, dhcp.ID)
+	reloadedBefore := len(env.vnfs.reloaded)
+
+	recorder := do(t, handler, http.MethodPost, "/api/nat44-vnfs", map[string]any{
+		"name":              "nat44",
+		"network_id":        network.ID,
+		"enabled":           true,
+		"gateway":           "10.20.0.1/24",
+		"outside_interface": "enp9s0",
+		"outside_address":   "198.51.100.10/24",
+		"outside_gateway":   "198.51.100.1",
+	})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create NAT44 with a degraded DHCP VNF = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if len(env.vnfs.reloaded) != reloadedBefore {
+		t.Fatalf("degraded DHCP runtime was reloaded: %v", env.vnfs.reloaded)
+	}
+	saved, err := env.store.GetDHCPVNF(context.Background(), dhcp.ID)
+	if err != nil {
+		t.Fatalf("get DHCP VNF: %v", err)
+	}
+	if saved.Config.Gateway != "10.20.0.1/24" || saved.Config.BindIP != "10.20.0.2/24" {
+		t.Fatalf("derived bindings not persisted: %+v", saved.Config)
+	}
+}

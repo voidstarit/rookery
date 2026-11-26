@@ -4,20 +4,39 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+
+	"github.com/rs/zerolog/log"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
 // reloadAfterChildWrite reloads an enabled parent's runtime after a child
-// row write. On failure it runs rollback, reloads the restored configuration,
-// and disables the parent when the restore itself fails.
+// row write. A stopped or unreachable runtime keeps the row and leaves the VNF
+// degraded; the daemon's desired spec is updated best-effort so a later start
+// uses the new configuration. On a reload failure it runs rollback, reloads the
+// restored configuration, and disables the parent when the restore fails.
 func (s *Service) reloadAfterChildWrite(ctx context.Context, vnfID int64, rollback func() error) error {
 	vnf, err := s.store.GetVNF(ctx, vnfID)
 	if err != nil {
 		return storeError(err)
 	}
 	if !vnf.Enabled {
+		return nil
+	}
+	if !s.backend.Running(ctx, vnf) {
+		// The daemon persists the prepared spec even for a stopped runtime, so
+		// supervision and a manual restart pick up the child row. If the daemon
+		// is unreachable, the row still stays committed and the VNF stays
+		// degraded until it reconnects.
+		if reloadErr := s.backend.ReloadVNF(ctx, vnf); reloadErr != nil {
+			log.Debug().
+				Int64("vnf_id", vnf.ID).
+				Str("type", vnf.Type).
+				Err(reloadErr).
+				Msg("VNF runtime is not running; kept the child row for the next start")
+		}
 		return nil
 	}
 	if err := s.backend.ReloadVNF(ctx, vnf); err != nil {
@@ -28,27 +47,55 @@ func (s *Service) reloadAfterChildWrite(ctx context.Context, vnfID int64, rollba
 			restoreReloadErr = s.backend.ReloadVNF(ctx, restored)
 		}
 		if rollbackErr != nil || getErr != nil || restoreReloadErr != nil {
+			var disableErr error
 			if getErr == nil {
 				restored.Enabled = false
-				_, _ = s.store.UpdateVNFIdentity(ctx, restored)
+				_, disableErr = s.store.UpdateVNFIdentity(ctx, restored)
 			}
-			return internalError(fmt.Errorf("reload failed: %v; restore failed: %v",
-				err, errors.Join(rollbackErr, getErr, restoreReloadErr)))
+			log.Error().
+				Int64("vnf_id", vnf.ID).
+				Str("type", vnf.Type).
+				Err(errors.Join(err, rollbackErr, getErr, restoreReloadErr, disableErr)).
+				Msg("VNF child write reload failed and the previous configuration could not be restored")
+			return &VNFError{Status: 500, Message: describeChildReloadFailure(
+				vnf, err, rollbackErr, getErr, restoreReloadErr, disableErr)}
 		}
 		return internalError(fmt.Errorf("reload failed: %w", err))
 	}
 	return nil
 }
 
+// describeChildReloadFailure names every failure that left a child write and
+// its parent runtime inconsistent. The API exposes it for 500 responses.
+func describeChildReloadFailure(vnf store.VNF, reloadErr, rollbackErr, getErr, restoreErr, disableErr error) string {
+	parts := []string{fmt.Sprintf("could not reload the %s VNF %s: %v", vnf.Type, vnf.Name, reloadErr)}
+	if rollbackErr != nil {
+		parts = append(parts, fmt.Sprintf("could not restore the previous row: %v", rollbackErr))
+	}
+	if getErr != nil {
+		parts = append(parts, fmt.Sprintf("could not read the restored row: %v", getErr))
+	}
+	if restoreErr != nil {
+		parts = append(parts, fmt.Sprintf("could not reload the previous configuration: %v", restoreErr))
+	}
+	if disableErr != nil {
+		parts = append(parts, fmt.Sprintf("could not disable the VNF: %v", disableErr))
+	} else {
+		parts = append(parts, "the VNF was disabled")
+	}
+	return strings.Join(parts, "; ")
+}
+
 // applyNAT44ChildChange re-applies a NAT44 VNF's static mappings after a DNAT
-// rule write. A VPP failure restores the previous row and mapping set; a failed
-// restore disables the parent.
+// rule write. A skipped apply (disabled or degraded NAT44) keeps the row. A VPP
+// failure restores the previous row and mapping set; a failed restore disables
+// the parent.
 func (s *Service) applyNAT44ChildChange(ctx context.Context, vnfID int64, rollback func() error) error {
 	vnf, err := s.store.GetVNF(ctx, vnfID)
 	if err != nil {
 		return storeError(err)
 	}
-	if !vnf.Enabled {
+	if !vnf.Enabled || !s.backend.Running(ctx, vnf) {
 		return nil
 	}
 	if applyErr := s.backend.ApplyNAT44DNATRules(ctx, vnf); applyErr != nil {
@@ -59,16 +106,41 @@ func (s *Service) applyNAT44ChildChange(ctx context.Context, vnfID int64, rollba
 			restoreErr = s.backend.ApplyNAT44DNATRules(ctx, restored)
 		}
 		if rollbackErr != nil || getErr != nil || restoreErr != nil {
+			var disableErr error
 			if getErr == nil {
 				restored.Enabled = false
-				_, _ = s.store.UpdateVNFIdentity(ctx, restored)
+				_, disableErr = s.store.UpdateVNFIdentity(ctx, restored)
 			}
-			return internalError(fmt.Errorf("NAT44 mapping update failed: %v; restore failed: %v",
-				applyErr, errors.Join(rollbackErr, getErr, restoreErr)))
+			log.Error().
+				Int64("vnf_id", vnf.ID).
+				Err(errors.Join(applyErr, rollbackErr, getErr, restoreErr, disableErr)).
+				Msg("NAT44 mapping update failed and the previous state could not be restored")
+			return &VNFError{Status: 500, Message: describeNAT44ChildFailure(
+				vnf, applyErr, rollbackErr, getErr, restoreErr, disableErr)}
 		}
 		return internalError(fmt.Errorf("NAT44 mapping update failed: %w", applyErr))
 	}
 	return nil
+}
+
+// describeNAT44ChildFailure names every failure from an in-place mapping write.
+func describeNAT44ChildFailure(vnf store.VNF, applyErr, rollbackErr, getErr, restoreErr, disableErr error) string {
+	parts := []string{fmt.Sprintf("could not apply NAT44 mappings for %s: %v", vnf.Name, applyErr)}
+	if rollbackErr != nil {
+		parts = append(parts, fmt.Sprintf("could not restore the previous row: %v", rollbackErr))
+	}
+	if getErr != nil {
+		parts = append(parts, fmt.Sprintf("could not read the restored row: %v", getErr))
+	}
+	if restoreErr != nil {
+		parts = append(parts, fmt.Sprintf("could not restore the previous mappings: %v", restoreErr))
+	}
+	if disableErr != nil {
+		parts = append(parts, fmt.Sprintf("could not disable the VNF: %v", disableErr))
+	} else {
+		parts = append(parts, "the VNF was disabled")
+	}
+	return strings.Join(parts, "; ")
 }
 
 // CreateDHCPStaticAssignment adds one DHCPv4 static assignment and reloads the

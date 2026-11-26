@@ -355,7 +355,8 @@ func TestReloadDHCPFailureRestoresDesiredSpec(t *testing.T) {
 func TestReloadNotRunningReturnsStoppedState(t *testing.T) {
 	ctx := context.Background()
 	manager := newFakeManager()
-	server := NewServer(manager, t.TempDir(), zerolog.Nop())
+	dir := t.TempDir()
+	server := NewServer(manager, dir, zerolog.Nop())
 	if _, err := server.EnsureDHCP(ctx, &rookeryv1.EnsureDHCPRequest{Spec: dhcpSpec(1, "dhcpv4", "tap")}); err != nil {
 		t.Fatal(err)
 	}
@@ -372,6 +373,26 @@ func TestReloadNotRunningReturnsStoppedState(t *testing.T) {
 	}
 	if len(manager.reloaded) != 0 || len(manager.starts) != 1 {
 		t.Fatalf("stopped reload touched the runtime: reloaded=%+v starts=%+v", manager.reloaded, manager.starts)
+	}
+	// The new spec must replace the previous one even though the runtime is
+	// stopped, so supervision or a manual start does not bring back the old
+	// configuration.
+	server.mu.Lock()
+	desired := server.desired[1]
+	server.mu.Unlock()
+	if desired == nil || desired.spec.GetDhcp().GetDhcpv4().GetRangeEnd() != "10.20.0.30" {
+		t.Fatalf("desired spec was not updated: %+v", desired)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "desired-1.json"))
+	if err != nil {
+		t.Fatalf("read persisted spec: %v", err)
+	}
+	persisted := &rookeryv1.DesiredRuntime{}
+	if err := protojson.Unmarshal(data, persisted); err != nil {
+		t.Fatalf("parse persisted spec: %v", err)
+	}
+	if persisted.GetDhcp().GetDhcpv4().GetRangeEnd() != "10.20.0.30" {
+		t.Fatalf("persisted spec = %+v", persisted)
 	}
 }
 

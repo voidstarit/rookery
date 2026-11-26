@@ -40,6 +40,9 @@ type Backend interface {
 
 	ActivateVNF(ctx context.Context, vnf store.VNF) (store.VNF, error)
 	StopVNF(ctx context.Context, vnf store.VNF, removeLeases bool) error
+	// Running reports whether the VNF runtime is currently up. A child write on
+	// an enabled but stopped runtime keeps the row and does not fail.
+	Running(ctx context.Context, vnf store.VNF) bool
 	// ReloadVNF swaps a running runtime's configuration in place. It is a
 	// no-op for a VNF that is enabled but whose runtime is not running.
 	ReloadVNF(ctx context.Context, vnf store.VNF) error
@@ -101,6 +104,9 @@ func (e *VNFError) Unwrap() error { return e.Err }
 // detail of server errors (status 500 and above) with a generic message.
 func (e *VNFError) VNFStatus() (int, string) {
 	if e.Status >= 500 {
+		if e.Message != "" {
+			return e.Status, e.Message
+		}
 		return e.Status, "VNF operation failed"
 	}
 	return e.Status, e.Error()

@@ -364,7 +364,7 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	interfaces := &interfaceService{store: st, runtime: options.aclRuntime, attachments: options.interfaceRuntime, addresses: options.interfaceAddresses, vms: options.vmController, counters: options.interfaceCounters, readiness: ready, resourceMu: options.diskMutex, runMu: options.vmMutex, leases: options.leaseCleaner}
 	acls := &aclService{store: st, runtime: options.aclRuntime, readiness: ready}
 	routeTables := &routeTableService{store: st, runtime: options.aclRuntime, readiness: ready}
-	vnfs := &vnfService{store: st, runtime: options.vnfRuntime, statusProvider: options.vnfStatusProvider, writer: options.vnfWriter}
+	vnfs := &vnfService{store: st, runtime: options.vnfRuntime, statusProvider: options.vnfStatusProvider, writer: options.vnfWriter, logger: options.logger}
 	backends := &storageBackendService{store: st, readiness: ready, disks: options.diskProvisioner, mu: options.diskMutex, registry: options.storageRegistry, newKoujaClient: options.koujaClientFactory}
 	hostInterfaces := &hostService{source: options.vppInterfaces, store: st, writer: options.hostWriter, taps: options.hostTapWriter, devices: options.hostDeviceLister, addresses: options.interfaceAddresses, readiness: ready}
 	troubleshoot := &troubleshootService{runtime: options.diagnostics, readiness: ready}

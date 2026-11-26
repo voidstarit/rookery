@@ -8,7 +8,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/rs/zerolog"
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
+
 	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/store"
 )
@@ -79,6 +81,7 @@ type vnfService struct {
 	runtime        VNFRuntime
 	statusProvider VNFStatusProvider
 	writer         VNFWriter
+	logger         zerolog.Logger
 }
 
 // writeAvailable returns Unavailable when no native VNF writer is configured.

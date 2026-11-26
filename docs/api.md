@@ -902,11 +902,14 @@ Child writes reload the running runtime in place; parent writes restart it:
   set. A NAT44 DNAT write replaces the VNF's VPP static mappings while NAT44 and
   the BVI stay up.
 - A child write on a disabled parent only stores the row; the next enable loads
-  every child row and starts once.
+  every child row and starts once. A child write on an enabled parent whose
+  runtime is stopped or unreachable also stores the row and leaves the VNF
+  `degraded` instead of failing; the next start uses the new rows.
 - A parent `PUT` that changes any field (name, scalar configuration, transport,
-  tap/memif metadata, or `enabled`) stops and starts the enabled runtime. Use
-  the type's `.../restart` route for manual recovery; it stops and starts the
-  runtime without dropping its leases.
+  tap/memif metadata, or `enabled`) stops and starts the enabled runtime. If the
+  store write then fails (for example a duplicate name returns `409`), the
+  previous runtime is re-activated. Use the type's `.../restart` route for
+  manual recovery; it stops and starts the runtime without dropping its leases.
 - If a child reload fails, the server restores the previous child row, reloads
   the previous configuration, and returns `500`. If that restore reload also
   fails, the parent is disabled and the response names both failures.

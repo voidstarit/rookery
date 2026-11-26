@@ -135,7 +135,8 @@ func (s *vnfService) ListDNSVNFRecordViews(ctx context.Context, request *rookery
 	if s.statusProvider != nil {
 		dynamic, dynamicErr := s.statusProvider.VNFDNSRecords(ctx, identityStatusRecord(vnf.ID, vnf.Name, vnf.NetworkID, store.VNFTypeDNS, vnf.Enabled))
 		if dynamicErr != nil {
-			response.DynamicError = dynamicErr.Error()
+			s.logger.Error().Err(dynamicErr).Int64("vnf_id", vnf.ID).Msg("could not read dynamic DNS records")
+			response.DynamicError = "dynamic records are unavailable"
 		} else {
 			for _, record := range dynamic {
 				response.Records = append(response.Records, &rookeryv1.DNSRecordView{

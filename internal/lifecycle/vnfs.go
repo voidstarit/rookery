@@ -253,7 +253,7 @@ func (s *Service) UpdateDHCPVNF(ctx context.Context, request *rookeryv1.UpdateDH
 	identity.MemifHostName = ""
 	saved, err := s.store.UpdateDHCPVNF(ctx, identity, cfg)
 	if err != nil {
-		return store.VNF{}, storeError(err)
+		return store.VNF{}, s.restoreAfterFailedStore(ctx, existing, err)
 	}
 	if !enabled {
 		return saved, nil
@@ -353,7 +353,7 @@ func (s *Service) UpdateDNSVNF(ctx context.Context, request *rookeryv1.UpdateDNS
 	identity.MemifHostName = ""
 	saved, err := s.store.UpdateDNSVNF(ctx, identity, store.DNSVNFConfig{Forward: forward})
 	if err != nil {
-		return store.VNF{}, storeError(err)
+		return store.VNF{}, s.restoreAfterFailedStore(ctx, existing, err)
 	}
 	if !enabled {
 		return saved, nil
@@ -493,7 +493,7 @@ func (s *Service) UpdateNAT44VNF(ctx context.Context, request *rookeryv1.UpdateN
 	identity.TapHostName = ""
 	saved, err := s.store.UpdateNAT44VNF(ctx, identity, cfg)
 	if err != nil {
-		return store.VNF{}, storeError(err)
+		return store.VNF{}, s.restoreAfterFailedStore(ctx, existing, err)
 	}
 	if !enabled {
 		return saved, nil
@@ -674,7 +674,7 @@ func (s *Service) UpdateBGPVNF(ctx context.Context, request *rookeryv1.UpdateBGP
 	identity.MemifHostName = ""
 	saved, err := s.store.UpdateBGPVNF(ctx, identity, cfg)
 	if err != nil {
-		return store.VNF{}, storeError(err)
+		return store.VNF{}, s.restoreAfterFailedStore(ctx, existing, err)
 	}
 	if !enabled {
 		return saved, nil
@@ -824,4 +824,25 @@ func storeError(err error) error {
 	default:
 		return internalError(err)
 	}
+}
+
+// restoreAfterFailedStore brings the previous runtime back when a parent update
+// stopped it and the store write then failed (for example a 409 name conflict).
+// Without this the row still says enabled=true while the runtime is down and
+// nothing repairs it until the next API start.
+func (s *Service) restoreAfterFailedStore(ctx context.Context, previous store.VNF, saveErr error) error {
+	if !previous.Enabled {
+		return storeError(saveErr)
+	}
+	var restoreErr error
+	if previous.Type == store.VNFTypeNAT44 {
+		_, restoreErr = s.backend.ActivateNAT44(ctx, previous)
+	} else {
+		_, restoreErr = s.backend.ActivateVNF(ctx, previous)
+	}
+	if restoreErr != nil {
+		return &VNFError{Status: 500, Message: fmt.Sprintf(
+			"could not save the VNF: %v; could not restore the previous runtime: %v", saveErr, restoreErr)}
+	}
+	return storeError(saveErr)
 }

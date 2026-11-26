@@ -264,13 +264,18 @@ func (s *Server) configureDHCPv4ForNAT(ctx context.Context, network store.Networ
 		if !vnf.Enabled {
 			continue
 		}
+		// A degraded DHCPv4 runtime cannot reload; the persisted bindings are
+		// used by the next start, and NAT44 must not fail because of it.
+		if !s.vnfs.Running(ctx, vnf) {
+			continue
+		}
 		reloaded, err := s.store.GetVNF(ctx, vnf.ID)
 		if err != nil {
 			return fmt.Errorf("read DHCPv4 VNF %s for NAT: %w", vnf.Name, err)
 		}
 		if err := s.vnfs.ReloadVNF(ctx, reloaded); err != nil {
-			_ = s.store.SetDHCPVNFNetworkBindings(ctx, vnf.ID, previousGateway, previousBind)
-			return fmt.Errorf("reload DHCPv4 VNF %s for NAT: %w", vnf.Name, err)
+			restoreErr := s.store.SetDHCPVNFNetworkBindings(ctx, vnf.ID, previousGateway, previousBind)
+			return fmt.Errorf("reload DHCPv4 VNF %s for NAT: %w; restore bindings: %v", vnf.Name, err, restoreErr)
 		}
 	}
 	return nil

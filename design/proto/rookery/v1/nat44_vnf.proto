@@ -186,7 +186,7 @@ message GetNAT44DNATRuleRequest {
 
 message CreateNAT44DNATRuleRequest {
   int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
-  string protocol = 2 [(validate.rules).string = {in: ["tcp", "udp"]}];
+  string protocol = 2 [(validate.rules).string = {min_len: 1, max_len: 8}];
   int32 external_port = 3 [(validate.rules).int32 = {gte: 1, lte: 65535}];
   string local_ip = 4 [(validate.rules).string.ipv4 = true];
   int32 local_port = 5 [(validate.rules).int32 = {gte: 1, lte: 65535}];
@@ -195,7 +195,7 @@ message CreateNAT44DNATRuleRequest {
 message UpdateNAT44DNATRuleRequest {
   int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
   int64 rule_id = 2 [(validate.rules).int64 = {gt: 0}];
-  string protocol = 3 [(validate.rules).string = {in: ["tcp", "udp"]}];
+  string protocol = 3 [(validate.rules).string = {min_len: 1, max_len: 8}];
   int32 external_port = 4 [(validate.rules).int32 = {gte: 1, lte: 65535}];
   string local_ip = 5 [(validate.rules).string.ipv4 = true];
   int32 local_port = 6 [(validate.rules).int32 = {gte: 1, lte: 65535}];

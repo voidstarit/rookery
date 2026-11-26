@@ -51,8 +51,11 @@ func TestClientEnsureErrorsPerType(t *testing.T) {
 func TestClientStopErrorsAndUnsupportedType(t *testing.T) {
 	ctx := context.Background()
 	manager := newFakeManager()
-	manager.removeErr = errors.New("runtime busy")
 	client := startTestDaemon(t, manager, zerolog.Nop())
+	if err := client.Start(ctx, dhcpVNF(1), "vnf1"); err != nil {
+		t.Fatal(err)
+	}
+	manager.removeErr = errors.New("runtime busy")
 
 	err := client.Stop(ctx, dhcpVNF(1), false)
 	if err == nil || !strings.HasPrefix(err.Error(), "stop VNF: ") || !strings.Contains(err.Error(), "runtime busy") {

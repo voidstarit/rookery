@@ -1966,10 +1966,10 @@ func (m *CreateNAT44DNATRuleRequest) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
-	if _, ok := _CreateNAT44DNATRuleRequest_Protocol_InLookup[m.GetProtocol()]; !ok {
+	if l := utf8.RuneCountInString(m.GetProtocol()); l < 1 || l > 8 {
 		err := CreateNAT44DNATRuleRequestValidationError{
 			field:  "Protocol",
-			reason: "value must be in list [tcp udp]",
+			reason: "value length must be between 1 and 8 runes, inclusive",
 		}
 		if !all {
 			return err
@@ -2090,11 +2090,6 @@ var _ interface {
 	ErrorName() string
 } = CreateNAT44DNATRuleRequestValidationError{}
 
-var _CreateNAT44DNATRuleRequest_Protocol_InLookup = map[string]struct{}{
-	"tcp": {},
-	"udp": {},
-}
-
 // Validate checks the field values on UpdateNAT44DNATRuleRequest with the
 // rules defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
@@ -2139,10 +2134,10 @@ func (m *UpdateNAT44DNATRuleRequest) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
-	if _, ok := _UpdateNAT44DNATRuleRequest_Protocol_InLookup[m.GetProtocol()]; !ok {
+	if l := utf8.RuneCountInString(m.GetProtocol()); l < 1 || l > 8 {
 		err := UpdateNAT44DNATRuleRequestValidationError{
 			field:  "Protocol",
-			reason: "value must be in list [tcp udp]",
+			reason: "value length must be between 1 and 8 runes, inclusive",
 		}
 		if !all {
 			return err
@@ -2262,11 +2257,6 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = UpdateNAT44DNATRuleRequestValidationError{}
-
-var _UpdateNAT44DNATRuleRequest_Protocol_InLookup = map[string]struct{}{
-	"tcp": {},
-	"udp": {},
-}
 
 // Validate checks the field values on DeleteNAT44DNATRuleRequest with the
 // rules defined in the proto definition for this message. If any rules are
