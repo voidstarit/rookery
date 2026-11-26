@@ -6,25 +6,30 @@
 # so the outline doubles as a summary of what the code does. Go files use gopls
 # for exact symbol kinds and ranges; TypeScript and Preact files use a
 # top-level declaration outline, because TypeScript ships no standalone
-# symbol-query CLI. Use the result to pick the line ranges worth reading
-# instead of pulling the whole file into context.
+# symbol-query CLI.
 #
-# Usage: scripts/glance [--no-doc] [--match REGEX] FILE...
-# Exit:  0 success, 1 unreadable, unsupported, or unmatched input, 2 usage.
+# Usage: scripts/glance [--no-doc] [--match REGEX] [--body N] FILE...
+#        scripts/glance --find NAME[|NAME...] [PATH...]
+# Exit:  0 success, 1 unreadable, unsupported, unmatched, or missing input, 2 usage.
 
 set -euo pipefail
 
 usage() {
   local fd=2
   [ "${1:-}" = 0 ] && fd=1
-  printf 'usage: %s [--no-doc] [--match REGEX] FILE...\n' "${0##*/}" >&"$fd"
+  printf 'usage: %s [--no-doc] [--match REGEX] [--body N] FILE...\n' "${0##*/}" >&"$fd"
+  printf '       %s --find NAME[|NAME...] [PATH...]\n' "${0##*/}" >&"$fd"
   printf 'Print symbols, line ranges, and doc summaries for Go and TypeScript sources.\n' >&"$fd"
-  printf 'With --match, keep only symbols whose declaration matches the ERE.\n' >&"$fd"
+  printf '  --match REGEX  keep symbols whose declaration matches the ERE\n' >&"$fd"
+  printf '  --body N       with --match, print N lines of the declaration body\n' >&"$fd"
+  printf '  --find NAMES   find symbols by name across the module (PATH defaults to .)\n' >&"$fd"
   exit "${1:-2}"
 }
 
 with_doc=1
 match=""
+body=0
+find=""
 files=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -35,20 +40,55 @@ while [ "$#" -gt 0 ]; do
       shift
       ;;
     --match=*) match=${1#*=} ;;
+    --body)
+      [ "$#" -ge 2 ] || { printf 'glance: --body requires a line count\n' >&2; usage; }
+      body=$2
+      shift
+      ;;
+    --body=*) body=${1#*=} ;;
+    --find)
+      [ "$#" -ge 2 ] || { printf 'glance: --find requires a symbol name\n' >&2; usage; }
+      find=$2
+      shift
+      ;;
+    --find=*) find=${1#*=} ;;
     -h | --help) usage 0 ;;
     -*) printf 'glance: unknown option: %s\n' "$1" >&2; usage ;;
     *) files+=("$1") ;;
   esac
   shift
 done
-[ "${#files[@]}" -gt 0 ] || usage
+
+if [ -z "$find" ] && [ "${#files[@]}" -eq 0 ]; then
+  usage
+fi
+if [ "$body" != 0 ]; then
+  case "$body" in
+    '' | *[!0-9]*) printf 'glance: --body must be a positive integer\n' >&2; usage ;;
+  esac
+  [ "$body" -ge 1 ] || { printf 'glance: --body must be a positive integer\n' >&2; usage; }
+  [ -n "$match" ] || { printf 'glance: --body requires --match\n' >&2; usage; }
+fi
+
+# emit writes bulk output through a file so a downstream `head` closing the pipe
+# kills `cat` silently instead of turning the bash printf into a write error.
+emit() {
+  local text=$1 tmp
+  tmp=$(mktemp) || return 0
+  printf '%s\n' "$text" >"$tmp" || { rm -f "$tmp"; return 0; }
+  cat "$tmp" 2>/dev/null || true
+  rm -f "$tmp"
+}
 
 # apply_match keeps only symbol lines whose declaration matches the ERE
 # (--match). The doc summary after the em dash is excluded, so a word in a doc
-# comment cannot match a symbol name.
+# comment cannot match a symbol name. The result lands in MATCHED: the caller
+# cannot use a command substitution because status must stay global.
+MATCHED=""
 apply_match() {
   local file=$1 formatted=$2 filtered
-  [ -n "$match" ] || { printf '%s\n' "$formatted"; return 0; }
+  MATCHED=$formatted
+  [ -n "$match" ] || return 0
   filtered=$(printf '%s\n' "$formatted" | awk -v re="$match" '{
     line = $0
     sub(/ — .*/, "", line)
@@ -57,9 +97,112 @@ apply_match() {
   if [ -z "$filtered" ]; then
     printf 'glance: no symbol matching /%s/ in %s\n' "$match" "$file" >&2
     status=1
+    MATCHED=""
     return 0
   fi
-  printf '%s\n' "$filtered"
+  MATCHED=$filtered
+}
+
+# add_bodies prints each matched symbol line followed by N source lines from its
+# declaration (--body), which replaces `grep -n SYMBOL -A N`.
+add_bodies() {
+  local file=$1 mode=$2 text=$3
+  printf '%s\n' "$text" | awk -v src="$file" -v mode="$mode" -v n="$body" '
+    BEGIN { while ((getline l < src) > 0) { c++; L[c] = l } }
+    {
+      print
+      if (mode == "ts") {
+        start = $0
+        sub(/:.*/, "", start)
+      } else {
+        left = $0
+        sub(/ — .*/, "", left)
+        start = left
+        sub(/.* /, "", start)
+        sub(/:.*/, "", start)
+      }
+      start += 0
+      for (i = start; i <= start + n && i <= c; i++) printf "%6d  %s\n", i, L[i]
+    }'
+}
+
+# find_symbols answers "which file defines NAME?" (--find) from gopls workspace
+# symbols, replacing `grep -rn` over a directory. Names are literal, separated
+# by `|`; a method matches by its trailing ".Name".
+find_symbols() {
+  local names=$1
+  shift
+  local -a roots=("$@")
+  local -a alts=()
+  [ "${#roots[@]}" -gt 0 ] || roots=(".")
+  if ! command -v gopls >/dev/null 2>&1; then
+    printf 'glance: gopls is required for --find\n' >&2
+    status=1
+    return 0
+  fi
+  IFS='|' read -r -a alts <<< "$names"
+
+  local -a resolved=()
+  local root
+  for root in "${roots[@]}"; do
+    if [ ! -e "$root" ]; then
+      printf 'glance: no such path: %s\n' "$root" >&2
+      status=1
+      continue
+    fi
+    if [ -d "$root" ]; then
+      resolved+=("$(cd "$root" && pwd -P)")
+    else
+      resolved+=("$(cd "$(dirname "$root")" && pwd -P)/$(basename "$root")")
+    fi
+  done
+  [ "${#resolved[@]}" -gt 0 ] || return 0
+
+  local list
+  list=$(mktemp)
+  local alt
+  for alt in "${alts[@]}"; do
+    [ -n "$alt" ] || continue
+    if ! gopls workspace_symbol -matcher fuzzy "$alt" 2>/dev/null >>"$list"; then
+      # Same read-only-cache retry as `gopls symbols`.
+      XDG_CACHE_HOME=/tmp/rookery-gopls GOCACHE=/tmp/rookery-go-build \
+        gopls workspace_symbol -matcher fuzzy "$alt" 2>/dev/null >>"$list" || true
+    fi
+  done
+
+  local out
+  out=$(awk -v alts="$names" -v roots="$(printf '%s\n' "${resolved[@]}")" '
+    BEGIN {
+      na = split(alts, A, "|")
+      nr = split(roots, R, "\n")
+    }
+    {
+      path = $1
+      sub(/:[0-9]+:.*/, "", path)
+      name = $2
+      byName = 0
+      for (i = 1; i <= na; i++) {
+        a = A[i]
+        if (a == "") continue
+        if (name == a || substr(name, length(name) - length(a)) == "." a) { byName = 1; break }
+      }
+      if (!byName) next
+      for (i = 1; i <= nr; i++) {
+        if (path == R[i] || index(path, R[i] "/") == 1) { print; next }
+      }
+    }' "$list" | sort -u)
+  rm -f "$list"
+
+  if [ -z "$out" ]; then
+    printf 'glance: no symbol named %s\n' "$names" >&2
+    status=1
+    return 0
+  fi
+  local cwd
+  cwd=$(pwd -P)
+  local display
+  display=$(printf '%s\n' "$out" | awk -v p="$cwd/" '{ if (index($0, p) == 1) $0 = substr($0, length(p) + 1); print }')
+  emit "$display"
 }
 
 gopls_symbols() {
@@ -126,6 +269,13 @@ go_outline() {
           }
         ')
       apply_match "$file" "$formatted"
+      formatted=$MATCHED
+      if [ -n "$formatted" ]; then
+        if [ "$body" -gt 0 ]; then
+          formatted=$(add_bodies "$file" go "$formatted")
+        fi
+        emit "$formatted"
+      fi
       return 0
     fi
     printf 'glance: gopls symbols failed, falling back to a text outline\n' >&2
@@ -136,8 +286,8 @@ go_outline() {
 }
 
 ts_outline() {
-  local formatted
-  formatted=$(awk -v src="$1" -v with_doc="$with_doc" '
+  local file=$1 formatted
+  formatted=$(awk -v src="$file" -v with_doc="$with_doc" '
     function summarize(text,   p) {
       gsub(/[[:space:]]+/, " ", text)
       sub(/^ /, "", text)
@@ -198,11 +348,23 @@ ts_outline() {
       else printf "%s:%s\n", NR, line
       hit = 0
     }
-  ' "$1")
+  ' "$file")
   apply_match "$file" "$formatted"
+  formatted=$MATCHED
+  if [ -n "$formatted" ]; then
+    if [ "$body" -gt 0 ]; then
+      formatted=$(add_bodies "$file" ts "$formatted")
+    fi
+    emit "$formatted"
+  fi
 }
 
 status=0
+if [ -n "$find" ]; then
+  find_symbols "$find" "${files[@]}"
+  exit "$status"
+fi
+
 for file in "${files[@]}"; do
   if [ ! -f "$file" ]; then
     printf 'glance: no such file: %s\n' "$file" >&2

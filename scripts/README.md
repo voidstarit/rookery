@@ -10,7 +10,9 @@ comment, so the map also summarizes what the code does.
 ./scripts/glance internal/api/nat44.go
 ./scripts/glance ui/src/inventory/vnfs/VNFPage.tsx
 ./scripts/glance --no-doc internal/store/store.go   # compact symbol map only
-./scripts/glance --match 'vnfSelect|scanVNF' internal/store/store.go   # exact ranges for symbols
+./scripts/glance --match 'CreateDNSVNF|CreateBGPVNF' internal/store/vnfs.go
+./scripts/glance --body 12 --match NewDHCPVNF internal/store/vnfs.go
+./scripts/glance --find 'CreateDHCPVNF|NewDHCPVNF' internal/store
 ```
 
 - Go: `gopls symbols` output (names, kinds, line ranges), sorted by line, with
@@ -20,9 +22,14 @@ comment, so the map also summarizes what the code does.
 - TypeScript/Preact: top-level `type`/`interface`/`class`/`function`/`const`
   declarations, one truncated line each, with the first sentence of the
   `/** ... */` JSDoc block or the adjacent `//` comment.
-- `--match REGEX` keeps only symbols whose declaration matches the ERE, which answers "where is
-  this defined?" without a source grep; no match is an error.
-- Exit status is 0 on success, 1 for a missing, unsupported, or unmatched file, 2 for usage.
+- `--match REGEX` keeps only symbols whose declaration matches the ERE; no match is an error.
+- `--body N` requires `--match` and prints the declaration plus the next N source lines, replacing
+  `grep -n SYMBOL -A N`.
+- `--find NAME[|NAME...] [PATH...]` searches the module with `gopls workspace_symbol`, matching
+  methods by their trailing `.NAME`, and prints `path:line Name Kind`; PATH defaults to `.`. It
+  replaces `grep -rn` for "which file defines this?".
+- Exit status is 0 on success, 1 for a missing, unsupported, unmatched, or not-found input, 2 for
+  usage.
 
 This is a reading aid, not a compiler: the TypeScript outline is textual, so use
 the language service when symbol accuracy matters.

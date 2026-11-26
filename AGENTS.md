@@ -61,8 +61,9 @@ coverage, `go vet`, `gofmt -l`, `golangci-lint` (v2.15.0, config in `.golangci.y
 Use symbol-aware tooling before text search. `rg`/grep/`sed` are for literals (config keys, error
 strings, `rookery:*` event names, SQL, docs, generated output) and as a last resort — not for
 answering "where is this defined?" or for editing source. Never use `sed -i`/`perl -pi` on Go or
-TypeScript files. To locate a symbol by name in a file, run `scripts/glance --match NAME <file>`
-(or `gopls workspace_symbol`); a source `grep -n` is not the answer, even in a single file.
+TypeScript files. To find a symbol anywhere in the tree, run `scripts/glance --find NAME[|NAME...]
+[path]`; for one symbol's declaration plus body, `scripts/glance --body N --match NAME <file>`. A
+source `grep` is not the answer, in a file or across a directory.
 
 ```sh
 # Go (from the repository root)
