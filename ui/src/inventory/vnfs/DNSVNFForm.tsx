@@ -1,5 +1,7 @@
+/** Form for the DNS parent scalar fields on the VNF page. */
 import type { DNSVNF } from "../types";
 
+/** DNSVNFFormState is the editable DNS parent form state. */
 export type DNSVNFFormState = {
   forward: boolean;
 };

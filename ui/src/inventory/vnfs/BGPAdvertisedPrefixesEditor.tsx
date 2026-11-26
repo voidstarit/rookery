@@ -1,3 +1,4 @@
+/** Editor for the BGP VNF advertised-prefix child rows. */
 import type { BGPPrefix } from "../types";
 
 type BGPAdvertisedPrefixesEditorProps = {

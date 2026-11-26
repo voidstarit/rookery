@@ -1,3 +1,4 @@
+/** Editor for the DNS VNF authoritative-record child rows. */
 import type { DNSRecord, DNSRecordType } from "../types";
 
 type DNSRecordsEditorProps = {

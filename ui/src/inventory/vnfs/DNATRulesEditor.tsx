@@ -1,3 +1,4 @@
+/** Editor for the NAT44 VNF DNAT child rows. */
 import type { DNATRule } from "../types";
 
 type DNATRulesEditorProps = {

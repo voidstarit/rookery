@@ -1,8 +1,10 @@
+/** Form for the NAT44 parent scalar fields on the VNF page. */
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../../shared/api";
 import type { HostInterface, NAT44VNF, Network } from "../types";
 import { firstIPv4Host } from "./format";
 
+/** NAT44VNFFormState is the editable NAT44 parent scalar form state. */
 export type NAT44VNFFormState = {
   gateway: string;
   outsideInterface: string;

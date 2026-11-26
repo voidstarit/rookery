@@ -6,6 +6,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+// TestBoolPointerDefault covers the null, unknown, and explicit create-default paths.
 func TestBoolPointerDefault(t *testing.T) {
 	nullDefault := boolPointerDefault(types.BoolNull(), true)
 	if nullDefault == nil || !*nullDefault {

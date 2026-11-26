@@ -800,6 +800,7 @@ export type DHCPOption = {
   value: string;
 };
 
+/** DNSRecordType is an authoritative record type accepted by a DNS VNF. */
 export type DNSRecordType = "A" | "AAAA" | "CNAME" | "TXT" | "PTR";
 
 /**

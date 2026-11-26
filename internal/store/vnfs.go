@@ -940,6 +940,8 @@ func (s *Store) ListDHCPVNFs(ctx context.Context, networkID *int64, family strin
 	return s.listDHCPVNFs(ctx, networkID, family, nil)
 }
 
+// listDHCPVNFs returns DHCPv4/DHCPv6 parents, optionally filtered by network,
+// family, and VNF ID. The caller holds the single connection.
 func (s *Store) listDHCPVNFs(ctx context.Context, networkID *int64, family string, id *int64) ([]DHCPVNF, error) {
 	query := `
 		SELECT f.id, f.name, f.network_id, n.name, f.type, f.enabled,
@@ -1034,6 +1036,8 @@ func (s *Store) ListDNSVNFs(ctx context.Context, networkID *int64) ([]DNSVNF, er
 	return s.listDNSVNFs(ctx, networkID, nil)
 }
 
+// listDNSVNFs returns DNS parents, optionally filtered by network and VNF ID.
+// The caller holds the single connection.
 func (s *Store) listDNSVNFs(ctx context.Context, networkID *int64, id *int64) ([]DNSVNF, error) {
 	query := `
 		SELECT f.id, f.name, f.network_id, n.name, f.enabled, c.forward,
@@ -1113,6 +1117,8 @@ func (s *Store) ListNAT44VNFs(ctx context.Context, networkID *int64) ([]NAT44VNF
 	return s.listNAT44VNFs(ctx, networkID, nil)
 }
 
+// listNAT44VNFs returns NAT44 parents, optionally filtered by network and VNF
+// ID. The caller holds the single connection.
 func (s *Store) listNAT44VNFs(ctx context.Context, networkID *int64, id *int64) ([]NAT44VNF, error) {
 	query := `
 		SELECT f.id, f.name, f.network_id, n.name, f.enabled, c.gateway,
@@ -1192,6 +1198,8 @@ func (s *Store) ListBGPVNFs(ctx context.Context, networkID *int64) ([]BGPVNF, er
 	return s.listBGPVNFs(ctx, networkID, nil)
 }
 
+// listBGPVNFs returns BGP parents, optionally filtered by network and VNF ID.
+// The caller holds the single connection.
 func (s *Store) listBGPVNFs(ctx context.Context, networkID *int64, id *int64) ([]BGPVNF, error) {
 	query := `
 		SELECT f.id, f.name, f.network_id, n.name, f.enabled, c.transport,

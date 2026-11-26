@@ -1,10 +1,13 @@
+/** Form for the DHCPv4/DHCPv6 parent scalar fields and DNS integration. */
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../../shared/api";
 import type { DHCPVNF, DNSVNFRecord, Network } from "../types";
 import { firstIPv4Host, ipv4HostOffset, ipv6HostOffset, vnfTypeLabel } from "./format";
 
+/** DHCPTransport is the DHCP parent transport; "" follows the network default. */
 export type DHCPTransport = "" | "shared" | "dedicated" | "tap";
 
+/** DHCPVNFFormState is the editable DHCP parent scalar form state. */
 export type DHCPVNFFormState = {
   gateway: string;
   rangeStart: string;

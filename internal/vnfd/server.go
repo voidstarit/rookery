@@ -271,14 +271,17 @@ func desiredSpec(desired *desiredRuntime) *rookeryv1.DesiredRuntime {
 	return desired.spec
 }
 
+// wrapDHCP puts a DHCP runtime spec in the persisted desired-runtime envelope.
 func wrapDHCP(spec *rookeryv1.DHCPRuntimeSpec) *rookeryv1.DesiredRuntime {
 	return &rookeryv1.DesiredRuntime{Runtime: &rookeryv1.DesiredRuntime_Dhcp{Dhcp: spec}}
 }
 
+// wrapDNS puts a DNS runtime spec in the persisted desired-runtime envelope.
 func wrapDNS(spec *rookeryv1.DNSRuntimeSpec) *rookeryv1.DesiredRuntime {
 	return &rookeryv1.DesiredRuntime{Runtime: &rookeryv1.DesiredRuntime_Dns{Dns: spec}}
 }
 
+// wrapBGP puts a BGP runtime spec in the persisted desired-runtime envelope.
 func wrapBGP(spec *rookeryv1.BGPRuntimeSpec) *rookeryv1.DesiredRuntime {
 	return &rookeryv1.DesiredRuntime{Runtime: &rookeryv1.DesiredRuntime_Bgp{Bgp: spec}}
 }
