@@ -39,11 +39,11 @@ func startBGPTestInstance(t *testing.T, port int32, advertised ...*net.IPNet) *b
 	return instance
 }
 
-func TestBGPWithdrawUnknownPathFails(t *testing.T) {
+func TestBGPWithdrawUnknownPathSucceeds(t *testing.T) {
 	instance := startBGPTestInstance(t, 11831)
-	if err := instance.withdrawPaths(context.Background(), [][]byte{{0x01}}); err == nil ||
-		!strings.Contains(err.Error(), "withdraw advertised BGP prefix") {
-		t.Fatalf("withdrawPaths for an unknown path = %v", err)
+	remaining, err := instance.withdrawPaths(context.Background(), [][]byte{{0x01}})
+	if err != nil || len(remaining) != 0 {
+		t.Fatalf("withdrawPaths for an unknown path = %v, remaining = %v", err, remaining)
 	}
 }
 
@@ -51,19 +51,19 @@ func TestBGPReloadReportsWithdrawFailure(t *testing.T) {
 	initial := mustCIDR(t, "10.95.0.0/24")
 	instance := startBGPTestInstance(t, 11832, initial)
 
-	// A path UUID that the running server does not know makes the withdraw
-	// step fail before the proposed set is advertised.
-	instance.advertisedMu.Lock()
-	instance.advertisedIDs = [][]byte{{0x01}}
-	instance.advertisedMu.Unlock()
-
+	// Stopping the GoBGP server makes the withdraw fail; the tracked IDs must
+	// stay accounted for instead of being dropped from the RIB bookkeeping.
+	instance.server.Stop()
 	err := instance.reload(context.Background(), store.VNF{
 		ID:     41,
 		Type:   store.VNFTypeBGP,
 		Config: store.VNFConfig{LocalIP: "127.0.0.1/32"},
 	})
-	if err == nil || !strings.Contains(err.Error(), "withdraw advertised BGP prefix") {
+	if err == nil || !strings.Contains(err.Error(), "withdraw") {
 		t.Fatalf("reload withdraw failure = %v", err)
+	}
+	if len(instance.advertisedIDs) == 0 {
+		t.Fatal("advertised IDs were dropped after a failed withdraw")
 	}
 }
 

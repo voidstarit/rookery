@@ -14,6 +14,8 @@ import (
 	"github.com/osrg/gobgp/v3/pkg/packet/bgp"
 	"github.com/osrg/gobgp/v3/pkg/server"
 	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/voidstarit/rookery/internal/store"
 )
@@ -346,6 +348,8 @@ func (b *bgpInstance) advertise(ctx context.Context, cfg bgpStartConfig) error {
 	}
 	ids, err := b.advertisePaths(ctx, cfg.Advertise, nextHop)
 	if err != nil {
+		// Do not leave a partially advertised set behind when startup fails.
+		_, _ = b.withdrawPaths(ctx, ids)
 		return err
 	}
 	b.advertisedMu.Lock()
@@ -404,17 +408,38 @@ func (b *bgpInstance) advertisePaths(ctx context.Context, prefixes []*net.IPNet,
 }
 
 // withdrawPaths removes locally originated paths by the UUIDs GoBGP returned
-// when they were advertised.
-func (b *bgpInstance) withdrawPaths(ctx context.Context, ids [][]byte) error {
+// when they were advertised. It keeps deleting after a failure and returns the
+// IDs that are still present, so the caller can track a partially withdrawn set
+// instead of leaving stale UUIDs behind. A path GoBGP no longer knows about
+// counts as withdrawn.
+func (b *bgpInstance) withdrawPaths(ctx context.Context, ids [][]byte) ([][]byte, error) {
+	remaining := make([][]byte, 0)
+	failures := make([]error, 0)
 	for _, id := range ids {
-		if err := b.server.DeletePath(ctx, &api.DeletePathRequest{
+		err := b.server.DeletePath(ctx, &api.DeletePathRequest{
 			TableType: api.TableType_GLOBAL,
 			Uuid:      id,
-		}); err != nil {
-			return fmt.Errorf("withdraw advertised BGP prefix: %w", err)
+		})
+		if err != nil && !bgpPathMissing(err) {
+			remaining = append(remaining, id)
+			failures = append(failures, err)
 		}
 	}
-	return nil
+	if len(failures) > 0 {
+		return remaining, fmt.Errorf("withdraw %d advertised BGP prefix(es): %w", len(failures), errors.Join(failures...))
+	}
+	return nil, nil
+}
+
+// bgpPathMissing reports whether GoBGP says a path UUID is already gone.
+func bgpPathMissing(err error) bool {
+	if err == nil {
+		return false
+	}
+	if status.Code(err) == codes.NotFound {
+		return true
+	}
+	return strings.Contains(err.Error(), "can't find a specified path")
 }
 
 // reload withdraws the currently advertised prefix set and advertises the
@@ -428,18 +453,37 @@ func (b *bgpInstance) reload(ctx context.Context, vnf store.VNF) error {
 	b.advertisedMu.Lock()
 	defer b.advertisedMu.Unlock()
 
-	if err := b.withdrawPaths(ctx, b.advertisedIDs); err != nil {
-		return err
+	previousPrefixes := b.advertised
+	previousNextHop := b.nextHop
+	remaining, withdrawErr := b.withdrawPaths(ctx, b.advertisedIDs)
+	if withdrawErr != nil {
+		// Some previous paths could not be removed. Retry the rest, then restore
+		// the complete previous set so the RIB is not left half-withdrawn.
+		stillPresent, cleanupErr := b.withdrawPaths(ctx, remaining)
+		if len(stillPresent) > 0 {
+			b.advertisedIDs = stillPresent
+			return errors.Join(withdrawErr, fmt.Errorf("some advertised BGP prefixes could not be withdrawn: %w", cleanupErr))
+		}
+		restored, restoreErr := b.advertisePaths(ctx, previousPrefixes, previousNextHop)
+		b.advertisedIDs = restored
+		if restoreErr != nil {
+			return errors.Join(withdrawErr, fmt.Errorf("restore advertised BGP prefixes: %w", restoreErr))
+		}
+		return withdrawErr
 	}
 	ids, err := b.advertisePaths(ctx, prefixes, nextHop)
 	if err != nil {
 		// Drop any paths this attempt added and restore the previous set.
-		_ = b.withdrawPaths(ctx, ids)
-		restored, restoreErr := b.advertisePaths(ctx, b.advertised, b.nextHop)
+		leftover, cleanupErr := b.withdrawPaths(ctx, ids)
+		if len(leftover) > 0 {
+			b.advertisedIDs = leftover
+			return errors.Join(err, fmt.Errorf("some newly advertised BGP prefixes could not be withdrawn: %w", cleanupErr))
+		}
+		restored, restoreErr := b.advertisePaths(ctx, previousPrefixes, previousNextHop)
+		b.advertisedIDs = restored
 		if restoreErr != nil {
 			return errors.Join(err, fmt.Errorf("restore advertised BGP prefixes: %w", restoreErr))
 		}
-		b.advertisedIDs = restored
 		return err
 	}
 	b.advertisedIDs = ids

@@ -67,6 +67,10 @@ type memifDHCPv4 struct {
 func newDHCPv4Handlers(vnf store.VNF, leasePath string, port int) ([]handler.Handler4, error) {
 	ensureCoreDHCPPlugin()
 	ensureCoreDHCPLivePlugins()
+	// A reload must not race an in-flight request on the previous handler while
+	// it reads the lease file and publishes the new handler.
+	unlock := lockLiveDHCPv4(leasePath)
+	defer unlock()
 	cfg, err := buildDHCPv4Config(vnf, "memif", leasePath, port)
 	if err != nil {
 		return nil, err

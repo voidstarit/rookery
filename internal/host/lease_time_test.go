@@ -28,6 +28,8 @@ func TestDecodeLeaseTime(t *testing.T) {
 		{value: "", ok: false},
 		{value: "soon", ok: false},
 		{value: "0", ok: false},
+		{value: "10", ok: false},
+		{value: "1h10", ok: false},
 		{value: "00", ok: false},
 		{value: "-1h", ok: false},
 		{value: "0s", ok: false},

@@ -13,7 +13,7 @@ import (
 // old formatter trimmed a trailing zero from the smallest duration unit, so
 // 1h30m was stored as "1h3", 30m as "3", 1h10m as "1h1", and 2h20m as "2h2".
 // The final digit of such a value is the tens digit of the missing unit.
-var legacyCompactDuration = regexp.MustCompile(`^(?:([0-9]+)h)?(?:([0-9]+)m)?([0-9]+)$`)
+var legacyCompactDuration = regexp.MustCompile(`^(?:([0-9]+)h)?(?:([0-9]+)m)?([0-9])$`)
 
 // DecodeLeaseTime decodes a configured DHCP lease duration. It accepts standard
 // Go duration strings such as "12h" and "1h30m" and the legacy compact forms

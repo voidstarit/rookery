@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/insomniacslk/dhcp/dhcpv4"
 	"github.com/insomniacslk/dhcp/dhcpv6"
@@ -208,4 +209,85 @@ func TestNewDHCPv6HandlersLoadsPluginChain(t *testing.T) {
 		!strings.Contains(err.Error(), "load DHCPv6 plugin") {
 		t.Fatalf("newDHCPv6Handlers with invalid options = %v", err)
 	}
+}
+
+// TestLiveDHCPv4SwapWaitsForInFlight proves a handler reload cannot publish a
+// new lease state while a packet is still being handled by the old one.
+func TestLiveDHCPv4SwapWaitsForInFlight(t *testing.T) {
+	key := "in-flight-v4"
+	liveDHCPv4.Delete(key)
+	t.Cleanup(func() { liveDHCPv4.Delete(key) })
+	started := make(chan struct{})
+	release := make(chan struct{})
+	liveDHCPv4.Store(key, &liveDHCPHandler4{handler: func(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+		close(started)
+		<-release
+		return resp, true
+	}})
+	proxy := coreDHCPv4Proxy(key)
+	done := make(chan struct{})
+	go func() {
+		proxy(nil, nil)
+		close(done)
+	}()
+	<-started
+
+	locked := make(chan struct{})
+	go func() {
+		unlock := lockLiveDHCPv4(key)
+		close(locked)
+		unlock()
+	}()
+	select {
+	case <-locked:
+		t.Fatal("the reload lock was acquired while a handler call was in flight")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case <-locked:
+	case <-time.After(time.Second):
+		t.Fatal("the reload lock was never acquired after the handler returned")
+	}
+	<-done
+}
+
+// TestLiveDHCPv6SwapWaitsForInFlight is the DHCPv6 equivalent of the v4 test.
+func TestLiveDHCPv6SwapWaitsForInFlight(t *testing.T) {
+	key := "in-flight-v6"
+	liveDHCPv6.Delete(key)
+	t.Cleanup(func() { liveDHCPv6.Delete(key) })
+	started := make(chan struct{})
+	release := make(chan struct{})
+	liveDHCPv6.Store(key, &liveDHCPHandler6{handler: func(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
+		close(started)
+		<-release
+		return resp, true
+	}})
+	proxy := coreDHCPv6Proxy(key)
+	done := make(chan struct{})
+	go func() {
+		proxy(nil, nil)
+		close(done)
+	}()
+	<-started
+
+	locked := make(chan struct{})
+	go func() {
+		unlock := lockLiveDHCPv6(key)
+		close(locked)
+		unlock()
+	}()
+	select {
+	case <-locked:
+		t.Fatal("the reload lock was acquired while a handler call was in flight")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case <-locked:
+	case <-time.After(time.Second):
+		t.Fatal("the reload lock was never acquired after the handler returned")
+	}
+	<-done
 }
