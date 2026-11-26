@@ -48,6 +48,18 @@ func TestMigrationConvertsNetworkDHCPToVNF(t *testing.T) {
 		vnf.Config.LeaseTime != "12h" || vnf.TapSwIfIndex != 0 || vnf.TapHostName != "" {
 		t.Fatalf("migrated vnf = %+v", vnf)
 	}
+	// The typed tables are the storage now; the union JSON column is gone.
+	if schemaTableHasColumn(ctx, st.db, "vnfs", "config") {
+		t.Fatal("vnfs.config survived the 0061 migration")
+	}
+	typed, err := st.GetDHCPVNF(ctx, vnf.ID)
+	if err != nil {
+		t.Fatalf("get typed migrated vnf: %v", err)
+	}
+	if typed.Family != VNFTypeDHCPv4 || typed.Config.Gateway != "10.20.0.1/24" ||
+		typed.Config.RangeStart != "10.20.0.100" || typed.Config.RangeEnd != "10.20.0.200" {
+		t.Fatalf("typed migrated vnf = %+v", typed)
+	}
 }
 
 func TestMigrationBackfillsVMDisks(t *testing.T) {

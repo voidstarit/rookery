@@ -41,9 +41,9 @@ func TestUIContractRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CreateVNF(context.Background(), store.VNF{
-		Name: "dhcp", NetworkID: network.ID, Type: store.VNFTypeDHCPv4, Enabled: true,
-		Config: store.VNFConfig{Gateway: "10.0.0.1/24", RangeStart: "10.0.0.10", RangeEnd: "10.0.0.20"},
+	if _, err := st.CreateDHCPVNF(context.Background(), store.NewDHCPVNF{
+		Name: "dhcp", NetworkID: network.ID, Family: store.VNFTypeDHCPv4, Enabled: true,
+		Config: store.DHCPVNFConfig{Gateway: "10.0.0.1/24", RangeStart: "10.0.0.10", RangeEnd: "10.0.0.20"},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestUIContractRoutes(t *testing.T) {
 	}
 
 	for _, path := range []string{
-		"/api/disks", "/api/networks", "/api/vnfs", "/api/storage-backends",
+		"/api/disks", "/api/networks", "/api/dhcp-vnfs", "/api/storage-backends",
 	} {
 		response := get(path)
 		var items []map[string]any

@@ -20,7 +20,16 @@ var createdMethods = map[string]bool{
 	"/rookery.v1.NetworkService/CreateNetworkPipe":            true,
 	"/rookery.v1.InterfaceService/CreateInterface":            true,
 	"/rookery.v1.ACLService/CreateACL":                        true,
-	"/rookery.v1.VNFService/CreateVNF":                        true,
+	"/rookery.v1.DHCPVNFService/CreateDHCPVNF":                true,
+	"/rookery.v1.DHCPVNFService/CreateDHCPStaticAssignment":   true,
+	"/rookery.v1.DHCPVNFService/CreateDHCPOption":             true,
+	"/rookery.v1.DNSVNFService/CreateDNSVNF":                  true,
+	"/rookery.v1.DNSVNFService/CreateDNSVNFRecord":            true,
+	"/rookery.v1.DNSVNFService/CreateDNSVNFForwarder":         true,
+	"/rookery.v1.NAT44VNFService/CreateNAT44VNF":              true,
+	"/rookery.v1.NAT44VNFService/CreateNAT44DNATRule":         true,
+	"/rookery.v1.BGPVNFService/CreateBGPVNF":                  true,
+	"/rookery.v1.BGPVNFService/CreateBGPVNFAdvertisedPrefix":  true,
 	"/rookery.v1.StorageBackendService/CreateStorageBackend":  true,
 	"/rookery.v1.StorageBackendService/ImportDisks":           true,
 	"/rookery.v1.CaptureService/StartCapture":                 true,
@@ -41,7 +50,16 @@ var noContentMethods = map[string]bool{
 	"/rookery.v1.InterfaceService/DeleteInterface":            true,
 	"/rookery.v1.InterfaceService/ResetInterfaceCounters":     true,
 	"/rookery.v1.ACLService/DeleteACL":                        true,
-	"/rookery.v1.VNFService/DeleteVNF":                        true,
+	"/rookery.v1.DHCPVNFService/DeleteDHCPVNF":                true,
+	"/rookery.v1.DHCPVNFService/DeleteDHCPStaticAssignment":   true,
+	"/rookery.v1.DHCPVNFService/DeleteDHCPOption":             true,
+	"/rookery.v1.DNSVNFService/DeleteDNSVNF":                  true,
+	"/rookery.v1.DNSVNFService/DeleteDNSVNFRecord":            true,
+	"/rookery.v1.DNSVNFService/DeleteDNSVNFForwarder":         true,
+	"/rookery.v1.NAT44VNFService/DeleteNAT44VNF":              true,
+	"/rookery.v1.NAT44VNFService/DeleteNAT44DNATRule":         true,
+	"/rookery.v1.BGPVNFService/DeleteBGPVNF":                  true,
+	"/rookery.v1.BGPVNFService/DeleteBGPVNFAdvertisedPrefix":  true,
 	"/rookery.v1.StorageBackendService/DeleteStorageBackend":  true,
 	"/rookery.v1.CaptureService/DeleteCaptureFile":            true,
 	"/rookery.v1.TroubleshootService/ClearTrace":              true,
@@ -75,8 +93,26 @@ func setLocationHeader(method string, response proto.Message, writer http.Respon
 		writer.Header().Set("Location", fmt.Sprintf("/api/interfaces/%d", value.GetId()))
 	case *rookeryv1.ACL:
 		writer.Header().Set("Location", fmt.Sprintf("/api/acls/%d", value.GetId()))
-	case *rookeryv1.VNF:
-		writer.Header().Set("Location", fmt.Sprintf("/api/vnfs/%d", value.GetId()))
+	case *rookeryv1.DHCPVNF:
+		writer.Header().Set("Location", fmt.Sprintf("/api/dhcp-vnfs/%d", value.GetId()))
+	case *rookeryv1.DHCPStaticAssignment:
+		writer.Header().Set("Location", fmt.Sprintf("/api/dhcp-vnfs/%d/static-assignments/%d", value.GetVnfId(), value.GetId()))
+	case *rookeryv1.DHCPOption:
+		writer.Header().Set("Location", fmt.Sprintf("/api/dhcp-vnfs/%d/options/%d", value.GetVnfId(), value.GetId()))
+	case *rookeryv1.DNSVNF:
+		writer.Header().Set("Location", fmt.Sprintf("/api/dns-vnfs/%d", value.GetId()))
+	case *rookeryv1.DNSRecord:
+		writer.Header().Set("Location", fmt.Sprintf("/api/dns-vnfs/%d/records/%d", value.GetVnfId(), value.GetId()))
+	case *rookeryv1.DNSForwarder:
+		writer.Header().Set("Location", fmt.Sprintf("/api/dns-vnfs/%d/forwarders/%d", value.GetVnfId(), value.GetId()))
+	case *rookeryv1.NAT44VNF:
+		writer.Header().Set("Location", fmt.Sprintf("/api/nat44-vnfs/%d", value.GetId()))
+	case *rookeryv1.DNATRule:
+		writer.Header().Set("Location", fmt.Sprintf("/api/nat44-vnfs/%d/dnat-rules/%d", value.GetVnfId(), value.GetId()))
+	case *rookeryv1.BGPVNF:
+		writer.Header().Set("Location", fmt.Sprintf("/api/bgp-vnfs/%d", value.GetId()))
+	case *rookeryv1.BGPPrefix:
+		writer.Header().Set("Location", fmt.Sprintf("/api/bgp-vnfs/%d/advertised-prefixes/%d", value.GetVnfId(), value.GetId()))
 	case *rookeryv1.StorageBackend:
 		writer.Header().Set("Location", fmt.Sprintf("/api/storage-backends/%d", value.GetId()))
 	case *rookeryv1.RouteTable:

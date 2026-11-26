@@ -1,22 +1,16 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
-import type { VNF, VNFLease } from "../types";
-import { formatDate } from "./format";
+import type { DHCPLeasesResponse, DHCPVNF, VNFLease } from "../types";
+import { formatDate, vnfTypeLabel } from "./format";
 
 type VNFLeasesDialogProps = {
-  vnf: VNF;
+  vnf: DHCPVNF;
   onClose: () => void;
-};
-
-type LeaseResponse = {
-  vnf_id: number;
-  type: string;
-  leases: VNFLease[];
 };
 
 /**
  * VNFLeasesDialog renders a modal lease table for an IPv4 or IPv6 DHCP VNF, showing client ID,
- * address, hostname, expiry, and active state. It loads /api/vnfs/{id}/leases on mount and
+ * address, hostname, expiry, and active state. It loads /api/dhcp-vnfs/{id}/leases on mount and
  * Refresh, displays an empty state when no clients have leases, and closes on backdrop click.
  */
 export function VNFLeasesDialog({ vnf, onClose }: VNFLeasesDialogProps) {
@@ -28,7 +22,7 @@ export function VNFLeasesDialog({ vnf, onClose }: VNFLeasesDialogProps) {
   const load = async () => {
     setLoading(true);
     try {
-      const data = await api<LeaseResponse>(`/api/vnfs/${vnf.id}/leases`);
+      const data = await api<DHCPLeasesResponse>(`/api/dhcp-vnfs/${vnf.id}/leases`);
       setLeases(Array.isArray(data.leases) ? data.leases : []);
       setError("");
     } catch (err) {
@@ -68,7 +62,7 @@ export function VNFLeasesDialog({ vnf, onClose }: VNFLeasesDialogProps) {
       </header>
 
       <p class="dialog-lede">
-        {vnf.type === "dhcpv6" ? "DHCPv6" : "DHCPv4"} · {vnf.network_name || "network"}
+        {vnfTypeLabel(vnf.type)} · {vnf.network_name || "network"}
       </p>
       {error ? (
         <div class="banner" role="alert">

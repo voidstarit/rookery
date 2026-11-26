@@ -22,9 +22,9 @@ func TestRemoveLeasesForInterface(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	vnf, err := ta.store.CreateVNF(ctx, store.VNF{
-		Name: "dhcp", NetworkID: network.ID, Type: store.VNFTypeDHCPv4, Enabled: true,
-		Config: store.VNFConfig{Gateway: "10.20.0.1/24", RangeStart: "10.20.0.100", RangeEnd: "10.20.0.200"},
+	vnf, err := ta.store.CreateDHCPVNF(ctx, store.NewDHCPVNF{
+		Name: "dhcp", NetworkID: network.ID, Family: store.VNFTypeDHCPv4, Enabled: true,
+		Config: store.DHCPVNFConfig{Gateway: "10.20.0.1/24", RangeStart: "10.20.0.100", RangeEnd: "10.20.0.200"},
 	})
 	if err != nil {
 		t.Fatal(err)

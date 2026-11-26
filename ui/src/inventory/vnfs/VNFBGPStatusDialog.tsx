@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
-import type { VNF, VNFBGPStatus } from "../types";
+import type { BGPVNF, VNFBGPStatus } from "../types";
 
 type VNFBGPStatusDialogProps = {
-  vnf: VNF;
+  vnf: BGPVNF;
   onClose: () => void;
 };
 
@@ -17,7 +17,7 @@ function sessionLabel(state: string): string {
 
 /**
  * VNFBGPStatusDialog renders a modal BGP monitor for one VNF with its session state and the
- * advertised and received prefixes. It fetches /api/vnfs/{id}/bgp on mount and on Refresh,
+ * advertised and received prefixes. It fetches /api/bgp-vnfs/{id}/status on mount and on Refresh,
  * surfaces load errors in a banner, and closes on the backdrop or Close button.
  */
 export function VNFBGPStatusDialog({ vnf, onClose }: VNFBGPStatusDialogProps) {
@@ -29,7 +29,7 @@ export function VNFBGPStatusDialog({ vnf, onClose }: VNFBGPStatusDialogProps) {
   const load = async () => {
     setLoading(true);
     try {
-      const data = await api<VNFBGPStatus>(`/api/vnfs/${vnf.id}/bgp`);
+      const data = await api<VNFBGPStatus>(`/api/bgp-vnfs/${vnf.id}/status`);
       setStatus(data);
       setError("");
     } catch (err) {
@@ -78,8 +78,8 @@ export function VNFBGPStatusDialog({ vnf, onClose }: VNFBGPStatusDialogProps) {
       </header>
 
       <p class="dialog-lede">
-        {vnf.network_name || "network"} · local AS {vnf.config.local_as || "—"} · peer AS{" "}
-        {vnf.config.peer_as || "—"}
+        {vnf.network_name || "network"} · local AS {vnf.local_as || "—"} · peer AS{" "}
+        {vnf.peer_as || "—"}
       </p>
 
       {error ? (
@@ -95,7 +95,7 @@ export function VNFBGPStatusDialog({ vnf, onClose }: VNFBGPStatusDialogProps) {
               {stateLabel}
             </span>
             <span class="bgp-peer">
-              peer {status.peer_address || vnf.config.peer_ip || "—"}
+              peer {status.peer_address || vnf.peer_ip || "—"}
               {status.peer_as ? ` · AS${status.peer_as}` : ""}
             </span>
             <span class="bgp-local">local AS{status.local_as || "—"}</span>

@@ -26,26 +26,29 @@ func TestDHCPDNSIntegrationValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dnsVNF, err := st.CreateVNF(ctx, store.VNF{Name: "dns", NetworkID: network.ID, Type: store.VNFTypeDNS})
+	dnsVNF, err := st.CreateDNSVNF(ctx, store.NewDNSVNF{Name: "dns", NetworkID: network.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	service := New(st, &fakeBackend{}, &sync.Mutex{})
-	if err := service.validateDHCPDNSIntegration(ctx, network.ID, store.VNFTypeDHCPv4, store.VNFConfig{DNSVNFID: dnsVNF.ID}); err != nil {
+	if err := service.validateDHCPDNSIntegration(ctx, network.ID, dnsVNF.ID); err != nil {
 		t.Fatalf("same-network integration rejected: %v", err)
 	}
-	if err := service.validateDHCPDNSIntegration(ctx, other.ID, store.VNFTypeDHCPv4, store.VNFConfig{DNSVNFID: dnsVNF.ID}); err == nil || !strings.Contains(err.Error(), "same network") {
+	if err := service.validateDHCPDNSIntegration(ctx, other.ID, dnsVNF.ID); err == nil || !strings.Contains(err.Error(), "same network") {
 		t.Fatalf("cross-network integration error = %v", err)
 	}
 
-	dhcp, err := st.CreateVNF(ctx, store.VNF{
-		Name: "dhcp", NetworkID: network.ID, Type: store.VNFTypeDHCPv4,
-		Config: store.VNFConfig{DNSVNFID: dnsVNF.ID, DNSDomain: "lab.test"},
+	dhcp, err := st.CreateDHCPVNF(ctx, store.NewDHCPVNF{
+		Name: "dhcp", NetworkID: network.ID, Family: store.VNFTypeDHCPv4,
+		Config: store.DHCPVNFConfig{
+			Gateway: "10.20.0.1/24", RangeStart: "10.20.0.100", RangeEnd: "10.20.0.200",
+			DNSVNFID: dnsVNF.ID, DNSDomain: "lab.test",
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := service.DeleteVNF(ctx, &rookeryv1.DeleteVNFRequest{Id: dnsVNF.ID}); err == nil || !strings.Contains(err.Error(), "used by DHCP") {
+	if err := service.DeleteDNSVNF(ctx, &rookeryv1.DeleteDNSVNFRequest{Id: dnsVNF.ID}); err == nil || !strings.Contains(err.Error(), "used by DHCP") {
 		t.Fatalf("deleting referenced DNS VNF error = %v", err)
 	}
 	_ = dhcp

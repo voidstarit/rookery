@@ -456,15 +456,14 @@ func (s *Server) activateSharedDNS(ctx context.Context, vnf store.VNF, network s
 	if err := s.vnfs.StartShared(ctx, vnf, network.VNFMemifSocket, host.NetworkVNFMemifID(network.ID), serviceCIDR, serviceIPv6CIDR); err != nil {
 		return vnf, err
 	}
-	vnf.Enabled = true
 	vnf.MemifSocket = network.VNFMemifSocket
 	vnf.MemifSwIfIndex = network.VNFMemifSwIfIndex
 	vnf.MemifHostName = network.VNFMemifHostName
 	vnf.TapSwIfIndex = 0
 	vnf.TapHostName = ""
-	updated, err := s.store.UpdateVNF(ctx, vnf.ID, vnf)
+	updated, err := s.persistVNFActivation(ctx, vnf, "", "", false)
 	if err != nil {
-		_ = s.vnfs.Stop(ctx, vnf.ID, false)
+		_ = s.vnfs.Stop(ctx, vnf, false)
 		return vnf, err
 	}
 	s.logger.Info().
@@ -527,15 +526,14 @@ func (s *Server) activateSharedVNF(ctx context.Context, vnf store.VNF, network s
 		return vnf, err
 	}
 
-	vnf.Enabled = true
 	vnf.MemifSocket = network.VNFMemifSocket
 	vnf.MemifSwIfIndex = network.VNFMemifSwIfIndex
 	vnf.MemifHostName = network.VNFMemifHostName
 	vnf.TapSwIfIndex = 0
 	vnf.TapHostName = ""
-	updated, err := s.store.UpdateVNF(ctx, vnf.ID, vnf)
+	updated, err := s.persistVNFActivation(ctx, vnf, gateway, serviceCIDR, true)
 	if err != nil {
-		_ = s.vnfs.Stop(ctx, vnf.ID, false)
+		_ = s.vnfs.Stop(ctx, vnf, false)
 		return vnf, err
 	}
 	s.logger.Info().

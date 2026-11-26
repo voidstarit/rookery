@@ -14,7 +14,7 @@ relevant file before changing a subsystem. User-facing documentation lives in
 | Path | Purpose |
 | --- | --- |
 | `cmd/rookery` | API server: `init`, `serve`, and client-certificate issuance. |
-| `cmd/vnfs` | DHCP/DNS/BGP daemon, exposed to the API over the internal `VNFDaemon` gRPC service. |
+| `cmd/vnfs` | DHCP/DNS/BGP daemon, exposed to the API over the internal typed `DHCPDaemon`, `DNSDaemon`, `BGPDaemon`, and `VNFRuntimeAdmin` gRPC services. |
 | `cmd/terraform-provider-rookery` | Terraform provider, part of the main Go module. |
 | `design/` | Protobuf source of truth, vendored third-party protos, and committed generated Go/OpenAPI. |
 | `internal/` | API, gateway, store, host/VPP, QEMU, LightVM, PKI, cgroups, and UI embedding. |
@@ -131,7 +131,7 @@ first is enough, and do not skip the outline before a large read.
 - Keep host operations and store records consistent. If a host operation succeeds and the DB
   write fails (or vice versa), roll the first side back explicitly.
 - Prefer small, focused packages and typed APIs over JSON blobs except where a schema is
-  deliberately extensible (storage backend `config`, VNF `config`).
+  deliberately extensible (storage backend `config`).
 
 ### Logging
 
@@ -156,6 +156,10 @@ events and lease log levels, are in [`docs/agent-notes/logging.md`](docs/agent-n
 
 - Request validation uses `protoc-gen-validate`. 64-bit JSON fields are emitted as numbers;
   create/delete responses map to `201`/`204`.
+- VNFs are four typed services (`DHCPVNFService`, `DNSVNFService`, `NAT44VNFService`,
+  `BGPVNFService`); there is no common `/api/vnfs` route. Parent writes carry flat scalars, child
+  rows have per-item routes, and a child write reloads the runtime while a parent
+  scalar/transport/enabled change stops and starts it.
 - grpc-gateway registers handlers in declaration order and tries the newest first, so literal
   paths must be declared after patterns they would otherwise shadow (for example
   `/api/interfaces/counters` must stay after `GetInterface`/`DeleteInterface`).
@@ -188,7 +192,7 @@ events and lease log levels, are in [`docs/agent-notes/logging.md`](docs/agent-n
 ### Database
 
 - SQLite uses pure-Go `modernc.org/sqlite`; migrations are embedded and numbered sequentially
-  (latest is `0060_lightvm_ephemeral.sql`). Foreign-key cascades and restriction are used
+  (latest is `0061_per_type_vnfs.sql`). Foreign-key cascades and restriction are used
   deliberately; preserve them when adding tables.
 - Store methods return typed/sentinel errors for cases the API maps to HTTP status codes; use
   transactions for multi-row invariants.
@@ -236,10 +240,11 @@ events and lease log levels, are in [`docs/agent-notes/logging.md`](docs/agent-n
    ephemeral LightVMs are deleted after exit and never auto-start again. →
    [compute](docs/agent-notes/compute.md#vm-lifecycle-and-autostart),
    [lightvm](docs/agent-notes/lightvm.md#lifecycle-autostart-and-ephemeral-runs)
-5. **Concurrency is explicit.** `resourceMu` serializes disk provisioning with VM attachment;
-   a shared run mutex guards VM lifecycle with reconciliation; `lightvm.StartCoordinator`
-   serializes starts per LightVM and limits concurrent preparation. Preserve or replace these
-   with equivalent guarantees. → [api](docs/agent-notes/api.md#concurrency)
+5. **Concurrency is explicit.** The shared `resourceMu` serializes disk provisioning, VM
+   attachment, and typed VNF writes/reloads; a shared run mutex guards VM lifecycle with
+   reconciliation; `lightvm.StartCoordinator` serializes starts per LightVM and limits concurrent
+   preparation. Preserve or replace these with equivalent guarantees. →
+   [api](docs/agent-notes/api.md#concurrency)
 6. **The gateway/native split is deliberate.** WebSockets, pcap streams, PKI, uploads, and the
    UI stay on native handlers; the public mTLS listener serves the gateway plus the token
    console only, and PKI endpoints are not exposed there. → [api](docs/agent-notes/api.md#http-listeners-and-native-routes)
@@ -274,10 +279,10 @@ events and lease log levels, are in [`docs/agent-notes/logging.md`](docs/agent-n
 | [LightVM](docs/agent-notes/lightvm.md) | Inventory, runtimes, config drive, lifecycle, consoles, kernel variants. |
 | [Storage](docs/agent-notes/storage.md) | Backends, Kouja, templates, attachments, passthrough, throttle classes, media. |
 | [Networking](docs/agent-notes/networking.md) | Networks, interfaces, ACLs, routes, host NICs/taps, NAT44, reconciliation, counters. |
-| [VNFs](docs/agent-notes/vnfs.md) | Daemon RPCs, DHCP/DNS/BGP runtimes, transports, leases, legacy cleanup. |
+| [VNFs](docs/agent-notes/vnfs.md) | Typed records/tables, daemon RPCs, DHCP/DNS/BGP runtimes, transports, reload, leases, legacy cleanup. |
 | [Troubleshooting](docs/agent-notes/troubleshooting.md) | VPP graph, packet trace, ACL counters, packet capture. |
 | [Operations](docs/agent-notes/operations.md) | Readiness, mTLS/PKI, client allowlist, local-listener security, rate limits. |
-| [Terraform](docs/agent-notes/terraform.md) | Provider scope and disk force delete. |
+| [Terraform](docs/agent-notes/terraform.md) | Provider scope, typed VNF resources and state migration, disk force delete. |
 | [Logging](docs/agent-notes/logging.md) | zerolog setup, fields, levels, and trace-level events. |
 | [Tooling](docs/agent-notes/tooling.md) | gopls/TypeScript navigation (incl. call hierarchy and caveats), read protocol, edit rules, sandbox cache workaround. |
 

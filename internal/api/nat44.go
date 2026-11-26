@@ -95,10 +95,9 @@ func (s *Server) activateNAT44(ctx context.Context, vnf store.VNF) (store.VNF, e
 		return vnf, err
 	}
 
-	vnf.Enabled = true
 	vnf.TapSwIfIndex = 0
 	vnf.TapHostName = ""
-	updated, err := s.store.UpdateVNF(ctx, vnf.ID, vnf)
+	updated, err := s.persistVNFActivation(ctx, vnf, "", "", false)
 	if err != nil {
 		_ = s.nat.RemoveNAT44StaticMappings(ctx, outside, vnf.ID)
 		_ = s.nat.RemoveNAT44(ctx, bviName, outside, vnf.Config.NAT44Pool)
@@ -238,11 +237,13 @@ func (s *Server) configureDHCPv4ForNAT(ctx context.Context, network store.Networ
 		if bytesCompareIPv4(start, bindIP) <= 0 && bytesCompareIPv4(end, bindIP) >= 0 {
 			return fmt.Errorf("DHCPv4 VNF %s range cannot include the NAT service address %s", vnf.Name, bindIP)
 		}
-		changed := vnf.Config.Gateway != natGateway || vnf.Config.BindIP != bindCIDR
+		previousGateway := vnf.Config.Gateway
+		previousBind := vnf.Config.BindIP
+		changed := previousGateway != natGateway || previousBind != bindCIDR
 		vnf.Config.Gateway = natGateway
 		vnf.Config.BindIP = bindCIDR
 		if !changed {
-			if vnf.Enabled && !s.vnfs.Running(ctx, vnf.ID) {
+			if vnf.Enabled && !s.vnfs.Running(ctx, vnf) {
 				if vnf.TapHostName != "" {
 					if err := s.vnfs.Start(ctx, vnf, vnf.TapHostName); err == nil {
 						continue
@@ -255,21 +256,21 @@ func (s *Server) configureDHCPv4ForNAT(ctx context.Context, network store.Networ
 			continue
 		}
 
-		if vnf.Enabled {
-			if err := s.stopVNF(ctx, vnf, false); err != nil {
-				return fmt.Errorf("stop DHCPv4 VNF %s for NAT: %w", vnf.Name, err)
-			}
-			vnf.TapSwIfIndex = 0
-			vnf.TapHostName = ""
-		}
-		saved, err := s.store.UpdateVNF(ctx, vnf.ID, vnf)
-		if err != nil {
+		// A derived gateway/bind change reloads the running DHCP runtime; it does
+		// not remove the client state.
+		if err := s.store.SetDHCPVNFNetworkBindings(ctx, vnf.ID, natGateway, bindCIDR); err != nil {
 			return fmt.Errorf("save DHCPv4 VNF %s for NAT: %w", vnf.Name, err)
 		}
-		if saved.Enabled {
-			if _, err := s.activateVNF(ctx, saved); err != nil {
-				return fmt.Errorf("restart DHCPv4 VNF %s for NAT: %w", vnf.Name, err)
-			}
+		if !vnf.Enabled {
+			continue
+		}
+		reloaded, err := s.store.GetVNF(ctx, vnf.ID)
+		if err != nil {
+			return fmt.Errorf("read DHCPv4 VNF %s for NAT: %w", vnf.Name, err)
+		}
+		if err := s.vnfs.ReloadVNF(ctx, reloaded); err != nil {
+			_ = s.store.SetDHCPVNFNetworkBindings(ctx, vnf.ID, previousGateway, previousBind)
+			return fmt.Errorf("reload DHCPv4 VNF %s for NAT: %w", vnf.Name, err)
 		}
 	}
 	return nil

@@ -673,81 +673,176 @@ export type ACL = {
 
 export type VNFType = "dhcpv4" | "dhcpv6" | "nat44" | "bgp" | "dns";
 
+/**
+ * VNFBase is the identity and runtime metadata carried by every typed VNF record.
+ */
+export type VNFBase = {
+  id: number;
+  name: string;
+  network_id: number;
+  network_name?: string;
+  enabled: boolean;
+  status?: string;
+  status_detail?: string;
+  tap_sw_if_index?: number;
+  tap_host_name?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
+ * DHCPVNFRecord is one DHCPv4 or DHCPv6 VNF as returned by /api/dhcp-vnfs; its
+ * static assignments and options are separate child rows summarized by counts.
+ */
+export type DHCPVNFRecord = VNFBase & {
+  family: "dhcpv4" | "dhcpv6";
+  gateway: string;
+  range_start: string;
+  range_end: string;
+  lease_time: string;
+  dns: string;
+  bind_ip: string;
+  transport: string;
+  dns_vnf_id: number;
+  dns_domain: string;
+  dns_ttl: number;
+  static_assignment_count: number;
+  option_count: number;
+  lease_count: number;
+};
+
+/**
+ * DHCPVNF is a DHCP record tagged with its family for the merged inventory union.
+ */
+export type DHCPVNF = DHCPVNFRecord & { type: "dhcpv4" | "dhcpv6" };
+
+/**
+ * DNSVNFRecord is one DNS VNF as returned by /api/dns-vnfs; its records and
+ * forwarders are separate child rows summarized by counts.
+ */
+export type DNSVNFRecord = VNFBase & {
+  forward: boolean;
+  record_count: number;
+  forwarder_count: number;
+};
+
+/**
+ * DNSVNF is a DNS record tagged for the merged inventory union.
+ */
+export type DNSVNF = DNSVNFRecord & { type: "dns" };
+
+/**
+ * NAT44VNFRecord is one NAT44 VNF as returned by /api/nat44-vnfs; its DNAT
+ * rules are separate child rows summarized by a count.
+ */
+export type NAT44VNFRecord = VNFBase & {
+  gateway: string;
+  outside_interface: string;
+  outside_address: string;
+  outside_gateway: string;
+  nat44_pool: string;
+  dnat_rule_count: number;
+};
+
+/**
+ * NAT44VNF is a NAT44 record tagged for the merged inventory union.
+ */
+export type NAT44VNF = NAT44VNFRecord & { type: "nat44" };
+
+/**
+ * BGPVNFRecord is one BGP VNF as returned by /api/bgp-vnfs. The password is
+ * write-only and never appears on a read.
+ */
+export type BGPVNFRecord = VNFBase & {
+  transport: string;
+  local_as: number;
+  router_id: string;
+  peer_as: number;
+  peer_ip: string;
+  local_ip: string;
+  peer_gateway: string;
+  multihop_ttl: number;
+  passive: boolean;
+  target_table_id: number;
+  next_hop: string;
+  advertised_prefix_count: number;
+};
+
+/**
+ * BGPVNF is a BGP record tagged for the merged inventory union.
+ */
+export type BGPVNF = BGPVNFRecord & { type: "bgp" };
+
+/**
+ * VNF is the tagged union the merged inventory table, dialogs, and networks
+ * view use; the type tag is added by format.ts when the typed lists are merged.
+ */
+export type VNF = DHCPVNF | DNSVNF | NAT44VNF | BGPVNF;
+
+/**
+ * DHCPStaticAssignment reserves one IPv4 address for one MAC address.
+ */
+export type DHCPStaticAssignment = {
+  id?: number;
+  vnf_id?: number;
+  mac: string;
+  ip: string;
+};
+
+/**
+ * DHCPOption is one extra DHCPv4 or DHCPv6 option advertised by a DHCP VNF.
+ */
+export type DHCPOption = {
+  id?: number;
+  vnf_id?: number;
+  code: number;
+  format: string;
+  value: string;
+};
+
+export type DNSRecordType = "A" | "AAAA" | "CNAME" | "TXT" | "PTR";
+
+/**
+ * DNSRecord is one local record served by a DNS VNF.
+ */
+export type DNSRecord = {
+  id?: number;
+  vnf_id?: number;
+  name: string;
+  type: DNSRecordType;
+  value: string;
+  ttl: number;
+};
+
+/**
+ * DNSForwarder is one upstream resolver; position orders the forwarders.
+ */
+export type DNSForwarder = {
+  id?: number;
+  vnf_id?: number;
+  address: string;
+  position: number;
+};
+
+/**
+ * DNATRule forwards one external port to a local address and port.
+ */
 export type DNATRule = {
+  id?: number;
+  vnf_id?: number;
   protocol: "tcp" | "udp";
   external_port: number;
   local_ip: string;
   local_port: number;
 };
 
-export type DNSRecord = {
-  name: string;
-  type: "A" | "AAAA" | "CNAME" | "TXT" | "PTR";
-  value: string;
-  ttl?: number;
-};
-
-export type DHCPOption = {
-  code: number;
-  format: string;
-  value: string;
-};
-
-export type VNFConfig = {
-  gateway?: string;
-  range_start?: string;
-  range_end?: string;
-  dns?: string;
-  lease_time?: string;
-  bind_ip?: string;
-  static_assignments?: DHCPStaticAssignment[];
-  outside_interface?: string;
-  outside_address?: string;
-  outside_gateway?: string;
-  nat44_pool?: string;
-  dnat_rules?: DNATRule[];
-  transport?: "shared" | "dedicated" | "tap" | "memif";
-  local_as?: number;
-  router_id?: string;
-  peer_as?: number;
-  peer_ip?: string;
-  local_ip?: string;
-  peer_gateway?: string;
-  multihop_ttl?: number;
-  password?: string;
-  passive?: boolean;
-  target_table_id?: number;
-  advertise_prefixes?: string[];
-  next_hop?: string;
-  dns_records?: DNSRecord[];
-  dns_forward?: boolean;
-  dns_forwarders?: string[];
-  dns_vnf_id?: number;
-  dns_domain?: string;
-  dns_ttl?: number;
-  dhcp_options?: DHCPOption[];
-};
-
-export type DHCPStaticAssignment = {
-  mac: string;
-  ip: string;
-};
-
-export type VNF = {
-  id: number;
-  name: string;
-  network_id: number;
-  network_name?: string;
-  type: VNFType;
-  enabled: boolean;
-  config: VNFConfig;
-  tap_sw_if_index?: number;
-  tap_host_name?: string;
-  status?: "running" | "disabled" | "degraded";
-  status_detail?: string;
-  lease_count?: number;
-  created_at: string;
-  updated_at: string;
+/**
+ * BGPPrefix is one prefix advertised by a BGP VNF.
+ */
+export type BGPPrefix = {
+  id?: number;
+  vnf_id?: number;
+  prefix: string;
 };
 
 export type HostInterface = {
@@ -787,12 +882,50 @@ export type VNFLease = {
   active: boolean;
 };
 
-export type VNFBGPReceivedPrefix = {
+/**
+ * DHCPLeasesResponse is the lease list returned by /api/dhcp-vnfs/{id}/leases.
+ */
+export type DHCPLeasesResponse = {
+  vnf_id: number;
+  leases: VNFLease[];
+};
+
+/**
+ * NAT44SessionsResponse is the translation list returned by
+ * /api/nat44-vnfs/{id}/sessions.
+ */
+export type NAT44SessionsResponse = {
+  vnf_id: number;
+  sessions: string[];
+};
+
+/**
+ * BGPReceivedPrefix is one prefix learned from a BGP peer.
+ */
+export type BGPReceivedPrefix = {
   prefix: string;
   next_hop: string;
   as_path?: number[];
 };
 
+/**
+ * VNFBGPStatus is the live snapshot returned by /api/bgp-vnfs/{id}/status.
+ */
+export type VNFBGPStatus = {
+  vnf_id: number;
+  running: boolean;
+  established: boolean;
+  session_state: string;
+  peer_address: string;
+  peer_as: number;
+  local_as: number;
+  advertised: string[];
+  received: BGPReceivedPrefix[];
+};
+
+/**
+ * VNFDNSRecord is one record in the merged static and DHCP-derived DNS view.
+ */
 export type VNFDNSRecord = {
   name: string;
   type: string;
@@ -802,24 +935,14 @@ export type VNFDNSRecord = {
   source_vnf_id?: number;
 };
 
+/**
+ * VNFDNSRecordsResponse is the merged record view returned by
+ * /api/dns-vnfs/{id}/record-views.
+ */
 export type VNFDNSRecordsResponse = {
   vnf_id: number;
-  type: string;
   records: VNFDNSRecord[];
   dynamic_error?: string;
-};
-
-export type VNFBGPStatus = {
-  vnf_id: number;
-  type: string;
-  running: boolean;
-  established: boolean;
-  session_state: string;
-  peer_address: string;
-  peer_as: number;
-  local_as: number;
-  advertised: string[];
-  received: VNFBGPReceivedPrefix[];
 };
 
 export type StatusResponse = {

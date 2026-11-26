@@ -69,15 +69,14 @@ func (s *Server) activateMemifVNF(ctx context.Context, vnf store.VNF, network st
 		return vnf, err
 	}
 
-	vnf.Enabled = true
 	vnf.MemifSwIfIndex = memifSwIfIndex
 	vnf.MemifSocket = socketPath
 	vnf.MemifHostName = hostIf
 	vnf.TapSwIfIndex = 0
 	vnf.TapHostName = ""
-	updated, err := s.store.UpdateVNF(ctx, vnf.ID, vnf)
+	updated, err := s.persistVNFActivation(ctx, vnf, "", "", false)
 	if err != nil {
-		_ = s.vnfs.Stop(ctx, vnf.ID, false)
+		_ = s.vnfs.Stop(ctx, vnf, false)
 		_ = s.networks.DeleteMemif(ctx, memifSwIfIndex)
 		return vnf, err
 	}

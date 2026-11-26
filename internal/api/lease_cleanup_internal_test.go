@@ -81,16 +81,16 @@ func TestReconcileOrphanedLeases(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	v4, err := st.CreateVNF(ctx, store.VNF{
-		Name: "dhcp", NetworkID: network.ID, Type: store.VNFTypeDHCPv4, Enabled: true,
-		Config: store.VNFConfig{Gateway: "10.20.0.1/24", RangeStart: "10.20.0.100", RangeEnd: "10.20.0.200"},
+	v4, err := st.CreateDHCPVNF(ctx, store.NewDHCPVNF{
+		Name: "dhcp", NetworkID: network.ID, Family: store.VNFTypeDHCPv4, Enabled: true,
+		Config: store.DHCPVNFConfig{Gateway: "10.20.0.1/24", RangeStart: "10.20.0.100", RangeEnd: "10.20.0.200"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	v6, err := st.CreateVNF(ctx, store.VNF{
-		Name: "dhcp6", NetworkID: network.ID, Type: store.VNFTypeDHCPv6, Enabled: true,
-		Config: store.VNFConfig{Gateway: "fd00:20::1/64", RangeStart: "fd00:20::100", RangeEnd: "fd00:20::200"},
+	v6, err := st.CreateDHCPVNF(ctx, store.NewDHCPVNF{
+		Name: "dhcp6", NetworkID: network.ID, Family: store.VNFTypeDHCPv6, Enabled: true,
+		Config: store.DHCPVNFConfig{Gateway: "fd00:20::1/64", RangeStart: "fd00:20::100", RangeEnd: "fd00:20::200"},
 	})
 	if err != nil {
 		t.Fatal(err)

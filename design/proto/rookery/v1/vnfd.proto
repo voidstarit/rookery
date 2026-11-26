@@ -3,97 +3,146 @@ syntax = "proto3";
 package rookery.v1;
 
 import "google/protobuf/empty.proto";
-import "rookery/v1/vnf.proto";
 import "validate/validate.proto";
+import "rookery/v1/vnf.proto";
+import "rookery/v1/dhcp_vnf.proto";
+import "rookery/v1/dns_vnf.proto";
+import "rookery/v1/bgp_vnf.proto";
 
 option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
 
-// VNFDaemon is the internal control channel between the API server and the
-// separate VNF daemon (cmd/vnfs). It is not exposed through the HTTP gateway.
-// The API owns all VPP provisioning (memif/tap creation) and sends the full
-// desired runtime spec; the daemon owns the userspace runtimes (CoreDHCP,
-// gVisor memif stacks, GoBGP) so API restarts do not interrupt them.
-service VNFDaemon {
-  // EnsureVNF starts a VNF runtime, or restarts it when the spec changed.
+// The internal daemon services are the control channel between the API server
+// and the separate VNF daemon (cmd/vnfs). They are not exposed through the HTTP
+// gateway. The API owns all VPP provisioning (memif/tap creation) and sends the
+// full desired runtime spec per type; the daemon owns the userspace runtimes
+// (CoreDHCP, gVisor memif stacks, GoBGP) so API restarts do not interrupt them.
+//
+// Each type service has its own ensure, remove, reload, and state calls plus
+// the reads that belong to that runtime. Daemon-wide operations stay on
+// VNFRuntimeAdmin.
+
+service DHCPDaemon {
+  // EnsureDHCP starts a DHCP runtime, or restarts it when the spec changed.
   // It is idempotent: a running VNF with an unchanged spec is left alone.
-  rpc EnsureVNF(EnsureVNFRequest) returns (VNFState);
-  rpc RemoveVNF(RemoveVNFRequest) returns (google.protobuf.Empty);
+  rpc EnsureDHCP(EnsureDHCPRequest) returns (VNFState);
+  rpc RemoveDHCP(RemoveDHCPRequest) returns (google.protobuf.Empty);
+  // ReloadDHCP swaps the runtime configuration in place. It keeps the process,
+  // the lease file, and the listener. A reload of a runtime that is not running
+  // returns running=false and does not start it.
+  rpc ReloadDHCP(ReloadDHCPRequest) returns (VNFState);
+  rpc GetDHCPState(GetDHCPStateRequest) returns (VNFState);
+  rpc ListDHCPLeases(ListDHCPLeasesRequest) returns (ListDHCPLeasesResponse);
+  // RemoveDHCPLeases drops specific leases from a running DHCP runtime and its
+  // persisted lease file.
+  rpc RemoveDHCPLeases(RemoveDHCPLeasesRequest) returns (RemoveDHCPLeasesResponse);
+}
+
+service DNSDaemon {
+  rpc EnsureDNS(EnsureDNSRequest) returns (VNFState);
+  rpc RemoveDNS(RemoveDNSRequest) returns (google.protobuf.Empty);
+  rpc ReloadDNS(ReloadDNSRequest) returns (VNFState);
+  rpc GetDNSState(GetDNSStateRequest) returns (VNFState);
+  // ListDNSRecords returns the dynamic records derived from DHCP leases.
+  rpc ListDNSRecords(ListDNSRecordsRequest) returns (ListDNSRecordsResponse);
+}
+
+service BGPDaemon {
+  rpc EnsureBGP(EnsureBGPRequest) returns (VNFState);
+  rpc RemoveBGP(RemoveBGPRequest) returns (google.protobuf.Empty);
+  rpc ReloadBGP(ReloadBGPRequest) returns (VNFState);
+  rpc GetBGPState(GetBGPStateRequest) returns (VNFState);
+  rpc GetBGPStatus(GetBGPStatusRequest) returns (BGPStatus);
+}
+
+service VNFRuntimeAdmin {
   // ResetRuntime stops every runtime but keeps the desired specs so the API
   // can re-ensure them after a VPP restart.
   rpc ResetRuntime(ResetRuntimeRequest) returns (google.protobuf.Empty);
-  rpc ListVNFStates(ListVNFStatesRequest) returns (ListVNFStatesResponse);
-  rpc GetVNFState(GetVNFStateRequest) returns (VNFState);
-  rpc ListLeases(ListLeasesRequest) returns (ListLeasesResponse);
-  // RemoveLeases drops specific leases from a running DHCP runtime and its
-  // persisted lease file. Dynamic DNS records derived from those leases are
-  // removed by the daemon's normal lease reconciliation.
-  rpc RemoveLeases(RemoveLeasesRequest) returns (RemoveLeasesResponse);
-  rpc GetBGPStatus(GetBGPStatusRequest) returns (VNFBGPStatus);
-  rpc ListDNSRecords(ListDNSRecordsRequest) returns (ListDNSRecordsResponse);
   // CleanupLegacyNetwork removes DHCP runtime files left by the old
   // per-network DHCP implementation.
   rpc CleanupLegacyNetwork(CleanupLegacyNetworkRequest) returns (google.protobuf.Empty);
 }
 
-message VNFSpec {
+// RuntimeSpec is the transport and identity part shared by every runtime spec.
+message RuntimeSpec {
   int64 id = 1 [(validate.rules).int64 = {gt: 0}];
   string name = 2;
-  string type = 3 [(validate.rules).string = {in: ["dhcpv4", "dhcpv6", "bgp"]}];
-  int64 network_id = 4;
-  // transport tells the daemon how the VNF reaches VPP: "memif" uses the
-  // memif socket created by the API, anything else uses tap_host_name.
-  string transport = 5 [(validate.rules).string = {in: ["memif", "tap", "shared"]}];
-  VNFConfig config = 6;
-  string tap_host_name = 7;
-  string memif_socket = 8;
-  uint32 memif_sw_if_index = 9;
+  int64 network_id = 3;
+  // transport tells the daemon how the VNF reaches VPP: "memif"/"dedicated"
+  // uses the memif socket created by the API, "shared" uses the network's
+  // shared stack, anything else uses tap_host_name.
+  string transport = 4 [(validate.rules).string = {in: ["", "memif", "tap", "shared", "dedicated"]}];
+  string tap_host_name = 5;
+  string memif_socket = 6;
+  uint32 memif_sw_if_index = 7;
   // shared_address is the IPv4 CIDR assigned to the network's shared VNF
   // memif stack (normally .2/prefix). It is required for transport "shared".
-  string shared_address = 10;
+  string shared_address = 8;
   // shared_ipv6_address is the IPv6 CIDR assigned to the network's shared VNF
-  // memif stack (normally prefix + 2). DNS listens on UDP/TCP 53 over both
-  // families when it is present.
-  string shared_ipv6_address = 11;
+  // memif stack (normally prefix + 2).
+  string shared_ipv6_address = 9;
 }
 
-message EnsureVNFRequest {
-  VNFSpec vnf = 1 [(validate.rules).message = {required: true}];
+// DHCPRuntimeSpec is the full desired spec of one DHCP runtime.
+message DHCPRuntimeSpec {
+  RuntimeSpec runtime = 1 [(validate.rules).message = {required: true}];
+  string family = 2 [(validate.rules).string = {in: ["dhcpv4", "dhcpv6"]}];
+  oneof config {
+    DHCPV4RuntimeConfig dhcpv4 = 3;
+    DHCPV6RuntimeConfig dhcpv6 = 4;
+  }
 }
 
-message RemoveVNFRequest {
+// DNSRuntimeSpec is the full desired spec of one DNS runtime.
+message DNSRuntimeSpec {
+  RuntimeSpec runtime = 1 [(validate.rules).message = {required: true}];
+  DNSRuntimeConfig config = 2;
+}
+
+// BGPRuntimeSpec is the full desired spec of one BGP runtime.
+message BGPRuntimeSpec {
+  RuntimeSpec runtime = 1 [(validate.rules).message = {required: true}];
+  BGPRuntimeConfig config = 2;
+}
+
+// DesiredRuntime is the persisted desired spec of one runtime. The oneof
+// selects the runtime type. Load ignores files that do not parse as this
+// wrapper, including the old single-VNFSpec files.
+message DesiredRuntime {
+  oneof runtime {
+    DHCPRuntimeSpec dhcp = 1;
+    DNSRuntimeSpec dns = 2;
+    BGPRuntimeSpec bgp = 3;
+  }
+}
+
+message EnsureDHCPRequest {
+  DHCPRuntimeSpec spec = 1 [(validate.rules).message = {required: true}];
+}
+
+message ReloadDHCPRequest {
+  DHCPRuntimeSpec spec = 1 [(validate.rules).message = {required: true}];
+}
+
+message RemoveDHCPRequest {
   int64 id = 1 [(validate.rules).int64 = {gt: 0}];
   bool remove_leases = 2;
 }
 
-message ResetRuntimeRequest {}
-
-message VNFState {
-  int64 id = 1;
-  bool running = 2;
-  string detail = 3;
-}
-
-message ListVNFStatesRequest {}
-
-message ListVNFStatesResponse {
-  repeated VNFState vnfs = 1;
-}
-
-message GetVNFStateRequest {
+message GetDHCPStateRequest {
   int64 id = 1 [(validate.rules).int64 = {gt: 0}];
 }
 
-message ListLeasesRequest {
+message ListDHCPLeasesRequest {
   int64 id = 1 [(validate.rules).int64 = {gt: 0}];
 }
 
-message ListLeasesResponse {
+message ListDHCPLeasesResponse {
   int64 vnf_id = 1;
-  string type = 2;
-  repeated VNFLease leases = 3;
+  repeated VNFLease leases = 2;
 }
 
-message RemoveLeasesRequest {
+message RemoveDHCPLeasesRequest {
   int64 id = 1 [(validate.rules).int64 = {gt: 0}];
   repeated string client_ids = 2 [(validate.rules).repeated = {
     min_items: 1
@@ -102,11 +151,23 @@ message RemoveLeasesRequest {
   }];
 }
 
-message RemoveLeasesResponse {
+message RemoveDHCPLeasesResponse {
   int64 removed = 1;
 }
 
-message GetBGPStatusRequest {
+message EnsureDNSRequest {
+  DNSRuntimeSpec spec = 1 [(validate.rules).message = {required: true}];
+}
+
+message ReloadDNSRequest {
+  DNSRuntimeSpec spec = 1 [(validate.rules).message = {required: true}];
+}
+
+message RemoveDNSRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message GetDNSStateRequest {
   int64 id = 1 [(validate.rules).int64 = {gt: 0}];
 }
 
@@ -116,9 +177,38 @@ message ListDNSRecordsRequest {
 
 message ListDNSRecordsResponse {
   int64 vnf_id = 1;
-  repeated VNFDNSRecord records = 2;
+  repeated DNSRecordView records = 2;
 }
+
+message EnsureBGPRequest {
+  BGPRuntimeSpec spec = 1 [(validate.rules).message = {required: true}];
+}
+
+message ReloadBGPRequest {
+  BGPRuntimeSpec spec = 1 [(validate.rules).message = {required: true}];
+}
+
+message RemoveBGPRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message GetBGPStateRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message GetBGPStatusRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ResetRuntimeRequest {}
 
 message CleanupLegacyNetworkRequest {
   int64 network_id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+// VNFState is the running state of one runtime.
+message VNFState {
+  int64 id = 1;
+  bool running = 2;
+  string detail = 3;
 }

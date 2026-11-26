@@ -395,7 +395,10 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 	rookeryv1.RegisterInterfaceServiceServer(server, interfaces)
 	rookeryv1.RegisterACLServiceServer(server, acls)
 	rookeryv1.RegisterRouteTableServiceServer(server, routeTables)
-	rookeryv1.RegisterVNFServiceServer(server, vnfs)
+	rookeryv1.RegisterDHCPVNFServiceServer(server, vnfs)
+	rookeryv1.RegisterDNSVNFServiceServer(server, vnfs)
+	rookeryv1.RegisterNAT44VNFServiceServer(server, vnfs)
+	rookeryv1.RegisterBGPVNFServiceServer(server, vnfs)
 	rookeryv1.RegisterStorageBackendServiceServer(server, backends)
 	rookeryv1.RegisterHostServiceServer(server, hostInterfaces)
 	rookeryv1.RegisterTroubleshootServiceServer(server, troubleshoot)
@@ -455,7 +458,10 @@ func New(st *store.Store, ready Readiness, opts ...Option) (*Gateway, error) {
 		rookeryv1.RegisterInterfaceServiceHandler,
 		rookeryv1.RegisterACLServiceHandler,
 		rookeryv1.RegisterRouteTableServiceHandler,
-		rookeryv1.RegisterVNFServiceHandler,
+		rookeryv1.RegisterDHCPVNFServiceHandler,
+		rookeryv1.RegisterDNSVNFServiceHandler,
+		rookeryv1.RegisterNAT44VNFServiceHandler,
+		rookeryv1.RegisterBGPVNFServiceHandler,
 		rookeryv1.RegisterStorageBackendServiceHandler,
 		rookeryv1.RegisterHostServiceHandler,
 		rookeryv1.RegisterTroubleshootServiceHandler,

@@ -38,18 +38,33 @@ builds the UI first and sets the provider version from `VERSION`.
 ## Database
 
 SQLite uses the pure-Go `modernc.org/sqlite` driver, so builds need no CGO. The module targets Go
-1.26 and pins `modernc.org/sqlite` v1.60.1.
+1.26 and pins `modernc.org/sqlite` v1.60.1. Migrations are embedded from
+`internal/store/migrations`; the latest is `0061_per_type_vnfs.sql`. Key tables:
+
+| Area | Tables |
+| --- | --- |
+| Storage | `storage_backends`, `disks`, `vm_disks`, `disk_throttle_classes` |
+| VMs | `vms` (`vms.disk_id` is a legacy compatibility column) |
+| LightVM | `lightvm_kernels`, `lightvm_initramfs`, `lightvms`, `lightvm_interfaces`, `lightvm_consoles`, `lightvm_virtiofs_shares`, `lightvm_console_access` |
+| Media | `media` |
+| Networks | `networks`, `virtual_interfaces`, `network_host_taps`, `network_pipes` |
+| Network policy | `acls`, `interface_acls`, `route_tables`, `routes` |
+| VNF identity | `vnfs` (identity only; `config` was dropped in 0061) |
+| VNF typed parents | `dhcpv4_vnfs`, `dhcpv6_vnfs`, `dns_vnfs`, `nat44_vnfs`, `bgp_vnfs` |
+| VNF children | `dhcpv4_static_assignments`, `dhcpv4_options`, `dhcpv6_options`, `dns_records`, `dns_forwarders`, `nat44_dnat_rules`, `bgp_advertised_prefixes` |
+| Host takeover | `host_interfaces` |
+| PKI and labels | `client_certificates`, `entity_labels` |
 
 ## Package map
 
 | Path | Purpose |
 | --- | --- |
 | `cmd/rookery` | `init`, `serve`, and `create-client-cert` entry points. |
-| `cmd/vnfs` | DHCP/DNS/BGP daemon and its `VNFDaemon` gRPC service. |
+| `cmd/vnfs` | DHCP/DNS/BGP daemon and its typed `DHCPDaemon`, `DNSDaemon`, and `BGPDaemon` gRPC services. |
 | `cmd/terraform-provider-rookery` | Terraform provider (part of the main Go module). |
 | `internal/api` | HTTP server, native handlers, lifecycle endpoints, autostart, reconciliation. |
 | `internal/gateway` | grpc-gateway service implementations. |
-| `internal/lifecycle` | VNF writes and network-deletion orchestration. |
+| `internal/lifecycle` | Typed VNF parent/child writes and reloads, network-deletion orchestration. |
 | `internal/store` | SQLite schema, migrations, and persistence. |
 | `internal/qemu` | QEMU/KVM launch, monitor socket, VNC sockets, disk arguments. |
 | `internal/lightvm` | LightVM preparation/start/cleanup runtime and start coordinator. |
@@ -61,7 +76,7 @@ SQLite uses the pure-Go `modernc.org/sqlite` driver, so builds need no CGO. The 
 | `internal/diskthrottle` | Validates and formats QEMU block-throttling limits. |
 | `internal/blockdev` | Block-device attachment descriptions. |
 | `internal/pki` | CA, server/client certificates, and mTLS configuration. |
-| `internal/vnfd` | Client for the VNF daemon gRPC service. |
+| `internal/vnfd` | Client for the typed VNF daemon services; daemon gRPC server implementation. |
 | `internal/readiness` | Cached host-prerequisite status. |
 | `internal/config` | YAML/environment/flag configuration loading. |
 | `internal/logging` | Process-wide zerolog setup. |

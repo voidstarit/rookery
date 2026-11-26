@@ -229,11 +229,15 @@ downloaded capture in Wireshark or another packet analyzer. The active capture
 file cannot be deleted until the capture is stopped.
 
 Network functions (**VNFs**) are attached to Rookery Networks. The **VNFs** tab
-supports `dhcpv4`, `dhcpv6`, `nat44`, `bgp`, and `dns` functions; the VNF record
-has a type, network, enable flag, and type-specific configuration. A network can
-have one VNF of each type. Adding or editing a VNF opens a full page at `/vnfs/new`
-or `/vnfs/{id}/edit`, so refreshing keeps the form open; lease and session
-views remain dialogs.
+supports `dhcpv4`, `dhcpv6`, `nat44`, `bgp`, and `dns` functions. Each VNF is
+one `vnfs` identity row (name, network, enable flag, tap/memif metadata) plus a
+typed parent row (`dhcpv4_vnfs`, `dhcpv6_vnfs`, `dns_vnfs`, `nat44_vnfs`, or
+`bgp_vnfs`) and typed child rows. The API is four typed services
+(`/api/dhcp-vnfs`, `/api/dns-vnfs`, `/api/nat44-vnfs`, `/api/bgp-vnfs`); there
+is no `/api/vnfs` resource. A network can have one VNF of each type. Adding or
+editing a VNF opens a full page at `/vnfs/new` or `/vnfs/{id}/edit`, so
+refreshing keeps the form open; leases, sessions, BGP status, and DNS records
+remain dialogs at `/vnfs/{id}/leases`, `/sessions`, `/bgp`, and `/dns`.
 
 DNS VNFs provide a small authoritative DNS server on the network's shared VNF
 memif, reachable at the network service address (`.2`, UDP/TCP 53 over both
@@ -247,8 +251,9 @@ precedence. Point DHCP clients at the `.2` service address through the DHCP
 VNF's DNS field.
 
 A DHCPv4 or DHCPv6 VNF can register its active leases in a DNS VNF on the same
-network. Set `dns_vnf_id` to the DNS VNF id, `dns_domain` to the suffix used for
-names (for example `lab1.test`), and optionally `dns_ttl` (default 300 seconds).
+network. Set the DHCP parent's `dns_vnf_id` to the DNS VNF id, `dns_domain` to
+the suffix used for names (for example `lab1.test`), and optionally `dns_ttl`
+(default 300 seconds).
 The daemon prefers the client's DHCP FQDN option, falls back to the DHCP
 hostname plus the domain suffix, and uses a MAC/DUID-derived `host-...` name if
 the client sends no usable name or the name conflicts. A/AAAA and PTR records
@@ -354,16 +359,18 @@ both IPv4 and IPv6, with table ID `100000 + network ID` and a
 `100000` upward are reserved for network VRFs and cannot be created manually.
 
 The default is controlled by `networks.vnf_transport` (currently `shared`).
-Each VNF can override it with `config.transport`:
+A DHCPv4 VNF can override it with the parent `transport` field
+(`""` follows the network default):
 
 - `shared` — network-wide memif and `.2` VNF address (DHCPv4 default)
 - `dedicated` — per-VNF memif (`<memif-dir>/<vnf-id>.sock`, VPP interface named
   after the VNF), as in earlier releases
 - `tap` — VNF tap interface
 
-DHCPv6 currently remains on a tap, and BGP keeps its dedicated memif/tap
-transport. Running VNFs keep their existing transport until restarted; a VPP
-restart or VNF restart migrates DHCPv4 to the shared memif.
+The legacy `memif` value is normalized to `dedicated`. DHCPv6 has no memif
+transport and is always stored as `tap`. BGP VNFs have their own `transport`
+field (`memif` or `tap`). Running VNFs keep their existing transport until
+restarted; a VPP restart or VNF restart migrates DHCPv4 to the shared memif.
 
 DHCP, DNS, and BGP runtimes live in a separate `vnfs` daemon, so restarting
 the API does not interrupt them. Run it alongside the API:
@@ -380,8 +387,10 @@ The API keeps the database and all VPP provisioning (memif/tap creation, BVIs,
 NAT44) and drives the daemon over an internal gRPC control channel
 (`-vnf-addr`, default `unix:///run/rookery/vnfs.sock`; `tcp://host:port` is
 supported). The API starts even when the daemon is absent — enabled VNFs show
-`degraded` until it is reachable, and desired runtimes are re-ensured when the
-daemon becomes reachable. The API queries runtime state on demand (VNF views
+`degraded` until it is reachable. The API re-sends every enabled spec during
+startup and after a VPP restart; if a VNF is still degraded after the daemon is
+up, restart that VNF (or the API) to re-send its spec. The API queries runtime
+state on demand (VNF views
 and start/stop/restart decisions) instead of polling; the daemon restores its
 persisted desired specs on its own restart. API startup also re-sends current
 specs to already-running VNFs once, so upgrading from an older daemon refreshes
@@ -390,16 +399,17 @@ stale desired specs without manually recreating the VNFs.
 DHCPv4 uses CoreDHCP's DHCPv4 server with a per-VNF bitmap allocator. DHCPv6
 uses CoreDHCP's DHCPv6 server with stateful IA_NA allocation from the configured
 IPv6 range; it does not provide router advertisements or prefix delegation, so
-clients must be configured to request DHCPv6. DHCPv4 VNFs can also define
-`static_assignments`, a list of unique MAC/IPv4 pairs. The reserved address may
-be inside or outside the dynamic range, but it must be a usable host in the
-DHCP subnet and cannot be the gateway or service address. Reserved addresses
-are kept out of the dynamic allocator, so a client MAC always receives its
-assigned address. Static assignments are DHCPv4-only. Lease files live under
-`<run-dir>/vnfs/<vnf-id>.json`, and the **Leases** action shows client ID,
-address, hostname, expiry, and active state. The server does not use CoreDHCP's
-`range` plugin because that plugin imports the CGO `mattn/go-sqlite3` driver;
-leases are stored as JSON instead, keeping the project CGO-free.
+clients must be configured to request DHCPv6. DHCPv4 VNFs can also own
+`/api/dhcp-vnfs/{vnf_id}/static-assignments` child rows: unique MAC/IPv4 pairs.
+The reserved address may be inside or outside the dynamic range, but it must be
+a usable host in the DHCP subnet and cannot be the gateway or service address.
+Reserved addresses are kept out of the dynamic allocator, so a client MAC always
+receives its assigned address. Static assignments are DHCPv4-only. Lease files
+live under `<run-dir>/vnfs/<vnf-id>.json`, and the **Leases** action or
+`GET /api/dhcp-vnfs/{id}/leases` shows client ID, address, hostname, expiry, and
+active state. The server does not use CoreDHCP's `range` plugin because that
+plugin imports the CGO `mattn/go-sqlite3` driver; leases are stored as JSON
+instead, keeping the project CGO-free.
 
 NAT44 is IPv4-only. Use a dedicated network whose only purpose is NAT. On
 enable, the NAT44 VNF:
@@ -416,27 +426,24 @@ enable, the NAT44 VNF:
   route;
 - optionally adds a NAT44 pool with `nat44_pool` (address or `start-end`);
 - optionally forwards TCP/UDP ports from the outside address to services on the
-  NAT network with `dnat_rules` (DNAT / port forwarding).
+  NAT network with DNAT child rules (`/api/nat44-vnfs/{vnf_id}/dnat-rules`).
 
 A DNAT rule has a `protocol` (`tcp` or `udp`), an `external_port`, and the
 internal destination's `local_ip` and `local_port`. The external address is the
 outside interface's current address, so rules also work when the address comes
 from DHCP. The internal address must be a usable host in the NAT44 subnet.
-Rules are stored with the VNF and are restored after VPP restarts. For example:
+Rules are stored in `nat44_dnat_rules` and are restored after VPP restarts. For
+example:
 
-```json
-"config": {
-  "gateway": "10.20.0.1/24",
-  "outside_interface": "enp9s0",
-  "dnat_rules": [
-    {"protocol": "tcp", "external_port": 8080, "local_ip": "10.20.0.100", "local_port": 80},
-    {"protocol": "udp", "external_port": 5353, "local_ip": "10.20.0.101", "local_port": 53}
-  ]
-}
+```bash
+curl -sS -X POST http://127.0.0.1:8080/api/nat44-vnfs/3/dnat-rules \
+  -H 'Content-Type: application/json' \
+  -d '{"protocol":"tcp","external_port":8080,"local_ip":"10.20.0.100","local_port":80}'
 ```
 
-Saving the NAT44 VNF restarts its NAT44 configuration, so existing
-translations may be interrupted briefly.
+Adding, updating, or deleting a DNAT rule replaces the VNF's VPP static
+mappings in place: NAT44 and the BVI stay up, so existing translations are not
+torn down by a stop/start.
 
 If a DHCPv4 VNF exists on a NAT network, the BVI keeps `.1` and the DHCP server
 uses the next address (`.2`) as its bind/service address (shared stack or tap,
@@ -444,7 +451,7 @@ depending on transport). Clients still receive the BVI gateway (`.1`) as their
 router. Creating a DHCPv4 VNF later on a network with a BVI applies the same
 rule. The DHCP range must be inside the NAT subnet and must not include the
 service address. NAT44 does not create a tap or leases; use the **Sessions**
-action or `GET /api/vnfs/{id}/sessions` to inspect VPP translations. Disabling/deleting
+action or `GET /api/nat44-vnfs/{id}/sessions` to inspect VPP translations. Disabling/deleting
 NAT44 removes its NAT44 interface configuration, pool, and DNAT static-mapping
 rules. The BVI is removed once no NAT44 or NAT-adjusted DHCPv4 VNF depends on
 it. The VPP `host-<nic>` takeover and outside addressing remain; detach the host

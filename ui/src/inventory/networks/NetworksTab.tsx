@@ -9,9 +9,13 @@ import type {
   ACLDirectionCounters,
   ACLInterfaceCounters,
   ACLRuleCounter,
+  BGPVNFRecord,
+  DHCPVNFRecord,
+  DNSVNFRecord,
   HostInterface,
   HostTap,
   InterfaceCounters,
+  NAT44VNFRecord,
   Network,
   NetworkPipe,
   StatusResponse,
@@ -21,6 +25,7 @@ import type {
   VPPGraph,
   RouteTable,
 } from "../types";
+import { mergeVNFs } from "../vnfs/format";
 import { ACLDialog } from "./ACLDialog";
 import { AttachDialog } from "./AttachDialog";
 import { HostTapDialog } from "./HostTapDialog";
@@ -519,12 +524,22 @@ export function NetworksTab() {
   };
 
   const loadVNFs = async () => {
-    try {
-      const data = await api<VNF[]>("/api/vnfs");
-      setData({ vnfs: Array.isArray(data) ? data : [] });
-    } catch {
-      setData({ vnfs: [] });
-    }
+    const [dhcpResult, dnsResult, nat44Result, bgpResult] = await Promise.allSettled([
+      api<DHCPVNFRecord[]>("/api/dhcp-vnfs"),
+      api<DNSVNFRecord[]>("/api/dns-vnfs"),
+      api<NAT44VNFRecord[]>("/api/nat44-vnfs"),
+      api<BGPVNFRecord[]>("/api/bgp-vnfs"),
+    ]);
+    const values = <T,>(result: PromiseSettledResult<T[]>): T[] =>
+      result.status === "fulfilled" && Array.isArray(result.value) ? result.value : [];
+    setData({
+      vnfs: mergeVNFs(
+        values(dhcpResult),
+        values(dnsResult),
+        values(nat44Result),
+        values(bgpResult)
+      ),
+    });
   };
 
   const loadStatus = async () => {

@@ -1,6 +1,6 @@
 # UI notes
 
-Preact/TypeScript sources, generated bundles, HTTP client, and console.
+Preact/TypeScript sources, generated bundles, HTTP client, VNF inventory, and console.
 
 Part of the Rookery agent notes; the index and working rules are in
 [`AGENTS.md`](../../AGENTS.md).
@@ -24,6 +24,33 @@ CustomEvents (`vms-changed`, `add-vm`, `readiness-changed`, `networks-changed`, 
 use deep links such as `/vms/new`, `/vms/{uuid}/edit`, `/interfaces/{id}/acls`, and
 `/vnfs/{id}/leases`. `internal/webui.Handler` must keep serving `index.html` for HTML navigations
 that do not match an embedded asset, or refreshing a deep link returns 404.
+
+## VNFs
+
+The **VNFs** tab fetches `/api/dhcp-vnfs`, `/api/dns-vnfs`, `/api/nat44-vnfs`, and
+`/api/bgp-vnfs` with `Promise.allSettled`, tags each record with its type, merges and sorts them by
+name, and renders one table with one `rookery:vnfs-changed` event. A failing type keeps the
+previous rows for that type and shows a partial-list banner instead of blanking the tab. The event
+payload is the merged `VNF[]` list; `rookery:vnfs-data` accepts a pushed `VNF[]`, and
+`rookery:add-vnf` carries `{ networkId }` to open the create page for a network.
+`NetworksTab.tsx` consumes the same merged list and re-fetches the four endpoints.
+
+Deep links stay `/vnfs/{id}/edit`, `/vnfs/{id}/leases`, `/vnfs/{id}/sessions`,
+`/vnfs/{id}/bgp`, and `/vnfs/{id}/dns`; the route effect resolves the ID from the merged list, so
+a refresh works. `new` and `edit` are full pages; leases, sessions, BGP status, and DNS records are
+dialogs whose endpoints are `/api/dhcp-vnfs/{id}/leases`, `/api/nat44-vnfs/{id}/sessions`,
+`/api/bgp-vnfs/{id}/status`, and `/api/dns-vnfs/{id}/record-views`.
+
+`VNFPage.tsx` is the typed create/edit shell. It renders a per-type form (`DHCPVNFForm`,
+`DNSVNFForm`, `NAT44VNFForm`, or `BGPVNFForm`) and per-type child editors: static assignments and
+options for DHCP, records and forwarders for DNS, DNAT rules for NAT44, and advertised prefixes for
+BGP. Saving a
+new VNF creates the parent with `enabled=false`, writes child rows in delete-then-update-then-create
+order, then sends the requested `enabled` transition once. Saving an edit sends only changed parent
+scalars, then the child diff, then the enabled transition if it changed. There is no
+disable/apply/enable cycle: each child write reloads the running runtime, and a failed child write
+reloads the child lists and shows the server's error while the server has restored the previous
+row and configuration.
 
 ## HTTP client
 

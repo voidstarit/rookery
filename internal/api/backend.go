@@ -3,23 +3,14 @@ package api
 import (
 	"context"
 	"errors"
+	"strings"
 
-	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
 // VPPBlocked reports whether VPP-dependent lifecycle operations are blocked.
 func (s *Server) VPPBlocked() (bool, string) { return s.vppBlocked() }
-
-// NormalizeVNFConfig validates and normalizes a protobuf VNF configuration.
-func (s *Server) NormalizeVNFConfig(vnfType string, config *rookeryv1.VNFConfig) (store.VNFConfig, error) {
-	payload := vnfConfigPayloadFromProto(config)
-	if payload == nil {
-		return store.VNFConfig{}, errors.New("config is required")
-	}
-	return payload.toConfig(vnfType)
-}
 
 // VNFWritesReady checks runtime prerequisites for an enabled VNF.
 func (s *Server) VNFWritesReady(vnfType string) error {
@@ -35,13 +26,17 @@ func (s *Server) VNFWritesReady(vnfType string) error {
 	return nil
 }
 
-// ApplyNATGatewayToDHCPConfig applies the network NAT gateway to a DHCP config.
-func (s *Server) ApplyNATGatewayToDHCPConfig(ctx context.Context, networkID int64, vnfType string, config *store.VNFConfig) error {
+// ApplyNATGatewayToDHCPConfig applies the network NAT gateway and service bind
+// address to a DHCPv4 config. Other families are left unchanged.
+func (s *Server) ApplyNATGatewayToDHCPConfig(ctx context.Context, networkID int64, family string, config *store.DHCPVNFConfig) error {
+	if family != store.VNFTypeDHCPv4 {
+		return nil
+	}
 	network, err := s.store.GetNetwork(ctx, networkID)
 	if err != nil {
 		return err
 	}
-	return applyNATGatewayToDHCPConfig(network, vnfType, config)
+	return applyNATGatewayToDHCPConfig(network, config)
 }
 
 // ActivateVNF provisions the VNF's interface, starts its runtime over the
@@ -133,49 +128,37 @@ func (s *Server) DeleteNetworkPipe(ctx context.Context, instance, parentSwIfInde
 	return s.networks.DeletePipe(ctx, instance, parentSwIfIndex)
 }
 
-// vnfConfigPayloadFromProto converts a protobuf VNFConfig into the payload
-// struct, copying slice fields so later mutation does not alias the protobuf
-// message; it returns nil for a nil config.
-func vnfConfigPayloadFromProto(config *rookeryv1.VNFConfig) *vnfConfigPayload {
-	if config == nil {
-		return nil
+// ReloadVNF swaps a running DHCP, DNS, or BGP runtime's configuration in place
+// through the daemon. NAT44 has no daemon runtime and is applied by the API.
+func (s *Server) ReloadVNF(ctx context.Context, vnf store.VNF) error {
+	if vnf.Type == store.VNFTypeNAT44 {
+		return errors.New("NAT44 has no daemon runtime to reload")
 	}
-	payload := &vnfConfigPayload{
-		Gateway: config.GetGateway(), RangeStart: config.GetRangeStart(), RangeEnd: config.GetRangeEnd(),
-		DNS: config.GetDns(), LeaseTime: config.GetLeaseTime(), BindIP: config.GetBindIp(),
-		OutsideInterface: config.GetOutsideInterface(), OutsideAddress: config.GetOutsideAddress(),
-		OutsideGateway: config.GetOutsideGateway(), NAT44Pool: config.GetNat44Pool(),
-		Transport: config.GetTransport(), LocalAS: config.GetLocalAs(), RouterID: config.GetRouterId(),
-		PeerAS: config.GetPeerAs(), PeerIP: config.GetPeerIp(), LocalIP: config.GetLocalIp(),
-		PeerGateway: config.GetPeerGateway(), MultihopTTL: config.GetMultihopTtl(),
-		Password: config.GetPassword(), Passive: config.GetPassive(), TargetTableID: config.GetTargetTableId(),
-		AdvertisePrefixes: append([]string(nil), config.GetAdvertisePrefixes()...),
-		NextHop:           config.GetNextHop(),
-		DNSForward:        config.GetDnsForward(),
-		DNSForwarders:     append([]string(nil), config.GetDnsForwarders()...),
-		DNSVNFID:          config.GetDnsVnfId(),
-		DNSDomain:         config.GetDnsDomain(),
-		DNSTTL:            config.GetDnsTtl(),
+	if s.vnfs == nil {
+		return errors.New("VNF runtime is not configured")
 	}
-	for _, record := range config.GetDnsRecords() {
-		payload.DNSRecords = append(payload.DNSRecords, dnsRecordPayload{
-			Name: record.GetName(), Type: record.GetType(),
-			Value: record.GetValue(), TTL: record.GetTtl(),
-		})
+	return s.vnfs.ReloadVNF(ctx, vnf)
+}
+
+// ApplyNAT44DNATRules replaces a NAT44 VNF's VPP static mappings in place while
+// NAT44 and the network BVI stay up.
+func (s *Server) ApplyNAT44DNATRules(ctx context.Context, vnf store.VNF) error {
+	if s.nat == nil {
+		return errors.New("NAT44 runtime is not configured")
 	}
-	for _, option := range config.GetDhcpOptions() {
-		payload.DHCPOptions = append(payload.DHCPOptions, dhcpOptionPayload{
-			Code: uint16(option.GetCode()), Format: option.GetFormat(), Value: option.GetValue(),
-		})
+	if vnf.Type != store.VNFTypeNAT44 {
+		return errors.New("static mappings are supported for NAT44 VNFs only")
 	}
-	for _, assignment := range config.GetStaticAssignments() {
-		payload.StaticAssignments = append(payload.StaticAssignments, dhcpStaticAssignmentPayload{MAC: assignment.GetMac(), IP: assignment.GetIp()})
+	outside := "host-" + strings.TrimSpace(vnf.Config.OutsideInterface)
+	if outside == "host-" {
+		return errors.New("NAT44 outside interface is not configured")
 	}
-	for _, rule := range config.GetDnatRules() {
-		payload.DNATRules = append(payload.DNATRules, dnatRulePayload{
-			Protocol: rule.GetProtocol(), ExternalPort: int(rule.GetExternalPort()),
-			LocalIP: rule.GetLocalIp(), LocalPort: int(rule.GetLocalPort()),
-		})
+	if err := s.nat.RemoveNAT44StaticMappings(ctx, outside, vnf.ID); err != nil {
+		return err
 	}
-	return payload
+	if err := s.nat.ApplyNAT44StaticMappings(ctx, outside, vnf.ID, vnf.Config.DNATRules); err != nil {
+		_ = s.nat.RemoveNAT44StaticMappings(ctx, outside, vnf.ID)
+		return err
+	}
+	return nil
 }

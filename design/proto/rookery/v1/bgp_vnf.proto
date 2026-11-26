@@ -1,0 +1,254 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// BGPVNFService manages BGP VNFs. Advertised prefixes are independent child
+// resources; status is a live snapshot of the embedded GoBGP server.
+service BGPVNFService {
+  rpc ListBGPVNFs(ListBGPVNFsRequest) returns (ListBGPVNFsResponse) {
+    option (google.api.http) = {
+      get: "/api/bgp-vnfs"
+      response_body: "vnfs"
+    };
+  }
+
+  rpc GetBGPVNF(GetBGPVNFRequest) returns (BGPVNF) {
+    option (google.api.http) = {get: "/api/bgp-vnfs/{id}"};
+  }
+
+  rpc CreateBGPVNF(CreateBGPVNFRequest) returns (BGPVNF) {
+    option (google.api.http) = {
+      post: "/api/bgp-vnfs"
+      body: "*"
+    };
+  }
+
+  rpc UpdateBGPVNF(UpdateBGPVNFRequest) returns (BGPVNF) {
+    option (google.api.http) = {
+      put: "/api/bgp-vnfs/{id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteBGPVNF(DeleteBGPVNFRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/bgp-vnfs/{id}"};
+  }
+
+  rpc RestartBGPVNF(RestartBGPVNFRequest) returns (BGPVNF) {
+    option (google.api.http) = {post: "/api/bgp-vnfs/{id}/restart"};
+  }
+
+  rpc GetBGPVNFStatus(GetBGPVNFStatusRequest) returns (BGPStatus) {
+    option (google.api.http) = {get: "/api/bgp-vnfs/{id}/status"};
+  }
+
+  rpc ListBGPVNFAdvertisedPrefixes(ListBGPVNFAdvertisedPrefixesRequest) returns (ListBGPVNFAdvertisedPrefixesResponse) {
+    option (google.api.http) = {
+      get: "/api/bgp-vnfs/{vnf_id}/advertised-prefixes"
+      response_body: "prefixes"
+    };
+  }
+
+  rpc GetBGPVNFAdvertisedPrefix(GetBGPVNFAdvertisedPrefixRequest) returns (BGPPrefix) {
+    option (google.api.http) = {get: "/api/bgp-vnfs/{vnf_id}/advertised-prefixes/{prefix_id}"};
+  }
+
+  rpc CreateBGPVNFAdvertisedPrefix(CreateBGPVNFAdvertisedPrefixRequest) returns (BGPPrefix) {
+    option (google.api.http) = {
+      post: "/api/bgp-vnfs/{vnf_id}/advertised-prefixes"
+      body: "*"
+    };
+  }
+
+  rpc UpdateBGPVNFAdvertisedPrefix(UpdateBGPVNFAdvertisedPrefixRequest) returns (BGPPrefix) {
+    option (google.api.http) = {
+      put: "/api/bgp-vnfs/{vnf_id}/advertised-prefixes/{prefix_id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteBGPVNFAdvertisedPrefix(DeleteBGPVNFAdvertisedPrefixRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/bgp-vnfs/{vnf_id}/advertised-prefixes/{prefix_id}"};
+  }
+}
+
+// BGPVNF is one BGP VNF. The password is write-only: it is accepted on create
+// and update and never returned by a read.
+message BGPVNF {
+  int64 id = 1;
+  string name = 2;
+  int64 network_id = 3;
+  string network_name = 4;
+  bool enabled = 5;
+  string transport = 6;
+  uint32 local_as = 7;
+  string router_id = 8;
+  uint32 peer_as = 9;
+  string peer_ip = 10;
+  string local_ip = 11;
+  string peer_gateway = 12;
+  uint32 multihop_ttl = 13;
+  bool passive = 14;
+  uint32 target_table_id = 15;
+  string next_hop = 16;
+  uint32 advertised_prefix_count = 17;
+  string status = 18;
+  string status_detail = 19;
+  uint32 tap_sw_if_index = 20;
+  string tap_host_name = 21;
+  google.protobuf.Timestamp created_at = 22;
+  google.protobuf.Timestamp updated_at = 23;
+}
+
+message ListBGPVNFsRequest {
+  optional int64 network_id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListBGPVNFsResponse {
+  repeated BGPVNF vnfs = 1;
+}
+
+message GetBGPVNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateBGPVNFRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  int64 network_id = 2 [(validate.rules).int64 = {gt: 0}];
+  optional bool enabled = 3;
+  string transport = 4 [(validate.rules).string = {in: ["", "memif", "tap"]}];
+  uint32 local_as = 5;
+  string router_id = 6 [(validate.rules).string = {max_len: 64}];
+  uint32 peer_as = 7;
+  string peer_ip = 8 [(validate.rules).string = {max_len: 64}];
+  string local_ip = 9 [(validate.rules).string = {max_len: 64}];
+  string peer_gateway = 10 [(validate.rules).string = {max_len: 64}];
+  uint32 multihop_ttl = 11;
+  string password = 12 [(validate.rules).string = {max_len: 128}];
+  bool passive = 13;
+  uint32 target_table_id = 14;
+  string next_hop = 15 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
+}
+
+message UpdateBGPVNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  optional string name = 2 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  optional bool enabled = 3;
+  optional string transport = 4 [(validate.rules).string = {in: ["", "memif", "tap"]}];
+  optional uint32 local_as = 5;
+  optional string router_id = 6 [(validate.rules).string = {max_len: 64}];
+  optional uint32 peer_as = 7;
+  optional string peer_ip = 8 [(validate.rules).string = {max_len: 64}];
+  optional string local_ip = 9 [(validate.rules).string = {max_len: 64}];
+  optional string peer_gateway = 10 [(validate.rules).string = {max_len: 64}];
+  optional uint32 multihop_ttl = 11;
+  optional string password = 12 [(validate.rules).string = {max_len: 128}];
+  optional bool passive = 13;
+  optional uint32 target_table_id = 14;
+  optional string next_hop = 15 [(validate.rules).string = {ignore_empty: true, max_len: 64}];
+}
+
+message DeleteBGPVNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message RestartBGPVNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message GetBGPVNFStatusRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+// BGPReceivedPrefix is one prefix learned from the peer.
+message BGPReceivedPrefix {
+  string prefix = 1;
+  string next_hop = 2;
+  repeated uint32 as_path = 3;
+}
+
+// BGPStatus is a live snapshot of a running BGP VNF.
+message BGPStatus {
+  int64 vnf_id = 1;
+  bool running = 2;
+  bool established = 3;
+  string session_state = 4;
+  string peer_address = 5;
+  uint32 peer_as = 6;
+  uint32 local_as = 7;
+  repeated string advertised = 8;
+  repeated BGPReceivedPrefix received = 9;
+}
+
+// BGPPrefix is one prefix advertised by the VNF.
+message BGPPrefix {
+  int64 id = 1;
+  int64 vnf_id = 2;
+  string prefix = 3;
+}
+
+message ListBGPVNFAdvertisedPrefixesRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListBGPVNFAdvertisedPrefixesResponse {
+  repeated BGPPrefix prefixes = 1;
+}
+
+message GetBGPVNFAdvertisedPrefixRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 prefix_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateBGPVNFAdvertisedPrefixRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  string prefix = 2 [(validate.rules).string = {min_len: 1, max_len: 64}];
+}
+
+message UpdateBGPVNFAdvertisedPrefixRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 prefix_id = 2 [(validate.rules).int64 = {gt: 0}];
+  string prefix = 3 [(validate.rules).string = {min_len: 1, max_len: 64}];
+}
+
+message DeleteBGPVNFAdvertisedPrefixRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 prefix_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+
+// BGPPrefixSpec is one advertised prefix in a runtime config; it has no row
+// identity.
+message BGPPrefixSpec {
+  string prefix = 1;
+}
+
+// BGPRuntimeConfig is the full BGP configuration sent to the daemon.
+message BGPRuntimeConfig {
+  uint32 local_as = 1;
+  string router_id = 2;
+  uint32 peer_as = 3;
+  string peer_ip = 4;
+  string local_ip = 5;
+  string peer_gateway = 6;
+  uint32 multihop_ttl = 7;
+  string password = 8;
+  bool passive = 9;
+  uint32 target_table_id = 10;
+  string next_hop = 11;
+  repeated BGPPrefixSpec advertised_prefixes = 12;
+}

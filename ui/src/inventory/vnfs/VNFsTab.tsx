@@ -1,9 +1,32 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { APIError, api } from "../../shared/api";
 import { showToast } from "../../shared/toast";
 import { EntityLabels, useEntityLabels } from "../../shared/labels";
-import type { Network, StatusResponse, VNF } from "../types";
-import { formatDate } from "./format";
+import type {
+  BGPVNF,
+  BGPVNFRecord,
+  DHCPVNF,
+  DHCPVNFRecord,
+  DNSVNF,
+  DNSVNFRecord,
+  NAT44VNF,
+  NAT44VNFRecord,
+  Network,
+  StatusResponse,
+  VNF,
+} from "../types";
+import {
+  formatDate,
+  sortVNFs,
+  tagBGPVNF,
+  tagDHCPVNF,
+  tagDNSVNF,
+  tagNAT44VNF,
+  vnfAPISlug,
+  vnfLeaseCount,
+  vnfSummary,
+  vnfTypeLabel,
+} from "./format";
 import { VNFPage } from "./VNFPage";
 import { VNFBGPStatusDialog } from "./VNFBGPStatusDialog";
 import { VNFDNSRecordsDialog } from "./VNFDNSRecordsDialog";
@@ -17,10 +40,11 @@ type DialogState = {
 };
 
 /**
- * VNFsTab renders the VNF inventory table with status, lease counts, and row actions for
- * monitoring, editing, starting, and deleting network functions, plus its monitor dialogs. It
- * loads VNFs, networks, and VPP readiness on mount, keeps dialogs in sync with the path route, and
- * reacts to rookery:* window events; start and delete actions refresh the list and show toasts.
+ * VNFsTab renders the merged VNF inventory table with status, per-type counts, and row actions for
+ * monitoring, editing, restarting, and deleting network functions. It fetches the four typed lists
+ * (without network_id because the table spans every network) and merges them, shows a partial list
+ * with a banner when one type fails, keeps dialogs in sync with the path route, and reacts to
+ * rookery:* window events.
  */
 export function VNFsTab() {
   const [vnfs, setVnfs] = useState<VNF[]>([]);
@@ -28,11 +52,13 @@ export function VNFsTab() {
   const [vppReady, setVppReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [dialog, setDialog] = useState<DialogState | null>(null);
-  const [leasesVNF, setLeasesVNF] = useState<VNF | null>(null);
-  const [sessionsVNF, setSessionsVNF] = useState<VNF | null>(null);
-  const [bgpVNF, setBGPVNF] = useState<VNF | null>(null);
-  const [dnsVNF, setDNSVNF] = useState<VNF | null>(null);
+  const [leasesVNF, setLeasesVNF] = useState<DHCPVNF | null>(null);
+  const [sessionsVNF, setSessionsVNF] = useState<NAT44VNF | null>(null);
+  const [bgpVNF, setBGPVNF] = useState<BGPVNF | null>(null);
+  const [dnsVNF, setDNSVNF] = useState<DNSVNF | null>(null);
+  const vnfsRef = useRef<VNF[]>([]);
   const entityLabels = useEntityLabels("vnf");
   const route = useRoute();
 
@@ -58,13 +84,19 @@ export function VNFsTab() {
     if (action && action !== "new") {
       const vnf = vnfs.find((item) => String(item.id) === action);
       const mode = route.segments[2];
-      if (vnf) {
-        setDialog(mode === "edit" ? { vnf } : null);
-        setLeasesVNF(mode === "leases" ? vnf : null);
-        setSessionsVNF(mode === "sessions" ? vnf : null);
-        setBGPVNF(mode === "bgp" ? vnf : null);
-        setDNSVNF(mode === "dns" ? vnf : null);
+      if (!vnf) {
+        setDialog(null);
+        setLeasesVNF(null);
+        setSessionsVNF(null);
+        setBGPVNF(null);
+        setDNSVNF(null);
+        return;
       }
+      setDialog(mode === "edit" ? { vnf } : null);
+      setLeasesVNF(mode === "leases" && (vnf.type === "dhcpv4" || vnf.type === "dhcpv6") ? vnf : null);
+      setSessionsVNF(mode === "sessions" && vnf.type === "nat44" ? vnf : null);
+      setBGPVNF(mode === "bgp" && vnf.type === "bgp" ? vnf : null);
+      setDNSVNF(mode === "dns" && vnf.type === "dns" ? vnf : null);
       return;
     }
     setDialog(null);
@@ -75,22 +107,51 @@ export function VNFsTab() {
   }, [route.path, route.search, vnfs]);
 
   const publishVNFs = (list: VNF[]) => {
+    vnfsRef.current = list;
     setVnfs(list);
     window.dispatchEvent(new CustomEvent("rookery:vnfs-changed", { detail: list }));
   };
 
-  const loadVNFs = async (showErrors = true) => {
-    try {
-      const data = await api<VNF[]>("/api/vnfs");
-      publishVNFs(Array.isArray(data) ? data : []);
-      if (showErrors) {
-        setError("");
+  const loadVNFs = async () => {
+    const previous = vnfsRef.current;
+    const [dhcpResult, dnsResult, nat44Result, bgpResult] = await Promise.allSettled([
+      api<DHCPVNFRecord[]>("/api/dhcp-vnfs"),
+      api<DNSVNFRecord[]>("/api/dns-vnfs"),
+      api<NAT44VNFRecord[]>("/api/nat44-vnfs"),
+      api<BGPVNFRecord[]>("/api/bgp-vnfs"),
+    ]);
+    const failures: string[] = [];
+    const pick = <T extends { id: number }>(
+      result: PromiseSettledResult<T[]>,
+      label: string,
+      keep: (candidate: VNF) => boolean,
+      tag: (record: T) => VNF
+    ): VNF[] => {
+      if (result.status === "fulfilled") {
+        return (Array.isArray(result.value) ? result.value : []).map(tag);
       }
-    } catch (err) {
-      if (showErrors) {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    }
+      failures.push(
+        `${label}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`
+      );
+      return previous.filter(keep);
+    };
+    const merged = sortVNFs([
+      ...pick(
+        dhcpResult,
+        "DHCP",
+        (candidate) => candidate.type === "dhcpv4" || candidate.type === "dhcpv6",
+        tagDHCPVNF
+      ),
+      ...pick(dnsResult, "DNS", (candidate) => candidate.type === "dns", tagDNSVNF),
+      ...pick(nat44Result, "NAT44", (candidate) => candidate.type === "nat44", tagNAT44VNF),
+      ...pick(bgpResult, "BGP", (candidate) => candidate.type === "bgp", tagBGPVNF),
+    ]);
+    publishVNFs(merged);
+    setLoadError(
+      failures.length === 0
+        ? ""
+        : `Some VNF types could not be loaded, so the table is partial — ${failures.join("; ")}`
+    );
   };
 
   const loadNetworks = async () => {
@@ -127,7 +188,7 @@ export function VNFsTab() {
       } else {
         void loadNetworks();
       }
-      void loadVNFs(false);
+      void loadVNFs();
     };
     const onVPPReady = (event: Event) => {
       setVppReady(Boolean((event as CustomEvent<boolean>).detail));
@@ -135,6 +196,7 @@ export function VNFsTab() {
     const onVNFData = (event: Event) => {
       const detail = (event as CustomEvent<VNF[]>).detail;
       if (Array.isArray(detail)) {
+        vnfsRef.current = detail;
         setVnfs(detail);
       }
     };
@@ -150,6 +212,7 @@ export function VNFsTab() {
         setDialog(null);
         setLeasesVNF(null);
         setSessionsVNF(null);
+        setBGPVNF(null);
         setDNSVNF(null);
       }
     };
@@ -189,7 +252,7 @@ export function VNFsTab() {
     navigate("/vnfs", true);
     setError("");
     showToast(`${dialog?.vnf ? "Saved" : "Added"} VNF ${saved.name}`);
-    void loadVNFs(false);
+    void loadVNFs();
     if (saved.type === "nat44" || saved.type === "dns") {
       refreshNetworksInLegacy();
     }
@@ -197,10 +260,10 @@ export function VNFsTab() {
 
   const startVNF = async (vnf: VNF) => {
     try {
-      await api<VNF>(`/api/vnfs/${vnf.id}/restart`, { method: "POST" });
+      await api(`/api/${vnfAPISlug(vnf.type)}/${vnf.id}/restart`, { method: "POST" });
       setError("");
       showToast(`Started VNF ${vnf.name}`);
-      void loadVNFs(false);
+      void loadVNFs();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(`Could not start ${vnf.name}: ${message}`);
@@ -213,17 +276,19 @@ export function VNFsTab() {
   const deleteVNF = async (vnf: VNF) => {
     const confirmed = window.confirm(
       vnf.type === "nat44"
-        ? `Delete VNF "${vnf.name}"?\n\nThis stops NAT44 and removes its VPP rules. The network BVI is kept until the network is deleted.`
+        ? `Delete VNF "${vnf.name}"?\n\nThis stops NAT44 and removes its VPP rules and DNAT mappings. The network BVI is kept until the network is deleted.`
         : vnf.type === "dns"
-          ? `Delete VNF "${vnf.name}"?\n\nThis stops the DNS server and removes its local records.`
-          : `Delete VNF "${vnf.name}"?\n\nThis stops the function, removes its tap, and deletes its leases.`
+          ? `Delete VNF "${vnf.name}"?\n\nThis stops the DNS server and removes its local records and forwarders.`
+          : vnf.type === "bgp"
+            ? `Delete VNF "${vnf.name}"?\n\nThis stops the BGP speaker and removes its advertised prefixes.`
+            : `Delete VNF "${vnf.name}"?\n\nThis stops the function, removes its tap, and deletes its leases, static assignments, and options.`
     );
     if (!confirmed) {
       return;
     }
 
     try {
-      await api(`/api/vnfs/${vnf.id}`, { method: "DELETE" });
+      await api(`/api/${vnfAPISlug(vnf.type)}/${vnf.id}`, { method: "DELETE" });
       const next = vnfs.filter((item) => item.id !== vnf.id);
       publishVNFs(next);
       setError("");
@@ -242,7 +307,6 @@ export function VNFsTab() {
         key={dialog.vnf ? `edit-${dialog.vnf.id}` : `new-${dialog.networkID ?? "default"}`}
         vnf={dialog.vnf}
         networks={networks}
-        vnfs={vnfs}
         vppReady={vppReady}
         initialNetworkID={dialog.networkID}
         onClose={() => {
@@ -255,7 +319,7 @@ export function VNFsTab() {
   }
 
   const enabled = vnfs.filter((vnf) => vnf.enabled).length;
-  const leaseCount = vnfs.reduce((sum, vnf) => sum + (vnf.lease_count || 0), 0);
+  const leaseCount = vnfs.reduce((sum, vnf) => sum + (vnfLeaseCount(vnf) ?? 0), 0);
   const summary =
     vnfs.length === 0
       ? loading
@@ -290,6 +354,11 @@ export function VNFsTab() {
           </div>
         </div>
 
+        {loadError ? (
+          <div class="banner" role="alert">
+            {loadError}
+          </div>
+        ) : null}
         {error ? (
           <div class="banner" role="alert">
             {error}
@@ -317,42 +386,12 @@ export function VNFsTab() {
               <tbody>
                 {vnfs.map((vnf) => {
                   const network = networks.find((item) => item.id === vnf.network_id);
-                  const typeLabel =
-                    vnf.type === "nat44"
-                      ? "NAT44"
-                      : vnf.type === "bgp"
-                        ? "BGP"
-                        : vnf.type === "dns"
-                          ? "DNS"
-                          : vnf.type === "dhcpv6"
-                            ? "DHCPv6"
-                            : "DHCPv4";
-                  const hasLeases = vnf.type === "dhcpv4" || vnf.type === "dhcpv6";
-                  const dnatCount = Array.isArray(vnf.config.dnat_rules) ? vnf.config.dnat_rules.length : 0;
+                  const leases = vnfLeaseCount(vnf);
                   return (
                     <tr key={vnf.id}>
                       <td>
                         <span class="vm-name">{vnf.name}</span>
-                        {vnf.type === "nat44" && vnf.config.outside_interface ? (
-                          <span class="vm-description">
-                            outside {vnf.config.outside_interface}
-                            {dnatCount ? ` · ${dnatCount} DNAT` : ""}
-                          </span>
-                        ) : vnf.type === "dns" ? (
-                          <span class="vm-description">
-                            {Array.isArray(vnf.config.dns_records) ? vnf.config.dns_records.length : 0} static
-                            {vnf.config.dns_forward ? " · forwarding" : " · authoritative"}
-                          </span>
-                        ) : vnf.tap_host_name ? (
-                          <span class="vm-description">
-                            {vnf.tap_host_name}
-                            {vnf.type === "dhcpv4" &&
-                            Array.isArray(vnf.config.static_assignments) &&
-                            vnf.config.static_assignments.length > 0
-                              ? ` · ${vnf.config.static_assignments.length} static`
-                              : ""}
-                          </span>
-                        ) : null}
+                        <span class="vm-description">{vnfSummary(vnf)}</span>
                         <EntityLabels
                           entityType="vnf"
                           entityID={vnf.id}
@@ -361,15 +400,15 @@ export function VNFsTab() {
                           onSaved={(labels) => entityLabels.setEntityLabels(String(vnf.id), labels)}
                         />
                       </td>
-                      <td class="mono">{typeLabel}</td>
+                      <td class="mono">{vnfTypeLabel(vnf.type)}</td>
                       <td class="mono">{network?.name || vnf.network_name || `network ${vnf.network_id}`}</td>
                       <td>
                         <span class="status-badge" data-status={vnf.status || "disabled"} title={vnf.status_detail}>
                           {vnf.status || "disabled"}
                         </span>
                       </td>
-                      <td class={hasLeases && vnf.lease_count ? "mono" : "mono muted"}>
-                        {hasLeases ? String(vnf.lease_count || 0) : "—"}
+                      <td class={leases ? "mono" : "mono muted"}>
+                        {leases === undefined ? "—" : String(leases)}
                       </td>
                       <td class="updated hide-sm">{formatDate(vnf.updated_at)}</td>
                       <td>
@@ -390,15 +429,21 @@ export function VNFsTab() {
                             >
                               Records
                             </button>
+                          ) : vnf.type === "nat44" ? (
+                            <button
+                              class="row-action"
+                              type="button"
+                              onClick={() => navigate(`/vnfs/${vnf.id}/sessions`)}
+                            >
+                              Sessions
+                            </button>
                           ) : (
                             <button
                               class="row-action"
                               type="button"
-                              onClick={() =>
-                                navigate(`/vnfs/${vnf.id}/${vnf.type === "nat44" ? "sessions" : "leases"}`)
-                              }
+                              onClick={() => navigate(`/vnfs/${vnf.id}/leases`)}
                             >
-                              {vnf.type === "nat44" ? "Sessions" : "Leases"}
+                              Leases
                             </button>
                           )}
                           <button class="row-action" type="button" onClick={() => navigate(`/vnfs/${vnf.id}/edit`)}>

@@ -14,30 +14,121 @@ import (
 )
 
 type fakeBackend struct {
-	stopped   int
-	activated int
+	store          *store.Store
+	stopped        int
+	activated      int
+	reloaded       int
+	reloadFailures int
+	reloadErr      error
+	natRules       int
 }
 
-func (f *fakeBackend) VPPBlocked() (bool, string) { return false, "" }
-func (f *fakeBackend) NormalizeVNFConfig(_ string, _ *rookeryv1.VNFConfig) (store.VNFConfig, error) {
-	return store.VNFConfig{Gateway: "10.0.0.1/24", RangeStart: "10.0.0.10", RangeEnd: "10.0.0.20"}, nil
-}
+func (f *fakeBackend) VPPBlocked() (bool, string)  { return false, "" }
 func (f *fakeBackend) VNFWritesReady(string) error { return nil }
-func (f *fakeBackend) ApplyNATGatewayToDHCPConfig(context.Context, int64, string, *store.VNFConfig) error {
+
+func (f *fakeBackend) NormalizeDHCPVNFConfig(_ string, config store.DHCPVNFConfig) (store.DHCPVNFConfig, error) {
+	if config.Gateway == "" {
+		config.Gateway = "10.0.0.1/24"
+	}
+	if config.RangeStart == "" {
+		config.RangeStart = "10.0.0.10"
+	}
+	if config.RangeEnd == "" {
+		config.RangeEnd = "10.0.0.20"
+	}
+	if config.LeaseTime == "" {
+		config.LeaseTime = "12h"
+	}
+	return config, nil
+}
+
+func (f *fakeBackend) NormalizeNAT44VNFConfig(config store.NAT44VNFConfig) (store.NAT44VNFConfig, error) {
+	if config.Gateway == "" {
+		config.Gateway = "10.0.0.1/24"
+	}
+	if config.OutsideInterface == "" {
+		config.OutsideInterface = "eth0"
+	}
+	return config, nil
+}
+
+func (f *fakeBackend) NormalizeBGPVNFConfig(config store.BGPVNFConfig) (store.BGPVNFConfig, error) {
+	if config.Transport == "" {
+		config.Transport = "memif"
+	}
+	if config.LocalAS == 0 {
+		config.LocalAS = 65000
+	}
+	if config.PeerAS == 0 {
+		config.PeerAS = 65001
+	}
+	return config, nil
+}
+
+func (f *fakeBackend) ApplyNATGatewayToDHCPConfig(context.Context, int64, string, *store.DHCPVNFConfig) error {
 	return nil
 }
-func (f *fakeBackend) ActivateVNF(_ context.Context, vnf store.VNF) (store.VNF, error) {
+
+func (f *fakeBackend) NormalizeDHCPStaticAssignment(_ context.Context, _ store.VNF, item store.DHCPStaticAssignment) (store.DHCPStaticAssignment, error) {
+	return item, nil
+}
+
+func (f *fakeBackend) NormalizeDHCPOption(_ context.Context, _ store.VNF, item store.DHCPOption) (store.DHCPOption, error) {
+	return item, nil
+}
+
+func (f *fakeBackend) NormalizeDNSRecord(_ context.Context, _ store.VNF, _ []store.DNSRecord, item store.DNSRecord) (store.DNSRecord, error) {
+	return item, nil
+}
+
+func (f *fakeBackend) NormalizeDNSForwarder(_ context.Context, _ store.VNF, _ []store.DNSForwarder, item store.DNSForwarder) (store.DNSForwarder, error) {
+	return item, nil
+}
+
+func (f *fakeBackend) NormalizeDNATRule(_ context.Context, _ store.VNF, _ []store.DNATRule, item store.DNATRule) (store.DNATRule, error) {
+	return item, nil
+}
+
+func (f *fakeBackend) NormalizeBGPPrefix(_ context.Context, _ store.VNF, prefix string) (store.BGPPrefix, error) {
+	return store.BGPPrefix{Prefix: prefix}, nil
+}
+
+func (f *fakeBackend) ActivateVNF(ctx context.Context, vnf store.VNF) (store.VNF, error) {
 	f.activated++
 	vnf.Enabled = true
+	if f.store != nil {
+		return f.store.UpdateVNFIdentity(ctx, vnf)
+	}
 	return vnf, nil
 }
+
 func (f *fakeBackend) StopVNF(context.Context, store.VNF, bool) error { f.stopped++; return nil }
-func (f *fakeBackend) ActivateNAT44(_ context.Context, vnf store.VNF) (store.VNF, error) {
+
+func (f *fakeBackend) ReloadVNF(context.Context, store.VNF) error {
+	f.reloaded++
+	if f.reloadFailures > 0 {
+		f.reloadFailures--
+		return errors.New("reload failed")
+	}
+	return f.reloadErr
+}
+
+func (f *fakeBackend) ActivateNAT44(ctx context.Context, vnf store.VNF) (store.VNF, error) {
 	f.activated++
 	vnf.Enabled = true
+	if f.store != nil {
+		return f.store.UpdateVNFIdentity(ctx, vnf)
+	}
 	return vnf, nil
 }
-func (f *fakeBackend) StopNAT44(context.Context, store.VNF) error                   { f.stopped++; return nil }
+
+func (f *fakeBackend) StopNAT44(context.Context, store.VNF) error { f.stopped++; return nil }
+
+func (f *fakeBackend) ApplyNAT44DNATRules(context.Context, store.VNF) error {
+	f.natRules++
+	return nil
+}
+
 func (f *fakeBackend) CleanupNetworkBVIAfterNATDelete(context.Context, int64) error { return nil }
 func (f *fakeBackend) CleanupLegacyNetworkVNF(context.Context, store.Network) error { return nil }
 func (f *fakeBackend) DeleteBVI(context.Context, string) error                      { return nil }
@@ -75,8 +166,8 @@ func TestVNFAndNetworkLifecycle(t *testing.T) {
 	backend := &fakeBackend{}
 	service := New(st, backend, &sync.Mutex{})
 
-	vnf, err := service.CreateVNF(context.Background(), &rookeryv1.CreateVNFRequest{
-		Name: "dhcp", NetworkId: network.ID, Type: store.VNFTypeDHCPv4,
+	vnf, err := service.CreateDHCPVNF(context.Background(), &rookeryv1.CreateDHCPVNFRequest{
+		Name: "dhcp", NetworkId: network.ID, Family: store.VNFTypeDHCPv4,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -84,7 +175,7 @@ func TestVNFAndNetworkLifecycle(t *testing.T) {
 	if vnf.ID == 0 || vnf.Enabled {
 		t.Fatalf("vnf = %+v", vnf)
 	}
-	if err := service.DeleteVNF(context.Background(), &rookeryv1.DeleteVNFRequest{Id: vnf.ID}); err != nil {
+	if err := service.DeleteDHCPVNF(context.Background(), &rookeryv1.DeleteDHCPVNFRequest{Id: vnf.ID}); err != nil {
 		t.Fatal(err)
 	}
 	if backend.stopped != 1 {

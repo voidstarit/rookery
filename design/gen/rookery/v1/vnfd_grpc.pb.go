@@ -20,473 +20,963 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	VNFDaemon_EnsureVNF_FullMethodName            = "/rookery.v1.VNFDaemon/EnsureVNF"
-	VNFDaemon_RemoveVNF_FullMethodName            = "/rookery.v1.VNFDaemon/RemoveVNF"
-	VNFDaemon_ResetRuntime_FullMethodName         = "/rookery.v1.VNFDaemon/ResetRuntime"
-	VNFDaemon_ListVNFStates_FullMethodName        = "/rookery.v1.VNFDaemon/ListVNFStates"
-	VNFDaemon_GetVNFState_FullMethodName          = "/rookery.v1.VNFDaemon/GetVNFState"
-	VNFDaemon_ListLeases_FullMethodName           = "/rookery.v1.VNFDaemon/ListLeases"
-	VNFDaemon_RemoveLeases_FullMethodName         = "/rookery.v1.VNFDaemon/RemoveLeases"
-	VNFDaemon_GetBGPStatus_FullMethodName         = "/rookery.v1.VNFDaemon/GetBGPStatus"
-	VNFDaemon_ListDNSRecords_FullMethodName       = "/rookery.v1.VNFDaemon/ListDNSRecords"
-	VNFDaemon_CleanupLegacyNetwork_FullMethodName = "/rookery.v1.VNFDaemon/CleanupLegacyNetwork"
+	DHCPDaemon_EnsureDHCP_FullMethodName       = "/rookery.v1.DHCPDaemon/EnsureDHCP"
+	DHCPDaemon_RemoveDHCP_FullMethodName       = "/rookery.v1.DHCPDaemon/RemoveDHCP"
+	DHCPDaemon_ReloadDHCP_FullMethodName       = "/rookery.v1.DHCPDaemon/ReloadDHCP"
+	DHCPDaemon_GetDHCPState_FullMethodName     = "/rookery.v1.DHCPDaemon/GetDHCPState"
+	DHCPDaemon_ListDHCPLeases_FullMethodName   = "/rookery.v1.DHCPDaemon/ListDHCPLeases"
+	DHCPDaemon_RemoveDHCPLeases_FullMethodName = "/rookery.v1.DHCPDaemon/RemoveDHCPLeases"
 )
 
-// VNFDaemonClient is the client API for VNFDaemon service.
+// DHCPDaemonClient is the client API for DHCPDaemon service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// VNFDaemon is the internal control channel between the API server and the
-// separate VNF daemon (cmd/vnfs). It is not exposed through the HTTP gateway.
-// The API owns all VPP provisioning (memif/tap creation) and sends the full
-// desired runtime spec; the daemon owns the userspace runtimes (CoreDHCP,
-// gVisor memif stacks, GoBGP) so API restarts do not interrupt them.
-type VNFDaemonClient interface {
-	// EnsureVNF starts a VNF runtime, or restarts it when the spec changed.
+type DHCPDaemonClient interface {
+	// EnsureDHCP starts a DHCP runtime, or restarts it when the spec changed.
 	// It is idempotent: a running VNF with an unchanged spec is left alone.
-	EnsureVNF(ctx context.Context, in *EnsureVNFRequest, opts ...grpc.CallOption) (*VNFState, error)
-	RemoveVNF(ctx context.Context, in *RemoveVNFRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	// ResetRuntime stops every runtime but keeps the desired specs so the API
-	// can re-ensure them after a VPP restart.
-	ResetRuntime(ctx context.Context, in *ResetRuntimeRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	ListVNFStates(ctx context.Context, in *ListVNFStatesRequest, opts ...grpc.CallOption) (*ListVNFStatesResponse, error)
-	GetVNFState(ctx context.Context, in *GetVNFStateRequest, opts ...grpc.CallOption) (*VNFState, error)
-	ListLeases(ctx context.Context, in *ListLeasesRequest, opts ...grpc.CallOption) (*ListLeasesResponse, error)
-	// RemoveLeases drops specific leases from a running DHCP runtime and its
-	// persisted lease file. Dynamic DNS records derived from those leases are
-	// removed by the daemon's normal lease reconciliation.
-	RemoveLeases(ctx context.Context, in *RemoveLeasesRequest, opts ...grpc.CallOption) (*RemoveLeasesResponse, error)
-	GetBGPStatus(ctx context.Context, in *GetBGPStatusRequest, opts ...grpc.CallOption) (*VNFBGPStatus, error)
-	ListDNSRecords(ctx context.Context, in *ListDNSRecordsRequest, opts ...grpc.CallOption) (*ListDNSRecordsResponse, error)
-	// CleanupLegacyNetwork removes DHCP runtime files left by the old
-	// per-network DHCP implementation.
-	CleanupLegacyNetwork(ctx context.Context, in *CleanupLegacyNetworkRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	EnsureDHCP(ctx context.Context, in *EnsureDHCPRequest, opts ...grpc.CallOption) (*VNFState, error)
+	RemoveDHCP(ctx context.Context, in *RemoveDHCPRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// ReloadDHCP swaps the runtime configuration in place. It keeps the process,
+	// the lease file, and the listener. A reload of a runtime that is not running
+	// returns running=false and does not start it.
+	ReloadDHCP(ctx context.Context, in *ReloadDHCPRequest, opts ...grpc.CallOption) (*VNFState, error)
+	GetDHCPState(ctx context.Context, in *GetDHCPStateRequest, opts ...grpc.CallOption) (*VNFState, error)
+	ListDHCPLeases(ctx context.Context, in *ListDHCPLeasesRequest, opts ...grpc.CallOption) (*ListDHCPLeasesResponse, error)
+	// RemoveDHCPLeases drops specific leases from a running DHCP runtime and its
+	// persisted lease file.
+	RemoveDHCPLeases(ctx context.Context, in *RemoveDHCPLeasesRequest, opts ...grpc.CallOption) (*RemoveDHCPLeasesResponse, error)
 }
 
-type vNFDaemonClient struct {
+type dHCPDaemonClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewVNFDaemonClient(cc grpc.ClientConnInterface) VNFDaemonClient {
-	return &vNFDaemonClient{cc}
+func NewDHCPDaemonClient(cc grpc.ClientConnInterface) DHCPDaemonClient {
+	return &dHCPDaemonClient{cc}
 }
 
-func (c *vNFDaemonClient) EnsureVNF(ctx context.Context, in *EnsureVNFRequest, opts ...grpc.CallOption) (*VNFState, error) {
+func (c *dHCPDaemonClient) EnsureDHCP(ctx context.Context, in *EnsureDHCPRequest, opts ...grpc.CallOption) (*VNFState, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(VNFState)
-	err := c.cc.Invoke(ctx, VNFDaemon_EnsureVNF_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, DHCPDaemon_EnsureDHCP_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *vNFDaemonClient) RemoveVNF(ctx context.Context, in *RemoveVNFRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+func (c *dHCPDaemonClient) RemoveDHCP(ctx context.Context, in *RemoveDHCPRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, VNFDaemon_RemoveVNF_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, DHCPDaemon_RemoveDHCP_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *vNFDaemonClient) ResetRuntime(ctx context.Context, in *ResetRuntimeRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, VNFDaemon_ResetRuntime_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vNFDaemonClient) ListVNFStates(ctx context.Context, in *ListVNFStatesRequest, opts ...grpc.CallOption) (*ListVNFStatesResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListVNFStatesResponse)
-	err := c.cc.Invoke(ctx, VNFDaemon_ListVNFStates_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vNFDaemonClient) GetVNFState(ctx context.Context, in *GetVNFStateRequest, opts ...grpc.CallOption) (*VNFState, error) {
+func (c *dHCPDaemonClient) ReloadDHCP(ctx context.Context, in *ReloadDHCPRequest, opts ...grpc.CallOption) (*VNFState, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(VNFState)
-	err := c.cc.Invoke(ctx, VNFDaemon_GetVNFState_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, DHCPDaemon_ReloadDHCP_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *vNFDaemonClient) ListLeases(ctx context.Context, in *ListLeasesRequest, opts ...grpc.CallOption) (*ListLeasesResponse, error) {
+func (c *dHCPDaemonClient) GetDHCPState(ctx context.Context, in *GetDHCPStateRequest, opts ...grpc.CallOption) (*VNFState, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListLeasesResponse)
-	err := c.cc.Invoke(ctx, VNFDaemon_ListLeases_FullMethodName, in, out, cOpts...)
+	out := new(VNFState)
+	err := c.cc.Invoke(ctx, DHCPDaemon_GetDHCPState_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *vNFDaemonClient) RemoveLeases(ctx context.Context, in *RemoveLeasesRequest, opts ...grpc.CallOption) (*RemoveLeasesResponse, error) {
+func (c *dHCPDaemonClient) ListDHCPLeases(ctx context.Context, in *ListDHCPLeasesRequest, opts ...grpc.CallOption) (*ListDHCPLeasesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RemoveLeasesResponse)
-	err := c.cc.Invoke(ctx, VNFDaemon_RemoveLeases_FullMethodName, in, out, cOpts...)
+	out := new(ListDHCPLeasesResponse)
+	err := c.cc.Invoke(ctx, DHCPDaemon_ListDHCPLeases_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *vNFDaemonClient) GetBGPStatus(ctx context.Context, in *GetBGPStatusRequest, opts ...grpc.CallOption) (*VNFBGPStatus, error) {
+func (c *dHCPDaemonClient) RemoveDHCPLeases(ctx context.Context, in *RemoveDHCPLeasesRequest, opts ...grpc.CallOption) (*RemoveDHCPLeasesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(VNFBGPStatus)
-	err := c.cc.Invoke(ctx, VNFDaemon_GetBGPStatus_FullMethodName, in, out, cOpts...)
+	out := new(RemoveDHCPLeasesResponse)
+	err := c.cc.Invoke(ctx, DHCPDaemon_RemoveDHCPLeases_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *vNFDaemonClient) ListDNSRecords(ctx context.Context, in *ListDNSRecordsRequest, opts ...grpc.CallOption) (*ListDNSRecordsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListDNSRecordsResponse)
-	err := c.cc.Invoke(ctx, VNFDaemon_ListDNSRecords_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vNFDaemonClient) CleanupLegacyNetwork(ctx context.Context, in *CleanupLegacyNetworkRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, VNFDaemon_CleanupLegacyNetwork_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// VNFDaemonServer is the server API for VNFDaemon service.
-// All implementations must embed UnimplementedVNFDaemonServer
+// DHCPDaemonServer is the server API for DHCPDaemon service.
+// All implementations must embed UnimplementedDHCPDaemonServer
 // for forward compatibility.
-//
-// VNFDaemon is the internal control channel between the API server and the
-// separate VNF daemon (cmd/vnfs). It is not exposed through the HTTP gateway.
-// The API owns all VPP provisioning (memif/tap creation) and sends the full
-// desired runtime spec; the daemon owns the userspace runtimes (CoreDHCP,
-// gVisor memif stacks, GoBGP) so API restarts do not interrupt them.
-type VNFDaemonServer interface {
-	// EnsureVNF starts a VNF runtime, or restarts it when the spec changed.
+type DHCPDaemonServer interface {
+	// EnsureDHCP starts a DHCP runtime, or restarts it when the spec changed.
 	// It is idempotent: a running VNF with an unchanged spec is left alone.
-	EnsureVNF(context.Context, *EnsureVNFRequest) (*VNFState, error)
-	RemoveVNF(context.Context, *RemoveVNFRequest) (*emptypb.Empty, error)
-	// ResetRuntime stops every runtime but keeps the desired specs so the API
-	// can re-ensure them after a VPP restart.
-	ResetRuntime(context.Context, *ResetRuntimeRequest) (*emptypb.Empty, error)
-	ListVNFStates(context.Context, *ListVNFStatesRequest) (*ListVNFStatesResponse, error)
-	GetVNFState(context.Context, *GetVNFStateRequest) (*VNFState, error)
-	ListLeases(context.Context, *ListLeasesRequest) (*ListLeasesResponse, error)
-	// RemoveLeases drops specific leases from a running DHCP runtime and its
-	// persisted lease file. Dynamic DNS records derived from those leases are
-	// removed by the daemon's normal lease reconciliation.
-	RemoveLeases(context.Context, *RemoveLeasesRequest) (*RemoveLeasesResponse, error)
-	GetBGPStatus(context.Context, *GetBGPStatusRequest) (*VNFBGPStatus, error)
-	ListDNSRecords(context.Context, *ListDNSRecordsRequest) (*ListDNSRecordsResponse, error)
-	// CleanupLegacyNetwork removes DHCP runtime files left by the old
-	// per-network DHCP implementation.
-	CleanupLegacyNetwork(context.Context, *CleanupLegacyNetworkRequest) (*emptypb.Empty, error)
-	mustEmbedUnimplementedVNFDaemonServer()
+	EnsureDHCP(context.Context, *EnsureDHCPRequest) (*VNFState, error)
+	RemoveDHCP(context.Context, *RemoveDHCPRequest) (*emptypb.Empty, error)
+	// ReloadDHCP swaps the runtime configuration in place. It keeps the process,
+	// the lease file, and the listener. A reload of a runtime that is not running
+	// returns running=false and does not start it.
+	ReloadDHCP(context.Context, *ReloadDHCPRequest) (*VNFState, error)
+	GetDHCPState(context.Context, *GetDHCPStateRequest) (*VNFState, error)
+	ListDHCPLeases(context.Context, *ListDHCPLeasesRequest) (*ListDHCPLeasesResponse, error)
+	// RemoveDHCPLeases drops specific leases from a running DHCP runtime and its
+	// persisted lease file.
+	RemoveDHCPLeases(context.Context, *RemoveDHCPLeasesRequest) (*RemoveDHCPLeasesResponse, error)
+	mustEmbedUnimplementedDHCPDaemonServer()
 }
 
-// UnimplementedVNFDaemonServer must be embedded to have
+// UnimplementedDHCPDaemonServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedVNFDaemonServer struct{}
+type UnimplementedDHCPDaemonServer struct{}
 
-func (UnimplementedVNFDaemonServer) EnsureVNF(context.Context, *EnsureVNFRequest) (*VNFState, error) {
-	return nil, status.Error(codes.Unimplemented, "method EnsureVNF not implemented")
+func (UnimplementedDHCPDaemonServer) EnsureDHCP(context.Context, *EnsureDHCPRequest) (*VNFState, error) {
+	return nil, status.Error(codes.Unimplemented, "method EnsureDHCP not implemented")
 }
-func (UnimplementedVNFDaemonServer) RemoveVNF(context.Context, *RemoveVNFRequest) (*emptypb.Empty, error) {
-	return nil, status.Error(codes.Unimplemented, "method RemoveVNF not implemented")
+func (UnimplementedDHCPDaemonServer) RemoveDHCP(context.Context, *RemoveDHCPRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveDHCP not implemented")
 }
-func (UnimplementedVNFDaemonServer) ResetRuntime(context.Context, *ResetRuntimeRequest) (*emptypb.Empty, error) {
-	return nil, status.Error(codes.Unimplemented, "method ResetRuntime not implemented")
+func (UnimplementedDHCPDaemonServer) ReloadDHCP(context.Context, *ReloadDHCPRequest) (*VNFState, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReloadDHCP not implemented")
 }
-func (UnimplementedVNFDaemonServer) ListVNFStates(context.Context, *ListVNFStatesRequest) (*ListVNFStatesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListVNFStates not implemented")
+func (UnimplementedDHCPDaemonServer) GetDHCPState(context.Context, *GetDHCPStateRequest) (*VNFState, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetDHCPState not implemented")
 }
-func (UnimplementedVNFDaemonServer) GetVNFState(context.Context, *GetVNFStateRequest) (*VNFState, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetVNFState not implemented")
+func (UnimplementedDHCPDaemonServer) ListDHCPLeases(context.Context, *ListDHCPLeasesRequest) (*ListDHCPLeasesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListDHCPLeases not implemented")
 }
-func (UnimplementedVNFDaemonServer) ListLeases(context.Context, *ListLeasesRequest) (*ListLeasesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListLeases not implemented")
+func (UnimplementedDHCPDaemonServer) RemoveDHCPLeases(context.Context, *RemoveDHCPLeasesRequest) (*RemoveDHCPLeasesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveDHCPLeases not implemented")
 }
-func (UnimplementedVNFDaemonServer) RemoveLeases(context.Context, *RemoveLeasesRequest) (*RemoveLeasesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RemoveLeases not implemented")
-}
-func (UnimplementedVNFDaemonServer) GetBGPStatus(context.Context, *GetBGPStatusRequest) (*VNFBGPStatus, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetBGPStatus not implemented")
-}
-func (UnimplementedVNFDaemonServer) ListDNSRecords(context.Context, *ListDNSRecordsRequest) (*ListDNSRecordsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListDNSRecords not implemented")
-}
-func (UnimplementedVNFDaemonServer) CleanupLegacyNetwork(context.Context, *CleanupLegacyNetworkRequest) (*emptypb.Empty, error) {
-	return nil, status.Error(codes.Unimplemented, "method CleanupLegacyNetwork not implemented")
-}
-func (UnimplementedVNFDaemonServer) mustEmbedUnimplementedVNFDaemonServer() {}
-func (UnimplementedVNFDaemonServer) testEmbeddedByValue()                   {}
+func (UnimplementedDHCPDaemonServer) mustEmbedUnimplementedDHCPDaemonServer() {}
+func (UnimplementedDHCPDaemonServer) testEmbeddedByValue()                    {}
 
-// UnsafeVNFDaemonServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to VNFDaemonServer will
+// UnsafeDHCPDaemonServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to DHCPDaemonServer will
 // result in compilation errors.
-type UnsafeVNFDaemonServer interface {
-	mustEmbedUnimplementedVNFDaemonServer()
+type UnsafeDHCPDaemonServer interface {
+	mustEmbedUnimplementedDHCPDaemonServer()
 }
 
-func RegisterVNFDaemonServer(s grpc.ServiceRegistrar, srv VNFDaemonServer) {
-	// If the following call panics, it indicates UnimplementedVNFDaemonServer was
+func RegisterDHCPDaemonServer(s grpc.ServiceRegistrar, srv DHCPDaemonServer) {
+	// If the following call panics, it indicates UnimplementedDHCPDaemonServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&VNFDaemon_ServiceDesc, srv)
+	s.RegisterService(&DHCPDaemon_ServiceDesc, srv)
 }
 
-func _VNFDaemon_EnsureVNF_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(EnsureVNFRequest)
+func _DHCPDaemon_EnsureDHCP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnsureDHCPRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VNFDaemonServer).EnsureVNF(ctx, in)
+		return srv.(DHCPDaemonServer).EnsureDHCP(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: VNFDaemon_EnsureVNF_FullMethodName,
+		FullMethod: DHCPDaemon_EnsureDHCP_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VNFDaemonServer).EnsureVNF(ctx, req.(*EnsureVNFRequest))
+		return srv.(DHCPDaemonServer).EnsureDHCP(ctx, req.(*EnsureDHCPRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VNFDaemon_RemoveVNF_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RemoveVNFRequest)
+func _DHCPDaemon_RemoveDHCP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveDHCPRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VNFDaemonServer).RemoveVNF(ctx, in)
+		return srv.(DHCPDaemonServer).RemoveDHCP(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: VNFDaemon_RemoveVNF_FullMethodName,
+		FullMethod: DHCPDaemon_RemoveDHCP_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VNFDaemonServer).RemoveVNF(ctx, req.(*RemoveVNFRequest))
+		return srv.(DHCPDaemonServer).RemoveDHCP(ctx, req.(*RemoveDHCPRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VNFDaemon_ResetRuntime_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ResetRuntimeRequest)
+func _DHCPDaemon_ReloadDHCP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReloadDHCPRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VNFDaemonServer).ResetRuntime(ctx, in)
+		return srv.(DHCPDaemonServer).ReloadDHCP(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: VNFDaemon_ResetRuntime_FullMethodName,
+		FullMethod: DHCPDaemon_ReloadDHCP_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VNFDaemonServer).ResetRuntime(ctx, req.(*ResetRuntimeRequest))
+		return srv.(DHCPDaemonServer).ReloadDHCP(ctx, req.(*ReloadDHCPRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VNFDaemon_ListVNFStates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListVNFStatesRequest)
+func _DHCPDaemon_GetDHCPState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDHCPStateRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VNFDaemonServer).ListVNFStates(ctx, in)
+		return srv.(DHCPDaemonServer).GetDHCPState(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: VNFDaemon_ListVNFStates_FullMethodName,
+		FullMethod: DHCPDaemon_GetDHCPState_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VNFDaemonServer).ListVNFStates(ctx, req.(*ListVNFStatesRequest))
+		return srv.(DHCPDaemonServer).GetDHCPState(ctx, req.(*GetDHCPStateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VNFDaemon_GetVNFState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetVNFStateRequest)
+func _DHCPDaemon_ListDHCPLeases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDHCPLeasesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VNFDaemonServer).GetVNFState(ctx, in)
+		return srv.(DHCPDaemonServer).ListDHCPLeases(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: VNFDaemon_GetVNFState_FullMethodName,
+		FullMethod: DHCPDaemon_ListDHCPLeases_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VNFDaemonServer).GetVNFState(ctx, req.(*GetVNFStateRequest))
+		return srv.(DHCPDaemonServer).ListDHCPLeases(ctx, req.(*ListDHCPLeasesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VNFDaemon_ListLeases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListLeasesRequest)
+func _DHCPDaemon_RemoveDHCPLeases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveDHCPLeasesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VNFDaemonServer).ListLeases(ctx, in)
+		return srv.(DHCPDaemonServer).RemoveDHCPLeases(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: VNFDaemon_ListLeases_FullMethodName,
+		FullMethod: DHCPDaemon_RemoveDHCPLeases_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VNFDaemonServer).ListLeases(ctx, req.(*ListLeasesRequest))
+		return srv.(DHCPDaemonServer).RemoveDHCPLeases(ctx, req.(*RemoveDHCPLeasesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VNFDaemon_RemoveLeases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RemoveLeasesRequest)
+// DHCPDaemon_ServiceDesc is the grpc.ServiceDesc for DHCPDaemon service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var DHCPDaemon_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "rookery.v1.DHCPDaemon",
+	HandlerType: (*DHCPDaemonServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "EnsureDHCP",
+			Handler:    _DHCPDaemon_EnsureDHCP_Handler,
+		},
+		{
+			MethodName: "RemoveDHCP",
+			Handler:    _DHCPDaemon_RemoveDHCP_Handler,
+		},
+		{
+			MethodName: "ReloadDHCP",
+			Handler:    _DHCPDaemon_ReloadDHCP_Handler,
+		},
+		{
+			MethodName: "GetDHCPState",
+			Handler:    _DHCPDaemon_GetDHCPState_Handler,
+		},
+		{
+			MethodName: "ListDHCPLeases",
+			Handler:    _DHCPDaemon_ListDHCPLeases_Handler,
+		},
+		{
+			MethodName: "RemoveDHCPLeases",
+			Handler:    _DHCPDaemon_RemoveDHCPLeases_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "rookery/v1/vnfd.proto",
+}
+
+const (
+	DNSDaemon_EnsureDNS_FullMethodName      = "/rookery.v1.DNSDaemon/EnsureDNS"
+	DNSDaemon_RemoveDNS_FullMethodName      = "/rookery.v1.DNSDaemon/RemoveDNS"
+	DNSDaemon_ReloadDNS_FullMethodName      = "/rookery.v1.DNSDaemon/ReloadDNS"
+	DNSDaemon_GetDNSState_FullMethodName    = "/rookery.v1.DNSDaemon/GetDNSState"
+	DNSDaemon_ListDNSRecords_FullMethodName = "/rookery.v1.DNSDaemon/ListDNSRecords"
+)
+
+// DNSDaemonClient is the client API for DNSDaemon service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type DNSDaemonClient interface {
+	EnsureDNS(ctx context.Context, in *EnsureDNSRequest, opts ...grpc.CallOption) (*VNFState, error)
+	RemoveDNS(ctx context.Context, in *RemoveDNSRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	ReloadDNS(ctx context.Context, in *ReloadDNSRequest, opts ...grpc.CallOption) (*VNFState, error)
+	GetDNSState(ctx context.Context, in *GetDNSStateRequest, opts ...grpc.CallOption) (*VNFState, error)
+	// ListDNSRecords returns the dynamic records derived from DHCP leases.
+	ListDNSRecords(ctx context.Context, in *ListDNSRecordsRequest, opts ...grpc.CallOption) (*ListDNSRecordsResponse, error)
+}
+
+type dNSDaemonClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewDNSDaemonClient(cc grpc.ClientConnInterface) DNSDaemonClient {
+	return &dNSDaemonClient{cc}
+}
+
+func (c *dNSDaemonClient) EnsureDNS(ctx context.Context, in *EnsureDNSRequest, opts ...grpc.CallOption) (*VNFState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VNFState)
+	err := c.cc.Invoke(ctx, DNSDaemon_EnsureDNS_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dNSDaemonClient) RemoveDNS(ctx context.Context, in *RemoveDNSRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, DNSDaemon_RemoveDNS_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dNSDaemonClient) ReloadDNS(ctx context.Context, in *ReloadDNSRequest, opts ...grpc.CallOption) (*VNFState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VNFState)
+	err := c.cc.Invoke(ctx, DNSDaemon_ReloadDNS_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dNSDaemonClient) GetDNSState(ctx context.Context, in *GetDNSStateRequest, opts ...grpc.CallOption) (*VNFState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VNFState)
+	err := c.cc.Invoke(ctx, DNSDaemon_GetDNSState_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dNSDaemonClient) ListDNSRecords(ctx context.Context, in *ListDNSRecordsRequest, opts ...grpc.CallOption) (*ListDNSRecordsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListDNSRecordsResponse)
+	err := c.cc.Invoke(ctx, DNSDaemon_ListDNSRecords_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// DNSDaemonServer is the server API for DNSDaemon service.
+// All implementations must embed UnimplementedDNSDaemonServer
+// for forward compatibility.
+type DNSDaemonServer interface {
+	EnsureDNS(context.Context, *EnsureDNSRequest) (*VNFState, error)
+	RemoveDNS(context.Context, *RemoveDNSRequest) (*emptypb.Empty, error)
+	ReloadDNS(context.Context, *ReloadDNSRequest) (*VNFState, error)
+	GetDNSState(context.Context, *GetDNSStateRequest) (*VNFState, error)
+	// ListDNSRecords returns the dynamic records derived from DHCP leases.
+	ListDNSRecords(context.Context, *ListDNSRecordsRequest) (*ListDNSRecordsResponse, error)
+	mustEmbedUnimplementedDNSDaemonServer()
+}
+
+// UnimplementedDNSDaemonServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedDNSDaemonServer struct{}
+
+func (UnimplementedDNSDaemonServer) EnsureDNS(context.Context, *EnsureDNSRequest) (*VNFState, error) {
+	return nil, status.Error(codes.Unimplemented, "method EnsureDNS not implemented")
+}
+func (UnimplementedDNSDaemonServer) RemoveDNS(context.Context, *RemoveDNSRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveDNS not implemented")
+}
+func (UnimplementedDNSDaemonServer) ReloadDNS(context.Context, *ReloadDNSRequest) (*VNFState, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReloadDNS not implemented")
+}
+func (UnimplementedDNSDaemonServer) GetDNSState(context.Context, *GetDNSStateRequest) (*VNFState, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetDNSState not implemented")
+}
+func (UnimplementedDNSDaemonServer) ListDNSRecords(context.Context, *ListDNSRecordsRequest) (*ListDNSRecordsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListDNSRecords not implemented")
+}
+func (UnimplementedDNSDaemonServer) mustEmbedUnimplementedDNSDaemonServer() {}
+func (UnimplementedDNSDaemonServer) testEmbeddedByValue()                   {}
+
+// UnsafeDNSDaemonServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to DNSDaemonServer will
+// result in compilation errors.
+type UnsafeDNSDaemonServer interface {
+	mustEmbedUnimplementedDNSDaemonServer()
+}
+
+func RegisterDNSDaemonServer(s grpc.ServiceRegistrar, srv DNSDaemonServer) {
+	// If the following call panics, it indicates UnimplementedDNSDaemonServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&DNSDaemon_ServiceDesc, srv)
+}
+
+func _DNSDaemon_EnsureDNS_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnsureDNSRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VNFDaemonServer).RemoveLeases(ctx, in)
+		return srv.(DNSDaemonServer).EnsureDNS(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: VNFDaemon_RemoveLeases_FullMethodName,
+		FullMethod: DNSDaemon_EnsureDNS_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VNFDaemonServer).RemoveLeases(ctx, req.(*RemoveLeasesRequest))
+		return srv.(DNSDaemonServer).EnsureDNS(ctx, req.(*EnsureDNSRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VNFDaemon_GetBGPStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetBGPStatusRequest)
+func _DNSDaemon_RemoveDNS_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveDNSRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VNFDaemonServer).GetBGPStatus(ctx, in)
+		return srv.(DNSDaemonServer).RemoveDNS(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: VNFDaemon_GetBGPStatus_FullMethodName,
+		FullMethod: DNSDaemon_RemoveDNS_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VNFDaemonServer).GetBGPStatus(ctx, req.(*GetBGPStatusRequest))
+		return srv.(DNSDaemonServer).RemoveDNS(ctx, req.(*RemoveDNSRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VNFDaemon_ListDNSRecords_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _DNSDaemon_ReloadDNS_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReloadDNSRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DNSDaemonServer).ReloadDNS(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DNSDaemon_ReloadDNS_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DNSDaemonServer).ReloadDNS(ctx, req.(*ReloadDNSRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DNSDaemon_GetDNSState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDNSStateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DNSDaemonServer).GetDNSState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DNSDaemon_GetDNSState_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DNSDaemonServer).GetDNSState(ctx, req.(*GetDNSStateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DNSDaemon_ListDNSRecords_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListDNSRecordsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VNFDaemonServer).ListDNSRecords(ctx, in)
+		return srv.(DNSDaemonServer).ListDNSRecords(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: VNFDaemon_ListDNSRecords_FullMethodName,
+		FullMethod: DNSDaemon_ListDNSRecords_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VNFDaemonServer).ListDNSRecords(ctx, req.(*ListDNSRecordsRequest))
+		return srv.(DNSDaemonServer).ListDNSRecords(ctx, req.(*ListDNSRecordsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VNFDaemon_CleanupLegacyNetwork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+// DNSDaemon_ServiceDesc is the grpc.ServiceDesc for DNSDaemon service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var DNSDaemon_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "rookery.v1.DNSDaemon",
+	HandlerType: (*DNSDaemonServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "EnsureDNS",
+			Handler:    _DNSDaemon_EnsureDNS_Handler,
+		},
+		{
+			MethodName: "RemoveDNS",
+			Handler:    _DNSDaemon_RemoveDNS_Handler,
+		},
+		{
+			MethodName: "ReloadDNS",
+			Handler:    _DNSDaemon_ReloadDNS_Handler,
+		},
+		{
+			MethodName: "GetDNSState",
+			Handler:    _DNSDaemon_GetDNSState_Handler,
+		},
+		{
+			MethodName: "ListDNSRecords",
+			Handler:    _DNSDaemon_ListDNSRecords_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "rookery/v1/vnfd.proto",
+}
+
+const (
+	BGPDaemon_EnsureBGP_FullMethodName    = "/rookery.v1.BGPDaemon/EnsureBGP"
+	BGPDaemon_RemoveBGP_FullMethodName    = "/rookery.v1.BGPDaemon/RemoveBGP"
+	BGPDaemon_ReloadBGP_FullMethodName    = "/rookery.v1.BGPDaemon/ReloadBGP"
+	BGPDaemon_GetBGPState_FullMethodName  = "/rookery.v1.BGPDaemon/GetBGPState"
+	BGPDaemon_GetBGPStatus_FullMethodName = "/rookery.v1.BGPDaemon/GetBGPStatus"
+)
+
+// BGPDaemonClient is the client API for BGPDaemon service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type BGPDaemonClient interface {
+	EnsureBGP(ctx context.Context, in *EnsureBGPRequest, opts ...grpc.CallOption) (*VNFState, error)
+	RemoveBGP(ctx context.Context, in *RemoveBGPRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	ReloadBGP(ctx context.Context, in *ReloadBGPRequest, opts ...grpc.CallOption) (*VNFState, error)
+	GetBGPState(ctx context.Context, in *GetBGPStateRequest, opts ...grpc.CallOption) (*VNFState, error)
+	GetBGPStatus(ctx context.Context, in *GetBGPStatusRequest, opts ...grpc.CallOption) (*BGPStatus, error)
+}
+
+type bGPDaemonClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewBGPDaemonClient(cc grpc.ClientConnInterface) BGPDaemonClient {
+	return &bGPDaemonClient{cc}
+}
+
+func (c *bGPDaemonClient) EnsureBGP(ctx context.Context, in *EnsureBGPRequest, opts ...grpc.CallOption) (*VNFState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VNFState)
+	err := c.cc.Invoke(ctx, BGPDaemon_EnsureBGP_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bGPDaemonClient) RemoveBGP(ctx context.Context, in *RemoveBGPRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, BGPDaemon_RemoveBGP_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bGPDaemonClient) ReloadBGP(ctx context.Context, in *ReloadBGPRequest, opts ...grpc.CallOption) (*VNFState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VNFState)
+	err := c.cc.Invoke(ctx, BGPDaemon_ReloadBGP_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bGPDaemonClient) GetBGPState(ctx context.Context, in *GetBGPStateRequest, opts ...grpc.CallOption) (*VNFState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VNFState)
+	err := c.cc.Invoke(ctx, BGPDaemon_GetBGPState_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bGPDaemonClient) GetBGPStatus(ctx context.Context, in *GetBGPStatusRequest, opts ...grpc.CallOption) (*BGPStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BGPStatus)
+	err := c.cc.Invoke(ctx, BGPDaemon_GetBGPStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// BGPDaemonServer is the server API for BGPDaemon service.
+// All implementations must embed UnimplementedBGPDaemonServer
+// for forward compatibility.
+type BGPDaemonServer interface {
+	EnsureBGP(context.Context, *EnsureBGPRequest) (*VNFState, error)
+	RemoveBGP(context.Context, *RemoveBGPRequest) (*emptypb.Empty, error)
+	ReloadBGP(context.Context, *ReloadBGPRequest) (*VNFState, error)
+	GetBGPState(context.Context, *GetBGPStateRequest) (*VNFState, error)
+	GetBGPStatus(context.Context, *GetBGPStatusRequest) (*BGPStatus, error)
+	mustEmbedUnimplementedBGPDaemonServer()
+}
+
+// UnimplementedBGPDaemonServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedBGPDaemonServer struct{}
+
+func (UnimplementedBGPDaemonServer) EnsureBGP(context.Context, *EnsureBGPRequest) (*VNFState, error) {
+	return nil, status.Error(codes.Unimplemented, "method EnsureBGP not implemented")
+}
+func (UnimplementedBGPDaemonServer) RemoveBGP(context.Context, *RemoveBGPRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveBGP not implemented")
+}
+func (UnimplementedBGPDaemonServer) ReloadBGP(context.Context, *ReloadBGPRequest) (*VNFState, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReloadBGP not implemented")
+}
+func (UnimplementedBGPDaemonServer) GetBGPState(context.Context, *GetBGPStateRequest) (*VNFState, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBGPState not implemented")
+}
+func (UnimplementedBGPDaemonServer) GetBGPStatus(context.Context, *GetBGPStatusRequest) (*BGPStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBGPStatus not implemented")
+}
+func (UnimplementedBGPDaemonServer) mustEmbedUnimplementedBGPDaemonServer() {}
+func (UnimplementedBGPDaemonServer) testEmbeddedByValue()                   {}
+
+// UnsafeBGPDaemonServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to BGPDaemonServer will
+// result in compilation errors.
+type UnsafeBGPDaemonServer interface {
+	mustEmbedUnimplementedBGPDaemonServer()
+}
+
+func RegisterBGPDaemonServer(s grpc.ServiceRegistrar, srv BGPDaemonServer) {
+	// If the following call panics, it indicates UnimplementedBGPDaemonServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&BGPDaemon_ServiceDesc, srv)
+}
+
+func _BGPDaemon_EnsureBGP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnsureBGPRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BGPDaemonServer).EnsureBGP(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BGPDaemon_EnsureBGP_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BGPDaemonServer).EnsureBGP(ctx, req.(*EnsureBGPRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BGPDaemon_RemoveBGP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveBGPRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BGPDaemonServer).RemoveBGP(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BGPDaemon_RemoveBGP_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BGPDaemonServer).RemoveBGP(ctx, req.(*RemoveBGPRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BGPDaemon_ReloadBGP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReloadBGPRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BGPDaemonServer).ReloadBGP(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BGPDaemon_ReloadBGP_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BGPDaemonServer).ReloadBGP(ctx, req.(*ReloadBGPRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BGPDaemon_GetBGPState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBGPStateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BGPDaemonServer).GetBGPState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BGPDaemon_GetBGPState_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BGPDaemonServer).GetBGPState(ctx, req.(*GetBGPStateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BGPDaemon_GetBGPStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBGPStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BGPDaemonServer).GetBGPStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BGPDaemon_GetBGPStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BGPDaemonServer).GetBGPStatus(ctx, req.(*GetBGPStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// BGPDaemon_ServiceDesc is the grpc.ServiceDesc for BGPDaemon service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var BGPDaemon_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "rookery.v1.BGPDaemon",
+	HandlerType: (*BGPDaemonServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "EnsureBGP",
+			Handler:    _BGPDaemon_EnsureBGP_Handler,
+		},
+		{
+			MethodName: "RemoveBGP",
+			Handler:    _BGPDaemon_RemoveBGP_Handler,
+		},
+		{
+			MethodName: "ReloadBGP",
+			Handler:    _BGPDaemon_ReloadBGP_Handler,
+		},
+		{
+			MethodName: "GetBGPState",
+			Handler:    _BGPDaemon_GetBGPState_Handler,
+		},
+		{
+			MethodName: "GetBGPStatus",
+			Handler:    _BGPDaemon_GetBGPStatus_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "rookery/v1/vnfd.proto",
+}
+
+const (
+	VNFRuntimeAdmin_ResetRuntime_FullMethodName         = "/rookery.v1.VNFRuntimeAdmin/ResetRuntime"
+	VNFRuntimeAdmin_CleanupLegacyNetwork_FullMethodName = "/rookery.v1.VNFRuntimeAdmin/CleanupLegacyNetwork"
+)
+
+// VNFRuntimeAdminClient is the client API for VNFRuntimeAdmin service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type VNFRuntimeAdminClient interface {
+	// ResetRuntime stops every runtime but keeps the desired specs so the API
+	// can re-ensure them after a VPP restart.
+	ResetRuntime(ctx context.Context, in *ResetRuntimeRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// CleanupLegacyNetwork removes DHCP runtime files left by the old
+	// per-network DHCP implementation.
+	CleanupLegacyNetwork(ctx context.Context, in *CleanupLegacyNetworkRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+}
+
+type vNFRuntimeAdminClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewVNFRuntimeAdminClient(cc grpc.ClientConnInterface) VNFRuntimeAdminClient {
+	return &vNFRuntimeAdminClient{cc}
+}
+
+func (c *vNFRuntimeAdminClient) ResetRuntime(ctx context.Context, in *ResetRuntimeRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, VNFRuntimeAdmin_ResetRuntime_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vNFRuntimeAdminClient) CleanupLegacyNetwork(ctx context.Context, in *CleanupLegacyNetworkRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, VNFRuntimeAdmin_CleanupLegacyNetwork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// VNFRuntimeAdminServer is the server API for VNFRuntimeAdmin service.
+// All implementations must embed UnimplementedVNFRuntimeAdminServer
+// for forward compatibility.
+type VNFRuntimeAdminServer interface {
+	// ResetRuntime stops every runtime but keeps the desired specs so the API
+	// can re-ensure them after a VPP restart.
+	ResetRuntime(context.Context, *ResetRuntimeRequest) (*emptypb.Empty, error)
+	// CleanupLegacyNetwork removes DHCP runtime files left by the old
+	// per-network DHCP implementation.
+	CleanupLegacyNetwork(context.Context, *CleanupLegacyNetworkRequest) (*emptypb.Empty, error)
+	mustEmbedUnimplementedVNFRuntimeAdminServer()
+}
+
+// UnimplementedVNFRuntimeAdminServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedVNFRuntimeAdminServer struct{}
+
+func (UnimplementedVNFRuntimeAdminServer) ResetRuntime(context.Context, *ResetRuntimeRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResetRuntime not implemented")
+}
+func (UnimplementedVNFRuntimeAdminServer) CleanupLegacyNetwork(context.Context, *CleanupLegacyNetworkRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method CleanupLegacyNetwork not implemented")
+}
+func (UnimplementedVNFRuntimeAdminServer) mustEmbedUnimplementedVNFRuntimeAdminServer() {}
+func (UnimplementedVNFRuntimeAdminServer) testEmbeddedByValue()                         {}
+
+// UnsafeVNFRuntimeAdminServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to VNFRuntimeAdminServer will
+// result in compilation errors.
+type UnsafeVNFRuntimeAdminServer interface {
+	mustEmbedUnimplementedVNFRuntimeAdminServer()
+}
+
+func RegisterVNFRuntimeAdminServer(s grpc.ServiceRegistrar, srv VNFRuntimeAdminServer) {
+	// If the following call panics, it indicates UnimplementedVNFRuntimeAdminServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&VNFRuntimeAdmin_ServiceDesc, srv)
+}
+
+func _VNFRuntimeAdmin_ResetRuntime_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResetRuntimeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VNFRuntimeAdminServer).ResetRuntime(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VNFRuntimeAdmin_ResetRuntime_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VNFRuntimeAdminServer).ResetRuntime(ctx, req.(*ResetRuntimeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VNFRuntimeAdmin_CleanupLegacyNetwork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CleanupLegacyNetworkRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VNFDaemonServer).CleanupLegacyNetwork(ctx, in)
+		return srv.(VNFRuntimeAdminServer).CleanupLegacyNetwork(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: VNFDaemon_CleanupLegacyNetwork_FullMethodName,
+		FullMethod: VNFRuntimeAdmin_CleanupLegacyNetwork_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VNFDaemonServer).CleanupLegacyNetwork(ctx, req.(*CleanupLegacyNetworkRequest))
+		return srv.(VNFRuntimeAdminServer).CleanupLegacyNetwork(ctx, req.(*CleanupLegacyNetworkRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// VNFDaemon_ServiceDesc is the grpc.ServiceDesc for VNFDaemon service.
+// VNFRuntimeAdmin_ServiceDesc is the grpc.ServiceDesc for VNFRuntimeAdmin service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var VNFDaemon_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "rookery.v1.VNFDaemon",
-	HandlerType: (*VNFDaemonServer)(nil),
+var VNFRuntimeAdmin_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "rookery.v1.VNFRuntimeAdmin",
+	HandlerType: (*VNFRuntimeAdminServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "EnsureVNF",
-			Handler:    _VNFDaemon_EnsureVNF_Handler,
-		},
-		{
-			MethodName: "RemoveVNF",
-			Handler:    _VNFDaemon_RemoveVNF_Handler,
-		},
-		{
 			MethodName: "ResetRuntime",
-			Handler:    _VNFDaemon_ResetRuntime_Handler,
-		},
-		{
-			MethodName: "ListVNFStates",
-			Handler:    _VNFDaemon_ListVNFStates_Handler,
-		},
-		{
-			MethodName: "GetVNFState",
-			Handler:    _VNFDaemon_GetVNFState_Handler,
-		},
-		{
-			MethodName: "ListLeases",
-			Handler:    _VNFDaemon_ListLeases_Handler,
-		},
-		{
-			MethodName: "RemoveLeases",
-			Handler:    _VNFDaemon_RemoveLeases_Handler,
-		},
-		{
-			MethodName: "GetBGPStatus",
-			Handler:    _VNFDaemon_GetBGPStatus_Handler,
-		},
-		{
-			MethodName: "ListDNSRecords",
-			Handler:    _VNFDaemon_ListDNSRecords_Handler,
+			Handler:    _VNFRuntimeAdmin_ResetRuntime_Handler,
 		},
 		{
 			MethodName: "CleanupLegacyNetwork",
-			Handler:    _VNFDaemon_CleanupLegacyNetwork_Handler,
+			Handler:    _VNFRuntimeAdmin_CleanupLegacyNetwork_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

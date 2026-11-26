@@ -133,8 +133,12 @@ type VNFManager interface {
 	Start(ctx context.Context, vnf store.VNF, hostIf string) error
 	StartMemif(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32) error
 	StartShared(ctx context.Context, vnf store.VNF, socketPath string, ifID uint32, address, ipv6Address string) error
-	Stop(ctx context.Context, vnfID int64, removeLeases bool) error
-	Running(ctx context.Context, vnfID int64) bool
+	Stop(ctx context.Context, vnf store.VNF, removeLeases bool) error
+	Running(ctx context.Context, vnf store.VNF) bool
+	// ReloadVNF swaps the running runtime's configuration in place, keeping the
+	// process, listener, and lease file. It returns nil when the runtime is not
+	// running; the VNF then stays degraded until the next start.
+	ReloadVNF(ctx context.Context, vnf store.VNF) error
 	Leases(ctx context.Context, vnfID int64) ([]store.VNFLease, error)
 	RemoveLeases(ctx context.Context, vnfID int64, clientIDs []string) (int, error)
 	DNSRecords(ctx context.Context, vnfID int64) ([]host.DNSRecordView, error)

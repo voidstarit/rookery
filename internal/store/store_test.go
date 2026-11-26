@@ -760,31 +760,24 @@ func TestVNFCrud(t *testing.T) {
 	network := createNetwork(t, st, "lab")
 	other := createNetwork(t, st, "other")
 
-	created, err := st.CreateVNF(ctx, store.VNF{
+	created, err := st.CreateDHCPVNF(ctx, store.NewDHCPVNF{
 		Name:      "lab-dhcpv4",
 		NetworkID: network.ID,
-		Type:      store.VNFTypeDHCPv4,
+		Family:    store.VNFTypeDHCPv4,
 		Enabled:   true,
-		Config: store.VNFConfig{
+		Config: store.DHCPVNFConfig{
 			Gateway:    "10.20.0.1/24",
 			RangeStart: "10.20.0.100",
 			RangeEnd:   "10.20.0.200",
 			DNS:        "1.1.1.1",
 			LeaseTime:  "12h",
 		},
-		TapSwIfIndex:   7,
-		TapHostName:    "vnf1",
-		MemifSwIfIndex: 9,
-		MemifSocket:    "/run/rookery/memif/1.sock",
-		MemifHostName:  "lab-dhcpv4",
 	})
 	if err != nil {
 		t.Fatalf("create vnf: %v", err)
 	}
 	if created.ID < 1 || created.NetworkName != "lab" || !created.Enabled ||
-		created.Config.Gateway != "10.20.0.1/24" || created.TapSwIfIndex != 7 ||
-		created.MemifSwIfIndex != 9 || created.MemifSocket != "/run/rookery/memif/1.sock" ||
-		created.MemifHostName != "lab-dhcpv4" {
+		created.Config.Gateway != "10.20.0.1/24" {
 		t.Fatalf("created vnf = %+v", created)
 	}
 
@@ -801,32 +794,56 @@ func TestVNFCrud(t *testing.T) {
 		t.Fatalf("other vnfs = %+v, err = %v", vnfsOther, err)
 	}
 
-	updated, err := st.UpdateVNF(ctx, created.ID, store.VNF{
-		Name:           "lab-dhcpv4-renamed",
-		Enabled:        false,
-		Config:         created.Config,
-		TapSwIfIndex:   0,
-		TapHostName:    "",
-		MemifSwIfIndex: 11,
-		MemifSocket:    "/run/rookery/memif/2.sock",
-		MemifHostName:  "lab-dhcpv4-renamed",
+	// Activation persists tap/memif metadata through the identity write.
+	created.TapSwIfIndex = 7
+	created.TapHostName = "vnf1"
+	created.MemifSwIfIndex = 9
+	created.MemifSocket = "/run/rookery/memif/1.sock"
+	created.MemifHostName = "lab-dhcpv4"
+	identified, err := st.UpdateVNFIdentity(ctx, created)
+	if err != nil {
+		t.Fatalf("update vnf identity: %v", err)
+	}
+	if identified.TapSwIfIndex != 7 || identified.MemifSwIfIndex != 9 ||
+		identified.MemifSocket != "/run/rookery/memif/1.sock" || identified.MemifHostName != "lab-dhcpv4" {
+		t.Fatalf("updated vnf identity = %+v", identified)
+	}
+
+	// Parent scalar and identity changes are written together by the typed update.
+	identified.Name = "lab-dhcpv4-renamed"
+	identified.Enabled = false
+	updated, err := st.UpdateDHCPVNF(ctx, identified, store.DHCPVNFConfig{
+		Gateway:    "10.20.0.1/24",
+		RangeStart: "10.20.0.100",
+		RangeEnd:   "10.20.0.250",
+		DNS:        "1.1.1.1",
+		LeaseTime:  "12h",
 	})
 	if err != nil {
 		t.Fatalf("update vnf: %v", err)
 	}
-	if updated.Name != "lab-dhcpv4-renamed" || updated.Enabled || updated.TapSwIfIndex != 0 ||
-		updated.MemifSwIfIndex != 11 || updated.MemifSocket != "/run/rookery/memif/2.sock" ||
-		updated.MemifHostName != "lab-dhcpv4-renamed" {
+	if updated.Name != "lab-dhcpv4-renamed" || updated.Enabled ||
+		updated.Config.RangeEnd != "10.20.0.250" || updated.TapSwIfIndex != 7 ||
+		updated.MemifSwIfIndex != 9 {
 		t.Fatalf("updated vnf = %+v", updated)
 	}
 
-	if _, err := st.CreateVNF(ctx, store.VNF{
+	if _, err := st.CreateDHCPVNF(ctx, store.NewDHCPVNF{
 		Name:      updated.Name,
 		NetworkID: other.ID,
-		Type:      store.VNFTypeDHCPv6,
-		Config:    created.Config,
+		Family:    store.VNFTypeDHCPv6,
+		Config: store.DHCPVNFConfig{
+			Gateway:    "fd00::1/64",
+			RangeStart: "fd00::100",
+			RangeEnd:   "fd00::200",
+		},
 	}); !errors.Is(err, store.ErrVNFNameTaken) {
 		t.Fatalf("duplicate name error = %v, want ErrVNFNameTaken", err)
+	}
+
+	dhcp, err := st.GetDHCPVNF(ctx, created.ID)
+	if err != nil || dhcp.Family != store.VNFTypeDHCPv4 || dhcp.Config.RangeEnd != "10.20.0.250" {
+		t.Fatalf("typed dhcp vnf = %+v, err = %v", dhcp, err)
 	}
 
 	if err := st.DeleteVNF(ctx, created.ID); err != nil {
@@ -841,11 +858,15 @@ func TestVNFsCascadeWithNetwork(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()
 	network := createNetwork(t, st, "lab")
-	vnf, err := st.CreateVNF(ctx, store.VNF{
+	vnf, err := st.CreateDHCPVNF(ctx, store.NewDHCPVNF{
 		Name:      "lab-dhcpv4",
 		NetworkID: network.ID,
-		Type:      store.VNFTypeDHCPv4,
-		Config:    store.VNFConfig{Gateway: "10.20.0.1/24", RangeStart: "10.20.0.100", RangeEnd: "10.20.0.200"},
+		Family:    store.VNFTypeDHCPv4,
+		Config: store.DHCPVNFConfig{
+			Gateway:    "10.20.0.1/24",
+			RangeStart: "10.20.0.100",
+			RangeEnd:   "10.20.0.200",
+		},
 	})
 	if err != nil {
 		t.Fatalf("create vnf: %v", err)

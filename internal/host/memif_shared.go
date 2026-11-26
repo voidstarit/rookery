@@ -520,7 +520,7 @@ func (n *sharedNetwork) dnsHandler() *dnsHandler {
 	if n.dns == nil {
 		return nil
 	}
-	return n.dns.handler
+	return n.dns.current()
 }
 
 // isClosed reports whether close has run on the shared network.

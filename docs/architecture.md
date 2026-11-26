@@ -56,7 +56,7 @@ C4Container
   Rel(api, db, "Reads and writes")
   Rel(api, vpp, "Binary API and CLI")
   Rel(api, qemu, "Spawns and controls")
-  Rel(api, vnfd, "Internal VNFDaemon gRPC")
+  Rel(api, vnfd, "Internal typed VNF daemon gRPC")
   Rel(api, lvm, "LVM commands")
   Rel(vnfd, vpp, "BGP route updates; memif/tap dataplane")
   Rel(qemu, vpp, "vhost-user dataplane")
@@ -77,7 +77,7 @@ C4Component
     Component(store, "Store", "Go", "SQLite migrations and inventory")
     Component(host, "Host adapters", "Go", "LVM, VPP binary API/CLI, CoreDHCP plugin setup")
     Component(qemur, "QEMU runner", "Go", "Process launch, pid files, monitor and VNC sockets")
-    Component(vnfc, "VNF daemon client", "Go", "gRPC client for EnsureVNF/RemoveVNF/status")
+    Component(vnfc, "VNF daemon client", "Go", "gRPC client for DHCPDaemon, DNSDaemon, and BGPDaemon ensure/remove/reload/state")
     Component(readiness, "Readiness", "Go", "Cached thin-pool and VPP status")
     Component(pki, "PKI", "Go", "CA, server/client certificates, revocation")
     Component(config, "Config", "Go", "YAML/env/flag precedence")
@@ -185,25 +185,56 @@ and overlapping CIDRs are isolated by the per-network VRF.
 ```mermaid
 sequenceDiagram
   participant A as rookery API
+  participant S as SQLite
   participant V as VPP
   participant D as vnfs daemon
 
+  A->>S: Write vnfs identity + typed parent/child rows
   A->>V: Create tap/memif and attach to network BD
   A->>V: Bind interface to network VRF
-  A->>D: EnsureVNF(desired spec)
+  A->>D: EnsureDHCP / EnsureDNS / EnsureBGP (full typed spec)
   D->>V: Open VPP binary API for BGP routes
   D-->>A: runtime state
   Note over A,D: API keeps DB and VPP ownership; daemon keeps runtime state
+  A->>S: Child write (row + updated_at)
+  A->>D: ReloadDHCP / ReloadDNS / ReloadBGP (in place)
+  Note over A,D: parent scalar/transport/enabled change stops and starts
 ```
 
-The daemon persists desired specs under the run directory, restores them on its
-own restart, and supervises dead runtimes. The API reconciles daemon state after
-API/VPP restarts and can run without the daemon; enabled VNFs report `degraded`.
+A VNF is one `vnfs` identity row plus one typed parent row (`dhcpv4_vnfs`,
+`dhcpv6_vnfs`, `dns_vnfs`, `nat44_vnfs`, or `bgp_vnfs`) and its child rows
+(`dhcpv4_static_assignments`, `dhcpv4_options`, `dhcpv6_options`,
+`dns_records`, `dns_forwarders`, `nat44_dnat_rules`,
+`bgp_advertised_prefixes`). The identity carries the name, network, type,
+enable flag, tap/memif metadata, and timestamps; type-specific fields live only
+in the typed tables, and a unique index on `(network_id, type)` enforces one VNF
+of each type per network. `store.VNFConfig` is only an internal runtime-hydration
+shape: the old persisted/exposed config union is gone, typed store methods are
+the only write path, and the config union is never written back.
+
+The daemon exposes four internal services: `DHCPDaemon`, `DNSDaemon`,
+`BGPDaemon`, and `VNFRuntimeAdmin` (runtime reset and legacy cleanup). There is
+no `EnsureVNF` or shared state list; each type has its own ensure, remove,
+reload, state, and type-specific read. The daemon persists a `DesiredRuntime`
+wrapper with a DHCP, DNS, or BGP oneof and ignores old single-`VNFSpec` files;
+the API's startup reconciliation re-sends every enabled VNF. A child create,
+update, or delete reloads the running DHCP, DNS, or BGP runtime in place and
+keeps its process, listener, lease file, and desired spec. A parent scalar,
+transport, tap/memif, or enabled change still stops and starts the runtime.
+NAT44 is VPP NAT44 driven by the API: a DNAT child write replaces the VNF's VPP
+static mappings without stopping NAT44 or the BVI.
+
+The API reconciles daemon state after API/VPP restarts and can run without the
+daemon; enabled VNFs report `degraded`. If a child reload fails, the lifecycle
+restores the previous row and reloads the previous configuration; if that
+restore reload also fails, the parent is disabled.
 
 ## Storage and data model
 
 SQLite is the inventory source of truth. The embedded migrations under
-`internal/store/migrations` define the schema; key tables are:
+`internal/store/migrations` define the schema; the latest is
+`0061_per_type_vnfs.sql`, which moves VNF configuration into the typed tables
+after a read-only preflight in `store.Open`. Key tables are:
 
 | Area | Tables |
 | --- | --- |
@@ -212,7 +243,7 @@ SQLite is the inventory source of truth. The embedded migrations under
 | Media | `media` |
 | Networks | `networks`, `virtual_interfaces`, `network_host_taps` |
 | Network policy | `acls`, `interface_acls`, `route_tables`, `routes` |
-| VNFs | `vnfs` |
+| VNFs | `vnfs` identity plus `dhcpv4_vnfs`, `dhcpv6_vnfs`, `dns_vnfs`, `nat44_vnfs`, `bgp_vnfs`, and their child tables |
 | Host takeover | `host_interfaces` |
 | PKI | `client_certificates` |
 
@@ -233,7 +264,7 @@ CGO or a system SQLite library.
 
 ```text
 cmd/rookery/                    API, init, serve
-cmd/vnfs/                       DHCP/DNS/BGP daemon
+cmd/vnfs/                       DHCP/DNS/BGP daemon and its typed gRPC services
 cmd/terraform-provider-rookery/ Terraform provider over mTLS gRPC
 
 internal/api/                   HTTP/native handlers, VPP/NAT/DHCP orchestration
@@ -243,7 +274,7 @@ internal/store/                 SQLite, migrations, inventory types
 internal/host/                  LVM, VPP, DHCP/DNS/BGP runtimes, vhost/memif/tap
 internal/qemu/                  QEMU process, monitor, VNC, metrics
 internal/cgroup/                cgroup v2 hierarchy, limits, CPU/device helpers
-internal/vnfd/                  internal VNFDaemon gRPC protocol
+internal/vnfd/                  client for the typed internal VNF daemon services
 internal/readiness/             cached host prerequisite status
 internal/pki/                   mTLS CA and client certificates
 internal/config/                YAML configuration loader

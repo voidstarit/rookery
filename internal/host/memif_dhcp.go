@@ -66,6 +66,7 @@ type memifDHCPv4 struct {
 // CoreDHCP server, without starting CoreDHCP's kernel listeners.
 func newDHCPv4Handlers(vnf store.VNF, leasePath string, port int) ([]handler.Handler4, error) {
 	ensureCoreDHCPPlugin()
+	ensureCoreDHCPLivePlugins()
 	cfg, err := buildDHCPv4Config(vnf, "memif", leasePath, port)
 	if err != nil {
 		return nil, err

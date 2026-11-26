@@ -23,44 +23,43 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type VNFSpec struct {
+// RuntimeSpec is the transport and identity part shared by every runtime spec.
+type RuntimeSpec struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	Id        int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	Name      string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Type      string                 `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`
-	NetworkId int64                  `protobuf:"varint,4,opt,name=network_id,json=networkId,proto3" json:"network_id,omitempty"`
-	// transport tells the daemon how the VNF reaches VPP: "memif" uses the
-	// memif socket created by the API, anything else uses tap_host_name.
-	Transport      string     `protobuf:"bytes,5,opt,name=transport,proto3" json:"transport,omitempty"`
-	Config         *VNFConfig `protobuf:"bytes,6,opt,name=config,proto3" json:"config,omitempty"`
-	TapHostName    string     `protobuf:"bytes,7,opt,name=tap_host_name,json=tapHostName,proto3" json:"tap_host_name,omitempty"`
-	MemifSocket    string     `protobuf:"bytes,8,opt,name=memif_socket,json=memifSocket,proto3" json:"memif_socket,omitempty"`
-	MemifSwIfIndex uint32     `protobuf:"varint,9,opt,name=memif_sw_if_index,json=memifSwIfIndex,proto3" json:"memif_sw_if_index,omitempty"`
+	NetworkId int64                  `protobuf:"varint,3,opt,name=network_id,json=networkId,proto3" json:"network_id,omitempty"`
+	// transport tells the daemon how the VNF reaches VPP: "memif"/"dedicated"
+	// uses the memif socket created by the API, "shared" uses the network's
+	// shared stack, anything else uses tap_host_name.
+	Transport      string `protobuf:"bytes,4,opt,name=transport,proto3" json:"transport,omitempty"`
+	TapHostName    string `protobuf:"bytes,5,opt,name=tap_host_name,json=tapHostName,proto3" json:"tap_host_name,omitempty"`
+	MemifSocket    string `protobuf:"bytes,6,opt,name=memif_socket,json=memifSocket,proto3" json:"memif_socket,omitempty"`
+	MemifSwIfIndex uint32 `protobuf:"varint,7,opt,name=memif_sw_if_index,json=memifSwIfIndex,proto3" json:"memif_sw_if_index,omitempty"`
 	// shared_address is the IPv4 CIDR assigned to the network's shared VNF
 	// memif stack (normally .2/prefix). It is required for transport "shared".
-	SharedAddress string `protobuf:"bytes,10,opt,name=shared_address,json=sharedAddress,proto3" json:"shared_address,omitempty"`
+	SharedAddress string `protobuf:"bytes,8,opt,name=shared_address,json=sharedAddress,proto3" json:"shared_address,omitempty"`
 	// shared_ipv6_address is the IPv6 CIDR assigned to the network's shared VNF
-	// memif stack (normally prefix + 2). DNS listens on UDP/TCP 53 over both
-	// families when it is present.
-	SharedIpv6Address string `protobuf:"bytes,11,opt,name=shared_ipv6_address,json=sharedIpv6Address,proto3" json:"shared_ipv6_address,omitempty"`
+	// memif stack (normally prefix + 2).
+	SharedIpv6Address string `protobuf:"bytes,9,opt,name=shared_ipv6_address,json=sharedIpv6Address,proto3" json:"shared_ipv6_address,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
 
-func (x *VNFSpec) Reset() {
-	*x = VNFSpec{}
+func (x *RuntimeSpec) Reset() {
+	*x = RuntimeSpec{}
 	mi := &file_rookery_v1_vnfd_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *VNFSpec) String() string {
+func (x *RuntimeSpec) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*VNFSpec) ProtoMessage() {}
+func (*RuntimeSpec) ProtoMessage() {}
 
-func (x *VNFSpec) ProtoReflect() protoreflect.Message {
+func (x *RuntimeSpec) ProtoReflect() protoreflect.Message {
 	mi := &file_rookery_v1_vnfd_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -72,109 +71,102 @@ func (x *VNFSpec) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use VNFSpec.ProtoReflect.Descriptor instead.
-func (*VNFSpec) Descriptor() ([]byte, []int) {
+// Deprecated: Use RuntimeSpec.ProtoReflect.Descriptor instead.
+func (*RuntimeSpec) Descriptor() ([]byte, []int) {
 	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *VNFSpec) GetId() int64 {
+func (x *RuntimeSpec) GetId() int64 {
 	if x != nil {
 		return x.Id
 	}
 	return 0
 }
 
-func (x *VNFSpec) GetName() string {
+func (x *RuntimeSpec) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-func (x *VNFSpec) GetType() string {
-	if x != nil {
-		return x.Type
-	}
-	return ""
-}
-
-func (x *VNFSpec) GetNetworkId() int64 {
+func (x *RuntimeSpec) GetNetworkId() int64 {
 	if x != nil {
 		return x.NetworkId
 	}
 	return 0
 }
 
-func (x *VNFSpec) GetTransport() string {
+func (x *RuntimeSpec) GetTransport() string {
 	if x != nil {
 		return x.Transport
 	}
 	return ""
 }
 
-func (x *VNFSpec) GetConfig() *VNFConfig {
-	if x != nil {
-		return x.Config
-	}
-	return nil
-}
-
-func (x *VNFSpec) GetTapHostName() string {
+func (x *RuntimeSpec) GetTapHostName() string {
 	if x != nil {
 		return x.TapHostName
 	}
 	return ""
 }
 
-func (x *VNFSpec) GetMemifSocket() string {
+func (x *RuntimeSpec) GetMemifSocket() string {
 	if x != nil {
 		return x.MemifSocket
 	}
 	return ""
 }
 
-func (x *VNFSpec) GetMemifSwIfIndex() uint32 {
+func (x *RuntimeSpec) GetMemifSwIfIndex() uint32 {
 	if x != nil {
 		return x.MemifSwIfIndex
 	}
 	return 0
 }
 
-func (x *VNFSpec) GetSharedAddress() string {
+func (x *RuntimeSpec) GetSharedAddress() string {
 	if x != nil {
 		return x.SharedAddress
 	}
 	return ""
 }
 
-func (x *VNFSpec) GetSharedIpv6Address() string {
+func (x *RuntimeSpec) GetSharedIpv6Address() string {
 	if x != nil {
 		return x.SharedIpv6Address
 	}
 	return ""
 }
 
-type EnsureVNFRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Vnf           *VNFSpec               `protobuf:"bytes,1,opt,name=vnf,proto3" json:"vnf,omitempty"`
+// DHCPRuntimeSpec is the full desired spec of one DHCP runtime.
+type DHCPRuntimeSpec struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Runtime *RuntimeSpec           `protobuf:"bytes,1,opt,name=runtime,proto3" json:"runtime,omitempty"`
+	Family  string                 `protobuf:"bytes,2,opt,name=family,proto3" json:"family,omitempty"`
+	// Types that are valid to be assigned to Config:
+	//
+	//	*DHCPRuntimeSpec_Dhcpv4
+	//	*DHCPRuntimeSpec_Dhcpv6
+	Config        isDHCPRuntimeSpec_Config `protobuf_oneof:"config"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *EnsureVNFRequest) Reset() {
-	*x = EnsureVNFRequest{}
+func (x *DHCPRuntimeSpec) Reset() {
+	*x = DHCPRuntimeSpec{}
 	mi := &file_rookery_v1_vnfd_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *EnsureVNFRequest) String() string {
+func (x *DHCPRuntimeSpec) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*EnsureVNFRequest) ProtoMessage() {}
+func (*DHCPRuntimeSpec) ProtoMessage() {}
 
-func (x *EnsureVNFRequest) ProtoReflect() protoreflect.Message {
+func (x *DHCPRuntimeSpec) ProtoReflect() protoreflect.Message {
 	mi := &file_rookery_v1_vnfd_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -186,19 +178,362 @@ func (x *EnsureVNFRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use EnsureVNFRequest.ProtoReflect.Descriptor instead.
-func (*EnsureVNFRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use DHCPRuntimeSpec.ProtoReflect.Descriptor instead.
+func (*DHCPRuntimeSpec) Descriptor() ([]byte, []int) {
 	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *EnsureVNFRequest) GetVnf() *VNFSpec {
+func (x *DHCPRuntimeSpec) GetRuntime() *RuntimeSpec {
 	if x != nil {
-		return x.Vnf
+		return x.Runtime
 	}
 	return nil
 }
 
-type RemoveVNFRequest struct {
+func (x *DHCPRuntimeSpec) GetFamily() string {
+	if x != nil {
+		return x.Family
+	}
+	return ""
+}
+
+func (x *DHCPRuntimeSpec) GetConfig() isDHCPRuntimeSpec_Config {
+	if x != nil {
+		return x.Config
+	}
+	return nil
+}
+
+func (x *DHCPRuntimeSpec) GetDhcpv4() *DHCPV4RuntimeConfig {
+	if x != nil {
+		if x, ok := x.Config.(*DHCPRuntimeSpec_Dhcpv4); ok {
+			return x.Dhcpv4
+		}
+	}
+	return nil
+}
+
+func (x *DHCPRuntimeSpec) GetDhcpv6() *DHCPV6RuntimeConfig {
+	if x != nil {
+		if x, ok := x.Config.(*DHCPRuntimeSpec_Dhcpv6); ok {
+			return x.Dhcpv6
+		}
+	}
+	return nil
+}
+
+type isDHCPRuntimeSpec_Config interface {
+	isDHCPRuntimeSpec_Config()
+}
+
+type DHCPRuntimeSpec_Dhcpv4 struct {
+	Dhcpv4 *DHCPV4RuntimeConfig `protobuf:"bytes,3,opt,name=dhcpv4,proto3,oneof"`
+}
+
+type DHCPRuntimeSpec_Dhcpv6 struct {
+	Dhcpv6 *DHCPV6RuntimeConfig `protobuf:"bytes,4,opt,name=dhcpv6,proto3,oneof"`
+}
+
+func (*DHCPRuntimeSpec_Dhcpv4) isDHCPRuntimeSpec_Config() {}
+
+func (*DHCPRuntimeSpec_Dhcpv6) isDHCPRuntimeSpec_Config() {}
+
+// DNSRuntimeSpec is the full desired spec of one DNS runtime.
+type DNSRuntimeSpec struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Runtime       *RuntimeSpec           `protobuf:"bytes,1,opt,name=runtime,proto3" json:"runtime,omitempty"`
+	Config        *DNSRuntimeConfig      `protobuf:"bytes,2,opt,name=config,proto3" json:"config,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DNSRuntimeSpec) Reset() {
+	*x = DNSRuntimeSpec{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DNSRuntimeSpec) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DNSRuntimeSpec) ProtoMessage() {}
+
+func (x *DNSRuntimeSpec) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DNSRuntimeSpec.ProtoReflect.Descriptor instead.
+func (*DNSRuntimeSpec) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *DNSRuntimeSpec) GetRuntime() *RuntimeSpec {
+	if x != nil {
+		return x.Runtime
+	}
+	return nil
+}
+
+func (x *DNSRuntimeSpec) GetConfig() *DNSRuntimeConfig {
+	if x != nil {
+		return x.Config
+	}
+	return nil
+}
+
+// BGPRuntimeSpec is the full desired spec of one BGP runtime.
+type BGPRuntimeSpec struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Runtime       *RuntimeSpec           `protobuf:"bytes,1,opt,name=runtime,proto3" json:"runtime,omitempty"`
+	Config        *BGPRuntimeConfig      `protobuf:"bytes,2,opt,name=config,proto3" json:"config,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BGPRuntimeSpec) Reset() {
+	*x = BGPRuntimeSpec{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BGPRuntimeSpec) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BGPRuntimeSpec) ProtoMessage() {}
+
+func (x *BGPRuntimeSpec) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BGPRuntimeSpec.ProtoReflect.Descriptor instead.
+func (*BGPRuntimeSpec) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *BGPRuntimeSpec) GetRuntime() *RuntimeSpec {
+	if x != nil {
+		return x.Runtime
+	}
+	return nil
+}
+
+func (x *BGPRuntimeSpec) GetConfig() *BGPRuntimeConfig {
+	if x != nil {
+		return x.Config
+	}
+	return nil
+}
+
+// DesiredRuntime is the persisted desired spec of one runtime. The oneof
+// selects the runtime type. Load ignores files that do not parse as this
+// wrapper, including the old single-VNFSpec files.
+type DesiredRuntime struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Runtime:
+	//
+	//	*DesiredRuntime_Dhcp
+	//	*DesiredRuntime_Dns
+	//	*DesiredRuntime_Bgp
+	Runtime       isDesiredRuntime_Runtime `protobuf_oneof:"runtime"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DesiredRuntime) Reset() {
+	*x = DesiredRuntime{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DesiredRuntime) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DesiredRuntime) ProtoMessage() {}
+
+func (x *DesiredRuntime) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DesiredRuntime.ProtoReflect.Descriptor instead.
+func (*DesiredRuntime) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *DesiredRuntime) GetRuntime() isDesiredRuntime_Runtime {
+	if x != nil {
+		return x.Runtime
+	}
+	return nil
+}
+
+func (x *DesiredRuntime) GetDhcp() *DHCPRuntimeSpec {
+	if x != nil {
+		if x, ok := x.Runtime.(*DesiredRuntime_Dhcp); ok {
+			return x.Dhcp
+		}
+	}
+	return nil
+}
+
+func (x *DesiredRuntime) GetDns() *DNSRuntimeSpec {
+	if x != nil {
+		if x, ok := x.Runtime.(*DesiredRuntime_Dns); ok {
+			return x.Dns
+		}
+	}
+	return nil
+}
+
+func (x *DesiredRuntime) GetBgp() *BGPRuntimeSpec {
+	if x != nil {
+		if x, ok := x.Runtime.(*DesiredRuntime_Bgp); ok {
+			return x.Bgp
+		}
+	}
+	return nil
+}
+
+type isDesiredRuntime_Runtime interface {
+	isDesiredRuntime_Runtime()
+}
+
+type DesiredRuntime_Dhcp struct {
+	Dhcp *DHCPRuntimeSpec `protobuf:"bytes,1,opt,name=dhcp,proto3,oneof"`
+}
+
+type DesiredRuntime_Dns struct {
+	Dns *DNSRuntimeSpec `protobuf:"bytes,2,opt,name=dns,proto3,oneof"`
+}
+
+type DesiredRuntime_Bgp struct {
+	Bgp *BGPRuntimeSpec `protobuf:"bytes,3,opt,name=bgp,proto3,oneof"`
+}
+
+func (*DesiredRuntime_Dhcp) isDesiredRuntime_Runtime() {}
+
+func (*DesiredRuntime_Dns) isDesiredRuntime_Runtime() {}
+
+func (*DesiredRuntime_Bgp) isDesiredRuntime_Runtime() {}
+
+type EnsureDHCPRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Spec          *DHCPRuntimeSpec       `protobuf:"bytes,1,opt,name=spec,proto3" json:"spec,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnsureDHCPRequest) Reset() {
+	*x = EnsureDHCPRequest{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnsureDHCPRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnsureDHCPRequest) ProtoMessage() {}
+
+func (x *EnsureDHCPRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnsureDHCPRequest.ProtoReflect.Descriptor instead.
+func (*EnsureDHCPRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *EnsureDHCPRequest) GetSpec() *DHCPRuntimeSpec {
+	if x != nil {
+		return x.Spec
+	}
+	return nil
+}
+
+type ReloadDHCPRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Spec          *DHCPRuntimeSpec       `protobuf:"bytes,1,opt,name=spec,proto3" json:"spec,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReloadDHCPRequest) Reset() {
+	*x = ReloadDHCPRequest{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReloadDHCPRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReloadDHCPRequest) ProtoMessage() {}
+
+func (x *ReloadDHCPRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReloadDHCPRequest.ProtoReflect.Descriptor instead.
+func (*ReloadDHCPRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ReloadDHCPRequest) GetSpec() *DHCPRuntimeSpec {
+	if x != nil {
+		return x.Spec
+	}
+	return nil
+}
+
+type RemoveDHCPRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	RemoveLeases  bool                   `protobuf:"varint,2,opt,name=remove_leases,json=removeLeases,proto3" json:"remove_leases,omitempty"`
@@ -206,21 +541,21 @@ type RemoveVNFRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *RemoveVNFRequest) Reset() {
-	*x = RemoveVNFRequest{}
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[2]
+func (x *RemoveDHCPRequest) Reset() {
+	*x = RemoveDHCPRequest{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RemoveVNFRequest) String() string {
+func (x *RemoveDHCPRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RemoveVNFRequest) ProtoMessage() {}
+func (*RemoveDHCPRequest) ProtoMessage() {}
 
-func (x *RemoveVNFRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[2]
+func (x *RemoveDHCPRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -231,23 +566,751 @@ func (x *RemoveVNFRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RemoveVNFRequest.ProtoReflect.Descriptor instead.
-func (*RemoveVNFRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{2}
+// Deprecated: Use RemoveDHCPRequest.ProtoReflect.Descriptor instead.
+func (*RemoveDHCPRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *RemoveVNFRequest) GetId() int64 {
+func (x *RemoveDHCPRequest) GetId() int64 {
 	if x != nil {
 		return x.Id
 	}
 	return 0
 }
 
-func (x *RemoveVNFRequest) GetRemoveLeases() bool {
+func (x *RemoveDHCPRequest) GetRemoveLeases() bool {
 	if x != nil {
 		return x.RemoveLeases
 	}
 	return false
+}
+
+type GetDHCPStateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDHCPStateRequest) Reset() {
+	*x = GetDHCPStateRequest{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDHCPStateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDHCPStateRequest) ProtoMessage() {}
+
+func (x *GetDHCPStateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDHCPStateRequest.ProtoReflect.Descriptor instead.
+func (*GetDHCPStateRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *GetDHCPStateRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type ListDHCPLeasesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDHCPLeasesRequest) Reset() {
+	*x = ListDHCPLeasesRequest{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDHCPLeasesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDHCPLeasesRequest) ProtoMessage() {}
+
+func (x *ListDHCPLeasesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDHCPLeasesRequest.ProtoReflect.Descriptor instead.
+func (*ListDHCPLeasesRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ListDHCPLeasesRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type ListDHCPLeasesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	VnfId         int64                  `protobuf:"varint,1,opt,name=vnf_id,json=vnfId,proto3" json:"vnf_id,omitempty"`
+	Leases        []*VNFLease            `protobuf:"bytes,2,rep,name=leases,proto3" json:"leases,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDHCPLeasesResponse) Reset() {
+	*x = ListDHCPLeasesResponse{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDHCPLeasesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDHCPLeasesResponse) ProtoMessage() {}
+
+func (x *ListDHCPLeasesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDHCPLeasesResponse.ProtoReflect.Descriptor instead.
+func (*ListDHCPLeasesResponse) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ListDHCPLeasesResponse) GetVnfId() int64 {
+	if x != nil {
+		return x.VnfId
+	}
+	return 0
+}
+
+func (x *ListDHCPLeasesResponse) GetLeases() []*VNFLease {
+	if x != nil {
+		return x.Leases
+	}
+	return nil
+}
+
+type RemoveDHCPLeasesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	ClientIds     []string               `protobuf:"bytes,2,rep,name=client_ids,json=clientIds,proto3" json:"client_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveDHCPLeasesRequest) Reset() {
+	*x = RemoveDHCPLeasesRequest{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveDHCPLeasesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveDHCPLeasesRequest) ProtoMessage() {}
+
+func (x *RemoveDHCPLeasesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveDHCPLeasesRequest.ProtoReflect.Descriptor instead.
+func (*RemoveDHCPLeasesRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *RemoveDHCPLeasesRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *RemoveDHCPLeasesRequest) GetClientIds() []string {
+	if x != nil {
+		return x.ClientIds
+	}
+	return nil
+}
+
+type RemoveDHCPLeasesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Removed       int64                  `protobuf:"varint,1,opt,name=removed,proto3" json:"removed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveDHCPLeasesResponse) Reset() {
+	*x = RemoveDHCPLeasesResponse{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveDHCPLeasesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveDHCPLeasesResponse) ProtoMessage() {}
+
+func (x *RemoveDHCPLeasesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveDHCPLeasesResponse.ProtoReflect.Descriptor instead.
+func (*RemoveDHCPLeasesResponse) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *RemoveDHCPLeasesResponse) GetRemoved() int64 {
+	if x != nil {
+		return x.Removed
+	}
+	return 0
+}
+
+type EnsureDNSRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Spec          *DNSRuntimeSpec        `protobuf:"bytes,1,opt,name=spec,proto3" json:"spec,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnsureDNSRequest) Reset() {
+	*x = EnsureDNSRequest{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnsureDNSRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnsureDNSRequest) ProtoMessage() {}
+
+func (x *EnsureDNSRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnsureDNSRequest.ProtoReflect.Descriptor instead.
+func (*EnsureDNSRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *EnsureDNSRequest) GetSpec() *DNSRuntimeSpec {
+	if x != nil {
+		return x.Spec
+	}
+	return nil
+}
+
+type ReloadDNSRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Spec          *DNSRuntimeSpec        `protobuf:"bytes,1,opt,name=spec,proto3" json:"spec,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReloadDNSRequest) Reset() {
+	*x = ReloadDNSRequest{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReloadDNSRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReloadDNSRequest) ProtoMessage() {}
+
+func (x *ReloadDNSRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReloadDNSRequest.ProtoReflect.Descriptor instead.
+func (*ReloadDNSRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ReloadDNSRequest) GetSpec() *DNSRuntimeSpec {
+	if x != nil {
+		return x.Spec
+	}
+	return nil
+}
+
+type RemoveDNSRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveDNSRequest) Reset() {
+	*x = RemoveDNSRequest{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveDNSRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveDNSRequest) ProtoMessage() {}
+
+func (x *RemoveDNSRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveDNSRequest.ProtoReflect.Descriptor instead.
+func (*RemoveDNSRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *RemoveDNSRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type GetDNSStateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDNSStateRequest) Reset() {
+	*x = GetDNSStateRequest{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDNSStateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDNSStateRequest) ProtoMessage() {}
+
+func (x *GetDNSStateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDNSStateRequest.ProtoReflect.Descriptor instead.
+func (*GetDNSStateRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *GetDNSStateRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type ListDNSRecordsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDNSRecordsRequest) Reset() {
+	*x = ListDNSRecordsRequest{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDNSRecordsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDNSRecordsRequest) ProtoMessage() {}
+
+func (x *ListDNSRecordsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDNSRecordsRequest.ProtoReflect.Descriptor instead.
+func (*ListDNSRecordsRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *ListDNSRecordsRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type ListDNSRecordsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	VnfId         int64                  `protobuf:"varint,1,opt,name=vnf_id,json=vnfId,proto3" json:"vnf_id,omitempty"`
+	Records       []*DNSRecordView       `protobuf:"bytes,2,rep,name=records,proto3" json:"records,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDNSRecordsResponse) Reset() {
+	*x = ListDNSRecordsResponse{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDNSRecordsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDNSRecordsResponse) ProtoMessage() {}
+
+func (x *ListDNSRecordsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDNSRecordsResponse.ProtoReflect.Descriptor instead.
+func (*ListDNSRecordsResponse) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ListDNSRecordsResponse) GetVnfId() int64 {
+	if x != nil {
+		return x.VnfId
+	}
+	return 0
+}
+
+func (x *ListDNSRecordsResponse) GetRecords() []*DNSRecordView {
+	if x != nil {
+		return x.Records
+	}
+	return nil
+}
+
+type EnsureBGPRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Spec          *BGPRuntimeSpec        `protobuf:"bytes,1,opt,name=spec,proto3" json:"spec,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnsureBGPRequest) Reset() {
+	*x = EnsureBGPRequest{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnsureBGPRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnsureBGPRequest) ProtoMessage() {}
+
+func (x *EnsureBGPRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnsureBGPRequest.ProtoReflect.Descriptor instead.
+func (*EnsureBGPRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *EnsureBGPRequest) GetSpec() *BGPRuntimeSpec {
+	if x != nil {
+		return x.Spec
+	}
+	return nil
+}
+
+type ReloadBGPRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Spec          *BGPRuntimeSpec        `protobuf:"bytes,1,opt,name=spec,proto3" json:"spec,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReloadBGPRequest) Reset() {
+	*x = ReloadBGPRequest{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReloadBGPRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReloadBGPRequest) ProtoMessage() {}
+
+func (x *ReloadBGPRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReloadBGPRequest.ProtoReflect.Descriptor instead.
+func (*ReloadBGPRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ReloadBGPRequest) GetSpec() *BGPRuntimeSpec {
+	if x != nil {
+		return x.Spec
+	}
+	return nil
+}
+
+type RemoveBGPRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveBGPRequest) Reset() {
+	*x = RemoveBGPRequest{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveBGPRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveBGPRequest) ProtoMessage() {}
+
+func (x *RemoveBGPRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveBGPRequest.ProtoReflect.Descriptor instead.
+func (*RemoveBGPRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *RemoveBGPRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type GetBGPStateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetBGPStateRequest) Reset() {
+	*x = GetBGPStateRequest{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBGPStateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBGPStateRequest) ProtoMessage() {}
+
+func (x *GetBGPStateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBGPStateRequest.ProtoReflect.Descriptor instead.
+func (*GetBGPStateRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *GetBGPStateRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type GetBGPStatusRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetBGPStatusRequest) Reset() {
+	*x = GetBGPStatusRequest{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBGPStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBGPStatusRequest) ProtoMessage() {}
+
+func (x *GetBGPStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBGPStatusRequest.ProtoReflect.Descriptor instead.
+func (*GetBGPStatusRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *GetBGPStatusRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
 }
 
 type ResetRuntimeRequest struct {
@@ -258,7 +1321,7 @@ type ResetRuntimeRequest struct {
 
 func (x *ResetRuntimeRequest) Reset() {
 	*x = ResetRuntimeRequest{}
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[3]
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -270,7 +1333,7 @@ func (x *ResetRuntimeRequest) String() string {
 func (*ResetRuntimeRequest) ProtoMessage() {}
 
 func (x *ResetRuntimeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[3]
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -283,9 +1346,54 @@ func (x *ResetRuntimeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetRuntimeRequest.ProtoReflect.Descriptor instead.
 func (*ResetRuntimeRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{3}
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{24}
 }
 
+type CleanupLegacyNetworkRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NetworkId     int64                  `protobuf:"varint,1,opt,name=network_id,json=networkId,proto3" json:"network_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CleanupLegacyNetworkRequest) Reset() {
+	*x = CleanupLegacyNetworkRequest{}
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CleanupLegacyNetworkRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CleanupLegacyNetworkRequest) ProtoMessage() {}
+
+func (x *CleanupLegacyNetworkRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CleanupLegacyNetworkRequest.ProtoReflect.Descriptor instead.
+func (*CleanupLegacyNetworkRequest) Descriptor() ([]byte, []int) {
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *CleanupLegacyNetworkRequest) GetNetworkId() int64 {
+	if x != nil {
+		return x.NetworkId
+	}
+	return 0
+}
+
+// VNFState is the running state of one runtime.
 type VNFState struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -297,7 +1405,7 @@ type VNFState struct {
 
 func (x *VNFState) Reset() {
 	*x = VNFState{}
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[4]
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -309,7 +1417,7 @@ func (x *VNFState) String() string {
 func (*VNFState) ProtoMessage() {}
 
 func (x *VNFState) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[4]
+	mi := &file_rookery_v1_vnfd_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -322,7 +1430,7 @@ func (x *VNFState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VNFState.ProtoReflect.Descriptor instead.
 func (*VNFState) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{4}
+	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *VNFState) GetId() int64 {
@@ -346,582 +1454,116 @@ func (x *VNFState) GetDetail() string {
 	return ""
 }
 
-type ListVNFStatesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListVNFStatesRequest) Reset() {
-	*x = ListVNFStatesRequest{}
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListVNFStatesRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListVNFStatesRequest) ProtoMessage() {}
-
-func (x *ListVNFStatesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListVNFStatesRequest.ProtoReflect.Descriptor instead.
-func (*ListVNFStatesRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{5}
-}
-
-type ListVNFStatesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Vnfs          []*VNFState            `protobuf:"bytes,1,rep,name=vnfs,proto3" json:"vnfs,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListVNFStatesResponse) Reset() {
-	*x = ListVNFStatesResponse{}
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListVNFStatesResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListVNFStatesResponse) ProtoMessage() {}
-
-func (x *ListVNFStatesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListVNFStatesResponse.ProtoReflect.Descriptor instead.
-func (*ListVNFStatesResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *ListVNFStatesResponse) GetVnfs() []*VNFState {
-	if x != nil {
-		return x.Vnfs
-	}
-	return nil
-}
-
-type GetVNFStateRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetVNFStateRequest) Reset() {
-	*x = GetVNFStateRequest{}
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetVNFStateRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetVNFStateRequest) ProtoMessage() {}
-
-func (x *GetVNFStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[7]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetVNFStateRequest.ProtoReflect.Descriptor instead.
-func (*GetVNFStateRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *GetVNFStateRequest) GetId() int64 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-type ListLeasesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListLeasesRequest) Reset() {
-	*x = ListLeasesRequest{}
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListLeasesRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListLeasesRequest) ProtoMessage() {}
-
-func (x *ListLeasesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListLeasesRequest.ProtoReflect.Descriptor instead.
-func (*ListLeasesRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *ListLeasesRequest) GetId() int64 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-type ListLeasesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	VnfId         int64                  `protobuf:"varint,1,opt,name=vnf_id,json=vnfId,proto3" json:"vnf_id,omitempty"`
-	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
-	Leases        []*VNFLease            `protobuf:"bytes,3,rep,name=leases,proto3" json:"leases,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListLeasesResponse) Reset() {
-	*x = ListLeasesResponse{}
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListLeasesResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListLeasesResponse) ProtoMessage() {}
-
-func (x *ListLeasesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListLeasesResponse.ProtoReflect.Descriptor instead.
-func (*ListLeasesResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *ListLeasesResponse) GetVnfId() int64 {
-	if x != nil {
-		return x.VnfId
-	}
-	return 0
-}
-
-func (x *ListLeasesResponse) GetType() string {
-	if x != nil {
-		return x.Type
-	}
-	return ""
-}
-
-func (x *ListLeasesResponse) GetLeases() []*VNFLease {
-	if x != nil {
-		return x.Leases
-	}
-	return nil
-}
-
-type RemoveLeasesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	ClientIds     []string               `protobuf:"bytes,2,rep,name=client_ids,json=clientIds,proto3" json:"client_ids,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *RemoveLeasesRequest) Reset() {
-	*x = RemoveLeasesRequest{}
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[10]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RemoveLeasesRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RemoveLeasesRequest) ProtoMessage() {}
-
-func (x *RemoveLeasesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[10]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RemoveLeasesRequest.ProtoReflect.Descriptor instead.
-func (*RemoveLeasesRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *RemoveLeasesRequest) GetId() int64 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-func (x *RemoveLeasesRequest) GetClientIds() []string {
-	if x != nil {
-		return x.ClientIds
-	}
-	return nil
-}
-
-type RemoveLeasesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Removed       int64                  `protobuf:"varint,1,opt,name=removed,proto3" json:"removed,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *RemoveLeasesResponse) Reset() {
-	*x = RemoveLeasesResponse{}
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[11]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RemoveLeasesResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RemoveLeasesResponse) ProtoMessage() {}
-
-func (x *RemoveLeasesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[11]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RemoveLeasesResponse.ProtoReflect.Descriptor instead.
-func (*RemoveLeasesResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{11}
-}
-
-func (x *RemoveLeasesResponse) GetRemoved() int64 {
-	if x != nil {
-		return x.Removed
-	}
-	return 0
-}
-
-type GetBGPStatusRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetBGPStatusRequest) Reset() {
-	*x = GetBGPStatusRequest{}
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[12]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetBGPStatusRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetBGPStatusRequest) ProtoMessage() {}
-
-func (x *GetBGPStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[12]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetBGPStatusRequest.ProtoReflect.Descriptor instead.
-func (*GetBGPStatusRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{12}
-}
-
-func (x *GetBGPStatusRequest) GetId() int64 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-type ListDNSRecordsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListDNSRecordsRequest) Reset() {
-	*x = ListDNSRecordsRequest{}
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[13]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListDNSRecordsRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListDNSRecordsRequest) ProtoMessage() {}
-
-func (x *ListDNSRecordsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[13]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListDNSRecordsRequest.ProtoReflect.Descriptor instead.
-func (*ListDNSRecordsRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{13}
-}
-
-func (x *ListDNSRecordsRequest) GetId() int64 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-type ListDNSRecordsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	VnfId         int64                  `protobuf:"varint,1,opt,name=vnf_id,json=vnfId,proto3" json:"vnf_id,omitempty"`
-	Records       []*VNFDNSRecord        `protobuf:"bytes,2,rep,name=records,proto3" json:"records,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListDNSRecordsResponse) Reset() {
-	*x = ListDNSRecordsResponse{}
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[14]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListDNSRecordsResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListDNSRecordsResponse) ProtoMessage() {}
-
-func (x *ListDNSRecordsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[14]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListDNSRecordsResponse.ProtoReflect.Descriptor instead.
-func (*ListDNSRecordsResponse) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{14}
-}
-
-func (x *ListDNSRecordsResponse) GetVnfId() int64 {
-	if x != nil {
-		return x.VnfId
-	}
-	return 0
-}
-
-func (x *ListDNSRecordsResponse) GetRecords() []*VNFDNSRecord {
-	if x != nil {
-		return x.Records
-	}
-	return nil
-}
-
-type CleanupLegacyNetworkRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NetworkId     int64                  `protobuf:"varint,1,opt,name=network_id,json=networkId,proto3" json:"network_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CleanupLegacyNetworkRequest) Reset() {
-	*x = CleanupLegacyNetworkRequest{}
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[15]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CleanupLegacyNetworkRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CleanupLegacyNetworkRequest) ProtoMessage() {}
-
-func (x *CleanupLegacyNetworkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rookery_v1_vnfd_proto_msgTypes[15]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CleanupLegacyNetworkRequest.ProtoReflect.Descriptor instead.
-func (*CleanupLegacyNetworkRequest) Descriptor() ([]byte, []int) {
-	return file_rookery_v1_vnfd_proto_rawDescGZIP(), []int{15}
-}
-
-func (x *CleanupLegacyNetworkRequest) GetNetworkId() int64 {
-	if x != nil {
-		return x.NetworkId
-	}
-	return 0
-}
-
 var File_rookery_v1_vnfd_proto protoreflect.FileDescriptor
 
 const file_rookery_v1_vnfd_proto_rawDesc = "" +
 	"\n" +
 	"\x15rookery/v1/vnfd.proto\x12\n" +
-	"rookery.v1\x1a\x1bgoogle/protobuf/empty.proto\x1a\x14rookery/v1/vnf.proto\x1a\x17validate/validate.proto\"\xb6\x03\n" +
-	"\aVNFSpec\x12\x17\n" +
+	"rookery.v1\x1a\x1bgoogle/protobuf/empty.proto\x1a\x17validate/validate.proto\x1a\x14rookery/v1/vnf.proto\x1a\x19rookery/v1/dhcp_vnf.proto\x1a\x18rookery/v1/dns_vnf.proto\x1a\x18rookery/v1/bgp_vnf.proto\"\xe8\x02\n" +
+	"\vRuntimeSpec\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\x12.\n" +
-	"\x04type\x18\x03 \x01(\tB\x1a\xfaB\x17r\x15R\x06dhcpv4R\x06dhcpv6R\x03bgpR\x04type\x12\x1d\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +
 	"\n" +
-	"network_id\x18\x04 \x01(\x03R\tnetworkId\x127\n" +
-	"\ttransport\x18\x05 \x01(\tB\x19\xfaB\x16r\x14R\x05memifR\x03tapR\x06sharedR\ttransport\x12-\n" +
-	"\x06config\x18\x06 \x01(\v2\x15.rookery.v1.VNFConfigR\x06config\x12\"\n" +
-	"\rtap_host_name\x18\a \x01(\tR\vtapHostName\x12!\n" +
-	"\fmemif_socket\x18\b \x01(\tR\vmemifSocket\x12)\n" +
-	"\x11memif_sw_if_index\x18\t \x01(\rR\x0ememifSwIfIndex\x12%\n" +
-	"\x0eshared_address\x18\n" +
-	" \x01(\tR\rsharedAddress\x12.\n" +
-	"\x13shared_ipv6_address\x18\v \x01(\tR\x11sharedIpv6Address\"C\n" +
-	"\x10EnsureVNFRequest\x12/\n" +
-	"\x03vnf\x18\x01 \x01(\v2\x13.rookery.v1.VNFSpecB\b\xfaB\x05\x8a\x01\x02\x10\x01R\x03vnf\"P\n" +
-	"\x10RemoveVNFRequest\x12\x17\n" +
+	"network_id\x18\x03 \x01(\x03R\tnetworkId\x12D\n" +
+	"\ttransport\x18\x04 \x01(\tB&\xfaB#r!R\x00R\x05memifR\x03tapR\x06sharedR\tdedicatedR\ttransport\x12\"\n" +
+	"\rtap_host_name\x18\x05 \x01(\tR\vtapHostName\x12!\n" +
+	"\fmemif_socket\x18\x06 \x01(\tR\vmemifSocket\x12)\n" +
+	"\x11memif_sw_if_index\x18\a \x01(\rR\x0ememifSwIfIndex\x12%\n" +
+	"\x0eshared_address\x18\b \x01(\tR\rsharedAddress\x12.\n" +
+	"\x13shared_ipv6_address\x18\t \x01(\tR\x11sharedIpv6Address\"\xfd\x01\n" +
+	"\x0fDHCPRuntimeSpec\x12;\n" +
+	"\aruntime\x18\x01 \x01(\v2\x17.rookery.v1.RuntimeSpecB\b\xfaB\x05\x8a\x01\x02\x10\x01R\aruntime\x12-\n" +
+	"\x06family\x18\x02 \x01(\tB\x15\xfaB\x12r\x10R\x06dhcpv4R\x06dhcpv6R\x06family\x129\n" +
+	"\x06dhcpv4\x18\x03 \x01(\v2\x1f.rookery.v1.DHCPV4RuntimeConfigH\x00R\x06dhcpv4\x129\n" +
+	"\x06dhcpv6\x18\x04 \x01(\v2\x1f.rookery.v1.DHCPV6RuntimeConfigH\x00R\x06dhcpv6B\b\n" +
+	"\x06config\"\x83\x01\n" +
+	"\x0eDNSRuntimeSpec\x12;\n" +
+	"\aruntime\x18\x01 \x01(\v2\x17.rookery.v1.RuntimeSpecB\b\xfaB\x05\x8a\x01\x02\x10\x01R\aruntime\x124\n" +
+	"\x06config\x18\x02 \x01(\v2\x1c.rookery.v1.DNSRuntimeConfigR\x06config\"\x83\x01\n" +
+	"\x0eBGPRuntimeSpec\x12;\n" +
+	"\aruntime\x18\x01 \x01(\v2\x17.rookery.v1.RuntimeSpecB\b\xfaB\x05\x8a\x01\x02\x10\x01R\aruntime\x124\n" +
+	"\x06config\x18\x02 \x01(\v2\x1c.rookery.v1.BGPRuntimeConfigR\x06config\"\xae\x01\n" +
+	"\x0eDesiredRuntime\x121\n" +
+	"\x04dhcp\x18\x01 \x01(\v2\x1b.rookery.v1.DHCPRuntimeSpecH\x00R\x04dhcp\x12.\n" +
+	"\x03dns\x18\x02 \x01(\v2\x1a.rookery.v1.DNSRuntimeSpecH\x00R\x03dns\x12.\n" +
+	"\x03bgp\x18\x03 \x01(\v2\x1a.rookery.v1.BGPRuntimeSpecH\x00R\x03bgpB\t\n" +
+	"\aruntime\"N\n" +
+	"\x11EnsureDHCPRequest\x129\n" +
+	"\x04spec\x18\x01 \x01(\v2\x1b.rookery.v1.DHCPRuntimeSpecB\b\xfaB\x05\x8a\x01\x02\x10\x01R\x04spec\"N\n" +
+	"\x11ReloadDHCPRequest\x129\n" +
+	"\x04spec\x18\x01 \x01(\v2\x1b.rookery.v1.DHCPRuntimeSpecB\b\xfaB\x05\x8a\x01\x02\x10\x01R\x04spec\"Q\n" +
+	"\x11RemoveDHCPRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x12#\n" +
-	"\rremove_leases\x18\x02 \x01(\bR\fremoveLeases\"\x15\n" +
-	"\x13ResetRuntimeRequest\"L\n" +
+	"\rremove_leases\x18\x02 \x01(\bR\fremoveLeases\".\n" +
+	"\x13GetDHCPStateRequest\x12\x17\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"0\n" +
+	"\x15ListDHCPLeasesRequest\x12\x17\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"]\n" +
+	"\x16ListDHCPLeasesResponse\x12\x15\n" +
+	"\x06vnf_id\x18\x01 \x01(\x03R\x05vnfId\x12,\n" +
+	"\x06leases\x18\x02 \x03(\v2\x14.rookery.v1.VNFLeaseR\x06leases\"g\n" +
+	"\x17RemoveDHCPLeasesRequest\x12\x17\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x123\n" +
+	"\n" +
+	"client_ids\x18\x02 \x03(\tB\x14\xfaB\x11\x92\x01\x0e\b\x01\x10\x80\x02\"\ar\x05\x10\x01\x18\x80\x01R\tclientIds\"4\n" +
+	"\x18RemoveDHCPLeasesResponse\x12\x18\n" +
+	"\aremoved\x18\x01 \x01(\x03R\aremoved\"L\n" +
+	"\x10EnsureDNSRequest\x128\n" +
+	"\x04spec\x18\x01 \x01(\v2\x1a.rookery.v1.DNSRuntimeSpecB\b\xfaB\x05\x8a\x01\x02\x10\x01R\x04spec\"L\n" +
+	"\x10ReloadDNSRequest\x128\n" +
+	"\x04spec\x18\x01 \x01(\v2\x1a.rookery.v1.DNSRuntimeSpecB\b\xfaB\x05\x8a\x01\x02\x10\x01R\x04spec\"+\n" +
+	"\x10RemoveDNSRequest\x12\x17\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"-\n" +
+	"\x12GetDNSStateRequest\x12\x17\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"0\n" +
+	"\x15ListDNSRecordsRequest\x12\x17\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"d\n" +
+	"\x16ListDNSRecordsResponse\x12\x15\n" +
+	"\x06vnf_id\x18\x01 \x01(\x03R\x05vnfId\x123\n" +
+	"\arecords\x18\x02 \x03(\v2\x19.rookery.v1.DNSRecordViewR\arecords\"L\n" +
+	"\x10EnsureBGPRequest\x128\n" +
+	"\x04spec\x18\x01 \x01(\v2\x1a.rookery.v1.BGPRuntimeSpecB\b\xfaB\x05\x8a\x01\x02\x10\x01R\x04spec\"L\n" +
+	"\x10ReloadBGPRequest\x128\n" +
+	"\x04spec\x18\x01 \x01(\v2\x1a.rookery.v1.BGPRuntimeSpecB\b\xfaB\x05\x8a\x01\x02\x10\x01R\x04spec\"+\n" +
+	"\x10RemoveBGPRequest\x12\x17\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"-\n" +
+	"\x12GetBGPStateRequest\x12\x17\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\".\n" +
+	"\x13GetBGPStatusRequest\x12\x17\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"\x15\n" +
+	"\x13ResetRuntimeRequest\"E\n" +
+	"\x1bCleanupLegacyNetworkRequest\x12&\n" +
+	"\n" +
+	"network_id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\tnetworkId\"L\n" +
 	"\bVNFState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x18\n" +
 	"\arunning\x18\x02 \x01(\bR\arunning\x12\x16\n" +
-	"\x06detail\x18\x03 \x01(\tR\x06detail\"\x16\n" +
-	"\x14ListVNFStatesRequest\"A\n" +
-	"\x15ListVNFStatesResponse\x12(\n" +
-	"\x04vnfs\x18\x01 \x03(\v2\x14.rookery.v1.VNFStateR\x04vnfs\"-\n" +
-	"\x12GetVNFStateRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\",\n" +
-	"\x11ListLeasesRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"m\n" +
-	"\x12ListLeasesResponse\x12\x15\n" +
-	"\x06vnf_id\x18\x01 \x01(\x03R\x05vnfId\x12\x12\n" +
-	"\x04type\x18\x02 \x01(\tR\x04type\x12,\n" +
-	"\x06leases\x18\x03 \x03(\v2\x14.rookery.v1.VNFLeaseR\x06leases\"c\n" +
-	"\x13RemoveLeasesRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\x123\n" +
+	"\x06detail\x18\x03 \x01(\tR\x06detail2\xd6\x03\n" +
 	"\n" +
-	"client_ids\x18\x02 \x03(\tB\x14\xfaB\x11\x92\x01\x0e\b\x01\x10\x80\x02\"\ar\x05\x10\x01\x18\x80\x01R\tclientIds\"0\n" +
-	"\x14RemoveLeasesResponse\x12\x18\n" +
-	"\aremoved\x18\x01 \x01(\x03R\aremoved\".\n" +
-	"\x13GetBGPStatusRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"0\n" +
-	"\x15ListDNSRecordsRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x02id\"c\n" +
-	"\x16ListDNSRecordsResponse\x12\x15\n" +
-	"\x06vnf_id\x18\x01 \x01(\x03R\x05vnfId\x122\n" +
-	"\arecords\x18\x02 \x03(\v2\x18.rookery.v1.VNFDNSRecordR\arecords\"E\n" +
-	"\x1bCleanupLegacyNetworkRequest\x12&\n" +
+	"DHCPDaemon\x12A\n" +
 	"\n" +
-	"network_id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\tnetworkId2\x90\x06\n" +
-	"\tVNFDaemon\x12?\n" +
-	"\tEnsureVNF\x12\x1c.rookery.v1.EnsureVNFRequest\x1a\x14.rookery.v1.VNFState\x12A\n" +
-	"\tRemoveVNF\x12\x1c.rookery.v1.RemoveVNFRequest\x1a\x16.google.protobuf.Empty\x12G\n" +
-	"\fResetRuntime\x12\x1f.rookery.v1.ResetRuntimeRequest\x1a\x16.google.protobuf.Empty\x12T\n" +
-	"\rListVNFStates\x12 .rookery.v1.ListVNFStatesRequest\x1a!.rookery.v1.ListVNFStatesResponse\x12C\n" +
-	"\vGetVNFState\x12\x1e.rookery.v1.GetVNFStateRequest\x1a\x14.rookery.v1.VNFState\x12K\n" +
+	"EnsureDHCP\x12\x1d.rookery.v1.EnsureDHCPRequest\x1a\x14.rookery.v1.VNFState\x12C\n" +
 	"\n" +
-	"ListLeases\x12\x1d.rookery.v1.ListLeasesRequest\x1a\x1e.rookery.v1.ListLeasesResponse\x12Q\n" +
-	"\fRemoveLeases\x12\x1f.rookery.v1.RemoveLeasesRequest\x1a .rookery.v1.RemoveLeasesResponse\x12I\n" +
-	"\fGetBGPStatus\x12\x1f.rookery.v1.GetBGPStatusRequest\x1a\x18.rookery.v1.VNFBGPStatus\x12W\n" +
-	"\x0eListDNSRecords\x12!.rookery.v1.ListDNSRecordsRequest\x1a\".rookery.v1.ListDNSRecordsResponse\x12W\n" +
+	"RemoveDHCP\x12\x1d.rookery.v1.RemoveDHCPRequest\x1a\x16.google.protobuf.Empty\x12A\n" +
+	"\n" +
+	"ReloadDHCP\x12\x1d.rookery.v1.ReloadDHCPRequest\x1a\x14.rookery.v1.VNFState\x12E\n" +
+	"\fGetDHCPState\x12\x1f.rookery.v1.GetDHCPStateRequest\x1a\x14.rookery.v1.VNFState\x12W\n" +
+	"\x0eListDHCPLeases\x12!.rookery.v1.ListDHCPLeasesRequest\x1a\".rookery.v1.ListDHCPLeasesResponse\x12]\n" +
+	"\x10RemoveDHCPLeases\x12#.rookery.v1.RemoveDHCPLeasesRequest\x1a$.rookery.v1.RemoveDHCPLeasesResponse2\xee\x02\n" +
+	"\tDNSDaemon\x12?\n" +
+	"\tEnsureDNS\x12\x1c.rookery.v1.EnsureDNSRequest\x1a\x14.rookery.v1.VNFState\x12A\n" +
+	"\tRemoveDNS\x12\x1c.rookery.v1.RemoveDNSRequest\x1a\x16.google.protobuf.Empty\x12?\n" +
+	"\tReloadDNS\x12\x1c.rookery.v1.ReloadDNSRequest\x1a\x14.rookery.v1.VNFState\x12C\n" +
+	"\vGetDNSState\x12\x1e.rookery.v1.GetDNSStateRequest\x1a\x14.rookery.v1.VNFState\x12W\n" +
+	"\x0eListDNSRecords\x12!.rookery.v1.ListDNSRecordsRequest\x1a\".rookery.v1.ListDNSRecordsResponse2\xdd\x02\n" +
+	"\tBGPDaemon\x12?\n" +
+	"\tEnsureBGP\x12\x1c.rookery.v1.EnsureBGPRequest\x1a\x14.rookery.v1.VNFState\x12A\n" +
+	"\tRemoveBGP\x12\x1c.rookery.v1.RemoveBGPRequest\x1a\x16.google.protobuf.Empty\x12?\n" +
+	"\tReloadBGP\x12\x1c.rookery.v1.ReloadBGPRequest\x1a\x14.rookery.v1.VNFState\x12C\n" +
+	"\vGetBGPState\x12\x1e.rookery.v1.GetBGPStateRequest\x1a\x14.rookery.v1.VNFState\x12F\n" +
+	"\fGetBGPStatus\x12\x1f.rookery.v1.GetBGPStatusRequest\x1a\x15.rookery.v1.BGPStatus2\xb3\x01\n" +
+	"\x0fVNFRuntimeAdmin\x12G\n" +
+	"\fResetRuntime\x12\x1f.rookery.v1.ResetRuntimeRequest\x1a\x16.google.protobuf.Empty\x12W\n" +
 	"\x14CleanupLegacyNetwork\x12'.rookery.v1.CleanupLegacyNetworkRequest\x1a\x16.google.protobuf.EmptyB?Z=github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1b\x06proto3"
 
 var (
@@ -936,61 +1578,104 @@ func file_rookery_v1_vnfd_proto_rawDescGZIP() []byte {
 	return file_rookery_v1_vnfd_proto_rawDescData
 }
 
-var file_rookery_v1_vnfd_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_rookery_v1_vnfd_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_rookery_v1_vnfd_proto_goTypes = []any{
-	(*VNFSpec)(nil),                     // 0: rookery.v1.VNFSpec
-	(*EnsureVNFRequest)(nil),            // 1: rookery.v1.EnsureVNFRequest
-	(*RemoveVNFRequest)(nil),            // 2: rookery.v1.RemoveVNFRequest
-	(*ResetRuntimeRequest)(nil),         // 3: rookery.v1.ResetRuntimeRequest
-	(*VNFState)(nil),                    // 4: rookery.v1.VNFState
-	(*ListVNFStatesRequest)(nil),        // 5: rookery.v1.ListVNFStatesRequest
-	(*ListVNFStatesResponse)(nil),       // 6: rookery.v1.ListVNFStatesResponse
-	(*GetVNFStateRequest)(nil),          // 7: rookery.v1.GetVNFStateRequest
-	(*ListLeasesRequest)(nil),           // 8: rookery.v1.ListLeasesRequest
-	(*ListLeasesResponse)(nil),          // 9: rookery.v1.ListLeasesResponse
-	(*RemoveLeasesRequest)(nil),         // 10: rookery.v1.RemoveLeasesRequest
-	(*RemoveLeasesResponse)(nil),        // 11: rookery.v1.RemoveLeasesResponse
-	(*GetBGPStatusRequest)(nil),         // 12: rookery.v1.GetBGPStatusRequest
-	(*ListDNSRecordsRequest)(nil),       // 13: rookery.v1.ListDNSRecordsRequest
-	(*ListDNSRecordsResponse)(nil),      // 14: rookery.v1.ListDNSRecordsResponse
-	(*CleanupLegacyNetworkRequest)(nil), // 15: rookery.v1.CleanupLegacyNetworkRequest
-	(*VNFConfig)(nil),                   // 16: rookery.v1.VNFConfig
-	(*VNFLease)(nil),                    // 17: rookery.v1.VNFLease
-	(*VNFDNSRecord)(nil),                // 18: rookery.v1.VNFDNSRecord
-	(*emptypb.Empty)(nil),               // 19: google.protobuf.Empty
-	(*VNFBGPStatus)(nil),                // 20: rookery.v1.VNFBGPStatus
+	(*RuntimeSpec)(nil),                 // 0: rookery.v1.RuntimeSpec
+	(*DHCPRuntimeSpec)(nil),             // 1: rookery.v1.DHCPRuntimeSpec
+	(*DNSRuntimeSpec)(nil),              // 2: rookery.v1.DNSRuntimeSpec
+	(*BGPRuntimeSpec)(nil),              // 3: rookery.v1.BGPRuntimeSpec
+	(*DesiredRuntime)(nil),              // 4: rookery.v1.DesiredRuntime
+	(*EnsureDHCPRequest)(nil),           // 5: rookery.v1.EnsureDHCPRequest
+	(*ReloadDHCPRequest)(nil),           // 6: rookery.v1.ReloadDHCPRequest
+	(*RemoveDHCPRequest)(nil),           // 7: rookery.v1.RemoveDHCPRequest
+	(*GetDHCPStateRequest)(nil),         // 8: rookery.v1.GetDHCPStateRequest
+	(*ListDHCPLeasesRequest)(nil),       // 9: rookery.v1.ListDHCPLeasesRequest
+	(*ListDHCPLeasesResponse)(nil),      // 10: rookery.v1.ListDHCPLeasesResponse
+	(*RemoveDHCPLeasesRequest)(nil),     // 11: rookery.v1.RemoveDHCPLeasesRequest
+	(*RemoveDHCPLeasesResponse)(nil),    // 12: rookery.v1.RemoveDHCPLeasesResponse
+	(*EnsureDNSRequest)(nil),            // 13: rookery.v1.EnsureDNSRequest
+	(*ReloadDNSRequest)(nil),            // 14: rookery.v1.ReloadDNSRequest
+	(*RemoveDNSRequest)(nil),            // 15: rookery.v1.RemoveDNSRequest
+	(*GetDNSStateRequest)(nil),          // 16: rookery.v1.GetDNSStateRequest
+	(*ListDNSRecordsRequest)(nil),       // 17: rookery.v1.ListDNSRecordsRequest
+	(*ListDNSRecordsResponse)(nil),      // 18: rookery.v1.ListDNSRecordsResponse
+	(*EnsureBGPRequest)(nil),            // 19: rookery.v1.EnsureBGPRequest
+	(*ReloadBGPRequest)(nil),            // 20: rookery.v1.ReloadBGPRequest
+	(*RemoveBGPRequest)(nil),            // 21: rookery.v1.RemoveBGPRequest
+	(*GetBGPStateRequest)(nil),          // 22: rookery.v1.GetBGPStateRequest
+	(*GetBGPStatusRequest)(nil),         // 23: rookery.v1.GetBGPStatusRequest
+	(*ResetRuntimeRequest)(nil),         // 24: rookery.v1.ResetRuntimeRequest
+	(*CleanupLegacyNetworkRequest)(nil), // 25: rookery.v1.CleanupLegacyNetworkRequest
+	(*VNFState)(nil),                    // 26: rookery.v1.VNFState
+	(*DHCPV4RuntimeConfig)(nil),         // 27: rookery.v1.DHCPV4RuntimeConfig
+	(*DHCPV6RuntimeConfig)(nil),         // 28: rookery.v1.DHCPV6RuntimeConfig
+	(*DNSRuntimeConfig)(nil),            // 29: rookery.v1.DNSRuntimeConfig
+	(*BGPRuntimeConfig)(nil),            // 30: rookery.v1.BGPRuntimeConfig
+	(*VNFLease)(nil),                    // 31: rookery.v1.VNFLease
+	(*DNSRecordView)(nil),               // 32: rookery.v1.DNSRecordView
+	(*emptypb.Empty)(nil),               // 33: google.protobuf.Empty
+	(*BGPStatus)(nil),                   // 34: rookery.v1.BGPStatus
 }
 var file_rookery_v1_vnfd_proto_depIdxs = []int32{
-	16, // 0: rookery.v1.VNFSpec.config:type_name -> rookery.v1.VNFConfig
-	0,  // 1: rookery.v1.EnsureVNFRequest.vnf:type_name -> rookery.v1.VNFSpec
-	4,  // 2: rookery.v1.ListVNFStatesResponse.vnfs:type_name -> rookery.v1.VNFState
-	17, // 3: rookery.v1.ListLeasesResponse.leases:type_name -> rookery.v1.VNFLease
-	18, // 4: rookery.v1.ListDNSRecordsResponse.records:type_name -> rookery.v1.VNFDNSRecord
-	1,  // 5: rookery.v1.VNFDaemon.EnsureVNF:input_type -> rookery.v1.EnsureVNFRequest
-	2,  // 6: rookery.v1.VNFDaemon.RemoveVNF:input_type -> rookery.v1.RemoveVNFRequest
-	3,  // 7: rookery.v1.VNFDaemon.ResetRuntime:input_type -> rookery.v1.ResetRuntimeRequest
-	5,  // 8: rookery.v1.VNFDaemon.ListVNFStates:input_type -> rookery.v1.ListVNFStatesRequest
-	7,  // 9: rookery.v1.VNFDaemon.GetVNFState:input_type -> rookery.v1.GetVNFStateRequest
-	8,  // 10: rookery.v1.VNFDaemon.ListLeases:input_type -> rookery.v1.ListLeasesRequest
-	10, // 11: rookery.v1.VNFDaemon.RemoveLeases:input_type -> rookery.v1.RemoveLeasesRequest
-	12, // 12: rookery.v1.VNFDaemon.GetBGPStatus:input_type -> rookery.v1.GetBGPStatusRequest
-	13, // 13: rookery.v1.VNFDaemon.ListDNSRecords:input_type -> rookery.v1.ListDNSRecordsRequest
-	15, // 14: rookery.v1.VNFDaemon.CleanupLegacyNetwork:input_type -> rookery.v1.CleanupLegacyNetworkRequest
-	4,  // 15: rookery.v1.VNFDaemon.EnsureVNF:output_type -> rookery.v1.VNFState
-	19, // 16: rookery.v1.VNFDaemon.RemoveVNF:output_type -> google.protobuf.Empty
-	19, // 17: rookery.v1.VNFDaemon.ResetRuntime:output_type -> google.protobuf.Empty
-	6,  // 18: rookery.v1.VNFDaemon.ListVNFStates:output_type -> rookery.v1.ListVNFStatesResponse
-	4,  // 19: rookery.v1.VNFDaemon.GetVNFState:output_type -> rookery.v1.VNFState
-	9,  // 20: rookery.v1.VNFDaemon.ListLeases:output_type -> rookery.v1.ListLeasesResponse
-	11, // 21: rookery.v1.VNFDaemon.RemoveLeases:output_type -> rookery.v1.RemoveLeasesResponse
-	20, // 22: rookery.v1.VNFDaemon.GetBGPStatus:output_type -> rookery.v1.VNFBGPStatus
-	14, // 23: rookery.v1.VNFDaemon.ListDNSRecords:output_type -> rookery.v1.ListDNSRecordsResponse
-	19, // 24: rookery.v1.VNFDaemon.CleanupLegacyNetwork:output_type -> google.protobuf.Empty
-	15, // [15:25] is the sub-list for method output_type
-	5,  // [5:15] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	0,  // 0: rookery.v1.DHCPRuntimeSpec.runtime:type_name -> rookery.v1.RuntimeSpec
+	27, // 1: rookery.v1.DHCPRuntimeSpec.dhcpv4:type_name -> rookery.v1.DHCPV4RuntimeConfig
+	28, // 2: rookery.v1.DHCPRuntimeSpec.dhcpv6:type_name -> rookery.v1.DHCPV6RuntimeConfig
+	0,  // 3: rookery.v1.DNSRuntimeSpec.runtime:type_name -> rookery.v1.RuntimeSpec
+	29, // 4: rookery.v1.DNSRuntimeSpec.config:type_name -> rookery.v1.DNSRuntimeConfig
+	0,  // 5: rookery.v1.BGPRuntimeSpec.runtime:type_name -> rookery.v1.RuntimeSpec
+	30, // 6: rookery.v1.BGPRuntimeSpec.config:type_name -> rookery.v1.BGPRuntimeConfig
+	1,  // 7: rookery.v1.DesiredRuntime.dhcp:type_name -> rookery.v1.DHCPRuntimeSpec
+	2,  // 8: rookery.v1.DesiredRuntime.dns:type_name -> rookery.v1.DNSRuntimeSpec
+	3,  // 9: rookery.v1.DesiredRuntime.bgp:type_name -> rookery.v1.BGPRuntimeSpec
+	1,  // 10: rookery.v1.EnsureDHCPRequest.spec:type_name -> rookery.v1.DHCPRuntimeSpec
+	1,  // 11: rookery.v1.ReloadDHCPRequest.spec:type_name -> rookery.v1.DHCPRuntimeSpec
+	31, // 12: rookery.v1.ListDHCPLeasesResponse.leases:type_name -> rookery.v1.VNFLease
+	2,  // 13: rookery.v1.EnsureDNSRequest.spec:type_name -> rookery.v1.DNSRuntimeSpec
+	2,  // 14: rookery.v1.ReloadDNSRequest.spec:type_name -> rookery.v1.DNSRuntimeSpec
+	32, // 15: rookery.v1.ListDNSRecordsResponse.records:type_name -> rookery.v1.DNSRecordView
+	3,  // 16: rookery.v1.EnsureBGPRequest.spec:type_name -> rookery.v1.BGPRuntimeSpec
+	3,  // 17: rookery.v1.ReloadBGPRequest.spec:type_name -> rookery.v1.BGPRuntimeSpec
+	5,  // 18: rookery.v1.DHCPDaemon.EnsureDHCP:input_type -> rookery.v1.EnsureDHCPRequest
+	7,  // 19: rookery.v1.DHCPDaemon.RemoveDHCP:input_type -> rookery.v1.RemoveDHCPRequest
+	6,  // 20: rookery.v1.DHCPDaemon.ReloadDHCP:input_type -> rookery.v1.ReloadDHCPRequest
+	8,  // 21: rookery.v1.DHCPDaemon.GetDHCPState:input_type -> rookery.v1.GetDHCPStateRequest
+	9,  // 22: rookery.v1.DHCPDaemon.ListDHCPLeases:input_type -> rookery.v1.ListDHCPLeasesRequest
+	11, // 23: rookery.v1.DHCPDaemon.RemoveDHCPLeases:input_type -> rookery.v1.RemoveDHCPLeasesRequest
+	13, // 24: rookery.v1.DNSDaemon.EnsureDNS:input_type -> rookery.v1.EnsureDNSRequest
+	15, // 25: rookery.v1.DNSDaemon.RemoveDNS:input_type -> rookery.v1.RemoveDNSRequest
+	14, // 26: rookery.v1.DNSDaemon.ReloadDNS:input_type -> rookery.v1.ReloadDNSRequest
+	16, // 27: rookery.v1.DNSDaemon.GetDNSState:input_type -> rookery.v1.GetDNSStateRequest
+	17, // 28: rookery.v1.DNSDaemon.ListDNSRecords:input_type -> rookery.v1.ListDNSRecordsRequest
+	19, // 29: rookery.v1.BGPDaemon.EnsureBGP:input_type -> rookery.v1.EnsureBGPRequest
+	21, // 30: rookery.v1.BGPDaemon.RemoveBGP:input_type -> rookery.v1.RemoveBGPRequest
+	20, // 31: rookery.v1.BGPDaemon.ReloadBGP:input_type -> rookery.v1.ReloadBGPRequest
+	22, // 32: rookery.v1.BGPDaemon.GetBGPState:input_type -> rookery.v1.GetBGPStateRequest
+	23, // 33: rookery.v1.BGPDaemon.GetBGPStatus:input_type -> rookery.v1.GetBGPStatusRequest
+	24, // 34: rookery.v1.VNFRuntimeAdmin.ResetRuntime:input_type -> rookery.v1.ResetRuntimeRequest
+	25, // 35: rookery.v1.VNFRuntimeAdmin.CleanupLegacyNetwork:input_type -> rookery.v1.CleanupLegacyNetworkRequest
+	26, // 36: rookery.v1.DHCPDaemon.EnsureDHCP:output_type -> rookery.v1.VNFState
+	33, // 37: rookery.v1.DHCPDaemon.RemoveDHCP:output_type -> google.protobuf.Empty
+	26, // 38: rookery.v1.DHCPDaemon.ReloadDHCP:output_type -> rookery.v1.VNFState
+	26, // 39: rookery.v1.DHCPDaemon.GetDHCPState:output_type -> rookery.v1.VNFState
+	10, // 40: rookery.v1.DHCPDaemon.ListDHCPLeases:output_type -> rookery.v1.ListDHCPLeasesResponse
+	12, // 41: rookery.v1.DHCPDaemon.RemoveDHCPLeases:output_type -> rookery.v1.RemoveDHCPLeasesResponse
+	26, // 42: rookery.v1.DNSDaemon.EnsureDNS:output_type -> rookery.v1.VNFState
+	33, // 43: rookery.v1.DNSDaemon.RemoveDNS:output_type -> google.protobuf.Empty
+	26, // 44: rookery.v1.DNSDaemon.ReloadDNS:output_type -> rookery.v1.VNFState
+	26, // 45: rookery.v1.DNSDaemon.GetDNSState:output_type -> rookery.v1.VNFState
+	18, // 46: rookery.v1.DNSDaemon.ListDNSRecords:output_type -> rookery.v1.ListDNSRecordsResponse
+	26, // 47: rookery.v1.BGPDaemon.EnsureBGP:output_type -> rookery.v1.VNFState
+	33, // 48: rookery.v1.BGPDaemon.RemoveBGP:output_type -> google.protobuf.Empty
+	26, // 49: rookery.v1.BGPDaemon.ReloadBGP:output_type -> rookery.v1.VNFState
+	26, // 50: rookery.v1.BGPDaemon.GetBGPState:output_type -> rookery.v1.VNFState
+	34, // 51: rookery.v1.BGPDaemon.GetBGPStatus:output_type -> rookery.v1.BGPStatus
+	33, // 52: rookery.v1.VNFRuntimeAdmin.ResetRuntime:output_type -> google.protobuf.Empty
+	33, // 53: rookery.v1.VNFRuntimeAdmin.CleanupLegacyNetwork:output_type -> google.protobuf.Empty
+	36, // [36:54] is the sub-list for method output_type
+	18, // [18:36] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_rookery_v1_vnfd_proto_init() }
@@ -999,15 +1684,27 @@ func file_rookery_v1_vnfd_proto_init() {
 		return
 	}
 	file_rookery_v1_vnf_proto_init()
+	file_rookery_v1_dhcp_vnf_proto_init()
+	file_rookery_v1_dns_vnf_proto_init()
+	file_rookery_v1_bgp_vnf_proto_init()
+	file_rookery_v1_vnfd_proto_msgTypes[1].OneofWrappers = []any{
+		(*DHCPRuntimeSpec_Dhcpv4)(nil),
+		(*DHCPRuntimeSpec_Dhcpv6)(nil),
+	}
+	file_rookery_v1_vnfd_proto_msgTypes[4].OneofWrappers = []any{
+		(*DesiredRuntime_Dhcp)(nil),
+		(*DesiredRuntime_Dns)(nil),
+		(*DesiredRuntime_Bgp)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rookery_v1_vnfd_proto_rawDesc), len(file_rookery_v1_vnfd_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   27,
 			NumExtensions: 0,
-			NumServices:   1,
+			NumServices:   4,
 		},
 		GoTypes:           file_rookery_v1_vnfd_proto_goTypes,
 		DependencyIndexes: file_rookery_v1_vnfd_proto_depIdxs,

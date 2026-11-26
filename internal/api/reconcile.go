@@ -772,7 +772,7 @@ func (s *Server) reconcileVNFBindings(ctx context.Context) error {
 	}
 	var errs []error
 	for _, vnf := range vnfs {
-		if !vnf.Enabled || vnf.Type == store.VNFTypeNAT44 || !s.vnfs.Running(ctx, vnf.ID) {
+		if !vnf.Enabled || vnf.Type == store.VNFTypeNAT44 || !s.vnfs.Running(ctx, vnf) {
 			continue
 		}
 		network, err := s.store.GetNetwork(ctx, vnf.NetworkID)
@@ -818,7 +818,7 @@ func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF, ensureRunning 
 	if !vnf.Enabled {
 		return nil
 	}
-	if s.vnfs.Running(ctx, vnf.ID) {
+	if s.vnfs.Running(ctx, vnf) {
 		if !ensureRunning {
 			return nil
 		}
@@ -857,7 +857,7 @@ func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF, ensureRunning 
 		vnf.TapHostName = ""
 		vnf.MemifSwIfIndex = 0
 		vnf.MemifSocket = ""
-		if _, err := s.store.UpdateVNF(ctx, vnf.ID, vnf); err != nil {
+		if _, err := s.store.UpdateVNFIdentity(ctx, vnf); err != nil {
 			return fmt.Errorf("clear tap-era VNF runtime: %w", err)
 		}
 		activated, err := s.activateVNF(ctx, vnf)
@@ -894,7 +894,7 @@ func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF, ensureRunning 
 		vnf.MemifSocket = ""
 		vnf.TapSwIfIndex = 0
 		vnf.TapHostName = ""
-		if _, err := s.store.UpdateVNF(ctx, vnf.ID, vnf); err != nil {
+		if _, err := s.store.UpdateVNFIdentity(ctx, vnf); err != nil {
 			return fmt.Errorf("clear stale VNF memif: %w", err)
 		}
 	}
@@ -921,7 +921,7 @@ func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF, ensureRunning 
 		}
 		vnf.TapSwIfIndex = 0
 		vnf.TapHostName = ""
-		if _, err := s.store.UpdateVNF(ctx, vnf.ID, vnf); err != nil {
+		if _, err := s.store.UpdateVNFIdentity(ctx, vnf); err != nil {
 			return fmt.Errorf("clear stale VNF tap: %w", err)
 		}
 	}
