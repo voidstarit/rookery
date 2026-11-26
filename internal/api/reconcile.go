@@ -789,37 +789,45 @@ func (s *Server) ResyncPendingVNFs(ctx context.Context) error {
 	s.pendingVNFMu.Unlock()
 	var errs []error
 	for _, id := range ids {
+		// Read, reload, and dequeue under resourceMu: a concurrent child or
+		// parent write must not commit a newer config between this read and the
+		// reload, or the stale snapshot would overwrite the newer runtime spec.
+		s.resourceMu.Lock()
 		vnf, err := s.store.GetVNF(ctx, id)
 		if errors.Is(err, store.ErrVNFNotFound) {
 			s.clearPendingVNFResync(id)
+			s.resourceMu.Unlock()
 			continue
 		}
 		if err != nil {
+			s.resourceMu.Unlock()
 			errs = append(errs, fmt.Errorf("VNF %d: %w", id, err))
 			continue
 		}
 		if !vnf.Enabled {
 			s.clearPendingVNFResync(id)
+			s.resourceMu.Unlock()
 			continue
 		}
-		s.resourceMu.Lock()
 		reloadErr := s.vnfs.ReloadVNF(ctx, vnf)
-		s.resourceMu.Unlock()
-		if reloadErr != nil {
-			// A restarted daemon may have no desired spec at all; a reload then
-			// returns NotFound forever. Re-ensure that VNF instead of retrying
-			// the reload. Transient daemon failures stay queued.
-			if status.Code(reloadErr) != codes.NotFound {
-				errs = append(errs, fmt.Errorf("VNF %s: %w", vnf.Name, reloadErr))
-				continue
-			}
-			if reconcileErr := s.reconcileVNF(ctx, vnf, true); reconcileErr != nil {
-				errs = append(errs, fmt.Errorf("VNF %s: reload: %v; re-ensure: %w", vnf.Name, reloadErr, reconcileErr))
-				continue
-			}
+		if reloadErr == nil {
+			s.clearPendingVNFResync(id)
+			s.resourceMu.Unlock()
+			s.logger.Info().Int64("vnf_id", id).Str("type", vnf.Type).Msg("VNF resynced after the daemon became reachable")
+			continue
 		}
-		s.clearPendingVNFResync(id)
-		s.logger.Info().Int64("vnf_id", id).Str("type", vnf.Type).Msg("VNF resynced after the daemon became reachable")
+		s.resourceMu.Unlock()
+		// A restarted daemon may have no desired spec at all; a reload then
+		// returns NotFound forever. Re-ensure that VNF instead of retrying the
+		// reload. Keep the queue entry: the next pass reloads the now-managed
+		// runtime and clears it under the lock. Transient failures stay queued.
+		if status.Code(reloadErr) != codes.NotFound {
+			errs = append(errs, fmt.Errorf("VNF %s: %w", vnf.Name, reloadErr))
+			continue
+		}
+		if reconcileErr := s.reconcileVNF(ctx, vnf, true); reconcileErr != nil {
+			errs = append(errs, fmt.Errorf("VNF %s: reload: %v; re-ensure: %w", vnf.Name, reloadErr, reconcileErr))
+		}
 	}
 	return errors.Join(errs...)
 }
