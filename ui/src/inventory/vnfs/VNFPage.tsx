@@ -414,6 +414,25 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, initialType
     }));
   };
 
+  // A typed add deep link can mount this page before the network list loads.
+  // Adopt the requested or first network once it is available instead of
+  // leaving the required Network selector empty.
+  useEffect(() => {
+    if (editing || networks.length === 0) {
+      return;
+    }
+    if (networks.some((network) => network.id === form.networkID)) {
+      return;
+    }
+    const preferred =
+      initialNetworkID !== undefined && networks.some((network) => network.id === initialNetworkID)
+        ? initialNetworkID
+        : networks[0].id;
+    changeNetwork(preferred);
+    // changeNetwork only reads state and networks; include the values it uses.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [networks, editing, initialNetworkID, form.networkID]);
+
   const changeType = (type: VNFType) => {
     if (editing) {
       return;
@@ -860,7 +879,7 @@ export function VNFPage({ vnf, networks, vppReady, initialNetworkID, initialType
               pattern={NAME_PATTERN}
               autocomplete="off"
               spellcheck={false}
-              placeholder="lab-dhcpv4"
+              placeholder={`lab-${form.type}`}
               value={form.name}
               onInput={(event) => update("name", event.currentTarget.value)}
             />

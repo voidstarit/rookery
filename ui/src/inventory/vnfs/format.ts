@@ -128,38 +128,45 @@ export function vnfSummary(vnf: VNF): string {
     case "dhcpv4":
     case "dhcpv6": {
       const parts: string[] = [];
+      const staticCount = vnf.static_assignment_count ?? 0;
+      const optionCount = vnf.option_count ?? 0;
       if (vnf.tap_host_name) {
         parts.push(vnf.tap_host_name);
       }
-      if (vnf.type === "dhcpv4" && vnf.static_assignment_count > 0) {
-        parts.push(`${vnf.static_assignment_count} static`);
+      if (vnf.type === "dhcpv4" && staticCount > 0) {
+        parts.push(`${staticCount} static`);
       }
-      if (vnf.option_count > 0) {
-        parts.push(`${vnf.option_count} option${vnf.option_count === 1 ? "" : "s"}`);
+      if (optionCount > 0) {
+        parts.push(`${optionCount} option${optionCount === 1 ? "" : "s"}`);
       }
       return parts.join(" · ") || vnfTypeLabel(vnf.type);
     }
     case "dns": {
+      // protojson omits zero-valued scalars, so a zero count arrives as undefined.
+      const recordCount = vnf.record_count ?? 0;
+      const forwarderCount = vnf.forwarder_count ?? 0;
       const parts = [
-        `${vnf.record_count} record${vnf.record_count === 1 ? "" : "s"}`,
+        `${recordCount} record${recordCount === 1 ? "" : "s"}`,
         vnf.forward ? "forwarding" : "authoritative",
       ];
-      if (vnf.forwarder_count > 0) {
-        parts.push(`${vnf.forwarder_count} forwarder${vnf.forwarder_count === 1 ? "" : "s"}`);
+      if (forwarderCount > 0) {
+        parts.push(`${forwarderCount} forwarder${forwarderCount === 1 ? "" : "s"}`);
       }
       return parts.join(" · ");
     }
     case "nat44": {
       const parts = [`outside ${vnf.outside_interface || "—"}`];
-      if (vnf.dnat_rule_count > 0) {
-        parts.push(`${vnf.dnat_rule_count} DNAT`);
+      const dnatRuleCount = vnf.dnat_rule_count ?? 0;
+      if (dnatRuleCount > 0) {
+        parts.push(`${dnatRuleCount} DNAT`);
       }
       return parts.join(" · ");
     }
     case "bgp": {
       const parts = [`AS${vnf.local_as} → AS${vnf.peer_as}`];
-      if (vnf.advertised_prefix_count > 0) {
-        parts.push(`${vnf.advertised_prefix_count} prefix${vnf.advertised_prefix_count === 1 ? "" : "es"}`);
+      const prefixCount = vnf.advertised_prefix_count ?? 0;
+      if (prefixCount > 0) {
+        parts.push(`${prefixCount} prefix${prefixCount === 1 ? "" : "es"}`);
       }
       return parts.join(" · ");
     }
@@ -170,7 +177,8 @@ export function vnfSummary(vnf: VNF): string {
  * vnfLeaseCount returns the active lease count for DHCP VNFs and undefined for every other type.
  */
 export function vnfLeaseCount(vnf: VNF): number | undefined {
-  return vnf.type === "dhcpv4" || vnf.type === "dhcpv6" ? vnf.lease_count : undefined;
+  // A zero lease_count is omitted by protojson; DHCP VNFs still have a count.
+  return vnf.type === "dhcpv4" || vnf.type === "dhcpv6" ? (vnf.lease_count ?? 0) : undefined;
 }
 
 /**
