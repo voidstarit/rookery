@@ -396,6 +396,10 @@ func validateLegacyDNSRecords(row legacyVNFRow) []string {
 	}
 	seen := make(map[string]int, len(row.Config.DNSRecords))
 	for i, record := range row.Config.DNSRecords {
+		if hasNonSpaceWhitespace(record.Type) {
+			add("config.dns_records[%d].type contains unsupported whitespace", i)
+			continue
+		}
 		recordType := strings.ToUpper(strings.TrimSpace(record.Type))
 		switch recordType {
 		case "A", "AAAA", "CNAME", "TXT", "PTR":
@@ -457,6 +461,10 @@ func validateLegacyDNATRules(row legacyVNFRow) []string {
 	}
 	seen := make(map[string]int, len(row.Config.DNATRules))
 	for i, rule := range row.Config.DNATRules {
+		if hasNonSpaceWhitespace(rule.Protocol) {
+			add("config.dnat_rules[%d].protocol contains unsupported whitespace", i)
+			continue
+		}
 		protocol := strings.ToLower(strings.TrimSpace(rule.Protocol))
 		if protocol != "tcp" && protocol != "udp" {
 			add("config.dnat_rules[%d].protocol %q must be tcp or udp", i, rule.Protocol)
@@ -478,6 +486,13 @@ func validateLegacyDNATRules(row legacyVNFRow) []string {
 		}
 	}
 	return problems
+}
+
+// hasNonSpaceWhitespace reports leading or trailing whitespace that the SQL
+// trim() backfill does not remove. Keeping it out of the enum fields avoids a
+// migration CHECK abort after preflight accepted the row.
+func hasNonSpaceWhitespace(value string) bool {
+	return strings.Trim(value, " ") != strings.TrimSpace(value)
 }
 
 // validateLegacyAdvertisedPrefixes checks required values and duplicate
