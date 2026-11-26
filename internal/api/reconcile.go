@@ -7,6 +7,9 @@ import (
 	"os"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/voidstarit/rookery/internal/lightvm"
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/store"
@@ -483,6 +486,7 @@ func (s *Server) watchVPP(ctx context.Context, initiallyDirty bool) {
 		if reconnected {
 			go s.runVPPStartupScript()
 		}
+		s.startPendingVNFResync(ctx)
 
 		if !pendingReconcile || !healthy || reconcileDone != nil {
 			continue
@@ -724,6 +728,37 @@ func (s *Server) reconcileNAT44(ctx context.Context, vnf store.VNF) error {
 	return nil
 }
 
+// startPendingVNFResync launches at most one bounded resync pass. The VPP
+// watcher calls it every tick; a hung daemon cannot block the watcher because
+// the pass runs in its own goroutine with a timeout.
+func (s *Server) startPendingVNFResync(ctx context.Context) {
+	s.pendingVNFMu.Lock()
+	queued := len(s.pendingVNFResync) > 0
+	s.pendingVNFMu.Unlock()
+	if !queued {
+		return
+	}
+	s.resyncMu.Lock()
+	if s.resyncing {
+		s.resyncMu.Unlock()
+		return
+	}
+	s.resyncing = true
+	s.resyncMu.Unlock()
+	go func() {
+		defer func() {
+			s.resyncMu.Lock()
+			s.resyncing = false
+			s.resyncMu.Unlock()
+		}()
+		resyncCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		if err := s.ResyncPendingVNFs(resyncCtx); err != nil {
+			s.logger.Debug().Err(err).Msg("VNF resync after daemon reconnect failed; will retry")
+		}
+	}()
+}
+
 // QueueVNFResync records a committed child write whose runtime could not be
 // updated because the daemon was unreachable. The reconciler retries it once
 // the daemon is reachable again.
@@ -771,8 +806,17 @@ func (s *Server) ResyncPendingVNFs(ctx context.Context) error {
 		reloadErr := s.vnfs.ReloadVNF(ctx, vnf)
 		s.resourceMu.Unlock()
 		if reloadErr != nil {
-			errs = append(errs, fmt.Errorf("VNF %s: %w", vnf.Name, reloadErr))
-			continue
+			// A restarted daemon may have no desired spec at all; a reload then
+			// returns NotFound forever. Re-ensure that VNF instead of retrying
+			// the reload. Transient daemon failures stay queued.
+			if status.Code(reloadErr) != codes.NotFound {
+				errs = append(errs, fmt.Errorf("VNF %s: %w", vnf.Name, reloadErr))
+				continue
+			}
+			if reconcileErr := s.reconcileVNF(ctx, vnf, true); reconcileErr != nil {
+				errs = append(errs, fmt.Errorf("VNF %s: reload: %v; re-ensure: %w", vnf.Name, reloadErr, reconcileErr))
+				continue
+			}
 		}
 		s.clearPendingVNFResync(id)
 		s.logger.Info().Int64("vnf_id", id).Str("type", vnf.Type).Msg("VNF resynced after the daemon became reachable")

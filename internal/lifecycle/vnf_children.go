@@ -79,9 +79,12 @@ func describeChildReloadFailure(vnf store.VNF, reloadErr, rollbackErr, getErr, r
 	if restoreErr != nil {
 		parts = append(parts, fmt.Sprintf("could not reload the previous configuration: %v", restoreErr))
 	}
-	if disableErr != nil {
+	switch {
+	case disableErr != nil:
 		parts = append(parts, fmt.Sprintf("could not disable the VNF: %v", disableErr))
-	} else {
+	case getErr != nil:
+		parts = append(parts, "the VNF could not be disabled")
+	default:
 		parts = append(parts, "the VNF was disabled")
 	}
 	return strings.Join(parts, "; ")
@@ -136,9 +139,12 @@ func describeNAT44ChildFailure(vnf store.VNF, applyErr, rollbackErr, getErr, res
 	if restoreErr != nil {
 		parts = append(parts, fmt.Sprintf("could not restore the previous mappings: %v", restoreErr))
 	}
-	if disableErr != nil {
+	switch {
+	case disableErr != nil:
 		parts = append(parts, fmt.Sprintf("could not disable the VNF: %v", disableErr))
-	} else {
+	case getErr != nil:
+		parts = append(parts, "the VNF could not be disabled")
+	default:
 		parts = append(parts, "the VNF was disabled")
 	}
 	return strings.Join(parts, "; ")

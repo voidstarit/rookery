@@ -338,19 +338,26 @@ func (c *Client) ResetRuntime(ctx context.Context) error {
 // status message, falling back to err's text for non-status errors.
 func grpcError(action string, err error) error {
 	if st, ok := status.FromError(err); ok {
-		return &clientError{action: action, message: st.Message()}
+		return &clientError{action: action, message: st.Message(), code: st.Code()}
 	}
-	return &clientError{action: action, message: err.Error()}
+	return &clientError{action: action, message: err.Error(), code: codes.Unknown}
 }
 
 type clientError struct {
 	action  string
 	message string
+	code    codes.Code
 }
 
 // Error renders the clientError as "<action>: <message>" for logs and error
 // wrapping.
 func (e *clientError) Error() string { return e.action + ": " + e.message }
+
+// GRPCStatus preserves the daemon status code for callers that distinguish a
+// lost desired spec (NotFound) from a transient daemon failure.
+func (e *clientError) GRPCStatus() *status.Status {
+	return status.New(e.code, e.message)
+}
 
 // dialTarget turns the daemon address into a gRPC target.
 func dialTarget(addr string) (string, error) {

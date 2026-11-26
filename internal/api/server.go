@@ -169,6 +169,8 @@ type Server struct {
 	vnfSpecsSynced   bool
 	pendingVNFMu     sync.Mutex
 	pendingVNFResync map[int64]struct{}
+	resyncMu         sync.Mutex
+	resyncing        bool
 
 	memifDHCP bool
 	memifDir  string

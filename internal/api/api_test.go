@@ -20,6 +20,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"golang.org/x/net/websocket"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/voidstarit/rookery/internal/api"
 	"github.com/voidstarit/rookery/internal/gateway"
@@ -3716,5 +3718,25 @@ func TestResyncPendingVNFsRetriesAfterDaemonFailure(t *testing.T) {
 	}
 	if len(env.vnfs.reloaded) != 2 {
 		t.Fatalf("a successful resync stayed queued: %v", env.vnfs.reloaded)
+	}
+}
+
+// TestResyncPendingVNFsReensuresLostSpec proves a VNF whose daemon lost its
+// desired spec is started through the reconcile path instead of retrying a
+// NotFound reload forever.
+func TestResyncPendingVNFsReensuresLostSpec(t *testing.T) {
+	ctx := context.Background()
+	env := newTestAPI(t)
+	network := createNetworkAPI(t, env.handler, "lost-spec-lab")
+	vnf := createDNSVNFAPI(t, env.handler, "lost-spec-dns", network.ID, true)
+	delete(env.vnfs.running, vnf.ID)
+	env.vnfs.reloadErr = status.Error(codes.NotFound, "vnf is not managed by the daemon")
+	env.server.QueueVNFResync(store.VNF{ID: vnf.ID, Type: store.VNFTypeDNS, Enabled: true})
+
+	if err := env.server.ResyncPendingVNFs(ctx); err != nil {
+		t.Fatalf("resync with a lost desired spec: %v", err)
+	}
+	if !env.vnfs.running[vnf.ID] {
+		t.Fatal("lost-spec VNF was not restarted through reconciliation")
 	}
 }

@@ -2,12 +2,15 @@ package vnfd
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/host"
@@ -260,5 +263,18 @@ func TestClientErrorIncludesAction(t *testing.T) {
 	_, err = client.RemoveLeases(context.Background(), 1, []string{"aa"})
 	if err == nil || !strings.HasPrefix(err.Error(), "remove VNF leases: ") {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+// TestClientErrorPreservesGRPCCode proves the API can distinguish a lost
+// desired spec (NotFound) from a transient daemon failure.
+func TestClientErrorPreservesGRPCCode(t *testing.T) {
+	err := grpcError("reload VNF", status.Error(codes.NotFound, "vnf is not managed"))
+	if code := status.Code(err); code != codes.NotFound {
+		t.Fatalf("status code = %v, want NotFound (%v)", code, err)
+	}
+	transient := grpcError("reload VNF", errors.New("connection refused"))
+	if code := status.Code(transient); code != codes.Unknown {
+		t.Fatalf("non-gRPC status code = %v, want Unknown", code)
 	}
 }

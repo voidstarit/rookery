@@ -906,7 +906,8 @@ Child writes reload the running runtime in place; parent writes restart it:
   runtime is stopped or unreachable also stores the row and leaves the VNF
   `degraded` instead of failing. A reachable daemon receives the new spec for
   its next start; if it was unreachable, the reconciler retries the reload once
-  it returns, so the row is served without a manual restart.
+  it returns (or re-ensures the VNF when the daemon lost the desired spec), so
+  the row is served without a manual restart.
 - A parent `PUT` that changes any field (name, scalar configuration, transport,
   tap/memif metadata, or `enabled`) stops and starts the enabled runtime. If the
   store write then fails (for example a duplicate name returns `409`), the
