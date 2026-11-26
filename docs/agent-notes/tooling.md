@@ -11,6 +11,8 @@ symbol-aware tooling first, text search only for literals.
 | Outline a file | `gopls symbols <file>` | Language server document symbols |
 | Definition / references | `gopls definition` / `gopls references` | Language server definition / references |
 | Interface implementations | `gopls implementation` | Language server implementations |
+| Call hierarchy | `gopls call_hierarchy` | Language server call hierarchy |
+| Type hierarchy | Editor LSP (no CLI) | Language server type hierarchy |
 | Diagnostics | `gopls check <file>`, `go vet` | `tsc --noEmit` (`npm run typecheck`) |
 | Rename | `gopls rename -w`, reviewed with `git diff` | Language server rename, reviewed with `git diff` |
 | String literals, config keys, errors, event names, SQL, docs | `rg` / grep | `rg` / grep |
@@ -31,6 +33,7 @@ gopls symbols internal/api/host_taps.go
 gopls definition internal/api/host_taps.go:70:20
 gopls references internal/api/host_taps.go:70:20
 gopls implementation internal/api/host_taps.go:70:20
+gopls call_hierarchy internal/api/host_taps.go:70:20
 gopls check internal/api/host_taps.go
 go doc ./internal/api Server
 ```
@@ -51,6 +54,26 @@ Notes:
 - Use `gopls rename -w` only after checking `git diff`; it is symbol-aware, unlike a text replace.
 - `go test`, `go vet`, and `gofmt` remain the verification authority. gopls diagnostics supplement
   them; they do not replace tests.
+
+## Go navigation details and limits
+
+The [gopls navigation reference](https://go.dev/gopls/features/navigation) documents behaviors
+worth knowing:
+
+- `definition` also works on import paths, package clauses, `go:embed` filenames, doc links,
+  `go:linkname`, labels, and `return` statements.
+- `references` reflect only the build configuration used for the selected file. A query on
+  `foo_windows.go` will not see references in `bar_linux.go`, so repeat with the relevant
+  `GOOS`/`GOARCH` or build tags when changing cross-platform code. References on a `go.mod`
+  `require` line return the imports of that module.
+- Interface-method references include concrete implementations, and concrete-method references
+  include the interface methods. An embedded field is reported only as a field reference, so jump
+  to the type declaration to find type references.
+- `implementation` on a concrete type returns the interfaces it satisfies; on an interface it
+  returns implementors. Use the editor's type hierarchy for explicit supertypes (`typeDefinition`
+  and type hierarchy have no CLI).
+- `call_hierarchy` returns static incoming and outgoing calls; dynamic calls are not included, so
+  follow up with `references` when changing function behavior.
 
 ## TypeScript and Preact
 
