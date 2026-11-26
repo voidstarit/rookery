@@ -10,6 +10,7 @@ comment, so the map also summarizes what the code does.
 ./scripts/glance internal/api/nat44.go
 ./scripts/glance ui/src/inventory/vnfs/VNFPage.tsx
 ./scripts/glance --no-doc internal/store/store.go   # compact symbol map only
+./scripts/glance --match 'vnfSelect|scanVNF' internal/store/store.go   # exact ranges for symbols
 ```
 
 - Go: `gopls symbols` output (names, kinds, line ranges), sorted by line, with
@@ -19,7 +20,9 @@ comment, so the map also summarizes what the code does.
 - TypeScript/Preact: top-level `type`/`interface`/`class`/`function`/`const`
   declarations, one truncated line each, with the first sentence of the
   `/** ... */` JSDoc block or the adjacent `//` comment.
-- Exit status is 0 on success, 1 for a missing or unsupported file, 2 for usage.
+- `--match REGEX` keeps only symbols whose declaration matches the ERE, which answers "where is
+  this defined?" without a source grep; no match is an error.
+- Exit status is 0 on success, 1 for a missing, unsupported, or unmatched file, 2 for usage.
 
 This is a reading aid, not a compiler: the TypeScript outline is textual, so use
 the language service when symbol accuracy matters.

@@ -9,30 +9,58 @@
 # symbol-query CLI. Use the result to pick the line ranges worth reading
 # instead of pulling the whole file into context.
 #
-# Usage: scripts/glance [--no-doc] FILE...
-# Exit:  0 success, 1 unreadable or unsupported input, 2 usage.
+# Usage: scripts/glance [--no-doc] [--match REGEX] FILE...
+# Exit:  0 success, 1 unreadable, unsupported, or unmatched input, 2 usage.
 
 set -euo pipefail
 
 usage() {
   local fd=2
   [ "${1:-}" = 0 ] && fd=1
-  printf 'usage: %s [--no-doc] FILE...\n' "${0##*/}" >&"$fd"
+  printf 'usage: %s [--no-doc] [--match REGEX] FILE...\n' "${0##*/}" >&"$fd"
   printf 'Print symbols, line ranges, and doc summaries for Go and TypeScript sources.\n' >&"$fd"
+  printf 'With --match, keep only symbols whose declaration matches the ERE.\n' >&"$fd"
   exit "${1:-2}"
 }
 
 with_doc=1
+match=""
 files=()
-for arg in "$@"; do
-  case "$arg" in
+while [ "$#" -gt 0 ]; do
+  case "$1" in
     --no-doc) with_doc=0 ;;
+    -m | --match)
+      [ "$#" -ge 2 ] || { printf 'glance: --match requires a regular expression\n' >&2; usage; }
+      match=$2
+      shift
+      ;;
+    --match=*) match=${1#*=} ;;
     -h | --help) usage 0 ;;
-    -*) printf 'glance: unknown option: %s\n' "$arg" >&2; usage ;;
-    *) files+=("$arg") ;;
+    -*) printf 'glance: unknown option: %s\n' "$1" >&2; usage ;;
+    *) files+=("$1") ;;
   esac
+  shift
 done
 [ "${#files[@]}" -gt 0 ] || usage
+
+# apply_match keeps only symbol lines whose declaration matches the ERE
+# (--match). The doc summary after the em dash is excluded, so a word in a doc
+# comment cannot match a symbol name.
+apply_match() {
+  local file=$1 formatted=$2 filtered
+  [ -n "$match" ] || { printf '%s\n' "$formatted"; return 0; }
+  filtered=$(printf '%s\n' "$formatted" | awk -v re="$match" '{
+    line = $0
+    sub(/ — .*/, "", line)
+    if (line ~ re) print
+  }')
+  if [ -z "$filtered" ]; then
+    printf 'glance: no symbol matching /%s/ in %s\n' "$match" "$file" >&2
+    status=1
+    return 0
+  fi
+  printf '%s\n' "$filtered"
+}
 
 gopls_symbols() {
   local file=$1 out
@@ -97,7 +125,7 @@ go_outline() {
             print
           }
         ')
-      printf '%s\n' "$formatted"
+      apply_match "$file" "$formatted"
       return 0
     fi
     printf 'glance: gopls symbols failed, falling back to a text outline\n' >&2
@@ -171,7 +199,7 @@ ts_outline() {
       hit = 0
     }
   ' "$1")
-  printf '%s\n' "$formatted"
+  apply_match "$file" "$formatted"
 }
 
 status=0
