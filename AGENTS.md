@@ -127,6 +127,15 @@ first is enough, and do not skip the outline before a large read.
 - Vendored runtime assets stay in-tree: noVNC under `internal/webui/static/novnc`, xterm.js and
   fonts in the UI bundle. Do not replace them with CDNs, and keep CSP exceptions minimal.
 
+### Documentation comments
+
+- Keep godoc current for every Go function, method, type, and package you add or change, including
+  unexported helpers. Describe behavior and the contract, not the implementation line by line.
+- Keep JSDoc current for every TypeScript/TSX function, type, and export you add or change, and
+  keep a module-level header on new or substantially changed modules.
+- Update the comment in the same change as the behavior it describes. Generated code and vendored
+  third-party files are exempt.
+
 ### Go
 
 - Format with `gofmt`; keep `go vet ./...` and `golangci-lint run ./...` clean. The lint config
