@@ -7,7 +7,7 @@ symbol-aware tooling first, text search only for literals.
 
 | Task | Go | TypeScript / Preact |
 | --- | --- | --- |
-| Find a symbol by name | `scripts/glance --match NAME <file>`, `gopls workspace_symbol` | Editor/agent language server workspace symbols |
+| Find a symbol by name | `scripts/glance --find NAME`, `gopls workspace_symbol` | Editor/agent language server workspace symbols |
 | Outline a file | `gopls symbols <file>` | Language server document symbols |
 | Definition / references | `gopls definition` / `gopls references` | Language server definition / references |
 | Interface implementations | `gopls implementation` | Language server implementations |
@@ -18,9 +18,9 @@ symbol-aware tooling first, text search only for literals.
 | String literals, config keys, errors, event names, SQL, docs | `rg` / grep | `rg` / grep |
 | Edits | Editor/apply-patch | Editor/apply-patch |
 
-Do not use `grep -rn` or `grep -n` to answer "where is this defined?"; `scripts/glance --match NAME
-<file>` prints the exact symbol range from gopls without scanning text. Do not use `sed`/`perl -pi`
-to edit source. Text search cannot see methods, interface dispatch, generated code, or build-tag
+Do not use `grep -rn` or `grep -n` to answer "where is this defined?"; `scripts/glance --find NAME`
+locates a symbol across the tree, and `--match NAME <file>` (with `--body N`) prints one declaration
+and its body from gopls. Do not use `sed`/`perl -pi` to edit source. Text search cannot see methods, interface dispatch, generated code, or build-tag
 variants, and scripted in-place edits bypass formatting and review.
 
 ## Reading protocol
@@ -41,14 +41,16 @@ order, and only as far as the task needs.
 `scripts/glance` prints gopls symbol names, kinds, and ranges for Go, and the top-level
 declarations (types, functions, components, constants) for TypeScript/Preact. Each symbol carries
 the first sentence of its Go doc comment or JSDoc block, so the outline also summarizes what the
-symbol does; `--no-doc` drops the summaries and `--match NAME` keeps only symbols matching an ERE
-(the right tool for "where is this defined?"). It retries with `/tmp` caches for sandboxed checkouts
-and falls back to a text outline when gopls is missing:
+symbol does; `--no-doc` drops the summaries, `--find NAME` searches the module by symbol name, and
+`--match NAME` with `--body N` prints one declaration and the body lines below it. It retries with
+`/tmp` caches for sandboxed checkouts and falls back to a text outline when gopls is missing:
 
 ```sh
-./scripts/glance internal/api/nat44.go               # Go: symbol map with doc summaries
-./scripts/glance ui/src/inventory/vnfs/VNFPage.tsx   # TS/Preact: declaration outline
-./scripts/glance --no-doc internal/store/store.go    # compact map, no docs
+./scripts/glance internal/api/nat44.go                  # Go: symbol map with doc summaries
+./scripts/glance ui/src/inventory/vnfs/VNFPage.tsx      # TS/Preact: declaration outline
+./scripts/glance --find 'CreateDHCPVNF|NewDHCPVNF' internal/store
+./scripts/glance --body 12 --match NewDHCPVNF internal/store/vnfs.go
+./scripts/glance --no-doc internal/store/store.go       # compact map, no docs
 ```
 
 ## Go
