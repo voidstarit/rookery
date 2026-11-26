@@ -44,8 +44,8 @@ func main() {
 
 // run loads VNF configuration (inheriting shared VPP paths from the api
 // section), prepares the runtime manager and VPP route writer, restores
-// persisted specs, and serves the VNFDaemon gRPC API until SIGINT/SIGTERM or a
-// serve error stops it.
+// persisted specs, and serves the four VNF daemon gRPC services until
+// SIGINT/SIGTERM or a serve error stops it.
 func run(args []string) error {
 	file, err := config.Load(config.Path(args))
 	if err != nil {
@@ -124,7 +124,10 @@ func run(args []string) error {
 		return err
 	}
 	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(vnfd.TraceInterceptor(logger)))
-	rookeryv1.RegisterVNFDaemonServer(grpcServer, server)
+	rookeryv1.RegisterDHCPDaemonServer(grpcServer, server)
+	rookeryv1.RegisterDNSDaemonServer(grpcServer, server)
+	rookeryv1.RegisterBGPDaemonServer(grpcServer, server)
+	rookeryv1.RegisterVNFRuntimeAdminServer(grpcServer, server)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

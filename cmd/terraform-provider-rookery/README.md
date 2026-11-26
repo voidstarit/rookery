@@ -81,7 +81,16 @@ provider "rookery" {
 | `rookery_acl` | Ordered permit/deny rule set |
 | `rookery_route_table` | Custom VRF table (IDs 100000+ are reserved) |
 | `rookery_route` | Static route in a route table, including VPP path options |
-| `rookery_vnf` | DHCPv4/DHCPv6/NAT44/BGP network function |
+| `rookery_dhcp_vnf` | DHCPv4/DHCPv6 parent VNF (family, address plan, transport, DNS integration) |
+| `rookery_dhcp_static_assignment` | DHCPv4 MAC-to-IP reservation owned by a `rookery_dhcp_vnf` |
+| `rookery_dhcp_option` | Extra DHCP option owned by a `rookery_dhcp_vnf` (sensitive value) |
+| `rookery_dns_vnf` | DNS parent VNF (authoritative records, forwarding) |
+| `rookery_dns_record` | DNS record owned by a `rookery_dns_vnf` (sensitive value) |
+| `rookery_dns_forwarder` | Upstream resolver owned by a `rookery_dns_vnf` |
+| `rookery_nat44_vnf` | NAT44 parent VNF |
+| `rookery_nat44_dnat_rule` | Destination-NAT rule owned by a `rookery_nat44_vnf` |
+| `rookery_bgp_vnf` | BGP parent VNF (write-only sensitive password) |
+| `rookery_bgp_advertised_prefix` | Advertised prefix owned by a `rookery_bgp_vnf` |
 | `rookery_vm` | VM definition, disks, interfaces, boot media, cgroup class |
 | `rookery_lightvm_kernel` | Kernel image, either uploaded from Terraform or registered from a host path |
 | `rookery_lightvm_initramfs` | Initramfs image, either uploaded from Terraform or registered from a host path |
@@ -90,12 +99,14 @@ provider "rookery" {
 | `rookery_startup_script` | Server-level Rookery or VPP reconnect script |
 | `rookery_cgroup_settings` | Host-wide cgroup limits and reusable VM classes |
 
-All first-class resources and data sources expose a free-form `labels` set:
+Top-level resources and data sources expose a free-form `labels` set:
 `rookery_storage_backend`, `rookery_disk`, `rookery_media`, `rookery_network`,
 `rookery_network_pipe`, `rookery_interface`, `rookery_host_tap`,
-`rookery_acl`, `rookery_route_table`, `rookery_route`, `rookery_vnf`,
-`rookery_vm`, `rookery_lightvm_kernel`, `rookery_lightvm_initramfs`,
-`rookery_lightvm`, and `rookery_host_interface`. Assign any number of labels:
+`rookery_acl`, `rookery_route_table`, `rookery_route`, `rookery_dhcp_vnf`,
+`rookery_dns_vnf`, `rookery_nat44_vnf`, `rookery_bgp_vnf`, `rookery_vm`,
+`rookery_lightvm_kernel`, `rookery_lightvm_initramfs`, `rookery_lightvm`, and
+`rookery_host_interface`. Child VNF resources inherit no labels of their own; the
+parent carries them. Assign any number of labels:
 
 ```hcl
 resource "rookery_vm" "app" {
@@ -461,14 +472,26 @@ resource "rookery_route" "lookup" {
 }
 ```
 
-`rookery_vnf.config_json` uses protobuf JSON. Write proto field names (for
-example `range_start`, `outside_interface`, `advertise_prefixes`) and use
-`jsonencode({...})`. The provider stores the configured JSON as-is, and the
-server normalizes some fields (the `bind_ip` and `gateway` it derives for a
-DHCPv4 VNF on a NAT network, the default `lease_time`). Use the `rookery_vnf`
-data source when you need the server's canonical configuration. For DHCPv4,
-`transport` can be omitted (use the network default), `"shared"`,
+VNF configuration is typed. Each parent resource owns its scalar fields and the
+children are first-class resources: `rookery_dhcp_static_assignment` and
+`rookery_dhcp_option` for DHCP, `rookery_dns_record` and `rookery_dns_forwarder`
+for DNS, `rookery_nat44_dnat_rule` for NAT44, and
+`rookery_bgp_advertised_prefix` for BGP. There is no `config_json` and no `type`
+attribute; the resource name selects the VNF type.
+
+Child resources require `vnf_id`, which forces replacement when it changes.
+Changing a child reloads the running DHCP, DNS, or BGP runtime (or re-applies
+NAT44 DNAT mappings) without restarting it. Changing a parent scalar field,
+transport, or `enabled` stops and starts the runtime, so an apply that changes a
+parent and its children sees one restart at most. The BGP `password`, DHCP option
+`value`, and DNS record `value` are sensitive. The API never returns the BGP
+password, so Terraform keeps the configured value in state.
+
+For DHCPv4, `transport` can be omitted (use the network default), `"shared"`,
 `"dedicated"`, or `"tap"`; `"memif"` is the legacy alias for a dedicated memif.
+The server derives a `gateway`/`bind_ip` for a DHCPv4 VNF on a NAT network and
+defaults `lease_time` to `12h`; read them back with the data source or let the
+computed attributes settle after the first apply.
 
 DHCPv4 and DHCPv6 VNFs can integrate with a DNS VNF on the same network by
 setting `dns_vnf_id`, `dns_domain` (the suffix for generated names), and
@@ -476,9 +499,23 @@ optionally `dns_ttl` (default `300`). The DNS VNF maintains A/AAAA and PTR
 records for active leases. Set the DHCP `dns` field to the DNS VNF's `.2`
 service address (IPv4 for DHCPv4, IPv6 for DHCPv6) so clients use it.
 
+The old `rookery_vnf` resource and its data source are retired with no
+compatibility shim. Remove the old state and import each object into the typed
+resources instead:
+
+```bash
+terraform state rm rookery_vnf.dhcp
+terraform import rookery_dhcp_vnf.dhcp 7
+terraform import rookery_dhcp_static_assignment.laptop 7:3
+```
+
+Terraform cannot split a `config_json` blob into typed children automatically;
+import the parent first, then each child by `<vnf_id>:<child_id>`.
+
 ## Data sources
 
-Each resource has a matching data source:
+Most resources have a matching data source; VNF child resources are managed only
+through their parent:
 
 | Data source | Lookup |
 | --- | --- |
@@ -496,7 +533,10 @@ Each resource has a matching data source:
 | `rookery_acl` | `id` or `name` |
 | `rookery_route_table` | `id`, `table_id` + `ipv6`, or `name` + optional `ipv6` |
 | `rookery_route` | `route_table_id` + `ipv6` + `id`, or `route_table_id` + `ipv6` + `prefix` |
-| `rookery_vnf` | `id` or `name` |
+| `rookery_dhcp_vnf` | `id` or `name` |
+| `rookery_dns_vnf` | `id` or `name` |
+| `rookery_nat44_vnf` | `id` or `name` |
+| `rookery_bgp_vnf` | `id` or `name` |
 | `rookery_vm` | `id` or `name` |
 | `rookery_host_interface` | `nic` |
 | `rookery_startup_script` | `kind` (`rookery` or `vpp`) |
@@ -524,6 +564,18 @@ terraform import rookery_startup_script.vpp vpp
 terraform import rookery_cgroup_settings.host cgroup
 ```
 
+VNF child resources use a composite import id:
+
+```bash
+terraform import rookery_dhcp_static_assignment.laptop 7:3
+terraform import rookery_dhcp_option.ntp 7:4
+terraform import rookery_dns_record.router 5:8
+terraform import rookery_dns_forwarder.upstream 5:2
+terraform import rookery_nat44_dnat_rule.web 9:1
+terraform import rookery_bgp_advertised_prefix.app 11:6
+# <vnf_id>:<child_id>
+```
+
 Routes use a composite import id:
 
 ```bash
@@ -536,6 +588,6 @@ terraform import rookery_route.app 7/false/42
 ## Example
 
 See `examples/complete/main.tf` for a full network, disk, VM, ACL, route,
-DHCP VNF, host tap, network pipe, address, route-table, startup-script,
-cgroup-settings, and template-provisioning example. See
-`examples/data-sources/main.tf` for the matching data sources.
+DHCP/DNS/NAT44/BGP VNFs with child resources, host tap, network pipe, address,
+route-table, startup-script, cgroup-settings, and template-provisioning example.
+See `examples/data-sources/main.tf` for the matching data sources.

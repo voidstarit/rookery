@@ -1,0 +1,351 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+import "rookery/v1/vnf.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// DHCPVNFService manages DHCPv4 and DHCPv6 VNFs. Both families share this
+// service; the family is fixed at creation and cannot be changed. A VNF's
+// scalar configuration is carried on the parent record and write requests,
+// while static assignments and options are independent child resources with
+// their own routes.
+service DHCPVNFService {
+  rpc ListDHCPVNFs(ListDHCPVNFsRequest) returns (ListDHCPVNFsResponse) {
+    option (google.api.http) = {
+      get: "/api/dhcp-vnfs"
+      response_body: "vnfs"
+    };
+  }
+
+  rpc GetDHCPVNF(GetDHCPVNFRequest) returns (DHCPVNF) {
+    option (google.api.http) = {get: "/api/dhcp-vnfs/{id}"};
+  }
+
+  rpc CreateDHCPVNF(CreateDHCPVNFRequest) returns (DHCPVNF) {
+    option (google.api.http) = {
+      post: "/api/dhcp-vnfs"
+      body: "*"
+    };
+  }
+
+  rpc UpdateDHCPVNF(UpdateDHCPVNFRequest) returns (DHCPVNF) {
+    option (google.api.http) = {
+      put: "/api/dhcp-vnfs/{id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteDHCPVNF(DeleteDHCPVNFRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/dhcp-vnfs/{id}"};
+  }
+
+  rpc RestartDHCPVNF(RestartDHCPVNFRequest) returns (DHCPVNF) {
+    option (google.api.http) = {post: "/api/dhcp-vnfs/{id}/restart"};
+  }
+
+  // ListDHCPVNFLeases returns the active leases of a running DHCP VNF.
+  rpc ListDHCPVNFLeases(ListDHCPVNFLeasesRequest) returns (ListDHCPVNFLeasesResponse) {
+    option (google.api.http) = {get: "/api/dhcp-vnfs/{id}/leases"};
+  }
+
+  // DHCPv4 static assignments (MAC to IPv4 reservations).
+  rpc ListDHCPStaticAssignments(ListDHCPStaticAssignmentsRequest) returns (ListDHCPStaticAssignmentsResponse) {
+    option (google.api.http) = {
+      get: "/api/dhcp-vnfs/{vnf_id}/static-assignments"
+      response_body: "assignments"
+    };
+  }
+
+  rpc GetDHCPStaticAssignment(GetDHCPStaticAssignmentRequest) returns (DHCPStaticAssignment) {
+    option (google.api.http) = {get: "/api/dhcp-vnfs/{vnf_id}/static-assignments/{assignment_id}"};
+  }
+
+  rpc CreateDHCPStaticAssignment(CreateDHCPStaticAssignmentRequest) returns (DHCPStaticAssignment) {
+    option (google.api.http) = {
+      post: "/api/dhcp-vnfs/{vnf_id}/static-assignments"
+      body: "*"
+    };
+  }
+
+  rpc UpdateDHCPStaticAssignment(UpdateDHCPStaticAssignmentRequest) returns (DHCPStaticAssignment) {
+    option (google.api.http) = {
+      put: "/api/dhcp-vnfs/{vnf_id}/static-assignments/{assignment_id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteDHCPStaticAssignment(DeleteDHCPStaticAssignmentRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/dhcp-vnfs/{vnf_id}/static-assignments/{assignment_id}"};
+  }
+
+  // Extra DHCP options advertised by the VNF.
+  rpc ListDHCPOptions(ListDHCPOptionsRequest) returns (ListDHCPOptionsResponse) {
+    option (google.api.http) = {
+      get: "/api/dhcp-vnfs/{vnf_id}/options"
+      response_body: "options"
+    };
+  }
+
+  rpc GetDHCPOption(GetDHCPOptionRequest) returns (DHCPOption) {
+    option (google.api.http) = {get: "/api/dhcp-vnfs/{vnf_id}/options/{option_id}"};
+  }
+
+  rpc CreateDHCPOption(CreateDHCPOptionRequest) returns (DHCPOption) {
+    option (google.api.http) = {
+      post: "/api/dhcp-vnfs/{vnf_id}/options"
+      body: "*"
+    };
+  }
+
+  rpc UpdateDHCPOption(UpdateDHCPOptionRequest) returns (DHCPOption) {
+    option (google.api.http) = {
+      put: "/api/dhcp-vnfs/{vnf_id}/options/{option_id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteDHCPOption(DeleteDHCPOptionRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/dhcp-vnfs/{vnf_id}/options/{option_id}"};
+  }
+}
+
+// DHCPVNF is one DHCPv4 or DHCPv6 VNF. Family, address plan, transport, and
+// DNS integration are scalar configuration; static assignments and options are
+// separate child resources and are only summarized by the counts.
+message DHCPVNF {
+  int64 id = 1;
+  string name = 2;
+  int64 network_id = 3;
+  string network_name = 4;
+  // family is "dhcpv4" or "dhcpv6" and is immutable.
+  string family = 5;
+  bool enabled = 6;
+  string gateway = 7;
+  string range_start = 8;
+  string range_end = 9;
+  string lease_time = 10;
+  string dns = 11;
+  string bind_ip = 12;
+  string transport = 13;
+  int64 dns_vnf_id = 14;
+  string dns_domain = 15;
+  uint32 dns_ttl = 16;
+  uint32 static_assignment_count = 17;
+  uint32 option_count = 18;
+  uint32 lease_count = 19;
+  string status = 20;
+  string status_detail = 21;
+  uint32 tap_sw_if_index = 22;
+  string tap_host_name = 23;
+  google.protobuf.Timestamp created_at = 24;
+  google.protobuf.Timestamp updated_at = 25;
+}
+
+message ListDHCPVNFsRequest {
+  optional int64 network_id = 1 [(validate.rules).int64 = {gt: 0}];
+  // family filters the list to "dhcpv4" or "dhcpv6"; empty lists both.
+  optional string family = 2 [(validate.rules).string = {in: ["dhcpv4", "dhcpv6"]}];
+}
+
+message ListDHCPVNFsResponse {
+  repeated DHCPVNF vnfs = 1;
+}
+
+message GetDHCPVNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateDHCPVNFRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  int64 network_id = 2 [(validate.rules).int64 = {gt: 0}];
+  string family = 3 [(validate.rules).string = {in: ["dhcpv4", "dhcpv6"]}];
+  optional bool enabled = 4;
+  string gateway = 5 [(validate.rules).string = {max_len: 64}];
+  string range_start = 6 [(validate.rules).string = {max_len: 64}];
+  string range_end = 7 [(validate.rules).string = {max_len: 64}];
+  string lease_time = 8 [(validate.rules).string = {max_len: 32}];
+  string dns = 9 [(validate.rules).string = {max_len: 256}];
+  string bind_ip = 10 [(validate.rules).string = {max_len: 64}];
+  string transport = 11 [(validate.rules).string = {in: ["", "memif", "tap", "shared", "dedicated"]}];
+  int64 dns_vnf_id = 12;
+  string dns_domain = 13 [(validate.rules).string = {ignore_empty: true, max_len: 253}];
+  uint32 dns_ttl = 14 [(validate.rules).uint32 = {lte: 86400}];
+}
+
+message UpdateDHCPVNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  optional string name = 2 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  optional bool enabled = 3;
+  optional string gateway = 4 [(validate.rules).string = {max_len: 64}];
+  optional string range_start = 5 [(validate.rules).string = {max_len: 64}];
+  optional string range_end = 6 [(validate.rules).string = {max_len: 64}];
+  optional string lease_time = 7 [(validate.rules).string = {max_len: 32}];
+  optional string dns = 8 [(validate.rules).string = {max_len: 256}];
+  optional string bind_ip = 9 [(validate.rules).string = {max_len: 64}];
+  optional string transport = 10 [(validate.rules).string = {in: ["", "memif", "tap", "shared", "dedicated"]}];
+  optional int64 dns_vnf_id = 11;
+  optional string dns_domain = 12 [(validate.rules).string = {ignore_empty: true, max_len: 253}];
+  optional uint32 dns_ttl = 13 [(validate.rules).uint32 = {lte: 86400}];
+}
+
+message DeleteDHCPVNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message RestartDHCPVNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListDHCPVNFLeasesRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListDHCPVNFLeasesResponse {
+  int64 vnf_id = 1;
+  repeated VNFLease leases = 2;
+}
+
+// DHCPStaticAssignment reserves one IPv4 address for one MAC address.
+message DHCPStaticAssignment {
+  int64 id = 1;
+  int64 vnf_id = 2;
+  string mac = 3;
+  string ip = 4;
+}
+
+message ListDHCPStaticAssignmentsRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListDHCPStaticAssignmentsResponse {
+  repeated DHCPStaticAssignment assignments = 1;
+}
+
+message GetDHCPStaticAssignmentRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 assignment_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateDHCPStaticAssignmentRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  string mac = 2 [(validate.rules).string = {
+    pattern: "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$"
+  }];
+  string ip = 3 [(validate.rules).string.ipv4 = true];
+}
+
+message UpdateDHCPStaticAssignmentRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 assignment_id = 2 [(validate.rules).int64 = {gt: 0}];
+  string mac = 3 [(validate.rules).string = {
+    pattern: "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$"
+  }];
+  string ip = 4 [(validate.rules).string.ipv4 = true];
+}
+
+message DeleteDHCPStaticAssignmentRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 assignment_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+
+// DHCPOption is an extra DHCPv4/DHCPv6 option advertised by a DHCP VNF.
+// Format selects how Value is encoded: string, ipv4, ipv6, hex, uint8, uint16,
+// uint32, or domain-list. Server-managed option codes are rejected.
+message DHCPOption {
+  int64 id = 1;
+  int64 vnf_id = 2;
+  uint32 code = 3;
+  string format = 4;
+  string value = 5;
+}
+
+message ListDHCPOptionsRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListDHCPOptionsResponse {
+  repeated DHCPOption options = 1;
+}
+
+message GetDHCPOptionRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 option_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateDHCPOptionRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  uint32 code = 2 [(validate.rules).uint32 = {gte: 1, lte: 65535}];
+  string format = 3 [(validate.rules).string = {ignore_empty: true, max_len: 32}];
+  string value = 4 [(validate.rules).string = {max_len: 1024}];
+}
+
+message UpdateDHCPOptionRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 option_id = 2 [(validate.rules).int64 = {gt: 0}];
+  uint32 code = 3 [(validate.rules).uint32 = {gte: 1, lte: 65535}];
+  string format = 4 [(validate.rules).string = {ignore_empty: true, max_len: 32}];
+  string value = 5 [(validate.rules).string = {max_len: 1024}];
+}
+
+message DeleteDHCPOptionRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 option_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+
+// DHCPStaticAssignmentSpec is one static assignment in a runtime config. It has
+// no row identity; the daemon receives the full hydrated set.
+message DHCPStaticAssignmentSpec {
+  string mac = 1;
+  string ip = 2;
+}
+
+// DHCPOptionSpec is one DHCP option in a runtime config.
+message DHCPOptionSpec {
+  uint32 code = 1;
+  string format = 2;
+  string value = 3;
+}
+
+// DHCPV4RuntimeConfig is the full DHCPv4 configuration sent to the daemon.
+message DHCPV4RuntimeConfig {
+  string gateway = 1;
+  string range_start = 2;
+  string range_end = 3;
+  string lease_time = 4;
+  string dns = 5;
+  string bind_ip = 6;
+  int64 dns_vnf_id = 7;
+  string dns_domain = 8;
+  uint32 dns_ttl = 9;
+  repeated DHCPStaticAssignmentSpec static_assignments = 10;
+  repeated DHCPOptionSpec options = 11;
+}
+
+// DHCPV6RuntimeConfig is the full DHCPv6 configuration sent to the daemon.
+// Static assignments are DHCPv4-only.
+message DHCPV6RuntimeConfig {
+  string gateway = 1;
+  string range_start = 2;
+  string range_end = 3;
+  string lease_time = 4;
+  string dns = 5;
+  string bind_ip = 6;
+  int64 dns_vnf_id = 7;
+  string dns_domain = 8;
+  uint32 dns_ttl = 9;
+  repeated DHCPOptionSpec options = 10;
+}

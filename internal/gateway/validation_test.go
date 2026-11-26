@@ -56,7 +56,27 @@ func TestRequestValidation(t *testing.T) {
 		t.Fatal("invalid capture accepted")
 	}
 
-	if err := (&rookeryv1.CreateVNFRequest{Name: "dhcp", NetworkId: 1, Type: "bad"}).Validate(); err == nil {
-		t.Fatal("invalid VNF type accepted")
+	if err := (&rookeryv1.CreateDHCPVNFRequest{Name: "dhcp", NetworkId: 1, Family: "dhcpv4"}).Validate(); err != nil {
+		t.Fatalf("valid DHCP VNF rejected: %v", err)
+	}
+	if err := (&rookeryv1.CreateDHCPVNFRequest{Name: "dhcp", NetworkId: 1, Family: "bad"}).Validate(); err == nil {
+		t.Fatal("invalid DHCP family accepted")
+	}
+	if err := (&rookeryv1.CreateDHCPVNFRequest{Name: "bad name", NetworkId: 1, Family: "dhcpv4"}).Validate(); err == nil {
+		t.Fatal("invalid DHCP VNF name accepted")
+	}
+	if err := (&rookeryv1.CreateDNSVNFRequest{Name: "dns", NetworkId: 1}).Validate(); err != nil {
+		t.Fatalf("valid DNS VNF rejected: %v", err)
+	}
+	if err := (&rookeryv1.CreateBGPVNFRequest{Name: "bgp", NetworkId: 1, LocalIp: "10.0.0.1/24"}).Validate(); err != nil {
+		t.Fatalf("valid BGP VNF rejected: %v", err)
+	}
+	// Record types and DNAT protocols are case-insensitive in the API: the
+	// server normalizes them, and unknown values are rejected with a 400 there.
+	if err := (&rookeryv1.CreateDNSVNFRecordRequest{VnfId: 1, Name: "host", Type: "a", Value: "10.0.0.1"}).Validate(); err != nil {
+		t.Fatalf("lowercase DNS record type rejected by protobuf validation: %v", err)
+	}
+	if err := (&rookeryv1.CreateNAT44DNATRuleRequest{VnfId: 1, Protocol: "TCP", ExternalPort: 1, LocalIp: "10.0.0.2", LocalPort: 2}).Validate(); err != nil {
+		t.Fatalf("uppercase DNAT protocol rejected by protobuf validation: %v", err)
 	}
 }

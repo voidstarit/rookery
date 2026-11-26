@@ -13,13 +13,22 @@
       "name": "ACLService"
     },
     {
+      "name": "BGPVNFService"
+    },
+    {
       "name": "CaptureService"
+    },
+    {
+      "name": "DHCPVNFService"
     },
     {
       "name": "DiskService"
     },
     {
       "name": "DiskThrottleService"
+    },
+    {
+      "name": "DNSVNFService"
     },
     {
       "name": "HostService"
@@ -46,6 +55,9 @@
       "name": "MediaService"
     },
     {
+      "name": "NAT44VNFService"
+    },
+    {
       "name": "NetworkService"
     },
     {
@@ -61,10 +73,16 @@
       "name": "VMService"
     },
     {
-      "name": "VNFService"
+      "name": "DHCPDaemon"
     },
     {
-      "name": "VNFDaemon"
+      "name": "DNSDaemon"
+    },
+    {
+      "name": "BGPDaemon"
+    },
+    {
+      "name": "VNFRuntimeAdmin"
     }
   ],
   "schemes": [
@@ -231,6 +249,422 @@
         ]
       }
     },
+    "/api/bgp-vnfs": {
+      "get": {
+        "operationId": "BGPVNFService_ListBGPVNFs",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1BGPVNF"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "network_id",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "BGPVNFService"
+        ]
+      },
+      "post": {
+        "operationId": "BGPVNFService_CreateBGPVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1BGPVNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateBGPVNFRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BGPVNFService"
+        ]
+      }
+    },
+    "/api/bgp-vnfs/{id}": {
+      "get": {
+        "operationId": "BGPVNFService_GetBGPVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1BGPVNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "BGPVNFService"
+        ]
+      },
+      "delete": {
+        "operationId": "BGPVNFService_DeleteBGPVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "BGPVNFService"
+        ]
+      },
+      "put": {
+        "operationId": "BGPVNFService_UpdateBGPVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1BGPVNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BGPVNFServiceUpdateBGPVNFBody"
+            }
+          }
+        ],
+        "tags": [
+          "BGPVNFService"
+        ]
+      }
+    },
+    "/api/bgp-vnfs/{id}/restart": {
+      "post": {
+        "operationId": "BGPVNFService_RestartBGPVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1BGPVNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "BGPVNFService"
+        ]
+      }
+    },
+    "/api/bgp-vnfs/{id}/status": {
+      "get": {
+        "operationId": "BGPVNFService_GetBGPVNFStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1BGPStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "BGPVNFService"
+        ]
+      }
+    },
+    "/api/bgp-vnfs/{vnf_id}/advertised-prefixes": {
+      "get": {
+        "operationId": "BGPVNFService_ListBGPVNFAdvertisedPrefixes",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1BGPPrefix"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "BGPVNFService"
+        ]
+      },
+      "post": {
+        "operationId": "BGPVNFService_CreateBGPVNFAdvertisedPrefix",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1BGPPrefix"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BGPVNFServiceCreateBGPVNFAdvertisedPrefixBody"
+            }
+          }
+        ],
+        "tags": [
+          "BGPVNFService"
+        ]
+      }
+    },
+    "/api/bgp-vnfs/{vnf_id}/advertised-prefixes/{prefix_id}": {
+      "get": {
+        "operationId": "BGPVNFService_GetBGPVNFAdvertisedPrefix",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1BGPPrefix"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "prefix_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "BGPVNFService"
+        ]
+      },
+      "delete": {
+        "operationId": "BGPVNFService_DeleteBGPVNFAdvertisedPrefix",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "prefix_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "BGPVNFService"
+        ]
+      },
+      "put": {
+        "operationId": "BGPVNFService_UpdateBGPVNFAdvertisedPrefix",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1BGPPrefix"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "prefix_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BGPVNFServiceUpdateBGPVNFAdvertisedPrefixBody"
+            }
+          }
+        ],
+        "tags": [
+          "BGPVNFService"
+        ]
+      }
+    },
     "/api/cgroup-settings": {
       "get": {
         "summary": "GetCgroupSettings returns the host-wide cgroup v2 limits and runtime\nstatus.",
@@ -305,6 +739,623 @@
         },
         "tags": [
           "SystemService"
+        ]
+      }
+    },
+    "/api/dhcp-vnfs": {
+      "get": {
+        "operationId": "DHCPVNFService_ListDHCPVNFs",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1DHCPVNF"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "network_id",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "family",
+            "description": "family filters the list to \"dhcpv4\" or \"dhcpv6\"; empty lists both.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "DHCPVNFService"
+        ]
+      },
+      "post": {
+        "operationId": "DHCPVNFService_CreateDHCPVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DHCPVNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateDHCPVNFRequest"
+            }
+          }
+        ],
+        "tags": [
+          "DHCPVNFService"
+        ]
+      }
+    },
+    "/api/dhcp-vnfs/{id}": {
+      "get": {
+        "operationId": "DHCPVNFService_GetDHCPVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DHCPVNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DHCPVNFService"
+        ]
+      },
+      "delete": {
+        "operationId": "DHCPVNFService_DeleteDHCPVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DHCPVNFService"
+        ]
+      },
+      "put": {
+        "operationId": "DHCPVNFService_UpdateDHCPVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DHCPVNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DHCPVNFServiceUpdateDHCPVNFBody"
+            }
+          }
+        ],
+        "tags": [
+          "DHCPVNFService"
+        ]
+      }
+    },
+    "/api/dhcp-vnfs/{id}/leases": {
+      "get": {
+        "summary": "ListDHCPVNFLeases returns the active leases of a running DHCP VNF.",
+        "operationId": "DHCPVNFService_ListDHCPVNFLeases",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListDHCPVNFLeasesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DHCPVNFService"
+        ]
+      }
+    },
+    "/api/dhcp-vnfs/{id}/restart": {
+      "post": {
+        "operationId": "DHCPVNFService_RestartDHCPVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DHCPVNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DHCPVNFService"
+        ]
+      }
+    },
+    "/api/dhcp-vnfs/{vnf_id}/options": {
+      "get": {
+        "summary": "Extra DHCP options advertised by the VNF.",
+        "operationId": "DHCPVNFService_ListDHCPOptions",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1DHCPOption"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DHCPVNFService"
+        ]
+      },
+      "post": {
+        "operationId": "DHCPVNFService_CreateDHCPOption",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DHCPOption"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DHCPVNFServiceCreateDHCPOptionBody"
+            }
+          }
+        ],
+        "tags": [
+          "DHCPVNFService"
+        ]
+      }
+    },
+    "/api/dhcp-vnfs/{vnf_id}/options/{option_id}": {
+      "get": {
+        "operationId": "DHCPVNFService_GetDHCPOption",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DHCPOption"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "option_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DHCPVNFService"
+        ]
+      },
+      "delete": {
+        "operationId": "DHCPVNFService_DeleteDHCPOption",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "option_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DHCPVNFService"
+        ]
+      },
+      "put": {
+        "operationId": "DHCPVNFService_UpdateDHCPOption",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DHCPOption"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "option_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DHCPVNFServiceUpdateDHCPOptionBody"
+            }
+          }
+        ],
+        "tags": [
+          "DHCPVNFService"
+        ]
+      }
+    },
+    "/api/dhcp-vnfs/{vnf_id}/static-assignments": {
+      "get": {
+        "summary": "DHCPv4 static assignments (MAC to IPv4 reservations).",
+        "operationId": "DHCPVNFService_ListDHCPStaticAssignments",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1DHCPStaticAssignment"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DHCPVNFService"
+        ]
+      },
+      "post": {
+        "operationId": "DHCPVNFService_CreateDHCPStaticAssignment",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DHCPStaticAssignment"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DHCPVNFServiceCreateDHCPStaticAssignmentBody"
+            }
+          }
+        ],
+        "tags": [
+          "DHCPVNFService"
+        ]
+      }
+    },
+    "/api/dhcp-vnfs/{vnf_id}/static-assignments/{assignment_id}": {
+      "get": {
+        "operationId": "DHCPVNFService_GetDHCPStaticAssignment",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DHCPStaticAssignment"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DHCPVNFService"
+        ]
+      },
+      "delete": {
+        "operationId": "DHCPVNFService_DeleteDHCPStaticAssignment",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DHCPVNFService"
+        ]
+      },
+      "put": {
+        "operationId": "DHCPVNFService_UpdateDHCPStaticAssignment",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DHCPStaticAssignment"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DHCPVNFServiceUpdateDHCPStaticAssignmentBody"
+            }
+          }
+        ],
+        "tags": [
+          "DHCPVNFService"
         ]
       }
     },
@@ -619,6 +1670,614 @@
         ],
         "tags": [
           "DiskService"
+        ]
+      }
+    },
+    "/api/dns-vnfs": {
+      "get": {
+        "operationId": "DNSVNFService_ListDNSVNFs",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1DNSVNF"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "network_id",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DNSVNFService"
+        ]
+      },
+      "post": {
+        "operationId": "DNSVNFService_CreateDNSVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DNSVNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateDNSVNFRequest"
+            }
+          }
+        ],
+        "tags": [
+          "DNSVNFService"
+        ]
+      }
+    },
+    "/api/dns-vnfs/{id}": {
+      "get": {
+        "operationId": "DNSVNFService_GetDNSVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DNSVNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DNSVNFService"
+        ]
+      },
+      "delete": {
+        "operationId": "DNSVNFService_DeleteDNSVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DNSVNFService"
+        ]
+      },
+      "put": {
+        "operationId": "DNSVNFService_UpdateDNSVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DNSVNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DNSVNFServiceUpdateDNSVNFBody"
+            }
+          }
+        ],
+        "tags": [
+          "DNSVNFService"
+        ]
+      }
+    },
+    "/api/dns-vnfs/{id}/record-views": {
+      "get": {
+        "summary": "ListDNSVNFRecordViews returns the merged static and DHCP-derived records.",
+        "operationId": "DNSVNFService_ListDNSVNFRecordViews",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListDNSVNFRecordViewsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DNSVNFService"
+        ]
+      }
+    },
+    "/api/dns-vnfs/{id}/restart": {
+      "post": {
+        "operationId": "DNSVNFService_RestartDNSVNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DNSVNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DNSVNFService"
+        ]
+      }
+    },
+    "/api/dns-vnfs/{vnf_id}/forwarders": {
+      "get": {
+        "operationId": "DNSVNFService_ListDNSVNFForwarders",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1DNSForwarder"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DNSVNFService"
+        ]
+      },
+      "post": {
+        "operationId": "DNSVNFService_CreateDNSVNFForwarder",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DNSForwarder"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DNSVNFServiceCreateDNSVNFForwarderBody"
+            }
+          }
+        ],
+        "tags": [
+          "DNSVNFService"
+        ]
+      }
+    },
+    "/api/dns-vnfs/{vnf_id}/forwarders/{forwarder_id}": {
+      "get": {
+        "operationId": "DNSVNFService_GetDNSVNFForwarder",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DNSForwarder"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "forwarder_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DNSVNFService"
+        ]
+      },
+      "delete": {
+        "operationId": "DNSVNFService_DeleteDNSVNFForwarder",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "forwarder_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DNSVNFService"
+        ]
+      },
+      "put": {
+        "operationId": "DNSVNFService_UpdateDNSVNFForwarder",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DNSForwarder"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "forwarder_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DNSVNFServiceUpdateDNSVNFForwarderBody"
+            }
+          }
+        ],
+        "tags": [
+          "DNSVNFService"
+        ]
+      }
+    },
+    "/api/dns-vnfs/{vnf_id}/records": {
+      "get": {
+        "operationId": "DNSVNFService_ListDNSVNFRecords",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1DNSRecord"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DNSVNFService"
+        ]
+      },
+      "post": {
+        "operationId": "DNSVNFService_CreateDNSVNFRecord",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DNSRecord"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DNSVNFServiceCreateDNSVNFRecordBody"
+            }
+          }
+        ],
+        "tags": [
+          "DNSVNFService"
+        ]
+      }
+    },
+    "/api/dns-vnfs/{vnf_id}/records/{record_id}": {
+      "get": {
+        "operationId": "DNSVNFService_GetDNSVNFRecord",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DNSRecord"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "record_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DNSVNFService"
+        ]
+      },
+      "delete": {
+        "operationId": "DNSVNFService_DeleteDNSVNFRecord",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "record_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "DNSVNFService"
+        ]
+      },
+      "put": {
+        "operationId": "DNSVNFService_UpdateDNSVNFRecord",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DNSRecord"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "record_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DNSVNFServiceUpdateDNSVNFRecordBody"
+            }
+          }
+        ],
+        "tags": [
+          "DNSVNFService"
         ]
       }
     },
@@ -1990,6 +3649,423 @@
         ],
         "tags": [
           "MediaService"
+        ]
+      }
+    },
+    "/api/nat44-vnfs": {
+      "get": {
+        "operationId": "NAT44VNFService_ListNAT44VNFs",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1NAT44VNF"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "network_id",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "NAT44VNFService"
+        ]
+      },
+      "post": {
+        "operationId": "NAT44VNFService_CreateNAT44VNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1NAT44VNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateNAT44VNFRequest"
+            }
+          }
+        ],
+        "tags": [
+          "NAT44VNFService"
+        ]
+      }
+    },
+    "/api/nat44-vnfs/{id}": {
+      "get": {
+        "operationId": "NAT44VNFService_GetNAT44VNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1NAT44VNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "NAT44VNFService"
+        ]
+      },
+      "delete": {
+        "operationId": "NAT44VNFService_DeleteNAT44VNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "NAT44VNFService"
+        ]
+      },
+      "put": {
+        "operationId": "NAT44VNFService_UpdateNAT44VNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1NAT44VNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/NAT44VNFServiceUpdateNAT44VNFBody"
+            }
+          }
+        ],
+        "tags": [
+          "NAT44VNFService"
+        ]
+      }
+    },
+    "/api/nat44-vnfs/{id}/restart": {
+      "post": {
+        "operationId": "NAT44VNFService_RestartNAT44VNF",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1NAT44VNF"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "NAT44VNFService"
+        ]
+      }
+    },
+    "/api/nat44-vnfs/{id}/sessions": {
+      "get": {
+        "summary": "ListNAT44VNFSessions returns the current VPP NAT44 translations.",
+        "operationId": "NAT44VNFService_ListNAT44VNFSessions",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListNAT44VNFSessionsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "NAT44VNFService"
+        ]
+      }
+    },
+    "/api/nat44-vnfs/{vnf_id}/dnat-rules": {
+      "get": {
+        "operationId": "NAT44VNFService_ListNAT44DNATRules",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/v1DNATRule"
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "NAT44VNFService"
+        ]
+      },
+      "post": {
+        "operationId": "NAT44VNFService_CreateNAT44DNATRule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DNATRule"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/NAT44VNFServiceCreateNAT44DNATRuleBody"
+            }
+          }
+        ],
+        "tags": [
+          "NAT44VNFService"
+        ]
+      }
+    },
+    "/api/nat44-vnfs/{vnf_id}/dnat-rules/{rule_id}": {
+      "get": {
+        "operationId": "NAT44VNFService_GetNAT44DNATRule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DNATRule"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "NAT44VNFService"
+        ]
+      },
+      "delete": {
+        "operationId": "NAT44VNFService_DeleteNAT44DNATRule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "NAT44VNFService"
+        ]
+      },
+      "put": {
+        "operationId": "NAT44VNFService_UpdateNAT44DNATRule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DNATRule"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vnf_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/NAT44VNFServiceUpdateNAT44DNATRuleBody"
+            }
+          }
+        ],
+        "tags": [
+          "NAT44VNFService"
         ]
       }
     },
@@ -3553,325 +5629,6 @@
         ]
       }
     },
-    "/api/vnfs": {
-      "get": {
-        "operationId": "VNFService_ListVNFs",
-        "responses": {
-          "200": {
-            "description": "",
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "$ref": "#/definitions/v1VNF"
-              }
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "network_id",
-            "in": "query",
-            "required": false,
-            "type": "string",
-            "format": "int64"
-          }
-        ],
-        "tags": [
-          "VNFService"
-        ]
-      },
-      "post": {
-        "operationId": "VNFService_CreateVNF",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1VNF"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1CreateVNFRequest"
-            }
-          }
-        ],
-        "tags": [
-          "VNFService"
-        ]
-      }
-    },
-    "/api/vnfs/{id}": {
-      "get": {
-        "operationId": "VNFService_GetVNF",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1VNF"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "int64"
-          }
-        ],
-        "tags": [
-          "VNFService"
-        ]
-      },
-      "delete": {
-        "operationId": "VNFService_DeleteVNF",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "type": "object",
-              "properties": {}
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "int64"
-          }
-        ],
-        "tags": [
-          "VNFService"
-        ]
-      },
-      "put": {
-        "operationId": "VNFService_UpdateVNF",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1VNF"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "int64"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/VNFServiceUpdateVNFBody"
-            }
-          }
-        ],
-        "tags": [
-          "VNFService"
-        ]
-      }
-    },
-    "/api/vnfs/{id}/bgp": {
-      "get": {
-        "operationId": "VNFService_GetVNFBGP",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1VNFBGPStatus"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "int64"
-          }
-        ],
-        "tags": [
-          "VNFService"
-        ]
-      }
-    },
-    "/api/vnfs/{id}/dns-records": {
-      "get": {
-        "summary": "ListVNFDNSRecords returns the static DNS records and the dynamic records\ncurrently registered by DHCP leases.",
-        "operationId": "VNFService_ListVNFDNSRecords",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1ListVNFDNSRecordsResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "int64"
-          }
-        ],
-        "tags": [
-          "VNFService"
-        ]
-      }
-    },
-    "/api/vnfs/{id}/leases": {
-      "get": {
-        "operationId": "VNFService_ListVNFLeases",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1ListVNFLeasesResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "int64"
-          }
-        ],
-        "tags": [
-          "VNFService"
-        ]
-      }
-    },
-    "/api/vnfs/{id}/restart": {
-      "post": {
-        "operationId": "VNFService_RestartVNF",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1VNF"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "int64"
-          }
-        ],
-        "tags": [
-          "VNFService"
-        ]
-      }
-    },
-    "/api/vnfs/{id}/sessions": {
-      "get": {
-        "operationId": "VNFService_ListVNFSessions",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1ListVNFSessionsResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "int64"
-          }
-        ],
-        "tags": [
-          "VNFService"
-        ]
-      }
-    },
     "/api/vpp-startup-script": {
       "get": {
         "operationId": "SystemService_GetVPPStartupScript",
@@ -4108,6 +5865,242 @@
             "type": "object",
             "$ref": "#/definitions/v1ACLRule"
           }
+        }
+      }
+    },
+    "BGPVNFServiceCreateBGPVNFAdvertisedPrefixBody": {
+      "type": "object",
+      "properties": {
+        "prefix": {
+          "type": "string"
+        }
+      }
+    },
+    "BGPVNFServiceUpdateBGPVNFAdvertisedPrefixBody": {
+      "type": "object",
+      "properties": {
+        "prefix": {
+          "type": "string"
+        }
+      }
+    },
+    "BGPVNFServiceUpdateBGPVNFBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "transport": {
+          "type": "string"
+        },
+        "local_as": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "router_id": {
+          "type": "string"
+        },
+        "peer_as": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "peer_ip": {
+          "type": "string"
+        },
+        "local_ip": {
+          "type": "string"
+        },
+        "peer_gateway": {
+          "type": "string"
+        },
+        "multihop_ttl": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "password": {
+          "type": "string"
+        },
+        "passive": {
+          "type": "boolean"
+        },
+        "target_table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "next_hop": {
+          "type": "string"
+        }
+      }
+    },
+    "DHCPVNFServiceCreateDHCPOptionBody": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "format": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "DHCPVNFServiceCreateDHCPStaticAssignmentBody": {
+      "type": "object",
+      "properties": {
+        "mac": {
+          "type": "string"
+        },
+        "ip": {
+          "type": "string"
+        }
+      }
+    },
+    "DHCPVNFServiceUpdateDHCPOptionBody": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "format": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "DHCPVNFServiceUpdateDHCPStaticAssignmentBody": {
+      "type": "object",
+      "properties": {
+        "mac": {
+          "type": "string"
+        },
+        "ip": {
+          "type": "string"
+        }
+      }
+    },
+    "DHCPVNFServiceUpdateDHCPVNFBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "gateway": {
+          "type": "string"
+        },
+        "range_start": {
+          "type": "string"
+        },
+        "range_end": {
+          "type": "string"
+        },
+        "lease_time": {
+          "type": "string"
+        },
+        "dns": {
+          "type": "string"
+        },
+        "bind_ip": {
+          "type": "string"
+        },
+        "transport": {
+          "type": "string"
+        },
+        "dns_vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "dns_domain": {
+          "type": "string"
+        },
+        "dns_ttl": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "DNSVNFServiceCreateDNSVNFForwarderBody": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "position": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "DNSVNFServiceCreateDNSVNFRecordBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "ttl": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "DNSVNFServiceUpdateDNSVNFBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "forward": {
+          "type": "boolean"
+        }
+      }
+    },
+    "DNSVNFServiceUpdateDNSVNFForwarderBody": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "position": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "DNSVNFServiceUpdateDNSVNFRecordBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "ttl": {
+          "type": "integer",
+          "format": "int64"
         }
       }
     },
@@ -4375,6 +6368,70 @@
         }
       }
     },
+    "NAT44VNFServiceCreateNAT44DNATRuleBody": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "type": "string"
+        },
+        "external_port": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "local_ip": {
+          "type": "string"
+        },
+        "local_port": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "NAT44VNFServiceUpdateNAT44DNATRuleBody": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "type": "string"
+        },
+        "external_port": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "local_ip": {
+          "type": "string"
+        },
+        "local_port": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "NAT44VNFServiceUpdateNAT44VNFBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "gateway": {
+          "type": "string"
+        },
+        "outside_interface": {
+          "type": "string"
+        },
+        "outside_address": {
+          "type": "string"
+        },
+        "outside_gateway": {
+          "type": "string"
+        },
+        "nat44_pool": {
+          "type": "string"
+        }
+      }
+    },
     "NetworkServiceUpdateNetworkBody": {
       "type": "object",
       "properties": {
@@ -4639,20 +6696,6 @@
         }
       }
     },
-    "VNFServiceUpdateVNFBody": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "enabled": {
-          "type": "boolean"
-        },
-        "config": {
-          "$ref": "#/definitions/v1VNFConfig"
-        }
-      }
-    },
     "protobufAny": {
       "type": "object",
       "properties": {
@@ -4830,6 +6873,170 @@
           "format": "uint64"
         }
       }
+    },
+    "v1BGPPrefix": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "prefix": {
+          "type": "string"
+        }
+      },
+      "description": "BGPPrefix is one prefix advertised by the VNF."
+    },
+    "v1BGPReceivedPrefix": {
+      "type": "object",
+      "properties": {
+        "prefix": {
+          "type": "string"
+        },
+        "next_hop": {
+          "type": "string"
+        },
+        "as_path": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "description": "BGPReceivedPrefix is one prefix learned from the peer."
+    },
+    "v1BGPStatus": {
+      "type": "object",
+      "properties": {
+        "vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "established": {
+          "type": "boolean"
+        },
+        "session_state": {
+          "type": "string"
+        },
+        "peer_address": {
+          "type": "string"
+        },
+        "peer_as": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "local_as": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "advertised": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "received": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1BGPReceivedPrefix"
+          }
+        }
+      },
+      "description": "BGPStatus is a live snapshot of a running BGP VNF."
+    },
+    "v1BGPVNF": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "network_name": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "transport": {
+          "type": "string"
+        },
+        "local_as": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "router_id": {
+          "type": "string"
+        },
+        "peer_as": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "peer_ip": {
+          "type": "string"
+        },
+        "local_ip": {
+          "type": "string"
+        },
+        "peer_gateway": {
+          "type": "string"
+        },
+        "multihop_ttl": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "passive": {
+          "type": "boolean"
+        },
+        "target_table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "next_hop": {
+          "type": "string"
+        },
+        "advertised_prefix_count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "status": {
+          "type": "string"
+        },
+        "status_detail": {
+          "type": "string"
+        },
+        "tap_sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "tap_host_name": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "BGPVNF is one BGP VNF. The password is write-only: it is accepted on create\nand update and never returned by a read."
     },
     "v1BlockDeviceMetrics": {
       "type": "object",
@@ -5123,6 +7330,129 @@
         }
       }
     },
+    "v1CreateBGPVNFRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "transport": {
+          "type": "string"
+        },
+        "local_as": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "router_id": {
+          "type": "string"
+        },
+        "peer_as": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "peer_ip": {
+          "type": "string"
+        },
+        "local_ip": {
+          "type": "string"
+        },
+        "peer_gateway": {
+          "type": "string"
+        },
+        "multihop_ttl": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "password": {
+          "type": "string"
+        },
+        "passive": {
+          "type": "boolean"
+        },
+        "target_table_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "next_hop": {
+          "type": "string"
+        }
+      }
+    },
+    "v1CreateDHCPVNFRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "family": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "gateway": {
+          "type": "string"
+        },
+        "range_start": {
+          "type": "string"
+        },
+        "range_end": {
+          "type": "string"
+        },
+        "lease_time": {
+          "type": "string"
+        },
+        "dns": {
+          "type": "string"
+        },
+        "bind_ip": {
+          "type": "string"
+        },
+        "transport": {
+          "type": "string"
+        },
+        "dns_vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "dns_domain": {
+          "type": "string"
+        },
+        "dns_ttl": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "v1CreateDNSVNFRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "forward": {
+          "type": "boolean"
+        }
+      }
+    },
     "v1CreateDiskRequest": {
       "type": "object",
       "properties": {
@@ -5360,6 +7690,36 @@
         }
       }
     },
+    "v1CreateNAT44VNFRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "gateway": {
+          "type": "string"
+        },
+        "outside_interface": {
+          "type": "string"
+        },
+        "outside_address": {
+          "type": "string"
+        },
+        "outside_gateway": {
+          "type": "string"
+        },
+        "nat44_pool": {
+          "type": "string"
+        }
+      }
+    },
     "v1CreateNetworkPipeRequest": {
       "type": "object",
       "properties": {
@@ -5478,30 +7838,17 @@
         }
       }
     },
-    "v1CreateVNFRequest": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "network_id": {
-          "type": "string",
-          "format": "int64"
-        },
-        "type": {
-          "type": "string"
-        },
-        "enabled": {
-          "type": "boolean"
-        },
-        "config": {
-          "$ref": "#/definitions/v1VNFConfig"
-        }
-      }
-    },
     "v1DHCPOption": {
       "type": "object",
       "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
         "code": {
           "type": "integer",
           "format": "int64"
@@ -5518,17 +7865,126 @@
     "v1DHCPStaticAssignment": {
       "type": "object",
       "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
         "mac": {
           "type": "string"
         },
         "ip": {
           "type": "string"
         }
-      }
+      },
+      "description": "DHCPStaticAssignment reserves one IPv4 address for one MAC address."
+    },
+    "v1DHCPVNF": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "network_name": {
+          "type": "string"
+        },
+        "family": {
+          "type": "string",
+          "description": "family is \"dhcpv4\" or \"dhcpv6\" and is immutable."
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "gateway": {
+          "type": "string"
+        },
+        "range_start": {
+          "type": "string"
+        },
+        "range_end": {
+          "type": "string"
+        },
+        "lease_time": {
+          "type": "string"
+        },
+        "dns": {
+          "type": "string"
+        },
+        "bind_ip": {
+          "type": "string"
+        },
+        "transport": {
+          "type": "string"
+        },
+        "dns_vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "dns_domain": {
+          "type": "string"
+        },
+        "dns_ttl": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "static_assignment_count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "option_count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "lease_count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "status": {
+          "type": "string"
+        },
+        "status_detail": {
+          "type": "string"
+        },
+        "tap_sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "tap_host_name": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "DHCPVNF is one DHCPv4 or DHCPv6 VNF. Family, address plan, transport, and\nDNS integration are scalar configuration; static assignments and options are\nseparate child resources and are only summarized by the counts."
     },
     "v1DNATRule": {
       "type": "object",
       "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
         "protocol": {
           "type": "string"
         },
@@ -5543,11 +7999,41 @@
           "type": "integer",
           "format": "int32"
         }
-      }
+      },
+      "description": "DNATRule forwards one external port to a local address and port."
+    },
+    "v1DNSForwarder": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "address": {
+          "type": "string"
+        },
+        "position": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "DNSForwarder is one upstream resolver. Position orders the forwarders."
     },
     "v1DNSRecord": {
       "type": "object",
       "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
         "name": {
           "type": "string"
         },
@@ -5563,6 +8049,87 @@
         }
       },
       "description": "DNSRecord is one local record served by a DNS VNF. Name is a fully qualified\ndomain name; wildcard names such as *.lab1.test are supported. Type is A,\nAAAA, CNAME, TXT, or PTR."
+    },
+    "v1DNSRecordView": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "ttl": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "source": {
+          "type": "string"
+        },
+        "source_vnf_id": {
+          "type": "string",
+          "format": "int64"
+        }
+      },
+      "description": "DNSRecordView is a record shown in the merged record view. Source is\n\"static\" for configured records or \"dhcp\" for lease-derived records."
+    },
+    "v1DNSVNF": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "network_name": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "forward": {
+          "type": "boolean"
+        },
+        "record_count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "forwarder_count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "status": {
+          "type": "string"
+        },
+        "status_detail": {
+          "type": "string"
+        },
+        "tap_sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "tap_host_name": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "DNSVNF is one DNS VNF. Records are served authoritatively; names without a\nlocal record are forwarded to the configured forwarders when forward is\nenabled."
     },
     "v1DeleteDiskResponse": {
       "type": "object",
@@ -6653,6 +9220,30 @@
         }
       }
     },
+    "v1ListBGPVNFAdvertisedPrefixesResponse": {
+      "type": "object",
+      "properties": {
+        "prefixes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1BGPPrefix"
+          }
+        }
+      }
+    },
+    "v1ListBGPVNFsResponse": {
+      "type": "object",
+      "properties": {
+        "vnfs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1BGPVNF"
+          }
+        }
+      }
+    },
     "v1ListCaptureFilesResponse": {
       "type": "object",
       "properties": {
@@ -6673,6 +9264,113 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1VPPInterface"
+          }
+        }
+      }
+    },
+    "v1ListDHCPOptionsResponse": {
+      "type": "object",
+      "properties": {
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1DHCPOption"
+          }
+        }
+      }
+    },
+    "v1ListDHCPStaticAssignmentsResponse": {
+      "type": "object",
+      "properties": {
+        "assignments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1DHCPStaticAssignment"
+          }
+        }
+      }
+    },
+    "v1ListDHCPVNFLeasesResponse": {
+      "type": "object",
+      "properties": {
+        "vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "leases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1VNFLease"
+          }
+        }
+      }
+    },
+    "v1ListDHCPVNFsResponse": {
+      "type": "object",
+      "properties": {
+        "vnfs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1DHCPVNF"
+          }
+        }
+      }
+    },
+    "v1ListDNSVNFForwardersResponse": {
+      "type": "object",
+      "properties": {
+        "forwarders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1DNSForwarder"
+          }
+        }
+      }
+    },
+    "v1ListDNSVNFRecordViewsResponse": {
+      "type": "object",
+      "properties": {
+        "vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1DNSRecordView"
+          }
+        },
+        "dynamic_error": {
+          "type": "string"
+        }
+      }
+    },
+    "v1ListDNSVNFRecordsResponse": {
+      "type": "object",
+      "properties": {
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1DNSRecord"
+          }
+        }
+      }
+    },
+    "v1ListDNSVNFsResponse": {
+      "type": "object",
+      "properties": {
+        "vnfs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1DNSVNF"
           }
         }
       }
@@ -6845,6 +9543,45 @@
         }
       }
     },
+    "v1ListNAT44DNATRulesResponse": {
+      "type": "object",
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1DNATRule"
+          }
+        }
+      }
+    },
+    "v1ListNAT44VNFSessionsResponse": {
+      "type": "object",
+      "properties": {
+        "vnf_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "sessions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v1ListNAT44VNFsResponse": {
+      "type": "object",
+      "properties": {
+        "vnfs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1NAT44VNF"
+          }
+        }
+      }
+    },
     "v1ListNetworkPipesResponse": {
       "type": "object",
       "properties": {
@@ -6928,77 +9665,6 @@
         }
       }
     },
-    "v1ListVNFDNSRecordsResponse": {
-      "type": "object",
-      "properties": {
-        "vnf_id": {
-          "type": "string",
-          "format": "int64"
-        },
-        "type": {
-          "type": "string"
-        },
-        "records": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1VNFDNSRecord"
-          }
-        },
-        "dynamic_error": {
-          "type": "string"
-        }
-      }
-    },
-    "v1ListVNFLeasesResponse": {
-      "type": "object",
-      "properties": {
-        "vnf_id": {
-          "type": "string",
-          "format": "int64"
-        },
-        "type": {
-          "type": "string"
-        },
-        "leases": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1VNFLease"
-          }
-        }
-      }
-    },
-    "v1ListVNFSessionsResponse": {
-      "type": "object",
-      "properties": {
-        "vnf_id": {
-          "type": "string",
-          "format": "int64"
-        },
-        "type": {
-          "type": "string"
-        },
-        "sessions": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
-    },
-    "v1ListVNFsResponse": {
-      "type": "object",
-      "properties": {
-        "vnfs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1VNF"
-          }
-        }
-      }
-    },
     "v1Media": {
       "type": "object",
       "properties": {
@@ -7025,6 +9691,69 @@
           "format": "date-time"
         }
       }
+    },
+    "v1NAT44VNF": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "network_id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "network_name": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "gateway": {
+          "type": "string"
+        },
+        "outside_interface": {
+          "type": "string"
+        },
+        "outside_address": {
+          "type": "string"
+        },
+        "outside_gateway": {
+          "type": "string"
+        },
+        "nat44_pool": {
+          "type": "string"
+        },
+        "dnat_rule_count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "status": {
+          "type": "string"
+        },
+        "status_detail": {
+          "type": "string"
+        },
+        "tap_sw_if_index": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "tap_host_name": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "NAT44VNF is one NAT44 VNF."
     },
     "v1Network": {
       "type": "object",
@@ -8008,282 +10737,6 @@
         }
       }
     },
-    "v1VNF": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "format": "int64"
-        },
-        "name": {
-          "type": "string"
-        },
-        "network_id": {
-          "type": "string",
-          "format": "int64"
-        },
-        "network_name": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string"
-        },
-        "enabled": {
-          "type": "boolean"
-        },
-        "config": {
-          "$ref": "#/definitions/v1VNFConfig"
-        },
-        "tap_sw_if_index": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "tap_host_name": {
-          "type": "string"
-        },
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updated_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "status": {
-          "type": "string"
-        },
-        "status_detail": {
-          "type": "string"
-        },
-        "lease_count": {
-          "type": "integer",
-          "format": "int32"
-        }
-      }
-    },
-    "v1VNFBGPReceivedPrefix": {
-      "type": "object",
-      "properties": {
-        "prefix": {
-          "type": "string"
-        },
-        "next_hop": {
-          "type": "string"
-        },
-        "as_path": {
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      }
-    },
-    "v1VNFBGPStatus": {
-      "type": "object",
-      "properties": {
-        "vnf_id": {
-          "type": "string",
-          "format": "int64"
-        },
-        "type": {
-          "type": "string"
-        },
-        "running": {
-          "type": "boolean"
-        },
-        "established": {
-          "type": "boolean"
-        },
-        "session_state": {
-          "type": "string"
-        },
-        "peer_address": {
-          "type": "string"
-        },
-        "peer_as": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "local_as": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "advertised": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "received": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1VNFBGPReceivedPrefix"
-          }
-        }
-      }
-    },
-    "v1VNFConfig": {
-      "type": "object",
-      "properties": {
-        "gateway": {
-          "type": "string"
-        },
-        "range_start": {
-          "type": "string"
-        },
-        "range_end": {
-          "type": "string"
-        },
-        "dns": {
-          "type": "string"
-        },
-        "lease_time": {
-          "type": "string"
-        },
-        "bind_ip": {
-          "type": "string"
-        },
-        "static_assignments": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1DHCPStaticAssignment"
-          }
-        },
-        "outside_interface": {
-          "type": "string"
-        },
-        "outside_address": {
-          "type": "string"
-        },
-        "outside_gateway": {
-          "type": "string"
-        },
-        "nat44_pool": {
-          "type": "string"
-        },
-        "dnat_rules": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1DNATRule"
-          }
-        },
-        "transport": {
-          "type": "string",
-          "description": "Transport override for DHCPv4: shared, dedicated, or tap. memif is a\nlegacy alias for dedicated memif. Empty selects the network default.\nBGP supports tap and memif (dedicated) transport."
-        },
-        "local_as": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "router_id": {
-          "type": "string"
-        },
-        "peer_as": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "peer_ip": {
-          "type": "string"
-        },
-        "local_ip": {
-          "type": "string"
-        },
-        "peer_gateway": {
-          "type": "string"
-        },
-        "multihop_ttl": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "password": {
-          "type": "string"
-        },
-        "passive": {
-          "type": "boolean"
-        },
-        "target_table_id": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "advertise_prefixes": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "next_hop": {
-          "type": "string",
-          "description": "next_hop overrides the BGP NEXT_HOP for advertised prefixes. Empty means\nuse local_ip. Must match the local_ip address family."
-        },
-        "dns_records": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1DNSRecord"
-          },
-          "description": "DNS configuration. Records are served authoritatively; names without a\nlocal record are forwarded when dns_forward is enabled. If dns_forward is\nenabled and dns_forwarders is empty, the daemon uses the host resolver\nconfiguration (/etc/resolv.conf)."
-        },
-        "dns_forward": {
-          "type": "boolean"
-        },
-        "dns_forwarders": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "dhcp_options": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1DHCPOption"
-          },
-          "description": "Extra DHCPv4/DHCPv6 options advertised by a DHCP VNF. DNS (v4 option 6,\nv6 option 23) and server-managed options are rejected; use config.dns for\nDNS servers."
-        },
-        "dns_vnf_id": {
-          "type": "string",
-          "format": "int64",
-          "description": "DHCP DNS integration. Select a DNS VNF on the same network; the daemon\ncreates dynamic A/AAAA and PTR records for active DHCP leases. DNSDomain\nis the suffix used when a client does not provide an FQDN; DNSTTL is the\ndynamic record TTL in seconds (0 means the default 300)."
-        },
-        "dns_domain": {
-          "type": "string"
-        },
-        "dns_ttl": {
-          "type": "integer",
-          "format": "int64"
-        }
-      }
-    },
-    "v1VNFDNSRecord": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string"
-        },
-        "value": {
-          "type": "string"
-        },
-        "ttl": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "source": {
-          "type": "string",
-          "description": "source is \"static\" for configured records or \"dhcp\" for lease-derived records."
-        },
-        "source_vnf_id": {
-          "type": "string",
-          "format": "int64"
-        }
-      }
-    },
     "v1VNFLease": {
       "type": "object",
       "properties": {
@@ -8303,7 +10756,8 @@
         "active": {
           "type": "boolean"
         }
-      }
+      },
+      "description": "VNFLease is one DHCP lease reported by a running DHCP VNF. It is shared by\nthe public DHCP VNF service and the internal DHCP daemon service."
     },
     "v1VPPGraph": {
       "type": "object",

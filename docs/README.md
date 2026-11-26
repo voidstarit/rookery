@@ -8,5 +8,6 @@
 | [Networking](networking.md) | VPP networks, interfaces, addresses, ACLs, route tables, host taps, VNFs, NAT44, startup scripts |
 | [API and access](api.md) | mTLS HTTP/gRPC listeners, Terraform provider, protobuf design, endpoint reference |
 | [Development](development.md) | Build, test, UI, release, protobuf generation |
+| [Go review agent](go-review-agent.md) | Review method, Rookery-specific failure modes, severity, and checklist for AI code reviewers |
 | [API design](api-design.md) | Deep protobuf/API generation and validation notes |
 | [Disk throttling classes](designs/disk-throttle-classes.md) | Reusable QEMU disk throttling policy design and implementation plan |

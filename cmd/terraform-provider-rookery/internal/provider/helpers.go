@@ -23,6 +23,11 @@ func int64Value(v types.Int64) int64 {
 	return v.ValueInt64()
 }
 
+// uint32Value narrows v to uint32, returning zero for null or unknown values.
+func uint32Value(v types.Int64) uint32 {
+	return uint32(v.ValueInt64())
+}
+
 // int32Value narrows v to int32, returning zero for null or unknown values.
 func int32Value(v types.Int64) int32 {
 	return int32(v.ValueInt64())
@@ -78,6 +83,17 @@ func stringPointer(v types.String) *string {
 func boolPointer(v types.Bool) *bool {
 	if v.IsNull() || v.IsUnknown() {
 		return nil
+	}
+	value := v.ValueBool()
+	return &value
+}
+
+// boolPointerDefault is boolPointer with an explicit fallback for a null or
+// unknown planned value, used where the schema documents a create default.
+func boolPointerDefault(v types.Bool, fallback bool) *bool {
+	if v.IsNull() || v.IsUnknown() {
+		value := fallback
+		return &value
 	}
 	value := v.ValueBool()
 	return &value
@@ -207,4 +223,69 @@ func importInt64ID(ctx context.Context, req resource.ImportStateRequest, resp *r
 		return
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), types.Int64Value(id))...)
+}
+
+// childImportIDs parses a child import id of the form <vnf_id>:<child_id>.
+func childImportIDs(value string) (int64, int64, error) {
+	parts := strings.Split(strings.TrimSpace(value), ":")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("invalid import id %q: expected <vnf_id>:<child_id>", value)
+	}
+	vnfID, err := parseID(parts[0], "vnf")
+	if err != nil {
+		return 0, 0, err
+	}
+	childID, err := parseID(parts[1], "child")
+	if err != nil {
+		return 0, 0, err
+	}
+	return vnfID, childID, nil
+}
+
+// importChildIDs sets the vnf_id and id attributes from a child import id of
+// the form <vnf_id>:<child_id>.
+func importChildIDs(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	vnfID, childID, err := childImportIDs(req.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Import resource", err.Error())
+		return
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("vnf_id"), types.Int64Value(vnfID))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), types.Int64Value(childID))...)
+}
+
+// sensitiveValue keeps a configured sensitive value while it is known and maps
+// an unresolved value to null so a write-only field can still be stored after
+// apply.
+func sensitiveValue(value types.String) types.String {
+	if value.IsNull() || value.IsUnknown() {
+		return types.StringNull()
+	}
+	return value
+}
+
+// int64Count converts a server-side uint32 count into a Terraform int64 count.
+func int64Count(value uint32) types.Int64 {
+	return types.Int64Value(int64(value))
+}
+
+// findVNFByName returns the single item whose name matches case-insensitively,
+// failing on duplicate matches or no match.
+func findVNFByName[T any](items []T, name string, getName func(T) string) (T, error) {
+	var zero, found T
+	matches := 0
+	for _, item := range items {
+		if strings.EqualFold(getName(item), name) {
+			found = item
+			matches++
+		}
+	}
+	switch matches {
+	case 0:
+		return zero, fmt.Errorf("VNF %q not found", name)
+	case 1:
+		return found, nil
+	default:
+		return zero, fmt.Errorf("multiple VNFs match name %q", name)
+	}
 }

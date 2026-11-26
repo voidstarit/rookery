@@ -133,26 +133,73 @@ access the VPP socket; disk creation and deletion operate on the host.
 
 ## Start the VNF daemon
 
-The API and VNF daemon are separate processes. Start `vnfs` before or alongside
-the API; the API starts even when the daemon is unavailable and reports enabled
-VNFs as `degraded` until it connects.
+The API and VNF daemon are separate processes. For normal operation start `vnfs`
+before or alongside the API; the API starts even when the daemon is unavailable
+and reports enabled VNFs as `degraded` until it connects. The 0061 upgrade below
+is the exception: start the upgraded API before the upgraded daemon.
 
 ```sh
 sudo vnfs -config /etc/rookery/config.yaml
 ```
 
 The daemon owns the CoreDHCP, DNS, gVisor memif, and GoBGP runtimes and restores
-its persisted desired VNFs after a restart. The API owns SQLite and all VPP
+its persisted desired VNFs after a restart. Its control surface is four typed
+internal services (`DHCPDaemon`, `DNSDaemon`, `BGPDaemon`, and
+`VNFRuntimeAdmin`), not one shared VNF call. The API owns SQLite and all VPP
 provisioning (memifs, taps, BVIs, NAT44) and controls the daemon over the
 internal gRPC socket configured by `api.vnf_addr` / `vnf.listen`.
 
-When upgrading both binaries, restart `vnfs` first and then restart
-`rookery serve`. On startup the API re-sends the current database configuration
-to already-running VNFs once; the daemon compares the spec hash and only
-restarts a runtime when the configuration changed. This repairs desired specs
-written by an older daemon, including DHCP DNS integration and the shared stack
-IPv6 address. If `vnfs` is restarted independently after an upgrade, restart
-the API or restart the affected VNFs to re-send their configuration.
+The VNF schema changed in migration `0061_per_type_vnfs.sql`. Upgrading from a
+database that still has `vnfs.config` is a hard cut; follow
+[Upgrade to per-type VNF storage](#upgrade-to-per-type-vnf-storage) rather than
+restarting the binaries in place.
+
+## Upgrade to per-type VNF storage
+
+Migration `0061_per_type_vnfs.sql` replaces the shared `vnfs.config` JSON column
+with typed parent and child tables. Old and new binaries cannot share a
+database, so upgrade the API, daemon, UI, and Terraform provider as one release.
+
+1. Stop the API and then the VNF daemon. Do not run a new binary against the old
+   schema or an old binary against the new schema.
+2. Back up SQLite while both processes are stopped. With the CLI:
+   `sqlite3 /var/lib/rookery/rookery.db ".backup '/var/lib/rookery/rookery-pre-0061.db'"`
+   (use your database path). Copy the backup off the host.
+3. Upgrade `rookery`, `vnfs`, the embedded UI (shipped in the API binary), and
+   `terraform-provider-rookery` together. There is no compatibility window.
+4. Start the API first. `store.Open` runs a read-only preflight and then applies
+   migration 0061 in one transaction. If the preflight fails, the API exits
+   without migrating and reports the VNF IDs and fields to fix.
+5. Start the daemon. The API's startup reconciliation re-sends every enabled VNF
+   through the typed ensure calls. Old daemon `VNFSpec` state files are ignored;
+   the daemon writes `DesiredRuntime` wrappers as the API re-sends the specs.
+6. Verify the four typed lists (`/api/dhcp-vnfs`, `/api/dns-vnfs`,
+   `/api/nat44-vnfs`, `/api/bgp-vnfs`), confirm `/api/vnfs` returns `404`, and
+   check that enabled VNFs are `running` rather than `degraded`. If the API
+   finished its first reconciliation before the daemon was reachable, restart
+   the affected VNF (or the API) to re-send its typed spec.
+7. Move Terraform state with `terraform state rm` and `terraform import`; see
+   the [Terraform notes](agent-notes/terraform.md#state-migration).
+
+### Preflight failure
+
+A preflight error names each offending VNF and field and leaves
+`PRAGMA user_version` at 60, so the API does not start with a partial schema.
+Fix the named rows in the stopped schema-60 database (for example remove a
+duplicate static-assignment MAC or a `dns_vnf_id` that points at another
+network), then start the API again. Restoring the pre-upgrade backup is also
+safe. A message saying the database reports version 61 but still has
+`vnfs.config` and no typed tables means the file carries a pre-release 0061
+stamp: restore the backup rather than retrying.
+
+### Rollback
+
+Stop the API and the daemon, restore the pre-upgrade SQLite backup, reinstall
+the previous `rookery` and `vnfs` binaries (and the matching provider), then
+start the API followed by the daemon. The old schema has no typed tables, so
+records created after the backup are lost; restoring only the binaries without
+the backup leaves a database the old server cannot read. Refresh the UI after
+the rollback so it stops calling the typed endpoints.
 
 ## Logging
 

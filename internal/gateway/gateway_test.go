@@ -139,7 +139,10 @@ func TestSystemAndVMReadOnlyRoutes(t *testing.T) {
 		"/api/networks",
 		"/api/interfaces",
 		"/api/acls",
-		"/api/vnfs",
+		"/api/dhcp-vnfs",
+		"/api/dns-vnfs",
+		"/api/nat44-vnfs",
+		"/api/bgp-vnfs",
 		"/api/storage-backends",
 	} {
 		response := get(path)
@@ -175,7 +178,7 @@ func TestSystemAndVMReadOnlyRoutes(t *testing.T) {
 		"/api/networks/999",
 		"/api/interfaces/999",
 		"/api/acls/999",
-		"/api/vnfs/999",
+		"/api/dhcp-vnfs/999",
 		"/api/storage-backends/999",
 	} {
 		response := get(path)

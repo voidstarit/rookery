@@ -62,6 +62,9 @@ func TestClientUploadTimeoutAndValidation(t *testing.T) {
 	if client.UploadTimeout() != 45*time.Minute || client.LightVMKernels == nil || client.LightVMArtifacts == nil || client.LightVMs == nil {
 		t.Fatalf("client = %+v", client)
 	}
+	if client.DHCPVNFs == nil || client.DNSVNFs == nil || client.NAT44VNFs == nil || client.BGPVNFs == nil {
+		t.Fatalf("typed VNF clients were not constructed: %+v", client)
+	}
 	if _, err := NewClient(ClientConfig{
 		Endpoint: "127.0.0.1:1", CAPEM: certPEM, CertPEM: certPEM, KeyPEM: keyPEM,
 		UploadTimeoutRaw: "not-a-duration",

@@ -311,7 +311,7 @@ func TestNetworkUpdateCIDRs(t *testing.T) {
 	}
 	_ = response.Body.Close()
 
-	if _, err := st.CreateVNF(ctx, store.VNF{Name: "lab-dns", NetworkID: network.ID, Type: store.VNFTypeDNS}); err != nil {
+	if _, err := st.CreateDNSVNF(ctx, store.NewDNSVNF{Name: "lab-dns", NetworkID: network.ID}); err != nil {
 		t.Fatal(err)
 	}
 	request, err = http.NewRequest(http.MethodPut, server.URL+"/api/networks/"+jsonID(network.ID),

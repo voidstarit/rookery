@@ -1,0 +1,301 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// DNSVNFService manages DNS VNFs. Records and forwarders are independent child
+// resources with their own routes; record-views merges the configured static
+// records with the dynamic records registered by DHCP leases.
+service DNSVNFService {
+  rpc ListDNSVNFs(ListDNSVNFsRequest) returns (ListDNSVNFsResponse) {
+    option (google.api.http) = {
+      get: "/api/dns-vnfs"
+      response_body: "vnfs"
+    };
+  }
+
+  rpc GetDNSVNF(GetDNSVNFRequest) returns (DNSVNF) {
+    option (google.api.http) = {get: "/api/dns-vnfs/{id}"};
+  }
+
+  rpc CreateDNSVNF(CreateDNSVNFRequest) returns (DNSVNF) {
+    option (google.api.http) = {
+      post: "/api/dns-vnfs"
+      body: "*"
+    };
+  }
+
+  rpc UpdateDNSVNF(UpdateDNSVNFRequest) returns (DNSVNF) {
+    option (google.api.http) = {
+      put: "/api/dns-vnfs/{id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteDNSVNF(DeleteDNSVNFRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/dns-vnfs/{id}"};
+  }
+
+  rpc RestartDNSVNF(RestartDNSVNFRequest) returns (DNSVNF) {
+    option (google.api.http) = {post: "/api/dns-vnfs/{id}/restart"};
+  }
+
+  // ListDNSVNFRecordViews returns the merged static and DHCP-derived records.
+  rpc ListDNSVNFRecordViews(ListDNSVNFRecordViewsRequest) returns (ListDNSVNFRecordViewsResponse) {
+    option (google.api.http) = {get: "/api/dns-vnfs/{id}/record-views"};
+  }
+
+  rpc ListDNSVNFRecords(ListDNSVNFRecordsRequest) returns (ListDNSVNFRecordsResponse) {
+    option (google.api.http) = {
+      get: "/api/dns-vnfs/{vnf_id}/records"
+      response_body: "records"
+    };
+  }
+
+  rpc GetDNSVNFRecord(GetDNSVNFRecordRequest) returns (DNSRecord) {
+    option (google.api.http) = {get: "/api/dns-vnfs/{vnf_id}/records/{record_id}"};
+  }
+
+  rpc CreateDNSVNFRecord(CreateDNSVNFRecordRequest) returns (DNSRecord) {
+    option (google.api.http) = {
+      post: "/api/dns-vnfs/{vnf_id}/records"
+      body: "*"
+    };
+  }
+
+  rpc UpdateDNSVNFRecord(UpdateDNSVNFRecordRequest) returns (DNSRecord) {
+    option (google.api.http) = {
+      put: "/api/dns-vnfs/{vnf_id}/records/{record_id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteDNSVNFRecord(DeleteDNSVNFRecordRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/dns-vnfs/{vnf_id}/records/{record_id}"};
+  }
+
+  rpc ListDNSVNFForwarders(ListDNSVNFForwardersRequest) returns (ListDNSVNFForwardersResponse) {
+    option (google.api.http) = {
+      get: "/api/dns-vnfs/{vnf_id}/forwarders"
+      response_body: "forwarders"
+    };
+  }
+
+  rpc GetDNSVNFForwarder(GetDNSVNFForwarderRequest) returns (DNSForwarder) {
+    option (google.api.http) = {get: "/api/dns-vnfs/{vnf_id}/forwarders/{forwarder_id}"};
+  }
+
+  rpc CreateDNSVNFForwarder(CreateDNSVNFForwarderRequest) returns (DNSForwarder) {
+    option (google.api.http) = {
+      post: "/api/dns-vnfs/{vnf_id}/forwarders"
+      body: "*"
+    };
+  }
+
+  rpc UpdateDNSVNFForwarder(UpdateDNSVNFForwarderRequest) returns (DNSForwarder) {
+    option (google.api.http) = {
+      put: "/api/dns-vnfs/{vnf_id}/forwarders/{forwarder_id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteDNSVNFForwarder(DeleteDNSVNFForwarderRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/dns-vnfs/{vnf_id}/forwarders/{forwarder_id}"};
+  }
+}
+
+// DNSVNF is one DNS VNF. Records are served authoritatively; names without a
+// local record are forwarded to the configured forwarders when forward is
+// enabled.
+message DNSVNF {
+  int64 id = 1;
+  string name = 2;
+  int64 network_id = 3;
+  string network_name = 4;
+  bool enabled = 5;
+  bool forward = 6;
+  uint32 record_count = 7;
+  uint32 forwarder_count = 8;
+  string status = 9;
+  string status_detail = 10;
+  uint32 tap_sw_if_index = 11;
+  string tap_host_name = 12;
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp updated_at = 14;
+}
+
+message ListDNSVNFsRequest {
+  optional int64 network_id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListDNSVNFsResponse {
+  repeated DNSVNF vnfs = 1;
+}
+
+message GetDNSVNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateDNSVNFRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  int64 network_id = 2 [(validate.rules).int64 = {gt: 0}];
+  optional bool enabled = 3;
+  optional bool forward = 4;
+}
+
+message UpdateDNSVNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  optional string name = 2 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  optional bool enabled = 3;
+  optional bool forward = 4;
+}
+
+message DeleteDNSVNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message RestartDNSVNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+// DNSRecord is one local record served by a DNS VNF. Name is a fully qualified
+// domain name; wildcard names such as *.lab1.test are supported. Type is A,
+// AAAA, CNAME, TXT, or PTR.
+message DNSRecord {
+  int64 id = 1;
+  int64 vnf_id = 2;
+  string name = 3;
+  string type = 4;
+  string value = 5;
+  uint32 ttl = 6;
+}
+
+// DNSForwarder is one upstream resolver. Position orders the forwarders.
+message DNSForwarder {
+  int64 id = 1;
+  int64 vnf_id = 2;
+  string address = 3;
+  int32 position = 4;
+}
+
+// DNSRecordView is a record shown in the merged record view. Source is
+// "static" for configured records or "dhcp" for lease-derived records.
+message DNSRecordView {
+  string name = 1;
+  string type = 2;
+  string value = 3;
+  uint32 ttl = 4;
+  string source = 5;
+  int64 source_vnf_id = 6;
+}
+
+message ListDNSVNFRecordViewsRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListDNSVNFRecordViewsResponse {
+  int64 vnf_id = 1;
+  repeated DNSRecordView records = 2;
+  string dynamic_error = 3;
+}
+
+message ListDNSVNFRecordsRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListDNSVNFRecordsResponse {
+  repeated DNSRecord records = 1;
+}
+
+message GetDNSVNFRecordRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 record_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateDNSVNFRecordRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  string name = 2 [(validate.rules).string = {min_len: 1, max_len: 255}];
+  string type = 3 [(validate.rules).string = {min_len: 1, max_len: 16}];
+  string value = 4 [(validate.rules).string = {min_len: 1, max_len: 512}];
+  uint32 ttl = 5 [(validate.rules).uint32 = {lte: 86400}];
+}
+
+message UpdateDNSVNFRecordRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 record_id = 2 [(validate.rules).int64 = {gt: 0}];
+  string name = 3 [(validate.rules).string = {min_len: 1, max_len: 255}];
+  string type = 4 [(validate.rules).string = {min_len: 1, max_len: 16}];
+  string value = 5 [(validate.rules).string = {min_len: 1, max_len: 512}];
+  uint32 ttl = 6 [(validate.rules).uint32 = {lte: 86400}];
+}
+
+message DeleteDNSVNFRecordRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 record_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListDNSVNFForwardersRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListDNSVNFForwardersResponse {
+  repeated DNSForwarder forwarders = 1;
+}
+
+message GetDNSVNFForwarderRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 forwarder_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateDNSVNFForwarderRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  string address = 2 [(validate.rules).string = {min_len: 1, max_len: 64}];
+  int32 position = 3 [(validate.rules).int32 = {gte: 0, lte: 1024}];
+}
+
+message UpdateDNSVNFForwarderRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 forwarder_id = 2 [(validate.rules).int64 = {gt: 0}];
+  string address = 3 [(validate.rules).string = {min_len: 1, max_len: 64}];
+  int32 position = 4 [(validate.rules).int32 = {gte: 0, lte: 1024}];
+}
+
+message DeleteDNSVNFForwarderRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 forwarder_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+
+// DNSRecordSpec is one record in a runtime config; it has no row identity.
+message DNSRecordSpec {
+  string name = 1;
+  string type = 2;
+  string value = 3;
+  uint32 ttl = 4;
+}
+
+// DNSForwarderSpec is one forwarder in a runtime config.
+message DNSForwarderSpec {
+  string address = 1;
+  int32 position = 2;
+}
+
+// DNSRuntimeConfig is the full DNS configuration sent to the daemon.
+message DNSRuntimeConfig {
+  bool forward = 1;
+  repeated DNSRecordSpec records = 2;
+  repeated DNSForwarderSpec forwarders = 3;
+}

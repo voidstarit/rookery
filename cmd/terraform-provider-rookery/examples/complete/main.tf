@@ -221,37 +221,91 @@ resource "rookery_cgroup_settings" "host" {
   ]
 }
 
-resource "rookery_vnf" "dns" {
+resource "rookery_dns_vnf" "app" {
   name       = "app-dns"
   network_id = rookery_network.app.id
   labels     = ["dns"]
-  type       = "dns"
   enabled    = true
-  config_json = jsonencode({
-    dns_records = [
-      {
-        name  = "router.lab.test"
-        type  = "A"
-        value = "10.20.0.1"
-        ttl   = 300
-      }
-    ]
-    dns_forward = true
-  })
+  forward    = true
 }
 
-resource "rookery_vnf" "dhcp" {
-  name       = "app-dhcp"
-  network_id = rookery_network.app.id
-  type       = "dhcpv4"
-  enabled    = true
-  config_json = jsonencode({
-    gateway     = "10.20.0.1"
-    range_start = "10.20.0.100"
-    range_end   = "10.20.0.200"
-    dns         = "10.20.0.2"
-    dns_vnf_id  = rookery_vnf.dns.id
-    dns_domain  = "lab.test"
-    dns_ttl     = 300
-  })
+resource "rookery_dns_record" "router" {
+  vnf_id = rookery_dns_vnf.app.id
+  name   = "router.lab.test"
+  type   = "A"
+  value  = "10.20.0.1"
+  ttl    = 300
+}
+
+resource "rookery_dns_forwarder" "upstream" {
+  vnf_id   = rookery_dns_vnf.app.id
+  address  = "1.1.1.1"
+  position = 1
+}
+
+resource "rookery_dhcp_vnf" "app" {
+  name        = "app-dhcp"
+  network_id  = rookery_network.app.id
+  family      = "dhcpv4"
+  enabled     = true
+  gateway     = "10.20.0.1/16"
+  range_start = "10.20.0.100"
+  range_end   = "10.20.0.200"
+  dns         = "10.20.0.2"
+  dns_vnf_id  = rookery_dns_vnf.app.id
+  dns_domain  = "lab.test"
+  dns_ttl     = 300
+}
+
+resource "rookery_dhcp_static_assignment" "printer" {
+  vnf_id = rookery_dhcp_vnf.app.id
+  mac    = "02:00:00:00:00:10"
+  ip     = "10.20.0.50"
+}
+
+resource "rookery_dhcp_option" "ntp" {
+  vnf_id = rookery_dhcp_vnf.app.id
+  code   = 42
+  format = "ipv4"
+  value  = "10.20.0.1"
+}
+
+resource "rookery_nat44_vnf" "edge" {
+  name              = "edge-nat"
+  network_id        = rookery_network.app.id
+  enabled           = true
+  gateway           = "10.20.0.1/16"
+  outside_interface = "wan0"
+  outside_address   = "192.0.2.10/24"
+  outside_gateway   = "192.0.2.1"
+  nat44_pool        = "192.0.2.20-192.0.2.30"
+  labels            = ["nat"]
+}
+
+resource "rookery_nat44_dnat_rule" "web" {
+  vnf_id        = rookery_nat44_vnf.edge.id
+  protocol      = "tcp"
+  external_port = 8080
+  local_ip      = "10.20.0.50"
+  local_port    = 80
+}
+
+resource "rookery_bgp_vnf" "edge" {
+  name            = "edge-bgp"
+  network_id      = rookery_network.edge.id
+  enabled         = true
+  transport       = "tap"
+  local_as        = 65001
+  router_id       = "10.21.0.2"
+  peer_as         = 65002
+  peer_ip         = "10.21.0.2"
+  local_ip        = "10.21.0.1/24"
+  multihop_ttl    = 64
+  target_table_id = rookery_route_table.app.table_id
+  labels          = ["bgp"]
+}
+
+resource "rookery_bgp_advertised_prefix" "app" {
+  vnf_id = rookery_bgp_vnf.edge.id
+  prefix = "10.20.0.0/16"
 }

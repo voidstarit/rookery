@@ -10,6 +10,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
@@ -28,7 +29,10 @@ const (
 // the client does not poll the daemon.
 type Client struct {
 	conn   *grpc.ClientConn
-	client rookeryv1.VNFDaemonClient
+	dhcp   rookeryv1.DHCPDaemonClient
+	dns    rookeryv1.DNSDaemonClient
+	bgp    rookeryv1.BGPDaemonClient
+	admin  rookeryv1.VNFRuntimeAdminClient
 	logger zerolog.Logger
 }
 
@@ -46,7 +50,10 @@ func NewClient(addr string, logger zerolog.Logger) (*Client, error) {
 	logger.Trace().Str("target", target).Msg("VNF daemon client created")
 	return &Client{
 		conn:   conn,
-		client: rookeryv1.NewVNFDaemonClient(conn),
+		dhcp:   rookeryv1.NewDHCPDaemonClient(conn),
+		dns:    rookeryv1.NewDNSDaemonClient(conn),
+		bgp:    rookeryv1.NewBGPDaemonClient(conn),
+		admin:  rookeryv1.NewVNFRuntimeAdminClient(conn),
 		logger: logger,
 	}, nil
 }
@@ -71,9 +78,9 @@ func (c *Client) StartShared(ctx context.Context, vnf store.VNF, socketPath stri
 	return c.ensure(ctx, vnf, "shared", "", socketPath, ifID, address, ipv6Address)
 }
 
-// ensure submits a VNF spec for the given transport and endpoint to the daemon
-// and wraps RPC failures with the start action; it backs Start, StartMemif, and
-// StartShared.
+// ensure submits the type-specific runtime spec for the given transport and
+// endpoint to the daemon and wraps RPC failures with the start action; it backs
+// Start, StartMemif, and StartShared.
 func (c *Client) ensure(ctx context.Context, vnf store.VNF, transport, tapHost string, socket string, ifID uint32, sharedAddress, sharedIPv6Address string) error {
 	c.logger.Trace().
 		Int64("vnf_id", vnf.ID).
@@ -86,51 +93,132 @@ func (c *Client) ensure(ctx context.Context, vnf store.VNF, transport, tapHost s
 		Msg("ensuring VNF runtime")
 	callCtx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-	response, err := c.client.EnsureVNF(callCtx, &rookeryv1.EnsureVNFRequest{
-		Vnf: specFor(vnf, transport, tapHost, socket, ifID, sharedAddress, sharedIPv6Address),
-	})
-	if err != nil {
-		c.logger.Trace().Int64("vnf_id", vnf.ID).Str("transport", transport).Err(err).Msg("ensure VNF runtime failed")
-		return grpcError("start VNF", err)
+	runtime := runtimeSpecFor(vnf, transport, tapHost, socket, ifID, sharedAddress, sharedIPv6Address)
+	var running bool
+	switch vnf.Type {
+	case store.VNFTypeDHCPv4, store.VNFTypeDHCPv6:
+		state, err := c.dhcp.EnsureDHCP(callCtx, &rookeryv1.EnsureDHCPRequest{Spec: dhcpRuntimeSpec(vnf, runtime)})
+		if err != nil {
+			c.logger.Trace().Int64("vnf_id", vnf.ID).Str("transport", transport).Err(err).Msg("ensure DHCP runtime failed")
+			return grpcError("start VNF", err)
+		}
+		running = state.GetRunning()
+	case store.VNFTypeDNS:
+		state, err := c.dns.EnsureDNS(callCtx, &rookeryv1.EnsureDNSRequest{Spec: dnsRuntimeSpec(vnf, runtime)})
+		if err != nil {
+			c.logger.Trace().Int64("vnf_id", vnf.ID).Str("transport", transport).Err(err).Msg("ensure DNS runtime failed")
+			return grpcError("start VNF", err)
+		}
+		running = state.GetRunning()
+	case store.VNFTypeBGP:
+		state, err := c.bgp.EnsureBGP(callCtx, &rookeryv1.EnsureBGPRequest{Spec: bgpRuntimeSpec(vnf, runtime)})
+		if err != nil {
+			c.logger.Trace().Int64("vnf_id", vnf.ID).Str("transport", transport).Err(err).Msg("ensure BGP runtime failed")
+			return grpcError("start VNF", err)
+		}
+		running = state.GetRunning()
+	default:
+		return grpcError("start VNF", status.Error(codes.InvalidArgument, "VNF type "+vnf.Type+" is not served by the daemon"))
 	}
-	c.logger.Trace().Int64("vnf_id", vnf.ID).Bool("running", response.GetRunning()).Msg("VNF runtime ensured")
+	c.logger.Trace().Int64("vnf_id", vnf.ID).Bool("running", running).Msg("VNF runtime ensured")
 	return nil
 }
 
-// Stop removes a runtime through the daemon.
-func (c *Client) Stop(ctx context.Context, vnfID int64, removeLeases bool) error {
-	c.logger.Trace().Int64("vnf_id", vnfID).Bool("remove_leases", removeLeases).Msg("removing VNF runtime")
+// Stop removes a runtime through the daemon. NAT44 has no daemon runtime, so
+// stopping it is a no-op.
+func (c *Client) Stop(ctx context.Context, vnf store.VNF, removeLeases bool) error {
+	c.logger.Trace().Int64("vnf_id", vnf.ID).Str("type", vnf.Type).Bool("remove_leases", removeLeases).Msg("removing VNF runtime")
 	callCtx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-	if _, err := c.client.RemoveVNF(callCtx, &rookeryv1.RemoveVNFRequest{Id: vnfID, RemoveLeases: removeLeases}); err != nil {
-		c.logger.Trace().Int64("vnf_id", vnfID).Err(err).Msg("remove VNF runtime failed")
+	var err error
+	switch vnf.Type {
+	case store.VNFTypeDHCPv4, store.VNFTypeDHCPv6:
+		_, err = c.dhcp.RemoveDHCP(callCtx, &rookeryv1.RemoveDHCPRequest{Id: vnf.ID, RemoveLeases: removeLeases})
+	case store.VNFTypeDNS:
+		_, err = c.dns.RemoveDNS(callCtx, &rookeryv1.RemoveDNSRequest{Id: vnf.ID})
+	case store.VNFTypeBGP:
+		_, err = c.bgp.RemoveBGP(callCtx, &rookeryv1.RemoveBGPRequest{Id: vnf.ID})
+	case store.VNFTypeNAT44:
+		return nil
+	default:
+		return grpcError("stop VNF", status.Error(codes.InvalidArgument, "VNF type "+vnf.Type+" is not served by the daemon"))
+	}
+	if err != nil {
+		c.logger.Trace().Int64("vnf_id", vnf.ID).Err(err).Msg("remove VNF runtime failed")
 		return grpcError("stop VNF", err)
 	}
-	c.logger.Trace().Int64("vnf_id", vnfID).Msg("VNF runtime removed")
+	c.logger.Trace().Int64("vnf_id", vnf.ID).Msg("VNF runtime removed")
 	return nil
 }
 
 // Running asks the daemon whether a runtime is currently alive. It is only
 // called when a caller needs the state (a view or a reconciliation decision),
-// never by a background poll.
-func (c *Client) Running(ctx context.Context, vnfID int64) bool {
-	callCtx, cancel := context.WithTimeout(ctx, statusTimeout)
-	defer cancel()
-	state, err := c.client.GetVNFState(callCtx, &rookeryv1.GetVNFStateRequest{Id: vnfID})
-	if err != nil {
-		c.logger.Trace().Int64("vnf_id", vnfID).Err(err).Msg("VNF state query failed")
+// never by a background poll. NAT44 has no daemon runtime and is never running.
+func (c *Client) Running(ctx context.Context, vnf store.VNF) bool {
+	switch vnf.Type {
+	case store.VNFTypeDHCPv4, store.VNFTypeDHCPv6, store.VNFTypeDNS, store.VNFTypeBGP:
+	default:
 		return false
 	}
-	c.logger.Trace().Int64("vnf_id", vnfID).Bool("running", state.GetRunning()).Msg("VNF state queried")
+	callCtx, cancel := context.WithTimeout(ctx, statusTimeout)
+	defer cancel()
+	state, err := c.state(callCtx, vnf)
+	if err != nil {
+		c.logger.Trace().Int64("vnf_id", vnf.ID).Str("type", vnf.Type).Err(err).Msg("VNF state query failed")
+		return false
+	}
+	c.logger.Trace().Int64("vnf_id", vnf.ID).Bool("running", state.GetRunning()).Msg("VNF state queried")
 	return state.GetRunning()
 }
 
-// Leases returns the daemon's persisted leases for a VNF.
+// state queries the per-type state RPC.
+func (c *Client) state(ctx context.Context, vnf store.VNF) (*rookeryv1.VNFState, error) {
+	switch vnf.Type {
+	case store.VNFTypeDHCPv4, store.VNFTypeDHCPv6:
+		return c.dhcp.GetDHCPState(ctx, &rookeryv1.GetDHCPStateRequest{Id: vnf.ID})
+	case store.VNFTypeDNS:
+		return c.dns.GetDNSState(ctx, &rookeryv1.GetDNSStateRequest{Id: vnf.ID})
+	case store.VNFTypeBGP:
+		return c.bgp.GetBGPState(ctx, &rookeryv1.GetBGPStateRequest{Id: vnf.ID})
+	}
+	return nil, status.Error(codes.InvalidArgument, "VNF type "+vnf.Type+" is not served by the daemon")
+}
+
+// ReloadVNF swaps a running runtime's configuration in place. It returns nil
+// when the runtime is not running; the VNF then stays degraded. NAT44 has no
+// daemon runtime, so reloading it is a no-op.
+func (c *Client) ReloadVNF(ctx context.Context, vnf store.VNF) error {
+	c.logger.Trace().Int64("vnf_id", vnf.ID).Str("type", vnf.Type).Msg("reloading VNF runtime")
+	callCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+	runtime := runtimeSpecFor(vnf, vnf.Config.Transport, vnf.TapHostName, vnf.MemifSocket, vnf.MemifSwIfIndex, "", "")
+	var err error
+	switch vnf.Type {
+	case store.VNFTypeDHCPv4, store.VNFTypeDHCPv6:
+		_, err = c.dhcp.ReloadDHCP(callCtx, &rookeryv1.ReloadDHCPRequest{Spec: dhcpRuntimeSpec(vnf, runtime)})
+	case store.VNFTypeDNS:
+		_, err = c.dns.ReloadDNS(callCtx, &rookeryv1.ReloadDNSRequest{Spec: dnsRuntimeSpec(vnf, runtime)})
+	case store.VNFTypeBGP:
+		_, err = c.bgp.ReloadBGP(callCtx, &rookeryv1.ReloadBGPRequest{Spec: bgpRuntimeSpec(vnf, runtime)})
+	case store.VNFTypeNAT44:
+		return nil
+	default:
+		return grpcError("reload VNF", status.Error(codes.InvalidArgument, "VNF type "+vnf.Type+" is not served by the daemon"))
+	}
+	if err != nil {
+		c.logger.Trace().Int64("vnf_id", vnf.ID).Err(err).Msg("reload VNF runtime failed")
+		return grpcError("reload VNF", err)
+	}
+	c.logger.Trace().Int64("vnf_id", vnf.ID).Msg("VNF runtime reloaded")
+	return nil
+}
+
+// Leases returns the daemon's persisted leases for a DHCP VNF.
 func (c *Client) Leases(ctx context.Context, vnfID int64) ([]store.VNFLease, error) {
 	c.logger.Trace().Int64("vnf_id", vnfID).Msg("reading VNF leases")
 	callCtx, cancel := context.WithTimeout(ctx, statusTimeout)
 	defer cancel()
-	response, err := c.client.ListLeases(callCtx, &rookeryv1.ListLeasesRequest{Id: vnfID})
+	response, err := c.dhcp.ListDHCPLeases(callCtx, &rookeryv1.ListDHCPLeasesRequest{Id: vnfID})
 	if err != nil {
 		c.logger.Trace().Int64("vnf_id", vnfID).Err(err).Msg("read VNF leases failed")
 		return nil, grpcError("read VNF leases", err)
@@ -154,7 +242,7 @@ func (c *Client) Leases(ctx context.Context, vnfID int64) ([]store.VNFLease, err
 func (c *Client) RemoveLeases(ctx context.Context, vnfID int64, clientIDs []string) (int, error) {
 	callCtx, cancel := context.WithTimeout(ctx, statusTimeout)
 	defer cancel()
-	response, err := c.client.RemoveLeases(callCtx, &rookeryv1.RemoveLeasesRequest{
+	response, err := c.dhcp.RemoveDHCPLeases(callCtx, &rookeryv1.RemoveDHCPLeasesRequest{
 		Id: vnfID, ClientIds: clientIDs,
 	})
 	if err != nil {
@@ -173,7 +261,7 @@ func (c *Client) RemoveLeases(ctx context.Context, vnfID int64, clientIDs []stri
 func (c *Client) DNSRecords(ctx context.Context, vnfID int64) ([]host.DNSRecordView, error) {
 	callCtx, cancel := context.WithTimeout(ctx, statusTimeout)
 	defer cancel()
-	response, err := c.client.ListDNSRecords(callCtx, &rookeryv1.ListDNSRecordsRequest{Id: vnfID})
+	response, err := c.dns.ListDNSRecords(callCtx, &rookeryv1.ListDNSRecordsRequest{Id: vnfID})
 	if err != nil {
 		return nil, grpcError("read DNS records", err)
 	}
@@ -192,7 +280,7 @@ func (c *Client) BGPStatus(ctx context.Context, vnfID int64) (host.BGPStatus, er
 	c.logger.Trace().Int64("vnf_id", vnfID).Msg("reading BGP status")
 	callCtx, cancel := context.WithTimeout(ctx, statusTimeout)
 	defer cancel()
-	response, err := c.client.GetBGPStatus(callCtx, &rookeryv1.GetBGPStatusRequest{Id: vnfID})
+	response, err := c.bgp.GetBGPStatus(callCtx, &rookeryv1.GetBGPStatusRequest{Id: vnfID})
 	if err != nil {
 		c.logger.Trace().Int64("vnf_id", vnfID).Err(err).Msg("read BGP status failed")
 		return host.BGPStatus{}, grpcError("read BGP status", err)
@@ -228,7 +316,7 @@ func (c *Client) CleanupLegacyNetwork(networkID int64) {
 	c.logger.Trace().Int64("network_id", networkID).Msg("cleaning up legacy VNF runtime")
 	ctx, cancel := context.WithTimeout(context.Background(), statusTimeout)
 	defer cancel()
-	if _, err := c.client.CleanupLegacyNetwork(ctx, &rookeryv1.CleanupLegacyNetworkRequest{NetworkId: networkID}); err != nil {
+	if _, err := c.admin.CleanupLegacyNetwork(ctx, &rookeryv1.CleanupLegacyNetworkRequest{NetworkId: networkID}); err != nil {
 		c.logger.Warn().Int64("network_id", networkID).Err(err).Msg("cleanup legacy VNF runtime failed")
 	}
 }
@@ -238,7 +326,7 @@ func (c *Client) ResetRuntime(ctx context.Context) error {
 	c.logger.Trace().Msg("resetting VNF runtimes")
 	callCtx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-	if _, err := c.client.ResetRuntime(callCtx, &rookeryv1.ResetRuntimeRequest{}); err != nil {
+	if _, err := c.admin.ResetRuntime(callCtx, &rookeryv1.ResetRuntimeRequest{}); err != nil {
 		c.logger.Trace().Err(err).Msg("reset VNF runtimes failed")
 		return grpcError("reset VNF runtime", err)
 	}
@@ -250,19 +338,26 @@ func (c *Client) ResetRuntime(ctx context.Context) error {
 // status message, falling back to err's text for non-status errors.
 func grpcError(action string, err error) error {
 	if st, ok := status.FromError(err); ok {
-		return &clientError{action: action, message: st.Message()}
+		return &clientError{action: action, message: st.Message(), code: st.Code()}
 	}
-	return &clientError{action: action, message: err.Error()}
+	return &clientError{action: action, message: err.Error(), code: codes.Unknown}
 }
 
 type clientError struct {
 	action  string
 	message string
+	code    codes.Code
 }
 
 // Error renders the clientError as "<action>: <message>" for logs and error
 // wrapping.
 func (e *clientError) Error() string { return e.action + ": " + e.message }
+
+// GRPCStatus preserves the daemon status code for callers that distinguish a
+// lost desired spec (NotFound) from a transient daemon failure.
+func (e *clientError) GRPCStatus() *status.Status {
+	return status.New(e.code, e.message)
+}
 
 // dialTarget turns the daemon address into a gRPC target.
 func dialTarget(addr string) (string, error) {
@@ -315,15 +410,26 @@ func Listen(addr string) (net.Listener, error) {
 	return nil, &clientError{action: "VNF daemon listen address", message: "must be unix:///path or tcp://host:port"}
 }
 
-// specFor builds the control spec from an API-side VNF record.
-func specFor(vnf store.VNF, transport, tapHost string, socket string, ifID uint32, sharedAddress, sharedIPv6Address string) *rookeryv1.VNFSpec {
-	return &rookeryv1.VNFSpec{
+// runtimeSpecFor builds the shared runtime identity and transport fields from
+// an API-side VNF record.
+func runtimeSpecFor(vnf store.VNF, transport, tapHost string, socket string, ifID uint32, sharedAddress, sharedIPv6Address string) *rookeryv1.RuntimeSpec {
+	if strings.TrimSpace(transport) == "" {
+		transport = vnf.Config.Transport
+	}
+	if strings.TrimSpace(tapHost) == "" {
+		tapHost = vnf.TapHostName
+	}
+	if strings.TrimSpace(socket) == "" {
+		socket = vnf.MemifSocket
+	}
+	if ifID == 0 {
+		ifID = vnf.MemifSwIfIndex
+	}
+	return &rookeryv1.RuntimeSpec{
 		Id:                vnf.ID,
 		Name:              vnf.Name,
-		Type:              vnf.Type,
 		NetworkId:         vnf.NetworkID,
 		Transport:         transport,
-		Config:            configToProto(vnf.Config),
 		TapHostName:       tapHost,
 		MemifSocket:       socket,
 		MemifSwIfIndex:    ifID,
@@ -332,49 +438,101 @@ func specFor(vnf store.VNF, transport, tapHost string, socket string, ifID uint3
 	}
 }
 
-// configToProto mirrors the gateway's VNF config mapping.
-func configToProto(config store.VNFConfig) *rookeryv1.VNFConfig {
-	static := make([]*rookeryv1.DHCPStaticAssignment, 0, len(config.StaticAssignments))
-	for _, assignment := range config.StaticAssignments {
-		static = append(static, &rookeryv1.DHCPStaticAssignment{Mac: assignment.MAC, Ip: assignment.IP})
+// dhcpRuntimeSpec builds the full DHCPv4/DHCPv6 runtime spec for a VNF.
+func dhcpRuntimeSpec(vnf store.VNF, runtime *rookeryv1.RuntimeSpec) *rookeryv1.DHCPRuntimeSpec {
+	spec := &rookeryv1.DHCPRuntimeSpec{Runtime: runtime, Family: vnf.Type}
+	options := dhcpOptionsToProto(vnf.Config.DHCPOptions)
+	switch vnf.Type {
+	case store.VNFTypeDHCPv6:
+		spec.Config = &rookeryv1.DHCPRuntimeSpec_Dhcpv6{Dhcpv6: &rookeryv1.DHCPV6RuntimeConfig{
+			Gateway:    vnf.Config.Gateway,
+			RangeStart: vnf.Config.RangeStart,
+			RangeEnd:   vnf.Config.RangeEnd,
+			LeaseTime:  vnf.Config.LeaseTime,
+			Dns:        vnf.Config.DNS,
+			BindIp:     vnf.Config.BindIP,
+			DnsVnfId:   vnf.Config.DNSVNFID,
+			DnsDomain:  vnf.Config.DNSDomain,
+			DnsTtl:     vnf.Config.DNSTTL,
+			Options:    options,
+		}}
+	default:
+		static := make([]*rookeryv1.DHCPStaticAssignmentSpec, 0, len(vnf.Config.StaticAssignments))
+		for _, assignment := range vnf.Config.StaticAssignments {
+			static = append(static, &rookeryv1.DHCPStaticAssignmentSpec{Mac: assignment.MAC, Ip: assignment.IP})
+		}
+		spec.Family = store.VNFTypeDHCPv4
+		spec.Config = &rookeryv1.DHCPRuntimeSpec_Dhcpv4{Dhcpv4: &rookeryv1.DHCPV4RuntimeConfig{
+			Gateway:           vnf.Config.Gateway,
+			RangeStart:        vnf.Config.RangeStart,
+			RangeEnd:          vnf.Config.RangeEnd,
+			LeaseTime:         vnf.Config.LeaseTime,
+			Dns:               vnf.Config.DNS,
+			BindIp:            vnf.Config.BindIP,
+			DnsVnfId:          vnf.Config.DNSVNFID,
+			DnsDomain:         vnf.Config.DNSDomain,
+			DnsTtl:            vnf.Config.DNSTTL,
+			StaticAssignments: static,
+			Options:           options,
+		}}
 	}
-	dnat := make([]*rookeryv1.DNATRule, 0, len(config.DNATRules))
-	for _, rule := range config.DNATRules {
-		dnat = append(dnat, &rookeryv1.DNATRule{
-			Protocol: rule.Protocol, ExternalPort: int32(rule.ExternalPort),
-			LocalIp: rule.LocalIP, LocalPort: int32(rule.LocalPort),
-		})
-	}
-	dnsRecords := make([]*rookeryv1.DNSRecord, 0, len(config.DNSRecords))
-	for _, record := range config.DNSRecords {
-		dnsRecords = append(dnsRecords, &rookeryv1.DNSRecord{
+	return spec
+}
+
+// dnsRuntimeSpec builds the full DNS runtime spec for a VNF.
+func dnsRuntimeSpec(vnf store.VNF, runtime *rookeryv1.RuntimeSpec) *rookeryv1.DNSRuntimeSpec {
+	records := make([]*rookeryv1.DNSRecordSpec, 0, len(vnf.Config.DNSRecords))
+	for _, record := range vnf.Config.DNSRecords {
+		records = append(records, &rookeryv1.DNSRecordSpec{
 			Name: record.Name, Type: record.Type, Value: record.Value, Ttl: record.TTL,
 		})
 	}
-	dhcpOptions := make([]*rookeryv1.DHCPOption, 0, len(config.DHCPOptions))
-	for _, option := range config.DHCPOptions {
-		dhcpOptions = append(dhcpOptions, &rookeryv1.DHCPOption{
+	forwarders := make([]*rookeryv1.DNSForwarderSpec, 0, len(vnf.Config.DNSForwarders))
+	for index, address := range vnf.Config.DNSForwarders {
+		forwarders = append(forwarders, &rookeryv1.DNSForwarderSpec{Address: address, Position: int32(index)})
+	}
+	return &rookeryv1.DNSRuntimeSpec{
+		Runtime: runtime,
+		Config: &rookeryv1.DNSRuntimeConfig{
+			Forward:    vnf.Config.DNSForward,
+			Records:    records,
+			Forwarders: forwarders,
+		},
+	}
+}
+
+// bgpRuntimeSpec builds the full BGP runtime spec for a VNF.
+func bgpRuntimeSpec(vnf store.VNF, runtime *rookeryv1.RuntimeSpec) *rookeryv1.BGPRuntimeSpec {
+	prefixes := make([]*rookeryv1.BGPPrefixSpec, 0, len(vnf.Config.AdvertisePrefixes))
+	for _, prefix := range vnf.Config.AdvertisePrefixes {
+		prefixes = append(prefixes, &rookeryv1.BGPPrefixSpec{Prefix: prefix})
+	}
+	return &rookeryv1.BGPRuntimeSpec{
+		Runtime: runtime,
+		Config: &rookeryv1.BGPRuntimeConfig{
+			LocalAs:            vnf.Config.LocalAS,
+			RouterId:           vnf.Config.RouterID,
+			PeerAs:             vnf.Config.PeerAS,
+			PeerIp:             vnf.Config.PeerIP,
+			LocalIp:            vnf.Config.LocalIP,
+			PeerGateway:        vnf.Config.PeerGateway,
+			MultihopTtl:        vnf.Config.MultihopTTL,
+			Password:           vnf.Config.Password,
+			Passive:            vnf.Config.Passive,
+			TargetTableId:      vnf.Config.TargetTableID,
+			NextHop:            vnf.Config.NextHop,
+			AdvertisedPrefixes: prefixes,
+		},
+	}
+}
+
+// dhcpOptionsToProto converts extra DHCPv4/v6 options.
+func dhcpOptionsToProto(options []store.DHCPOption) []*rookeryv1.DHCPOptionSpec {
+	items := make([]*rookeryv1.DHCPOptionSpec, 0, len(options))
+	for _, option := range options {
+		items = append(items, &rookeryv1.DHCPOptionSpec{
 			Code: uint32(option.Code), Format: option.Format, Value: option.Value,
 		})
 	}
-	return &rookeryv1.VNFConfig{
-		Gateway: config.Gateway, RangeStart: config.RangeStart, RangeEnd: config.RangeEnd,
-		Dns: config.DNS, LeaseTime: config.LeaseTime, BindIp: config.BindIP,
-		StaticAssignments: static, OutsideInterface: config.OutsideInterface,
-		OutsideAddress: config.OutsideAddress, OutsideGateway: config.OutsideGateway,
-		Nat44Pool: config.NAT44Pool, DnatRules: dnat,
-		Transport: config.Transport, LocalAs: config.LocalAS, RouterId: config.RouterID,
-		PeerAs: config.PeerAS, PeerIp: config.PeerIP, LocalIp: config.LocalIP,
-		PeerGateway: config.PeerGateway, MultihopTtl: config.MultihopTTL,
-		Password: config.Password, Passive: config.Passive, TargetTableId: config.TargetTableID,
-		AdvertisePrefixes: append([]string(nil), config.AdvertisePrefixes...),
-		NextHop:           config.NextHop,
-		DnsRecords:        dnsRecords,
-		DnsForward:        config.DNSForward,
-		DnsForwarders:     append([]string(nil), config.DNSForwarders...),
-		DnsVnfId:          config.DNSVNFID,
-		DnsDomain:         config.DNSDomain,
-		DnsTtl:            config.DNSTTL,
-		DhcpOptions:       dhcpOptions,
-	}
+	return items
 }

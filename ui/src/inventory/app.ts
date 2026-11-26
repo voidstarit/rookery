@@ -35,7 +35,7 @@ const tabMeta: Record<TabName, TabMeta> = {
   vnfs: {
     eyebrow: "Network functions",
     title: "VNFs",
-    lede: "Attach DHCPv4 and DHCPv6 functions to Rookery Networks, enable them, and inspect their leases.",
+    lede: "Attach DHCP, DNS, NAT44, and BGP functions to Rookery Networks, enable them, and inspect leases, records, sessions, and status.",
   },
   lightvm: {
     eyebrow: "LightVM inventory",

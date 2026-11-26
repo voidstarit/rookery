@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -92,10 +91,6 @@ var (
 	ErrNetworkHostTapNotFound = errors.New("network host tap not found")
 	// ErrNetworkHostTapNameTaken is returned when a host interface name is already in use.
 	ErrNetworkHostTapNameTaken = errors.New("network host tap name already exists")
-	// ErrVNFNotFound is returned when a network function does not exist.
-	ErrVNFNotFound = errors.New("vnf not found")
-	// ErrVNFNameTaken is returned when a network function name is already in use.
-	ErrVNFNameTaken = errors.New("vnf name already exists")
 	// ErrACLNotFound is returned when an ACL does not exist.
 	ErrACLNotFound = errors.New("acl not found")
 	// ErrACLNameTaken is returned when an ACL name is already in use.
@@ -305,145 +300,6 @@ type StartupScript struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 }
 
-const (
-	// VNFTypeDHCPv4 is a DHCPv4 server function.
-	VNFTypeDHCPv4 = "dhcpv4"
-	// VNFTypeDHCPv6 is a DHCPv6 server function.
-	VNFTypeDHCPv6 = "dhcpv6"
-	// VNFTypeNAT44 is a VPP NAT44 function.
-	VNFTypeNAT44 = "nat44"
-	// VNFTypeBGP is an embedded IPv4 BGP speaker.
-	VNFTypeBGP = "bgp"
-	// VNFTypeDNS is a local DNS server with optional upstream forwarding.
-	VNFTypeDNS = "dns"
-)
-
-// ValidVNFType reports whether type is a supported network function.
-func ValidVNFType(vnfType string) bool {
-	return vnfType == VNFTypeDHCPv4 || vnfType == VNFTypeDHCPv6 || vnfType == VNFTypeNAT44 || vnfType == VNFTypeBGP || vnfType == VNFTypeDNS
-}
-
-// VNFConfig is the shared configuration for DHCP network functions. IPv4 and
-// IPv6 functions use the same fields with addresses in the corresponding family.
-type VNFConfig struct {
-	Gateway    string `json:"gateway"`
-	RangeStart string `json:"range_start"`
-	RangeEnd   string `json:"range_end"`
-	DNS        string `json:"dns,omitempty"`
-	LeaseTime  string `json:"lease_time,omitempty"`
-
-	// BindIP is the address assigned to a DHCP VNF's Linux tap. It is normally
-	// empty (the gateway is used). On a NAT network it is the .2 address so the
-	// BVI can own the .1 gateway.
-	BindIP string `json:"bind_ip,omitempty"`
-
-	// StaticAssignments reserve IPv4 addresses for specific MAC addresses.
-	StaticAssignments []DHCPStaticAssignment `json:"static_assignments,omitempty"`
-
-	// NAT44 configuration.
-	OutsideInterface string `json:"outside_interface,omitempty"`
-	OutsideAddress   string `json:"outside_address,omitempty"`
-	OutsideGateway   string `json:"outside_gateway,omitempty"`
-	NAT44Pool        string `json:"nat44_pool,omitempty"`
-
-	// DNATRules expose services on the NAT44 network to clients on the
-	// outside interface. The external address is the outside interface's
-	// address, so rules keep working when the address is DHCP-assigned.
-	DNATRules []DNATRule `json:"dnat_rules,omitempty"`
-
-	// BGP configuration. Address family follows LocalIP (IPv4 or IPv6).
-	Transport         string   `json:"transport,omitempty"`
-	LocalAS           uint32   `json:"local_as,omitempty"`
-	RouterID          string   `json:"router_id,omitempty"`
-	PeerAS            uint32   `json:"peer_as,omitempty"`
-	PeerIP            string   `json:"peer_ip,omitempty"`
-	LocalIP           string   `json:"local_ip,omitempty"`
-	PeerGateway       string   `json:"peer_gateway,omitempty"`
-	MultihopTTL       uint32   `json:"multihop_ttl,omitempty"`
-	Password          string   `json:"password,omitempty"`
-	Passive           bool     `json:"passive,omitempty"`
-	TargetTableID     uint32   `json:"target_table_id,omitempty"`
-	AdvertisePrefixes []string `json:"advertise_prefixes,omitempty"`
-	// NextHop overrides the NEXT_HOP announced with advertised prefixes.
-	// Empty means LocalIP is advertised.
-	NextHop string `json:"next_hop,omitempty"`
-
-	// DNS configuration. Records are served authoritatively; names without a
-	// local record are forwarded when Forward is enabled.
-	DNSRecords    []DNSRecord `json:"dns_records,omitempty"`
-	DNSForward    bool        `json:"dns_forward,omitempty"`
-	DNSForwarders []string    `json:"dns_forwarders,omitempty"`
-
-	// DHCP DNS integration. A DHCPv4/DHCPv6 VNF can register dynamic A/AAAA
-	// and PTR records for its leases in another DNS VNF on the same network.
-	// DNSDomain is the suffix used when the client does not send a FQDN;
-	// DNSTTL defaults to 300 seconds.
-	DNSVNFID  int64  `json:"dns_vnf_id,omitempty"`
-	DNSDomain string `json:"dns_domain,omitempty"`
-	DNSTTL    uint32 `json:"dns_ttl,omitempty"`
-
-	// DHCPOptions are extra DHCPv4/DHCPv6 options advertised by a DHCP VNF.
-	// Code is the DHCP option code; Format controls how Value is encoded.
-	DHCPOptions []DHCPOption `json:"dhcp_options,omitempty"`
-}
-
-// DHCPOption is one extra option advertised by a DHCP VNF.
-type DHCPOption struct {
-	Code   uint16 `json:"code"`
-	Format string `json:"format"`
-	Value  string `json:"value"`
-}
-
-// DNSRecord is one authoritative record served by a DNS VNF.
-type DNSRecord struct {
-	Name  string `json:"name"`
-	Type  string `json:"type"`
-	Value string `json:"value"`
-	TTL   uint32 `json:"ttl,omitempty"`
-}
-
-// DHCPStaticAssignment reserves one IPv4 address for a MAC address.
-type DHCPStaticAssignment struct {
-	MAC string `json:"mac"`
-	IP  string `json:"ip"`
-}
-
-// DNATRule forwards one external TCP or UDP port to an address inside a NAT44
-// network.
-type DNATRule struct {
-	Protocol     string `json:"protocol"`
-	ExternalPort int    `json:"external_port"`
-	LocalIP      string `json:"local_ip"`
-	LocalPort    int    `json:"local_port"`
-}
-
-// VNF is a network function attached to a Rookery Network.
-type VNF struct {
-	ID             int64     `json:"id"`
-	Name           string    `json:"name"`
-	NetworkID      int64     `json:"network_id"`
-	NetworkName    string    `json:"network_name"`
-	Type           string    `json:"type"`
-	Enabled        bool      `json:"enabled"`
-	Config         VNFConfig `json:"config"`
-	TapSwIfIndex   uint32    `json:"tap_sw_if_index,omitempty"`
-	TapHostName    string    `json:"tap_host_name,omitempty"`
-	MemifSwIfIndex uint32    `json:"memif_sw_if_index,omitempty"`
-	MemifSocket    string    `json:"memif_socket,omitempty"`
-	MemifHostName  string    `json:"memif_host_name,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-}
-
-// VNFLease is one address handed out by a DHCP network function.
-type VNFLease struct {
-	ClientID  string    `json:"client_id"`
-	Address   string    `json:"address"`
-	Hostname  string    `json:"hostname,omitempty"`
-	ExpiresAt time.Time `json:"expires_at"`
-	Active    bool      `json:"active"`
-}
-
 // ACLRule is one ordered permit/deny rule in an ACL.
 type ACLRule struct {
 	Action               string `json:"action"`
@@ -631,6 +487,10 @@ func Open(dbPath string) (*Store, error) {
 	}
 
 	if err := reportLegacyDiskConflicts(ctx, db); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := preflightVNFMigration(ctx, db); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -2025,140 +1885,6 @@ func (s *Store) SetNetworkDHCP(ctx context.Context, id int64, network Network) (
 	return s.GetNetwork(ctx, id)
 }
 
-// CreateVNF inserts a network function record.
-func (s *Store) CreateVNF(ctx context.Context, vnf VNF) (VNF, error) {
-	if _, err := s.GetNetwork(ctx, vnf.NetworkID); err != nil {
-		return VNF{}, err
-	}
-	config, err := json.Marshal(vnf.Config)
-	if err != nil {
-		return VNF{}, fmt.Errorf("encode vnf config: %w", err)
-	}
-
-	now := time.Now().UTC().UnixMilli()
-	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO vnfs
-			(name, network_id, type, enabled, config, tap_sw_if_index,
-			 tap_host_name, memif_sw_if_index, memif_socket, memif_host_name,
-			 created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		vnf.Name, vnf.NetworkID, vnf.Type, vnf.Enabled, string(config),
-		vnf.TapSwIfIndex, vnf.TapHostName, vnf.MemifSwIfIndex, vnf.MemifSocket,
-		vnf.MemifHostName, now, now,
-	)
-	if err != nil {
-		if isUniqueViolation(err) {
-			return VNF{}, fmt.Errorf("%w: %q", ErrVNFNameTaken, vnf.Name)
-		}
-		return VNF{}, fmt.Errorf("insert vnf: %w", err)
-	}
-
-	id, err := res.LastInsertId()
-	if err != nil {
-		return VNF{}, fmt.Errorf("read inserted vnf id: %w", err)
-	}
-	return s.GetVNF(ctx, id)
-}
-
-// ListVNFs returns network functions ordered by name, optionally filtered by network.
-func (s *Store) ListVNFs(ctx context.Context, networkID *int64) ([]VNF, error) {
-	query := vnfSelect
-	args := make([]any, 0, 1)
-	if networkID != nil {
-		query += ` WHERE f.network_id = ?`
-		args = append(args, *networkID)
-	}
-	query += ` ORDER BY f.name COLLATE NOCASE, f.id`
-
-	rows, err := s.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("query vnfs: %w", err)
-	}
-	defer rows.Close()
-
-	vnfs := make([]VNF, 0)
-	for rows.Next() {
-		vnf, err := scanVNF(rows)
-		if err != nil {
-			return nil, err
-		}
-		vnfs = append(vnfs, vnf)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate vnfs: %w", err)
-	}
-	return vnfs, nil
-}
-
-// ListVNFsByNetwork returns the network functions attached to one network.
-func (s *Store) ListVNFsByNetwork(ctx context.Context, networkID int64) ([]VNF, error) {
-	return s.ListVNFs(ctx, &networkID)
-}
-
-// GetVNF returns one network function by ID.
-func (s *Store) GetVNF(ctx context.Context, id int64) (VNF, error) {
-	row := s.db.QueryRowContext(ctx, vnfSelect+`
-		WHERE f.id = ?`, id)
-
-	vnf, err := scanVNF(row)
-	if errors.Is(err, sql.ErrNoRows) {
-		return VNF{}, ErrVNFNotFound
-	}
-	if err != nil {
-		return VNF{}, err
-	}
-	return vnf, nil
-}
-
-// UpdateVNF updates the mutable fields of a network function.
-func (s *Store) UpdateVNF(ctx context.Context, id int64, vnf VNF) (VNF, error) {
-	config, err := json.Marshal(vnf.Config)
-	if err != nil {
-		return VNF{}, fmt.Errorf("encode vnf config: %w", err)
-	}
-	now := time.Now().UTC().UnixMilli()
-	res, err := s.db.ExecContext(ctx, `
-		UPDATE vnfs
-		SET name = ?, enabled = ?, config = ?, tap_sw_if_index = ?,
-		    tap_host_name = ?, memif_sw_if_index = ?, memif_socket = ?,
-		    memif_host_name = ?, updated_at = ?
-		WHERE id = ?`,
-		vnf.Name, vnf.Enabled, string(config), vnf.TapSwIfIndex,
-		vnf.TapHostName, vnf.MemifSwIfIndex, vnf.MemifSocket, vnf.MemifHostName,
-		now, id,
-	)
-	if err != nil {
-		if isUniqueViolation(err) {
-			return VNF{}, fmt.Errorf("%w: %q", ErrVNFNameTaken, vnf.Name)
-		}
-		return VNF{}, fmt.Errorf("update vnf: %w", err)
-	}
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return VNF{}, fmt.Errorf("read updated rows: %w", err)
-	}
-	if affected == 0 {
-		return VNF{}, ErrVNFNotFound
-	}
-	return s.GetVNF(ctx, id)
-}
-
-// DeleteVNF removes a network function record.
-func (s *Store) DeleteVNF(ctx context.Context, id int64) error {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM vnfs WHERE id = ?`, id)
-	if err != nil {
-		return fmt.Errorf("delete vnf: %w", err)
-	}
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("read deleted rows: %w", err)
-	}
-	if affected == 0 {
-		return ErrVNFNotFound
-	}
-	return nil
-}
-
 // SetNetworkBVI updates the bridge-domain BVI metadata for a network.
 func (s *Store) SetNetworkBVI(ctx context.Context, id int64, hostName string, swIfIndex uint32, gateway string) (Network, error) {
 	now := time.Now().UTC().UnixMilli()
@@ -2789,13 +2515,6 @@ const networkSelect = `
 	       n.route_table_id, n.created_at, n.updated_at
 	FROM networks AS n`
 
-const vnfSelect = `
-	SELECT f.id, f.name, f.network_id, n.name, f.type, f.enabled, f.config,
-	       f.tap_sw_if_index, f.tap_host_name, f.memif_sw_if_index, f.memif_socket,
-	       f.memif_host_name, f.created_at, f.updated_at
-	FROM vnfs AS f
-	JOIN networks AS n ON n.id = f.network_id`
-
 const interfaceSelect = `
 	SELECT i.id, i.name, i.network_id, n.name, i.socket_path, i.mac, i.sw_if_index,
 	       i.attached_vm_id, v.name, li.lightvm_id, lv.name,
@@ -2847,39 +2566,6 @@ func scanNetwork(s scanner) (Network, error) {
 	network.CreatedAt = time.UnixMilli(createdAt).UTC()
 	network.UpdatedAt = time.UnixMilli(updatedAt).UTC()
 	return network, nil
-}
-
-// scanVNF decodes one joined VNF row, mapping the enabled flag and sw_if_index values and
-// unmarshalling the JSON config only when it is non-empty; malformed config yields an error naming
-// the VNF ID.
-func scanVNF(s scanner) (VNF, error) {
-	var (
-		vnf       VNF
-		enabled   int64
-		config    string
-		tapSwIf   int64
-		memifSwIf int64
-		createdAt int64
-		updatedAt int64
-	)
-	if err := s.Scan(
-		&vnf.ID, &vnf.Name, &vnf.NetworkID, &vnf.NetworkName, &vnf.Type,
-		&enabled, &config, &tapSwIf, &vnf.TapHostName, &memifSwIf, &vnf.MemifSocket,
-		&vnf.MemifHostName, &createdAt, &updatedAt,
-	); err != nil {
-		return VNF{}, err
-	}
-	vnf.Enabled = enabled != 0
-	vnf.TapSwIfIndex = uint32(tapSwIf)
-	vnf.MemifSwIfIndex = uint32(memifSwIf)
-	if strings.TrimSpace(config) != "" {
-		if err := json.Unmarshal([]byte(config), &vnf.Config); err != nil {
-			return VNF{}, fmt.Errorf("decode vnf %d config: %w", vnf.ID, err)
-		}
-	}
-	vnf.CreatedAt = time.UnixMilli(createdAt).UTC()
-	vnf.UpdatedAt = time.UnixMilli(updatedAt).UTC()
-	return vnf, nil
 }
 
 // scanInterface decodes one joined interface row, filling nullable VM, LightVM, and ACL columns as

@@ -10,22 +10,50 @@ import (
 	"strings"
 	"sync"
 
-	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 	"github.com/voidstarit/rookery/internal/host"
 	"github.com/voidstarit/rookery/internal/netutil"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
-// Backend exposes the VPP/NAT/DHCP runtime used by lifecycle operations.
+// Backend exposes the VPP/NAT/DHCP runtime and the type-specific validators
+// used by lifecycle operations.
 type Backend interface {
 	VPPBlocked() (bool, string)
-	NormalizeVNFConfig(vnfType string, config *rookeryv1.VNFConfig) (store.VNFConfig, error)
 	VNFWritesReady(vnfType string) error
-	ApplyNATGatewayToDHCPConfig(ctx context.Context, networkID int64, vnfType string, config *store.VNFConfig) error
+
+	// Normalizers validate and canonicalize typed parent configuration.
+	NormalizeDHCPVNFConfig(family string, config store.DHCPVNFConfig) (store.DHCPVNFConfig, error)
+	NormalizeNAT44VNFConfig(config store.NAT44VNFConfig) (store.NAT44VNFConfig, error)
+	NormalizeBGPVNFConfig(config store.BGPVNFConfig) (store.BGPVNFConfig, error)
+	// ApplyNATGatewayToDHCPConfig rewrites the derived NAT gateway and bind
+	// address of a DHCPv4 config, rejecting ranges outside the network CIDR.
+	ApplyNATGatewayToDHCPConfig(ctx context.Context, networkID int64, family string, config *store.DHCPVNFConfig) error
+
+	// Child validators check a new or updated row against its parent and the
+	// sibling rows that remain.
+	NormalizeDHCPStaticAssignment(ctx context.Context, vnf store.VNF, item store.DHCPStaticAssignment) (store.DHCPStaticAssignment, error)
+	NormalizeDHCPOption(ctx context.Context, vnf store.VNF, item store.DHCPOption) (store.DHCPOption, error)
+	NormalizeDNSRecord(ctx context.Context, vnf store.VNF, siblings []store.DNSRecord, item store.DNSRecord) (store.DNSRecord, error)
+	NormalizeDNSForwarder(ctx context.Context, vnf store.VNF, siblings []store.DNSForwarder, item store.DNSForwarder) (store.DNSForwarder, error)
+	NormalizeDNATRule(ctx context.Context, vnf store.VNF, siblings []store.DNATRule, item store.DNATRule) (store.DNATRule, error)
+	NormalizeBGPPrefix(ctx context.Context, vnf store.VNF, prefix string) (store.BGPPrefix, error)
+
 	ActivateVNF(ctx context.Context, vnf store.VNF) (store.VNF, error)
 	StopVNF(ctx context.Context, vnf store.VNF, removeLeases bool) error
+	// Running reports whether the VNF runtime is currently up. A child write on
+	// an enabled but stopped runtime keeps the row and does not fail.
+	Running(ctx context.Context, vnf store.VNF) bool
+	// QueueVNFResync records an enabled VNF whose runtime could not be updated
+	// because the daemon was unreachable. The API retries it once the daemon is
+	// reachable again.
+	QueueVNFResync(vnf store.VNF)
+	// ReloadVNF swaps a running runtime's configuration in place. It is a
+	// no-op for a VNF that is enabled but whose runtime is not running.
+	ReloadVNF(ctx context.Context, vnf store.VNF) error
 	ActivateNAT44(ctx context.Context, vnf store.VNF) (store.VNF, error)
 	StopNAT44(ctx context.Context, vnf store.VNF) error
+	// ApplyNAT44DNATRules replaces the VNF's VPP static mappings in place.
+	ApplyNAT44DNATRules(ctx context.Context, vnf store.VNF) error
 	CleanupNetworkBVIAfterNATDelete(ctx context.Context, networkID int64) error
 	CleanupLegacyNetworkVNF(ctx context.Context, network store.Network) error
 	DeleteBVI(ctx context.Context, name string) error
@@ -80,6 +108,9 @@ func (e *VNFError) Unwrap() error { return e.Err }
 // detail of server errors (status 500 and above) with a generic message.
 func (e *VNFError) VNFStatus() (int, string) {
 	if e.Status >= 500 {
+		if e.Message != "" {
+			return e.Status, e.Message
+		}
 		return e.Status, "VNF operation failed"
 	}
 	return e.Status, e.Error()
@@ -143,305 +174,6 @@ func unavailableError(message string) error {
 // internalError wraps err in a VNFError with status 500 Internal Server Error.
 func internalError(err error) error {
 	return &VNFError{Status: http.StatusInternalServerError, Err: err}
-}
-
-// validateDHCPDNSIntegration checks that a DHCP VNF's dns_vnf_id references an
-// existing DNS VNF on the same network. A zero ID means no integration and
-// skips validation.
-func (s *Service) validateDHCPDNSIntegration(ctx context.Context, networkID int64, vnfType string, config store.VNFConfig) error {
-	if config.DNSVNFID == 0 {
-		return nil
-	}
-	if vnfType != store.VNFTypeDHCPv4 && vnfType != store.VNFTypeDHCPv6 {
-		return errors.New("dns_vnf_id is supported for DHCP VNFs only")
-	}
-	target, err := s.store.GetVNF(ctx, config.DNSVNFID)
-	if err != nil {
-		if errors.Is(err, store.ErrVNFNotFound) {
-			return errors.New("selected DNS VNF not found")
-		}
-		return err
-	}
-	if target.Type != store.VNFTypeDNS {
-		return errors.New("selected VNF is not a DNS VNF")
-	}
-	if target.NetworkID != networkID {
-		return errors.New("selected DNS VNF must belong to the same network")
-	}
-	return nil
-}
-
-// CreateVNF validates the request, normalizes its config, and stores the VNF,
-// starting its runtime immediately when enabled. A failed start deletes the new
-// record; one VNF per type per network is enforced.
-func (s *Service) CreateVNF(ctx context.Context, request *rookeryv1.CreateVNFRequest) (store.VNF, error) {
-	name := strings.TrimSpace(request.GetName())
-	switch {
-	case name == "":
-		return store.VNF{}, inputError("name is required")
-	case len(name) > 64:
-		return store.VNF{}, inputError("name must be at most 64 characters")
-	case !lvmNamePattern.MatchString(name):
-		return store.VNF{}, inputError("name must start with a letter or digit and contain only letters, digits, dots, dashes, and underscores")
-	}
-	vnfType := strings.ToLower(strings.TrimSpace(request.GetType()))
-	if !store.ValidVNFType(vnfType) {
-		return store.VNF{}, inputError("unsupported VNF type")
-	}
-	if request.GetNetworkId() < 1 {
-		return store.VNF{}, inputError("network_id is required")
-	}
-	config, err := s.backend.NormalizeVNFConfig(vnfType, request.GetConfig())
-	if err != nil {
-		return store.VNF{}, inputError(err.Error())
-	}
-	s.resourceMu.Lock()
-	defer s.resourceMu.Unlock()
-	network, err := s.store.GetNetwork(ctx, request.GetNetworkId())
-	if err != nil {
-		if errors.Is(err, store.ErrNetworkNotFound) {
-			return store.VNF{}, inputError("network not found")
-		}
-		return store.VNF{}, internalError(err)
-	}
-	if err := s.validateDHCPDNSIntegration(ctx, network.ID, vnfType, config); err != nil {
-		return store.VNF{}, inputError(err.Error())
-	}
-	existing, err := s.store.ListVNFsByNetwork(ctx, network.ID)
-	if err != nil {
-		return store.VNF{}, internalError(err)
-	}
-	for _, item := range existing {
-		if item.Type == vnfType {
-			return store.VNF{}, conflictError(fmt.Sprintf("network already has a %s VNF", vnfType))
-		}
-	}
-	if err := s.backend.ApplyNATGatewayToDHCPConfig(ctx, network.ID, vnfType, &config); err != nil {
-		return store.VNF{}, inputError(err.Error())
-	}
-	enabled := request.Enabled != nil && request.GetEnabled()
-	if enabled {
-		if err := s.backend.VNFWritesReady(vnfType); err != nil {
-			return store.VNF{}, unavailableError(err.Error())
-		}
-	}
-	created, err := s.store.CreateVNF(ctx, store.VNF{Name: name, NetworkID: network.ID, Type: vnfType, Enabled: false, Config: config})
-	if err != nil {
-		if errors.Is(err, store.ErrVNFNameTaken) {
-			return store.VNF{}, conflictError("a VNF with that name already exists")
-		}
-		return store.VNF{}, internalError(err)
-	}
-	if !enabled {
-		return created, nil
-	}
-	if vnfType == store.VNFTypeNAT44 {
-		created, err = s.backend.ActivateNAT44(ctx, created)
-	} else {
-		created, err = s.backend.ActivateVNF(ctx, created)
-	}
-	if err != nil {
-		_ = s.store.DeleteVNF(ctx, created.ID)
-		return store.VNF{}, internalError(fmt.Errorf("could not start VNF: %w", err))
-	}
-	return created, nil
-}
-
-// UpdateVNF applies name, config, and enabled changes to an existing VNF,
-// stopping and reactivating its runtime as needed. A failed activation persists
-// the VNF as disabled before returning the runtime error.
-func (s *Service) UpdateVNF(ctx context.Context, request *rookeryv1.UpdateVNFRequest) (store.VNF, error) {
-	s.resourceMu.Lock()
-	defer s.resourceMu.Unlock()
-	existing, err := s.store.GetVNF(ctx, request.GetId())
-	if err != nil {
-		if errors.Is(err, store.ErrVNFNotFound) {
-			return store.VNF{}, &VNFError{Status: http.StatusNotFound, Message: "vnf not found"}
-		}
-		return store.VNF{}, internalError(err)
-	}
-	name := existing.Name
-	if request.Name != nil {
-		name = strings.TrimSpace(request.GetName())
-		switch {
-		case name == "":
-			return store.VNF{}, inputError("name is required")
-		case len(name) > 64:
-			return store.VNF{}, inputError("name must be at most 64 characters")
-		case !lvmNamePattern.MatchString(name):
-			return store.VNF{}, inputError("name must start with a letter or digit and contain only letters, digits, dots, dashes, and underscores")
-		}
-	}
-	config := existing.Config
-	if request.Config != nil {
-		config, err = s.backend.NormalizeVNFConfig(existing.Type, request.Config)
-		if err != nil {
-			return store.VNF{}, inputError(err.Error())
-		}
-	}
-	if existing.Type == store.VNFTypeDHCPv4 {
-		if err := s.backend.ApplyNATGatewayToDHCPConfig(ctx, existing.NetworkID, existing.Type, &config); err != nil {
-			return store.VNF{}, inputError(err.Error())
-		}
-	}
-	if err := s.validateDHCPDNSIntegration(ctx, existing.NetworkID, existing.Type, config); err != nil {
-		return store.VNF{}, inputError(err.Error())
-	}
-	enabled := existing.Enabled
-	if request.Enabled != nil {
-		enabled = request.GetEnabled()
-	}
-	if enabled {
-		if err := s.backend.VNFWritesReady(existing.Type); err != nil {
-			return store.VNF{}, unavailableError(err.Error())
-		}
-	}
-	updated := existing
-	updated.Name = name
-	updated.Config = config
-	updated.Enabled = enabled
-	if existing.Type == store.VNFTypeNAT44 {
-		if err := s.backend.StopNAT44(ctx, existing); err != nil {
-			return store.VNF{}, internalError(fmt.Errorf("could not stop NAT44: %w", err))
-		}
-		updated.Enabled = false
-		updated.TapSwIfIndex = 0
-		updated.TapHostName = ""
-		if enabled {
-			activated, err := s.backend.ActivateNAT44(ctx, updated)
-			if err != nil {
-				_, _ = s.store.UpdateVNF(ctx, existing.ID, updated)
-				return store.VNF{}, internalError(fmt.Errorf("could not start NAT44: %w", err))
-			}
-			return activated, nil
-		}
-		saved, err := s.store.UpdateVNF(ctx, existing.ID, updated)
-		if err != nil {
-			return store.VNF{}, storeError(err)
-		}
-		return saved, nil
-	}
-	if existing.Enabled || existing.TapSwIfIndex > 0 {
-		if err := s.backend.StopVNF(ctx, existing, false); err != nil {
-			return store.VNF{}, internalError(fmt.Errorf("could not stop VNF: %w", err))
-		}
-		updated.TapSwIfIndex = 0
-		updated.TapHostName = ""
-	}
-	if enabled {
-		activated, err := s.backend.ActivateVNF(ctx, updated)
-		if err != nil {
-			updated.Enabled = false
-			updated.TapSwIfIndex = 0
-			updated.TapHostName = ""
-			_, _ = s.store.UpdateVNF(ctx, existing.ID, updated)
-			return store.VNF{}, internalError(fmt.Errorf("could not start VNF: %w", err))
-		}
-		return activated, nil
-	}
-	saved, err := s.store.UpdateVNF(ctx, existing.ID, updated)
-	if err != nil {
-		return store.VNF{}, storeError(err)
-	}
-	return saved, nil
-}
-
-// DeleteVNF stops and deletes a VNF, refusing to delete a DNS VNF that a DHCP
-// VNF still references and cleaning up the network BVI after NAT44 removal.
-func (s *Service) DeleteVNF(ctx context.Context, request *rookeryv1.DeleteVNFRequest) error {
-	s.resourceMu.Lock()
-	defer s.resourceMu.Unlock()
-	vnf, err := s.store.GetVNF(ctx, request.GetId())
-	if err != nil {
-		if errors.Is(err, store.ErrVNFNotFound) {
-			return &VNFError{Status: http.StatusNotFound, Message: "vnf not found"}
-		}
-		return internalError(err)
-	}
-	if vnf.Type == store.VNFTypeDNS {
-		vnfs, err := s.store.ListVNFs(ctx, nil)
-		if err != nil {
-			return internalError(err)
-		}
-		for _, item := range vnfs {
-			if item.Config.DNSVNFID == vnf.ID {
-				return &VNFError{Status: http.StatusConflict, Message: fmt.Sprintf("DNS VNF %s is used by DHCP VNF %s", vnf.Name, item.Name)}
-			}
-		}
-	}
-	var stopErr error
-	if vnf.Type == store.VNFTypeNAT44 {
-		stopErr = s.backend.StopNAT44(ctx, vnf)
-	} else {
-		stopErr = s.backend.StopVNF(ctx, vnf, true)
-	}
-	if stopErr != nil {
-		return internalError(fmt.Errorf("could not stop VNF: %w", stopErr))
-	}
-	if err := s.store.DeleteVNF(ctx, vnf.ID); err != nil {
-		if errors.Is(err, store.ErrVNFNotFound) {
-			return &VNFError{Status: http.StatusNotFound, Message: "vnf not found"}
-		}
-		return internalError(err)
-	}
-	if vnf.Type == store.VNFTypeNAT44 {
-		_ = s.backend.CleanupNetworkBVIAfterNATDelete(ctx, vnf.NetworkID)
-	}
-	return nil
-}
-
-// RestartVNF stops a VNF without dropping its leases and starts it again,
-// persisting Enabled=false when the restart fails.
-func (s *Service) RestartVNF(ctx context.Context, request *rookeryv1.RestartVNFRequest) (store.VNF, error) {
-	s.resourceMu.Lock()
-	defer s.resourceMu.Unlock()
-	vnf, err := s.store.GetVNF(ctx, request.GetId())
-	if err != nil {
-		if errors.Is(err, store.ErrVNFNotFound) {
-			return store.VNF{}, &VNFError{Status: http.StatusNotFound, Message: "vnf not found"}
-		}
-		return store.VNF{}, internalError(err)
-	}
-	if err := s.backend.VNFWritesReady(vnf.Type); err != nil {
-		return store.VNF{}, unavailableError(err.Error())
-	}
-	var stopErr error
-	if vnf.Type == store.VNFTypeNAT44 {
-		stopErr = s.backend.StopNAT44(ctx, vnf)
-	} else {
-		stopErr = s.backend.StopVNF(ctx, vnf, false)
-	}
-	if stopErr != nil {
-		return store.VNF{}, internalError(fmt.Errorf("could not stop VNF: %w", stopErr))
-	}
-	vnf.Enabled = true
-	vnf.TapSwIfIndex = 0
-	vnf.TapHostName = ""
-	var activated store.VNF
-	if vnf.Type == store.VNFTypeNAT44 {
-		activated, err = s.backend.ActivateNAT44(ctx, vnf)
-	} else {
-		activated, err = s.backend.ActivateVNF(ctx, vnf)
-	}
-	if err != nil {
-		vnf.Enabled = false
-		_, _ = s.store.UpdateVNF(ctx, vnf.ID, vnf)
-		return store.VNF{}, internalError(fmt.Errorf("could not restart VNF: %w", err))
-	}
-	return activated, nil
-}
-
-// storeError maps store sentinel errors to typed VNFErrors: name conflicts to
-// 409, missing VNFs to 404, and everything else to 500.
-func storeError(err error) error {
-	switch {
-	case errors.Is(err, store.ErrVNFNameTaken):
-		return conflictError("a VNF with that name already exists")
-	case errors.Is(err, store.ErrVNFNotFound):
-		return &VNFError{Status: http.StatusNotFound, Message: "vnf not found"}
-	default:
-		return internalError(err)
-	}
 }
 
 // networkInputError wraps message in a NetworkError with status 400 Bad Request.

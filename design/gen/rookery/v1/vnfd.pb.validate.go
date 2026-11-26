@@ -35,21 +35,22 @@ var (
 	_ = sort.Sort
 )
 
-// Validate checks the field values on VNFSpec with the rules defined in the
-// proto definition for this message. If any rules are violated, the first
+// Validate checks the field values on RuntimeSpec with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.
-func (m *VNFSpec) Validate() error {
+func (m *RuntimeSpec) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on VNFSpec with the rules defined in the
-// proto definition for this message. If any rules are violated, the result is
-// a list of violation errors wrapped in VNFSpecMultiError, or nil if none found.
-func (m *VNFSpec) ValidateAll() error {
+// ValidateAll checks the field values on RuntimeSpec with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in RuntimeSpecMultiError, or
+// nil if none found.
+func (m *RuntimeSpec) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *VNFSpec) validate(all bool) error {
+func (m *RuntimeSpec) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -57,7 +58,7 @@ func (m *VNFSpec) validate(all bool) error {
 	var errors []error
 
 	if m.GetId() <= 0 {
-		err := VNFSpecValidationError{
+		err := RuntimeSpecValidationError{
 			field:  "Id",
 			reason: "value must be greater than 0",
 		}
@@ -69,57 +70,17 @@ func (m *VNFSpec) validate(all bool) error {
 
 	// no validation rules for Name
 
-	if _, ok := _VNFSpec_Type_InLookup[m.GetType()]; !ok {
-		err := VNFSpecValidationError{
-			field:  "Type",
-			reason: "value must be in list [dhcpv4 dhcpv6 bgp]",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
-
 	// no validation rules for NetworkId
 
-	if _, ok := _VNFSpec_Transport_InLookup[m.GetTransport()]; !ok {
-		err := VNFSpecValidationError{
+	if _, ok := _RuntimeSpec_Transport_InLookup[m.GetTransport()]; !ok {
+		err := RuntimeSpecValidationError{
 			field:  "Transport",
-			reason: "value must be in list [memif tap shared]",
+			reason: "value must be in list [ memif tap shared dedicated]",
 		}
 		if !all {
 			return err
 		}
 		errors = append(errors, err)
-	}
-
-	if all {
-		switch v := interface{}(m.GetConfig()).(type) {
-		case interface{ ValidateAll() error }:
-			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, VNFSpecValidationError{
-					field:  "Config",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		case interface{ Validate() error }:
-			if err := v.Validate(); err != nil {
-				errors = append(errors, VNFSpecValidationError{
-					field:  "Config",
-					reason: "embedded message failed validation",
-					cause:  err,
-				})
-			}
-		}
-	} else if v, ok := interface{}(m.GetConfig()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return VNFSpecValidationError{
-				field:  "Config",
-				reason: "embedded message failed validation",
-				cause:  err,
-			}
-		}
 	}
 
 	// no validation rules for TapHostName
@@ -133,18 +94,18 @@ func (m *VNFSpec) validate(all bool) error {
 	// no validation rules for SharedIpv6Address
 
 	if len(errors) > 0 {
-		return VNFSpecMultiError(errors)
+		return RuntimeSpecMultiError(errors)
 	}
 
 	return nil
 }
 
-// VNFSpecMultiError is an error wrapping multiple validation errors returned
-// by VNFSpec.ValidateAll() if the designated constraints aren't met.
-type VNFSpecMultiError []error
+// RuntimeSpecMultiError is an error wrapping multiple validation errors
+// returned by RuntimeSpec.ValidateAll() if the designated constraints aren't met.
+type RuntimeSpecMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m VNFSpecMultiError) Error() string {
+func (m RuntimeSpecMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -153,11 +114,11 @@ func (m VNFSpecMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m VNFSpecMultiError) AllErrors() []error { return m }
+func (m RuntimeSpecMultiError) AllErrors() []error { return m }
 
-// VNFSpecValidationError is the validation error returned by VNFSpec.Validate
-// if the designated constraints aren't met.
-type VNFSpecValidationError struct {
+// RuntimeSpecValidationError is the validation error returned by
+// RuntimeSpec.Validate if the designated constraints aren't met.
+type RuntimeSpecValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -165,22 +126,22 @@ type VNFSpecValidationError struct {
 }
 
 // Field function returns field value.
-func (e VNFSpecValidationError) Field() string { return e.field }
+func (e RuntimeSpecValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e VNFSpecValidationError) Reason() string { return e.reason }
+func (e RuntimeSpecValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e VNFSpecValidationError) Cause() error { return e.cause }
+func (e RuntimeSpecValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e VNFSpecValidationError) Key() bool { return e.key }
+func (e RuntimeSpecValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e VNFSpecValidationError) ErrorName() string { return "VNFSpecValidationError" }
+func (e RuntimeSpecValidationError) ErrorName() string { return "RuntimeSpecValidationError" }
 
 // Error satisfies the builtin error interface
-func (e VNFSpecValidationError) Error() string {
+func (e RuntimeSpecValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -192,14 +153,14 @@ func (e VNFSpecValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sVNFSpec.%s: %s%s",
+		"invalid %sRuntimeSpec.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = VNFSpecValidationError{}
+var _ error = RuntimeSpecValidationError{}
 
 var _ interface {
 	Field() string
@@ -207,45 +168,41 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = VNFSpecValidationError{}
+} = RuntimeSpecValidationError{}
 
-var _VNFSpec_Type_InLookup = map[string]struct{}{
-	"dhcpv4": {},
-	"dhcpv6": {},
-	"bgp":    {},
+var _RuntimeSpec_Transport_InLookup = map[string]struct{}{
+	"":          {},
+	"memif":     {},
+	"tap":       {},
+	"shared":    {},
+	"dedicated": {},
 }
 
-var _VNFSpec_Transport_InLookup = map[string]struct{}{
-	"memif":  {},
-	"tap":    {},
-	"shared": {},
-}
-
-// Validate checks the field values on EnsureVNFRequest with the rules defined
+// Validate checks the field values on DHCPRuntimeSpec with the rules defined
 // in the proto definition for this message. If any rules are violated, the
 // first error encountered is returned, or nil if there are no violations.
-func (m *EnsureVNFRequest) Validate() error {
+func (m *DHCPRuntimeSpec) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on EnsureVNFRequest with the rules
+// ValidateAll checks the field values on DHCPRuntimeSpec with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the result is a list of violation errors wrapped in
-// EnsureVNFRequestMultiError, or nil if none found.
-func (m *EnsureVNFRequest) ValidateAll() error {
+// DHCPRuntimeSpecMultiError, or nil if none found.
+func (m *DHCPRuntimeSpec) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *EnsureVNFRequest) validate(all bool) error {
+func (m *DHCPRuntimeSpec) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
 	var errors []error
 
-	if m.GetVnf() == nil {
-		err := EnsureVNFRequestValidationError{
-			field:  "Vnf",
+	if m.GetRuntime() == nil {
+		err := DHCPRuntimeSpecValidationError{
+			field:  "Runtime",
 			reason: "value is required",
 		}
 		if !all {
@@ -255,48 +212,146 @@ func (m *EnsureVNFRequest) validate(all bool) error {
 	}
 
 	if all {
-		switch v := interface{}(m.GetVnf()).(type) {
+		switch v := interface{}(m.GetRuntime()).(type) {
 		case interface{ ValidateAll() error }:
 			if err := v.ValidateAll(); err != nil {
-				errors = append(errors, EnsureVNFRequestValidationError{
-					field:  "Vnf",
+				errors = append(errors, DHCPRuntimeSpecValidationError{
+					field:  "Runtime",
 					reason: "embedded message failed validation",
 					cause:  err,
 				})
 			}
 		case interface{ Validate() error }:
 			if err := v.Validate(); err != nil {
-				errors = append(errors, EnsureVNFRequestValidationError{
-					field:  "Vnf",
+				errors = append(errors, DHCPRuntimeSpecValidationError{
+					field:  "Runtime",
 					reason: "embedded message failed validation",
 					cause:  err,
 				})
 			}
 		}
-	} else if v, ok := interface{}(m.GetVnf()).(interface{ Validate() error }); ok {
+	} else if v, ok := interface{}(m.GetRuntime()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
-			return EnsureVNFRequestValidationError{
-				field:  "Vnf",
+			return DHCPRuntimeSpecValidationError{
+				field:  "Runtime",
 				reason: "embedded message failed validation",
 				cause:  err,
 			}
 		}
 	}
 
+	if _, ok := _DHCPRuntimeSpec_Family_InLookup[m.GetFamily()]; !ok {
+		err := DHCPRuntimeSpecValidationError{
+			field:  "Family",
+			reason: "value must be in list [dhcpv4 dhcpv6]",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	switch v := m.Config.(type) {
+	case *DHCPRuntimeSpec_Dhcpv4:
+		if v == nil {
+			err := DHCPRuntimeSpecValidationError{
+				field:  "Config",
+				reason: "oneof value cannot be a typed-nil",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+		if all {
+			switch v := interface{}(m.GetDhcpv4()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DHCPRuntimeSpecValidationError{
+						field:  "Dhcpv4",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DHCPRuntimeSpecValidationError{
+						field:  "Dhcpv4",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetDhcpv4()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DHCPRuntimeSpecValidationError{
+					field:  "Dhcpv4",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	case *DHCPRuntimeSpec_Dhcpv6:
+		if v == nil {
+			err := DHCPRuntimeSpecValidationError{
+				field:  "Config",
+				reason: "oneof value cannot be a typed-nil",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+		if all {
+			switch v := interface{}(m.GetDhcpv6()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DHCPRuntimeSpecValidationError{
+						field:  "Dhcpv6",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DHCPRuntimeSpecValidationError{
+						field:  "Dhcpv6",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetDhcpv6()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DHCPRuntimeSpecValidationError{
+					field:  "Dhcpv6",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	default:
+		_ = v // ensures v is used
+	}
+
 	if len(errors) > 0 {
-		return EnsureVNFRequestMultiError(errors)
+		return DHCPRuntimeSpecMultiError(errors)
 	}
 
 	return nil
 }
 
-// EnsureVNFRequestMultiError is an error wrapping multiple validation errors
-// returned by EnsureVNFRequest.ValidateAll() if the designated constraints
+// DHCPRuntimeSpecMultiError is an error wrapping multiple validation errors
+// returned by DHCPRuntimeSpec.ValidateAll() if the designated constraints
 // aren't met.
-type EnsureVNFRequestMultiError []error
+type DHCPRuntimeSpecMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m EnsureVNFRequestMultiError) Error() string {
+func (m DHCPRuntimeSpecMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -305,11 +360,11 @@ func (m EnsureVNFRequestMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m EnsureVNFRequestMultiError) AllErrors() []error { return m }
+func (m DHCPRuntimeSpecMultiError) AllErrors() []error { return m }
 
-// EnsureVNFRequestValidationError is the validation error returned by
-// EnsureVNFRequest.Validate if the designated constraints aren't met.
-type EnsureVNFRequestValidationError struct {
+// DHCPRuntimeSpecValidationError is the validation error returned by
+// DHCPRuntimeSpec.Validate if the designated constraints aren't met.
+type DHCPRuntimeSpecValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -317,22 +372,22 @@ type EnsureVNFRequestValidationError struct {
 }
 
 // Field function returns field value.
-func (e EnsureVNFRequestValidationError) Field() string { return e.field }
+func (e DHCPRuntimeSpecValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e EnsureVNFRequestValidationError) Reason() string { return e.reason }
+func (e DHCPRuntimeSpecValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e EnsureVNFRequestValidationError) Cause() error { return e.cause }
+func (e DHCPRuntimeSpecValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e EnsureVNFRequestValidationError) Key() bool { return e.key }
+func (e DHCPRuntimeSpecValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e EnsureVNFRequestValidationError) ErrorName() string { return "EnsureVNFRequestValidationError" }
+func (e DHCPRuntimeSpecValidationError) ErrorName() string { return "DHCPRuntimeSpecValidationError" }
 
 // Error satisfies the builtin error interface
-func (e EnsureVNFRequestValidationError) Error() string {
+func (e DHCPRuntimeSpecValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -344,14 +399,14 @@ func (e EnsureVNFRequestValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sEnsureVNFRequest.%s: %s%s",
+		"invalid %sDHCPRuntimeSpec.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = EnsureVNFRequestValidationError{}
+var _ error = DHCPRuntimeSpecValidationError{}
 
 var _ interface {
 	Field() string
@@ -359,24 +414,879 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = EnsureVNFRequestValidationError{}
+} = DHCPRuntimeSpecValidationError{}
 
-// Validate checks the field values on RemoveVNFRequest with the rules defined
-// in the proto definition for this message. If any rules are violated, the
-// first error encountered is returned, or nil if there are no violations.
-func (m *RemoveVNFRequest) Validate() error {
+var _DHCPRuntimeSpec_Family_InLookup = map[string]struct{}{
+	"dhcpv4": {},
+	"dhcpv6": {},
+}
+
+// Validate checks the field values on DNSRuntimeSpec with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *DNSRuntimeSpec) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on RemoveVNFRequest with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// RemoveVNFRequestMultiError, or nil if none found.
-func (m *RemoveVNFRequest) ValidateAll() error {
+// ValidateAll checks the field values on DNSRuntimeSpec with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in DNSRuntimeSpecMultiError,
+// or nil if none found.
+func (m *DNSRuntimeSpec) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *RemoveVNFRequest) validate(all bool) error {
+func (m *DNSRuntimeSpec) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetRuntime() == nil {
+		err := DNSRuntimeSpecValidationError{
+			field:  "Runtime",
+			reason: "value is required",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if all {
+		switch v := interface{}(m.GetRuntime()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, DNSRuntimeSpecValidationError{
+					field:  "Runtime",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, DNSRuntimeSpecValidationError{
+					field:  "Runtime",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetRuntime()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return DNSRuntimeSpecValidationError{
+				field:  "Runtime",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if all {
+		switch v := interface{}(m.GetConfig()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, DNSRuntimeSpecValidationError{
+					field:  "Config",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, DNSRuntimeSpecValidationError{
+					field:  "Config",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetConfig()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return DNSRuntimeSpecValidationError{
+				field:  "Config",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return DNSRuntimeSpecMultiError(errors)
+	}
+
+	return nil
+}
+
+// DNSRuntimeSpecMultiError is an error wrapping multiple validation errors
+// returned by DNSRuntimeSpec.ValidateAll() if the designated constraints
+// aren't met.
+type DNSRuntimeSpecMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m DNSRuntimeSpecMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m DNSRuntimeSpecMultiError) AllErrors() []error { return m }
+
+// DNSRuntimeSpecValidationError is the validation error returned by
+// DNSRuntimeSpec.Validate if the designated constraints aren't met.
+type DNSRuntimeSpecValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e DNSRuntimeSpecValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e DNSRuntimeSpecValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e DNSRuntimeSpecValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e DNSRuntimeSpecValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e DNSRuntimeSpecValidationError) ErrorName() string { return "DNSRuntimeSpecValidationError" }
+
+// Error satisfies the builtin error interface
+func (e DNSRuntimeSpecValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sDNSRuntimeSpec.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = DNSRuntimeSpecValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = DNSRuntimeSpecValidationError{}
+
+// Validate checks the field values on BGPRuntimeSpec with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *BGPRuntimeSpec) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on BGPRuntimeSpec with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in BGPRuntimeSpecMultiError,
+// or nil if none found.
+func (m *BGPRuntimeSpec) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *BGPRuntimeSpec) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetRuntime() == nil {
+		err := BGPRuntimeSpecValidationError{
+			field:  "Runtime",
+			reason: "value is required",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if all {
+		switch v := interface{}(m.GetRuntime()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, BGPRuntimeSpecValidationError{
+					field:  "Runtime",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, BGPRuntimeSpecValidationError{
+					field:  "Runtime",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetRuntime()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return BGPRuntimeSpecValidationError{
+				field:  "Runtime",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if all {
+		switch v := interface{}(m.GetConfig()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, BGPRuntimeSpecValidationError{
+					field:  "Config",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, BGPRuntimeSpecValidationError{
+					field:  "Config",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetConfig()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return BGPRuntimeSpecValidationError{
+				field:  "Config",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return BGPRuntimeSpecMultiError(errors)
+	}
+
+	return nil
+}
+
+// BGPRuntimeSpecMultiError is an error wrapping multiple validation errors
+// returned by BGPRuntimeSpec.ValidateAll() if the designated constraints
+// aren't met.
+type BGPRuntimeSpecMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m BGPRuntimeSpecMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m BGPRuntimeSpecMultiError) AllErrors() []error { return m }
+
+// BGPRuntimeSpecValidationError is the validation error returned by
+// BGPRuntimeSpec.Validate if the designated constraints aren't met.
+type BGPRuntimeSpecValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e BGPRuntimeSpecValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e BGPRuntimeSpecValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e BGPRuntimeSpecValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e BGPRuntimeSpecValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e BGPRuntimeSpecValidationError) ErrorName() string { return "BGPRuntimeSpecValidationError" }
+
+// Error satisfies the builtin error interface
+func (e BGPRuntimeSpecValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sBGPRuntimeSpec.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = BGPRuntimeSpecValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = BGPRuntimeSpecValidationError{}
+
+// Validate checks the field values on DesiredRuntime with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *DesiredRuntime) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on DesiredRuntime with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in DesiredRuntimeMultiError,
+// or nil if none found.
+func (m *DesiredRuntime) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *DesiredRuntime) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	switch v := m.Runtime.(type) {
+	case *DesiredRuntime_Dhcp:
+		if v == nil {
+			err := DesiredRuntimeValidationError{
+				field:  "Runtime",
+				reason: "oneof value cannot be a typed-nil",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+		if all {
+			switch v := interface{}(m.GetDhcp()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DesiredRuntimeValidationError{
+						field:  "Dhcp",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DesiredRuntimeValidationError{
+						field:  "Dhcp",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetDhcp()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DesiredRuntimeValidationError{
+					field:  "Dhcp",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	case *DesiredRuntime_Dns:
+		if v == nil {
+			err := DesiredRuntimeValidationError{
+				field:  "Runtime",
+				reason: "oneof value cannot be a typed-nil",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+		if all {
+			switch v := interface{}(m.GetDns()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DesiredRuntimeValidationError{
+						field:  "Dns",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DesiredRuntimeValidationError{
+						field:  "Dns",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetDns()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DesiredRuntimeValidationError{
+					field:  "Dns",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	case *DesiredRuntime_Bgp:
+		if v == nil {
+			err := DesiredRuntimeValidationError{
+				field:  "Runtime",
+				reason: "oneof value cannot be a typed-nil",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+		if all {
+			switch v := interface{}(m.GetBgp()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, DesiredRuntimeValidationError{
+						field:  "Bgp",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, DesiredRuntimeValidationError{
+						field:  "Bgp",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetBgp()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return DesiredRuntimeValidationError{
+					field:  "Bgp",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	default:
+		_ = v // ensures v is used
+	}
+
+	if len(errors) > 0 {
+		return DesiredRuntimeMultiError(errors)
+	}
+
+	return nil
+}
+
+// DesiredRuntimeMultiError is an error wrapping multiple validation errors
+// returned by DesiredRuntime.ValidateAll() if the designated constraints
+// aren't met.
+type DesiredRuntimeMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m DesiredRuntimeMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m DesiredRuntimeMultiError) AllErrors() []error { return m }
+
+// DesiredRuntimeValidationError is the validation error returned by
+// DesiredRuntime.Validate if the designated constraints aren't met.
+type DesiredRuntimeValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e DesiredRuntimeValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e DesiredRuntimeValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e DesiredRuntimeValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e DesiredRuntimeValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e DesiredRuntimeValidationError) ErrorName() string { return "DesiredRuntimeValidationError" }
+
+// Error satisfies the builtin error interface
+func (e DesiredRuntimeValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sDesiredRuntime.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = DesiredRuntimeValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = DesiredRuntimeValidationError{}
+
+// Validate checks the field values on EnsureDHCPRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *EnsureDHCPRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on EnsureDHCPRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// EnsureDHCPRequestMultiError, or nil if none found.
+func (m *EnsureDHCPRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *EnsureDHCPRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetSpec() == nil {
+		err := EnsureDHCPRequestValidationError{
+			field:  "Spec",
+			reason: "value is required",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if all {
+		switch v := interface{}(m.GetSpec()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, EnsureDHCPRequestValidationError{
+					field:  "Spec",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, EnsureDHCPRequestValidationError{
+					field:  "Spec",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetSpec()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return EnsureDHCPRequestValidationError{
+				field:  "Spec",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return EnsureDHCPRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// EnsureDHCPRequestMultiError is an error wrapping multiple validation errors
+// returned by EnsureDHCPRequest.ValidateAll() if the designated constraints
+// aren't met.
+type EnsureDHCPRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m EnsureDHCPRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m EnsureDHCPRequestMultiError) AllErrors() []error { return m }
+
+// EnsureDHCPRequestValidationError is the validation error returned by
+// EnsureDHCPRequest.Validate if the designated constraints aren't met.
+type EnsureDHCPRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e EnsureDHCPRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e EnsureDHCPRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e EnsureDHCPRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e EnsureDHCPRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e EnsureDHCPRequestValidationError) ErrorName() string {
+	return "EnsureDHCPRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e EnsureDHCPRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sEnsureDHCPRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = EnsureDHCPRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = EnsureDHCPRequestValidationError{}
+
+// Validate checks the field values on ReloadDHCPRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *ReloadDHCPRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ReloadDHCPRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ReloadDHCPRequestMultiError, or nil if none found.
+func (m *ReloadDHCPRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ReloadDHCPRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetSpec() == nil {
+		err := ReloadDHCPRequestValidationError{
+			field:  "Spec",
+			reason: "value is required",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if all {
+		switch v := interface{}(m.GetSpec()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, ReloadDHCPRequestValidationError{
+					field:  "Spec",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, ReloadDHCPRequestValidationError{
+					field:  "Spec",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetSpec()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return ReloadDHCPRequestValidationError{
+				field:  "Spec",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return ReloadDHCPRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// ReloadDHCPRequestMultiError is an error wrapping multiple validation errors
+// returned by ReloadDHCPRequest.ValidateAll() if the designated constraints
+// aren't met.
+type ReloadDHCPRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ReloadDHCPRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ReloadDHCPRequestMultiError) AllErrors() []error { return m }
+
+// ReloadDHCPRequestValidationError is the validation error returned by
+// ReloadDHCPRequest.Validate if the designated constraints aren't met.
+type ReloadDHCPRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ReloadDHCPRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ReloadDHCPRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ReloadDHCPRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ReloadDHCPRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ReloadDHCPRequestValidationError) ErrorName() string {
+	return "ReloadDHCPRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ReloadDHCPRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sReloadDHCPRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ReloadDHCPRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ReloadDHCPRequestValidationError{}
+
+// Validate checks the field values on RemoveDHCPRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *RemoveDHCPRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on RemoveDHCPRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// RemoveDHCPRequestMultiError, or nil if none found.
+func (m *RemoveDHCPRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *RemoveDHCPRequest) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -384,7 +1294,7 @@ func (m *RemoveVNFRequest) validate(all bool) error {
 	var errors []error
 
 	if m.GetId() <= 0 {
-		err := RemoveVNFRequestValidationError{
+		err := RemoveDHCPRequestValidationError{
 			field:  "Id",
 			reason: "value must be greater than 0",
 		}
@@ -397,19 +1307,19 @@ func (m *RemoveVNFRequest) validate(all bool) error {
 	// no validation rules for RemoveLeases
 
 	if len(errors) > 0 {
-		return RemoveVNFRequestMultiError(errors)
+		return RemoveDHCPRequestMultiError(errors)
 	}
 
 	return nil
 }
 
-// RemoveVNFRequestMultiError is an error wrapping multiple validation errors
-// returned by RemoveVNFRequest.ValidateAll() if the designated constraints
+// RemoveDHCPRequestMultiError is an error wrapping multiple validation errors
+// returned by RemoveDHCPRequest.ValidateAll() if the designated constraints
 // aren't met.
-type RemoveVNFRequestMultiError []error
+type RemoveDHCPRequestMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m RemoveVNFRequestMultiError) Error() string {
+func (m RemoveDHCPRequestMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -418,11 +1328,11 @@ func (m RemoveVNFRequestMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m RemoveVNFRequestMultiError) AllErrors() []error { return m }
+func (m RemoveDHCPRequestMultiError) AllErrors() []error { return m }
 
-// RemoveVNFRequestValidationError is the validation error returned by
-// RemoveVNFRequest.Validate if the designated constraints aren't met.
-type RemoveVNFRequestValidationError struct {
+// RemoveDHCPRequestValidationError is the validation error returned by
+// RemoveDHCPRequest.Validate if the designated constraints aren't met.
+type RemoveDHCPRequestValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -430,22 +1340,24 @@ type RemoveVNFRequestValidationError struct {
 }
 
 // Field function returns field value.
-func (e RemoveVNFRequestValidationError) Field() string { return e.field }
+func (e RemoveDHCPRequestValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e RemoveVNFRequestValidationError) Reason() string { return e.reason }
+func (e RemoveDHCPRequestValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e RemoveVNFRequestValidationError) Cause() error { return e.cause }
+func (e RemoveDHCPRequestValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e RemoveVNFRequestValidationError) Key() bool { return e.key }
+func (e RemoveDHCPRequestValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e RemoveVNFRequestValidationError) ErrorName() string { return "RemoveVNFRequestValidationError" }
+func (e RemoveDHCPRequestValidationError) ErrorName() string {
+	return "RemoveDHCPRequestValidationError"
+}
 
 // Error satisfies the builtin error interface
-func (e RemoveVNFRequestValidationError) Error() string {
+func (e RemoveDHCPRequestValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -457,14 +1369,14 @@ func (e RemoveVNFRequestValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sRemoveVNFRequest.%s: %s%s",
+		"invalid %sRemoveDHCPRequest.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = RemoveVNFRequestValidationError{}
+var _ error = RemoveDHCPRequestValidationError{}
 
 var _ interface {
 	Field() string
@@ -472,469 +1384,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = RemoveVNFRequestValidationError{}
+} = RemoveDHCPRequestValidationError{}
 
-// Validate checks the field values on ResetRuntimeRequest with the rules
+// Validate checks the field values on GetDHCPStateRequest with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
-func (m *ResetRuntimeRequest) Validate() error {
+func (m *GetDHCPStateRequest) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on ResetRuntimeRequest with the rules
+// ValidateAll checks the field values on GetDHCPStateRequest with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the result is a list of violation errors wrapped in
-// ResetRuntimeRequestMultiError, or nil if none found.
-func (m *ResetRuntimeRequest) ValidateAll() error {
+// GetDHCPStateRequestMultiError, or nil if none found.
+func (m *GetDHCPStateRequest) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *ResetRuntimeRequest) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	if len(errors) > 0 {
-		return ResetRuntimeRequestMultiError(errors)
-	}
-
-	return nil
-}
-
-// ResetRuntimeRequestMultiError is an error wrapping multiple validation
-// errors returned by ResetRuntimeRequest.ValidateAll() if the designated
-// constraints aren't met.
-type ResetRuntimeRequestMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m ResetRuntimeRequestMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m ResetRuntimeRequestMultiError) AllErrors() []error { return m }
-
-// ResetRuntimeRequestValidationError is the validation error returned by
-// ResetRuntimeRequest.Validate if the designated constraints aren't met.
-type ResetRuntimeRequestValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e ResetRuntimeRequestValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e ResetRuntimeRequestValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e ResetRuntimeRequestValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e ResetRuntimeRequestValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e ResetRuntimeRequestValidationError) ErrorName() string {
-	return "ResetRuntimeRequestValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e ResetRuntimeRequestValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sResetRuntimeRequest.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = ResetRuntimeRequestValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = ResetRuntimeRequestValidationError{}
-
-// Validate checks the field values on VNFState with the rules defined in the
-// proto definition for this message. If any rules are violated, the first
-// error encountered is returned, or nil if there are no violations.
-func (m *VNFState) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on VNFState with the rules defined in
-// the proto definition for this message. If any rules are violated, the
-// result is a list of violation errors wrapped in VNFStateMultiError, or nil
-// if none found.
-func (m *VNFState) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *VNFState) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	// no validation rules for Id
-
-	// no validation rules for Running
-
-	// no validation rules for Detail
-
-	if len(errors) > 0 {
-		return VNFStateMultiError(errors)
-	}
-
-	return nil
-}
-
-// VNFStateMultiError is an error wrapping multiple validation errors returned
-// by VNFState.ValidateAll() if the designated constraints aren't met.
-type VNFStateMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m VNFStateMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m VNFStateMultiError) AllErrors() []error { return m }
-
-// VNFStateValidationError is the validation error returned by
-// VNFState.Validate if the designated constraints aren't met.
-type VNFStateValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e VNFStateValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e VNFStateValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e VNFStateValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e VNFStateValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e VNFStateValidationError) ErrorName() string { return "VNFStateValidationError" }
-
-// Error satisfies the builtin error interface
-func (e VNFStateValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sVNFState.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = VNFStateValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = VNFStateValidationError{}
-
-// Validate checks the field values on ListVNFStatesRequest with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *ListVNFStatesRequest) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on ListVNFStatesRequest with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// ListVNFStatesRequestMultiError, or nil if none found.
-func (m *ListVNFStatesRequest) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *ListVNFStatesRequest) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	if len(errors) > 0 {
-		return ListVNFStatesRequestMultiError(errors)
-	}
-
-	return nil
-}
-
-// ListVNFStatesRequestMultiError is an error wrapping multiple validation
-// errors returned by ListVNFStatesRequest.ValidateAll() if the designated
-// constraints aren't met.
-type ListVNFStatesRequestMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m ListVNFStatesRequestMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m ListVNFStatesRequestMultiError) AllErrors() []error { return m }
-
-// ListVNFStatesRequestValidationError is the validation error returned by
-// ListVNFStatesRequest.Validate if the designated constraints aren't met.
-type ListVNFStatesRequestValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e ListVNFStatesRequestValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e ListVNFStatesRequestValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e ListVNFStatesRequestValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e ListVNFStatesRequestValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e ListVNFStatesRequestValidationError) ErrorName() string {
-	return "ListVNFStatesRequestValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e ListVNFStatesRequestValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sListVNFStatesRequest.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = ListVNFStatesRequestValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = ListVNFStatesRequestValidationError{}
-
-// Validate checks the field values on ListVNFStatesResponse with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *ListVNFStatesResponse) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on ListVNFStatesResponse with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// ListVNFStatesResponseMultiError, or nil if none found.
-func (m *ListVNFStatesResponse) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *ListVNFStatesResponse) validate(all bool) error {
-	if m == nil {
-		return nil
-	}
-
-	var errors []error
-
-	for idx, item := range m.GetVnfs() {
-		_, _ = idx, item
-
-		if all {
-			switch v := interface{}(item).(type) {
-			case interface{ ValidateAll() error }:
-				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ListVNFStatesResponseValidationError{
-						field:  fmt.Sprintf("Vnfs[%v]", idx),
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			case interface{ Validate() error }:
-				if err := v.Validate(); err != nil {
-					errors = append(errors, ListVNFStatesResponseValidationError{
-						field:  fmt.Sprintf("Vnfs[%v]", idx),
-						reason: "embedded message failed validation",
-						cause:  err,
-					})
-				}
-			}
-		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
-			if err := v.Validate(); err != nil {
-				return ListVNFStatesResponseValidationError{
-					field:  fmt.Sprintf("Vnfs[%v]", idx),
-					reason: "embedded message failed validation",
-					cause:  err,
-				}
-			}
-		}
-
-	}
-
-	if len(errors) > 0 {
-		return ListVNFStatesResponseMultiError(errors)
-	}
-
-	return nil
-}
-
-// ListVNFStatesResponseMultiError is an error wrapping multiple validation
-// errors returned by ListVNFStatesResponse.ValidateAll() if the designated
-// constraints aren't met.
-type ListVNFStatesResponseMultiError []error
-
-// Error returns a concatenation of all the error messages it wraps.
-func (m ListVNFStatesResponseMultiError) Error() string {
-	msgs := make([]string, 0, len(m))
-	for _, err := range m {
-		msgs = append(msgs, err.Error())
-	}
-	return strings.Join(msgs, "; ")
-}
-
-// AllErrors returns a list of validation violation errors.
-func (m ListVNFStatesResponseMultiError) AllErrors() []error { return m }
-
-// ListVNFStatesResponseValidationError is the validation error returned by
-// ListVNFStatesResponse.Validate if the designated constraints aren't met.
-type ListVNFStatesResponseValidationError struct {
-	field  string
-	reason string
-	cause  error
-	key    bool
-}
-
-// Field function returns field value.
-func (e ListVNFStatesResponseValidationError) Field() string { return e.field }
-
-// Reason function returns reason value.
-func (e ListVNFStatesResponseValidationError) Reason() string { return e.reason }
-
-// Cause function returns cause value.
-func (e ListVNFStatesResponseValidationError) Cause() error { return e.cause }
-
-// Key function returns key value.
-func (e ListVNFStatesResponseValidationError) Key() bool { return e.key }
-
-// ErrorName returns error name.
-func (e ListVNFStatesResponseValidationError) ErrorName() string {
-	return "ListVNFStatesResponseValidationError"
-}
-
-// Error satisfies the builtin error interface
-func (e ListVNFStatesResponseValidationError) Error() string {
-	cause := ""
-	if e.cause != nil {
-		cause = fmt.Sprintf(" | caused by: %v", e.cause)
-	}
-
-	key := ""
-	if e.key {
-		key = "key for "
-	}
-
-	return fmt.Sprintf(
-		"invalid %sListVNFStatesResponse.%s: %s%s",
-		key,
-		e.field,
-		e.reason,
-		cause)
-}
-
-var _ error = ListVNFStatesResponseValidationError{}
-
-var _ interface {
-	Field() string
-	Reason() string
-	Key() bool
-	Cause() error
-	ErrorName() string
-} = ListVNFStatesResponseValidationError{}
-
-// Validate checks the field values on GetVNFStateRequest with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *GetVNFStateRequest) Validate() error {
-	return m.validate(false)
-}
-
-// ValidateAll checks the field values on GetVNFStateRequest with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the result is a list of violation errors wrapped in
-// GetVNFStateRequestMultiError, or nil if none found.
-func (m *GetVNFStateRequest) ValidateAll() error {
-	return m.validate(true)
-}
-
-func (m *GetVNFStateRequest) validate(all bool) error {
+func (m *GetDHCPStateRequest) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -942,7 +1409,7 @@ func (m *GetVNFStateRequest) validate(all bool) error {
 	var errors []error
 
 	if m.GetId() <= 0 {
-		err := GetVNFStateRequestValidationError{
+		err := GetDHCPStateRequestValidationError{
 			field:  "Id",
 			reason: "value must be greater than 0",
 		}
@@ -953,19 +1420,19 @@ func (m *GetVNFStateRequest) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return GetVNFStateRequestMultiError(errors)
+		return GetDHCPStateRequestMultiError(errors)
 	}
 
 	return nil
 }
 
-// GetVNFStateRequestMultiError is an error wrapping multiple validation errors
-// returned by GetVNFStateRequest.ValidateAll() if the designated constraints
-// aren't met.
-type GetVNFStateRequestMultiError []error
+// GetDHCPStateRequestMultiError is an error wrapping multiple validation
+// errors returned by GetDHCPStateRequest.ValidateAll() if the designated
+// constraints aren't met.
+type GetDHCPStateRequestMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m GetVNFStateRequestMultiError) Error() string {
+func (m GetDHCPStateRequestMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -974,11 +1441,11 @@ func (m GetVNFStateRequestMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m GetVNFStateRequestMultiError) AllErrors() []error { return m }
+func (m GetDHCPStateRequestMultiError) AllErrors() []error { return m }
 
-// GetVNFStateRequestValidationError is the validation error returned by
-// GetVNFStateRequest.Validate if the designated constraints aren't met.
-type GetVNFStateRequestValidationError struct {
+// GetDHCPStateRequestValidationError is the validation error returned by
+// GetDHCPStateRequest.Validate if the designated constraints aren't met.
+type GetDHCPStateRequestValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -986,24 +1453,24 @@ type GetVNFStateRequestValidationError struct {
 }
 
 // Field function returns field value.
-func (e GetVNFStateRequestValidationError) Field() string { return e.field }
+func (e GetDHCPStateRequestValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e GetVNFStateRequestValidationError) Reason() string { return e.reason }
+func (e GetDHCPStateRequestValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e GetVNFStateRequestValidationError) Cause() error { return e.cause }
+func (e GetDHCPStateRequestValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e GetVNFStateRequestValidationError) Key() bool { return e.key }
+func (e GetDHCPStateRequestValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e GetVNFStateRequestValidationError) ErrorName() string {
-	return "GetVNFStateRequestValidationError"
+func (e GetDHCPStateRequestValidationError) ErrorName() string {
+	return "GetDHCPStateRequestValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e GetVNFStateRequestValidationError) Error() string {
+func (e GetDHCPStateRequestValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -1015,14 +1482,14 @@ func (e GetVNFStateRequestValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sGetVNFStateRequest.%s: %s%s",
+		"invalid %sGetDHCPStateRequest.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = GetVNFStateRequestValidationError{}
+var _ error = GetDHCPStateRequestValidationError{}
 
 var _ interface {
 	Field() string
@@ -1030,24 +1497,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = GetVNFStateRequestValidationError{}
+} = GetDHCPStateRequestValidationError{}
 
-// Validate checks the field values on ListLeasesRequest with the rules defined
-// in the proto definition for this message. If any rules are violated, the
-// first error encountered is returned, or nil if there are no violations.
-func (m *ListLeasesRequest) Validate() error {
+// Validate checks the field values on ListDHCPLeasesRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ListDHCPLeasesRequest) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on ListLeasesRequest with the rules
+// ValidateAll checks the field values on ListDHCPLeasesRequest with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the result is a list of violation errors wrapped in
-// ListLeasesRequestMultiError, or nil if none found.
-func (m *ListLeasesRequest) ValidateAll() error {
+// ListDHCPLeasesRequestMultiError, or nil if none found.
+func (m *ListDHCPLeasesRequest) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *ListLeasesRequest) validate(all bool) error {
+func (m *ListDHCPLeasesRequest) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -1055,7 +1522,7 @@ func (m *ListLeasesRequest) validate(all bool) error {
 	var errors []error
 
 	if m.GetId() <= 0 {
-		err := ListLeasesRequestValidationError{
+		err := ListDHCPLeasesRequestValidationError{
 			field:  "Id",
 			reason: "value must be greater than 0",
 		}
@@ -1066,19 +1533,19 @@ func (m *ListLeasesRequest) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return ListLeasesRequestMultiError(errors)
+		return ListDHCPLeasesRequestMultiError(errors)
 	}
 
 	return nil
 }
 
-// ListLeasesRequestMultiError is an error wrapping multiple validation errors
-// returned by ListLeasesRequest.ValidateAll() if the designated constraints
-// aren't met.
-type ListLeasesRequestMultiError []error
+// ListDHCPLeasesRequestMultiError is an error wrapping multiple validation
+// errors returned by ListDHCPLeasesRequest.ValidateAll() if the designated
+// constraints aren't met.
+type ListDHCPLeasesRequestMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m ListLeasesRequestMultiError) Error() string {
+func (m ListDHCPLeasesRequestMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -1087,11 +1554,11 @@ func (m ListLeasesRequestMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m ListLeasesRequestMultiError) AllErrors() []error { return m }
+func (m ListDHCPLeasesRequestMultiError) AllErrors() []error { return m }
 
-// ListLeasesRequestValidationError is the validation error returned by
-// ListLeasesRequest.Validate if the designated constraints aren't met.
-type ListLeasesRequestValidationError struct {
+// ListDHCPLeasesRequestValidationError is the validation error returned by
+// ListDHCPLeasesRequest.Validate if the designated constraints aren't met.
+type ListDHCPLeasesRequestValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -1099,24 +1566,24 @@ type ListLeasesRequestValidationError struct {
 }
 
 // Field function returns field value.
-func (e ListLeasesRequestValidationError) Field() string { return e.field }
+func (e ListDHCPLeasesRequestValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e ListLeasesRequestValidationError) Reason() string { return e.reason }
+func (e ListDHCPLeasesRequestValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e ListLeasesRequestValidationError) Cause() error { return e.cause }
+func (e ListDHCPLeasesRequestValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e ListLeasesRequestValidationError) Key() bool { return e.key }
+func (e ListDHCPLeasesRequestValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e ListLeasesRequestValidationError) ErrorName() string {
-	return "ListLeasesRequestValidationError"
+func (e ListDHCPLeasesRequestValidationError) ErrorName() string {
+	return "ListDHCPLeasesRequestValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e ListLeasesRequestValidationError) Error() string {
+func (e ListDHCPLeasesRequestValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -1128,14 +1595,14 @@ func (e ListLeasesRequestValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sListLeasesRequest.%s: %s%s",
+		"invalid %sListDHCPLeasesRequest.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = ListLeasesRequestValidationError{}
+var _ error = ListDHCPLeasesRequestValidationError{}
 
 var _ interface {
 	Field() string
@@ -1143,24 +1610,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = ListLeasesRequestValidationError{}
+} = ListDHCPLeasesRequestValidationError{}
 
-// Validate checks the field values on ListLeasesResponse with the rules
+// Validate checks the field values on ListDHCPLeasesResponse with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
-func (m *ListLeasesResponse) Validate() error {
+func (m *ListDHCPLeasesResponse) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on ListLeasesResponse with the rules
+// ValidateAll checks the field values on ListDHCPLeasesResponse with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the result is a list of violation errors wrapped in
-// ListLeasesResponseMultiError, or nil if none found.
-func (m *ListLeasesResponse) ValidateAll() error {
+// ListDHCPLeasesResponseMultiError, or nil if none found.
+func (m *ListDHCPLeasesResponse) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *ListLeasesResponse) validate(all bool) error {
+func (m *ListDHCPLeasesResponse) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -1169,8 +1636,6 @@ func (m *ListLeasesResponse) validate(all bool) error {
 
 	// no validation rules for VnfId
 
-	// no validation rules for Type
-
 	for idx, item := range m.GetLeases() {
 		_, _ = idx, item
 
@@ -1178,7 +1643,7 @@ func (m *ListLeasesResponse) validate(all bool) error {
 			switch v := interface{}(item).(type) {
 			case interface{ ValidateAll() error }:
 				if err := v.ValidateAll(); err != nil {
-					errors = append(errors, ListLeasesResponseValidationError{
+					errors = append(errors, ListDHCPLeasesResponseValidationError{
 						field:  fmt.Sprintf("Leases[%v]", idx),
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -1186,7 +1651,7 @@ func (m *ListLeasesResponse) validate(all bool) error {
 				}
 			case interface{ Validate() error }:
 				if err := v.Validate(); err != nil {
-					errors = append(errors, ListLeasesResponseValidationError{
+					errors = append(errors, ListDHCPLeasesResponseValidationError{
 						field:  fmt.Sprintf("Leases[%v]", idx),
 						reason: "embedded message failed validation",
 						cause:  err,
@@ -1195,7 +1660,7 @@ func (m *ListLeasesResponse) validate(all bool) error {
 			}
 		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
 			if err := v.Validate(); err != nil {
-				return ListLeasesResponseValidationError{
+				return ListDHCPLeasesResponseValidationError{
 					field:  fmt.Sprintf("Leases[%v]", idx),
 					reason: "embedded message failed validation",
 					cause:  err,
@@ -1206,19 +1671,19 @@ func (m *ListLeasesResponse) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return ListLeasesResponseMultiError(errors)
+		return ListDHCPLeasesResponseMultiError(errors)
 	}
 
 	return nil
 }
 
-// ListLeasesResponseMultiError is an error wrapping multiple validation errors
-// returned by ListLeasesResponse.ValidateAll() if the designated constraints
-// aren't met.
-type ListLeasesResponseMultiError []error
+// ListDHCPLeasesResponseMultiError is an error wrapping multiple validation
+// errors returned by ListDHCPLeasesResponse.ValidateAll() if the designated
+// constraints aren't met.
+type ListDHCPLeasesResponseMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m ListLeasesResponseMultiError) Error() string {
+func (m ListDHCPLeasesResponseMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -1227,11 +1692,11 @@ func (m ListLeasesResponseMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m ListLeasesResponseMultiError) AllErrors() []error { return m }
+func (m ListDHCPLeasesResponseMultiError) AllErrors() []error { return m }
 
-// ListLeasesResponseValidationError is the validation error returned by
-// ListLeasesResponse.Validate if the designated constraints aren't met.
-type ListLeasesResponseValidationError struct {
+// ListDHCPLeasesResponseValidationError is the validation error returned by
+// ListDHCPLeasesResponse.Validate if the designated constraints aren't met.
+type ListDHCPLeasesResponseValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -1239,24 +1704,24 @@ type ListLeasesResponseValidationError struct {
 }
 
 // Field function returns field value.
-func (e ListLeasesResponseValidationError) Field() string { return e.field }
+func (e ListDHCPLeasesResponseValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e ListLeasesResponseValidationError) Reason() string { return e.reason }
+func (e ListDHCPLeasesResponseValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e ListLeasesResponseValidationError) Cause() error { return e.cause }
+func (e ListDHCPLeasesResponseValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e ListLeasesResponseValidationError) Key() bool { return e.key }
+func (e ListDHCPLeasesResponseValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e ListLeasesResponseValidationError) ErrorName() string {
-	return "ListLeasesResponseValidationError"
+func (e ListDHCPLeasesResponseValidationError) ErrorName() string {
+	return "ListDHCPLeasesResponseValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e ListLeasesResponseValidationError) Error() string {
+func (e ListDHCPLeasesResponseValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -1268,14 +1733,14 @@ func (e ListLeasesResponseValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sListLeasesResponse.%s: %s%s",
+		"invalid %sListDHCPLeasesResponse.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = ListLeasesResponseValidationError{}
+var _ error = ListDHCPLeasesResponseValidationError{}
 
 var _ interface {
 	Field() string
@@ -1283,24 +1748,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = ListLeasesResponseValidationError{}
+} = ListDHCPLeasesResponseValidationError{}
 
-// Validate checks the field values on RemoveLeasesRequest with the rules
+// Validate checks the field values on RemoveDHCPLeasesRequest with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
-func (m *RemoveLeasesRequest) Validate() error {
+func (m *RemoveDHCPLeasesRequest) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on RemoveLeasesRequest with the rules
-// defined in the proto definition for this message. If any rules are
+// ValidateAll checks the field values on RemoveDHCPLeasesRequest with the
+// rules defined in the proto definition for this message. If any rules are
 // violated, the result is a list of violation errors wrapped in
-// RemoveLeasesRequestMultiError, or nil if none found.
-func (m *RemoveLeasesRequest) ValidateAll() error {
+// RemoveDHCPLeasesRequestMultiError, or nil if none found.
+func (m *RemoveDHCPLeasesRequest) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *RemoveLeasesRequest) validate(all bool) error {
+func (m *RemoveDHCPLeasesRequest) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -1308,7 +1773,7 @@ func (m *RemoveLeasesRequest) validate(all bool) error {
 	var errors []error
 
 	if m.GetId() <= 0 {
-		err := RemoveLeasesRequestValidationError{
+		err := RemoveDHCPLeasesRequestValidationError{
 			field:  "Id",
 			reason: "value must be greater than 0",
 		}
@@ -1319,7 +1784,7 @@ func (m *RemoveLeasesRequest) validate(all bool) error {
 	}
 
 	if l := len(m.GetClientIds()); l < 1 || l > 256 {
-		err := RemoveLeasesRequestValidationError{
+		err := RemoveDHCPLeasesRequestValidationError{
 			field:  "ClientIds",
 			reason: "value must contain between 1 and 256 items, inclusive",
 		}
@@ -1333,7 +1798,7 @@ func (m *RemoveLeasesRequest) validate(all bool) error {
 		_, _ = idx, item
 
 		if l := utf8.RuneCountInString(item); l < 1 || l > 128 {
-			err := RemoveLeasesRequestValidationError{
+			err := RemoveDHCPLeasesRequestValidationError{
 				field:  fmt.Sprintf("ClientIds[%v]", idx),
 				reason: "value length must be between 1 and 128 runes, inclusive",
 			}
@@ -1346,19 +1811,19 @@ func (m *RemoveLeasesRequest) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return RemoveLeasesRequestMultiError(errors)
+		return RemoveDHCPLeasesRequestMultiError(errors)
 	}
 
 	return nil
 }
 
-// RemoveLeasesRequestMultiError is an error wrapping multiple validation
-// errors returned by RemoveLeasesRequest.ValidateAll() if the designated
+// RemoveDHCPLeasesRequestMultiError is an error wrapping multiple validation
+// errors returned by RemoveDHCPLeasesRequest.ValidateAll() if the designated
 // constraints aren't met.
-type RemoveLeasesRequestMultiError []error
+type RemoveDHCPLeasesRequestMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m RemoveLeasesRequestMultiError) Error() string {
+func (m RemoveDHCPLeasesRequestMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -1367,11 +1832,11 @@ func (m RemoveLeasesRequestMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m RemoveLeasesRequestMultiError) AllErrors() []error { return m }
+func (m RemoveDHCPLeasesRequestMultiError) AllErrors() []error { return m }
 
-// RemoveLeasesRequestValidationError is the validation error returned by
-// RemoveLeasesRequest.Validate if the designated constraints aren't met.
-type RemoveLeasesRequestValidationError struct {
+// RemoveDHCPLeasesRequestValidationError is the validation error returned by
+// RemoveDHCPLeasesRequest.Validate if the designated constraints aren't met.
+type RemoveDHCPLeasesRequestValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -1379,24 +1844,24 @@ type RemoveLeasesRequestValidationError struct {
 }
 
 // Field function returns field value.
-func (e RemoveLeasesRequestValidationError) Field() string { return e.field }
+func (e RemoveDHCPLeasesRequestValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e RemoveLeasesRequestValidationError) Reason() string { return e.reason }
+func (e RemoveDHCPLeasesRequestValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e RemoveLeasesRequestValidationError) Cause() error { return e.cause }
+func (e RemoveDHCPLeasesRequestValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e RemoveLeasesRequestValidationError) Key() bool { return e.key }
+func (e RemoveDHCPLeasesRequestValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e RemoveLeasesRequestValidationError) ErrorName() string {
-	return "RemoveLeasesRequestValidationError"
+func (e RemoveDHCPLeasesRequestValidationError) ErrorName() string {
+	return "RemoveDHCPLeasesRequestValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e RemoveLeasesRequestValidationError) Error() string {
+func (e RemoveDHCPLeasesRequestValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -1408,14 +1873,14 @@ func (e RemoveLeasesRequestValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sRemoveLeasesRequest.%s: %s%s",
+		"invalid %sRemoveDHCPLeasesRequest.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = RemoveLeasesRequestValidationError{}
+var _ error = RemoveDHCPLeasesRequestValidationError{}
 
 var _ interface {
 	Field() string
@@ -1423,24 +1888,24 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = RemoveLeasesRequestValidationError{}
+} = RemoveDHCPLeasesRequestValidationError{}
 
-// Validate checks the field values on RemoveLeasesResponse with the rules
+// Validate checks the field values on RemoveDHCPLeasesResponse with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
-func (m *RemoveLeasesResponse) Validate() error {
+func (m *RemoveDHCPLeasesResponse) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on RemoveLeasesResponse with the rules
-// defined in the proto definition for this message. If any rules are
+// ValidateAll checks the field values on RemoveDHCPLeasesResponse with the
+// rules defined in the proto definition for this message. If any rules are
 // violated, the result is a list of violation errors wrapped in
-// RemoveLeasesResponseMultiError, or nil if none found.
-func (m *RemoveLeasesResponse) ValidateAll() error {
+// RemoveDHCPLeasesResponseMultiError, or nil if none found.
+func (m *RemoveDHCPLeasesResponse) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *RemoveLeasesResponse) validate(all bool) error {
+func (m *RemoveDHCPLeasesResponse) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -1450,19 +1915,19 @@ func (m *RemoveLeasesResponse) validate(all bool) error {
 	// no validation rules for Removed
 
 	if len(errors) > 0 {
-		return RemoveLeasesResponseMultiError(errors)
+		return RemoveDHCPLeasesResponseMultiError(errors)
 	}
 
 	return nil
 }
 
-// RemoveLeasesResponseMultiError is an error wrapping multiple validation
-// errors returned by RemoveLeasesResponse.ValidateAll() if the designated
+// RemoveDHCPLeasesResponseMultiError is an error wrapping multiple validation
+// errors returned by RemoveDHCPLeasesResponse.ValidateAll() if the designated
 // constraints aren't met.
-type RemoveLeasesResponseMultiError []error
+type RemoveDHCPLeasesResponseMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m RemoveLeasesResponseMultiError) Error() string {
+func (m RemoveDHCPLeasesResponseMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -1471,11 +1936,11 @@ func (m RemoveLeasesResponseMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m RemoveLeasesResponseMultiError) AllErrors() []error { return m }
+func (m RemoveDHCPLeasesResponseMultiError) AllErrors() []error { return m }
 
-// RemoveLeasesResponseValidationError is the validation error returned by
-// RemoveLeasesResponse.Validate if the designated constraints aren't met.
-type RemoveLeasesResponseValidationError struct {
+// RemoveDHCPLeasesResponseValidationError is the validation error returned by
+// RemoveDHCPLeasesResponse.Validate if the designated constraints aren't met.
+type RemoveDHCPLeasesResponseValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -1483,24 +1948,24 @@ type RemoveLeasesResponseValidationError struct {
 }
 
 // Field function returns field value.
-func (e RemoveLeasesResponseValidationError) Field() string { return e.field }
+func (e RemoveDHCPLeasesResponseValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e RemoveLeasesResponseValidationError) Reason() string { return e.reason }
+func (e RemoveDHCPLeasesResponseValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e RemoveLeasesResponseValidationError) Cause() error { return e.cause }
+func (e RemoveDHCPLeasesResponseValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e RemoveLeasesResponseValidationError) Key() bool { return e.key }
+func (e RemoveDHCPLeasesResponseValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e RemoveLeasesResponseValidationError) ErrorName() string {
-	return "RemoveLeasesResponseValidationError"
+func (e RemoveDHCPLeasesResponseValidationError) ErrorName() string {
+	return "RemoveDHCPLeasesResponseValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e RemoveLeasesResponseValidationError) Error() string {
+func (e RemoveDHCPLeasesResponseValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -1512,14 +1977,14 @@ func (e RemoveLeasesResponseValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sRemoveLeasesResponse.%s: %s%s",
+		"invalid %sRemoveDHCPLeasesResponse.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = RemoveLeasesResponseValidationError{}
+var _ error = RemoveDHCPLeasesResponseValidationError{}
 
 var _ interface {
 	Field() string
@@ -1527,24 +1992,304 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = RemoveLeasesResponseValidationError{}
+} = RemoveDHCPLeasesResponseValidationError{}
 
-// Validate checks the field values on GetBGPStatusRequest with the rules
-// defined in the proto definition for this message. If any rules are
-// violated, the first error encountered is returned, or nil if there are no violations.
-func (m *GetBGPStatusRequest) Validate() error {
+// Validate checks the field values on EnsureDNSRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *EnsureDNSRequest) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on GetBGPStatusRequest with the rules
+// ValidateAll checks the field values on EnsureDNSRequest with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the result is a list of violation errors wrapped in
-// GetBGPStatusRequestMultiError, or nil if none found.
-func (m *GetBGPStatusRequest) ValidateAll() error {
+// EnsureDNSRequestMultiError, or nil if none found.
+func (m *EnsureDNSRequest) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *GetBGPStatusRequest) validate(all bool) error {
+func (m *EnsureDNSRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetSpec() == nil {
+		err := EnsureDNSRequestValidationError{
+			field:  "Spec",
+			reason: "value is required",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if all {
+		switch v := interface{}(m.GetSpec()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, EnsureDNSRequestValidationError{
+					field:  "Spec",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, EnsureDNSRequestValidationError{
+					field:  "Spec",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetSpec()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return EnsureDNSRequestValidationError{
+				field:  "Spec",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return EnsureDNSRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// EnsureDNSRequestMultiError is an error wrapping multiple validation errors
+// returned by EnsureDNSRequest.ValidateAll() if the designated constraints
+// aren't met.
+type EnsureDNSRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m EnsureDNSRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m EnsureDNSRequestMultiError) AllErrors() []error { return m }
+
+// EnsureDNSRequestValidationError is the validation error returned by
+// EnsureDNSRequest.Validate if the designated constraints aren't met.
+type EnsureDNSRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e EnsureDNSRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e EnsureDNSRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e EnsureDNSRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e EnsureDNSRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e EnsureDNSRequestValidationError) ErrorName() string { return "EnsureDNSRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e EnsureDNSRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sEnsureDNSRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = EnsureDNSRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = EnsureDNSRequestValidationError{}
+
+// Validate checks the field values on ReloadDNSRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *ReloadDNSRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ReloadDNSRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ReloadDNSRequestMultiError, or nil if none found.
+func (m *ReloadDNSRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ReloadDNSRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetSpec() == nil {
+		err := ReloadDNSRequestValidationError{
+			field:  "Spec",
+			reason: "value is required",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if all {
+		switch v := interface{}(m.GetSpec()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, ReloadDNSRequestValidationError{
+					field:  "Spec",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, ReloadDNSRequestValidationError{
+					field:  "Spec",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetSpec()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return ReloadDNSRequestValidationError{
+				field:  "Spec",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return ReloadDNSRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// ReloadDNSRequestMultiError is an error wrapping multiple validation errors
+// returned by ReloadDNSRequest.ValidateAll() if the designated constraints
+// aren't met.
+type ReloadDNSRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ReloadDNSRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ReloadDNSRequestMultiError) AllErrors() []error { return m }
+
+// ReloadDNSRequestValidationError is the validation error returned by
+// ReloadDNSRequest.Validate if the designated constraints aren't met.
+type ReloadDNSRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ReloadDNSRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ReloadDNSRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ReloadDNSRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ReloadDNSRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ReloadDNSRequestValidationError) ErrorName() string { return "ReloadDNSRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e ReloadDNSRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sReloadDNSRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ReloadDNSRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ReloadDNSRequestValidationError{}
+
+// Validate checks the field values on RemoveDNSRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *RemoveDNSRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on RemoveDNSRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// RemoveDNSRequestMultiError, or nil if none found.
+func (m *RemoveDNSRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *RemoveDNSRequest) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
@@ -1552,7 +2297,7 @@ func (m *GetBGPStatusRequest) validate(all bool) error {
 	var errors []error
 
 	if m.GetId() <= 0 {
-		err := GetBGPStatusRequestValidationError{
+		err := RemoveDNSRequestValidationError{
 			field:  "Id",
 			reason: "value must be greater than 0",
 		}
@@ -1563,19 +2308,19 @@ func (m *GetBGPStatusRequest) validate(all bool) error {
 	}
 
 	if len(errors) > 0 {
-		return GetBGPStatusRequestMultiError(errors)
+		return RemoveDNSRequestMultiError(errors)
 	}
 
 	return nil
 }
 
-// GetBGPStatusRequestMultiError is an error wrapping multiple validation
-// errors returned by GetBGPStatusRequest.ValidateAll() if the designated
-// constraints aren't met.
-type GetBGPStatusRequestMultiError []error
+// RemoveDNSRequestMultiError is an error wrapping multiple validation errors
+// returned by RemoveDNSRequest.ValidateAll() if the designated constraints
+// aren't met.
+type RemoveDNSRequestMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m GetBGPStatusRequestMultiError) Error() string {
+func (m RemoveDNSRequestMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -1584,11 +2329,11 @@ func (m GetBGPStatusRequestMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m GetBGPStatusRequestMultiError) AllErrors() []error { return m }
+func (m RemoveDNSRequestMultiError) AllErrors() []error { return m }
 
-// GetBGPStatusRequestValidationError is the validation error returned by
-// GetBGPStatusRequest.Validate if the designated constraints aren't met.
-type GetBGPStatusRequestValidationError struct {
+// RemoveDNSRequestValidationError is the validation error returned by
+// RemoveDNSRequest.Validate if the designated constraints aren't met.
+type RemoveDNSRequestValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -1596,24 +2341,22 @@ type GetBGPStatusRequestValidationError struct {
 }
 
 // Field function returns field value.
-func (e GetBGPStatusRequestValidationError) Field() string { return e.field }
+func (e RemoveDNSRequestValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e GetBGPStatusRequestValidationError) Reason() string { return e.reason }
+func (e RemoveDNSRequestValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e GetBGPStatusRequestValidationError) Cause() error { return e.cause }
+func (e RemoveDNSRequestValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e GetBGPStatusRequestValidationError) Key() bool { return e.key }
+func (e RemoveDNSRequestValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e GetBGPStatusRequestValidationError) ErrorName() string {
-	return "GetBGPStatusRequestValidationError"
-}
+func (e RemoveDNSRequestValidationError) ErrorName() string { return "RemoveDNSRequestValidationError" }
 
 // Error satisfies the builtin error interface
-func (e GetBGPStatusRequestValidationError) Error() string {
+func (e RemoveDNSRequestValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -1625,14 +2368,14 @@ func (e GetBGPStatusRequestValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sGetBGPStatusRequest.%s: %s%s",
+		"invalid %sRemoveDNSRequest.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = GetBGPStatusRequestValidationError{}
+var _ error = RemoveDNSRequestValidationError{}
 
 var _ interface {
 	Field() string
@@ -1640,7 +2383,120 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = GetBGPStatusRequestValidationError{}
+} = RemoveDNSRequestValidationError{}
+
+// Validate checks the field values on GetDNSStateRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *GetDNSStateRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetDNSStateRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// GetDNSStateRequestMultiError, or nil if none found.
+func (m *GetDNSStateRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetDNSStateRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetId() <= 0 {
+		err := GetDNSStateRequestValidationError{
+			field:  "Id",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return GetDNSStateRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// GetDNSStateRequestMultiError is an error wrapping multiple validation errors
+// returned by GetDNSStateRequest.ValidateAll() if the designated constraints
+// aren't met.
+type GetDNSStateRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetDNSStateRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetDNSStateRequestMultiError) AllErrors() []error { return m }
+
+// GetDNSStateRequestValidationError is the validation error returned by
+// GetDNSStateRequest.Validate if the designated constraints aren't met.
+type GetDNSStateRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetDNSStateRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetDNSStateRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetDNSStateRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetDNSStateRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetDNSStateRequestValidationError) ErrorName() string {
+	return "GetDNSStateRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e GetDNSStateRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetDNSStateRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetDNSStateRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetDNSStateRequestValidationError{}
 
 // Validate checks the field values on ListDNSRecordsRequest with the rules
 // defined in the proto definition for this message. If any rules are
@@ -1893,6 +2749,725 @@ var _ interface {
 	ErrorName() string
 } = ListDNSRecordsResponseValidationError{}
 
+// Validate checks the field values on EnsureBGPRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *EnsureBGPRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on EnsureBGPRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// EnsureBGPRequestMultiError, or nil if none found.
+func (m *EnsureBGPRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *EnsureBGPRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetSpec() == nil {
+		err := EnsureBGPRequestValidationError{
+			field:  "Spec",
+			reason: "value is required",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if all {
+		switch v := interface{}(m.GetSpec()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, EnsureBGPRequestValidationError{
+					field:  "Spec",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, EnsureBGPRequestValidationError{
+					field:  "Spec",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetSpec()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return EnsureBGPRequestValidationError{
+				field:  "Spec",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return EnsureBGPRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// EnsureBGPRequestMultiError is an error wrapping multiple validation errors
+// returned by EnsureBGPRequest.ValidateAll() if the designated constraints
+// aren't met.
+type EnsureBGPRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m EnsureBGPRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m EnsureBGPRequestMultiError) AllErrors() []error { return m }
+
+// EnsureBGPRequestValidationError is the validation error returned by
+// EnsureBGPRequest.Validate if the designated constraints aren't met.
+type EnsureBGPRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e EnsureBGPRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e EnsureBGPRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e EnsureBGPRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e EnsureBGPRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e EnsureBGPRequestValidationError) ErrorName() string { return "EnsureBGPRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e EnsureBGPRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sEnsureBGPRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = EnsureBGPRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = EnsureBGPRequestValidationError{}
+
+// Validate checks the field values on ReloadBGPRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *ReloadBGPRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ReloadBGPRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ReloadBGPRequestMultiError, or nil if none found.
+func (m *ReloadBGPRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ReloadBGPRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetSpec() == nil {
+		err := ReloadBGPRequestValidationError{
+			field:  "Spec",
+			reason: "value is required",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if all {
+		switch v := interface{}(m.GetSpec()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, ReloadBGPRequestValidationError{
+					field:  "Spec",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, ReloadBGPRequestValidationError{
+					field:  "Spec",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetSpec()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return ReloadBGPRequestValidationError{
+				field:  "Spec",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return ReloadBGPRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// ReloadBGPRequestMultiError is an error wrapping multiple validation errors
+// returned by ReloadBGPRequest.ValidateAll() if the designated constraints
+// aren't met.
+type ReloadBGPRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ReloadBGPRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ReloadBGPRequestMultiError) AllErrors() []error { return m }
+
+// ReloadBGPRequestValidationError is the validation error returned by
+// ReloadBGPRequest.Validate if the designated constraints aren't met.
+type ReloadBGPRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ReloadBGPRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ReloadBGPRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ReloadBGPRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ReloadBGPRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ReloadBGPRequestValidationError) ErrorName() string { return "ReloadBGPRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e ReloadBGPRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sReloadBGPRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ReloadBGPRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ReloadBGPRequestValidationError{}
+
+// Validate checks the field values on RemoveBGPRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *RemoveBGPRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on RemoveBGPRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// RemoveBGPRequestMultiError, or nil if none found.
+func (m *RemoveBGPRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *RemoveBGPRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetId() <= 0 {
+		err := RemoveBGPRequestValidationError{
+			field:  "Id",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return RemoveBGPRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// RemoveBGPRequestMultiError is an error wrapping multiple validation errors
+// returned by RemoveBGPRequest.ValidateAll() if the designated constraints
+// aren't met.
+type RemoveBGPRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m RemoveBGPRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m RemoveBGPRequestMultiError) AllErrors() []error { return m }
+
+// RemoveBGPRequestValidationError is the validation error returned by
+// RemoveBGPRequest.Validate if the designated constraints aren't met.
+type RemoveBGPRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e RemoveBGPRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e RemoveBGPRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e RemoveBGPRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e RemoveBGPRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e RemoveBGPRequestValidationError) ErrorName() string { return "RemoveBGPRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e RemoveBGPRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sRemoveBGPRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = RemoveBGPRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = RemoveBGPRequestValidationError{}
+
+// Validate checks the field values on GetBGPStateRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *GetBGPStateRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetBGPStateRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// GetBGPStateRequestMultiError, or nil if none found.
+func (m *GetBGPStateRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetBGPStateRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetId() <= 0 {
+		err := GetBGPStateRequestValidationError{
+			field:  "Id",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return GetBGPStateRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// GetBGPStateRequestMultiError is an error wrapping multiple validation errors
+// returned by GetBGPStateRequest.ValidateAll() if the designated constraints
+// aren't met.
+type GetBGPStateRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetBGPStateRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetBGPStateRequestMultiError) AllErrors() []error { return m }
+
+// GetBGPStateRequestValidationError is the validation error returned by
+// GetBGPStateRequest.Validate if the designated constraints aren't met.
+type GetBGPStateRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetBGPStateRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetBGPStateRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetBGPStateRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetBGPStateRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetBGPStateRequestValidationError) ErrorName() string {
+	return "GetBGPStateRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e GetBGPStateRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetBGPStateRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetBGPStateRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetBGPStateRequestValidationError{}
+
+// Validate checks the field values on GetBGPStatusRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *GetBGPStatusRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetBGPStatusRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// GetBGPStatusRequestMultiError, or nil if none found.
+func (m *GetBGPStatusRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetBGPStatusRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetId() <= 0 {
+		err := GetBGPStatusRequestValidationError{
+			field:  "Id",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return GetBGPStatusRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// GetBGPStatusRequestMultiError is an error wrapping multiple validation
+// errors returned by GetBGPStatusRequest.ValidateAll() if the designated
+// constraints aren't met.
+type GetBGPStatusRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetBGPStatusRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetBGPStatusRequestMultiError) AllErrors() []error { return m }
+
+// GetBGPStatusRequestValidationError is the validation error returned by
+// GetBGPStatusRequest.Validate if the designated constraints aren't met.
+type GetBGPStatusRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetBGPStatusRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetBGPStatusRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetBGPStatusRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetBGPStatusRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetBGPStatusRequestValidationError) ErrorName() string {
+	return "GetBGPStatusRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e GetBGPStatusRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetBGPStatusRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetBGPStatusRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetBGPStatusRequestValidationError{}
+
+// Validate checks the field values on ResetRuntimeRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ResetRuntimeRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ResetRuntimeRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ResetRuntimeRequestMultiError, or nil if none found.
+func (m *ResetRuntimeRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ResetRuntimeRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if len(errors) > 0 {
+		return ResetRuntimeRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// ResetRuntimeRequestMultiError is an error wrapping multiple validation
+// errors returned by ResetRuntimeRequest.ValidateAll() if the designated
+// constraints aren't met.
+type ResetRuntimeRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ResetRuntimeRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ResetRuntimeRequestMultiError) AllErrors() []error { return m }
+
+// ResetRuntimeRequestValidationError is the validation error returned by
+// ResetRuntimeRequest.Validate if the designated constraints aren't met.
+type ResetRuntimeRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ResetRuntimeRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ResetRuntimeRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ResetRuntimeRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ResetRuntimeRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ResetRuntimeRequestValidationError) ErrorName() string {
+	return "ResetRuntimeRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ResetRuntimeRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sResetRuntimeRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ResetRuntimeRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ResetRuntimeRequestValidationError{}
+
 // Validate checks the field values on CleanupLegacyNetworkRequest with the
 // rules defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
@@ -2006,3 +3581,108 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = CleanupLegacyNetworkRequestValidationError{}
+
+// Validate checks the field values on VNFState with the rules defined in the
+// proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *VNFState) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on VNFState with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in VNFStateMultiError, or nil
+// if none found.
+func (m *VNFState) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *VNFState) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Id
+
+	// no validation rules for Running
+
+	// no validation rules for Detail
+
+	if len(errors) > 0 {
+		return VNFStateMultiError(errors)
+	}
+
+	return nil
+}
+
+// VNFStateMultiError is an error wrapping multiple validation errors returned
+// by VNFState.ValidateAll() if the designated constraints aren't met.
+type VNFStateMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m VNFStateMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m VNFStateMultiError) AllErrors() []error { return m }
+
+// VNFStateValidationError is the validation error returned by
+// VNFState.Validate if the designated constraints aren't met.
+type VNFStateValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e VNFStateValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e VNFStateValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e VNFStateValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e VNFStateValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e VNFStateValidationError) ErrorName() string { return "VNFStateValidationError" }
+
+// Error satisfies the builtin error interface
+func (e VNFStateValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sVNFState.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = VNFStateValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = VNFStateValidationError{}

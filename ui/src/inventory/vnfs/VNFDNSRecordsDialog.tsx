@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
-import type { VNF, VNFDNSRecordsResponse } from "../types";
+import type { DNSVNF, VNFDNSRecordsResponse } from "../types";
 
 type VNFDNSRecordsDialogProps = {
-  vnf: VNF;
+  vnf: DNSVNF;
   onClose: () => void;
 };
 
@@ -23,8 +23,9 @@ function sourceLabel(source: string, sourceVNFID?: number): string {
 
 /**
  * VNFDNSRecordsDialog renders a modal table of a DNS VNF's static and DHCP-derived records with
- * name, type, value, TTL, and source. It loads /api/vnfs/{id}/dns-records on mount and Refresh,
- * shows a separate banner when dynamic records are unavailable, and closes on backdrop click.
+ * name, type, value, TTL, and source. It loads /api/dns-vnfs/{id}/record-views on mount and
+ * Refresh, summarizes the static and dynamic sources, shows a separate banner when dynamic records
+ * are unavailable, and closes on backdrop click.
  */
 export function VNFDNSRecordsDialog({ vnf, onClose }: VNFDNSRecordsDialogProps) {
   const [data, setData] = useState<VNFDNSRecordsResponse | null>(null);
@@ -35,7 +36,7 @@ export function VNFDNSRecordsDialog({ vnf, onClose }: VNFDNSRecordsDialogProps) 
   const load = async () => {
     setLoading(true);
     try {
-      const response = await api<VNFDNSRecordsResponse>(`/api/vnfs/${vnf.id}/dns-records`);
+      const response = await api<VNFDNSRecordsResponse>(`/api/dns-vnfs/${vnf.id}/record-views`);
       setData(response);
       setError("");
     } catch (err) {
@@ -53,6 +54,8 @@ export function VNFDNSRecordsDialog({ vnf, onClose }: VNFDNSRecordsDialogProps) 
   }, []);
 
   const records = data?.records || [];
+  const staticCount = records.filter((record) => record.source === "static").length;
+  const dynamicCount = records.length - staticCount;
 
   return (
     <dialog
@@ -77,8 +80,8 @@ export function VNFDNSRecordsDialog({ vnf, onClose }: VNFDNSRecordsDialogProps) 
       </header>
 
       <p class="dialog-lede">
-        {vnf.network_name || "network"} · {records.length} record{records.length === 1 ? "" : "s"} · static and
-        DHCP-derived
+        {vnf.network_name || "network"} · {records.length} record{records.length === 1 ? "" : "s"} ·{" "}
+        {staticCount} static · {dynamicCount} DHCP-derived
       </p>
 
       {error ? (

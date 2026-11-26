@@ -85,8 +85,20 @@ data "rookery_route" "default_v4" {
   prefix         = "0.0.0.0/0"
 }
 
-data "rookery_vnf" "dhcp" {
+data "rookery_dhcp_vnf" "dhcp" {
   name = "app-dhcp"
+}
+
+data "rookery_dns_vnf" "dns" {
+  name = "app-dns"
+}
+
+data "rookery_nat44_vnf" "nat" {
+  name = "app-nat"
+}
+
+data "rookery_bgp_vnf" "bgp" {
+  name = "app-bgp"
 }
 
 data "rookery_vm" "app" {
@@ -111,4 +123,8 @@ output "cgroup_status" {
 
 output "vm_labels" {
   value = data.rookery_vm.app.labels
+}
+
+output "dhcp_vnf_status" {
+  value = data.rookery_dhcp_vnf.dhcp.status
 }

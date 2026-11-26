@@ -42,7 +42,10 @@ type Client struct {
 	Interfaces          rookeryv1.InterfaceServiceClient
 	ACLs                rookeryv1.ACLServiceClient
 	RouteTables         rookeryv1.RouteTableServiceClient
-	VNFs                rookeryv1.VNFServiceClient
+	DHCPVNFs            rookeryv1.DHCPVNFServiceClient
+	DNSVNFs             rookeryv1.DNSVNFServiceClient
+	NAT44VNFs           rookeryv1.NAT44VNFServiceClient
+	BGPVNFs             rookeryv1.BGPVNFServiceClient
 	StorageBackends     rookeryv1.StorageBackendServiceClient
 	HostInterfaces      rookeryv1.HostServiceClient
 	Troubleshoot        rookeryv1.TroubleshootServiceClient
@@ -136,7 +139,10 @@ func NewClient(config ClientConfig) (*Client, error) {
 		Interfaces:          rookeryv1.NewInterfaceServiceClient(conn),
 		ACLs:                rookeryv1.NewACLServiceClient(conn),
 		RouteTables:         rookeryv1.NewRouteTableServiceClient(conn),
-		VNFs:                rookeryv1.NewVNFServiceClient(conn),
+		DHCPVNFs:            rookeryv1.NewDHCPVNFServiceClient(conn),
+		DNSVNFs:             rookeryv1.NewDNSVNFServiceClient(conn),
+		NAT44VNFs:           rookeryv1.NewNAT44VNFServiceClient(conn),
+		BGPVNFs:             rookeryv1.NewBGPVNFServiceClient(conn),
 		StorageBackends:     rookeryv1.NewStorageBackendServiceClient(conn),
 		HostInterfaces:      rookeryv1.NewHostServiceClient(conn),
 		Troubleshoot:        rookeryv1.NewTroubleshootServiceClient(conn),

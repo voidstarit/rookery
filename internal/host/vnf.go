@@ -62,6 +62,7 @@ type managedVNF struct {
 	bgp       *bgpInstance
 	bgpMemif  *bgpMemifRuntime
 	shared    *sharedNetwork
+	hostIf    string
 	networkID int64
 	done      chan struct{}
 }
@@ -93,6 +94,7 @@ func NewVNFManager(runDir string) (*VNFManager, error) {
 
 	ensureCoreDHCPPlugin()
 	ensureCoreDHCPv6Plugin()
+	ensureCoreDHCPLivePlugins()
 
 	return &VNFManager{
 		Dir:         dir,
@@ -181,7 +183,7 @@ func (m *VNFManager) Start(ctx context.Context, vnf store.VNF, hostIf string) er
 		Str("leases", leasePath).
 		Msg("VNF started")
 
-	managed := &managedVNF{vnfType: vnf.Type, servers: servers, done: make(chan struct{})}
+	managed := &managedVNF{vnfType: vnf.Type, servers: servers, hostIf: hostIf, done: make(chan struct{})}
 	go func() {
 		err := servers.Wait()
 		if err != nil && !errors.Is(err, net.ErrClosed) {
@@ -361,6 +363,73 @@ func (m *VNFManager) StartShared(ctx context.Context, vnf store.VNF, socketPath 
 // removeLeases is true (VNF deletion).
 func (m *VNFManager) Stop(ctx context.Context, vnfID int64, removeLeases bool) error {
 	return m.stop(ctx, vnfID, removeLeases)
+}
+
+// Reload swaps a running runtime's type-specific configuration in place. The
+// process, the CoreDHCP socket, the DNS listener, the lease file, and the GoBGP
+// server all stay up; only the handler or advertised prefix set changes. It
+// fails when the runtime is not running or the proposed config is invalid, and
+// a failed reload leaves the previous configuration serving.
+func (m *VNFManager) Reload(ctx context.Context, vnf store.VNF) error {
+	if vnf.ID < 1 {
+		return errors.New("invalid VNF id")
+	}
+	if !store.ValidVNFType(vnf.Type) {
+		return fmt.Errorf("unsupported VNF type %q", vnf.Type)
+	}
+	m.mu.Lock()
+	managed := m.servers[vnf.ID]
+	m.mu.Unlock()
+	if managed == nil {
+		return fmt.Errorf("VNF %d is not running", vnf.ID)
+	}
+	if managed.vnfType != vnf.Type {
+		return fmt.Errorf("VNF %d is a %s runtime, not %s", vnf.ID, managed.vnfType, vnf.Type)
+	}
+
+	switch vnf.Type {
+	case store.VNFTypeDHCPv4:
+		if managed.shared == nil && managed.memif == nil && managed.servers == nil {
+			return fmt.Errorf("DHCPv4 VNF %d has no running server", vnf.ID)
+		}
+		if _, err := newDHCPv4Handlers(vnf, m.leasePath(vnf.ID), m.port()); err != nil {
+			return err
+		}
+		m.registerDHCPConfig(vnf)
+		return nil
+	case store.VNFTypeDHCPv6:
+		if managed.servers == nil {
+			return fmt.Errorf("DHCPv6 VNF %d has no running server", vnf.ID)
+		}
+		hostIf := managed.hostIf
+		if strings.TrimSpace(hostIf) == "" {
+			hostIf = "memif"
+		}
+		if _, err := newDHCPv6Handlers(vnf, hostIf, m.leasePath(vnf.ID)); err != nil {
+			return err
+		}
+		m.registerDHCPConfig(vnf)
+		return nil
+	case store.VNFTypeDNS:
+		if managed.shared == nil {
+			return fmt.Errorf("DNS VNF %d is not running on a shared network", vnf.ID)
+		}
+		if err := managed.shared.reloadDNS(vnf); err != nil {
+			return err
+		}
+		m.registerDNSRuntime(vnf.ID, managed.shared.dnsHandler())
+		return nil
+	case store.VNFTypeBGP:
+		if managed.bgp != nil {
+			return managed.bgp.reload(ctx, vnf)
+		}
+		if managed.bgpMemif != nil && managed.bgpMemif.server != nil {
+			return managed.bgpMemif.server.reload(ctx, vnf)
+		}
+		return fmt.Errorf("BGP VNF %d has no running server", vnf.ID)
+	default:
+		return fmt.Errorf("VNF %d type %q has no daemon runtime", vnf.ID, vnf.Type)
+	}
 }
 
 // stop tears down the runtime behind vnfID, closing its shared network when it
@@ -701,6 +770,22 @@ func buildDHCPv4Config(vnf store.VNF, hostIf, leasePath string, port int) (*core
 		optionsArg = string(data)
 	}
 
+	// The lease path is the registry key of the live handler, so a reload can
+	// swap the handler while the CoreDHCP listener keeps its socket.
+	args := []string{
+		leasePath,
+		gateway4.String(),
+		net.IP(ipnet.Mask).String(),
+		start4.String(),
+		end4.String(),
+		strings.Join(dns, ","),
+		leasePath,
+		leaseTime.String(),
+		broadcast.String(),
+		dhcpServerIP(vnf.Config).String(),
+		staticArg,
+		optionsArg,
+	}
 	return &coredhcpconfig.Config{
 		Server4: &coredhcpconfig.ServerConfig{
 			Addresses: []net.UDPAddr{{
@@ -709,20 +794,8 @@ func buildDHCPv4Config(vnf store.VNF, hostIf, leasePath string, port int) (*core
 				Zone: hostIf,
 			}},
 			Plugins: []coredhcpconfig.PluginConfig{{
-				Name: coreDHCPv4Plugin,
-				Args: []string{
-					gateway4.String(),
-					net.IP(ipnet.Mask).String(),
-					start4.String(),
-					end4.String(),
-					strings.Join(dns, ","),
-					leasePath,
-					leaseTime.String(),
-					broadcast.String(),
-					dhcpServerIP(vnf.Config).String(),
-					staticArg,
-					optionsArg,
-				},
+				Name: coreDHCPv4LivePlugin,
+				Args: args,
 			}},
 		},
 	}, nil
@@ -790,6 +863,19 @@ func buildDHCPv6Config(vnf store.VNF, hostIf, leasePath string) (*coredhcpconfig
 		optionsArg = string(data)
 	}
 
+	// The lease path is the registry key of the live handler, so a reload can
+	// swap the handler while the CoreDHCP listener keeps its socket.
+	args := []string{
+		leasePath,
+		gatewayCIDR,
+		start.String(),
+		end.String(),
+		strings.Join(dns, ","),
+		leasePath,
+		leaseTime.String(),
+		duidMAC.String(),
+		optionsArg,
+	}
 	return &coredhcpconfig.Config{
 		Server6: &coredhcpconfig.ServerConfig{
 			Addresses: []net.UDPAddr{{
@@ -798,17 +884,8 @@ func buildDHCPv6Config(vnf store.VNF, hostIf, leasePath string) (*coredhcpconfig
 				Zone: hostIf,
 			}},
 			Plugins: []coredhcpconfig.PluginConfig{{
-				Name: coreDHCPv6Plugin,
-				Args: []string{
-					gatewayCIDR,
-					start.String(),
-					end.String(),
-					strings.Join(dns, ","),
-					leasePath,
-					leaseTime.String(),
-					duidMAC.String(),
-					optionsArg,
-				},
+				Name: coreDHCPv6LivePlugin,
+				Args: args,
 			}},
 		},
 	}, nil
@@ -833,16 +910,13 @@ func dhcpServerIP(cfg store.VNFConfig) net.IP {
 
 // vnfLeaseTime parses the configured lease duration, returning coreDHCPLeaseTime
 // when the value is blank and an error when it is unparsable or non-positive.
+// It accepts standard durations and the legacy compact forms through
+// DecodeLeaseTime.
 func vnfLeaseTime(value string) (time.Duration, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
+	if strings.TrimSpace(value) == "" {
 		return coreDHCPLeaseTime, nil
 	}
-	duration, err := time.ParseDuration(value)
-	if err != nil || duration <= 0 {
-		return 0, fmt.Errorf("invalid DHCP lease time %q", value)
-	}
-	return duration, nil
+	return DecodeLeaseTime(value)
 }
 
 // normalizeDNS splits a comma-separated resolver list, trimming blanks, and

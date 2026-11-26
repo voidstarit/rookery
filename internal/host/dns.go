@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/miekg/dns"
@@ -26,7 +27,7 @@ const dnsListenPort = 53
 
 type sharedDNS struct {
 	vnfID        int64
-	handler      *dnsHandler
+	handler      atomic.Pointer[dnsHandler]
 	udpServer    *dns.Server
 	tcpServer    *dns.Server
 	udpConn      *gonet.UDPConn
@@ -39,12 +40,25 @@ type sharedDNS struct {
 	closeOnce    sync.Once
 }
 
+// current returns the handler currently serving DNS requests.
+func (s *sharedDNS) current() *dnsHandler {
+	return s.handler.Load()
+}
+
+// ServeDNS dispatches a request to the current handler, so a reload can swap
+// the record/forwarder handler without replacing the listener.
+func (s *sharedDNS) ServeDNS(writer dns.ResponseWriter, request *dns.Msg) {
+	if handler := s.current(); handler != nil {
+		handler.ServeDNS(writer, request)
+	}
+}
+
 // addDNS starts a DNS server on the shared network stack. The endpoint is
 // reachable at the network service address (.2) on UDP and TCP port 53.
 func (n *sharedNetwork) addDNS(vnf store.VNF) error {
-	handler := newDNSHandler(vnf.Config)
-	if handler == nil {
-		return errors.New("DNS configuration is invalid")
+	handler, err := buildDNSHandler(vnf.Config)
+	if err != nil {
+		return err
 	}
 	handler.vnfID = vnf.ID
 	handler.networkID = n.networkID
@@ -111,18 +125,18 @@ func (n *sharedNetwork) addDNS(vnf store.VNF) error {
 
 	component := &sharedDNS{
 		vnfID:        vnf.ID,
-		handler:      handler,
 		udpConn:      udpConn,
 		tcpListener:  tcpListener,
 		udpConn6:     udpConn6,
 		tcpListener6: tcpListener6,
 		done:         make(chan struct{}),
 	}
-	component.udpServer = &dns.Server{PacketConn: udpConn, Handler: handler, UDPSize: 4096}
-	component.tcpServer = &dns.Server{Listener: tcpListener, Handler: handler}
+	component.handler.Store(handler)
+	component.udpServer = &dns.Server{PacketConn: udpConn, Handler: component, UDPSize: 4096}
+	component.tcpServer = &dns.Server{Listener: tcpListener, Handler: component}
 	if udpConn6 != nil {
-		component.udpServer6 = &dns.Server{PacketConn: udpConn6, Handler: handler, UDPSize: 4096}
-		component.tcpServer6 = &dns.Server{Listener: tcpListener6, Handler: handler}
+		component.udpServer6 = &dns.Server{PacketConn: udpConn6, Handler: component, UDPSize: 4096}
+		component.tcpServer6 = &dns.Server{Listener: tcpListener6, Handler: component}
 	}
 
 	n.mu.Lock()
@@ -273,6 +287,81 @@ func newDNSHandler(config store.VNFConfig) *dnsHandler {
 		}
 	}
 	return handler
+}
+
+// buildDNSHandler validates a proposed runtime configuration and builds the
+// handler that serves it.
+func buildDNSHandler(config store.VNFConfig) (*dnsHandler, error) {
+	if err := validateDNSConfig(config); err != nil {
+		return nil, err
+	}
+	return newDNSHandler(config), nil
+}
+
+// validateDNSConfig checks the static records of a proposed DNS runtime
+// configuration before a reload swaps them into a running listener.
+func validateDNSConfig(config store.VNFConfig) error {
+	for _, record := range config.DNSRecords {
+		name := strings.TrimSpace(record.Name)
+		if name == "" || name == "." {
+			return errors.New("DNS record name is required")
+		}
+		if _, ok := dns.IsDomainName(name); !ok {
+			return fmt.Errorf("invalid DNS record name %q", record.Name)
+		}
+		switch strings.ToUpper(strings.TrimSpace(record.Type)) {
+		case "A":
+			ip := net.ParseIP(strings.TrimSpace(record.Value))
+			if ip == nil || ip.To4() == nil {
+				return fmt.Errorf("DNS A record %q needs an IPv4 value", record.Name)
+			}
+		case "AAAA":
+			ip := net.ParseIP(strings.TrimSpace(record.Value))
+			if ip == nil || ip.To4() != nil {
+				return fmt.Errorf("DNS AAAA record %q needs an IPv6 value", record.Name)
+			}
+		case "CNAME", "PTR":
+			if _, ok := dns.IsDomainName(strings.TrimSpace(record.Value)); !ok {
+				return fmt.Errorf("DNS %s record %q needs a domain value", record.Type, record.Name)
+			}
+		case "TXT":
+		default:
+			return fmt.Errorf("unsupported DNS record type %q", record.Type)
+		}
+	}
+	return nil
+}
+
+// reloadDNS swaps the record and forwarder handler behind a running shared DNS
+// listener. The listener, the handler identity, and lease-derived dynamic
+// records survive; a failed validation leaves the previous handler serving.
+func (n *sharedNetwork) reloadDNS(vnf store.VNF) error {
+	n.mu.Lock()
+	component := n.dns
+	n.mu.Unlock()
+	if component == nil {
+		return errors.New("DNS VNF is not running")
+	}
+	if component.vnfID != vnf.ID {
+		return fmt.Errorf("shared network %d serves DNS VNF %d, not %d", n.networkID, component.vnfID, vnf.ID)
+	}
+	next, err := buildDNSHandler(vnf.Config)
+	if err != nil {
+		return err
+	}
+	next.vnfID = vnf.ID
+	next.networkID = n.networkID
+	if current := component.current(); current != nil {
+		current.mu.RLock()
+		dynamic := make(map[string][]dnsDynamicRecord, len(current.dynamic))
+		for name, records := range current.dynamic {
+			dynamic[name] = append([]dnsDynamicRecord(nil), records...)
+		}
+		current.mu.RUnlock()
+		next.dynamic = dynamic
+	}
+	component.handler.Store(next)
+	return nil
 }
 
 // ServeDNS answers one DNS request: malformed or multi-question queries get

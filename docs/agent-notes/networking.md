@@ -157,10 +157,11 @@ selected wired outside NIC, creates a VPP `host-<nic>` using the physical NIC's 
 break upstream ARP/switch port security), configures NAT44-ED via the binary API (interface features
 are not idempotent in the VPP CLI), and uses a static outside address/default route or the VPP DHCP
 client (which installs its leased address and default route). DNAT/port-forwarding rules live in
-`VNFConfig.DNATRules` and are applied as VPP NAT44 static mappings through
+the `nat44_dnat_rules` typed child table and are applied as VPP NAT44 static mappings through
 `Nat44AddDelStaticMappingV2`; use the outside interface's `sw_if_index` so the external address
 follows DHCP changes, and tag mappings `rookery:<vnf-id>:<rule-index>` so applying/removing one VNF
-never touches another VNF's rules. Apply DNAT mappings after `ApplyNAT44` and remove them before
+never touches another VNF's rules. A DNAT child write replaces that VNF's mapping set in place
+without stopping NAT44. Apply DNAT mappings after `ApplyNAT44` and remove them before
 `RemoveNAT44`. Startup reconciliation order is bridge domains, enabled NAT44 VNFs, then DHCP VNFs. A
 DHCPv4 VNF on a NAT network runs on `.2` while the BVI owns `.1`; `BindIP` is the server ID and must
 not be compared with `gateway` in DHCP request filtering. Validate/take over the outside interface
@@ -172,8 +173,9 @@ BVI when deleting a NAT44 VNF unless another NAT44 or NAT-adjusted DHCPv4 VNF de
 On API startup, `internal/api.Server.RunInfrastructureReconciler` waits for VPP, ensures every
 recorded network bridge domain exists with its stored ID (`EnsureBridgeDomain`), finds or recreates
 every recorded vhost-user interface by name and updates its `sw_if_index`/socket metadata, restores
-ACL definitions/assignments, restores enabled NAT44 VNFs, then restarts every enabled DHCP VNF,
-reusing an existing `vnf<id>` tap and recreating a missing/migrated tap. A VPP restart removes
+ACL definitions/assignments, restores enabled NAT44 VNFs, then re-ensures every enabled DHCP, DNS,
+and BGP VNF through its typed daemon service, reusing an existing `vnf<id>` tap and recreating a
+missing/migrated tap. A VPP restart removes
 vhost-user interfaces, ACL state, NAT44 state, and VNF taps; API startup restores them; QEMU
 reconnect lets current VMs reattach, while older QEMU processes may need a restart. While running,
 `RunInfrastructureReconciler` control-pings the VPP API every five seconds and compares the API

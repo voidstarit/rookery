@@ -996,6 +996,16 @@ tbody tr:hover {
   gap: 0.35rem;
 }
 
+/* The VNF tab exposes one Add button per type to avoid a shared type selector. */
+.vnf-add-actions .button {
+  padding: 0.42rem 0.62rem;
+  font-size: 0.78rem;
+}
+
+.empty .vnf-add-actions {
+  justify-content: center;
+}
+
 .row-action {
   padding: 0.3rem 0.55rem;
   color: var(--muted);

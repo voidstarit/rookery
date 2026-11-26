@@ -1,22 +1,16 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../shared/api";
-import type { VNF } from "../types";
+import type { NAT44SessionsResponse, NAT44VNF } from "../types";
 
 type VNFSessionsDialogProps = {
-  vnf: VNF;
+  vnf: NAT44VNF;
   onClose: () => void;
-};
-
-type SessionsResponse = {
-  vnf_id: number;
-  type: string;
-  sessions: string[];
 };
 
 /**
  * VNFSessionsDialog renders a modal preformatted list of NAT44 sessions for one VNF. It fetches
- * /api/vnfs/{id}/sessions on mount and Refresh, reports load errors in a banner, and falls back to
- * loading or empty text while there are no sessions.
+ * /api/nat44-vnfs/{id}/sessions on mount and Refresh, reports load errors in a banner, and falls
+ * back to loading or empty text while there are no sessions.
  */
 export function VNFSessionsDialog({ vnf, onClose }: VNFSessionsDialogProps) {
   const [sessions, setSessions] = useState<string[]>([]);
@@ -27,7 +21,7 @@ export function VNFSessionsDialog({ vnf, onClose }: VNFSessionsDialogProps) {
   const load = async () => {
     setLoading(true);
     try {
-      const data = await api<SessionsResponse>(`/api/vnfs/${vnf.id}/sessions`);
+      const data = await api<NAT44SessionsResponse>(`/api/nat44-vnfs/${vnf.id}/sessions`);
       setSessions(Array.isArray(data.sessions) ? data.sessions : []);
       setError("");
     } catch (err) {
@@ -67,7 +61,7 @@ export function VNFSessionsDialog({ vnf, onClose }: VNFSessionsDialogProps) {
       </header>
 
       <p class="dialog-lede">
-        {vnf.network_name || "network"} · outside {vnf.config.outside_interface || "—"}
+        {vnf.network_name || "network"} · outside {vnf.outside_interface || "—"}
       </p>
       {error ? (
         <div class="banner" role="alert">

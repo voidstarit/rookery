@@ -14,6 +14,8 @@ import (
 	"github.com/osrg/gobgp/v3/pkg/packet/bgp"
 	"github.com/osrg/gobgp/v3/pkg/server"
 	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/voidstarit/rookery/internal/store"
 )
@@ -63,10 +65,15 @@ type bgpInstance struct {
 	localAS       uint32
 	peerAS        uint32
 	peerAddress   string
+	localIP       net.IP
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
 	installedMu   sync.Mutex
 	installed     map[string]string
+	advertisedMu  sync.Mutex
+	advertisedIDs [][]byte
+	advertised    []*net.IPNet
+	nextHop       net.IP
 	closeOnce     sync.Once
 }
 
@@ -303,6 +310,7 @@ func startBGPServer(ctx context.Context, cfg bgpStartConfig) (*bgpInstance, erro
 		localAS:       cfg.LocalAS,
 		peerAS:        cfg.PeerAS,
 		peerAddress:   cfg.PeerIP.String(),
+		localIP:       append(net.IP(nil), cfg.LocalIP...),
 		installed:     make(map[string]string),
 	}
 	if err := instance.advertise(ctx, cfg); err != nil {
@@ -334,15 +342,34 @@ func startBGPServer(ctx context.Context, cfg bgpStartConfig) (*bgpInstance, erro
 // (LocalIP unless overridden), using MP_REACH_NLRI or NEXT_HOP according to the
 // family. It is a no-op when no prefixes are configured.
 func (b *bgpInstance) advertise(ctx context.Context, cfg bgpStartConfig) error {
-	if len(cfg.Advertise) == 0 {
-		return nil
-	}
 	nextHop := cfg.LocalIP
 	if cfg.NextHop != nil {
 		nextHop = cfg.NextHop
 	}
+	ids, err := b.advertisePaths(ctx, cfg.Advertise, nextHop)
+	if err != nil {
+		// Do not leave a partially advertised set behind when startup fails.
+		_, _ = b.withdrawPaths(ctx, ids)
+		return err
+	}
+	b.advertisedMu.Lock()
+	b.advertisedIDs = ids
+	b.advertised = append([]*net.IPNet(nil), cfg.Advertise...)
+	b.nextHop = append(net.IP(nil), nextHop...)
+	b.advertisedMu.Unlock()
+	return nil
+}
+
+// advertisePaths adds prefixes to the global RIB and returns the UUIDs GoBGP
+// assigned to the locally originated paths, including any paths added before a
+// failure so the caller can withdraw a partial update.
+func (b *bgpInstance) advertisePaths(ctx context.Context, prefixes []*net.IPNet, nextHop net.IP) ([][]byte, error) {
+	ids := make([][]byte, 0, len(prefixes))
+	if len(prefixes) == 0 {
+		return ids, nil
+	}
 	nextHopText := nextHop.String()
-	for _, network := range cfg.Advertise {
+	for _, network := range prefixes {
 		ones, _ := network.Mask.Size()
 		var nlri bgp.AddrPrefixInterface
 		var attrs []bgp.PathAttributeInterface
@@ -361,21 +388,154 @@ func (b *bgpInstance) advertise(ctx context.Context, cfg bgpStartConfig) error {
 		}
 		path, err := apiutil.NewPath(nlri, false, attrs, time.Now())
 		if err != nil {
-			return fmt.Errorf("build advertised BGP path %s: %w", network, err)
+			return ids, fmt.Errorf("build advertised BGP path %s: %w", network, err)
 		}
-		if _, err := b.server.AddPath(ctx, &api.AddPathRequest{
+		response, err := b.server.AddPath(ctx, &api.AddPathRequest{
 			TableType: api.TableType_GLOBAL,
 			Path:      path,
-		}); err != nil {
-			return fmt.Errorf("advertise BGP prefix %s: %w", network, err)
+		})
+		if err != nil {
+			return ids, fmt.Errorf("advertise BGP prefix %s: %w", network, err)
 		}
+		ids = append(ids, response.GetUuid())
 		log.Trace().
 			Int64("vnf_id", b.vnfID).
 			Str("prefix", network.String()).
 			Str("next_hop", nextHopText).
 			Msg("advertised BGP prefix")
 	}
+	return ids, nil
+}
+
+// withdrawPaths removes locally originated paths by the UUIDs GoBGP returned
+// when they were advertised. It keeps deleting after a failure and returns the
+// IDs that are still present, so the caller can track a partially withdrawn set
+// instead of leaving stale UUIDs behind. A path GoBGP no longer knows about
+// counts as withdrawn.
+func (b *bgpInstance) withdrawPaths(ctx context.Context, ids [][]byte) ([][]byte, error) {
+	remaining := make([][]byte, 0)
+	failures := make([]error, 0)
+	for _, id := range ids {
+		err := b.server.DeletePath(ctx, &api.DeletePathRequest{
+			TableType: api.TableType_GLOBAL,
+			Uuid:      id,
+		})
+		if err != nil && !bgpPathMissing(err) {
+			remaining = append(remaining, id)
+			failures = append(failures, err)
+		}
+	}
+	if len(failures) > 0 {
+		return remaining, fmt.Errorf("withdraw %d advertised BGP prefix(es): %w", len(failures), errors.Join(failures...))
+	}
+	return nil, nil
+}
+
+// bgpPathMissing reports whether GoBGP says a path UUID is already gone.
+func bgpPathMissing(err error) bool {
+	if err == nil {
+		return false
+	}
+	if status.Code(err) == codes.NotFound {
+		return true
+	}
+	return strings.Contains(err.Error(), "can't find a specified path")
+}
+
+// reload withdraws the currently advertised prefix set and advertises the
+// proposed one. The GoBGP server and its peer session stay up. A validation
+// failure changes nothing; an advertisement failure restores the previous set.
+func (b *bgpInstance) reload(ctx context.Context, vnf store.VNF) error {
+	prefixes, nextHop, err := b.reloadConfig(vnf)
+	if err != nil {
+		return err
+	}
+	b.advertisedMu.Lock()
+	defer b.advertisedMu.Unlock()
+
+	previousPrefixes := b.advertised
+	previousNextHop := b.nextHop
+	remaining, withdrawErr := b.withdrawPaths(ctx, b.advertisedIDs)
+	if withdrawErr != nil {
+		// Some previous paths could not be removed. Retry the rest, then restore
+		// the complete previous set so the RIB is not left half-withdrawn.
+		stillPresent, cleanupErr := b.withdrawPaths(ctx, remaining)
+		if len(stillPresent) > 0 {
+			b.advertisedIDs = stillPresent
+			return errors.Join(withdrawErr, fmt.Errorf("some advertised BGP prefixes could not be withdrawn: %w", cleanupErr))
+		}
+		restored, restoreErr := b.advertisePaths(ctx, previousPrefixes, previousNextHop)
+		b.advertisedIDs = restored
+		if restoreErr != nil {
+			return errors.Join(withdrawErr, fmt.Errorf("restore advertised BGP prefixes: %w", restoreErr))
+		}
+		return withdrawErr
+	}
+	ids, err := b.advertisePaths(ctx, prefixes, nextHop)
+	if err != nil {
+		// Drop any paths this attempt added and restore the previous set.
+		leftover, cleanupErr := b.withdrawPaths(ctx, ids)
+		if len(leftover) > 0 {
+			b.advertisedIDs = leftover
+			return errors.Join(err, fmt.Errorf("some newly advertised BGP prefixes could not be withdrawn: %w", cleanupErr))
+		}
+		restored, restoreErr := b.advertisePaths(ctx, previousPrefixes, previousNextHop)
+		b.advertisedIDs = restored
+		if restoreErr != nil {
+			return errors.Join(err, fmt.Errorf("restore advertised BGP prefixes: %w", restoreErr))
+		}
+		return err
+	}
+	b.advertisedIDs = ids
+	b.advertised = append([]*net.IPNet(nil), prefixes...)
+	b.nextHop = append(net.IP(nil), nextHop...)
+	log.Info().
+		Int64("vnf_id", b.vnfID).
+		Int("prefixes", len(prefixes)).
+		Msg("BGP advertised prefixes reloaded")
 	return nil
+}
+
+// reloadConfig validates a proposed BGP config against the running session.
+// Reload only changes the advertised path set, so the local address must stay
+// the same; a parent address or transport change uses a stop/start instead.
+func (b *bgpInstance) reloadConfig(vnf store.VNF) ([]*net.IPNet, net.IP, error) {
+	if vnf.Type != store.VNFTypeBGP {
+		return nil, nil, fmt.Errorf("BGP runtime only supports BGP VNFs, got %q", vnf.Type)
+	}
+	if b.localIP == nil {
+		return nil, nil, errors.New("BGP runtime has no local address")
+	}
+	localIP, _, err := net.ParseCIDR(strings.TrimSpace(vnf.Config.LocalIP))
+	if err != nil || localIP == nil {
+		return nil, nil, errors.New("BGP local_ip must be an IPv4 or IPv6 CIDR")
+	}
+	if bgpIsIPv6(localIP) != bgpIsIPv6(b.localIP) || !localIP.Equal(b.localIP) {
+		return nil, nil, errors.New("BGP local_ip changed; restart the VNF instead of reloading")
+	}
+	nextHop := b.localIP
+	if strings.TrimSpace(vnf.Config.NextHop) != "" {
+		nextHop = net.ParseIP(strings.TrimSpace(vnf.Config.NextHop))
+		if nextHop == nil {
+			return nil, nil, errors.New("BGP next_hop must be an IPv4 or IPv6 address")
+		}
+		if bgpIsIPv6(nextHop) != bgpIsIPv6(b.localIP) {
+			return nil, nil, errors.New("BGP next_hop must match the local_ip address family")
+		}
+		if !bgpIsIPv6(nextHop) {
+			nextHop = nextHop.To4()
+		}
+	}
+	prefixes, err := bgpPrefixes(vnf.Config.AdvertisePrefixes)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, network := range prefixes {
+		if bgpIsIPv6(network.IP) != bgpIsIPv6(b.localIP) {
+			return nil, nil, errors.New("BGP advertised prefixes must match the local address family")
+		}
+	}
+	return prefixes, nextHop, nil
 }
 
 // watchRoutes streams the best paths from GoBGP's global table into handlePaths
@@ -683,7 +843,7 @@ func (m *VNFManager) startBGPTap(ctx context.Context, vnf store.VNF, hostIf stri
 	if m.servers == nil {
 		m.servers = make(map[int64]*managedVNF)
 	}
-	m.servers[vnf.ID] = &managedVNF{vnfType: vnf.Type, bgp: server, done: make(chan struct{})}
+	m.servers[vnf.ID] = &managedVNF{vnfType: vnf.Type, bgp: server, hostIf: hostIf, done: make(chan struct{})}
 	m.mu.Unlock()
 	return nil
 }

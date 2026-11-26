@@ -7,6 +7,9 @@ import (
 	"os"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/voidstarit/rookery/internal/lightvm"
 	"github.com/voidstarit/rookery/internal/qemu"
 	"github.com/voidstarit/rookery/internal/store"
@@ -483,6 +486,7 @@ func (s *Server) watchVPP(ctx context.Context, initiallyDirty bool) {
 		if reconnected {
 			go s.runVPPStartupScript()
 		}
+		s.startPendingVNFResync(ctx)
 
 		if !pendingReconcile || !healthy || reconcileDone != nil {
 			continue
@@ -724,6 +728,117 @@ func (s *Server) reconcileNAT44(ctx context.Context, vnf store.VNF) error {
 	return nil
 }
 
+// startPendingVNFResync launches at most one bounded resync pass. The VPP
+// watcher calls it every tick; a hung daemon cannot block the watcher because
+// the pass runs in its own goroutine with a timeout.
+func (s *Server) startPendingVNFResync(ctx context.Context) {
+	s.pendingVNFMu.Lock()
+	queued := len(s.pendingVNFResync) > 0
+	s.pendingVNFMu.Unlock()
+	if !queued {
+		return
+	}
+	s.resyncMu.Lock()
+	if s.resyncing {
+		s.resyncMu.Unlock()
+		return
+	}
+	s.resyncing = true
+	s.resyncMu.Unlock()
+	go func() {
+		defer func() {
+			s.resyncMu.Lock()
+			s.resyncing = false
+			s.resyncMu.Unlock()
+		}()
+		resyncCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		if err := s.ResyncPendingVNFs(resyncCtx); err != nil {
+			s.logger.Debug().Err(err).Msg("VNF resync after daemon reconnect failed; will retry")
+		}
+	}()
+}
+
+// QueueVNFResync records a committed child write whose runtime could not be
+// updated because the daemon was unreachable. The reconciler retries it once
+// the daemon is reachable again.
+func (s *Server) QueueVNFResync(vnf store.VNF) {
+	if vnf.ID <= 0 {
+		return
+	}
+	s.pendingVNFMu.Lock()
+	if s.pendingVNFResync == nil {
+		s.pendingVNFResync = make(map[int64]struct{})
+	}
+	s.pendingVNFResync[vnf.ID] = struct{}{}
+	s.pendingVNFMu.Unlock()
+}
+
+// ResyncPendingVNFs reloads enabled VNFs whose last in-place update could not
+// reach the daemon. It is safe to call periodically: entries are removed after
+// a successful reload, a delete, or a disable, and failures remain queued.
+func (s *Server) ResyncPendingVNFs(ctx context.Context) error {
+	if s.vnfs == nil || s.store == nil {
+		return nil
+	}
+	s.pendingVNFMu.Lock()
+	ids := make([]int64, 0, len(s.pendingVNFResync))
+	for id := range s.pendingVNFResync {
+		ids = append(ids, id)
+	}
+	s.pendingVNFMu.Unlock()
+	var errs []error
+	for _, id := range ids {
+		// Read, reload, and dequeue under resourceMu: a concurrent child or
+		// parent write must not commit a newer config between this read and the
+		// reload, or the stale snapshot would overwrite the newer runtime spec.
+		s.resourceMu.Lock()
+		vnf, err := s.store.GetVNF(ctx, id)
+		if errors.Is(err, store.ErrVNFNotFound) {
+			s.clearPendingVNFResync(id)
+			s.resourceMu.Unlock()
+			continue
+		}
+		if err != nil {
+			s.resourceMu.Unlock()
+			errs = append(errs, fmt.Errorf("VNF %d: %w", id, err))
+			continue
+		}
+		if !vnf.Enabled {
+			s.clearPendingVNFResync(id)
+			s.resourceMu.Unlock()
+			continue
+		}
+		reloadErr := s.vnfs.ReloadVNF(ctx, vnf)
+		if reloadErr == nil {
+			s.clearPendingVNFResync(id)
+			s.resourceMu.Unlock()
+			s.logger.Info().Int64("vnf_id", id).Str("type", vnf.Type).Msg("VNF resynced after the daemon became reachable")
+			continue
+		}
+		s.resourceMu.Unlock()
+		// A restarted daemon may have no desired spec at all; a reload then
+		// returns NotFound forever. Re-ensure that VNF instead of retrying the
+		// reload. Keep the queue entry: the next pass reloads the now-managed
+		// runtime and clears it under the lock. Transient failures stay queued.
+		if status.Code(reloadErr) != codes.NotFound {
+			errs = append(errs, fmt.Errorf("VNF %s: %w", vnf.Name, reloadErr))
+			continue
+		}
+		if reconcileErr := s.reconcileVNF(ctx, vnf, true); reconcileErr != nil {
+			errs = append(errs, fmt.Errorf("VNF %s: reload: %v; re-ensure: %w", vnf.Name, reloadErr, reconcileErr))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// clearPendingVNFResync removes one queued resync.
+func (s *Server) clearPendingVNFResync(id int64) {
+	s.pendingVNFMu.Lock()
+	delete(s.pendingVNFResync, id)
+	s.pendingVNFMu.Unlock()
+}
+
 // ReconcileVNFs starts every enabled VNF that is not currently running.
 func (s *Server) ReconcileVNFs(ctx context.Context) error {
 	if s.vnfs == nil || s.networks == nil {
@@ -772,7 +887,7 @@ func (s *Server) reconcileVNFBindings(ctx context.Context) error {
 	}
 	var errs []error
 	for _, vnf := range vnfs {
-		if !vnf.Enabled || vnf.Type == store.VNFTypeNAT44 || !s.vnfs.Running(ctx, vnf.ID) {
+		if !vnf.Enabled || vnf.Type == store.VNFTypeNAT44 || !s.vnfs.Running(ctx, vnf) {
 			continue
 		}
 		network, err := s.store.GetNetwork(ctx, vnf.NetworkID)
@@ -818,7 +933,7 @@ func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF, ensureRunning 
 	if !vnf.Enabled {
 		return nil
 	}
-	if s.vnfs.Running(ctx, vnf.ID) {
+	if s.vnfs.Running(ctx, vnf) {
 		if !ensureRunning {
 			return nil
 		}
@@ -857,7 +972,7 @@ func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF, ensureRunning 
 		vnf.TapHostName = ""
 		vnf.MemifSwIfIndex = 0
 		vnf.MemifSocket = ""
-		if _, err := s.store.UpdateVNF(ctx, vnf.ID, vnf); err != nil {
+		if _, err := s.store.UpdateVNFIdentity(ctx, vnf); err != nil {
 			return fmt.Errorf("clear tap-era VNF runtime: %w", err)
 		}
 		activated, err := s.activateVNF(ctx, vnf)
@@ -894,7 +1009,7 @@ func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF, ensureRunning 
 		vnf.MemifSocket = ""
 		vnf.TapSwIfIndex = 0
 		vnf.TapHostName = ""
-		if _, err := s.store.UpdateVNF(ctx, vnf.ID, vnf); err != nil {
+		if _, err := s.store.UpdateVNFIdentity(ctx, vnf); err != nil {
 			return fmt.Errorf("clear stale VNF memif: %w", err)
 		}
 	}
@@ -921,7 +1036,7 @@ func (s *Server) reconcileVNF(ctx context.Context, vnf store.VNF, ensureRunning 
 		}
 		vnf.TapSwIfIndex = 0
 		vnf.TapHostName = ""
-		if _, err := s.store.UpdateVNF(ctx, vnf.ID, vnf); err != nil {
+		if _, err := s.store.UpdateVNFIdentity(ctx, vnf); err != nil {
 			return fmt.Errorf("clear stale VNF tap: %w", err)
 		}
 	}

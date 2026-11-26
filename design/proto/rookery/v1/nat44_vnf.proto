@@ -1,0 +1,207 @@
+syntax = "proto3";
+
+package rookery.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/voidstarit/rookery/design/gen/rookery/v1;rookeryv1";
+
+// NAT44VNFService manages NAT44 VNFs. NAT44 is VPP NAT44 driven by the API, not
+// a daemon runtime. DNAT rules are independent child resources; a child write
+// replaces the VNF's static mappings in place.
+service NAT44VNFService {
+  rpc ListNAT44VNFs(ListNAT44VNFsRequest) returns (ListNAT44VNFsResponse) {
+    option (google.api.http) = {
+      get: "/api/nat44-vnfs"
+      response_body: "vnfs"
+    };
+  }
+
+  rpc GetNAT44VNF(GetNAT44VNFRequest) returns (NAT44VNF) {
+    option (google.api.http) = {get: "/api/nat44-vnfs/{id}"};
+  }
+
+  rpc CreateNAT44VNF(CreateNAT44VNFRequest) returns (NAT44VNF) {
+    option (google.api.http) = {
+      post: "/api/nat44-vnfs"
+      body: "*"
+    };
+  }
+
+  rpc UpdateNAT44VNF(UpdateNAT44VNFRequest) returns (NAT44VNF) {
+    option (google.api.http) = {
+      put: "/api/nat44-vnfs/{id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteNAT44VNF(DeleteNAT44VNFRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/nat44-vnfs/{id}"};
+  }
+
+  rpc RestartNAT44VNF(RestartNAT44VNFRequest) returns (NAT44VNF) {
+    option (google.api.http) = {post: "/api/nat44-vnfs/{id}/restart"};
+  }
+
+  // ListNAT44VNFSessions returns the current VPP NAT44 translations.
+  rpc ListNAT44VNFSessions(ListNAT44VNFSessionsRequest) returns (ListNAT44VNFSessionsResponse) {
+    option (google.api.http) = {get: "/api/nat44-vnfs/{id}/sessions"};
+  }
+
+  rpc ListNAT44DNATRules(ListNAT44DNATRulesRequest) returns (ListNAT44DNATRulesResponse) {
+    option (google.api.http) = {
+      get: "/api/nat44-vnfs/{vnf_id}/dnat-rules"
+      response_body: "rules"
+    };
+  }
+
+  rpc GetNAT44DNATRule(GetNAT44DNATRuleRequest) returns (DNATRule) {
+    option (google.api.http) = {get: "/api/nat44-vnfs/{vnf_id}/dnat-rules/{rule_id}"};
+  }
+
+  rpc CreateNAT44DNATRule(CreateNAT44DNATRuleRequest) returns (DNATRule) {
+    option (google.api.http) = {
+      post: "/api/nat44-vnfs/{vnf_id}/dnat-rules"
+      body: "*"
+    };
+  }
+
+  rpc UpdateNAT44DNATRule(UpdateNAT44DNATRuleRequest) returns (DNATRule) {
+    option (google.api.http) = {
+      put: "/api/nat44-vnfs/{vnf_id}/dnat-rules/{rule_id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteNAT44DNATRule(DeleteNAT44DNATRuleRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/nat44-vnfs/{vnf_id}/dnat-rules/{rule_id}"};
+  }
+}
+
+// NAT44VNF is one NAT44 VNF.
+message NAT44VNF {
+  int64 id = 1;
+  string name = 2;
+  int64 network_id = 3;
+  string network_name = 4;
+  bool enabled = 5;
+  string gateway = 6;
+  string outside_interface = 7;
+  string outside_address = 8;
+  string outside_gateway = 9;
+  string nat44_pool = 10;
+  uint32 dnat_rule_count = 11;
+  string status = 12;
+  string status_detail = 13;
+  uint32 tap_sw_if_index = 14;
+  string tap_host_name = 15;
+  google.protobuf.Timestamp created_at = 16;
+  google.protobuf.Timestamp updated_at = 17;
+}
+
+message ListNAT44VNFsRequest {
+  optional int64 network_id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListNAT44VNFsResponse {
+  repeated NAT44VNF vnfs = 1;
+}
+
+message GetNAT44VNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateNAT44VNFRequest {
+  string name = 1 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  int64 network_id = 2 [(validate.rules).int64 = {gt: 0}];
+  optional bool enabled = 3;
+  string gateway = 4 [(validate.rules).string = {max_len: 64}];
+  string outside_interface = 5 [(validate.rules).string = {max_len: 64}];
+  string outside_address = 6 [(validate.rules).string = {max_len: 64}];
+  string outside_gateway = 7 [(validate.rules).string = {max_len: 64}];
+  string nat44_pool = 8 [(validate.rules).string = {max_len: 128}];
+}
+
+message UpdateNAT44VNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+  optional string name = 2 [(validate.rules).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+  }];
+  optional bool enabled = 3;
+  optional string gateway = 4 [(validate.rules).string = {max_len: 64}];
+  optional string outside_interface = 5 [(validate.rules).string = {max_len: 64}];
+  optional string outside_address = 6 [(validate.rules).string = {max_len: 64}];
+  optional string outside_gateway = 7 [(validate.rules).string = {max_len: 64}];
+  optional string nat44_pool = 8 [(validate.rules).string = {max_len: 128}];
+}
+
+message DeleteNAT44VNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message RestartNAT44VNFRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListNAT44VNFSessionsRequest {
+  int64 id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListNAT44VNFSessionsResponse {
+  int64 vnf_id = 1;
+  repeated string sessions = 2;
+}
+
+// DNATRule forwards one external port to a local address and port.
+message DNATRule {
+  int64 id = 1;
+  int64 vnf_id = 2;
+  string protocol = 3;
+  int32 external_port = 4;
+  string local_ip = 5;
+  int32 local_port = 6;
+}
+
+message ListNAT44DNATRulesRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+}
+
+message ListNAT44DNATRulesResponse {
+  repeated DNATRule rules = 1;
+}
+
+message GetNAT44DNATRuleRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 rule_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
+
+message CreateNAT44DNATRuleRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  string protocol = 2 [(validate.rules).string = {min_len: 1, max_len: 8}];
+  int32 external_port = 3 [(validate.rules).int32 = {gte: 1, lte: 65535}];
+  string local_ip = 4 [(validate.rules).string.ipv4 = true];
+  int32 local_port = 5 [(validate.rules).int32 = {gte: 1, lte: 65535}];
+}
+
+message UpdateNAT44DNATRuleRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 rule_id = 2 [(validate.rules).int64 = {gt: 0}];
+  string protocol = 3 [(validate.rules).string = {min_len: 1, max_len: 8}];
+  int32 external_port = 4 [(validate.rules).int32 = {gte: 1, lte: 65535}];
+  string local_ip = 5 [(validate.rules).string.ipv4 = true];
+  int32 local_port = 6 [(validate.rules).int32 = {gte: 1, lte: 65535}];
+}
+
+message DeleteNAT44DNATRuleRequest {
+  int64 vnf_id = 1 [(validate.rules).int64 = {gt: 0}];
+  int64 rule_id = 2 [(validate.rules).int64 = {gt: 0}];
+}
