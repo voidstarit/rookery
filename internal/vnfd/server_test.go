@@ -35,6 +35,7 @@ type fakeManager struct {
 	startErr  error
 	removeErr error
 	reloadErr error
+	resetErr  error
 	reset     bool
 }
 
@@ -125,6 +126,9 @@ func (f *fakeManager) CleanupLegacyNetwork(networkID int64) {
 }
 
 func (f *fakeManager) ResetRuntime(context.Context) error {
+	if f.resetErr != nil {
+		return f.resetErr
+	}
 	f.reset = true
 	f.running = make(map[int64]bool)
 	return nil

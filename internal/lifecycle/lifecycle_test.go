@@ -21,12 +21,32 @@ type fakeBackend struct {
 	reloadFailures int
 	reloadErr      error
 	natRules       int
+
+	// Settable failures let the lifecycle tests exercise every error branch.
+	readyErr             error
+	normalizeDHCPErr     error
+	normalizeNAT44Err    error
+	normalizeBGPErr      error
+	natGatewayErr        error
+	childNormalizeErr    error
+	activateErr          error
+	stopErr              error
+	stopNATErr           error
+	applyNATRulesErr     error
+	applyNATRuleFailures int
+	reloadHook           func()
+	applyHook            func()
 }
 
-func (f *fakeBackend) VPPBlocked() (bool, string)  { return false, "" }
-func (f *fakeBackend) VNFWritesReady(string) error { return nil }
+func (f *fakeBackend) VPPBlocked() (bool, string) { return false, "" }
+func (f *fakeBackend) VNFWritesReady(string) error {
+	return f.readyErr
+}
 
 func (f *fakeBackend) NormalizeDHCPVNFConfig(_ string, config store.DHCPVNFConfig) (store.DHCPVNFConfig, error) {
+	if f.normalizeDHCPErr != nil {
+		return store.DHCPVNFConfig{}, f.normalizeDHCPErr
+	}
 	if config.Gateway == "" {
 		config.Gateway = "10.0.0.1/24"
 	}
@@ -43,6 +63,9 @@ func (f *fakeBackend) NormalizeDHCPVNFConfig(_ string, config store.DHCPVNFConfi
 }
 
 func (f *fakeBackend) NormalizeNAT44VNFConfig(config store.NAT44VNFConfig) (store.NAT44VNFConfig, error) {
+	if f.normalizeNAT44Err != nil {
+		return store.NAT44VNFConfig{}, f.normalizeNAT44Err
+	}
 	if config.Gateway == "" {
 		config.Gateway = "10.0.0.1/24"
 	}
@@ -53,6 +76,9 @@ func (f *fakeBackend) NormalizeNAT44VNFConfig(config store.NAT44VNFConfig) (stor
 }
 
 func (f *fakeBackend) NormalizeBGPVNFConfig(config store.BGPVNFConfig) (store.BGPVNFConfig, error) {
+	if f.normalizeBGPErr != nil {
+		return store.BGPVNFConfig{}, f.normalizeBGPErr
+	}
 	if config.Transport == "" {
 		config.Transport = "memif"
 	}
@@ -66,34 +92,37 @@ func (f *fakeBackend) NormalizeBGPVNFConfig(config store.BGPVNFConfig) (store.BG
 }
 
 func (f *fakeBackend) ApplyNATGatewayToDHCPConfig(context.Context, int64, string, *store.DHCPVNFConfig) error {
-	return nil
+	return f.natGatewayErr
 }
 
 func (f *fakeBackend) NormalizeDHCPStaticAssignment(_ context.Context, _ store.VNF, item store.DHCPStaticAssignment) (store.DHCPStaticAssignment, error) {
-	return item, nil
+	return item, f.childNormalizeErr
 }
 
 func (f *fakeBackend) NormalizeDHCPOption(_ context.Context, _ store.VNF, item store.DHCPOption) (store.DHCPOption, error) {
-	return item, nil
+	return item, f.childNormalizeErr
 }
 
 func (f *fakeBackend) NormalizeDNSRecord(_ context.Context, _ store.VNF, _ []store.DNSRecord, item store.DNSRecord) (store.DNSRecord, error) {
-	return item, nil
+	return item, f.childNormalizeErr
 }
 
 func (f *fakeBackend) NormalizeDNSForwarder(_ context.Context, _ store.VNF, _ []store.DNSForwarder, item store.DNSForwarder) (store.DNSForwarder, error) {
-	return item, nil
+	return item, f.childNormalizeErr
 }
 
 func (f *fakeBackend) NormalizeDNATRule(_ context.Context, _ store.VNF, _ []store.DNATRule, item store.DNATRule) (store.DNATRule, error) {
-	return item, nil
+	return item, f.childNormalizeErr
 }
 
 func (f *fakeBackend) NormalizeBGPPrefix(_ context.Context, _ store.VNF, prefix string) (store.BGPPrefix, error) {
-	return store.BGPPrefix{Prefix: prefix}, nil
+	return store.BGPPrefix{Prefix: prefix}, f.childNormalizeErr
 }
 
 func (f *fakeBackend) ActivateVNF(ctx context.Context, vnf store.VNF) (store.VNF, error) {
+	if f.activateErr != nil {
+		return store.VNF{}, f.activateErr
+	}
 	f.activated++
 	vnf.Enabled = true
 	if f.store != nil {
@@ -102,10 +131,19 @@ func (f *fakeBackend) ActivateVNF(ctx context.Context, vnf store.VNF) (store.VNF
 	return vnf, nil
 }
 
-func (f *fakeBackend) StopVNF(context.Context, store.VNF, bool) error { f.stopped++; return nil }
+func (f *fakeBackend) StopVNF(context.Context, store.VNF, bool) error {
+	if f.stopErr != nil {
+		return f.stopErr
+	}
+	f.stopped++
+	return nil
+}
 
 func (f *fakeBackend) ReloadVNF(context.Context, store.VNF) error {
 	f.reloaded++
+	if f.reloadHook != nil {
+		f.reloadHook()
+	}
 	if f.reloadFailures > 0 {
 		f.reloadFailures--
 		return errors.New("reload failed")
@@ -114,6 +152,9 @@ func (f *fakeBackend) ReloadVNF(context.Context, store.VNF) error {
 }
 
 func (f *fakeBackend) ActivateNAT44(ctx context.Context, vnf store.VNF) (store.VNF, error) {
+	if f.activateErr != nil {
+		return store.VNF{}, f.activateErr
+	}
 	f.activated++
 	vnf.Enabled = true
 	if f.store != nil {
@@ -122,9 +163,25 @@ func (f *fakeBackend) ActivateNAT44(ctx context.Context, vnf store.VNF) (store.V
 	return vnf, nil
 }
 
-func (f *fakeBackend) StopNAT44(context.Context, store.VNF) error { f.stopped++; return nil }
+func (f *fakeBackend) StopNAT44(context.Context, store.VNF) error {
+	if f.stopNATErr != nil {
+		return f.stopNATErr
+	}
+	f.stopped++
+	return nil
+}
 
 func (f *fakeBackend) ApplyNAT44DNATRules(context.Context, store.VNF) error {
+	if f.applyHook != nil {
+		f.applyHook()
+	}
+	if f.applyNATRuleFailures > 0 {
+		f.applyNATRuleFailures--
+		return errors.New("nat44 mapping failed")
+	}
+	if f.applyNATRulesErr != nil {
+		return f.applyNATRulesErr
+	}
 	f.natRules++
 	return nil
 }

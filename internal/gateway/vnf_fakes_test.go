@@ -21,10 +21,12 @@ func (fakeVNFRuntime) Leases(context.Context, int64) ([]store.VNFLease, error) {
 // fakeVNFStatusProvider reports a running VNF with two leases and canned
 // dynamic DNS, NAT44, and BGP views.
 type fakeVNFStatusProvider struct {
-	sessions   []string
-	bgp        host.BGPStatus
-	dnsError   error
-	dnsRecords []host.DNSRecordView
+	sessions    []string
+	sessionsErr error
+	bgp         host.BGPStatus
+	bgpErr      error
+	dnsError    error
+	dnsRecords  []host.DNSRecordView
 }
 
 func (f fakeVNFStatusProvider) VNFStatus(context.Context, store.VNF) (string, string, int) {
@@ -32,6 +34,9 @@ func (f fakeVNFStatusProvider) VNFStatus(context.Context, store.VNF) (string, st
 }
 
 func (f fakeVNFStatusProvider) VNFSessions(context.Context, store.VNF) ([]string, error) {
+	if f.sessionsErr != nil {
+		return nil, f.sessionsErr
+	}
 	if f.sessions == nil {
 		return []string{}, nil
 	}
@@ -39,6 +44,9 @@ func (f fakeVNFStatusProvider) VNFSessions(context.Context, store.VNF) ([]string
 }
 
 func (f fakeVNFStatusProvider) VNFBGP(context.Context, store.VNF) (host.BGPStatus, error) {
+	if f.bgpErr != nil {
+		return host.BGPStatus{}, f.bgpErr
+	}
 	return f.bgp, nil
 }
 
