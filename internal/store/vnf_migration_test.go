@@ -365,6 +365,13 @@ func TestVNFPreflightRejectsProblems(t *testing.T) {
 		assertPreflightRejected(t, path, "unsupported type")
 	})
 
+	t.Run("cross-type child array on dhcpv6", func(t *testing.T) {
+		path := openPreflightFixture(t, VNFTypeDHCPv6, `{
+			"gateway": "fd00:20::1/64", "range_start": "fd00:20::100", "range_end": "fd00:20::200",
+			"dns_records": [{"name": "a.lab", "type": "A", "value": "10.0.0.1", "ttl": 60}]}`)
+		assertPreflightRejected(t, path, "would be dropped")
+	})
+
 	t.Run("bad dns record type", func(t *testing.T) {
 		path := openPreflightFixture(t, VNFTypeDNS, `{
 			"dns_records": [{"name": "a.lab", "type": "SRV", "value": "x", "ttl": 60}]}`)

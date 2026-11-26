@@ -244,13 +244,17 @@ func validateLegacyVNFConfig(row legacyVNFRow) []string {
 			add("config.range_start and config.range_end are required")
 		}
 		if row.Type == VNFTypeDHCPv4 {
-			unexpected("config.dnat_rules", len(cfg.DNATRules) > 0)
-			unexpected("config.dns_records", len(cfg.DNSRecords) > 0)
-			unexpected("config.dns_forwarders", len(cfg.DNSForwarders) > 0)
-			unexpected("config.advertise_prefixes", len(cfg.AdvertisePrefixes) > 0)
+			problems = append(problems, validateLegacyStaticAssignments(row)...)
 		} else {
 			unexpected("config.static_assignments", len(cfg.StaticAssignments) > 0)
 		}
+		// DNS records, forwarders, DNAT rules, and advertised prefixes belong to
+		// other VNF types. Migration 0061 would drop them, so refuse them here
+		// rather than lose data silently.
+		unexpected("config.dnat_rules", len(cfg.DNATRules) > 0)
+		unexpected("config.dns_records", len(cfg.DNSRecords) > 0)
+		unexpected("config.dns_forwarders", len(cfg.DNSForwarders) > 0)
+		unexpected("config.advertise_prefixes", len(cfg.AdvertisePrefixes) > 0)
 		switch cfg.Transport {
 		case "", "shared", "dedicated", "tap", "memif":
 		default:
@@ -265,9 +269,6 @@ func validateLegacyVNFConfig(row legacyVNFRow) []string {
 		}
 		if cfg.DNSTTL > 86400 {
 			add("config.dns_ttl must be at most 86400")
-		}
-		if row.Type == VNFTypeDHCPv4 {
-			problems = append(problems, validateLegacyStaticAssignments(row)...)
 		}
 		problems = append(problems, validateLegacyDHCPOptions(row)...)
 
