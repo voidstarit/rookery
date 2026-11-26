@@ -6,8 +6,13 @@ LVM thin storage, and FD.io VPP networking.
 
 This file is the entry point for agents and contributors working in this repository. The
 detailed, hard-won subsystem notes live in [`docs/agent-notes/`](docs/agent-notes/); read the
-relevant file before changing a subsystem. User-facing documentation lives in
-[`docs/`](docs/README.md), and [`README.md`](README.md) is the high-level project entry point.
+relevant file before changing a subsystem.
+
+Code review agents should also read [`docs/go-review-agent.md`](docs/go-review-agent.md) before
+reviewing a change.
+
+User-facing documentation lives in [`docs/`](docs/README.md), and [`README.md`](README.md) is the
+high-level project entry point.
 
 ## Repository map
 
