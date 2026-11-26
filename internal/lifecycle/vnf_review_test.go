@@ -108,6 +108,9 @@ func TestChildWriteOnDegradedParentKeepsRow(t *testing.T) {
 	if !saved.Enabled {
 		t.Fatal("degraded parent was disabled by a child write")
 	}
+	if len(backend.resyncs) != 1 || backend.resyncs[0] != vnf.ID {
+		t.Fatalf("resync queue = %v, want one entry for %d", backend.resyncs, vnf.ID)
+	}
 	items, err := st.ListDHCPStaticAssignments(ctx, vnf.ID)
 	if err != nil || len(items) != 1 {
 		t.Fatalf("child rows = %+v, err = %v", items, err)
@@ -164,5 +167,19 @@ func TestChildRestoreFailureMessageNamesFailures(t *testing.T) {
 		if !strings.Contains(message, want) {
 			t.Fatalf("message = %q, want %q", message, want)
 		}
+	}
+}
+
+// TestDeleteDisabledVNF proves deleting a never-started VNF does not depend on
+// the daemon having a desired runtime.
+func TestDeleteDisabledVNF(t *testing.T) {
+	ctx := context.Background()
+	st, service, _, network, _ := newVNFService(t)
+	vnf := createNamedDNS(t, service, network.ID, "disabled-dns", false)
+	if err := service.DeleteDNSVNF(ctx, &rookeryv1.DeleteDNSVNFRequest{Id: vnf.ID}); err != nil {
+		t.Fatalf("delete disabled DNS VNF: %v", err)
+	}
+	if _, err := st.GetVNF(ctx, vnf.ID); err == nil {
+		t.Fatal("disabled VNF record still exists after delete")
 	}
 }

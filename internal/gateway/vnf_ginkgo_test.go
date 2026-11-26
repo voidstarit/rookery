@@ -229,6 +229,19 @@ var _ = Describe("Typed VNF services", func() {
 		Expect(response.StatusCode).To(Equal(http.StatusConflict))
 		response.Body.Close()
 	})
+
+	It("keeps a detailed 500 message from VNFStatus", func() {
+		writer.err = &testVNFError{status: http.StatusInternalServerError,
+			message: "reload failed: daemon unavailable; restore failed: timeout"}
+		response := request(http.MethodPost, "/api/dhcp-vnfs", `{
+			"name":"new-dhcp","network_id":`+jsonID(network.ID)+`,"family":"dhcpv4",
+			"gateway":"10.50.0.1/24","range_start":"10.50.0.10","range_end":"10.50.0.20"}`)
+		Expect(response.StatusCode).To(Equal(http.StatusInternalServerError))
+		body, err := io.ReadAll(response.Body)
+		Expect(err).NotTo(HaveOccurred())
+		response.Body.Close()
+		Expect(string(body)).To(ContainSubstring("reload failed: daemon unavailable; restore failed: timeout"))
+	})
 })
 
 // testVNFError implements the VNFError interface the gateway maps to gRPC codes.

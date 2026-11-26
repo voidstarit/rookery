@@ -31,11 +31,12 @@ func (s *Service) reloadAfterChildWrite(ctx context.Context, vnfID int64, rollba
 		// is unreachable, the row still stays committed and the VNF stays
 		// degraded until it reconnects.
 		if reloadErr := s.backend.ReloadVNF(ctx, vnf); reloadErr != nil {
+			s.backend.QueueVNFResync(vnf)
 			log.Debug().
 				Int64("vnf_id", vnf.ID).
 				Str("type", vnf.Type).
 				Err(reloadErr).
-				Msg("VNF runtime is not running; kept the child row for the next start")
+				Msg("VNF daemon is unreachable; queued a resync for the committed child row")
 		}
 		return nil
 	}

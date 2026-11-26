@@ -724,6 +724,69 @@ func (s *Server) reconcileNAT44(ctx context.Context, vnf store.VNF) error {
 	return nil
 }
 
+// QueueVNFResync records a committed child write whose runtime could not be
+// updated because the daemon was unreachable. The reconciler retries it once
+// the daemon is reachable again.
+func (s *Server) QueueVNFResync(vnf store.VNF) {
+	if vnf.ID <= 0 {
+		return
+	}
+	s.pendingVNFMu.Lock()
+	if s.pendingVNFResync == nil {
+		s.pendingVNFResync = make(map[int64]struct{})
+	}
+	s.pendingVNFResync[vnf.ID] = struct{}{}
+	s.pendingVNFMu.Unlock()
+}
+
+// ResyncPendingVNFs reloads enabled VNFs whose last in-place update could not
+// reach the daemon. It is safe to call periodically: entries are removed after
+// a successful reload, a delete, or a disable, and failures remain queued.
+func (s *Server) ResyncPendingVNFs(ctx context.Context) error {
+	if s.vnfs == nil || s.store == nil {
+		return nil
+	}
+	s.pendingVNFMu.Lock()
+	ids := make([]int64, 0, len(s.pendingVNFResync))
+	for id := range s.pendingVNFResync {
+		ids = append(ids, id)
+	}
+	s.pendingVNFMu.Unlock()
+	var errs []error
+	for _, id := range ids {
+		vnf, err := s.store.GetVNF(ctx, id)
+		if errors.Is(err, store.ErrVNFNotFound) {
+			s.clearPendingVNFResync(id)
+			continue
+		}
+		if err != nil {
+			errs = append(errs, fmt.Errorf("VNF %d: %w", id, err))
+			continue
+		}
+		if !vnf.Enabled {
+			s.clearPendingVNFResync(id)
+			continue
+		}
+		s.resourceMu.Lock()
+		reloadErr := s.vnfs.ReloadVNF(ctx, vnf)
+		s.resourceMu.Unlock()
+		if reloadErr != nil {
+			errs = append(errs, fmt.Errorf("VNF %s: %w", vnf.Name, reloadErr))
+			continue
+		}
+		s.clearPendingVNFResync(id)
+		s.logger.Info().Int64("vnf_id", id).Str("type", vnf.Type).Msg("VNF resynced after the daemon became reachable")
+	}
+	return errors.Join(errs...)
+}
+
+// clearPendingVNFResync removes one queued resync.
+func (s *Server) clearPendingVNFResync(id int64) {
+	s.pendingVNFMu.Lock()
+	delete(s.pendingVNFResync, id)
+	s.pendingVNFMu.Unlock()
+}
+
 // ReconcileVNFs starts every enabled VNF that is not currently running.
 func (s *Server) ReconcileVNFs(ctx context.Context) error {
 	if s.vnfs == nil || s.networks == nil {

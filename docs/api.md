@@ -904,7 +904,9 @@ Child writes reload the running runtime in place; parent writes restart it:
 - A child write on a disabled parent only stores the row; the next enable loads
   every child row and starts once. A child write on an enabled parent whose
   runtime is stopped or unreachable also stores the row and leaves the VNF
-  `degraded` instead of failing; the next start uses the new rows.
+  `degraded` instead of failing. A reachable daemon receives the new spec for
+  its next start; if it was unreachable, the reconciler retries the reload once
+  it returns, so the row is served without a manual restart.
 - A parent `PUT` that changes any field (name, scalar configuration, transport,
   tap/memif metadata, or `enabled`) stops and starts the enabled runtime. If the
   store write then fails (for example a duplicate name returns `409`), the

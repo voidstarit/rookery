@@ -172,6 +172,6 @@ func mapVNFWriteError(err error) error {
 	case 503:
 		return status.Error(codes.Unavailable, message)
 	default:
-		return status.Error(codes.Internal, "VNF operation failed")
+		return status.Error(codes.Internal, message)
 	}
 }

@@ -3687,3 +3687,34 @@ func TestHealthAndEmbeddedUI(t *testing.T) {
 		t.Fatalf("POST / status = %d, want 405", recorder.Code)
 	}
 }
+
+// TestResyncPendingVNFsRetriesAfterDaemonFailure proves a child write committed
+// while the daemon was unreachable is re-sent after it becomes reachable, and
+// that a failed resync stays queued for the next attempt.
+func TestResyncPendingVNFsRetriesAfterDaemonFailure(t *testing.T) {
+	ctx := context.Background()
+	env := newTestAPI(t)
+	network := createNetworkAPI(t, env.handler, "resync-lab")
+	vnf := createDNSVNFAPI(t, env.handler, "resync-dns", network.ID, true)
+	env.server.QueueVNFResync(store.VNF{ID: vnf.ID, Type: store.VNFTypeDNS, Enabled: true})
+	env.vnfs.reloadFailures = 1
+
+	if err := env.server.ResyncPendingVNFs(ctx); err == nil {
+		t.Fatal("resync succeeded while the daemon reload was failing")
+	}
+	if len(env.vnfs.reloaded) != 1 {
+		t.Fatalf("reload attempts = %v, want one", env.vnfs.reloaded)
+	}
+	if err := env.server.ResyncPendingVNFs(ctx); err != nil {
+		t.Fatalf("resync after the daemon recovered: %v", err)
+	}
+	if len(env.vnfs.reloaded) != 2 {
+		t.Fatalf("reload attempts = %v, want two", env.vnfs.reloaded)
+	}
+	if err := env.server.ResyncPendingVNFs(ctx); err != nil {
+		t.Fatalf("third resync: %v", err)
+	}
+	if len(env.vnfs.reloaded) != 2 {
+		t.Fatalf("a successful resync stayed queued: %v", env.vnfs.reloaded)
+	}
+}

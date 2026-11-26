@@ -105,7 +105,9 @@ use the daemon; it replaces the VNF's VPP static mappings while NAT44 and the BV
 child write on a disabled parent only stores the row; the next enable loads every child row and
 starts once. A child write on an enabled parent whose runtime is stopped or unreachable also only
 stores the row and keeps the VNF `degraded`; the daemon still persists the prepared desired spec
-when it is reachable, so supervision or a manual restart starts the new configuration.
+when it is reachable, so supervision or a manual restart starts the new configuration. When the
+daemon is unreachable, the API queues the VNF and the infrastructure reconciler retries the reload
+once the daemon is back; the child row is not left waiting for a manual restart.
 
 A parent create with `enabled=true` starts after the insert (a failed start removes the new
 record). Any parent `PUT` stops and starts the enabled runtime, including a name-only or scalar

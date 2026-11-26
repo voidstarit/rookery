@@ -609,3 +609,20 @@ func TestReloadPrepareFailure(t *testing.T) {
 		t.Fatalf("reload prepare failure = %v", err)
 	}
 }
+
+// TestRemoveUnknownRuntimeIsIdempotent proves delete/restart of a disabled or
+// never-started VNF no longer fails just because the daemon has no desired spec.
+func TestRemoveUnknownRuntimeIsIdempotent(t *testing.T) {
+	ctx := context.Background()
+	manager := newFakeManager()
+	server := NewServer(manager, t.TempDir(), zerolog.Nop())
+	if _, err := server.RemoveDHCP(ctx, &rookeryv1.RemoveDHCPRequest{Id: 99}); err != nil {
+		t.Fatalf("remove of an unstarted VNF: %v", err)
+	}
+	if _, err := server.EnsureDHCP(ctx, &rookeryv1.EnsureDHCPRequest{Spec: dhcpSpec(1, "dhcpv4", "tap")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := server.RemoveDNS(ctx, &rookeryv1.RemoveDNSRequest{Id: 1}); status.Code(err) != codes.NotFound {
+		t.Fatalf("remove through the wrong service = %v", err)
+	}
+}

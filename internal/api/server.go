@@ -165,8 +165,10 @@ type Server struct {
 	natMu      sync.Mutex
 	natRunning map[int64]bool
 
-	vnfSpecsMu     sync.Mutex
-	vnfSpecsSynced bool
+	vnfSpecsMu       sync.Mutex
+	vnfSpecsSynced   bool
+	pendingVNFMu     sync.Mutex
+	pendingVNFResync map[int64]struct{}
 
 	memifDHCP bool
 	memifDir  string

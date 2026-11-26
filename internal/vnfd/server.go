@@ -566,7 +566,10 @@ func (s *Server) remove(ctx context.Context, id int64, kind string, removeLeases
 	s.mu.Lock()
 	desired := s.desired[id]
 	s.mu.Unlock()
-	if desired == nil || desired.kind != kind {
+	// A missing desired spec is not an error: disabled and never-started VNFs
+	// have no runtime, and delete/restart call Stop unconditionally. Only a
+	// spec of a different type means the caller reached the wrong service.
+	if desired != nil && desired.kind != kind {
 		return nil, status.Error(codes.NotFound, "vnf is not managed by this daemon service")
 	}
 	if err := s.manager.Stop(ctx, id, removeLeases); err != nil {
