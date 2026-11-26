@@ -1,5 +1,7 @@
+/** Form for the BGP parent scalar fields on the VNF page. */
 import type { BGPVNF } from "../types";
 
+/** BGPVNFFormState is the editable BGP parent scalar form state. */
 export type BGPVNFFormState = {
   transport: "memif" | "tap";
   localAS: string;

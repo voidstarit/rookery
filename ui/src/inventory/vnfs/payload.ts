@@ -1,3 +1,8 @@
+/**
+ * VNF parent payload builders shared by the create/edit page and its unit tests.
+ * The form state stays UI-shaped; these helpers own the wire field names and the
+ * protojson-omitted-scalar normalization used by the create/update diff.
+ */
 import type { VNF, VNFType } from "../types";
 import type { BGPVNFFormState } from "./BGPVNFForm";
 import type { DHCPVNFFormState } from "./DHCPVNFForm";

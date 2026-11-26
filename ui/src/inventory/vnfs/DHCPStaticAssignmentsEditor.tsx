@@ -1,3 +1,4 @@
+/** Editor for the DHCP VNF static-assignment child rows. */
 import type { DHCPStaticAssignment } from "../types";
 
 type DHCPStaticAssignmentsEditorProps = {

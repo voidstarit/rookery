@@ -1,3 +1,4 @@
+/** Editor for the DNS VNF upstream-forwarder child rows. */
 import type { DNSForwarder } from "../types";
 
 type DNSForwardersEditorProps = {

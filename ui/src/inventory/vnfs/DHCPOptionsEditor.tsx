@@ -1,5 +1,7 @@
+/** Editor for the DHCP VNF option child rows. */
 import type { DHCPOption } from "../types";
 
+/** DHCPOptionFamily is the DHCP family whose option list is being edited. */
 export type DHCPOptionFamily = "dhcpv4" | "dhcpv6";
 
 type DHCPOptionPreset = {
