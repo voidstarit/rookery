@@ -66,10 +66,13 @@ type diskModel struct {
 	Labels              types.Set    `tfsdk:"labels"`
 }
 
+// Metadata sets the resource type name to the provider name followed by "_disk".
 func (r *diskResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_disk"
 }
 
+// Schema declares the rookery_disk attributes: identity, sizing, storage backend, template
+// cloning, throttle class, attachment, and asynchronous deletion.
 func (r *diskResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A provisioned, remote, or passthrough disk in Rookery.",
@@ -167,6 +170,9 @@ func (r *diskResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 	}
 }
 
+// Create provisions the disk through the API, applies its labels, and records the returned disk
+// in state. It stops before the API call when the throttle class id is unknown or
+// provisioning_json is invalid.
 func (r *diskResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan diskModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -222,6 +228,8 @@ func (r *diskResource) Create(ctx context.Context, req resource.CreateRequest, r
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read refreshes the disk from the API and removes it from state when the server reports it is
+// gone. Labels are reloaded from the entity label store.
 func (r *diskResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state diskModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -254,6 +262,8 @@ func (r *diskResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update sends the mutable disk fields: template flag, provisioning script and timeout, throttle
+// class, and read-only. The API response and reapplied labels become the new state.
 func (r *diskResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan diskModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -292,6 +302,8 @@ func (r *diskResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete requests asynchronous disk deletion and waits up to four hours, honoring force_delete to
+// drop the record when backend cleanup fails. Errors are reported through diagnostics.
 func (r *diskResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state diskModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -310,6 +322,9 @@ func (r *diskResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	}
 }
 
+// deleteDiskAsync starts asynchronous disk deletion and polls until the disk disappears, its
+// deletion state clears, or the timeout expires. A not-found disk succeeds; when force is set,
+// failed cleanup or a timeout falls back to a forced record removal.
 func deleteDiskAsync(ctx context.Context, client rookeryv1.DiskServiceClient, id int64, timeout, poll time.Duration, force bool) error {
 	deleted, err := client.DeleteDisk(ctx, &rookeryv1.DeleteDiskRequest{Id: id})
 	if err != nil {
@@ -377,10 +392,13 @@ func forceDeleteDisk(ctx context.Context, client rookeryv1.DiskServiceClient, id
 	return nil
 }
 
+// ImportState adopts an existing disk by its integer id into Terraform state.
 func (r *diskResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	importInt64ID(ctx, req, resp)
 }
 
+// ModifyPlan rejects plans that mark a disk as a template while also setting a positive
+// throttling class. Destroy plans are skipped because reading their null plan would fail.
 func (r *diskResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	// A destroy plan has a null plan and config. Reading either into the model
 	// fails with a "Value Conversion Error", which aborts the whole destroy.
@@ -409,6 +427,8 @@ func (r *diskResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRe
 	}
 }
 
+// validateTemplateThrottleClassConfig rejects a template disk whose throttle class is unknown or
+// positive; null, zero, and non-template values pass.
 func validateTemplateThrottleClassConfig(isTemplate bool, config types.Int64) error {
 	if !isTemplate || config.IsNull() {
 		return nil
@@ -419,6 +439,9 @@ func validateTemplateThrottleClassConfig(isTemplate bool, config types.Int64) er
 	return nil
 }
 
+// createThrottleClassID resolves the throttle class id from config, falling back to the planned
+// value when it is unknown. It returns zero for a null config and an error when the value is
+// still unknown at apply time.
 func createThrottleClassID(config, plan types.Int64) (int64, error) {
 	if config.IsNull() {
 		return 0, nil
@@ -432,6 +455,9 @@ func createThrottleClassID(config, plan types.Int64) (int64, error) {
 	return 0, fmt.Errorf("throttle_class_id must be known at apply time")
 }
 
+// updateThrottleClassID returns a pointer to the configured throttle class id, or nil when it is
+// null so updates leave the field unset. It falls back to the planned value and errors when that
+// is unknown.
 func updateThrottleClassID(config, plan types.Int64) (*int64, error) {
 	if config.IsNull() {
 		return nil, nil
@@ -447,6 +473,9 @@ func updateThrottleClassID(config, plan types.Int64) (*int64, error) {
 	return nil, fmt.Errorf("throttle_class_id must be known at apply time")
 }
 
+// buildDiskUpdateRequest converts the planned disk model into an UpdateDiskRequest, resolving the
+// throttle class from config and plan. It returns a throttle-resolution error without calling the
+// API.
 func buildDiskUpdateRequest(plan diskModel, configClass types.Int64) (*rookeryv1.UpdateDiskRequest, error) {
 	classID, err := updateThrottleClassID(configClass, plan.ThrottleClassID)
 	if err != nil {
@@ -462,6 +491,9 @@ func buildDiskUpdateRequest(plan diskModel, configClass types.Int64) (*rookeryv1
 	}, nil
 }
 
+// setDiskState copies the API disk into the Terraform model, deriving host_device from the device
+// for host-device disks and nulling it otherwise. Optional fields become null when absent from
+// the response.
 func setDiskState(state *diskModel, disk *rookeryv1.Disk) {
 	state.ID = types.Int64Value(disk.GetId())
 	state.Name = types.StringValue(disk.GetName())
@@ -496,6 +528,9 @@ func setDiskState(state *diskModel, disk *rookeryv1.Disk) {
 	state.ProvisioningTimeout = optionalStringValue(disk.GetProvisioningTimeout())
 }
 
+// diskProvisioningFromJSON converts provisioning_json into the protobuf struct sent with a
+// template clone. Empty, null, and unknown values yield nil, while invalid JSON or a non-object
+// returns an error.
 func diskProvisioningFromJSON(value types.String) (*structpb.Struct, error) {
 	if value.IsNull() || value.IsUnknown() || value.ValueString() == "" {
 		return nil, nil

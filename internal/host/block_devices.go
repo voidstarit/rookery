@@ -294,6 +294,10 @@ func blockDeviceSysfsPath(path string) (string, bool) {
 	return "", false
 }
 
+// blockDeviceBusyReason returns a human-readable reason the device cannot be
+// passed through, checking mounts, swap, read-only state, and sysfs holders. For
+// whole disks it also reports mounted or swapped child partitions, and returns
+// an empty string when the device is free.
 func blockDeviceBusyReason(base, real string, device AttachableBlockDevice, partition bool, candidates []attachCandidate, mounts, swaps map[uint64]string) string {
 	key := deviceKey(device.Major, device.Minor)
 	if where, ok := mounts[key]; ok {
@@ -325,6 +329,8 @@ func blockDeviceBusyReason(base, real string, device AttachableBlockDevice, part
 	return ""
 }
 
+// sysfsDeviceNumbers reads a sysfs block device's dev attribute and returns its
+// major and minor numbers. It reports false when the file cannot be read or parsed.
 func sysfsDeviceNumbers(base string) (uint32, uint32, bool) {
 	value, err := os.ReadFile(filepath.Join(base, "dev"))
 	if err != nil {
@@ -333,6 +339,9 @@ func sysfsDeviceNumbers(base string) (uint32, uint32, bool) {
 	return parseDeviceNumber(strings.TrimSpace(string(value)))
 }
 
+// blockDeviceKind classifies a sysfs block device as a partition, loop, zram,
+// ram, device-mapper LV, RAID member, or plain disk. Partition detection wins over
+// the backing device's name so partitions of virtual devices stay partitions.
 func blockDeviceKind(base string) string {
 	// Check partitions first so a partition of a loop/ram/zram device is still
 	// reported as a partition.
@@ -357,6 +366,8 @@ func blockDeviceKind(base string) string {
 	return BlockDeviceDisk
 }
 
+// blockKindOrder returns the inventory display rank for a block device kind,
+// placing disks first and unknown kinds last.
 func blockKindOrder(kind string) int {
 	switch kind {
 	case BlockDeviceDisk:
@@ -422,10 +433,13 @@ func hostBusyDeviceNumbers() (map[uint64]string, map[uint64]string) {
 	return mounts, swaps
 }
 
+// deviceKey packs a device major and minor number into one map key.
 func deviceKey(major, minor uint32) uint64 {
 	return uint64(major)<<32 | uint64(minor)
 }
 
+// readDirNames returns the entry names in path, or nil when the directory cannot
+// be read.
 func readDirNames(path string) []string {
 	entries, err := os.ReadDir(path)
 	if err != nil {
@@ -438,6 +452,9 @@ func readDirNames(path string) []string {
 	return names
 }
 
+// skipBlockDevice reports whether a sysfs block device name should be excluded
+// from the attachable inventory. Only floppy and optical devices are filtered;
+// loop, ram, and zram devices are kept for file- and memory-backed volumes.
 func skipBlockDevice(name string) bool {
 	// loop, ram, and zram are virtual devices but are still useful in the
 	// inventory (loop for file-backed images, ram/zram for memory-backed
@@ -474,6 +491,8 @@ func stableBlockDevicePath(sysfsBase, devPath string) string {
 	return devPath
 }
 
+// blockDeviceModel returns the device's model string, falling back to its
+// device-mapper name and finally to an empty string.
 func blockDeviceModel(base string) string {
 	if data, err := os.ReadFile(filepath.Join(base, "device/model")); err == nil {
 		if model := strings.TrimSpace(string(data)); model != "" {
@@ -486,6 +505,8 @@ func blockDeviceModel(base string) string {
 	return ""
 }
 
+// parseDeviceNumber parses a "major:minor" string into its numeric components,
+// reporting false when either part is missing or not a 32-bit unsigned integer.
 func parseDeviceNumber(value string) (uint32, uint32, bool) {
 	majorText, minorText, ok := strings.Cut(value, ":")
 	if !ok {
@@ -502,6 +523,8 @@ func parseDeviceNumber(value string) (uint32, uint32, bool) {
 	return uint32(major), uint32(minor), true
 }
 
+// readUint reads a single decimal unsigned integer from path, trimming trailing
+// whitespace before parsing.
 func readUint(path string) (uint64, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

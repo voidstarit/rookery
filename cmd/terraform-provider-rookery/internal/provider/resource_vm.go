@@ -45,10 +45,13 @@ type vmModel struct {
 	Labels         types.Set    `tfsdk:"labels"`
 }
 
+// Metadata sets the resource type name to the provider name followed by "_vm".
 func (r *vmResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_vm"
 }
 
+// Schema declares the rookery_vm attributes for naming, sizing, disk boot order, interfaces,
+// boot media, console access, and cgroup placement.
 func (r *vmResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A QEMU/KVM virtual machine. Creating a VM starts it; power actions are otherwise not managed by this resource.",
@@ -91,6 +94,9 @@ func (r *vmResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *r
 	}
 }
 
+// Create starts the VM with the planned disks, optional interfaces and serials, then applies
+// labels and stores it in state. It requires at least one disk id and validates the cgroup class
+// before creating the VM.
 func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan vmModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -157,6 +163,8 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read refreshes the VM from the API and removes it from state when the server reports it is
+// gone. Labels are reloaded from the entity label store.
 func (r *vmResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state vmModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -189,6 +197,9 @@ func (r *vmResource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update changes the VM's mutable fields and replaces disks, serials, or interfaces only when
+// they differ from state. Clearing the last serial triggers a disk-set replacement so the server
+// removes the serial rows.
 func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan, state vmModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -278,6 +289,8 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete removes the VM through the API, treating an already-absent VM as success and reporting
+// other errors through diagnostics.
 func (r *vmResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state vmModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -296,10 +309,14 @@ func (r *vmResource) Delete(ctx context.Context, req resource.DeleteRequest, res
 	}
 }
 
+// ImportState adopts an existing VM by its id into Terraform state.
 func (r *vmResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
+// setVMState copies the API VM into the Terraform model, deriving disk ids from the disk objects
+// when the response omits them. It returns diagnostics from converting the disk, serial, and
+// interface lists.
 func setVMState(ctx context.Context, state *vmModel, vm *rookeryv1.VM) diag.Diagnostics {
 	var diags diag.Diagnostics
 	state.ID = types.StringValue(vm.GetId())
@@ -333,12 +350,16 @@ func setVMState(ctx context.Context, state *vmModel, vm *rookeryv1.VM) diag.Diag
 	return diags
 }
 
+// interfaceInt64List converts a Terraform list into []int64 and returns the conversion
+// diagnostics instead of failing.
 func interfaceInt64List(ctx context.Context, list types.List) ([]int64, diag.Diagnostics) {
 	var values []int64
 	diags := list.ElementsAs(ctx, &values, false)
 	return values, diags
 }
 
+// interfaceInt64ListOptional converts a list and reports whether it was set, treating null and
+// unknown lists as unset.
 func interfaceInt64ListOptional(ctx context.Context, list types.List) ([]int64, bool, diag.Diagnostics) {
 	if list.IsNull() || list.IsUnknown() {
 		return nil, false, nil

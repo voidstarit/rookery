@@ -105,6 +105,10 @@ func (p *Preparer) Prepare(ctx context.Context, cfg Config, disk store.Disk) (bl
 	return attachment, nil
 }
 
+// validateLiveExport compares the live kouja volume and export with the stored
+// attachment reference before a start. It rejects unavailable states, missing
+// target or ACL, active sessions on writable disks, and changed portal, target,
+// LUN, NSID, initiator, or owner.
 func (p *Preparer) validateLiveExport(cfg Config, protocol blockdev.Protocol, disk store.Disk, response *koujav1.GetVolumeResponse) error {
 	desired := response.GetDesired()
 	export := response.GetExport()
@@ -186,6 +190,8 @@ func (p *Preparer) validateLiveExport(cfg Config, protocol blockdev.Protocol, di
 	return nil
 }
 
+// now returns the current time in UTC, preferring the injected Now hook so tests
+// control the observation-freshness windows.
 func (p *Preparer) now() time.Time {
 	if p != nil && p.Now != nil {
 		return p.Now().UTC()

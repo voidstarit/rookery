@@ -6,8 +6,13 @@ import (
 	"fmt"
 )
 
+// aclIndexRef converts a zero-based VPP ACL index into the one-based reference
+// the interface ACL API expects, keeping index 0 representable.
 func aclIndexRef(index uint32) uint32 { return index + 1 }
 
+// ReconcileACLs recreates every stored ACL in VPP, updates changed ACL indices,
+// and reapplies ingress and egress bindings to interfaces. It does nothing when
+// the network runtime is absent or VPP is blocked, and joins per-object errors.
 func (s *Server) ReconcileACLs(ctx context.Context) error {
 	if s.networks == nil {
 		return nil

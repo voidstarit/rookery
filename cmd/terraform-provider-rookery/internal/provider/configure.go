@@ -13,6 +13,8 @@ type configuredResource struct {
 	client *Client
 }
 
+// Configure stores the provider's shared client for later use by the resource,
+// ignoring calls that arrive without provider data.
 func (r *configuredResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
@@ -25,6 +27,8 @@ func (r *configuredResource) Configure(_ context.Context, req resource.Configure
 	r.client = client
 }
 
+// requireClient returns the configured client or an error when the resource was
+// used without provider configuration.
 func (r *configuredResource) requireClient() (*Client, error) {
 	if r.client == nil {
 		return nil, errors.New("Rookery provider is not configured")

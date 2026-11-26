@@ -17,12 +17,9 @@ const (
 	lightVMEphemeralCleanupTimeout = 2 * time.Minute
 )
 
-// RunLightVMEphemeralReaper watches ephemeral LightVMs and deletes the ones
-// whose guest run ended. A finished ephemeral LightVM is one-shot: QEMU,
-// virtiofsd, the attempt container, console sockets, and the config drive are
-// removed, then the definition is deleted. Deleting the definition cascades its
-// disk and interface attachment rows, so those resources become available to
-// other workloads; the disks and VPP interfaces themselves are not deleted.
+// RunLightVMEphemeralReaper periodically deletes ephemeral LightVMs whose guest
+// run ended, removing their runtime and definition and releasing disk and
+// interface attachments. The underlying disks and VPP interfaces are kept.
 func (s *Server) RunLightVMEphemeralReaper(ctx context.Context) {
 	if s.lightvms == nil || s.store == nil {
 		return
@@ -39,6 +36,8 @@ func (s *Server) RunLightVMEphemeralReaper(ctx context.Context) {
 	}
 }
 
+// reapEphemeralLightVMs terminates each reapable ephemeral LightVM that is no
+// longer running, logging and continuing when a single termination fails.
 func (s *Server) reapEphemeralLightVMs(ctx context.Context) {
 	vms, err := s.store.ListReapableEphemeralLightVMs(ctx)
 	if err != nil {

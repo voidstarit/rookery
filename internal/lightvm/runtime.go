@@ -176,6 +176,8 @@ func (r *Runtime) LightVMStatus() (ready bool, state, detail string) {
 	return true, "ready", fmt.Sprintf("buildah %s and virtiofsd %s are available", buildahPath, virtiofsdPath)
 }
 
+// ensureImage returns nil when buildah already knows the image, otherwise
+// pulling it with the pull timeout.
 func (r *Runtime) ensureImage(ctx context.Context, image string) error {
 	if _, err := r.runCommand(ctx, 30*time.Second, r.buildahBinary, "inspect", "--type=image", image); err == nil {
 		return nil
@@ -186,6 +188,9 @@ func (r *Runtime) ensureImage(ctx context.Context, image string) error {
 	return nil
 }
 
+// startVirtiofsd launches virtiofsd for rootfs on the fixed per-ID socket and
+// returns that socket path. It waits for the socket to appear and stops the
+// process again, appending the log tail to the error, when readiness fails.
 func (r *Runtime) startVirtiofsd(ctx context.Context, id, rootfs string) (string, error) {
 	socket := r.virtiofsdSocket(id)
 	pidfile := r.virtiofsdPIDFile(id)
@@ -235,6 +240,10 @@ func (r *Runtime) startVirtiofsd(ctx context.Context, id, rootfs string) (string
 	return socket, nil
 }
 
+// stopVirtiofsd terminates the virtiofsd processes serving the fixed per-ID
+// socket, found through the pid file and a process scan, escalating to SIGKILL
+// after virtiofsdStopTimeout. It removes the pid file and socket even when no
+// process is found.
 func (r *Runtime) stopVirtiofsd(ctx context.Context, id string) error {
 	socket := r.virtiofsdSocket(id)
 	pidfile := r.virtiofsdPIDFile(id)
@@ -298,6 +307,8 @@ func (r *Runtime) stopVirtiofsd(ctx context.Context, id string) error {
 	return nil
 }
 
+// cleanupContainer best-effort unmounts and removes the buildah container
+// backing id, logging failures at debug level and always returning nil.
 func (r *Runtime) cleanupContainer(ctx context.Context, id string) error {
 	container := lightVMContainerName(id)
 	if _, err := r.runCommand(ctx, buildahCommandTimeout, r.buildahBinary, "umount", container); err != nil {
@@ -309,12 +320,16 @@ func (r *Runtime) cleanupContainer(ctx context.Context, id string) error {
 	return nil
 }
 
+// cleanupContainerBackground runs cleanupContainer under a two-minute
+// background timeout for deferred cleanup whose errors are discarded.
 func (r *Runtime) cleanupContainerBackground(id string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	_ = r.cleanupContainer(ctx, id)
 }
 
+// writeLightVMEnvFile renders values and writes them as rootfs/.env, failing
+// when an entry is invalid, duplicated, or would span multiple lines.
 func writeLightVMEnvFile(rootfs string, values []store.LightVMEnvVar) error {
 	content, err := renderLightVMEnv(values)
 	if err != nil {
@@ -327,6 +342,8 @@ func writeLightVMEnvFile(rootfs string, values []store.LightVMEnvVar) error {
 	return nil
 }
 
+// renderLightVMEnv serializes environment variables as NAME=value lines. It
+// rejects invalid or duplicated names and values containing CR, LF, or NUL.
 func renderLightVMEnv(values []store.LightVMEnvVar) ([]byte, error) {
 	var content strings.Builder
 	seen := make(map[string]struct{}, len(values))
@@ -350,6 +367,8 @@ func renderLightVMEnv(values []store.LightVMEnvVar) ([]byte, error) {
 	return []byte(content.String()), nil
 }
 
+// validLightVMEnvName reports whether name is non-empty and matches
+// [A-Za-z_][A-Za-z0-9_]*.
 func validLightVMEnvName(name string) bool {
 	for index, char := range name {
 		switch {
@@ -378,6 +397,9 @@ func writeLightVMEntrypointFile(rootfs, executable string, args []string, script
 	return nil
 }
 
+// renderLightVMEntrypoint returns the /.entrypoint content, preferring script
+// when set and otherwise emitting an exec line for executable plus shell-quoted
+// args. It refuses an empty executable and NUL or newline characters.
 func renderLightVMEntrypoint(executable string, args []string, script string) ([]byte, error) {
 	if strings.TrimSpace(script) != "" {
 		return renderLightVMScriptEntrypoint(script)
@@ -405,6 +427,8 @@ func renderLightVMEntrypoint(executable string, args []string, script string) ([
 	return []byte(content.String()), nil
 }
 
+// renderLightVMScriptEntrypoint returns script with a #!/bin/sh shebang added
+// when missing and a trailing newline ensured; NUL bytes are rejected.
 func renderLightVMScriptEntrypoint(script string) ([]byte, error) {
 	if strings.ContainsRune(script, 0) {
 		return nil, errors.New("executable script cannot contain NUL characters")
@@ -420,10 +444,15 @@ func renderLightVMScriptEntrypoint(script string) ([]byte, error) {
 	return []byte(content.String()), nil
 }
 
+// shellQuote wraps value in single quotes and escapes embedded single quotes so
+// POSIX shells treat it as one literal word.
 func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }
 
+// runCommand runs binary with args under an optional timeout and returns its
+// trimmed stdout. On failure it returns the context error, otherwise an error
+// carrying the command and captured stderr or stdout.
 func (r *Runtime) runCommand(ctx context.Context, timeout time.Duration, binary string, args ...string) (string, error) {
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -451,18 +480,26 @@ func (r *Runtime) runCommand(ctx context.Context, timeout time.Duration, binary 
 	return strings.TrimSpace(stdout.String()), nil
 }
 
+// virtiofsdSocket returns the fixed per-LightVM virtiofsd Unix socket path
+// under the run directory.
 func (r *Runtime) virtiofsdSocket(id string) string {
 	return filepath.Join(r.runDir, id+".virtiofs.sock")
 }
 
+// virtiofsdPIDFile returns the fixed per-LightVM virtiofsd pid file path under
+// the run directory.
 func (r *Runtime) virtiofsdPIDFile(id string) string {
 	return filepath.Join(r.runDir, id+".virtiofsd.pid")
 }
 
+// lightVMContainerName returns the buildah container name for a LightVM ID,
+// using the rookery-lightvm- prefix.
 func lightVMContainerName(id string) string {
 	return lightVMContainerPrefix + id
 }
 
+// waitForVirtiofsSocket polls until socket exists or timeout elapses, failing
+// early when pid exits and honoring ctx cancellation.
 func waitForVirtiofsSocket(ctx context.Context, socket string, pid int, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
@@ -481,6 +518,8 @@ func waitForVirtiofsSocket(ctx context.Context, socket string, pid int, timeout 
 	return fmt.Errorf("timed out waiting for %s", socket)
 }
 
+// readPIDFile parses a positive process ID from path, reporting false when the
+// file is missing, unparsable, or not positive.
 func readPIDFile(path string) (int, bool) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -493,11 +532,15 @@ func readPIDFile(path string) (int, bool) {
 	return pid, true
 }
 
+// processAlive reports whether pid exists, counting EPERM from a process owned
+// by another user as alive.
 func processAlive(pid int) bool {
 	err := syscall.Kill(pid, 0)
 	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
+// processCommandLineContains reports whether /proc/<pid>/cmdline contains value,
+// returning false when the file cannot be read.
 func processCommandLineContains(pid int, value string) bool {
 	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "cmdline"))
 	if err != nil {
@@ -527,6 +570,8 @@ func matchingSocketPIDs(socket string) []int {
 	return pids
 }
 
+// processIsVirtiofsd reports whether the process name of pid mentions
+// virtiofsd, filtering out unrelated processes that share a socket path.
 func processIsVirtiofsd(pid int) bool {
 	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "comm"))
 	if err != nil {
@@ -535,6 +580,8 @@ func processIsVirtiofsd(pid int) bool {
 	return strings.Contains(strings.ToLower(strings.TrimSpace(string(data))), "virtiofsd")
 }
 
+// readLogTail returns the last at most 4096 bytes of the log at path, trimmed,
+// or an empty string when the file cannot be read.
 func readLogTail(path string) string {
 	file, err := os.Open(path)
 	if err != nil {

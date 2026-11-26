@@ -23,10 +23,13 @@ func NewDiskThrottleClassDataSource() datasource.DataSource {
 	return &diskThrottleClassDataSource{}
 }
 
+// Metadata registers the data source as <provider>_disk_throttle_class.
 func (d *diskThrottleClassDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_disk_throttle_class"
 }
 
+// Schema defines the throttle class attributes, adding the numeric limit fields reported by
+// diskThrottleNumericDescriptions dynamically.
 func (d *diskThrottleClassDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	attributes := map[string]dschema.Attribute{
 		"id":               dschema.Int64Attribute{Optional: true, Computed: true},
@@ -44,6 +47,8 @@ func (d *diskThrottleClassDataSource) Schema(_ context.Context, _ datasource.Sch
 	}
 }
 
+// Read resolves the throttle class by exactly one of id or name, storing it; lookup and
+// transport errors become diagnostics.
 func (d *diskThrottleClassDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config diskThrottleClassModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
@@ -83,6 +88,8 @@ func (d *diskThrottleClassDataSource) Read(ctx context.Context, req datasource.R
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// findDiskThrottleClass returns the single class whose name matches case-insensitively,
+// failing on duplicate matches or no match.
 func findDiskThrottleClass(classes []*rookeryv1.DiskThrottleClass, name string) (*rookeryv1.DiskThrottleClass, error) {
 	var found *rookeryv1.DiskThrottleClass
 	for _, class := range classes {

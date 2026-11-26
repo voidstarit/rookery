@@ -201,6 +201,8 @@ func (r Reference) Locator() string {
 	}
 }
 
+// validate checks that the iSCSI portal and target are set and the LUN is not
+// negative.
 func (r ISCSIReference) validate() error {
 	if strings.TrimSpace(r.Portal) == "" {
 		return errors.New("iSCSI portal is required")
@@ -214,6 +216,8 @@ func (r ISCSIReference) validate() error {
 	return nil
 }
 
+// validate checks that the NVMe/TCP address and NQN are set and the NSID is not
+// negative.
 func (r NVMeTCPReference) validate() error {
 	if strings.TrimSpace(r.Address) == "" {
 		return errors.New("NVMe/TCP address is required")
@@ -227,6 +231,7 @@ func (r NVMeTCPReference) validate() error {
 	return nil
 }
 
+// validate checks that the RBD pool and image are set.
 func (r RBDReference) validate() error {
 	if strings.TrimSpace(r.Pool) == "" {
 		return errors.New("RBD pool is required")

@@ -41,10 +41,13 @@ type routeTableModel struct {
 	Labels         types.Set    `tfsdk:"labels"`
 }
 
+// Metadata registers the resource under the provider type name with the _route_table suffix.
 func (r *routeTableResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_route_table"
 }
 
+// Schema declares name, table_id, and ipv6 as replace-only inputs and exposes the default and
+// managed flags plus interface/route counts as computed attributes.
 func (r *routeTableResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A custom VPP route table (VRF). Table 0 is implicit and cannot be created.",
@@ -75,6 +78,8 @@ func (r *routeTableResource) Schema(_ context.Context, _ resource.SchemaRequest,
 	}
 }
 
+// Create creates the VPP route table for the planned name, table id, and address family, then
+// applies labels and stores the server response in state.
 func (r *routeTableResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan routeTableModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -107,6 +112,8 @@ func (r *routeTableResource) Create(ctx context.Context, req resource.CreateRequ
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read lists route tables, refreshes state and labels for the matching id, and removes the
+// resource from state when no table matches.
 func (r *routeTableResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state routeTableModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -141,6 +148,8 @@ func (r *routeTableResource) Read(ctx context.Context, req resource.ReadRequest,
 	resp.State.RemoveResource(ctx)
 }
 
+// Update applies only the planned labels, since the table's identifying attributes are
+// replace-only, and writes the resulting label set to state.
 func (r *routeTableResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan routeTableModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -163,6 +172,8 @@ func (r *routeTableResource) Update(ctx context.Context, req resource.UpdateRequ
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete removes the route table, treating a not-found response as success so destroys are
+// idempotent.
 func (r *routeTableResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state routeTableModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -181,10 +192,13 @@ func (r *routeTableResource) Delete(ctx context.Context, req resource.DeleteRequ
 	}
 }
 
+// ImportState adopts an existing route table by its decimal id through the shared int64 helper.
 func (r *routeTableResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	importInt64ID(ctx, req, resp)
 }
 
+// setRouteTableState copies the table's name, VPP table id, address family, and computed
+// flags/counters into the model.
 func setRouteTableState(state *routeTableModel, table *rookeryv1.RouteTable) {
 	state.ID = types.Int64Value(table.GetId())
 	state.Name = types.StringValue(table.GetName())

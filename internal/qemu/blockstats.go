@@ -65,6 +65,9 @@ func (q *QEMU) LightVMBlockStats(ctx context.Context, id string) ([]BlockDeviceS
 	return blockStatsAtQMP(ctx, qmp)
 }
 
+// blockStatsAtQMP dials the QMP socket, negotiates capabilities, and returns
+// query-blockstats data per device, skipping entries without stats. A missing
+// socket is reported as ErrMonitorUnavailable.
 func blockStatsAtQMP(ctx context.Context, socket string) ([]BlockDeviceStats, error) {
 	dialer := net.Dialer{Timeout: monitorTimeout}
 	conn, err := dialer.DialContext(ctx, "unix", socket)
@@ -112,6 +115,9 @@ func blockStatsAtQMP(ctx context.Context, socket string) ([]BlockDeviceStats, er
 	return stats, nil
 }
 
+// qmpCommand sends one QMP command and waits for its reply, skipping
+// unsolicited events; when result is non-nil the reply's return value is
+// decoded into it. An error reply becomes an error naming the command.
 func qmpCommand(conn net.Conn, reader *bufio.Reader, command string, result any) error {
 	payload := map[string]any{"execute": command}
 	data, err := json.Marshal(payload)

@@ -88,6 +88,10 @@ func NetworkVNFStackMAC(networkID int64) net.HardwareAddr {
 	return net.HardwareAddr{0x02, 0x4e, 0x4e, byte(uint64(networkID) >> 16), byte(uint64(networkID) >> 8), byte(networkID)}
 }
 
+// startSharedNetwork builds the shared userspace VNF stack for a network:
+// validates the service addresses and MAC, creates a gVisor netstack with
+// routes to the BVI, and connects a memif slave. Partial stacks are closed on
+// error.
 func startSharedNetwork(ctx context.Context, cfg sharedNetworkConfig) (*sharedNetwork, error) {
 	if cfg.NetworkID < 1 {
 		return nil, errors.New("invalid network id")
@@ -206,6 +210,10 @@ func firstIPv4Host(network *net.IPNet) net.IP {
 	return gateway
 }
 
+// addDHCPv4 loads the DHCPv4 handler chain, binds a broadcast UDP endpoint on
+// port, and registers the component for vnf. It fails when another DHCPv4 VNF
+// is already registered on the network, in which case the new endpoint is
+// closed and not installed.
 func (n *sharedNetwork) addDHCPv4(vnf store.VNF, leasePath string, port int) error {
 	if port <= 0 {
 		port = defaultDHCPPort
@@ -258,6 +266,9 @@ func (n *sharedNetwork) addDHCPv4(vnf store.VNF, leasePath string, port int) err
 	return nil
 }
 
+// serveDHCPv4 reads requests for one registered DHCPv4 component, writes the
+// replies, and closes component.done on exit. Read errors end the loop, either
+// silently during shutdown or with a warning log.
 func (n *sharedNetwork) serveDHCPv4(ctx context.Context, component *sharedDHCPv4) {
 	defer close(component.done)
 	buf := make([]byte, 64*1024)
@@ -280,6 +291,10 @@ func (n *sharedNetwork) serveDHCPv4(ctx context.Context, component *sharedDHCPv4
 	}
 }
 
+// replyDHCPv4 parses a DHCPv4 request, runs the handler chain for vnfID, and
+// returns the response plus the UDP destination implied by the request's
+// addressing. It returns nil, nil for non-request packets, unsupported message
+// types, or when a handler drops the packet.
 func replyDHCPv4(vnfID int64, handlers []handler.Handler4, payload []byte) (*dhcpv4.DHCPv4, *net.UDPAddr) {
 	req, err := dhcpv4.FromBytes(payload)
 	if err != nil || req.OpCode != dhcpv4.OpcodeBootRequest {
@@ -335,6 +350,9 @@ func replyDHCPv4(vnfID int64, handlers []handler.Handler4, payload []byte) (*dhc
 	}
 }
 
+// removeVNF unregisters vnfID and stops its DHCPv4 or DNS component, waiting up
+// to vnfStopTimeout for DHCP shutdown. It reports whether the shared network now
+// has no VNFs left.
 func (n *sharedNetwork) removeVNF(vnfID int64) bool {
 	n.mu.Lock()
 	_, exists := n.vnfs[vnfID]
@@ -365,6 +383,9 @@ func (n *sharedNetwork) removeVNF(vnfID int64) bool {
 	return empty
 }
 
+// pumpRX reads frames from the shared memif and injects them into the netstack
+// as inbound IPv4, retrying after 100ms on transient errors. It returns when
+// the context is canceled or the memif closes.
 func (n *sharedNetwork) pumpRX(ctx context.Context) {
 	for {
 		frame, err := n.memif.readFrame(ctx)
@@ -385,6 +406,9 @@ func (n *sharedNetwork) pumpRX(ctx context.Context) {
 	}
 }
 
+// pumpTX forwards packets produced by the shared netstack to the memif,
+// retrying after 100ms on transient write errors. It returns when the context
+// is canceled or the memif closes.
 func (n *sharedNetwork) pumpTX(ctx context.Context) {
 	for {
 		pkt := n.link.ReadContext(ctx)
@@ -409,6 +433,9 @@ func (n *sharedNetwork) pumpTX(ctx context.Context) {
 	}
 }
 
+// close tears down the shared network once: it marks it closed, cancels the
+// pumps, stops the DHCP and DNS components, closes the memif and netstack, and
+// closes done.
 func (n *sharedNetwork) close() {
 	n.closeOnce.Do(func() {
 		n.mu.Lock()
@@ -485,6 +512,8 @@ func (n *sharedNetwork) ensureIPv6Address(cidr string) error {
 	return nil
 }
 
+// dnsHandler returns the DNS handler registered by the current DNS VNF, or nil
+// when no DNS VNF is present.
 func (n *sharedNetwork) dnsHandler() *dnsHandler {
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -494,6 +523,7 @@ func (n *sharedNetwork) dnsHandler() *dnsHandler {
 	return n.dns.handler
 }
 
+// isClosed reports whether close has run on the shared network.
 func (n *sharedNetwork) isClosed() bool {
 	n.mu.Lock()
 	defer n.mu.Unlock()

@@ -34,6 +34,8 @@ func NormalizeNetworkCIDRs(ipv4CIDR, ipv6CIDR string) (string, string, error) {
 	return v4, v6, nil
 }
 
+// normalizePrefix parses and masks a CIDR of the required address family,
+// rejecting zones and prefixes too small for the reserved host addresses.
 func normalizePrefix(value string, ipv6 bool) (string, error) {
 	prefix, err := netip.ParsePrefix(strings.TrimSpace(value))
 	if err != nil {

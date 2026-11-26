@@ -173,6 +173,8 @@ func (s *Store) DeleteNetworkHostTap(ctx context.Context, id int64) error {
 	return nil
 }
 
+// scanNetworkHostTap decodes one joined tap row, narrowing the sw_if_index to uint32 and converting
+// millisecond timestamps to UTC.
 func scanNetworkHostTap(s scanner) (NetworkHostTap, error) {
 	var (
 		tap       NetworkHostTap

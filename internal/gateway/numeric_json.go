@@ -21,6 +21,8 @@ type numericJSONMarshaler struct {
 	*runtime.JSONPb
 }
 
+// newNumericJSONMarshaler returns a marshaler that keeps proto field names and rejects unknown
+// input fields while emitting 64-bit integers as JSON numbers.
 func newNumericJSONMarshaler() *numericJSONMarshaler {
 	return &numericJSONMarshaler{JSONPb: &runtime.JSONPb{
 		MarshalOptions: protojson.MarshalOptions{
@@ -33,6 +35,8 @@ func newNumericJSONMarshaler() *numericJSONMarshaler {
 	}}
 }
 
+// Marshal encodes a proto message so 64-bit integers appear as JSON numbers, returns an empty body
+// for Empty, and falls back to element-wise handling for slices of messages.
 func (m *numericJSONMarshaler) Marshal(value interface{}) ([]byte, error) {
 	if _, ok := value.(*emptypb.Empty); ok {
 		return nil, nil
@@ -57,6 +61,8 @@ func (m *numericJSONMarshaler) Marshal(value interface{}) ([]byte, error) {
 	return json.Marshal(rewrite64BitFields(message.ProtoReflect(), generic))
 }
 
+// marshalProtoSlice marshals a slice or array of proto messages element-wise and reports
+// handled=false when the value is not such a collection.
 func marshalProtoSlice(m *numericJSONMarshaler, value interface{}) ([]byte, bool, error) {
 	reflected := reflect.ValueOf(value)
 	if reflected.Kind() != reflect.Slice && reflected.Kind() != reflect.Array {
@@ -78,6 +84,8 @@ func marshalProtoSlice(m *numericJSONMarshaler, value interface{}) ([]byte, bool
 	return data, true, err
 }
 
+// Unmarshal requires exactly one JSON value in the body, then decodes it with proto JSON field
+// names and unknown-field rejection.
 func (m *numericJSONMarshaler) Unmarshal(data []byte, value interface{}) error {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
@@ -95,6 +103,7 @@ func (m *numericJSONMarshaler) Unmarshal(data []byte, value interface{}) error {
 	return m.JSONPb.Unmarshal(data, value)
 }
 
+// NewDecoder returns a decoder that consumes its reader once and delegates to this marshaler.
 func (m *numericJSONMarshaler) NewDecoder(reader io.Reader) runtime.Decoder {
 	return &numericJSONDecoder{marshaler: m, reader: reader}
 }
@@ -105,6 +114,7 @@ type numericJSONDecoder struct {
 	done      bool
 }
 
+// Decode reads the whole reader and unmarshals it, returning io.EOF on any call after the first.
 func (d *numericJSONDecoder) Decode(value interface{}) error {
 	if d.done {
 		return io.EOF
@@ -117,6 +127,8 @@ func (d *numericJSONDecoder) Decode(value interface{}) error {
 	return d.marshaler.Unmarshal(data, value)
 }
 
+// NewEncoder returns an encoder that writes proto messages with the numeric-JSON rules and
+// delegates other values to the underlying JSON encoder.
 func (m *numericJSONMarshaler) NewEncoder(writer io.Writer) runtime.Encoder {
 	return &numericJSONEncoder{marshaler: m, writer: writer, fallback: m.JSONPb.NewEncoder(writer)}
 }
@@ -127,6 +139,8 @@ type numericJSONEncoder struct {
 	fallback  runtime.Encoder
 }
 
+// Encode writes a proto message as one numeric-JSON line terminated by a newline, delegating
+// non-proto values to the wrapped encoder.
 func (e *numericJSONEncoder) Encode(value interface{}) error {
 	if _, ok := value.(proto.Message); !ok {
 		return e.fallback.Encode(value)
@@ -139,6 +153,8 @@ func (e *numericJSONEncoder) Encode(value interface{}) error {
 	return err
 }
 
+// readinessMessage reports whether a message is one of the system status types that must always
+// expose a ready field.
 func readinessMessage(name protoreflect.FullName) bool {
 	switch name {
 	case "rookery.v1.StatusResponse", "rookery.v1.ComponentStatus", "rookery.v1.ThinPoolStatus", "rookery.v1.VPPStatus":
@@ -148,6 +164,9 @@ func readinessMessage(name protoreflect.FullName) bool {
 	}
 }
 
+// rewrite64BitFields walks a decoded JSON object against its proto message, turning 64-bit
+// integer strings into numbers and forcing ready=false on readiness messages where the field is
+// absent. Values that are not JSON objects are returned unchanged.
 func rewrite64BitFields(message protoreflect.Message, value interface{}) interface{} {
 	object, ok := value.(map[string]interface{})
 	if !ok {
@@ -185,6 +204,8 @@ func rewrite64BitFields(message protoreflect.Message, value interface{}) interfa
 	return object
 }
 
+// rewriteField converts one decoded JSON value for field, turning 64-bit integer strings into
+// json.Number and recursing into nested messages; all other kinds pass through.
 func rewriteField(field protoreflect.FieldDescriptor, value interface{}, protoValue protoreflect.Value) interface{} {
 	switch field.Kind() {
 	case protoreflect.Int64Kind, protoreflect.Sint64Kind,

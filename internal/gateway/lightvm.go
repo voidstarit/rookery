@@ -38,7 +38,8 @@ func (s *lightVMKernelService) ListKernels(ctx context.Context, _ *rookeryv1.Lis
 	return response, nil
 }
 
-// GetKernel returns one kernel record.
+// GetKernel returns the kernel record with the requested ID, reporting
+// NotFound when it is missing.
 func (s *lightVMKernelService) GetKernel(ctx context.Context, request *rookeryv1.GetKernelRequest) (*rookeryv1.LightVMKernel, error) {
 	kernel, err := s.store.GetLightVMKernel(ctx, request.GetId())
 	if err != nil {
@@ -97,6 +98,8 @@ func (s *lightVMKernelService) DeleteKernel(ctx context.Context, request *rooker
 	return &emptypb.Empty{}, nil
 }
 
+// kernelFromRequest validates the request fields and the kernel file on disk, defaulting an empty
+// fileName to the path's base name and marking the file managed when it lives under storageDir.
 func (s *lightVMKernelService) kernelFromRequest(id int64, name, description, path, fileName string) (store.LightVMKernel, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -130,6 +133,8 @@ func (s *lightVMKernelService) kernelFromRequest(id int64, name, description, pa
 	}, nil
 }
 
+// inspectLightVMFile returns the cleaned absolute path and size of an existing non-empty regular
+// file, rejecting relative, missing, empty, or non-regular paths with kind named in the error.
 func inspectLightVMFile(path, kind string) (string, int64, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
@@ -153,6 +158,8 @@ func inspectLightVMFile(path, kind string) (string, int64, error) {
 	return path, info.Size(), nil
 }
 
+// lightVMKernelToProto converts a stored kernel record into its API representation, including
+// the managed flag and creation/update timestamps.
 func lightVMKernelToProto(kernel store.LightVMKernel) *rookeryv1.LightVMKernel {
 	return &rookeryv1.LightVMKernel{
 		Id:          kernel.ID,
@@ -167,6 +174,8 @@ func lightVMKernelToProto(kernel store.LightVMKernel) *rookeryv1.LightVMKernel {
 	}
 }
 
+// lightVMKernelError maps store kernel errors to gRPC statuses: not-found uses notFoundMessage,
+// while name conflicts, in-use kernels, and unexpected failures get their own codes.
 func lightVMKernelError(err error, notFoundMessage string) error {
 	switch {
 	case errors.Is(err, store.ErrLightVMKernelNotFound):

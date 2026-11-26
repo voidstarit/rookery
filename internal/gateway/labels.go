@@ -64,6 +64,8 @@ func (s *labelService) SetEntityLabels(ctx context.Context, request *rookeryv1.S
 	return entityLabelsToProto(record), nil
 }
 
+// entityLabelsToProto copies a stored label record into proto form, cloning the label slice so
+// later store mutations cannot leak into the response.
 func entityLabelsToProto(record store.EntityLabels) *rookeryv1.EntityLabels {
 	return &rookeryv1.EntityLabels{
 		EntityType: record.EntityType,

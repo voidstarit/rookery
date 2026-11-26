@@ -36,6 +36,8 @@ type HostTapWriter interface {
 // passthrough.
 type AttachableBlockDeviceLister func() ([]host.AttachableBlockDevice, error)
 
+// ListHostBlockDevices returns the host's block devices with their size, model,
+// major/minor numbers, and rotational flag, or Internal when discovery fails.
 func (s *hostService) ListHostBlockDevices(_ context.Context, _ *rookeryv1.ListHostBlockDevicesRequest) (*rookeryv1.ListHostBlockDevicesResponse, error) {
 	devices, err := host.ListBlockDevices()
 	if err != nil {
@@ -52,6 +54,9 @@ func (s *hostService) ListHostBlockDevices(_ context.Context, _ *rookeryv1.ListH
 	return response, nil
 }
 
+// ListAttachableBlockDevices returns host devices eligible for passthrough, marking
+// devices that overlap a registered disk, are attached to a workload, or back a thin pool
+// as unavailable with the reason.
 func (s *hostService) ListAttachableBlockDevices(ctx context.Context, _ *rookeryv1.ListAttachableBlockDevicesRequest) (*rookeryv1.ListAttachableBlockDevicesResponse, error) {
 	lister := s.devices
 	if lister == nil {
@@ -123,6 +128,8 @@ func (s *hostService) ListAttachableBlockDevices(ctx context.Context, _ *rookery
 	return response, nil
 }
 
+// listInterfaces lists the host's NICs enriched with VPP state and management records,
+// annotating each with its VPP name, link state, and VPP addresses when VPP is ready.
 func (s *hostService) listInterfaces(ctx context.Context) (*rookeryv1.ListHostInterfacesResponse, error) {
 	interfaces, err := host.ListHostInterfaces()
 	if err != nil {
@@ -173,6 +180,8 @@ func (s *hostService) listInterfaces(ctx context.Context) (*rookeryv1.ListHostIn
 	return response, nil
 }
 
+// attachable rejects wireless NICs, the NIC carrying the host default route, and
+// non-physical interfaces, returning the matching InvalidArgument status.
 func (s *hostService) attachable(iface host.HostInterface) error {
 	switch {
 	case iface.Wireless:
@@ -185,6 +194,8 @@ func (s *hostService) attachable(iface host.HostInterface) error {
 	return nil
 }
 
+// vppInterface looks up the VPP interface named "host-" plus the NIC name, reporting false
+// when no VPP source is configured or the lookup fails.
 func (s *hostService) vppInterface(ctx context.Context, nic string) (host.VPPInterface, bool) {
 	if s.source == nil {
 		return host.VPPInterface{}, false
@@ -201,6 +212,9 @@ func (s *hostService) vppInterface(ctx context.Context, nic string) (host.VPPInt
 	return host.VPPInterface{}, false
 }
 
+// AttachHostInterface moves a physical host NIC into VPP, records it as a managed host
+// interface, and returns the refreshed listing; wireless NICs, the default-route NIC, and
+// non-physical interfaces are rejected.
 func (s *hostService) AttachHostInterface(ctx context.Context, request *rookeryv1.AttachHostInterfaceRequest) (*rookeryv1.HostInterface, error) {
 	name := strings.TrimSpace(request.GetName())
 	if name == "" {
@@ -250,6 +264,8 @@ func (s *hostService) AttachHostInterface(ctx context.Context, request *rookeryv
 	return &rookeryv1.HostInterface{Name: name, InVpp: true, VppName: "host-" + name, Managed: true}, nil
 }
 
+// DetachHostInterface removes a NIC from VPP and deletes its management record and stored
+// VPP addresses, refusing while a NAT44 VNF uses the NIC as its outside interface.
 func (s *hostService) DetachHostInterface(ctx context.Context, request *rookeryv1.DetachHostInterfaceRequest) (*emptypb.Empty, error) {
 	name := strings.TrimSpace(request.GetName())
 	if name == "" {
@@ -281,6 +297,8 @@ func (s *hostService) DetachHostInterface(ctx context.Context, request *rookeryv
 	return &emptypb.Empty{}, nil
 }
 
+// ListHostTaps returns the stored host taps, optionally limited to one network, annotated
+// with live VPP addresses when VPP is ready.
 func (s *hostService) ListHostTaps(ctx context.Context, request *rookeryv1.ListHostTapsRequest) (*rookeryv1.ListHostTapsResponse, error) {
 	var networkID *int64
 	if request.GetNetworkId() > 0 {
@@ -307,6 +325,8 @@ func (s *hostService) ListHostTaps(ctx context.Context, request *rookeryv1.ListH
 	return response, nil
 }
 
+// CreateHostTap creates a host tap between a network and the Linux host through the tap
+// runtime, mapping write failures to gRPC statuses.
 func (s *hostService) CreateHostTap(ctx context.Context, request *rookeryv1.CreateHostTapRequest) (*rookeryv1.HostTap, error) {
 	if s.taps == nil {
 		return nil, status.Error(codes.Unavailable, "host tap runtime is not configured")
@@ -318,6 +338,8 @@ func (s *hostService) CreateHostTap(ctx context.Context, request *rookeryv1.Crea
 	return hostTapToProto(tap), nil
 }
 
+// DeleteHostTap removes a stored host tap through the tap runtime, mapping write failures
+// to gRPC statuses.
 func (s *hostService) DeleteHostTap(ctx context.Context, request *rookeryv1.DeleteHostTapRequest) (*emptypb.Empty, error) {
 	if s.taps == nil {
 		return nil, status.Error(codes.Unavailable, "host tap runtime is not configured")
@@ -328,6 +350,8 @@ func (s *hostService) DeleteHostTap(ctx context.Context, request *rookeryv1.Dele
 	return &emptypb.Empty{}, nil
 }
 
+// hostTapToProto converts a stored network host tap into its proto form, including the
+// network, switch interface index, IPv4 address, and timestamps.
 func hostTapToProto(tap store.NetworkHostTap) *rookeryv1.HostTap {
 	return &rookeryv1.HostTap{
 		Id:          tap.ID,
@@ -349,6 +373,8 @@ type hostTapNetworkStatusError interface {
 	NetworkStatus() (int, string)
 }
 
+// mapHostTapWriteError translates errors exposing an HTTP-style host tap or network status
+// into gRPC statuses, falling back to Internal for unrecognized errors.
 func mapHostTapWriteError(err error) error {
 	var tapError hostTapStatusError
 	if errors.As(err, &tapError) {
@@ -361,6 +387,8 @@ func mapHostTapWriteError(err error) error {
 	return status.Error(codes.Internal, "host tap operation failed")
 }
 
+// statusForHostTap maps HTTP-style 400, 404, 409, and 503 codes to gRPC statuses, using a
+// generic message when none is supplied and Internal for other codes.
 func statusForHostTap(httpStatus int, message string) error {
 	if message == "" {
 		message = "host tap operation failed"

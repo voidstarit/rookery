@@ -22,6 +22,10 @@ const vncDialTimeout = 3 * time.Second
 // after an administrator disables console access.
 const consoleAccessCheckInterval = 1 * time.Second
 
+// handleVNCProxy validates the VM, console access and request origin, dials the
+// VM's VNC Unix socket, and upgrades the request to a WebSocket proxy. It maps
+// missing VMs to 404, disabled or cross-origin access to 403, stopped VMs to
+// 409, and an unreachable socket to 502.
 func (s *Server) handleVNCProxy(w http.ResponseWriter, r *http.Request) {
 	id, err := parseVMID(r)
 	if err != nil {
@@ -83,6 +87,9 @@ func (s *Server) handleVNCProxy(w http.ResponseWriter, r *http.Request) {
 	}.ServeHTTP(w, r)
 }
 
+// proxyVNC copies bytes in both directions between ws and conn and polls the
+// store once per second, closing both sides when the VM disappears or console
+// access is disabled.
 func (s *Server) proxyVNC(ws *websocket.Conn, conn net.Conn, vmID string) {
 	done := make(chan error, 2)
 	stop := make(chan struct{})
@@ -129,6 +136,8 @@ func (s *Server) proxyVNC(ws *websocket.Conn, conn net.Conn, vmID string) {
 	<-done
 }
 
+// sameOrigin reports whether the request is same-origin: an absent Origin header
+// is accepted, while a malformed one or a host differing from r.Host is not.
 func sameOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {

@@ -25,11 +25,14 @@ func New(version string) func() provider.Provider {
 	}
 }
 
+// Metadata reports the provider type name "rookery" and the build version.
 func (p *RookeryProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "rookery"
 	resp.Version = p.version
 }
 
+// Schema declares the provider's mTLS endpoint, certificate material, and
+// per-call and upload timeout options, each defaulting from the environment.
 func (p *RookeryProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = providerschema.Schema{
 		Description: "Manage Rookery VMs, disks, networks, interfaces, ACLs, VNFs, and storage backends over the public mTLS gRPC API.",
@@ -93,6 +96,8 @@ type providerModel struct {
 	UploadTimeout types.String `tfsdk:"upload_timeout"`
 }
 
+// Configure resolves provider attributes and environment fallbacks into a Client
+// and shares it with every resource and data source.
 func (p *RookeryProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var config providerModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
@@ -121,6 +126,8 @@ func (p *RookeryProvider) Configure(ctx context.Context, req provider.ConfigureR
 	resp.DataSourceData = client
 }
 
+// Resources returns constructors for every Rookery resource the provider
+// supports.
 func (p *RookeryProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewStorageBackendResource,
@@ -147,6 +154,8 @@ func (p *RookeryProvider) Resources(_ context.Context) []func() resource.Resourc
 	}
 }
 
+// DataSources returns constructors for every Rookery data source the provider
+// supports.
 func (p *RookeryProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		NewStatusDataSource,
@@ -171,6 +180,8 @@ func (p *RookeryProvider) DataSources(_ context.Context) []func() datasource.Dat
 	}
 }
 
+// stringOrEnv returns the configured value when it is known and non-empty,
+// otherwise the value of environment variable key.
 func stringOrEnv(value types.String, key string) string {
 	if !value.IsNull() && value.ValueString() != "" {
 		return value.ValueString()

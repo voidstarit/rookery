@@ -23,10 +23,12 @@ func NewNetworkDataSource() datasource.DataSource {
 	return &networkDataSource{}
 }
 
+// Metadata registers this data source under the provider-prefixed type name <provider>_network.
 func (d *networkDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_network"
 }
 
+// Schema defines the network attributes: CIDRs, bridge domain, BVI, gateway, and route table.
 func (d *networkDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a Rookery network by id or name.",
@@ -46,6 +48,7 @@ func (d *networkDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 	}
 }
 
+// Read resolves the network by exactly one of id or name, storing its state and entity labels.
 func (d *networkDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config networkModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
@@ -89,6 +92,8 @@ func (d *networkDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 
+// findNetwork returns the single network whose name matches case-insensitively,
+// failing on duplicate matches or no match.
 func findNetwork(networks []*rookeryv1.Network, name string) (*rookeryv1.Network, error) {
 	var found *rookeryv1.Network
 	for _, network := range networks {

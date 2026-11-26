@@ -23,6 +23,8 @@ type routeTableService struct {
 	readiness Readiness
 }
 
+// runtimeReady reports Unavailable when no VPP runtime is configured or VPP is not ready, and nil
+// otherwise.
 func (s *routeTableService) runtimeReady() error {
 	if s.runtime == nil {
 		return status.Error(codes.Unavailable, "VPP network runtime is not configured")
@@ -33,6 +35,8 @@ func (s *routeTableService) runtimeReady() error {
 	return nil
 }
 
+// ListRouteTables returns the two synthetic default tables (IPv4 and IPv6) followed by the stored
+// tables, filling interface and route counts when those store lookups succeed.
 func (s *routeTableService) ListRouteTables(ctx context.Context, _ *rookeryv1.ListRouteTablesRequest) (*rookeryv1.ListRouteTablesResponse, error) {
 	tables, err := s.store.ListRouteTables(ctx)
 	if err != nil {
@@ -60,11 +64,15 @@ func (s *routeTableService) ListRouteTables(ctx context.Context, _ *rookeryv1.Li
 	return response, nil
 }
 
+// defaultRouteTable builds the synthetic table 0 entry named "default" for the given address
+// family.
 func defaultRouteTable(ipv6 bool) *rookeryv1.RouteTable {
 	table := &rookeryv1.RouteTable{Id: 0, Name: "default", TableId: 0, Ipv6: ipv6, IsDefault: true}
 	return table
 }
 
+// routeTableToProto converts a store route table into protobuf, marking it managed when it belongs
+// to a network.
 func routeTableToProto(table store.RouteTable) *rookeryv1.RouteTable {
 	return &rookeryv1.RouteTable{
 		Id: table.ID, Name: table.Name, TableId: table.TableID, Ipv6: table.IPv6,
@@ -73,6 +81,9 @@ func routeTableToProto(table store.RouteTable) *rookeryv1.RouteTable {
 	}
 }
 
+// CreateRouteTable validates the name and table ID, rejects IDs reserved for network VRFs, and
+// stores the table before ensuring it in VPP; a VPP failure deletes the new record. Duplicate IDs
+// or names return AlreadyExists.
 func (s *routeTableService) CreateRouteTable(ctx context.Context, request *rookeryv1.CreateRouteTableRequest) (*rookeryv1.RouteTable, error) {
 	if err := s.runtimeReady(); err != nil {
 		return nil, err
@@ -107,6 +118,8 @@ func (s *routeTableService) CreateRouteTable(ctx context.Context, request *rooke
 	return routeTableToProto(created), nil
 }
 
+// DeleteRouteTable removes an unmanaged route table from the store and VPP; network-managed tables
+// return FailedPrecondition, and a failed VPP delete recreates the store record.
 func (s *routeTableService) DeleteRouteTable(ctx context.Context, request *rookeryv1.DeleteRouteTableRequest) (*emptypb.Empty, error) {
 	if err := s.runtimeReady(); err != nil {
 		return nil, err
@@ -128,6 +141,8 @@ func (s *routeTableService) DeleteRouteTable(ctx context.Context, request *rooke
 	return &emptypb.Empty{}, nil
 }
 
+// SetInterfaceRouteTables validates and applies the requested IPv4 and IPv6 tables in VPP, then
+// persists them; a store failure restores the previous VPP tables.
 func (s *routeTableService) SetInterfaceRouteTables(ctx context.Context, request *rookeryv1.SetInterfaceRouteTablesRequest) (*rookeryv1.VirtualInterface, error) {
 	if err := s.runtimeReady(); err != nil {
 		return nil, err
@@ -149,6 +164,8 @@ func (s *routeTableService) SetInterfaceRouteTables(ctx context.Context, request
 	return interfaceToProto(updated), nil
 }
 
+// applyInterfaceRouteTables verifies that each nonzero table ID exists for its family, programs
+// both address families in VPP, and restores the IPv4 table when the IPv6 update fails.
 func (s *routeTableService) applyInterfaceRouteTables(ctx context.Context, iface store.VirtualInterface, ipv4, ipv6 uint32) error {
 	if ipv4 != 0 {
 		if _, err := s.store.GetRouteTableByID(ctx, ipv4, false); err != nil {
@@ -170,6 +187,8 @@ func (s *routeTableService) applyInterfaceRouteTables(ctx context.Context, iface
 	return nil
 }
 
+// routeTableStoreError maps route-table and interface sentinel store errors to their gRPC codes,
+// defaulting to Internal.
 func routeTableStoreError(err error) error {
 	switch {
 	case errors.Is(err, store.ErrRouteTableNotFound):
@@ -185,6 +204,8 @@ func routeTableStoreError(err error) error {
 	}
 }
 
+// resolveRouteTable loads the route table with the given record ID, or synthesizes the table 0
+// default for the family when id is zero.
 func (s *routeTableService) resolveRouteTable(ctx context.Context, id int64, ipv6 bool) (store.RouteTable, error) {
 	if id == 0 {
 		return store.RouteTable{Name: "default", TableID: 0, IPv6: ipv6}, nil
@@ -196,6 +217,8 @@ func (s *routeTableService) resolveRouteTable(ctx context.Context, id int64, ipv
 	return table, nil
 }
 
+// ListRoutes returns the stored routes in the table selected by record ID and address family,
+// treating ID zero as the default table.
 func (s *routeTableService) ListRoutes(ctx context.Context, request *rookeryv1.ListRoutesRequest) (*rookeryv1.ListRoutesResponse, error) {
 	table, err := s.resolveRouteTable(ctx, request.GetRouteTableId(), request.GetIpv6())
 	if err != nil {
@@ -212,6 +235,9 @@ func (s *routeTableService) ListRoutes(ctx context.Context, request *rookeryv1.L
 	return response, nil
 }
 
+// CreateRoute validates the target table and next-hop interface, stores the route, and installs it
+// in VPP; a spec or install failure removes the new record. Interface ID and egress interface are
+// mutually exclusive.
 func (s *routeTableService) CreateRoute(ctx context.Context, request *rookeryv1.CreateRouteRequest) (*rookeryv1.Route, error) {
 	if err := s.runtimeReady(); err != nil {
 		return nil, err
@@ -260,6 +286,8 @@ func (s *routeTableService) CreateRoute(ctx context.Context, request *rookeryv1.
 	return routeToProto(created, request.GetRouteTableId()), nil
 }
 
+// UpdateRoute replaces an existing route in VPP and then in the store; a failed install restores
+// the previous spec, and a failed store write removes the new spec and restores the old one.
 func (s *routeTableService) UpdateRoute(ctx context.Context, request *rookeryv1.UpdateRouteRequest) (*rookeryv1.Route, error) {
 	if err := s.runtimeReady(); err != nil {
 		return nil, err
@@ -323,6 +351,8 @@ func (s *routeTableService) UpdateRoute(ctx context.Context, request *rookeryv1.
 	return routeToProto(saved, tableRecordID), nil
 }
 
+// DeleteRoute removes the route from the store and VPP; if the VPP removal fails it recreates the
+// store record and returns Internal.
 func (s *routeTableService) DeleteRoute(ctx context.Context, request *rookeryv1.DeleteRouteRequest) (*emptypb.Empty, error) {
 	if err := s.runtimeReady(); err != nil {
 		return nil, err
@@ -341,6 +371,8 @@ func (s *routeTableService) DeleteRoute(ctx context.Context, request *rookeryv1.
 	return &emptypb.Empty{}, nil
 }
 
+// ListFIBRoutes dumps the live VPP FIB for the selected table, including each path's interface,
+// next hop, weight, and preference.
 func (s *routeTableService) ListFIBRoutes(ctx context.Context, request *rookeryv1.ListFIBRoutesRequest) (*rookeryv1.ListFIBRoutesResponse, error) {
 	if err := s.runtimeReady(); err != nil {
 		return nil, err
@@ -372,6 +404,8 @@ func (s *routeTableService) ListFIBRoutes(ctx context.Context, request *rookeryv
 	return response, nil
 }
 
+// routeToProto converts a store route into protobuf, reporting routeTableID as the owning record ID
+// and rendering nil lookup-table names as empty strings.
 func routeToProto(route store.Route, routeTableID int64) *rookeryv1.Route {
 	return &rookeryv1.Route{
 		Id: route.ID, RouteTableId: routeTableID, TableId: route.TableID, Ipv6: route.IPv6,
@@ -388,6 +422,8 @@ func routeToProto(route store.Route, routeTableID int64) *rookeryv1.Route {
 	}
 }
 
+// routeStoreError maps route, route-table, and interface sentinel errors to gRPC codes, defaulting
+// to InvalidArgument with the original message.
 func routeStoreError(err error) error {
 	switch {
 	case errors.Is(err, store.ErrRouteNotFound):
@@ -403,6 +439,8 @@ func routeStoreError(err error) error {
 	}
 }
 
+// routeSpec builds the host route specification for route, resolving lookup-table names to numeric
+// IDs and defaulting the egress interface to the attached interface's name.
 func (s *routeTableService) routeSpec(ctx context.Context, route store.Route) (host.RouteSpec, error) {
 	egress := route.EgressInterface
 	if egress == "" {
@@ -432,6 +470,8 @@ func (s *routeTableService) routeSpec(ctx context.Context, route store.Route) (h
 	}, nil
 }
 
+// resolveRouteTableName converts a lookup-table name to its numeric ID, returning nil for a nil
+// name and wrapping lookup failures with label for context.
 func (s *routeTableService) resolveRouteTableName(ctx context.Context, name *string, ipv6 bool, label string) (*uint32, error) {
 	if name == nil {
 		return nil, nil
@@ -443,6 +483,8 @@ func (s *routeTableService) resolveRouteTableName(ctx context.Context, name *str
 	return &id, nil
 }
 
+// trimmedStringPointer trims surrounding whitespace from value, returning nil when nothing
+// remains.
 func trimmedStringPointer(value string) *string {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -451,6 +493,7 @@ func trimmedStringPointer(value string) *string {
 	return &value
 }
 
+// stringValue dereferences value, returning an empty string when value is nil.
 func stringValue(value *string) string {
 	if value == nil {
 		return ""

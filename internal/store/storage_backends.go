@@ -210,6 +210,8 @@ func (s *Store) EnsureDefaultStorageBackend(ctx context.Context, vg, thinPool st
 	return backend, nil
 }
 
+// scanStorageBackend decodes one backend row, unmarshalling its JSON config (returning an error
+// when malformed), converting the disk count to int, and timestamps to UTC.
 func scanStorageBackend(s scanner) (StorageBackend, error) {
 	var (
 		backend   StorageBackend

@@ -95,10 +95,13 @@ type lightVMVirtioFSShareModel struct {
 	Position types.Int64  `tfsdk:"position"`
 }
 
+// Metadata sets the resource type name to the provider type name plus "_lightvm".
 func (r *lightVMResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_lightvm"
 }
 
+// Schema describes the rookery_lightvm resource, covering lifecycle, executable,
+// attachment, and computed runtime attributes.
 func (r *lightVMResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A container-backed Rookery LightVM. Power actions are not managed by this resource.",
@@ -252,6 +255,8 @@ func (r *lightVMResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 	}
 }
 
+// Create creates a LightVM from the plan, attaches labels, and, when wait_for_exit is
+// set, blocks until the instance stops; failures are reported as diagnostics.
 func (r *lightVMResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan lightVMModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -293,6 +298,8 @@ func (r *lightVMResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 }
 
+// Read refreshes state from the API and drops the resource from state when the
+// LightVM no longer exists.
 func (r *lightVMResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state lightVMModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -325,6 +332,8 @@ func (r *lightVMResource) Read(ctx context.Context, req resource.ReadRequest, re
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update sends the planned configuration to the API, replaces the LightVM's labels,
+// and saves the response; the request replaces disk IDs rather than merging them.
 func (r *lightVMResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan lightVMModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -358,6 +367,7 @@ func (r *lightVMResource) Update(ctx context.Context, req resource.UpdateRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete removes the LightVM through the API, treating a not-found response as successful deletion.
 func (r *lightVMResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state lightVMModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -376,15 +386,14 @@ func (r *lightVMResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 }
 
+// ImportState adopts an existing LightVM by passing the import ID through to the "id" attribute.
 func (r *lightVMResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-// waitForLightVMExit polls the LightVM's live process metrics until the guest
-// has exited. A deleted definition also counts as exited: an ephemeral LightVM
-// is removed by the server once its run terminates. For an ephemeral LightVM
-// the wait keeps polling until the definition is gone, so the apply only
-// returns after its disk and interface attachments are released.
+// waitForLightVMExit polls live process metrics until the LightVM exits or its
+// definition is deleted. For an ephemeral LightVM it waits for the definition
+// to disappear so disk and interface attachments are released.
 func waitForLightVMExit(ctx context.Context, client *Client, id string, ephemeral bool) error {
 	ticker := time.NewTicker(lightVMExitPollInterval)
 	defer ticker.Stop()
@@ -408,6 +417,9 @@ func waitForLightVMExit(ctx context.Context, client *Client, id string, ephemera
 	}
 }
 
+// validateLightVMExecution rejects conflicting executable_path, executable_script,
+// and executable_args combinations and requires an executable for image-backed
+// LightVMs.
 func validateLightVMExecution(plan lightVMModel, args []string) diag.Diagnostics {
 	var diags diag.Diagnostics
 	executablePath := strings.TrimSpace(plan.ExecutablePath.ValueString())
@@ -426,6 +438,9 @@ func validateLightVMExecution(plan lightVMModel, args []string) diag.Diagnostics
 	return diags
 }
 
+// lightVMCreateRequest converts the plan into a create request, rejecting invalid
+// nested values, config_files combined with an image, and conflicting executable
+// settings.
 func lightVMCreateRequest(ctx context.Context, plan lightVMModel) (*rookeryv1.CreateLightVMRequest, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	env, envDiags := lightVMEnvFromModel(ctx, plan.Env)
@@ -472,6 +487,8 @@ func lightVMCreateRequest(ctx context.Context, plan lightVMModel) (*rookeryv1.Cr
 	}, diags
 }
 
+// lightVMUpdateRequest converts the plan into an update request that replaces disk
+// IDs, rejecting invalid nested values and conflicting executable settings.
 func lightVMUpdateRequest(ctx context.Context, plan lightVMModel) (*rookeryv1.UpdateLightVMRequest, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	env, envDiags := lightVMEnvFromModel(ctx, plan.Env)
@@ -520,6 +537,9 @@ func lightVMUpdateRequest(ctx context.Context, plan lightVMModel) (*rookeryv1.Up
 	}, diags
 }
 
+// setLightVMState copies the API LightVM into the Terraform model, converting nested
+// env, console, share, disk, and interface values and collecting conversion
+// diagnostics.
 func setLightVMState(ctx context.Context, state *lightVMModel, vm *rookeryv1.LightVM) diag.Diagnostics {
 	var diags diag.Diagnostics
 	state.ID = types.StringValue(vm.GetId())
@@ -574,6 +594,8 @@ func setLightVMState(ctx context.Context, state *lightVMModel, vm *rookeryv1.Lig
 	return diags
 }
 
+// lightVMEnvFromModel converts the plan's env list into API env vars, returning nil
+// when the list is null or unknown.
 func lightVMEnvFromModel(ctx context.Context, list types.List) ([]*rookeryv1.LightVMEnvVar, diag.Diagnostics) {
 	if list.IsNull() || list.IsUnknown() {
 		return nil, nil
@@ -587,6 +609,8 @@ func lightVMEnvFromModel(ctx context.Context, list types.List) ([]*rookeryv1.Lig
 	return result, diags
 }
 
+// lightVMConfigFilesFromModel converts the plan's config_files list into API config
+// files, returning nil when the list is null or unknown.
 func lightVMConfigFilesFromModel(ctx context.Context, list types.List) ([]*rookeryv1.LightVMConfigFile, diag.Diagnostics) {
 	if list.IsNull() || list.IsUnknown() {
 		return nil, nil
@@ -603,6 +627,8 @@ func lightVMConfigFilesFromModel(ctx context.Context, list types.List) ([]*rooke
 	return result, diags
 }
 
+// lightVMConsolesFromModel converts the plan's consoles list into API console
+// definitions, returning nil when the list is null or unknown.
 func lightVMConsolesFromModel(ctx context.Context, list types.List) ([]*rookeryv1.LightVMConsole, diag.Diagnostics) {
 	if list.IsNull() || list.IsUnknown() {
 		return nil, nil
@@ -616,6 +642,8 @@ func lightVMConsolesFromModel(ctx context.Context, list types.List) ([]*rookeryv
 	return result, diags
 }
 
+// lightVMVirtioFSFromModel converts the plan's virtiofs_shares list into API shares,
+// returning nil when the list is null or unknown.
 func lightVMVirtioFSFromModel(ctx context.Context, list types.List) ([]*rookeryv1.LightVMVirtioFSShare, diag.Diagnostics) {
 	if list.IsNull() || list.IsUnknown() {
 		return nil, nil
@@ -633,6 +661,8 @@ func lightVMVirtioFSFromModel(ctx context.Context, list types.List) ([]*rookeryv
 	return result, diags
 }
 
+// lightVMInt64Values extracts integer IDs from a list, returning nil for a null or
+// unknown list and ignoring decoding errors.
 func lightVMInt64Values(ctx context.Context, list types.List) []int64 {
 	if list.IsNull() || list.IsUnknown() {
 		return nil
@@ -642,6 +672,8 @@ func lightVMInt64Values(ctx context.Context, list types.List) []int64 {
 	return values
 }
 
+// lightVMEnvAttrTypes returns the attribute types for an env object: a name and a
+// value, both strings.
 func lightVMEnvAttrTypes() map[string]attr.Type {
 	return map[string]attr.Type{
 		"name":  types.StringType,
@@ -649,6 +681,8 @@ func lightVMEnvAttrTypes() map[string]attr.Type {
 	}
 }
 
+// lightVMConfigFileAttrTypes returns the attribute types for a config file object:
+// a name and content, both strings.
 func lightVMConfigFileAttrTypes() map[string]attr.Type {
 	return map[string]attr.Type{
 		"name":    types.StringType,
@@ -656,6 +690,8 @@ func lightVMConfigFileAttrTypes() map[string]attr.Type {
 	}
 }
 
+// lightVMConsoleAttrTypes returns the attribute types for a console object: integer
+// id plus name and port_name strings.
 func lightVMConsoleAttrTypes() map[string]attr.Type {
 	return map[string]attr.Type{
 		"id":        types.Int64Type,
@@ -664,6 +700,8 @@ func lightVMConsoleAttrTypes() map[string]attr.Type {
 	}
 }
 
+// lightVMShareAttrTypes returns the attribute types for a virtiofs share object,
+// including integer id and position plus host_path, tag, and read_only.
 func lightVMShareAttrTypes() map[string]attr.Type {
 	return map[string]attr.Type{
 		"id":        types.Int64Type,
@@ -674,6 +712,7 @@ func lightVMShareAttrTypes() map[string]attr.Type {
 	}
 }
 
+// lightVMEnvValues maps API env vars into Terraform env models for list conversion.
 func lightVMEnvValues(values []*rookeryv1.LightVMEnvVar) []lightVMEnvModel {
 	result := make([]lightVMEnvModel, 0, len(values))
 	for _, value := range values {
@@ -685,6 +724,8 @@ func lightVMEnvValues(values []*rookeryv1.LightVMEnvVar) []lightVMEnvModel {
 	return result
 }
 
+// lightVMConfigFileValues maps API config files into Terraform config file models
+// for list conversion.
 func lightVMConfigFileValues(values []*rookeryv1.LightVMConfigFile) []lightVMConfigFileModel {
 	result := make([]lightVMConfigFileModel, 0, len(values))
 	for _, value := range values {
@@ -696,6 +737,7 @@ func lightVMConfigFileValues(values []*rookeryv1.LightVMConfigFile) []lightVMCon
 	return result
 }
 
+// lightVMConsoleValues maps API consoles into Terraform console models for list conversion.
 func lightVMConsoleValues(values []*rookeryv1.LightVMConsole) []lightVMConsoleModel {
 	result := make([]lightVMConsoleModel, 0, len(values))
 	for _, value := range values {
@@ -708,6 +750,7 @@ func lightVMConsoleValues(values []*rookeryv1.LightVMConsole) []lightVMConsoleMo
 	return result
 }
 
+// lightVMShareValues maps API virtiofs shares into Terraform share models for list conversion.
 func lightVMShareValues(values []*rookeryv1.LightVMVirtioFSShare) []lightVMVirtioFSShareModel {
 	result := make([]lightVMVirtioFSShareModel, 0, len(values))
 	for _, value := range values {
@@ -722,6 +765,8 @@ func lightVMShareValues(values []*rookeryv1.LightVMVirtioFSShare) []lightVMVirti
 	return result
 }
 
+// stringListValues decodes a list of strings, returning nil without diagnostics when
+// the list is null or unknown.
 func stringListValues(ctx context.Context, list types.List) ([]string, diag.Diagnostics) {
 	if list.IsNull() || list.IsUnknown() {
 		return nil, nil

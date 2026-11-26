@@ -107,6 +107,8 @@ type LightVM struct {
 	UpdatedAt           time.Time              `json:"updated_at"`
 }
 
+// normalizeLightVMDiskIDs rejects non-positive disk IDs, removes duplicates in first-seen order,
+// and enforces MaxWorkloadDisks, wrapping ErrInvalidDiskIDs on failure.
 func normalizeLightVMDiskIDs(ids []int64) ([]int64, error) {
 	seen := make(map[int64]struct{}, len(ids))
 	out := make([]int64, 0, len(ids))
@@ -126,6 +128,8 @@ func normalizeLightVMDiskIDs(ids []int64) ([]int64, error) {
 	return out, nil
 }
 
+// validateLightVMDeviceBudget enforces MaxLightVMDevices over the combined disk, interface, and
+// share counts; on update an already-oversized LightVM may keep its device count but not grow it.
 func validateLightVMDeviceBudget(existingDisks, existingInterfaces, existingShares, newDisks, newInterfaces, newShares int, create bool) error {
 	newTotal := newDisks + newInterfaces + newShares
 	existingTotal := existingDisks + existingInterfaces + existingShares
@@ -151,6 +155,9 @@ func validateLightVMDeviceBudget(existingDisks, existingInterfaces, existingShar
 	return nil
 }
 
+// normalizeLightVMVirtioFSShares validates each share (absolute existing host directory, tag
+// format, no reserved "rootfs" tag, case-insensitive uniqueness) and returns cleaned copies with
+// positions assigned, wrapping ErrInvalidVirtioFSShare.
 func normalizeLightVMVirtioFSShares(shares []LightVMVirtioFSShare) ([]LightVMVirtioFSShare, error) {
 	seenTags := make(map[string]struct{}, len(shares))
 	out := make([]LightVMVirtioFSShare, 0, len(shares))
@@ -233,6 +240,9 @@ func NormalizeLightVMConfigFiles(values []LightVMConfigFile) ([]LightVMConfigFil
 	return out, nil
 }
 
+// validateLightVMConfigFileName accepts a non-empty relative single-line name of at most 255 bytes
+// with no empty, "." or ".." components, and rejects names whose first component is env or
+// startup-cmd because Rookery reserves those in the guest.
 func validateLightVMConfigFileName(name string) error {
 	if name == "" {
 		return errors.New("config file name is required")
@@ -262,6 +272,8 @@ func validateLightVMConfigFileName(name string) error {
 	return nil
 }
 
+// validLightVMShareTag reports whether tag is 1-64 characters, starts alphanumerically, and
+// continues only with ASCII letters, digits, '.', '_' or '-'.
 func validLightVMShareTag(tag string) bool {
 	if tag == "" || len(tag) > 64 {
 		return false
@@ -719,6 +731,8 @@ func (s *Store) normalizeLightVMInterfaceIDs(ctx context.Context, lightVMID stri
 	return unique, nil
 }
 
+// insertLightVMVirtioFSShares writes share rows in slice order using the position index, mapping a
+// duplicate-tag unique violation to ErrInvalidVirtioFSShare.
 func insertLightVMVirtioFSShares(ctx context.Context, tx *sql.Tx, lightVMID string, shares []LightVMVirtioFSShare) error {
 	for position, share := range shares {
 		readOnly := 0
@@ -739,6 +753,8 @@ func insertLightVMVirtioFSShares(ctx context.Context, tx *sql.Tx, lightVMID stri
 	return nil
 }
 
+// insertLightVMInterfaces attaches interface IDs to a LightVM in order, translating a foreign-key
+// violation (such as an interface already claimed at write time) into ErrInterfaceInUse.
 func insertLightVMInterfaces(ctx context.Context, tx *sql.Tx, lightVMID string, interfaceIDs []int64) error {
 	for position, interfaceID := range interfaceIDs {
 		if _, err := tx.ExecContext(ctx, `
@@ -753,6 +769,8 @@ func insertLightVMInterfaces(ctx context.Context, tx *sql.Tx, lightVMID string, 
 	return nil
 }
 
+// normalizeLightVMConsoles trims console names and, when no consoles are supplied, returns the
+// single default console named "console".
 func normalizeLightVMConsoles(values []LightVMConsole) []LightVMConsole {
 	if len(values) == 0 {
 		return []LightVMConsole{{Name: "console"}}
@@ -764,6 +782,8 @@ func normalizeLightVMConsoles(values []LightVMConsole) []LightVMConsole {
 	return consoles
 }
 
+// insertLightVMConsoles writes console rows in order, deriving virtio console port names from the
+// position and rejecting blank names or names already used by the same LightVM.
 func insertLightVMConsoles(ctx context.Context, tx *sql.Tx, lightVMID string, consoles []LightVMConsole) error {
 	for position, console := range consoles {
 		name := strings.TrimSpace(console.Name)
@@ -964,6 +984,8 @@ func (s *Store) checkLightVMInterfaceUse(ctx context.Context, interfaceID int64,
 	}
 }
 
+// scanLightVM decodes one joined LightVM row, unmarshalling the env, config-file, and argument JSON
+// columns into non-nil slices and converting millisecond timestamps to UTC.
 func scanLightVM(s scanner) (LightVM, error) {
 	var (
 		vm         LightVM
@@ -1005,6 +1027,8 @@ func scanLightVM(s scanner) (LightVM, error) {
 	return vm, nil
 }
 
+// marshalLightVMEnv encodes environment variables as JSON, storing an empty JSON array when values
+// is nil.
 func marshalLightVMEnv(values []LightVMEnvVar) (string, error) {
 	if values == nil {
 		values = []LightVMEnvVar{}
@@ -1016,6 +1040,8 @@ func marshalLightVMEnv(values []LightVMEnvVar) (string, error) {
 	return string(data), nil
 }
 
+// marshalLightVMConfigFiles encodes config files as JSON, storing an empty JSON array when values
+// is nil.
 func marshalLightVMConfigFiles(values []LightVMConfigFile) (string, error) {
 	if values == nil {
 		values = []LightVMConfigFile{}
@@ -1027,6 +1053,8 @@ func marshalLightVMConfigFiles(values []LightVMConfigFile) (string, error) {
 	return string(data), nil
 }
 
+// marshalLightVMArgs encodes executable arguments as JSON, storing an empty JSON array when values
+// is nil.
 func marshalLightVMArgs(values []string) (string, error) {
 	if values == nil {
 		values = []string{}

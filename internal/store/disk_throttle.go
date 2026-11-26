@@ -276,6 +276,8 @@ func (s *Store) SetDiskThrottleClass(ctx context.Context, diskID int64, classID 
 	return s.GetDisk(ctx, diskID)
 }
 
+// scanDiskThrottleClass decodes one class row, decoding its limits JSON and recording any decode
+// or validation failure in ValidationError instead of returning it, and converts timestamps to UTC.
 func scanDiskThrottleClass(s scanner) (DiskThrottleClass, error) {
 	var (
 		class     DiskThrottleClass
@@ -293,6 +295,8 @@ func scanDiskThrottleClass(s scanner) (DiskThrottleClass, error) {
 	return class, nil
 }
 
+// decodeDiskThrottleLimits unmarshals and validates stored limits, returning zero limits plus a
+// human-readable reason when the JSON is malformed or the values are invalid.
 func decodeDiskThrottleLimits(raw string) (diskthrottle.Limits, string) {
 	var limits diskthrottle.Limits
 	if err := json.Unmarshal([]byte(raw), &limits); err != nil {
@@ -304,6 +308,8 @@ func decodeDiskThrottleLimits(raw string) (diskthrottle.Limits, string) {
 	return limits, ""
 }
 
+// validateDiskThrottleClassName enforces a required name of at most 127 characters that starts
+// with an ASCII letter or digit and continues with letters, digits, '.', '_' or '-'.
 func validateDiskThrottleClassName(name string) error {
 	if name == "" {
 		return errors.New("name is required")
@@ -325,6 +331,7 @@ func validateDiskThrottleClassName(name string) error {
 	return nil
 }
 
+// isASCIILetterOrDigit reports whether r is an unaccented ASCII letter or a decimal digit.
 func isASCIILetterOrDigit(r rune) bool {
 	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
 }

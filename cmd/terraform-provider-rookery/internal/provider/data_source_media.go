@@ -23,10 +23,12 @@ func NewMediaDataSource() datasource.DataSource {
 	return &mediaDataSource{}
 }
 
+// Metadata registers this data source under the provider-prefixed type name <provider>_media.
 func (d *mediaDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_media"
 }
 
+// Schema defines the media lookup with optional id or name plus computed path and size attributes.
 func (d *mediaDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
 		Description: "Looks up registered installation media by id or name.",
@@ -40,6 +42,7 @@ func (d *mediaDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 	}
 }
 
+// Read resolves the media entry by exactly one of id or name, storing its state and labels.
 func (d *mediaDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config mediaModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
@@ -83,6 +86,8 @@ func (d *mediaDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 
+// findMedia returns the single media entry whose name matches case-insensitively,
+// failing on duplicate matches or no match.
 func findMedia(entries []*rookeryv1.Media, name string) (*rookeryv1.Media, error) {
 	var found *rookeryv1.Media
 	for _, entry := range entries {

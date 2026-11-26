@@ -150,6 +150,7 @@ func (s *Store) DeleteLightVMKernel(ctx context.Context, id int64) (LightVMKerne
 	return kernel, nil
 }
 
+// scanLightVMKernel decodes one kernel row, converting its millisecond timestamps to UTC times.
 func scanLightVMKernel(s scanner) (LightVMKernel, error) {
 	var (
 		kernel    LightVMKernel

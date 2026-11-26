@@ -153,6 +153,8 @@ func setupCoreDHCPv6(args ...string) (handler.Handler6, error) {
 	return state.handle, nil
 }
 
+// parseCoreDHCPv6DNS parses a comma-separated list of IPv6 resolver addresses,
+// returning nil for a blank value and an error for any non-IPv6 entry.
 func parseCoreDHCPv6DNS(value string) ([]net.IP, error) {
 	if strings.TrimSpace(value) == "" {
 		return nil, nil
@@ -172,6 +174,10 @@ func parseCoreDHCPv6DNS(value string) ([]net.IP, error) {
 	return dns, nil
 }
 
+// handle answers one DHCPv6 message: SOLICIT, REQUEST, RENEW, and REBIND get a
+// lease or status reply, RELEASE frees it, CONFIRM checks on-link status, and
+// INFORMATION-REQUEST gets options. It returns nil,true to drop messages meant
+// for another server or lacking a client ID.
 func (s *coreDHCPv6State) handle(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
 	msg, err := req.GetInnerMessage()
 	if err != nil {
@@ -299,6 +305,9 @@ func (s *coreDHCPv6State) handle(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) 
 	return nil, true
 }
 
+// applyOptions adds the server ID plus the DNS and custom options the client
+// requested, skipping DNS when a custom option 23 overrides it, and logs the
+// outgoing option set.
 func (s *coreDHCPv6State) applyOptions(resp dhcpv6.DHCPv6, msg *dhcpv6.Message) {
 	custom := make(map[uint16]struct{}, len(s.options))
 	for _, option := range s.options {
@@ -323,6 +332,8 @@ func (s *coreDHCPv6State) applyOptions(resp dhcpv6.DHCPv6, msg *dhcpv6.Message) 
 		Msg("DHCPv6 reply options")
 }
 
+// dhcpv6DNSName joins the labels of the client's FQDN option into a dotted
+// name, returning an empty string when the client sent no FQDN.
 func dhcpv6DNSName(msg *dhcpv6.Message) string {
 	if fqdn := msg.Options.FQDN(); fqdn != nil && fqdn.DomainName != nil {
 		return strings.TrimSpace(strings.Join(fqdn.DomainName.Labels, "."))
@@ -330,6 +341,8 @@ func dhcpv6DNSName(msg *dhcpv6.Message) string {
 	return ""
 }
 
+// requestedV6Address returns the first IA address in the client's IA_NA,
+// reporting false when the option, address, or valid IPv6 value is absent.
 func requestedV6Address(ianaOpt *dhcpv6.OptIANA) (netip.Addr, bool) {
 	if ianaOpt == nil {
 		return netip.Addr{}, false
@@ -345,6 +358,8 @@ func requestedV6Address(ianaOpt *dhcpv6.OptIANA) (netip.Addr, bool) {
 	return addr, true
 }
 
+// leaseForLocked returns the client's unexpired lease, freeing an expired record
+// and returning nil instead; the caller must hold s.mu.
 func (s *coreDHCPv6State) leaseForLocked(clientID string, now time.Time) *coreDHCPv6Lease {
 	record, ok := s.leases[clientID]
 	if !ok {
@@ -357,6 +372,8 @@ func (s *coreDHCPv6State) leaseForLocked(clientID string, now time.Time) *coreDH
 	return record
 }
 
+// renewLocked extends the lease by one lease time, replaces the hostname when a
+// non-empty one is supplied, and persists the lease file; s.mu must be held.
 func (s *coreDHCPv6State) renewLocked(record *coreDHCPv6Lease, hostname string, now time.Time) {
 	record.Expires = now.Add(s.leaseTime)
 	if hostname != "" {
@@ -371,6 +388,10 @@ func (s *coreDHCPv6State) renewLocked(record *coreDHCPv6Lease, hostname string, 
 	s.saveLocked()
 }
 
+// allocateLocked grants the requested address when it is in range and free,
+// otherwise scans start to end for the first unused address other than the
+// gateway, then records and persists the lease. It fails when no address is
+// available.
 func (s *coreDHCPv6State) allocateLocked(clientID string, requested netip.Addr, hasRequested bool, hostname string, now time.Time) (*coreDHCPv6Lease, error) {
 	chosen := netip.Addr{}
 	if hasRequested && s.inRange(requested) {
@@ -412,6 +433,8 @@ func (s *coreDHCPv6State) allocateLocked(clientID string, requested netip.Addr, 
 	return record, nil
 }
 
+// purgeExpiredLocked frees every lease past its expiry without persisting;
+// callers hold s.mu and save separately when needed.
 func (s *coreDHCPv6State) purgeExpiredLocked(now time.Time) {
 	for _, record := range s.leases {
 		if !record.Expires.After(now) {
@@ -420,6 +443,8 @@ func (s *coreDHCPv6State) purgeExpiredLocked(now time.Time) {
 	}
 }
 
+// freeLocked removes the lease and its address index entry and logs the
+// release.
 func (s *coreDHCPv6State) freeLocked(record *coreDHCPv6Lease) {
 	log.Info().
 		Str("leases", s.leasePath).
@@ -450,10 +475,16 @@ func (s *coreDHCPv6State) removeLeases(clientIDs []string) int {
 	return removed
 }
 
+// inRange reports whether addr lies within the inclusive pool start and end,
+// without excluding the gateway address that allocation skips.
 func (s *coreDHCPv6State) inRange(addr netip.Addr) bool {
 	return addr.Compare(s.start) >= 0 && addr.Compare(s.end) <= 0
 }
 
+// loadLeases restores unexpired, in-range leases from the JSON lease file,
+// skipping the gateway, invalid, duplicated, or out-of-pool addresses. A
+// missing file is ignored and an undecodable one is renamed to .corrupt and
+// ignored rather than failing startup.
 func (s *coreDHCPv6State) loadLeases() error {
 	if s.leasePath == "" {
 		return nil
@@ -506,6 +537,8 @@ func (s *coreDHCPv6State) loadLeases() error {
 	return nil
 }
 
+// saveLocked rewrites the lease file with the current leases ordered by client
+// ID, doing nothing when no lease path is configured.
 func (s *coreDHCPv6State) saveLocked() {
 	if s.leasePath == "" {
 		return

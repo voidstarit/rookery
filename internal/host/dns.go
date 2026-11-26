@@ -149,6 +149,9 @@ func (n *sharedNetwork) addDNS(vnf store.VNF) error {
 	return nil
 }
 
+// serve starts every non-nil UDP and TCP DNS server for the shared listener,
+// logging any failure other than a closed listener, and blocks until all of them
+// have stopped before closing done.
 func (s *sharedDNS) serve() {
 	var wg sync.WaitGroup
 	start := func(server *dns.Server, network string) {
@@ -171,6 +174,9 @@ func (s *sharedDNS) serve() {
 	close(s.done)
 }
 
+// close shuts down all DNS servers and closes their connections exactly once,
+// waiting up to vnfStopTimeout for serve to finish. It is safe to call
+// concurrently and ignores already-closed sockets.
 func (s *sharedDNS) close() {
 	s.closeOnce.Do(func() {
 		if s.udpServer != nil || s.tcpServer != nil || s.udpServer6 != nil || s.tcpServer6 != nil {
@@ -230,6 +236,10 @@ type dnsHandler struct {
 	forwarders []string
 }
 
+// newDNSHandler builds a handler from the VNF record configuration, grouping
+// records by canonical name and keeping wildcard records separate, longest suffix
+// first. When forwarding is enabled without explicit forwarders it adopts the
+// nameservers from /etc/resolv.conf and silently leaves the list empty on error.
 func newDNSHandler(config store.VNFConfig) *dnsHandler {
 	handler := &dnsHandler{
 		records: make(map[string][]store.DNSRecord, len(config.DNSRecords)),
@@ -265,6 +275,10 @@ func newDNSHandler(config store.VNFConfig) *dnsHandler {
 	return handler
 }
 
+// ServeDNS answers one DNS request: malformed or multi-question queries get
+// FORMERR, non-INET classes and zone transfers are REFUSED, local and wildcard
+// records are answered authoritatively, and unmatched names are NXDOMAIN unless
+// forwarding is enabled, in which case failures become SERVFAIL.
 func (h *dnsHandler) ServeDNS(writer dns.ResponseWriter, request *dns.Msg) {
 	response := new(dns.Msg)
 	response.SetReply(request)
@@ -328,6 +342,8 @@ func (h *dnsHandler) ServeDNS(writer dns.ResponseWriter, request *dns.Msg) {
 	_ = writer.WriteMsg(forwarded)
 }
 
+// logResponse emits a trace-level log line describing a response's source,
+// rcode, answer count, and queried name when the request has one question.
 func (h *dnsHandler) logResponse(writer dns.ResponseWriter, request, response *dns.Msg, source string) {
 	event := log.Trace().
 		Int64("vnf_id", h.vnfID).
@@ -343,6 +359,9 @@ func (h *dnsHandler) logResponse(writer dns.ResponseWriter, request, response *d
 	event.Str("response", response.String()).Msg("DNS response")
 }
 
+// lookup returns the static and dynamic records for a canonical name, falling
+// back to the first matching wildcard. The boolean reports whether the records
+// came from a wildcard rather than an exact match.
 func (h *dnsHandler) lookup(name string) ([]store.DNSRecord, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -424,6 +443,8 @@ func (h *dnsHandler) RemoveDynamic(source string) {
 	h.removeDynamicLocked(source)
 }
 
+// removeDynamicLocked drops every dynamic record owned by source, deleting map
+// entries that become empty. The caller must hold h.mu for writing.
 func (h *dnsHandler) removeDynamicLocked(source string) {
 	for name, records := range h.dynamic {
 		filtered := records[:0]
@@ -440,6 +461,9 @@ func (h *dnsHandler) removeDynamicLocked(source string) {
 	}
 }
 
+// answer appends the response records for owner, following a CNAME through
+// local lookups when the query asks for another type. Exact-name and ANY queries
+// return every record whose type matches the question.
 func (h *dnsHandler) answer(response *dns.Msg, question dns.Question, owner string, records []store.DNSRecord, wildcard bool) {
 	var cname *store.DNSRecord
 	for index := range records {
@@ -465,6 +489,9 @@ func (h *dnsHandler) answer(response *dns.Msg, question dns.Question, owner stri
 	}
 }
 
+// forwardQuery sends the request to the configured forwarders in order over UDP
+// with a three-second timeout, retrying over TCP when a reply is truncated. It
+// returns the first usable reply, or the last error when every forwarder fails.
 func (h *dnsHandler) forwardQuery(request *dns.Msg) (*dns.Msg, error) {
 	var lastErr error
 	qname, qtype := "", uint16(0)
@@ -526,6 +553,9 @@ func (h *dnsHandler) forwardQuery(request *dns.Msg) (*dns.Msg, error) {
 	return nil, lastErr
 }
 
+// dnsRecordRR converts a stored record into a DNS resource record using owner as
+// the answer name, canonicalizing it for wildcard hits and falling back to the
+// record's own name when owner is empty. Unknown record types are emitted as TXT.
 func dnsRecordRR(record store.DNSRecord, owner string, wildcard bool) dns.RR {
 	name := owner
 	if wildcard {
@@ -550,6 +580,8 @@ func dnsRecordRR(record store.DNSRecord, owner string, wildcard bool) dns.RR {
 	}
 }
 
+// recordQType maps a stored record type to its DNS query type, defaulting to TXT
+// for unknown types.
 func recordQType(recordType string) uint16 {
 	switch recordType {
 	case "A":
@@ -567,6 +599,8 @@ func recordQType(recordType string) uint16 {
 	}
 }
 
+// dnsTypeName returns the mnemonic for a DNS query type, or "TYPE<n>" when the
+// type is not in the standard table.
 func dnsTypeName(qtype uint16) string {
 	if name, ok := dns.TypeToString[qtype]; ok {
 		return name
@@ -574,6 +608,8 @@ func dnsTypeName(qtype uint16) string {
 	return fmt.Sprintf("TYPE%d", qtype)
 }
 
+// dnsClassName returns the mnemonic for a DNS class, or "CLASS<n>" when the class
+// is not in the standard table.
 func dnsClassName(qclass uint16) string {
 	if name, ok := dns.ClassToString[qclass]; ok {
 		return name

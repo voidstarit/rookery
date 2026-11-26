@@ -23,10 +23,13 @@ func NewVPPInterfaceAddressesDataSource() datasource.DataSource {
 	return &vppInterfaceAddressesDataSource{}
 }
 
+// Metadata registers the data source as <provider>_vpp_interface_addresses.
 func (d *vppInterfaceAddressesDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_vpp_interface_addresses"
 }
 
+// Schema defines the required interface name plus the computed managed address, live
+// address, and DHCP client fields.
 func (d *vppInterfaceAddressesDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
 		Description: "Reads managed addresses and DHCP state for a Rookery VPP interface.",
@@ -42,6 +45,7 @@ func (d *vppInterfaceAddressesDataSource) Schema(_ context.Context, _ datasource
 	}
 }
 
+// Read fetches managed addresses and DHCP client state for the required interface and stores them.
 func (d *vppInterfaceAddressesDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config vppInterfaceAddressesModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)

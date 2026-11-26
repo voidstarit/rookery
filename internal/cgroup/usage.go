@@ -119,6 +119,9 @@ func (m *Manager) Usage() Usage {
 	return result
 }
 
+// readUsageNode collects the memory, CPU, task, I/O, and effective cpuset
+// counters for the cgroup directory dir. An empty path labels the node with the
+// directory's base name.
 func readUsageNode(dir, path string) UsageNode {
 	name := path
 	if name == "" {
@@ -140,6 +143,8 @@ func readUsageNode(dir, path string) UsageNode {
 	}
 }
 
+// readCgroupString returns the trimmed contents of a cgroup file, or an empty
+// string when the file cannot be read.
 func readCgroupString(path string) string {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -148,6 +153,8 @@ func readCgroupString(path string) string {
 	return strings.TrimSpace(string(data))
 }
 
+// readCgroupInt parses a non-negative decimal from a cgroup file, returning 0
+// for the max sentinel as well as unreadable or malformed values.
 func readCgroupInt(path string) int64 {
 	value := readCgroupString(path)
 	if value == "" || value == maxValue {
@@ -160,10 +167,14 @@ func readCgroupInt(path string) int64 {
 	return parsed
 }
 
+// readCgroupMax reads a limit file such as memory.max or pids.max, mapping the
+// max sentinel and parse failures to 0.
 func readCgroupMax(path string) int64 {
 	return readCgroupInt(path)
 }
 
+// readCPUUsageUsec extracts the usage_usec counter from cpu.stat, returning 0
+// when the file, field, or value is missing or malformed.
 func readCPUUsageUsec(path string) int64 {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -182,6 +193,9 @@ func readCPUUsageUsec(path string) int64 {
 	return 0
 }
 
+// readIOStat sums the named per-device counter, such as rbytes, across every
+// line of io.stat. Unreadable, non-numeric, and non-positive values contribute
+// nothing.
 func readIOStat(path, key string) int64 {
 	data, err := os.ReadFile(path)
 	if err != nil {

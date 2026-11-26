@@ -67,10 +67,13 @@ type lightVMArtifactRecord struct {
 	Managed     bool
 }
 
+// Metadata sets the resource type name from the provider prefix and the resource's typeName suffix.
 func (r *lightVMArtifactResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_" + r.typeName
 }
 
+// Schema describes the kernel or initramfs artifact resource, including upload,
+// host-path, and computed file attributes.
 func (r *lightVMArtifactResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: fmt.Sprintf("A LightVM %s image. Use source_path to upload a local file, or path to register a file already present on the Rookery host.", r.noun),
@@ -115,6 +118,8 @@ func (r *lightVMArtifactResource) Schema(_ context.Context, _ resource.SchemaReq
 	}
 }
 
+// Create registers the artifact from a local upload or a host path, deletes a freshly
+// uploaded file if the record cannot be created, and applies labels.
 func (r *lightVMArtifactResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan lightVMArtifactModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -154,6 +159,8 @@ func (r *lightVMArtifactResource) Create(ctx context.Context, req resource.Creat
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read refreshes the artifact state from the API, removing it from state when the
+// record no longer exists.
 func (r *lightVMArtifactResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state lightVMArtifactModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -186,6 +193,8 @@ func (r *lightVMArtifactResource) Read(ctx context.Context, req resource.ReadReq
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update re-uploads the source when source_path or source_hash changed, updates the
+// record, and removes a freshly uploaded file if the update fails.
 func (r *lightVMArtifactResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan, state lightVMArtifactModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -225,6 +234,8 @@ func (r *lightVMArtifactResource) Update(ctx context.Context, req resource.Updat
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete removes the artifact record through the API, treating a not-found response
+// as successful deletion.
 func (r *lightVMArtifactResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state lightVMArtifactModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -243,10 +254,14 @@ func (r *lightVMArtifactResource) Delete(ctx context.Context, req resource.Delet
 	}
 }
 
+// ImportState imports an existing kernel or initramfs by its integer ID.
 func (r *lightVMArtifactResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	importInt64ID(ctx, req, resp)
 }
 
+// resolveArtifact returns the artifact's host path and display file name, uploading
+// source_path when requested and failing when neither a source nor a host path is
+// set.
 func (r *lightVMArtifactResource) resolveArtifact(ctx context.Context, client *Client, plan lightVMArtifactModel, upload bool) (string, string, bool, error) {
 	sourcePath := strings.TrimSpace(plan.SourcePath.ValueString())
 	hostPath := strings.TrimSpace(plan.Path.ValueString())
@@ -271,14 +286,19 @@ func (r *lightVMArtifactResource) resolveArtifact(ctx context.Context, client *C
 // marks it unknown when a source upload is created or replaced.
 type artifactPathPlanModifier struct{}
 
+// Description returns the documentation text explaining that the managed upload path
+// survives plans unless source_path or source_hash changes.
 func (artifactPathPlanModifier) Description(context.Context) string {
 	return "Use the managed upload path unless source_path or source_hash changes."
 }
 
+// MarkdownDescription returns the plain Description text, which contains no markdown formatting.
 func (artifactPathPlanModifier) MarkdownDescription(ctx context.Context) string {
 	return artifactPathPlanModifier{}.Description(ctx)
 }
 
+// PlanModifyString keeps the prior managed path when source_path and source_hash are
+// unchanged and marks it unknown when a new upload replaces the file.
 func (artifactPathPlanModifier) PlanModifyString(ctx context.Context, request planmodifier.StringRequest, response *planmodifier.StringResponse) {
 	var plan lightVMArtifactModel
 	response.Diagnostics.Append(request.Plan.Get(ctx, &plan)...)
@@ -315,14 +335,19 @@ func (artifactPathPlanModifier) PlanModifyString(ctx context.Context, request pl
 // so the value must be unknown and resolved during apply.
 type artifactSizePlanModifier struct{}
 
+// Description returns the documentation text explaining that the computed size
+// follows the file unless the plan replaces it.
 func (artifactSizePlanModifier) Description(context.Context) string {
 	return "Use the current file size unless the plan replaces the artifact file."
 }
 
+// MarkdownDescription returns the plain Description text, which contains no markdown formatting.
 func (artifactSizePlanModifier) MarkdownDescription(ctx context.Context) string {
 	return artifactSizePlanModifier{}.Description(ctx)
 }
 
+// PlanModifyInt64 preserves the prior size unless the artifact file is replaced, in
+// which case it marks the value unknown for the apply.
 func (m artifactSizePlanModifier) PlanModifyInt64(ctx context.Context, request planmodifier.Int64Request, response *planmodifier.Int64Response) {
 	replaced, diags := artifactFileReplaced(ctx, request.Config, request.State)
 	response.Diagnostics.Append(diags...)
@@ -338,14 +363,19 @@ func (m artifactSizePlanModifier) PlanModifyInt64(ctx context.Context, request p
 
 type artifactManagedPlanModifier struct{}
 
+// Description returns the documentation text explaining that the managed flag
+// follows the file unless the plan replaces it.
 func (artifactManagedPlanModifier) Description(context.Context) string {
 	return "Use the current managed flag unless the plan replaces the artifact file."
 }
 
+// MarkdownDescription returns the plain Description text, which contains no markdown formatting.
 func (artifactManagedPlanModifier) MarkdownDescription(ctx context.Context) string {
 	return artifactManagedPlanModifier{}.Description(ctx)
 }
 
+// PlanModifyBool preserves the prior managed flag unless the artifact file is
+// replaced, in which case it marks the value unknown for the apply.
 func (m artifactManagedPlanModifier) PlanModifyBool(ctx context.Context, request planmodifier.BoolRequest, response *planmodifier.BoolResponse) {
 	replaced, diags := artifactFileReplaced(ctx, request.Config, request.State)
 	response.Diagnostics.Append(diags...)
@@ -359,13 +389,10 @@ func (m artifactManagedPlanModifier) PlanModifyBool(ctx context.Context, request
 	response.PlanValue = request.StateValue
 }
 
-// artifactFileReplaced reports whether applying the plan changes the file that
-// backs the artifact: a new create, a new source_path or source_hash upload, or
-// a different configured host path.
-//
-// It compares the raw configuration with the prior state rather than the whole
-// plan, because attribute plan modifiers run in no particular order and path
-// may still be an unresolved unknown when the size/managed modifiers run.
+// artifactFileReplaced reports whether applying the plan replaces the artifact
+// file: a new create, a changed source_path or source_hash, or a different
+// configured host path. It compares raw configuration with prior state because
+// plan modifiers may run before path is resolved.
 func artifactFileReplaced(ctx context.Context, config tfsdk.Config, state tfsdk.State) (bool, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	if state.Raw.IsNull() {
@@ -395,6 +422,7 @@ func artifactFileReplaced(ctx context.Context, config tfsdk.Config, state tfsdk.
 	}
 }
 
+// capitalize upper-cases the first byte of value, returning an empty string unchanged.
 func capitalize(value string) string {
 	if value == "" {
 		return value
@@ -402,6 +430,8 @@ func capitalize(value string) string {
 	return strings.ToUpper(value[:1]) + value[1:]
 }
 
+// createRecord creates a kernel or initramfs record according to the resource kind,
+// trimming the name and description.
 func (r *lightVMArtifactResource) createRecord(ctx context.Context, client *Client, plan lightVMArtifactModel, path, fileName string) (lightVMArtifactRecord, error) {
 	name := strings.TrimSpace(plan.Name.ValueString())
 	description := strings.TrimSpace(plan.Description.ValueString())
@@ -423,6 +453,8 @@ func (r *lightVMArtifactResource) createRecord(ctx context.Context, client *Clie
 	return artifactRecordFromInitramfs(created), nil
 }
 
+// updateRecord updates the existing kernel or initramfs record by ID, selecting the
+// service from the resource kind.
 func (r *lightVMArtifactResource) updateRecord(ctx context.Context, client *Client, plan lightVMArtifactModel, path, fileName string) (lightVMArtifactRecord, error) {
 	name := strings.TrimSpace(plan.Name.ValueString())
 	description := strings.TrimSpace(plan.Description.ValueString())
@@ -444,6 +476,8 @@ func (r *lightVMArtifactResource) updateRecord(ctx context.Context, client *Clie
 	return artifactRecordFromInitramfs(updated), nil
 }
 
+// getRecord fetches the kernel or initramfs record by ID using the service selected
+// by the resource kind.
 func (r *lightVMArtifactResource) getRecord(ctx context.Context, client *Client, id int64) (lightVMArtifactRecord, error) {
 	if r.kind == lightvm.KindKernel {
 		kernel, err := client.LightVMKernels.GetKernel(ctx, &rookeryv1.GetKernelRequest{Id: id})
@@ -459,6 +493,7 @@ func (r *lightVMArtifactResource) getRecord(ctx context.Context, client *Client,
 	return artifactRecordFromInitramfs(image), nil
 }
 
+// deleteRecord deletes the kernel or initramfs record by ID, returning any API error unchanged.
 func (r *lightVMArtifactResource) deleteRecord(ctx context.Context, client *Client, id int64) error {
 	if r.kind == lightvm.KindKernel {
 		_, err := client.LightVMKernels.DeleteKernel(ctx, &rookeryv1.DeleteKernelRequest{Id: id})
@@ -468,6 +503,7 @@ func (r *lightVMArtifactResource) deleteRecord(ctx context.Context, client *Clie
 	return err
 }
 
+// artifactRecordFromKernel flattens an API kernel into the shared artifact record.
 func artifactRecordFromKernel(kernel *rookeryv1.LightVMKernel) lightVMArtifactRecord {
 	return lightVMArtifactRecord{
 		ID: kernel.GetId(), Name: kernel.GetName(), Description: kernel.GetDescription(),
@@ -476,6 +512,7 @@ func artifactRecordFromKernel(kernel *rookeryv1.LightVMKernel) lightVMArtifactRe
 	}
 }
 
+// artifactRecordFromInitramfs flattens an API initramfs image into the shared artifact record.
 func artifactRecordFromInitramfs(image *rookeryv1.LightVMInitramfs) lightVMArtifactRecord {
 	return lightVMArtifactRecord{
 		ID: image.GetId(), Name: image.GetName(), Description: image.GetDescription(),
@@ -484,6 +521,8 @@ func artifactRecordFromInitramfs(image *rookeryv1.LightVMInitramfs) lightVMArtif
 	}
 }
 
+// setLightVMArtifactState copies an artifact record into the Terraform model, treating
+// an empty file name as unset.
 func setLightVMArtifactState(state *lightVMArtifactModel, record lightVMArtifactRecord) {
 	state.ID = types.Int64Value(record.ID)
 	state.Name = types.StringValue(record.Name)

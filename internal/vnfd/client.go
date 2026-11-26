@@ -71,6 +71,9 @@ func (c *Client) StartShared(ctx context.Context, vnf store.VNF, socketPath stri
 	return c.ensure(ctx, vnf, "shared", "", socketPath, ifID, address, ipv6Address)
 }
 
+// ensure submits a VNF spec for the given transport and endpoint to the daemon
+// and wraps RPC failures with the start action; it backs Start, StartMemif, and
+// StartShared.
 func (c *Client) ensure(ctx context.Context, vnf store.VNF, transport, tapHost string, socket string, ifID uint32, sharedAddress, sharedIPv6Address string) error {
 	c.logger.Trace().
 		Int64("vnf_id", vnf.ID).
@@ -243,6 +246,8 @@ func (c *Client) ResetRuntime(ctx context.Context) error {
 	return nil
 }
 
+// grpcError converts a gRPC status into a clientError carrying action and the
+// status message, falling back to err's text for non-status errors.
 func grpcError(action string, err error) error {
 	if st, ok := status.FromError(err); ok {
 		return &clientError{action: action, message: st.Message()}
@@ -255,6 +260,8 @@ type clientError struct {
 	message string
 }
 
+// Error renders the clientError as "<action>: <message>" for logs and error
+// wrapping.
 func (e *clientError) Error() string { return e.action + ": " + e.message }
 
 // dialTarget turns the daemon address into a gRPC target.

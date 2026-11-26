@@ -445,6 +445,9 @@ func (q *QEMU) Resume(ctx context.Context, vmID string) (string, error) {
 	return q.RunState(ctx, vmID)
 }
 
+// monitorCommand sends one HMP command to a running VM's monitor socket,
+// treating an unreadable or refused socket as ErrMonitorUnavailable and a
+// stopped VM as ErrNotRunning. A read timeout after the write is ignored.
 func (q *QEMU) monitorCommand(ctx context.Context, vmID, command string) error {
 	if !q.Running(vmID) {
 		return ErrNotRunning
@@ -481,6 +484,8 @@ func (q *QEMU) monitorCommand(ctx context.Context, vmID, command string) error {
 	return nil
 }
 
+// monitorQuery sends an HMP query to a running VM and returns the raw monitor
+// output, reporting ErrNotRunning when the VM is stopped.
 func (q *QEMU) monitorQuery(ctx context.Context, vmID, command string) (string, error) {
 	if !q.Running(vmID) {
 		return "", ErrNotRunning
@@ -492,6 +497,8 @@ func (q *QEMU) monitorQuery(ctx context.Context, vmID, command string) (string, 
 	return q.monitorQueryPath(ctx, monitor, command)
 }
 
+// monitorQueryPath writes an HMP command to the given monitor socket and reads
+// until the 300ms read deadline, returning whatever output arrived as a string.
 func (q *QEMU) monitorQueryPath(ctx context.Context, monitor, command string) (string, error) {
 	dialer := net.Dialer{Timeout: monitorTimeout}
 	conn, err := dialer.DialContext(ctx, "unix", monitor)
@@ -526,6 +533,8 @@ func (q *QEMU) monitorQueryPath(ctx context.Context, monitor, command string) (s
 	return output.String(), nil
 }
 
+// paths derives the VNC, pidfile, and monitor socket paths for a VM from its
+// UUID, returning an error for malformed ids.
 func (q *QEMU) paths(vmID string) (socket, pidfile, monitor string, err error) {
 	parsed, err := uuid.Parse(vmID)
 	if err != nil {
@@ -535,6 +544,8 @@ func (q *QEMU) paths(vmID string) (socket, pidfile, monitor string, err error) {
 	return base + ".vnc", base + ".pid", base + ".monitor", nil
 }
 
+// cleanup removes a VM's VNC, pidfile, monitor, and QMP files, ignoring
+// errors because the process may already have removed them.
 func (q *QEMU) cleanup(socket, pidfile, monitor string) {
 	_ = os.Remove(socket)
 	_ = os.Remove(pidfile)
@@ -542,14 +553,21 @@ func (q *QEMU) cleanup(socket, pidfile, monitor string) {
 	_ = os.Remove(qmpPathFromSocket(socket))
 }
 
+// qmpPathFromSocket returns the QMP socket path paired with a VNC socket by
+// replacing its .vnc suffix with .qmp.
 func qmpPathFromSocket(socket string) string {
 	return strings.TrimSuffix(socket, ".vnc") + ".qmp"
 }
 
+// prepareSecrets writes transient credential files for a VM's remote disks
+// using the attachments in plan and returns them keyed by disk ID.
 func (q *QEMU) prepareSecrets(vm store.VM, plan StartPlan) (map[int64]string, error) {
 	return q.prepareDiskSecrets(vm.ID, vmDisks(vm), plan)
 }
 
+// prepareDiskSecrets writes 0600 secret files for iSCSI credentials and
+// NVMe/TCP PSKs in plan, returning their paths by disk ID; RBD and local disks
+// are skipped. On write failure it removes the files already written.
 func (q *QEMU) prepareDiskSecrets(secretPrefix string, disks []store.VMDisk, plan StartPlan) (map[int64]string, error) {
 	paths := make(map[int64]string)
 	for _, disk := range disks {
@@ -584,10 +602,14 @@ func (q *QEMU) prepareDiskSecrets(secretPrefix string, disks []store.VMDisk, pla
 	return paths, nil
 }
 
+// secretPath builds the run-directory path for one disk's secret file from
+// the VM or LightVM prefix, disk ID, and protocol.
 func (q *QEMU) secretPath(vmID string, diskID int64, protocol blockdev.Protocol) string {
 	return filepath.Join(q.runDir, fmt.Sprintf("%s.disk%d.%s.secret", vmID, diskID, protocol))
 }
 
+// writeSecret replaces any existing file with a new 0600 file containing
+// secret, removing the file again if writing or closing fails.
 func (q *QEMU) writeSecret(path, secret string) error {
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("remove existing disk secret: %w", err)
@@ -608,12 +630,16 @@ func (q *QEMU) writeSecret(path, secret string) error {
 	return nil
 }
 
+// removeSecretFiles removes every secret file in paths on a best-effort
+// basis, ignoring failures.
 func (q *QEMU) removeSecretFiles(paths map[int64]string) {
 	for _, path := range paths {
 		_ = os.Remove(path)
 	}
 }
 
+// cleanupSecrets removes all per-disk secret files whose names start with the
+// given VM or LightVM prefix, ignoring glob and removal errors.
 func (q *QEMU) cleanupSecrets(vmID string) {
 	matches, err := filepath.Glob(filepath.Join(q.runDir, vmID+".disk*.secret"))
 	if err != nil {
@@ -624,6 +650,8 @@ func (q *QEMU) cleanupSecrets(vmID string) {
 	}
 }
 
+// cleanupStaleSecrets deletes .secret files in the run directory that have not
+// been modified for an hour, leaving newer files for in-flight starts.
 func (q *QEMU) cleanupStaleSecrets() {
 	entries, err := os.ReadDir(q.runDir)
 	if err != nil {
@@ -642,6 +670,8 @@ func (q *QEMU) cleanupStaleSecrets() {
 	}
 }
 
+// readPID parses a pidfile, reporting false when it cannot be read, is not an
+// integer, or holds a non-positive PID.
 func readPID(path string) (int, bool) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -654,11 +684,15 @@ func readPID(path string) (int, bool) {
 	return pid, true
 }
 
+// processAlive reports whether a process exists, treating EPERM as alive
+// because the PID belongs to a process this user cannot signal.
 func processAlive(pid int) bool {
 	err := syscall.Kill(pid, 0)
 	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
+// processArgs returns the full argv of a process from /proc, or nil when the
+// command line cannot be read or is empty.
 func processArgs(pid int) []string {
 	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "cmdline"))
 	if err != nil || len(data) == 0 {
@@ -667,6 +701,8 @@ func processArgs(pid int) []string {
 	return strings.Split(strings.TrimRight(string(data), "\x00"), "\x00")
 }
 
+// processMatches reports whether a process's command line carries both the
+// expected -uuid and the expected -pidfile, accepting separate and = forms.
 func processMatches(pid int, expectedUUID, expectedPidfile string) bool {
 	args := processArgs(pid)
 	uuidMatches, pidfileMatches := false, false
@@ -689,6 +725,9 @@ func processMatches(pid int, expectedUUID, expectedPidfile string) bool {
 	return uuidMatches && pidfileMatches
 }
 
+// processMatchesBasename reports whether a process carries the expected UUID
+// and a pidfile whose basename is one of pidfileBases, accepting separate and
+// = forms.
 func processMatchesBasename(pid int, expectedUUID string, pidfileBases ...string) bool {
 	args := processArgs(pid)
 	uuidMatches := false
@@ -750,6 +789,8 @@ func matchingLightVMPIDs(id string) []int {
 	return matchingPIDsWithPidfile(id, "lightvm-"+id+".lightvm.pid", id+".lightvm.pid")
 }
 
+// matchingPIDsWithPidfile returns the PIDs whose command line contains the
+// given UUID plus a pidfile with any of the given basenames.
 func matchingPIDsWithPidfile(id string, bases ...string) []int {
 	wanted := make(map[string]struct{}, len(bases))
 	for _, base := range bases {
@@ -799,6 +840,9 @@ func lightVMQEMUProcesses(id string) []int {
 	return pids
 }
 
+// processArgsReferenceLightVMSocket reports whether argv points at the
+// LightVM's virtiofs socket, checking -chardev/-fsdev values and bare
+// arguments while ignoring virtiofsd helper processes.
 func processArgsReferenceLightVMSocket(args []string, id string) bool {
 	if len(args) == 0 || strings.Contains(filepath.Base(args[0]), "virtiofsd") {
 		return false
@@ -824,6 +868,8 @@ func processArgsReferenceLightVMSocket(args []string, id string) bool {
 	return false
 }
 
+// processReferencesLightVMSocket reports whether the process with pid
+// references the LightVM's virtiofs socket.
 func processReferencesLightVMSocket(pid int, id string) bool {
 	return processArgsReferenceLightVMSocket(processArgs(pid), id)
 }
@@ -862,6 +908,8 @@ func imageLockHolders(disks []store.VMDisk) []processRef {
 	return holders
 }
 
+// cmdlinePIDs scans /proc and returns the PIDs whose argv satisfy match,
+// skipping the calling process and entries that cannot be read.
 func cmdlinePIDs(match func([]string) bool) []int {
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
@@ -886,6 +934,8 @@ func cmdlinePIDs(match func([]string) bool) []int {
 	return pids
 }
 
+// processName returns the short command name from /proc, falling back to
+// "unknown" when it cannot be read or is empty.
 func processName(pid int) string {
 	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "comm"))
 	if err != nil {
@@ -898,6 +948,10 @@ func processName(pid int) string {
 	return name
 }
 
+// validateVMDisks rechecks that each disk can be handed to QEMU: host
+// passthrough devices must still be attachable, and local LVM-backed devices
+// are activated when their /dev node is missing. Kouja, Ceph, and remote
+// protocol disks are skipped.
 func validateVMDisks(ctx context.Context, disks []store.VMDisk) error {
 	for _, disk := range disks {
 		protocol := blockdev.Protocol(disk.Protocol).Normalize()
@@ -929,6 +983,9 @@ func ensureDiskDevice(ctx context.Context, disk store.VMDisk) error {
 
 type thinVolumeActivator func(ctx context.Context, vg, thinPool, name string) error
 
+// ensureDiskDeviceWith returns nil when the disk's device node exists, or
+// activates an inactive LVM thin volume and polls for its node until timeout.
+// Otherwise it returns an error wrapping the last stat failure.
 func ensureDiskDeviceWith(ctx context.Context, disk store.VMDisk, activate thinVolumeActivator, timeout time.Duration) error {
 	_, statErr := os.Stat(disk.Device)
 	if statErr == nil {
@@ -953,6 +1010,8 @@ func ensureDiskDeviceWith(ctx context.Context, disk store.VMDisk, activate thinV
 	return fmt.Errorf("disk device %s is not available: %w", disk.Device, statErr)
 }
 
+// vmDisks returns the VM's disk list, falling back to the legacy single Disk
+// pointer when Disks is empty, or nil when neither is set.
 func vmDisks(vm store.VM) []store.VMDisk {
 	if len(vm.Disks) > 0 {
 		return vm.Disks
@@ -963,11 +1022,16 @@ func vmDisks(vm store.VM) []store.VMDisk {
 	return nil
 }
 
+// buildArgs is the plan-less form of buildArgsWithPlan, returning nil when
+// argument construction fails.
 func buildArgs(vm store.VM, socket, pidfile, monitor string) []string {
 	args, _ := buildArgsWithPlan(vm, socket, pidfile, monitor, StartPlan{}, nil)
 	return args
 }
 
+// buildArgsWithPlan assembles a VM's QEMU arguments from its resources and the
+// prepared start plan: CPU and memory, vdagent, disks, VNC/monitor/QMP
+// sockets, NICs, and boot order. Disk construction errors are returned.
 func buildArgsWithPlan(vm store.VM, socket, pidfile, monitor string, plan StartPlan, secretPaths map[int64]string) ([]string, error) {
 	args := []string{
 		"-name", vm.Name,
@@ -1039,6 +1103,9 @@ func buildArgsWithPlan(vm store.VM, socket, pidfile, monitor string, plan StartP
 	return args, nil
 }
 
+// buildDiskArgs renders the -drive/-device arguments for one disk, including
+// read-only and throttle options. It rejects unresolved throttling, invalid
+// serials, missing attachments, and unsupported NVMe/TCP or RBD protocols.
 func buildDiskArgs(disk store.VMDisk, plan StartPlan, secretPaths map[int64]string) ([]string, error) {
 	classID := int64(0)
 	if disk.ThrottleClassID != nil {
@@ -1117,6 +1184,8 @@ func virtioDiskArgs(drive string, diskID int64, serial string, explicit bool) []
 	}
 }
 
+// diskReadOnlyArg returns ",readonly=on" for a read-only disk and an empty
+// string otherwise.
 func diskReadOnlyArg(disk store.VMDisk) string {
 	if disk.ReadOnly {
 		return ",readonly=on"
@@ -1124,6 +1193,8 @@ func diskReadOnlyArg(disk store.VMDisk) string {
 	return ""
 }
 
+// diskThrottleArgs returns the disk's QEMU throttle options, or an empty
+// string when no throttle limits are set.
 func diskThrottleArgs(disk store.VMDisk) string {
 	if disk.Throttle == nil {
 		return ""

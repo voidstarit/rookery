@@ -60,6 +60,10 @@ func (v *VPPNetwork) VPPNodeGraph(ctx context.Context) (VPPGraph, error) {
 	return graph, nil
 }
 
+// parseVPPNodeGraph parses VPP's DOT graph output into deduplicated nodes and
+// edges, reconnecting statements split by the CLI pager and reading width,
+// fontsize, and fillcolor node attributes. Lines not matching a DOT node or edge
+// are skipped, and the result is sorted by ID.
 func parseVPPNodeGraph(output string) (VPPGraph, error) {
 	nodes := make(map[string]VPPGraphNode)
 	edges := make(map[string]VPPGraphEdge)

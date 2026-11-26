@@ -363,6 +363,10 @@ func (m *VNFManager) Stop(ctx context.Context, vnfID int64, removeLeases bool) e
 	return m.stop(ctx, vnfID, removeLeases)
 }
 
+// stop tears down the runtime behind vnfID, closing its shared network when it
+// was the last user, its BGP, memif, or CoreDHCP server, and forgets the
+// runtime's lease hooks. Lease files are removed only when removeLeases is set;
+// it fails with ctx.Err() or a timeout when a server does not exit in time.
 func (m *VNFManager) stop(ctx context.Context, vnfID int64, removeLeases bool) error {
 	m.mu.Lock()
 	managed := m.servers[vnfID]
@@ -572,6 +576,9 @@ func (m *VNFManager) Close() error {
 	return err
 }
 
+// stopAll stops every managed VNF under one shared context and then closes any
+// remaining shared networks, keeping lease files. Per-server failures are
+// joined into a single error.
 func (m *VNFManager) stopAll() error {
 	m.mu.Lock()
 	ids := make([]int64, 0, len(m.servers))
@@ -602,6 +609,8 @@ func (m *VNFManager) stopAll() error {
 	return errors.Join(errs...)
 }
 
+// port returns the configured DHCP port, falling back to defaultDHCPPort when
+// Port is unset or non-positive.
 func (m *VNFManager) port() int {
 	if m.Port > 0 {
 		return m.Port
@@ -609,10 +618,16 @@ func (m *VNFManager) port() int {
 	return defaultDHCPPort
 }
 
+// leasePath returns the JSON lease file path for a VNF, under the manager's
+// directory and named by VNF ID.
 func (m *VNFManager) leasePath(vnfID int64) string {
 	return filepath.Join(m.Dir, strconv.FormatInt(vnfID, 10)+".json")
 }
 
+// buildDHCPv4Config validates the VNF's gateway, range, DNS, lease time, static
+// assignments, and options and assembles the CoreDHCP v4 config listening on
+// hostIf. It rejects a range outside the gateway subnet, any range including
+// the network, broadcast, or gateway address, and ranges above maxDHCPRangeSize.
 func buildDHCPv4Config(vnf store.VNF, hostIf, leasePath string, port int) (*coredhcpconfig.Config, error) {
 	if port <= 0 {
 		port = defaultDHCPPort
@@ -713,6 +728,10 @@ func buildDHCPv4Config(vnf store.VNF, hostIf, leasePath string, port int) (*core
 	}, nil
 }
 
+// buildDHCPv6Config validates the VNF's IPv6 gateway prefix, range, DNS, lease
+// time, and options and assembles the CoreDHCP v6 config using the VNF-derived
+// server DUID. It rejects non-IPv6 values, ranges outside the prefix or
+// covering the gateway or subnet-router anycast address, and oversized ranges.
 func buildDHCPv6Config(vnf store.VNF, hostIf, leasePath string) (*coredhcpconfig.Config, error) {
 	gatewayCIDR := strings.TrimSpace(vnf.Config.Gateway)
 	prefix, err := netip.ParsePrefix(gatewayCIDR)
@@ -795,6 +814,9 @@ func buildDHCPv6Config(vnf store.VNF, hostIf, leasePath string) (*coredhcpconfig
 	}, nil
 }
 
+// dhcpServerIP returns the IPv4 server address from BindIP, falling back to the
+// gateway when BindIP is blank or not IPv4, and nil when neither parses as an
+// IPv4 CIDR.
 func dhcpServerIP(cfg store.VNFConfig) net.IP {
 	if strings.TrimSpace(cfg.BindIP) != "" {
 		if ip, _, err := net.ParseCIDR(strings.TrimSpace(cfg.BindIP)); err == nil {
@@ -809,6 +831,8 @@ func dhcpServerIP(cfg store.VNFConfig) net.IP {
 	return nil
 }
 
+// vnfLeaseTime parses the configured lease duration, returning coreDHCPLeaseTime
+// when the value is blank and an error when it is unparsable or non-positive.
 func vnfLeaseTime(value string) (time.Duration, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -821,6 +845,9 @@ func vnfLeaseTime(value string) (time.Duration, error) {
 	return duration, nil
 }
 
+// normalizeDNS splits a comma-separated resolver list, trimming blanks, and
+// returns canonical addresses; it rejects entries that are not IPv4, or not
+// IPv6 when ipv6 is set. A blank value yields nil.
 func normalizeDNS(value string, ipv6 bool) ([]string, error) {
 	if strings.TrimSpace(value) == "" {
 		return nil, nil
@@ -851,6 +878,9 @@ func normalizeDNS(value string, ipv6 bool) ([]string, error) {
 	return out, nil
 }
 
+// v6RangeWithinLimit reports whether the inclusive IPv6 range from start to end
+// holds at most maxDHCPRangeSize addresses, computed with big integers so the
+// check cannot overflow.
 func v6RangeWithinLimit(start, end netip.Addr) bool {
 	startInt := new(big.Int).SetBytes(start.AsSlice())
 	endInt := new(big.Int).SetBytes(end.AsSlice())
@@ -859,6 +889,8 @@ func v6RangeWithinLimit(start, end netip.Addr) bool {
 	return size.Cmp(big.NewInt(maxDHCPRangeSize)) <= 0
 }
 
+// vnfDUIDMAC returns the 02:4e:56:46:xx:xx DUID-LL MAC for a VNF, built from
+// the low 16 bits of its ID.
 func vnfDUIDMAC(vnfID int64) net.HardwareAddr {
 	return net.HardwareAddr{
 		0x02, 0x4e, 0x56, 0x46,
@@ -866,6 +898,8 @@ func vnfDUIDMAC(vnfID int64) net.HardwareAddr {
 	}
 }
 
+// vnfMemifMAC returns the 02:4d:4d:xx:xx:xx MAC for the VPP side of a VNF memif,
+// built from the low 24 bits of the VNF ID.
 func vnfMemifMAC(vnfID int64) net.HardwareAddr {
 	return net.HardwareAddr{
 		0x02, 0x4d, 0x4d,
@@ -873,6 +907,8 @@ func vnfMemifMAC(vnfID int64) net.HardwareAddr {
 	}
 }
 
+// vnfMemifDHCPMAC returns the 02:4e:4d:xx:xx:xx MAC for the gVisor side of a
+// DHCPv4 memif VNF, built from the low 24 bits of the VNF ID.
 func vnfMemifDHCPMAC(vnfID int64) net.HardwareAddr {
 	return net.HardwareAddr{
 		0x02, 0x4e, 0x4d,
@@ -891,6 +927,8 @@ func vnfMemifBGPMAC(vnfID int64) net.HardwareAddr {
 	}
 }
 
+// vnfMemifName returns the VNF's trimmed name, or a vnf<ID> fallback when the
+// name is empty.
 func vnfMemifName(vnf store.VNF) string {
 	if name := strings.TrimSpace(vnf.Name); name != "" {
 		return name
@@ -904,6 +942,8 @@ func VNFMemifMAC(vnfID int64) net.HardwareAddr {
 	return vnfMemifMAC(vnfID)
 }
 
+// broadcastIPv4 returns the directed broadcast address for ipnet by OR-ing the
+// host bits of the mask into the network address.
 func broadcastIPv4(ipnet *net.IPNet) net.IP {
 	ip := ipnet.IP.To4()
 	out := make(net.IP, net.IPv4len)
@@ -913,6 +953,9 @@ func broadcastIPv4(ipnet *net.IPNet) net.IP {
 	return out
 }
 
+// waitForLink polls ip link show every 50ms until hostIf exists or timeout
+// elapses, honoring ctx cancellation. It fails immediately when the ip command
+// is not installed and with a timeout error when the link never appears.
 func waitForLink(ctx context.Context, hostIf string, timeout time.Duration) error {
 	if _, err := exec.LookPath("ip"); err != nil {
 		return fmt.Errorf("ip command is not available: %w", err)
@@ -933,6 +976,8 @@ func waitForLink(ctx context.Context, hostIf string, timeout time.Duration) erro
 	}
 }
 
+// runIP runs the ip command with args and returns its trimmed combined output;
+// the command's exit status is returned for callers that only need success.
 func runIP(ctx context.Context, args ...string) (string, error) {
 	out, err := exec.CommandContext(ctx, "ip", args...).CombinedOutput()
 	return strings.TrimSpace(string(out)), err
@@ -961,6 +1006,8 @@ func removeLegacyDHCP(dir string, networkID int64) {
 	}
 }
 
+// readPIDFile reads a positive PID from path, reporting false when the file is
+// missing, unparsable, or does not hold a positive integer.
 func readPIDFile(path string) (int, bool) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -973,11 +1020,16 @@ func readPIDFile(path string) (int, bool) {
 	return pid, true
 }
 
+// processExists reports whether pid names a live process, counting EPERM as
+// alive because the process exists but is owned by another user.
 func processExists(pid int) bool {
 	err := syscall.Kill(pid, 0)
 	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
+// processIsLegacyDNSMasq reports whether pid is a dnsmasq process whose command
+// line references configPath, preventing cleanup from signalling an unrelated
+// process that reused the PID.
 func processIsLegacyDNSMasq(pid int, configPath string) bool {
 	comm, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "comm"))
 	if err != nil || strings.TrimSpace(string(comm)) != "dnsmasq" {

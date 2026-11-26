@@ -44,10 +44,14 @@ type hostInterfaceModel struct {
 	Labels       types.Set    `tfsdk:"labels"`
 }
 
+// Metadata registers this resource as rookery_host_interface under the configured provider type
+// name.
 func (r *hostInterfaceResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_host_interface"
 }
 
+// Schema declares the NIC name as the replacement-triggering key plus computed host and VPP
+// status attributes and the shared label set.
 func (r *hostInterfaceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Takes a physical host NIC into VPP. Destroying the resource detaches it from VPP.",
@@ -74,6 +78,8 @@ func (r *hostInterfaceResource) Schema(_ context.Context, _ resource.SchemaReque
 	}
 }
 
+// Create attaches the named host NIC to VPP, records the returned host and VPP state, then
+// applies labels; the NIC stays attached if label application fails.
 func (r *hostInterfaceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan hostInterfaceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -102,6 +108,8 @@ func (r *hostInterfaceResource) Create(ctx context.Context, req resource.CreateR
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read lists host interfaces and refreshes state from the matching NIC, removing the resource
+// from state when no interface has that name.
 func (r *hostInterfaceResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state hostInterfaceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -136,6 +144,8 @@ func (r *hostInterfaceResource) Read(ctx context.Context, req resource.ReadReque
 	resp.State.RemoveResource(ctx)
 }
 
+// Update applies label changes only; the NIC identity forces replacement, and the refreshed
+// labels are stored in state.
 func (r *hostInterfaceResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan hostInterfaceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -158,6 +168,8 @@ func (r *hostInterfaceResource) Update(ctx context.Context, req resource.UpdateR
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete detaches the NIC from VPP, ignoring a not-found response so an already-detached
+// interface is treated as removed.
 func (r *hostInterfaceResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state hostInterfaceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -176,10 +188,13 @@ func (r *hostInterfaceResource) Delete(ctx context.Context, req resource.DeleteR
 	}
 }
 
+// ImportState imports an existing host interface by NIC name.
 func (r *hostInterfaceResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("nic"), types.StringValue(req.ID))...)
 }
 
+// setHostInterfaceState copies the interface name, flags, addresses, and VPP details into the
+// Terraform model, returning diagnostics from converting the address lists.
 func setHostInterfaceState(ctx context.Context, state *hostInterfaceModel, iface *rookeryv1.HostInterface) diag.Diagnostics {
 	var diags diag.Diagnostics
 	state.NIC = types.StringValue(iface.GetName())

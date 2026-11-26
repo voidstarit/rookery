@@ -23,10 +23,13 @@ func NewStorageBackendDataSource() datasource.DataSource {
 	return &storageBackendDataSource{}
 }
 
+// Metadata registers the data source as <provider>_storage_backend.
 func (d *storageBackendDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_storage_backend"
 }
 
+// Schema defines the storage backend lookup attributes, including driver config and
+// sensitive Kouja credentials.
 func (d *storageBackendDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
 		Description: "Looks up a storage backend by id or name.",
@@ -71,6 +74,8 @@ func (d *storageBackendDataSource) Schema(_ context.Context, _ datasource.Schema
 	}
 }
 
+// Read resolves the storage backend by exactly one of id or name, storing its state,
+// driver config, and entity labels.
 func (d *storageBackendDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config storageBackendModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
@@ -114,6 +119,8 @@ func (d *storageBackendDataSource) Read(ctx context.Context, req datasource.Read
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 
+// findStorageBackend returns the single backend whose name matches case-insensitively,
+// failing on duplicate matches or no match.
 func findStorageBackend(backends []*rookeryv1.StorageBackend, name string) (*rookeryv1.StorageBackend, error) {
 	var found *rookeryv1.StorageBackend
 	for _, backend := range backends {

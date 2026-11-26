@@ -61,10 +61,13 @@ type routeModel struct {
 	Labels              types.Set    `tfsdk:"labels"`
 }
 
+// Metadata registers the resource under the provider type name with the _route suffix.
 func (r *routeResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_route"
 }
 
+// Schema declares the route table, address family, and prefix as replace-only inputs and the
+// remaining VPP path attributes as optional inputs that also accept server-computed values.
 func (r *routeResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A static route in a Rookery route table. The next hop is optional when an egress interface is set.",
@@ -127,6 +130,8 @@ func (r *routeResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 	}
 }
 
+// Create converts out_labels to uint32 values, creates the route with optional attributes passed
+// as pointers, then applies labels and stores the returned route in state.
 func (r *routeResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan routeModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -182,6 +187,8 @@ func (r *routeResource) Create(ctx context.Context, req resource.CreateRequest, 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read lists routes for the stored table and address family, refreshes the matching id with its
+// labels, and removes the resource from state when the route is absent.
 func (r *routeResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state routeModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -223,6 +230,8 @@ func (r *routeResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	resp.State.RemoveResource(ctx)
 }
 
+// Update applies only the planned labels, since all route attributes are replace-only, and writes
+// the resulting label set to state.
 func (r *routeResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan routeModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -245,6 +254,7 @@ func (r *routeResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete removes the route, treating a not-found response as success so destroys are idempotent.
 func (r *routeResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state routeModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -263,7 +273,8 @@ func (r *routeResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	}
 }
 
-// Import uses the composite id "<route_table_id>/<ipv6>/<route_id>".
+// ImportState imports a route from a composite
+// "<route_table_id>/<ipv6>/<route_id>" id.
 func (r *routeResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	parts := strings.Split(req.ID, "/")
 	if len(parts) != 3 {
@@ -290,6 +301,8 @@ func (r *routeResource) ImportState(ctx context.Context, req resource.ImportStat
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("ipv6"), types.BoolValue(ipv6))...)
 }
 
+// setRouteState copies the route's fields into the model, mapping absent proto pointers to null
+// values and translating out labels into an int64 list.
 func setRouteState(ctx context.Context, state *routeModel, route *rookeryv1.Route) diag.Diagnostics {
 	var diags diag.Diagnostics
 	state.ID = types.Int64Value(route.GetId())
@@ -325,6 +338,8 @@ func setRouteState(ctx context.Context, state *routeModel, route *rookeryv1.Rout
 	return diags
 }
 
+// routeOutLabelsFromList returns nil for a null or unknown list and otherwise converts each value
+// to uint32, reporting out-of-range entries as diagnostics instead of truncating them.
 func routeOutLabelsFromList(ctx context.Context, list types.List) ([]uint32, diag.Diagnostics) {
 	if list.IsNull() || list.IsUnknown() {
 		return nil, nil

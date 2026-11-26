@@ -150,6 +150,8 @@ func (q *QEMU) StartLightVMWithVirtioFSAndPlan(ctx context.Context, vm store.Lig
 	return true, nil
 }
 
+// lightVMStartError wraps a failed LightVM QEMU start, appending QEMU's
+// trimmed output as context when it is non-empty.
 func lightVMStartError(out []byte, err error) error {
 	message := strings.TrimSpace(string(out))
 	if message == "" {
@@ -301,6 +303,8 @@ func (q *QEMU) LightVMConsoleSocket(id string, consoleID int64) string {
 	return console
 }
 
+// lightVMCgroupPlacement resolves the cgroup placement for a LightVM's class,
+// returning an empty placement when no cgroup manager is configured.
 func (q *QEMU) lightVMCgroupPlacement(vm store.LightVM) (cgroup.Placement, error) {
 	if q.cgroups == nil {
 		return cgroup.Placement{}, nil
@@ -312,6 +316,8 @@ func (q *QEMU) lightVMCgroupPlacement(vm store.LightVM) (cgroup.Placement, error
 	return placement, nil
 }
 
+// lightVMPaths returns the console socket, pidfile, and monitor socket paths
+// for a LightVM, or an error when the id is not a valid UUID.
 func (q *QEMU) lightVMPaths(id string) (console, pidfile, monitor string, err error) {
 	base, err := q.lightVMBase(id)
 	if err != nil {
@@ -329,6 +335,8 @@ func (q *QEMU) lightVMQMPPath(id string) (string, error) {
 	return base + ".lightvm.qmp", nil
 }
 
+// lightVMBase returns the run-directory path prefix for a LightVM UUID,
+// rejecting malformed ids so callers never derive paths from arbitrary input.
 func (q *QEMU) lightVMBase(id string) (string, error) {
 	parsed, err := uuid.Parse(id)
 	if err != nil {
@@ -337,6 +345,8 @@ func (q *QEMU) lightVMBase(id string) (string, error) {
 	return filepath.Join(q.runDir, parsed.String()), nil
 }
 
+// cleanupLightVM removes a LightVM's pidfile, console, monitor, QMP, and
+// per-console sockets, ignoring removal failures and invalid ids.
 func (q *QEMU) cleanupLightVM(id string) {
 	base, err := q.lightVMBase(id)
 	if err != nil {
@@ -357,6 +367,9 @@ type lightVMConsoleArg struct {
 	PortName   string
 }
 
+// lightVMConsoleArgs maps the LightVM's consoles to socket paths and port
+// names. With none configured it yields a single default console, and empty
+// port names fall back to org.example.console[.N].
 func (q *QEMU) lightVMConsoleArgs(vm store.LightVM) []lightVMConsoleArg {
 	consoles := vm.Consoles
 	if len(consoles) == 0 {
@@ -381,8 +394,14 @@ func (q *QEMU) lightVMConsoleArgs(vm store.LightVM) []lightVMConsoleArg {
 
 const appHostnameParam = "APP_HOSTNAME="
 
+// lightvmSecretPrefix returns the filename prefix shared by a LightVM's
+// transient disk secret files.
 func lightvmSecretPrefix(id string) string { return "lightvm-" + id }
 
+// buildLightVMArgs assembles the QEMU argument list for a LightVM: kernel and
+// initrd, shared guest RAM when interfaces or a rootfs virtiofs share are
+// present, consoles, disks, the config drive, and network devices. Disk
+// construction errors are returned.
 func buildLightVMArgs(vm store.LightVM, consoles []lightVMConsoleArg, pidfile, monitor, qmp string, rootfs LightVMVirtioFS, shares []LightVMVirtioFS, configDrive LightVMConfigDrive, plan StartPlan, secretPaths map[int64]string) ([]string, error) {
 	args := []string{
 		"-name", vm.Name,

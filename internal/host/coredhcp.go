@@ -68,11 +68,9 @@ type coreDHCPLease struct {
 	Hostname string
 }
 
-// setupCoreDHCP is a CoreDHCP plugin setup function. Arguments are, in order:
-// gateway IPv4, netmask, range start, range end, comma-separated DNS servers,
-// lease file path, lease duration, broadcast address, server identifier, an
-// optional JSON array of static MAC-to-IPv4 assignments, and an optional JSON
-// array of extra DHCP options.
+// setupCoreDHCP builds the CoreDHCPv4 plugin from positional arguments:
+// gateway, netmask, range, DNS servers, lease file, duration, broadcast,
+// server identifier, and optional static assignments and DHCP options.
 func setupCoreDHCP(args ...string) (handler.Handler4, error) {
 	if len(args) != 9 && len(args) != 10 && len(args) != 11 {
 		return nil, fmt.Errorf("CoreDHCP setup: want 9, 10, or 11 arguments, got %d", len(args))
@@ -237,6 +235,8 @@ func dhcpv4DNSName(req *dhcpv4.DHCPv4) string {
 	return strings.TrimSpace(req.HostName())
 }
 
+// parseCoreDHCPDNS parses a comma-separated list of IPv4 resolver addresses,
+// returning nil for a blank value and an error naming the first invalid entry.
 func parseCoreDHCPDNS(value string) ([]net.IP, error) {
 	if strings.TrimSpace(value) == "" {
 		return nil, nil
@@ -256,6 +256,10 @@ func parseCoreDHCPDNS(value string) ([]net.IP, error) {
 	return dns, nil
 }
 
+// handle processes one DHCPv4 packet: it allocates or renews leases for
+// DISCOVER/REQUEST, frees them on RELEASE, and fills options for INFORM. It
+// returns the reply with false so CoreDHCP continues its handler chain, or a
+// nil reply with true to drop packets not meant for this server.
 func (s *coreDHCPState) handle(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
 	if req.OpCode != dhcpv4.OpcodeBootRequest {
 		return resp, false
@@ -355,6 +359,8 @@ func (s *coreDHCPState) handle(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) 
 	return resp, false
 }
 
+// nak turns the pending reply into a DHCPNAK for the zero address, logs the
+// denied client, and returns true so CoreDHCP stops the handler chain.
 func (s *coreDHCPState) nak(resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
 	log.Debug().
 		Str("leases", s.leasePath).
@@ -367,6 +373,9 @@ func (s *coreDHCPState) nak(resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
 	return resp, true
 }
 
+// applyOptions fills the server ID, router, mask, broadcast, DNS, and lease time
+// into resp, skipping router and DNS when a custom option of the same code
+// overrides them and omitting the lease time for INFORM replies.
 func (s *coreDHCPState) applyOptions(resp *dhcpv4.DHCPv4, inform bool) {
 	custom := make(map[uint16]struct{}, len(s.options))
 	for _, option := range s.options {
@@ -398,6 +407,8 @@ func (s *coreDHCPState) applyOptions(resp *dhcpv4.DHCPv4, inform bool) {
 		Msg("DHCPv4 reply options")
 }
 
+// leaseForLocked returns the client's lease when it has not expired, freeing
+// the record and returning nil otherwise; the caller must hold s.mu.
 func (s *coreDHCPState) leaseForLocked(clientID string, now time.Time) *coreDHCPLease {
 	record, ok := s.leases[clientID]
 	if !ok {
@@ -410,6 +421,8 @@ func (s *coreDHCPState) leaseForLocked(clientID string, now time.Time) *coreDHCP
 	return record
 }
 
+// renewLocked extends the lease by one lease time, replaces the hostname when
+// a non-empty one is supplied, and persists the lease file; s.mu must be held.
 func (s *coreDHCPState) renewLocked(record *coreDHCPLease, hostname string, now time.Time) {
 	record.Expires = now.Add(s.leaseTime)
 	if hostname != "" {
@@ -424,6 +437,9 @@ func (s *coreDHCPState) renewLocked(record *coreDHCPLease, hostname string, now 
 	s.saveLocked()
 }
 
+// allocateLocked grants the client's static address when one exists, otherwise
+// the in-range hint or any free pool address, records and persists the lease,
+// and fails when the static address is held by another client.
 func (s *coreDHCPState) allocateLocked(clientID string, hint net.IP, hostname string, now time.Time) (*coreDHCPLease, error) {
 	if staticIP, ok := s.static[clientID]; ok {
 		if owner, used := s.byIP[staticIP.String()]; used && owner != clientID {
@@ -485,6 +501,8 @@ func (s *coreDHCPState) allocateLocked(clientID string, hint net.IP, hostname st
 	return record, nil
 }
 
+// purgeExpiredLocked frees every lease whose expiry has passed without
+// persisting; callers hold s.mu and save separately when needed.
 func (s *coreDHCPState) purgeExpiredLocked(now time.Time) {
 	for _, record := range s.leases {
 		if !record.Expires.After(now) {
@@ -493,6 +511,8 @@ func (s *coreDHCPState) purgeExpiredLocked(now time.Time) {
 	}
 }
 
+// freeLocked drops the lease and its address index entry, logs the release, and
+// returns the address to the allocator unless it is statically reserved.
 func (s *coreDHCPState) freeLocked(record *coreDHCPLease) {
 	log.Info().
 		Str("leases", s.leasePath).
@@ -527,6 +547,8 @@ func (s *coreDHCPState) removeLeases(clientIDs []string) int {
 	return removed
 }
 
+// inRange reports whether ip is IPv4 and falls inside the configured pool
+// bounds, returning false for non-IPv4 input.
 func (s *coreDHCPState) inRange(ip net.IP) bool {
 	ip4 := ip.To4()
 	if ip4 == nil {
@@ -536,6 +558,10 @@ func (s *coreDHCPState) inRange(ip net.IP) bool {
 	return value >= s.start && value <= s.end
 }
 
+// loadLeases restores unexpired leases from the JSON lease file, skipping
+// entries that are invalid, out of range, reserved to another client, or
+// duplicated. A missing file is ignored, and an undecodable one is renamed to
+// .corrupt and ignored rather than failing startup.
 func (s *coreDHCPState) loadLeases() error {
 	if s.leasePath == "" {
 		return nil
@@ -609,6 +635,8 @@ func (s *coreDHCPState) loadLeases() error {
 	return nil
 }
 
+// saveLocked snapshots the in-memory leases in client-ID order and rewrites the
+// lease file, doing nothing when no lease path is configured.
 func (s *coreDHCPState) saveLocked() {
 	if s.leasePath == "" {
 		return
@@ -626,6 +654,8 @@ func (s *coreDHCPState) saveLocked() {
 	writeLeaseFile(s.leasePath, leases)
 }
 
+// writeLeaseFile encodes leases as indented JSON and atomically replaces path by
+// writing a 0600 temporary file first; write failures are logged, not returned.
 func writeLeaseFile(path string, leases []leaseRecord) {
 	data, err := json.MarshalIndent(leaseFile{Leases: leases}, "", "  ")
 	if err != nil {
@@ -645,6 +675,7 @@ func writeLeaseFile(path string, leases []leaseRecord) {
 	}
 }
 
+// ipText formats ip for logging, returning an empty string for a nil address.
 func ipText(ip net.IP) string {
 	if ip == nil {
 		return ""
@@ -652,6 +683,8 @@ func ipText(ip net.IP) string {
 	return ip.String()
 }
 
+// bytesCompare orders two IPv4 addresses numerically, returning -1, 0, or 1 and
+// 0 when either argument is not IPv4.
 func bytesCompare(a, b net.IP) int {
 	a4 := a.To4()
 	b4 := b.To4()

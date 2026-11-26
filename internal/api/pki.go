@@ -20,6 +20,8 @@ func (s *Server) ConfigurePKI(manager *pki.Manager) {
 	s.handler = s.NativeHandler()
 }
 
+// pkiUnavailable writes a 503 response and reports true when no PKI manager is
+// configured, letting handlers return early.
 func (s *Server) pkiUnavailable(w http.ResponseWriter) bool {
 	if s.pki == nil {
 		writeError(w, http.StatusServiceUnavailable, "mTLS is not enabled on this server")
@@ -28,6 +30,8 @@ func (s *Server) pkiUnavailable(w http.ResponseWriter) bool {
 	return false
 }
 
+// handlePKICA serves the CA certificate as a downloadable PEM file, or a 503
+// when mTLS is not enabled.
 func (s *Server) handlePKICA(w http.ResponseWriter, _ *http.Request) {
 	if s.pkiUnavailable(w) {
 		return
@@ -43,6 +47,9 @@ type pkiIssueRequest struct {
 	Days int    `json:"days"`
 }
 
+// handlePKIIssueClient decodes a name and validity period, issues a client
+// certificate, and returns it with the CA and unencrypted private key PEM.
+// Malformed bodies and issuance failures both produce a 400 response.
 func (s *Server) handlePKIIssueClient(w http.ResponseWriter, r *http.Request) {
 	if s.pkiUnavailable(w) {
 		return
@@ -76,6 +83,8 @@ func (s *Server) handlePKIIssueClient(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handlePKIListClients returns every stored client certificate as JSON, or a
+// 503 when mTLS is not enabled.
 func (s *Server) handlePKIListClients(w http.ResponseWriter, r *http.Request) {
 	if s.pkiUnavailable(w) {
 		return
@@ -88,6 +97,8 @@ func (s *Server) handlePKIListClients(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, clients)
 }
 
+// handlePKIRevokeClient parses the path id and revokes that client certificate,
+// answering 400 for a malformed id, 404 for an unknown one, and 204 on success.
 func (s *Server) handlePKIRevokeClient(w http.ResponseWriter, r *http.Request) {
 	if s.pkiUnavailable(w) {
 		return

@@ -30,6 +30,8 @@ import (
 	"github.com/voidstarit/rookery/internal/vnfd"
 )
 
+// main runs the vnfs daemon with os.Args and exits non-zero after printing any
+// error other than flag.ErrHelp.
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -40,6 +42,10 @@ func main() {
 	}
 }
 
+// run loads VNF configuration (inheriting shared VPP paths from the api
+// section), prepares the runtime manager and VPP route writer, restores
+// persisted specs, and serves the VNFDaemon gRPC API until SIGINT/SIGTERM or a
+// serve error stops it.
 func run(args []string) error {
 	file, err := config.Load(config.Path(args))
 	if err != nil {

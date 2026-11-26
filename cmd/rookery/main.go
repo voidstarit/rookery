@@ -13,6 +13,8 @@ import (
 	"strings"
 )
 
+// main runs the CLI with os.Args and exits non-zero after printing any error
+// other than flag.ErrHelp.
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -23,6 +25,8 @@ func main() {
 	}
 }
 
+// run dispatches init, serve, and create-client-cert (including its alias),
+// prints usage for unknown commands, and treats bare flags as serve.
 func run(args []string) error {
 	if len(args) > 0 {
 		switch args[0] {
@@ -47,6 +51,8 @@ func run(args []string) error {
 	return runServe(args)
 }
 
+// printUsage writes the command overview, readiness note, and usage examples to
+// w.
 func printUsage(w io.Writer) {
 	fmt.Fprint(w, `Usage:
   rookery [serve] [flags]
@@ -75,6 +81,8 @@ Flags are command-specific. Use "rookery serve -h",
 `)
 }
 
+// parseFlags parses args into fs, showing usage on stdout when -h is requested
+// and rejecting leftover positional arguments.
 func parseFlags(fs *flag.FlagSet, args []string) error {
 	fs.SetOutput(io.Discard)
 	if err := fs.Parse(args); err != nil {

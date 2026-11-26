@@ -68,6 +68,9 @@ type Config struct {
 	ClientDir      string
 }
 
+// normalized validates the configuration and fills in defaults: mode becomes
+// managed when empty, and empty CA, server, and key paths resolve to the standard
+// filenames inside Dir. It fails when Dir is empty or the mode is unknown.
 func (c Config) normalized() (Config, error) {
 	c.Dir = strings.TrimSpace(c.Dir)
 	if c.Dir == "" {
@@ -88,6 +91,8 @@ func (c Config) normalized() (Config, error) {
 	return c, nil
 }
 
+// pkiFilePath returns value when it is non-empty after trimming, otherwise dir
+// joined with the default file name.
 func pkiFilePath(dir, value, name string) string {
 	if value = strings.TrimSpace(value); value != "" {
 		return value
@@ -372,6 +377,8 @@ func (m *Manager) refreshClientAllowlist() error {
 	return m.loadClientAllowlistLocked()
 }
 
+// clientCertificateAllowed reports whether cert's DER fingerprint is in the
+// in-memory client allowlist; a nil certificate is never allowed.
 func (m *Manager) clientCertificateAllowed(cert *x509.Certificate) bool {
 	if cert == nil {
 		return false
@@ -383,6 +390,9 @@ func (m *Manager) clientCertificateAllowed(cert *x509.Certificate) bool {
 	return ok
 }
 
+// allowClientCertificate parses certPEM and adds every non-CA certificate that
+// allows client authentication to the in-memory allowlist, creating the map when
+// it is still nil. It returns the PEM parse error without changing the allowlist.
 func (m *Manager) allowClientCertificate(certPEM []byte) error {
 	certs, err := parseCertificatesPEM(certPEM)
 	if err != nil {
@@ -422,6 +432,9 @@ func (m *Manager) writeClientCertificateToAllowlist(certPEM []byte, name string,
 	return path, nil
 }
 
+// parseCertificatesPEM decodes every CERTIFICATE block in data, skipping blocks of
+// other types. It fails on an unparsable certificate or when no certificate was
+// found at all.
 func parseCertificatesPEM(data []byte) ([]*x509.Certificate, error) {
 	certs := make([]*x509.Certificate, 0)
 	for {
@@ -445,6 +458,9 @@ func parseCertificatesPEM(data []byte) ([]*x509.Certificate, error) {
 	return certs, nil
 }
 
+// certificateAllowsClientAuth reports whether cert permits TLS client
+// authentication: it returns true when the certificate carries no extended key
+// usages at all, and false for a nil certificate.
 func certificateAllowsClientAuth(cert *x509.Certificate) bool {
 	if cert == nil {
 		return false
@@ -460,6 +476,10 @@ func certificateAllowsClientAuth(cert *x509.Certificate) bool {
 	return false
 }
 
+// clientCertFileStem converts a client name into a safe filename stem, collapsing
+// runs of unsupported characters into single dashes, trimming leading and trailing
+// separators, and truncating to 64 bytes. Names that sanitize to nothing become
+// "client".
 func clientCertFileStem(name string) string {
 	var stem strings.Builder
 	lastDash := false
@@ -582,6 +602,8 @@ func (m *Manager) IssueClientCertificate(ctx context.Context, name string, days 
 	}, nil
 }
 
+// loadCA reads the CA certificate and private key files and installs them on the
+// manager, joining the two read errors when either file is missing or unreadable.
 func (m *Manager) loadCA() error {
 	certPEM, certErr := os.ReadFile(m.caCertFile)
 	keyPEM, keyErr := os.ReadFile(m.caKeyFile)
@@ -619,6 +641,8 @@ func (m *Manager) loadExistingCA() error {
 	return nil
 }
 
+// setCA parses the CA certificate and key PEM and replaces the manager's cached
+// certificate, key, PEM, and DER. It does not lock and is called during startup.
 func (m *Manager) setCA(certPEM, keyPEM []byte) error {
 	cert, key, parsedPEM, der, err := parseCA(certPEM, keyPEM)
 	if err != nil {
@@ -628,6 +652,10 @@ func (m *Manager) setCA(certPEM, keyPEM []byte) error {
 	return nil
 }
 
+// loadOrCreateCA loads the managed CA when both files exist and otherwise generates
+// a self-signed P-256 CA valid for ten years, writing the key with 0600 and the
+// certificate with 0644 permissions. A partial pair or parse failure is an error
+// rather than a reason to overwrite existing material.
 func (m *Manager) loadOrCreateCA() error {
 	certPath := m.caCertFile
 	keyPath := m.caKeyFile
@@ -689,6 +717,9 @@ func (m *Manager) loadOrCreateCA() error {
 	return nil
 }
 
+// loadOrCreateServer loads the server certificate and key, regenerating and
+// rewriting both when missing, unreadable, or due for renewal. New
+// certificates are CA-signed for one year with the configured SANs.
 func (m *Manager) loadOrCreateServer(extraSANs []string) error {
 	certPath := m.serverCertFile
 	keyPath := m.serverKeyFile
@@ -799,6 +830,8 @@ func (m *Manager) loadExistingServer() error {
 	return nil
 }
 
+// verifyServerCertificate checks that leaf chains to the manager's CA for server
+// authentication, treating any additional certificates in the pair as intermediates.
 func (m *Manager) verifyServerCertificate(cert tls.Certificate, leaf *x509.Certificate) error {
 	roots := x509.NewCertPool()
 	roots.AddCert(m.caCert)
@@ -820,6 +853,9 @@ func (m *Manager) verifyServerCertificate(cert tls.Certificate, leaf *x509.Certi
 	return nil
 }
 
+// parseCA parses the CA certificate PEM and its EC private key PEM and verifies the
+// key matches the certificate's public key. It returns the certificate, the key, the
+// certificate PEM passed in, and its DER encoding.
 func parseCA(certPEM, keyPEM []byte) (*x509.Certificate, *ecdsa.PrivateKey, []byte, []byte, error) {
 	cert, parsedPEM, der, err := parseCACertificate(certPEM)
 	if err != nil {
@@ -847,6 +883,8 @@ func parseCA(certPEM, keyPEM []byte) (*x509.Certificate, *ecdsa.PrivateKey, []by
 	return cert, key, parsedPEM, der, nil
 }
 
+// parseCACertificate parses the first CERTIFICATE block of certPEM and requires it
+// to be a CA. It returns the certificate, the original PEM, and the DER bytes.
 func parseCACertificate(certPEM []byte) (*x509.Certificate, []byte, []byte, error) {
 	certBlock, _ := pem.Decode(certPEM)
 	if certBlock == nil || certBlock.Type != "CERTIFICATE" {
@@ -862,6 +900,8 @@ func parseCACertificate(certPEM []byte) (*x509.Certificate, []byte, []byte, erro
 	return cert, certPEM, certBlock.Bytes, nil
 }
 
+// serverNeedsRenewal reports whether the server certificate expires within seven
+// days or lacks any DNS name or IP address that serverSANs would now include.
 func serverNeedsRenewal(cert *x509.Certificate, extraSANs []string) bool {
 	if time.Until(cert.NotAfter) < 7*24*time.Hour {
 		return true
@@ -888,6 +928,10 @@ func serverNeedsRenewal(cert *x509.Certificate, extraSANs []string) bool {
 	return false
 }
 
+// serverSANs returns the DNS names and IP addresses a managed server certificate
+// should carry: localhost, the hostname, the loopback addresses, every interface
+// address, and the extra entries, split by whether they parse as an IP. Duplicates
+// are removed and unspecified IP addresses are skipped.
 func serverSANs(extra []string) ([]string, []net.IP) {
 	dnsNames := []string{"localhost"}
 	seenDNS := map[string]bool{"localhost": true}
@@ -938,6 +982,8 @@ func serverSANs(extra []string) ([]string, []net.IP) {
 	return dnsNames, ips
 }
 
+// randomSerial returns a random 128-bit certificate serial number, substituting 1
+// in the unlikely event the random draw is zero.
 func randomSerial() (*big.Int, error) {
 	limit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serial, err := rand.Int(rand.Reader, limit)

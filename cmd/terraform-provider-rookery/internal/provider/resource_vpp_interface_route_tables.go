@@ -35,10 +35,14 @@ type vppInterfaceRouteTablesModel struct {
 	IPv6TableName types.String `tfsdk:"ipv6_table_name"`
 }
 
+// Metadata registers this resource as rookery_vpp_interface_route_tables under the configured
+// provider type name.
 func (r *vppInterfaceRouteTablesResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_vpp_interface_route_tables"
 }
 
+// Schema declares the interface name as the replacement key, required IPv4/IPv6 table ids where
+// 0 means the default table, and computed table names.
 func (r *vppInterfaceRouteTablesResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Binds a Rookery host interface, host tap, or bridge-domain pipe endpoint to IPv4/IPv6 route tables. Destroying this resource removes the override and restores the automatic default (the network VRF for host taps). Vhost-user interfaces use rookery_interface.ipv4_table_id/ipv6_table_id instead.",
@@ -62,6 +66,8 @@ func (r *vppInterfaceRouteTablesResource) Schema(_ context.Context, _ resource.S
 	}
 }
 
+// Create binds the interface to the planned IPv4 and IPv6 route tables and stores the table
+// names resolved by Rookery.
 func (r *vppInterfaceRouteTablesResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan vppInterfaceRouteTablesModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -88,6 +94,8 @@ func (r *vppInterfaceRouteTablesResource) Create(ctx context.Context, req resour
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read refreshes the interface's route-table binding, removing the resource from state when the
+// binding or its interface is not found.
 func (r *vppInterfaceRouteTablesResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state vppInterfaceRouteTablesModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -114,6 +122,7 @@ func (r *vppInterfaceRouteTablesResource) Read(ctx context.Context, req resource
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update re-applies the planned IPv4 and IPv6 table ids and stores the resolved table names.
 func (r *vppInterfaceRouteTablesResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan vppInterfaceRouteTablesModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -140,6 +149,8 @@ func (r *vppInterfaceRouteTablesResource) Update(ctx context.Context, req resour
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete removes the route-table override so the interface returns to its automatic default; a
+// not-found response is treated as success.
 func (r *vppInterfaceRouteTablesResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state vppInterfaceRouteTablesModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -158,10 +169,13 @@ func (r *vppInterfaceRouteTablesResource) Delete(ctx context.Context, req resour
 	}
 }
 
+// ImportState imports an existing route-table binding by VPP interface name.
 func (r *vppInterfaceRouteTablesResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), types.StringValue(req.ID))...)
 }
 
+// setVPPInterfaceRouteTablesState copies the interface name, IPv4/IPv6 table ids, and resolved
+// table names into the Terraform model.
 func setVPPInterfaceRouteTablesState(state *vppInterfaceRouteTablesModel, tables *rookeryv1.VPPInterfaceRouteTables) {
 	state.Name = types.StringValue(tables.GetName())
 	state.IPv4TableID = types.Int64Value(int64(tables.GetIpv4TableId()))

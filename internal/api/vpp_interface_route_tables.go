@@ -58,6 +58,8 @@ func (s *Server) ReconcileVPPInterfaceRouteTables(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
+// applyInterfaceRouteTablesByIndex binds swIfIndex to the given IPv4 and IPv6
+// route tables, returning the first error and skipping the IPv6 binding then.
 func (s *Server) applyInterfaceRouteTablesByIndex(ctx context.Context, swIfIndex uint32, ipv4, ipv6 uint32) error {
 	if err := s.networks.SetInterfaceRouteTable(ctx, swIfIndex, false, ipv4); err != nil {
 		return err

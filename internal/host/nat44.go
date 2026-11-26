@@ -94,6 +94,9 @@ func isManagedHostInterface(name string) bool {
 	return false
 }
 
+// defaultRouteInterfaces returns the names of interfaces carrying a default
+// IPv4 route, parsed from ip route show default, or an empty set when the
+// command fails.
 func defaultRouteInterfaces() map[string]bool {
 	result := make(map[string]bool)
 	out, err := exec.Command("ip", "route", "show", "default").Output()
@@ -109,6 +112,8 @@ func defaultRouteInterfaces() map[string]bool {
 	return result
 }
 
+// isWirelessInterface reports whether sysfs marks the named interface as
+// wireless through its wireless or phy80211 attribute.
 func isWirelessInterface(name string) bool {
 	if _, err := os.Stat("/sys/class/net/" + name + "/wireless"); err == nil {
 		return true
@@ -263,6 +268,9 @@ func (v *VPPNetwork) AddInterfaceAddress(ctx context.Context, name, cidr string)
 	return fmt.Errorf("set %s address %s: %w: %s", name, cidr, err, out)
 }
 
+// interfaceHasAddress reports whether VPP already shows the exact address and
+// prefix from cidr on the named interface, returning false when cidr or the CLI
+// output cannot be parsed.
 func (v *VPPNetwork) interfaceHasAddress(ctx context.Context, name, cidr string) bool {
 	targetIP, targetNet, err := net.ParseCIDR(cidr)
 	if err != nil {
@@ -284,6 +292,8 @@ func (v *VPPNetwork) interfaceHasAddress(ctx context.Context, name, cidr string)
 	return false
 }
 
+// linuxInterfaceMAC returns the kernel MAC address of a host interface, failing
+// when the interface is unknown or reports no hardware address.
 func linuxInterfaceMAC(name string) (string, error) {
 	iface, err := net.InterfaceByName(name)
 	if err != nil {
@@ -295,6 +305,8 @@ func linuxInterfaceMAC(name string) (string, error) {
 	return iface.HardwareAddr.String(), nil
 }
 
+// linuxInterfaceMTU returns the kernel MTU of a host interface, substituting
+// defaultInterfaceMTU when the interface reports a non-positive value.
 func linuxInterfaceMTU(name string) (uint32, error) {
 	iface, err := net.InterfaceByName(name)
 	if err != nil {
@@ -439,6 +451,9 @@ func (v *VPPNetwork) EnsureHostInterface(ctx context.Context, nic string) (strin
 	return vppName, nil
 }
 
+// waitForVPPInterfaceGone waits until VPP no longer lists the named interface,
+// retrying every 50ms within vppCleanupTimeout and honoring ctx cancellation.
+// VPP lookup failures and the cleanup timeout are returned as errors.
 func waitForVPPInterfaceGone(ctx context.Context, conn *core.Connection, name string) error {
 	deadline := time.Now().Add(vppCleanupTimeout)
 	for {
@@ -501,8 +516,8 @@ func (v *VPPNetwork) DelInterfaceAddress(ctx context.Context, name, cidr string)
 	return nil
 }
 
-// DeleteHostInterface removes a VPP host-interface created from a Linux NIC.// DeleteHostInterface removes a VPP host-interface created from a Linux NIC.
-// The Linux NIC itself is not modified; it may need DHCP renewed afterwards.
+// DeleteHostInterface removes a VPP host-interface created from a Linux NIC.
+// The NIC itself is left unmodified and may need DHCP renewed.
 func (v *VPPNetwork) DeleteHostInterface(ctx context.Context, nic string) error {
 	nic = strings.TrimSpace(nic)
 	if nic == "" {
@@ -698,6 +713,10 @@ type nat44StaticMappingClient interface {
 	Nat44AddDelStaticMappingV2(context.Context, *nat44_ed.Nat44AddDelStaticMappingV2) (*nat44_ed.Nat44AddDelStaticMappingV2Reply, error)
 }
 
+// removeNAT44StaticMappings deletes every static mapping tagged for vnfID,
+// using outsideIndex when non-zero and otherwise each mapping's own external
+// interface. NAT44 being unavailable counts as already clean, and per-mapping
+// delete failures are joined into one error.
 func removeNAT44StaticMappings(ctx context.Context, client nat44StaticMappingClient, outsideIndex uint32, vnfID int64) error {
 	stream, err := client.Nat44StaticMappingDump(ctx, &nat44_ed.Nat44StaticMappingDump{})
 	if err != nil {
@@ -729,6 +748,9 @@ func removeNAT44StaticMappings(ctx context.Context, client nat44StaticMappingCli
 	return errors.Join(errs...)
 }
 
+// deleteNAT44StaticMapping removes one mapping through the outside interface
+// first and falls back to deleting by external address, treating a missing
+// entry as success and other retvals as an error.
 func deleteNAT44StaticMapping(ctx context.Context, client nat44StaticMappingClient, outsideIndex uint32, details *nat44_ed.Nat44StaticMappingDetails) error {
 	// Prefer deleting through the outside interface. Interface-bound mappings
 	// keep an internal resolve record after the address is known, and deleting
@@ -758,10 +780,15 @@ func deleteNAT44StaticMapping(ctx context.Context, client nat44StaticMappingClie
 	return fmt.Errorf("delete NAT44 static mapping %s/%d: VPP returned retval %d", nat44ProtocolName(details.Protocol), details.ExternalPort, ret)
 }
 
+// vppRetvalNoSuchEntry reports whether a VPP retval means the entry was already
+// absent.
 func vppRetvalNoSuchEntry(retval int32) bool {
 	return govppapi.VPPApiError(retval) == govppapi.NO_SUCH_ENTRY
 }
 
+// nat44DeleteStaticMapping issues one Nat44AddDelStaticMappingV2 delete and
+// returns VPP's raw retval, converting a VPPApiError into that code rather than
+// an error so callers can recognise an already-absent entry.
 func nat44DeleteStaticMapping(ctx context.Context, client nat44StaticMappingClient, externalSwIfIndex uint32, externalAddress ip_types.IP4Address, details *nat44_ed.Nat44StaticMappingDetails) (int32, error) {
 	reply, err := client.Nat44AddDelStaticMappingV2(ctx, &nat44_ed.Nat44AddDelStaticMappingV2{
 		IsAdd:             false,
@@ -787,14 +814,20 @@ func nat44DeleteStaticMapping(ctx context.Context, client nat44StaticMappingClie
 	return reply.Retval, nil
 }
 
+// nat44StaticMappingTagPrefix returns the rookery:<vnfID>: prefix that marks a
+// VNF's NAT44 static mappings.
 func nat44StaticMappingTagPrefix(vnfID int64) string {
 	return fmt.Sprintf("rookery:%d:", vnfID)
 }
 
+// nat44StaticMappingTag returns the tag for one of a VNF's DNAT rules, formed as
+// rookery:<vnfID>:<ruleIndex>.
 func nat44StaticMappingTag(vnfID int64, ruleIndex int) string {
 	return fmt.Sprintf("%s%d", nat44StaticMappingTagPrefix(vnfID), ruleIndex)
 }
 
+// nat44ProtocolNumber maps a case-insensitive tcp or udp string to its IP
+// protocol number, rejecting any other value.
 func nat44ProtocolNumber(protocol string) (uint8, error) {
 	switch strings.ToLower(strings.TrimSpace(protocol)) {
 	case "tcp":
@@ -806,6 +839,8 @@ func nat44ProtocolNumber(protocol string) (uint8, error) {
 	}
 }
 
+// nat44ProtocolName returns tcp or udp for protocols 6 and 17, and a
+// protocol <n> label for anything else.
 func nat44ProtocolName(protocol uint8) string {
 	switch protocol {
 	case 6:
@@ -817,6 +852,9 @@ func nat44ProtocolName(protocol uint8) string {
 	}
 }
 
+// nat44Unavailable reports whether err means NAT44 is not loaded or enabled,
+// covering VPP not-found errors and "not enabled", "feature disabled", or
+// "plugin disabled" messages.
 func nat44Unavailable(err error) bool {
 	if err == nil {
 		return false
@@ -944,6 +982,8 @@ func (v *VPPNetwork) setNAT44Interfaces(ctx context.Context, bviName, outsideNam
 	return nil
 }
 
+// natFlags returns the inside NAT flag when inside is true, and no flags
+// otherwise.
 func natFlags(inside bool) nat_types.NatConfigFlags {
 	if inside {
 		return nat_types.NAT_IS_INSIDE
@@ -951,6 +991,8 @@ func natFlags(inside bool) nat_types.NatConfigFlags {
 	return 0
 }
 
+// runCLI runs a VPP CLI command and turns output containing failure markers into
+// an error, returning the trimmed output for callers to inspect as well.
 func (v *VPPNetwork) runCLI(ctx context.Context, args ...string) (string, error) {
 	output, err := v.runCLIRaw(ctx, args...)
 	if err == nil && cliOutputFailed(output) {
@@ -986,6 +1028,9 @@ func (v *VPPNetwork) runCLIRaw(ctx context.Context, args ...string) (string, err
 	return output, err
 }
 
+// cliOutputFailed reports whether vppctl output contains markers such as
+// "unknown input", "invalid", "failed", or "not found" that mean the command did
+// not succeed.
 func cliOutputFailed(output string) bool {
 	output = strings.ToLower(output)
 	for _, marker := range []string{
@@ -1005,11 +1050,16 @@ func cliOutputFailed(output string) bool {
 	return false
 }
 
+// cliNATAddressExists reports whether the CLI output says adding outsideName's
+// NAT address failed because the address is already present.
 func cliNATAddressExists(output, outsideName string) bool {
 	output = strings.ToLower(output)
 	return strings.Contains(output, "add "+strings.ToLower(outsideName)+" address failed")
 }
 
+// waitForVPPIPv4 polls interfaceHasIPv4 every 500ms until the named VPP
+// interface has an IPv4 address, returning a timeout error after timeout or
+// ctx.Err() on cancellation.
 func waitForVPPIPv4(ctx context.Context, v *VPPNetwork, interfaceName string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {
@@ -1091,6 +1141,9 @@ func (v *VPPNetwork) dhcpClientConfigured(ctx context.Context, interfaceName str
 	return strings.Contains(out, interfaceName)
 }
 
+// cliAlreadyExists reports whether CLI output indicates the object is already
+// present, recognising "already", "exists", "conflicts with", and "address in
+// use".
 func cliAlreadyExists(output string) bool {
 	output = strings.ToLower(output)
 	return strings.Contains(output, "already") ||
@@ -1101,6 +1154,8 @@ func cliAlreadyExists(output string) bool {
 
 var errVPPInterfaceNotFound = errors.New("VPP interface not found")
 
+// findInterface dumps VPP software interfaces and returns the sw_if_index of the
+// named one, failing with errVPPInterfaceNotFound when no interface matches.
 func findInterface(ctx context.Context, conn *core.Connection, name string) (uint32, error) {
 	client := interfaces.NewServiceClient(conn)
 	stream, err := client.SwInterfaceDump(ctx, &interfaces.SwInterfaceDump{})

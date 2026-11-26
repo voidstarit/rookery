@@ -14,6 +14,8 @@ import (
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
 )
 
+// labelsResourceAttribute returns the optional label set shared by resources,
+// preserving known state while the planned value is unknown.
 func labelsResourceAttribute() schema.SetAttribute {
 	return schema.SetAttribute{
 		Optional:      true,
@@ -24,6 +26,8 @@ func labelsResourceAttribute() schema.SetAttribute {
 	}
 }
 
+// labelsDataSourceAttribute returns the computed label set shared by data
+// sources.
 func labelsDataSourceAttribute() dschema.SetAttribute {
 	return dschema.SetAttribute{
 		Computed:    true,
@@ -32,6 +36,8 @@ func labelsDataSourceAttribute() dschema.SetAttribute {
 	}
 }
 
+// labelsFromSet extracts labels from a Terraform set, returning nil without
+// diagnostics when the set is null or unknown.
 func labelsFromSet(ctx context.Context, value types.Set) ([]string, diag.Diagnostics) {
 	if value.IsNull() || value.IsUnknown() {
 		return nil, nil
@@ -41,6 +47,8 @@ func labelsFromSet(ctx context.Context, value types.Set) ([]string, diag.Diagnos
 	return labels, diags
 }
 
+// labelsToSet converts labels to a Terraform string set, mapping nil to an empty
+// set.
 func labelsToSet(ctx context.Context, labels []string) (types.Set, diag.Diagnostics) {
 	if labels == nil {
 		labels = []string{}
@@ -48,6 +56,8 @@ func labelsToSet(ctx context.Context, labels []string) (types.Set, diag.Diagnost
 	return types.SetValueFrom(ctx, types.StringType, labels)
 }
 
+// applyEntityLabels replaces the labels on one entity through the API and returns
+// the resulting set, which may differ from the planned labels.
 func applyEntityLabels(ctx context.Context, client *Client, entityType, entityID string, planned types.Set) (types.Set, error) {
 	values, diags := labelsFromSet(ctx, planned)
 	if diags.HasError() {
@@ -68,6 +78,8 @@ func applyEntityLabels(ctx context.Context, client *Client, entityType, entityID
 	return result, nil
 }
 
+// readEntityLabels fetches an entity's labels from the API and converts them to a
+// Terraform set, returning a null set on error.
 func readEntityLabels(ctx context.Context, client *Client, entityType, entityID string) (types.Set, error) {
 	record, err := client.Labels.GetEntityLabels(ctx, &rookeryv1.GetEntityLabelsRequest{
 		EntityType: entityType,
@@ -83,6 +95,8 @@ func readEntityLabels(ctx context.Context, client *Client, entityType, entityID 
 	return result, nil
 }
 
+// setEntityLabels replaces an entity's labels, discarding the returned set when
+// the caller only needs the error.
 func setEntityLabels(ctx context.Context, client *Client, entityType, entityID string, labels types.Set) error {
 	_, err := applyEntityLabels(ctx, client, entityType, entityID, labels)
 	return err

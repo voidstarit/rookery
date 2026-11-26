@@ -278,6 +278,9 @@ func (m *Manager) disableLocked() error {
 	return nil
 }
 
+// collectCgroupDirs returns root followed by every descendant directory in
+// depth-first order, skipping trees that cannot be read. Callers that delete
+// the directories can iterate the result in reverse to remove children first.
 func collectCgroupDirs(root string) []string {
 	dirs := make([]string, 0, 4)
 	var walk func(string)
@@ -297,10 +300,15 @@ func collectCgroupDirs(root string) []string {
 	return dirs
 }
 
+// movePIDOutLocked moves pid to the cgroup2 mount root, outside the Rookery
+// hierarchy. The caller must hold m.mu.
 func (m *Manager) movePIDOutLocked(pid int) error {
 	return m.writePIDOutLocked(strconv.Itoa(pid))
 }
 
+// writePIDOutLocked writes the textual pid to the mount-root cgroup.procs,
+// returning a wrapped error when the kernel rejects the move. The caller must
+// hold m.mu.
 func (m *Manager) writePIDOutLocked(pid string) error {
 	target := filepath.Join(m.mount, procsFile)
 	if err := os.WriteFile(target, []byte(pid), 0o644); err != nil {
@@ -309,6 +317,9 @@ func (m *Manager) writePIDOutLocked(pid string) error {
 	return nil
 }
 
+// pidInHierarchyLocked reports whether pid's /proc entry places it at or below
+// the configured root. Unreadable proc entries and unusable root paths report
+// false.
 func (m *Manager) pidInHierarchyLocked(pid int) bool {
 	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "cgroup"))
 	if err != nil {
@@ -332,6 +343,9 @@ func (m *Manager) pidInHierarchyLocked(pid int) bool {
 	return false
 }
 
+// validateRoot rejects a root that is not absolute or not a proper child of the
+// cgroup2 mount. It returns a descriptive error that Status can surface as the
+// unavailability reason.
 func (m *Manager) validateRoot() error {
 	if !filepath.IsAbs(m.root) {
 		return fmt.Errorf("cgroup root %s must be an absolute path", m.root)
@@ -343,6 +357,10 @@ func (m *Manager) validateRoot() error {
 	return nil
 }
 
+// ensureLocked creates the root and shared cgroups, relocates stray QEMU
+// processes, applies host limits to both, and recreates the class hierarchy.
+// Controller enabling failures are tolerated until a limit actually needs the
+// missing controller.
 func (m *Manager) ensureLocked() error {
 	if m.mount == "" {
 		return errors.New("cgroup v2 is not mounted; enable the cgroup2 filesystem")
@@ -392,6 +410,9 @@ func (m *Manager) ensureLocked() error {
 	return nil
 }
 
+// clampChildCPUs rewrites every descendant cpuset.cpus and cpuset.mems to only
+// reference the host-allowed sets. Clamping children before the parent shrinks
+// avoids EBUSY; an empty memory set leaves cpuset.mems untouched.
 func clampChildCPUs(dir, allowedCPUs, allowedMems string) error {
 	allowed, err := ParseCPUSet(allowedCPUs)
 	if err != nil {
@@ -418,6 +439,9 @@ func clampChildCPUs(dir, allowedCPUs, allowedMems string) error {
 	return nil
 }
 
+// clampCgroupCPUSet intersects the cpuset file at path with allowed and writes
+// the canonical result, falling back to the first allowed CPU when the
+// intersection is empty. Missing files and already-canonical values are no-ops.
 func clampCgroupCPUSet(path string, allowed []int) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -473,6 +497,8 @@ func moveQEMUProcesses(from, to string) {
 	}
 }
 
+// looksLikeQEMU reports whether pid's command line contains qemu-system or a
+// -uuid argument. Unreadable or already-exited processes are not QEMU.
 func looksLikeQEMU(pid int) bool {
 	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "cmdline"))
 	if err != nil {
@@ -570,6 +596,8 @@ func (m *Manager) ensureClassesLocked() error {
 	return nil
 }
 
+// classHasChildren reports whether classes holds any name nested below name
+// using slash-separated path prefixes.
 func classHasChildren(name string, classes map[string]Class) bool {
 	prefix := name + "/"
 	for other := range classes {
@@ -580,10 +608,16 @@ func classHasChildren(name string, classes map[string]Class) bool {
 	return false
 }
 
+// classHasChildrenLocked reports whether the configured classes include any
+// class nested below name. The caller must hold m.mu.
 func (m *Manager) classHasChildrenLocked(name string) bool {
 	return classHasChildren(name, classMap(m.settings.Classes))
 }
 
+// effectiveLimitsLocked resolves the limits for className by starting from the
+// host settings and applying each ancestor class override in order. An empty
+// name yields host-only limits, and unset CPU or memory-node sets fall back to
+// the online CPU and NUMA node lists.
 func (m *Manager) effectiveLimitsLocked(className string) (appliedLimits, error) {
 	host := m.settings
 	online, err := OnlineCPUs()
@@ -649,6 +683,8 @@ func (m *Manager) effectiveLimitsLocked(className string) (appliedLimits, error)
 	}, nil
 }
 
+// classExistsLocked reports whether name matches a configured class after
+// trimming surrounding whitespace.
 func (m *Manager) classExistsLocked(name string) bool {
 	name = strings.TrimSpace(name)
 	for _, class := range m.settings.Classes {
@@ -659,6 +695,8 @@ func (m *Manager) classExistsLocked(name string) bool {
 	return false
 }
 
+// classMap indexes classes by trimmed name, dropping entries whose name is
+// empty.
 func classMap(classes []Class) map[string]Class {
 	result := make(map[string]Class, len(classes))
 	for _, class := range classes {
@@ -689,6 +727,9 @@ func classPrefixes(name string) []string {
 	return result
 }
 
+// mergeIOLimits merges host and VM I/O limits per device, letting each positive
+// VM field override the host value. Devices keep first-appearance order and are
+// deduplicated by cleaned path.
 func mergeIOLimits(host, vm []IOLimit) []IOLimit {
 	type entry struct {
 		limit IOLimit
@@ -734,6 +775,9 @@ func mergeIOLimits(host, vm []IOLimit) []IOLimit {
 	return result
 }
 
+// applyLimits writes the resolved cpuset, memory, CPU weight, and I/O settings
+// into dir. Unset values are reset to max or the default weight when the
+// controller file exists, and absent I/O limits clear previously applied rules.
 func applyLimits(dir string, limits appliedLimits) error {
 	if limits.CPUs != "" {
 		if err := writeCgroup(dir, "cpuset.cpus", limits.CPUs, true); err != nil {
@@ -779,6 +823,9 @@ func applyLimits(dir string, limits appliedLimits) error {
 	return nil
 }
 
+// applyIOMax clears existing io.max rules and writes one rbps/wbps/riops/wiops
+// line per resolved device, rendering zero values as max. A missing io.max
+// controller is tolerated.
 func applyIOMax(dir string, limits []IOLimit) error {
 	resolved, order, err := resolveIOLimits(limits)
 	if err != nil {
@@ -803,6 +850,9 @@ func applyIOMax(dir string, limits []IOLimit) error {
 	return writeCgroup(dir, "io.max", strings.Join(lines, "\n"), true)
 }
 
+// applyIOWeight resets existing io.weight entries and then writes the default
+// weight plus one line per device with a configured weight. A missing io.weight
+// controller is tolerated.
 func applyIOWeight(dir string, limits []IOLimit) error {
 	resolved, order, err := resolveIOLimits(limits)
 	if err != nil {
@@ -823,6 +873,8 @@ func applyIOWeight(dir string, limits []IOLimit) error {
 	return writeCgroup(dir, "io.weight", strings.Join(lines, "\n"), true)
 }
 
+// clearIOMax rewrites every line in io.max with max for all four throttles while
+// preserving each device identity. A missing io.max file is not an error.
 func clearIOMax(dir string) error {
 	path := filepath.Join(dir, "io.max")
 	data, err := os.ReadFile(path)
@@ -846,6 +898,8 @@ func clearIOMax(dir string) error {
 	return writeCgroup(dir, "io.max", strings.Join(lines, "\n"), false)
 }
 
+// clearIOWeight rewrites per-device io.weight entries to the default weight,
+// skipping the default line itself. A missing io.weight file is not an error.
 func clearIOWeight(dir string) error {
 	path := filepath.Join(dir, "io.weight")
 	data, err := os.ReadFile(path)
@@ -869,6 +923,9 @@ func clearIOWeight(dir string) error {
 	return writeCgroup(dir, "io.weight", strings.Join(lines, "\n"), false)
 }
 
+// resolveIOLimits converts device paths to major:minor keys, merges duplicate
+// entries by keeping positive fields, and returns a sorted key order alongside
+// the limits. An unresolvable device path is an error.
 func resolveIOLimits(limits []IOLimit) (map[string]IOLimit, []string, error) {
 	resolved := make(map[string]IOLimit, len(limits))
 	order := make([]string, 0, len(limits))
@@ -905,6 +962,7 @@ func resolveIOLimits(limits []IOLimit) (map[string]IOLimit, []string, error) {
 	return resolved, order, nil
 }
 
+// hasIOWeight reports whether any limit sets a positive Weight.
 func hasIOWeight(limits []IOLimit) bool {
 	for _, limit := range limits {
 		if limit.Weight > 0 {
@@ -914,6 +972,8 @@ func hasIOWeight(limits []IOLimit) bool {
 	return false
 }
 
+// ioValue renders a positive I/O limit as a decimal and returns max for zero or
+// negative values.
 func ioValue(value int64) string {
 	if value <= 0 {
 		return maxValue
@@ -946,6 +1006,9 @@ func DeviceNumber(path string) (uint32, uint32, error) {
 	return unix.Major(device), unix.Minor(device), nil
 }
 
+// validateSettings checks host memory, CPU weight, cpuset, memory-node, I/O,
+// and class constraints, including that nested class CPU sets fit their
+// parents. It returns the first violation with a message naming the setting.
 func validateSettings(settings Settings) error {
 	if settings.MemoryMaxBytes < 0 {
 		return errors.New("memory_max_bytes must not be negative")
@@ -976,6 +1039,9 @@ func validateSettings(settings Settings) error {
 	return validateClassCPUHierarchy(settings, online)
 }
 
+// validateClassCPUHierarchy verifies that each class CPU set is a subset of its
+// parent's effective set, defaulting the host set to all online CPUs. Resolved
+// parents are cached so each nested class is evaluated once.
 func validateClassCPUHierarchy(settings Settings, online []int) error {
 	hostCPUs := settings.CPUs
 	if hostCPUs == "" {
@@ -1020,6 +1086,8 @@ func validateClassCPUHierarchy(settings Settings, online []int) error {
 	return nil
 }
 
+// parentClassName returns the slash-separated parent of name, or an empty
+// string for a top-level class.
 func parentClassName(name string) string {
 	if index := strings.LastIndex(name, "/"); index > 0 {
 		return name[:index]
@@ -1033,6 +1101,10 @@ func ValidateClassName(name string) error {
 	return err
 }
 
+// classSegments validates a slash-separated class path and returns its segments.
+// It enforces the 200-character name limit, the three-level nesting cap, and
+// rejects the reserved shared name, empty or dot segments, and characters other
+// than letters, digits, '.', '_', and '-'.
 func classSegments(name string) ([]string, error) {
 	name = strings.TrimSpace(name)
 	switch {
@@ -1077,6 +1149,9 @@ func classSegments(name string) ([]string, error) {
 	return segments, nil
 }
 
+// validateClasses checks each class name, uniqueness, memory and CPU weight
+// ranges, cpusets, and I/O limits. It also requires every parent referenced by a
+// nested class name to be defined.
 func validateClasses(classes []Class) error {
 	if len(classes) > 64 {
 		return errors.New("at most 64 cgroup classes are allowed")
@@ -1115,6 +1190,8 @@ func validateClasses(classes []Class) error {
 	return nil
 }
 
+// validateIOLimits rejects more than 64 limits as well as empty or duplicate
+// devices, negative throttles, and weights outside the 1-10000 range.
 func validateIOLimits(limits []IOLimit) error {
 	if len(limits) > maxIOLimits {
 		return fmt.Errorf("at most %d I/O limits are allowed", maxIOLimits)
@@ -1143,6 +1220,9 @@ func validateIOLimits(limits []IOLimit) error {
 	return nil
 }
 
+// normalizeSettings trims and canonicalizes host and class CPU sets, memory
+// node sets, and I/O device paths. Values that fail to parse stay trimmed rather
+// than being rejected so validation can report them later.
 func normalizeSettings(settings Settings) Settings {
 	settings.CPUs = strings.TrimSpace(settings.CPUs)
 	if cpus, err := CanonicalCPUSet(settings.CPUs); err == nil {
@@ -1169,6 +1249,8 @@ func normalizeSettings(settings Settings) Settings {
 	return settings
 }
 
+// normalizeIOLimits trims each device path, resolves relative paths under /dev,
+// and cleans the result. An empty slice returns nil.
 func normalizeIOLimits(limits []IOLimit) []IOLimit {
 	if len(limits) == 0 {
 		return nil
@@ -1185,6 +1267,8 @@ func normalizeIOLimits(limits []IOLimit) []IOLimit {
 	return out
 }
 
+// cloneSettings deep-copies settings so later changes to the caller's I/O limit
+// slices or class records cannot mutate the manager's stored configuration.
 func cloneSettings(settings Settings) Settings {
 	settings.IOLimits = append([]IOLimit(nil), settings.IOLimits...)
 	if len(settings.Classes) > 0 {
@@ -1198,6 +1282,9 @@ func cloneSettings(settings Settings) Settings {
 	return settings
 }
 
+// writeCgroup writes value to the named cgroup file in dir, skipping the write
+// when the current content already matches. A missing controller file is an
+// error only when required is true; other read and write failures are wrapped.
 func writeCgroup(dir, name, value string, required bool) error {
 	path := filepath.Join(dir, name)
 	current, err := os.ReadFile(path)
@@ -1219,11 +1306,15 @@ func writeCgroup(dir, name, value string, required bool) error {
 	return nil
 }
 
+// fileExists reports whether path can be stat'ed, treating any stat error as
+// absence.
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
 
+// controllersAt returns the controller names listed in dir's cgroup.controllers
+// file, or nil when that file cannot be read.
 func controllersAt(dir string) []string {
 	data, err := os.ReadFile(filepath.Join(dir, controllerFile))
 	if err != nil {
@@ -1232,6 +1323,9 @@ func controllersAt(dir string) []string {
 	return strings.Fields(string(data))
 }
 
+// enableControllers adds each available controller that is not already listed to
+// dir's cgroup.subtree_control. Unavailable controllers are skipped, and a
+// missing cgroup.controllers file is not an error.
 func enableControllers(dir string, controllers []string) error {
 	availableData, err := os.ReadFile(filepath.Join(dir, controllerFile))
 	if err != nil {
@@ -1265,6 +1359,9 @@ func enableControllers(dir string, controllers []string) error {
 	return nil
 }
 
+// cgroup2Mount locates the cgroup2 mount point in /proc/mounts and unescapes its
+// path. It returns an error when /proc/mounts cannot be read or no cgroup2
+// filesystem is mounted.
 func cgroup2Mount() (string, error) {
 	data, err := os.ReadFile("/proc/mounts")
 	if err != nil {
@@ -1280,6 +1377,8 @@ func cgroup2Mount() (string, error) {
 	return "", errors.New("cgroup2 is not mounted")
 }
 
+// unescapeMount decodes the octal escapes (\040, \011, \012, \134) that
+// /proc/mounts uses for spaces, tabs, newlines, and backslashes in paths.
 func unescapeMount(value string) string {
 	replacer := strings.NewReplacer(`\040`, " ", `\011`, "\t", `\012`, "\n", `\134`, `\`)
 	return replacer.Replace(value)

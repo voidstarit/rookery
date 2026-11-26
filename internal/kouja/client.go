@@ -44,6 +44,9 @@ func NewClient(cfg Config) (*Client, error) {
 	return &Client{API: grpcClient, close: grpcClient.Close}, nil
 }
 
+// tlsConfigForConfig builds the client TLS configuration from inline PEM
+// material when any PEM field is set, otherwise loading the configured
+// certificate, key, and CA files.
 func tlsConfigForConfig(cfg Config) (*tls.Config, error) {
 	if cfg.CAPEM != "" || cfg.ClientCertPEM != "" || cfg.ClientKeyPEM != "" {
 		return tlsConfigFromPEM(cfg.CAPEM, cfg.ClientCertPEM, cfg.ClientKeyPEM)

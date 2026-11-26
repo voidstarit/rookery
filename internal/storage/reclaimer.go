@@ -69,6 +69,10 @@ func (r *Reclaimer) Tick(ctx context.Context) (int, error) {
 	return processed, nil
 }
 
+// process deletes the backing volume for disk, using the orphan-cleaner path
+// while the disk is still provisioning. It removes the record on success,
+// reschedules retryable cleanup failures with a backoff, and marks the deletion
+// failed permanently after the attempt limit or on non-retryable errors.
 func (r *Reclaimer) process(ctx context.Context, disk store.Disk) error {
 	if disk.StorageBackendID == nil {
 		return r.fail(ctx, disk, "disk has no storage backend")
@@ -118,6 +122,9 @@ func (r *Reclaimer) process(ctx context.Context, disk store.Disk) error {
 	}
 }
 
+// fail marks the disk deletion as permanently failed in the store and logs it,
+// returning an error carrying message; a failing store write is returned
+// instead.
 func (r *Reclaimer) fail(ctx context.Context, disk store.Disk, message string) error {
 	err := r.store.SetDiskDeleteFailed(ctx, disk.ID, message)
 	if err != nil {
@@ -127,6 +134,8 @@ func (r *Reclaimer) fail(ctx context.Context, disk store.Disk, message string) e
 	return errors.New(message)
 }
 
+// deletionBackoff returns the retry delay for the given attempt number, growing
+// from 30 seconds to a one-hour cap.
 func deletionBackoff(attempt int) time.Duration {
 	switch {
 	case attempt <= 1:

@@ -34,6 +34,8 @@ type dnsTarget struct {
 	entries []dnsLeaseEntry
 }
 
+// registerDHCPConfig records a DHCP VNF's config for lease-to-DNS integration,
+// ignoring other VNF types, then starts the sync loop and reconciles records once.
 func (m *VNFManager) registerDHCPConfig(vnf store.VNF) {
 	if vnf.Type != store.VNFTypeDHCPv4 && vnf.Type != store.VNFTypeDHCPv6 {
 		return
@@ -45,6 +47,8 @@ func (m *VNFManager) registerDHCPConfig(vnf store.VNF) {
 	m.syncDNSRecords()
 }
 
+// registerDNSRuntime stores a DNS handler for integration, ignoring nil handlers,
+// then starts the sync loop and reconciles records once.
 func (m *VNFManager) registerDNSRuntime(vnfID int64, handler *dnsHandler) {
 	if handler == nil {
 		return
@@ -56,6 +60,8 @@ func (m *VNFManager) registerDNSRuntime(vnfID int64, handler *dnsHandler) {
 	m.syncDNSRecords()
 }
 
+// unregisterVNF forgets a VNF's DHCP config and DNS handler. When the removed VNF
+// served DHCP, its lease-derived records are deleted from every remaining handler.
 func (m *VNFManager) unregisterVNF(vnfID int64, vnfType string) {
 	m.dnsMu.Lock()
 	delete(m.dhcpConfigs, vnfID)
@@ -73,18 +79,23 @@ func (m *VNFManager) unregisterVNF(vnfID int64, vnfType string) {
 	}
 }
 
+// ensureDNSSync launches the background DNS reconciliation loop the first time
+// it is called.
 func (m *VNFManager) ensureDNSSync() {
 	m.dnsSyncStart.Do(func() {
 		go m.dnsSyncLoop()
 	})
 }
 
+// stopDNSSync signals the reconciliation loop to exit, doing so only once.
 func (m *VNFManager) stopDNSSync() {
 	m.dnsSyncStopOnce.Do(func() {
 		close(m.dnsSyncStop)
 	})
 }
 
+// dnsSyncLoop reconciles DHCP lease records into DNS every second until stopDNSSync
+// closes the stop channel.
 func (m *VNFManager) dnsSyncLoop() {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -219,6 +230,9 @@ func (m *VNFManager) syncDNSRecords() {
 	}
 }
 
+// readLeaseRecords reads and decodes a VNF's persisted lease file. A missing file
+// yields no records and no error, while unreadable or malformed files return a
+// wrapped error.
 func (m *VNFManager) readLeaseRecords(vnfID int64) ([]leaseRecord, error) {
 	data, err := os.ReadFile(m.leasePath(vnfID))
 	if errors.Is(err, os.ErrNotExist) {
@@ -234,6 +248,8 @@ func (m *VNFManager) readLeaseRecords(vnfID int64) ([]leaseRecord, error) {
 	return file.Leases, nil
 }
 
+// dynamicDNSTTL returns the configured dynamic record TTL, substituting the
+// default of 300 seconds when it is zero.
 func dynamicDNSTTL(ttl uint32) uint32 {
 	if ttl == 0 {
 		return defaultDynamicDNSTTL
@@ -241,10 +257,14 @@ func dynamicDNSTTL(ttl uint32) uint32 {
 	return ttl
 }
 
+// dnsDynamicSource returns the source tag ("dhcp-<id>") used to attribute dynamic
+// records to the DHCP VNF that produced them.
 func dnsDynamicSource(vnfID int64) string {
 	return "dhcp-" + strconv.FormatInt(vnfID, 10)
 }
 
+// dnsNameClaimed reports whether name is already used within this sync pass or by
+// a configured static record. A nil handler only checks the local claimed set.
 func dnsNameClaimed(handler *dnsHandler, claimed map[string]struct{}, name string) bool {
 	if _, ok := claimed[name]; ok {
 		return true
@@ -252,6 +272,9 @@ func dnsNameClaimed(handler *dnsHandler, claimed map[string]struct{}, name strin
 	return handler != nil && handler.StaticNameTaken(name)
 }
 
+// leaseForwardName builds the fully qualified forward name for a lease by appending
+// domain to a hostname that has no dot. It returns false for an empty hostname or
+// domain, wildcard/whitespace characters, or a result that is not a valid domain.
 func leaseForwardName(hostname, domain string) (string, bool) {
 	name := strings.TrimSpace(strings.TrimSuffix(hostname, "."))
 	domain = strings.TrimSpace(strings.TrimSuffix(domain, "."))
@@ -268,6 +291,10 @@ func leaseForwardName(hostname, domain string) (string, bool) {
 	return strings.TrimSuffix(dns.CanonicalName(name), "."), true
 }
 
+// fallbackLeaseName derives a unique name from a DHCP client ID as
+// "host-<sanitized>.<domain>", capping the label at 40 characters and using
+// "client" when nothing usable remains. It returns false when the domain is empty
+// or the result is not a valid domain name.
 func fallbackLeaseName(clientID, domain string) (string, bool) {
 	domain = strings.TrimSpace(strings.TrimSuffix(domain, "."))
 	if domain == "" {

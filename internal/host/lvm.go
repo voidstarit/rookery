@@ -297,6 +297,9 @@ func (l *LVM) DeleteThinVolume(ctx context.Context, vg, name string) error {
 	return nil
 }
 
+// lvAttribute looks up a logical volume's attribute string by listing the volume
+// group, reporting exists as false when the LV is absent. Invalid VG or LV names
+// and a failing lvs invocation return errors.
 func (l *LVM) lvAttribute(ctx context.Context, vg, name string) (attribute string, exists bool, err error) {
 	if err := ValidateLVMName("volume group", vg); err != nil {
 		return "", false, err

@@ -30,6 +30,8 @@ type ACLRuntime interface {
 	DumpFIBRoutes(ctx context.Context, tableID uint32, ipv6 bool) ([]host.FIBRoute, error)
 }
 
+// runtimeReady reports Unavailable when no VPP runtime is wired up or the readiness
+// snapshot says VPP is not ready, and nil when ACL changes can reach VPP.
 func (s *aclService) runtimeReady() error {
 	if s.runtime == nil {
 		return status.Error(codes.Unavailable, "VPP network runtime is not configured")
@@ -40,6 +42,9 @@ func (s *aclService) runtimeReady() error {
 	return nil
 }
 
+// CreateACL validates and stores a new ACL, installs it in VPP, and records the returned
+// VPP index, deleting the record and VPP object again if either later step fails. It
+// requires a ready VPP runtime and maps store errors through aclStoreError.
 func (s *aclService) CreateACL(ctx context.Context, request *rookeryv1.CreateACLRequest) (*rookeryv1.ACL, error) {
 	if err := s.runtimeReady(); err != nil {
 		return nil, err
@@ -66,6 +71,9 @@ func (s *aclService) CreateACL(ctx context.Context, request *rookeryv1.CreateACL
 	return aclToProto(created), nil
 }
 
+// UpdateACL validates a changed definition, applies it to VPP before updating the record
+// and its VPP index, and then reconciles interface assignments. Reconciliation errors are
+// ignored because the definition is already stored and can be repaired later.
 func (s *aclService) UpdateACL(ctx context.Context, request *rookeryv1.UpdateACLRequest) (*rookeryv1.ACL, error) {
 	if err := s.runtimeReady(); err != nil {
 		return nil, err
@@ -99,6 +107,9 @@ func (s *aclService) UpdateACL(ctx context.Context, request *rookeryv1.UpdateACL
 	return aclToProto(updated), nil
 }
 
+// DeleteACL removes the ACL record and then deletes its VPP ACL on a best-effort basis;
+// store errors map through aclStoreError so a missing or still-assigned ACL is reported
+// clearly.
 func (s *aclService) DeleteACL(ctx context.Context, request *rookeryv1.DeleteACLRequest) (*emptypb.Empty, error) {
 	acl, err := s.store.GetACL(ctx, request.GetId())
 	if err != nil {
@@ -113,6 +124,9 @@ func (s *aclService) DeleteACL(ctx context.Context, request *rookeryv1.DeleteACL
 	return &emptypb.Empty{}, nil
 }
 
+// reconcileACLs re-applies every stored ACL to VPP and persists any changed ACL index,
+// then pushes the resulting ingress and egress references to each interface, joining
+// per-object errors so one failure does not abort the rest.
 func (s *aclService) reconcileACLs(ctx context.Context) error {
 	acls, err := s.store.ListACLs(ctx)
 	if err != nil {
@@ -156,8 +170,12 @@ func (s *aclService) reconcileACLs(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
+// aclIndexReference converts a VPP ACL index into the one-based reference used in
+// interface ACL lists, keeping index 0 addressable because zero marks an empty slot.
 func aclIndexReference(index uint32) uint32 { return index + 1 }
 
+// aclStoreError maps store ACL errors to gRPC statuses: NotFound, AlreadyExists, Aborted
+// when the ACL is still assigned to an interface, and Internal otherwise.
 func aclStoreError(err error) error {
 	switch {
 	case errors.Is(err, store.ErrACLNotFound):
@@ -171,14 +189,21 @@ func aclStoreError(err error) error {
 	}
 }
 
+// aclFromCreateRequest builds a store ACL from a create request through aclFromFields,
+// returning plain validation errors that callers map to InvalidArgument.
 func aclFromCreateRequest(request *rookeryv1.CreateACLRequest) (store.ACL, error) {
 	return aclFromFields(request.GetName(), request.GetTitle(), request.GetDescription(), request.GetRules())
 }
 
+// aclFromUpdateRequest builds a store ACL from an update request through aclFromFields,
+// returning plain validation errors that callers map to InvalidArgument.
 func aclFromUpdateRequest(request *rookeryv1.UpdateACLRequest) (store.ACL, error) {
 	return aclFromFields(request.GetName(), request.GetTitle(), request.GetDescription(), request.GetRules())
 }
 
+// aclFromFields trims and validates the name (required, at most 64 characters), title,
+// description, and one to 64 rules, returning the first failure with a one-based rule
+// number or the normalized store ACL.
 func aclFromFields(name, title, description string, rules []*rookeryv1.ACLRule) (store.ACL, error) {
 	name = strings.TrimSpace(name)
 	switch {
@@ -212,6 +237,9 @@ func aclFromFields(name, title, description string, rules []*rookeryv1.ACLRule) 
 	return store.ACL{Name: name, Title: title, Description: description, Rules: normalized}, nil
 }
 
+// aclRuleFromProto validates one proto rule and returns its canonical store form: permit
+// or deny action, a protocol defaulting to any, matching-family CIDR prefixes, and
+// source/destination port ranges only for tcp and udp.
 func aclRuleFromProto(rule *rookeryv1.ACLRule) (store.ACLRule, error) {
 	description := strings.TrimSpace(rule.GetDescription())
 	if len(description) > 256 {
@@ -267,6 +295,8 @@ func aclRuleFromProto(rule *rookeryv1.ACLRule) (store.ACLRule, error) {
 	}, nil
 }
 
+// normalizedPortRange validates a start/end port pair, treating zero/zero as unset,
+// defaulting end to start, and rejecting out-of-range or inverted ranges.
 func normalizedPortRange(ports [2]int) ([2]int, error) {
 	start, end := ports[0], ports[1]
 	if start == 0 && end == 0 {
@@ -287,6 +317,8 @@ func normalizedPortRange(ports [2]int) ([2]int, error) {
 	return [2]int{start, end}, nil
 }
 
+// runtimeReady reports Unavailable when no VPP runtime is wired up or the readiness
+// snapshot says VPP is not ready, and nil when interface ACL changes can reach VPP.
 func (s *interfaceService) runtimeReady() error {
 	if s.runtime == nil {
 		return status.Error(codes.Unavailable, "VPP network runtime is not configured")
@@ -297,6 +329,10 @@ func (s *interfaceService) runtimeReady() error {
 	return nil
 }
 
+// SetInterfaceACLs replaces an interface's ingress and egress assignments from ACL names,
+// applying them to VPP before persisting the IDs and restoring the previous VPP assignment
+// if the store write fails. Empty plural lists fall back to the legacy singular fields,
+// and blank or duplicate names are skipped.
 func (s *interfaceService) SetInterfaceACLs(ctx context.Context, request *rookeryv1.SetInterfaceACLsRequest) (*rookeryv1.VirtualInterface, error) {
 	if err := s.runtimeReady(); err != nil {
 		return nil, err
@@ -337,6 +373,9 @@ func (s *interfaceService) SetInterfaceACLs(ctx context.Context, request *rooker
 	return interfaceToProto(updated), nil
 }
 
+// resolveInterfaceACLs turns trimmed, case-insensitively deduplicated ACL names into
+// store IDs and one-based VPP references, ensuring each ACL exists in VPP and persisting
+// its index; empty input yields empty slices.
 func (s *interfaceService) resolveInterfaceACLs(ctx context.Context, names []string) ([]int64, []uint32, error) {
 	ids := make([]int64, 0, len(names))
 	refs := make([]uint32, 0, len(names))
@@ -368,6 +407,9 @@ func (s *interfaceService) resolveInterfaceACLs(ctx context.Context, names []str
 	return ids, refs, nil
 }
 
+// interfaceACLRefs returns the one-based VPP ACL references currently installed for an
+// interface, for restoring that assignment after a failed store write; it falls back to
+// the legacy single ID and skips ACLs that can no longer be loaded.
 func (s *interfaceService) interfaceACLRefs(ctx context.Context, refs []store.InterfaceACL, legacy *int64) []uint32 {
 	ids := make([]int64, 0, len(refs)+1)
 	for _, ref := range refs {

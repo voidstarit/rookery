@@ -35,10 +35,13 @@ type mediaModel struct {
 	Labels    types.Set    `tfsdk:"labels"`
 }
 
+// Metadata registers this resource as rookery_media under the configured provider type name.
 func (r *mediaResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_media"
 }
 
+// Schema declares the media resource: name and path are required and force replacement when
+// changed, id and size_bytes are server-computed, and labels use the shared label set.
 func (r *mediaResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A read-only installation media file registered with Rookery.",
@@ -60,6 +63,8 @@ func (r *mediaResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 	}
 }
 
+// Create registers the media file, stores the server-assigned id and size, then applies the
+// planned labels; a label failure is reported but the media registration is left in place.
 func (r *mediaResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan mediaModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -91,6 +96,8 @@ func (r *mediaResource) Create(ctx context.Context, req resource.CreateRequest, 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read refreshes name, path, size, and labels from Rookery; a not-found media is removed from
+// state so Terraform plans a replacement.
 func (r *mediaResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state mediaModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -123,6 +130,8 @@ func (r *mediaResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update applies label changes only, since name and path force replacement, and writes the
+// resulting label set back to state.
 func (r *mediaResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan mediaModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -145,6 +154,7 @@ func (r *mediaResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete removes the media registration and treats a not-found response as success.
 func (r *mediaResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state mediaModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -163,10 +173,14 @@ func (r *mediaResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	}
 }
 
+// ImportState imports an existing media by numeric id, reporting a diagnostic when the id is
+// not a valid positive integer.
 func (r *mediaResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	importInt64ID(ctx, req, resp)
 }
 
+// setMediaState copies the proto media fields, including the server-derived size, into the
+// Terraform model.
 func setMediaState(state *mediaModel, media *rookeryv1.Media) {
 	state.ID = types.Int64Value(media.GetId())
 	state.Name = types.StringValue(media.GetName())

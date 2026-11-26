@@ -25,6 +25,8 @@ type storageReadiness interface {
 	SetStorage(vg, thinPool string)
 }
 
+// CreateStorageBackend validates the request, stores the backend, and points readiness at it when
+// it is lvm-thin and readiness has no volume group or the backend is the default one.
 func (s *storageBackendService) CreateStorageBackend(ctx context.Context, request *rookeryv1.CreateStorageBackendRequest) (*rookeryv1.StorageBackend, error) {
 	backend, err := normalizeStorageBackend(request)
 	if err != nil {
@@ -38,6 +40,8 @@ func (s *storageBackendService) CreateStorageBackend(ctx context.Context, reques
 	return storageBackendToProto(created), nil
 }
 
+// UpdateStorageBackend validates the request and updates an existing backend, refusing driver,
+// volume-group, or thin-pool changes while disks still use it.
 func (s *storageBackendService) UpdateStorageBackend(ctx context.Context, request *rookeryv1.UpdateStorageBackendRequest) (*rookeryv1.StorageBackend, error) {
 	existing, err := s.store.GetStorageBackend(ctx, request.GetId())
 	if err != nil {
@@ -60,6 +64,8 @@ func (s *storageBackendService) UpdateStorageBackend(ctx context.Context, reques
 	return storageBackendToProto(updated), nil
 }
 
+// DeleteStorageBackend loads and deletes a backend, then re-points readiness when the deleted
+// backend was the one readiness used.
 func (s *storageBackendService) DeleteStorageBackend(ctx context.Context, request *rookeryv1.DeleteStorageBackendRequest) (*emptypb.Empty, error) {
 	existing, err := s.store.GetStorageBackend(ctx, request.GetId())
 	if err != nil {
@@ -72,6 +78,8 @@ func (s *storageBackendService) DeleteStorageBackend(ctx context.Context, reques
 	return &emptypb.Empty{}, nil
 }
 
+// normalizeStorageBackend validates and trims the fields of a create request, returning the
+// store record to insert.
 func normalizeStorageBackend(request *rookeryv1.CreateStorageBackendRequest) (store.StorageBackend, error) {
 	return normalizeStorageBackendFields(
 		request.GetName(),
@@ -82,6 +90,8 @@ func normalizeStorageBackend(request *rookeryv1.CreateStorageBackendRequest) (st
 	)
 }
 
+// normalizeStorageBackendUpdate validates and trims the fields of an update request, returning
+// the store record to write.
 func normalizeStorageBackendUpdate(request *rookeryv1.UpdateStorageBackendRequest) (store.StorageBackend, error) {
 	return normalizeStorageBackendFields(
 		request.GetName(),
@@ -92,6 +102,9 @@ func normalizeStorageBackendUpdate(request *rookeryv1.UpdateStorageBackendReques
 	)
 }
 
+// normalizeStorageBackendFields trims and validates the common fields, defaulting an empty
+// driver to lvm-thin. Driver-specific configuration is validated too: kouja credentials are
+// parsed, and lvm-thin requires a volume group, thin pool, and preparation settings.
 func normalizeStorageBackendFields(name, title, description, driver string, config *rookeryv1.StorageBackendConfig) (store.StorageBackend, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -164,6 +177,8 @@ func normalizeStorageBackendFields(name, title, description, driver string, conf
 	}, nil
 }
 
+// storageBackendError maps store sentinel errors for storage backends to NotFound, AlreadyExists,
+// Aborted, or Internal gRPC codes.
 func storageBackendError(err error) error {
 	switch {
 	case errors.Is(err, store.ErrStorageBackendNotFound):
@@ -177,6 +192,8 @@ func storageBackendError(err error) error {
 	}
 }
 
+// configureStorageReadiness points the readiness checker at an lvm-thin backend's volume group
+// and thin pool when none is configured yet or the backend is the default one.
 func (s *storageBackendService) configureStorageReadiness(backend store.StorageBackend) {
 	readiness, ok := s.readiness.(storageReadiness)
 	if !ok || backend.Driver != "lvm-thin" {
@@ -188,6 +205,9 @@ func (s *storageBackendService) configureStorageReadiness(backend store.StorageB
 	}
 }
 
+// configureStorageReadinessAfterDelete clears or replaces the readiness volume group and thin
+// pool only when the deleted backend was the configured one, preferring the first remaining
+// complete lvm-thin backend.
 func (s *storageBackendService) configureStorageReadinessAfterDelete(backend store.StorageBackend) {
 	readiness, ok := s.readiness.(storageReadiness)
 	if !ok {
@@ -210,6 +230,8 @@ func (s *storageBackendService) configureStorageReadinessAfterDelete(backend sto
 	readiness.SetStorage("", "")
 }
 
+// CreateMedia registers an existing absolute regular file as boot media and records its size,
+// rejecting missing files, non-regular paths, and duplicate names.
 func (s *mediaService) CreateMedia(ctx context.Context, request *rookeryv1.CreateMediaRequest) (*rookeryv1.Media, error) {
 	name := strings.TrimSpace(request.GetName())
 	if name == "" {
@@ -245,6 +267,8 @@ func (s *mediaService) CreateMedia(ctx context.Context, request *rookeryv1.Creat
 	return mediaToProto(created), nil
 }
 
+// DeleteMedia removes a media record, reporting NotFound when it does not exist and Aborted when
+// a VM still uses it as boot media.
 func (s *mediaService) DeleteMedia(ctx context.Context, request *rookeryv1.DeleteMediaRequest) (*emptypb.Empty, error) {
 	if err := s.store.DeleteMedia(ctx, request.GetId()); err != nil {
 		switch {
@@ -259,6 +283,8 @@ func (s *mediaService) DeleteMedia(ctx context.Context, request *rookeryv1.Delet
 	return &emptypb.Empty{}, nil
 }
 
+// koujaConfigFromProto copies a proto Kouja configuration into the store type with every string
+// trimmed, returning nil for a nil input.
 func koujaConfigFromProto(raw *rookeryv1.KoujaConfig) *store.KoujaConfig {
 	if raw == nil {
 		return nil

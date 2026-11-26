@@ -14,6 +14,8 @@ type hostFlags struct {
 	vppSocket string
 }
 
+// register defines -vg, -thin-pool, and -vpp-socket on fs, seeding defaults
+// from cfg and the matching ROOKERY_* environment variables.
 func (h *hostFlags) register(fs *flag.FlagSet, cfg config.API) {
 	fs.StringVar(&h.vg, "vg",
 		config.EnvString(cfg.VG, "ROOKERY_VG", ""),
@@ -26,6 +28,9 @@ func (h *hostFlags) register(fs *flag.FlagSet, cfg config.API) {
 		"VPP binary API socket (not the CLI or vhost-user socket)")
 }
 
+// resolve trims the host flags and accepts -thin-pool as either a name or
+// <vg>/<name>, rejecting a path-like -vg, a malformed thin pool, or a volume
+// group that conflicts with the thin-pool prefix.
 func (h *hostFlags) resolve() (vg, thinPool, socket string, err error) {
 	vg = strings.TrimSpace(h.vg)
 	thinPool = strings.TrimSpace(h.thinPool)

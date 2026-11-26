@@ -33,6 +33,10 @@ const (
 	maxGatewayDiskGB     = 65_536
 )
 
+// CreateDisk validates a disk request and provisions it through the matching path: host
+// passthrough registration, a Kouja volume, or a thin-LVM volume, defaulting size to 10 GB
+// and capping it at 65536 GB. Template clones run the backend preparation and template
+// provisioning scripts first, and failed volume or record creation is rolled back.
 func (s *diskService) CreateDisk(ctx context.Context, request *rookeryv1.CreateDiskRequest) (*rookeryv1.Disk, error) {
 	name := strings.TrimSpace(request.GetName())
 	if name == "" {
@@ -321,6 +325,10 @@ func hostDeviceStorageBackend(ctx context.Context, st *store.Store, path string)
 	return "", false, nil
 }
 
+// UpdateDisk applies the supplied template, provisioning, throttle-class, and read-only
+// changes to an existing disk, rejecting combinations that conflict with templates or host
+// devices and re-checking attachments before toggling read-only. With no fields set it
+// returns the current disk unchanged.
 func (s *diskService) UpdateDisk(ctx context.Context, request *rookeryv1.UpdateDiskRequest) (*rookeryv1.Disk, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -424,6 +432,9 @@ func (s *diskService) UpdateDisk(ctx context.Context, request *rookeryv1.UpdateD
 	return diskToProto(updated), nil
 }
 
+// diskInUseFromRecord builds a store in-use error from a disk's attachment list, naming
+// the first attachment's owner and the total count, or returning an empty error when the
+// disk has no attachments.
 func diskInUseFromRecord(disk store.Disk) *store.DiskInUseError {
 	if len(disk.Attachments) == 0 {
 		return &store.DiskInUseError{}
@@ -437,6 +448,9 @@ func diskInUseFromRecord(disk store.Disk) *store.DiskInUseError {
 	}
 }
 
+// resolveCreateThrottleClass validates the throttle class requested for a new disk,
+// returning nil for no class, rejecting negative IDs and template disks, and verifying the
+// class exists and carries no validation error.
 func (s *diskService) resolveCreateThrottleClass(ctx context.Context, id int64, isTemplate bool) (*int64, error) {
 	if id < 0 {
 		return nil, status.Error(codes.InvalidArgument, "throttle_class_id must not be negative")
@@ -460,6 +474,9 @@ func (s *diskService) resolveCreateThrottleClass(ctx context.Context, id int64, 
 	return &id, nil
 }
 
+// diskAssignmentError maps throttle-class and read-only-template assignment failures from
+// a disk write to InvalidArgument or Aborted, returning nil for unrelated errors so
+// callers keep their own mapping.
 func diskAssignmentError(err error) error {
 	switch {
 	case errors.Is(err, store.ErrDiskThrottleClassOnTemplate):
@@ -476,6 +493,9 @@ func diskAssignmentError(err error) error {
 		return nil
 	}
 }
+
+// validateDiskProvisioning requires a provisioning script to be an absolute path and a
+// timeout, when set, to be a positive Go duration such as "90s".
 func validateDiskProvisioning(script, timeout string) error {
 	if script != "" && !filepath.IsAbs(script) {
 		return errors.New("provisioning_script must be an absolute path")
@@ -489,6 +509,9 @@ func validateDiskProvisioning(script, timeout string) error {
 	return nil
 }
 
+// diskInUseError turns a store in-use error into an Aborted status naming the owning
+// workload, mentioning multiple attachments explicitly and defaulting the owner kind to
+// "workload".
 func diskInUseError(err error) error {
 	var owner *store.DiskInUseError
 	if errors.As(err, &owner) {
@@ -509,6 +532,9 @@ func diskInUseError(err error) error {
 	return status.Error(codes.Aborted, "disk is attached to a workload; detach it first")
 }
 
+// diskUpdateError maps update failures to gRPC statuses: NotFound, Aborted for in-use or
+// deleting disks, InvalidArgument for template, throttle-class, or read-only violations,
+// and Internal otherwise.
 func diskUpdateError(err error) error {
 	switch {
 	case errors.Is(err, store.ErrDiskNotFound):
@@ -530,6 +556,10 @@ func diskUpdateError(err error) error {
 	}
 }
 
+// DeleteDisk removes a disk according to its source: force-deletes queued records, queues
+// Kouja volume deletion, drops host-device inventory entries, and removes thin-LVM volumes
+// after checking template clones and the backend preparation script. It returns Aborted
+// while the disk is attached or a template still has clones.
 func (s *diskService) DeleteDisk(ctx context.Context, request *rookeryv1.DeleteDiskRequest) (*rookeryv1.DeleteDiskResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -622,6 +652,9 @@ func (s *diskService) DeleteDisk(ctx context.Context, request *rookeryv1.DeleteD
 	return &rookeryv1.DeleteDiskResponse{}, nil
 }
 
+// resolveStorageBackend resolves an explicit backend ID, or when none is given picks the
+// backend named "default", the first configured LVM thin backend, the only backend, or one
+// bootstrapped from readiness. An explicit unknown ID yields "storage backend not found".
 func (s *diskService) resolveStorageBackend(ctx context.Context, id *int64) (store.StorageBackend, error) {
 	if id != nil {
 		backend, err := s.store.GetStorageBackend(ctx, *id)
@@ -668,6 +701,8 @@ func (s *diskService) resolveStorageBackend(ctx context.Context, id *int64) (sto
 	})
 }
 
+// ListImportableDisks lists the LVM thin volumes in a backend, flagging those already
+// registered as disks and sorting the result case-insensitively by name.
 func (s *storageBackendService) ListImportableDisks(ctx context.Context, request *rookeryv1.ListImportableDisksRequest) (*rookeryv1.ListImportableDisksResponse, error) {
 	backend, err := s.store.GetStorageBackend(ctx, request.GetId())
 	if err != nil {
@@ -715,6 +750,9 @@ func (s *storageBackendService) ListImportableDisks(ctx context.Context, request
 	return &rookeryv1.ListImportableDisksResponse{Disks: items}, nil
 }
 
+// ImportDisks registers existing thin volumes as disks, serialized against other disk
+// writes, and fails with InvalidArgument for unknown names or AlreadyExists for names that
+// are already registered.
 func (s *storageBackendService) ImportDisks(ctx context.Context, request *rookeryv1.ImportDisksRequest) (*rookeryv1.ImportDisksResponse, error) {
 	backend, err := s.store.GetStorageBackend(ctx, request.GetId())
 	if err != nil {
@@ -768,6 +806,8 @@ func (s *storageBackendService) ImportDisks(ctx context.Context, request *rooker
 	return response, nil
 }
 
+// normalizeImportNames trims and validates the thin volume names to import, rejecting
+// empty input, more than 256 names, invalid LVM names, and case-insensitive duplicates.
 func normalizeImportNames(names []string) ([]string, error) {
 	if len(names) == 0 {
 		return nil, errors.New("at least one disk is required")

@@ -124,6 +124,8 @@ func (c *Checker) Check(ctx context.Context, cfg Config, sample *store.Disk) (He
 	return health, nil
 }
 
+// now returns the current time in UTC, preferring the injected Now hook so tests
+// can pin observation freshness.
 func (c *Checker) now() time.Time {
 	if c != nil && c.Now != nil {
 		return c.Now().UTC()
@@ -131,6 +133,8 @@ func (c *Checker) now() time.Time {
 	return time.Now().UTC()
 }
 
+// protocolNames maps kouja protocol enums to the blockdev protocol names Rookery
+// reports, falling back to the enum name for protocols it does not model.
 func protocolNames(protocols []koujav1.Protocol) []string {
 	names := make([]string, 0, len(protocols))
 	for _, value := range protocols {
@@ -146,6 +150,7 @@ func protocolNames(protocols []koujav1.Protocol) []string {
 	return names
 }
 
+// containsProtocol reports whether want appears in the advertised protocol list.
 func containsProtocol(protocols []koujav1.Protocol, want koujav1.Protocol) bool {
 	for _, value := range protocols {
 		if value == want {

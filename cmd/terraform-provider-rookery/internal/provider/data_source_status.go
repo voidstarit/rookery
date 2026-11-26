@@ -64,10 +64,12 @@ var statusVPPAttrTypes = map[string]attr.Type{
 	"socket":     types.StringType,
 }
 
+// Metadata registers this data source under the provider-prefixed type name <provider>_status.
 func (d *statusDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_status"
 }
 
+// Schema defines the fully computed host readiness attributes for the thin pool and VPP.
 func (d *statusDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dschema.Schema{
 		Description: "Current Rookery host readiness: thin pool and VPP.",
@@ -99,6 +101,8 @@ func (d *statusDataSource) Schema(_ context.Context, _ datasource.SchemaRequest,
 	}
 }
 
+// Read queries host readiness for the thin pool and VPP without configuration and stores
+// the nested status objects.
 func (d *statusDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	client, err := d.requireClient()
 	if err != nil {

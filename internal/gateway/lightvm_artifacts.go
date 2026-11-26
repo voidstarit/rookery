@@ -21,6 +21,10 @@ type lightVMArtifactService struct {
 	storage *lightvm.Storage
 }
 
+// UploadArtifact consumes a client-streamed kernel or initramfs upload, where the first message
+// carries the kind and file name, and saves it to managed LightVM storage subject to the size
+// limit. It returns the stored path, file name, and size, or InvalidArgument for bad metadata and
+// FailedPrecondition when storage is not configured.
 func (s *lightVMArtifactService) UploadArtifact(stream rookeryv1.LightVMArtifactService_UploadArtifactServer) error {
 	if s.storage == nil {
 		return status.Error(codes.FailedPrecondition, "LightVM storage is not configured")
@@ -61,6 +65,8 @@ func (s *lightVMArtifactService) UploadArtifact(stream rookeryv1.LightVMArtifact
 	})
 }
 
+// DeleteArtifact removes a file previously uploaded to managed LightVM storage, rejecting empty
+// paths and paths outside that storage; it returns an empty response on success.
 func (s *lightVMArtifactService) DeleteArtifact(_ context.Context, request *rookeryv1.DeleteArtifactRequest) (*emptypb.Empty, error) {
 	if s.storage == nil {
 		return nil, status.Error(codes.FailedPrecondition, "LightVM storage is not configured")
@@ -83,6 +89,8 @@ type artifactStreamReader struct {
 	pending []byte
 }
 
+// Read fills p from the buffered upload chunk, receiving further stream messages as needed;
+// empty chunks are skipped and a zero-length p succeeds without consuming the stream.
 func (r *artifactStreamReader) Read(p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
@@ -99,6 +107,8 @@ func (r *artifactStreamReader) Read(p []byte) (int, error) {
 	return n, nil
 }
 
+// artifactStreamError converts a stream receive failure into a gRPC error, reporting EOF as an
+// empty upload, preserving an already-coded status, and otherwise returning Internal.
 func artifactStreamError(err error) error {
 	if errors.Is(err, io.EOF) {
 		return status.Error(codes.InvalidArgument, "uploaded file is empty")

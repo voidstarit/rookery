@@ -41,10 +41,13 @@ type networkModel struct {
 	Labels         types.Set    `tfsdk:"labels"`
 }
 
+// Metadata sets the resource type name to the provider name followed by "_network".
 func (r *networkResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_network"
 }
 
+// Schema declares the rookery_network attributes for name, IPv4 and IPv6 prefixes, and
+// computed bridge-domain, BVI, and route-table fields.
 func (r *networkResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A Rookery VPP bridge-domain network with an isolated VRF, IPv4 and IPv6 prefixes, and a gateway BVI.",
@@ -74,6 +77,8 @@ func (r *networkResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 	}
 }
 
+// Create builds the network with its IPv4 and IPv6 prefixes, applies labels, and stores the
+// returned bridge-domain network in state.
 func (r *networkResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan networkModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -106,6 +111,8 @@ func (r *networkResource) Create(ctx context.Context, req resource.CreateRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read refreshes the network from the API and removes it from state when the server reports it
+// is gone. Labels are reloaded from the entity label store.
 func (r *networkResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state networkModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -138,6 +145,8 @@ func (r *networkResource) Read(ctx context.Context, req resource.ReadRequest, re
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update changes the network's IPv4 and IPv6 prefixes, then reapplies labels. The server only
+// allows prefix changes while the network has no VNFs, taps, or BVI.
 func (r *networkResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan networkModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -170,6 +179,8 @@ func (r *networkResource) Update(ctx context.Context, req resource.UpdateRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete removes the network through the API, treating an already-absent network as success and
+// reporting other errors through diagnostics.
 func (r *networkResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state networkModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -188,10 +199,13 @@ func (r *networkResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 }
 
+// ImportState adopts an existing network by its integer id into Terraform state.
 func (r *networkResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	importInt64ID(ctx, req, resp)
 }
 
+// setNetworkState copies the API network into the Terraform model, including the computed
+// bridge-domain, interface count, BVI, and route-table fields.
 func setNetworkState(state *networkModel, network *rookeryv1.Network) {
 	state.ID = types.Int64Value(network.GetId())
 	state.Name = types.StringValue(network.GetName())

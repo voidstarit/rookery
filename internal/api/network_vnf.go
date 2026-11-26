@@ -18,10 +18,14 @@ const (
 	vnfTransportTap       = "tap"
 )
 
+// networkRouteTableID returns the VRF table ID reserved for a network by
+// offsetting the shared network route-table base by networkID.
 func networkRouteTableID(networkID int64) uint32 {
 	return netutil.NetworkRouteTableBase + uint32(networkID)
 }
 
+// networkVNFMemifSocket returns the shared memif socket path for a network,
+// defaulting the socket directory to /run/rookery/memif when unset.
 func (s *Server) networkVNFMemifSocket(networkID int64) string {
 	dir := strings.TrimSpace(s.memifDir)
 	if dir == "" {

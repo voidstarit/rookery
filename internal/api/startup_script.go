@@ -23,6 +23,9 @@ func (s *Server) runRookeryStartupScriptOnce() {
 	})
 }
 
+// runRookeryStartupScript loads and, when enabled and non-empty, runs the
+// Rookery startup script and records its status via SetStartupScriptResult;
+// store read errors are logged and otherwise ignored.
 func (s *Server) runRookeryStartupScript() {
 	if s.store == nil {
 		return
@@ -65,6 +68,10 @@ func (s *Server) runVPPStartupScript() {
 	})
 }
 
+// executeStartupScript runs script through /bin/sh with ROOKERY_STARTUP_SCRIPT=1
+// and the VPP socket when configured, capping runtime at five minutes and
+// captured output at 64 KiB. It reports running then success or failed status
+// through update, appending a timeout or error marker to the stored output.
 func (s *Server) executeStartupScript(name, script string, update func(status string, exitCode int, output string, ranAt time.Time) error) {
 	started := time.Now().UTC()
 	if err := update("running", -1, "", started); err != nil {
@@ -119,6 +126,9 @@ type limitedBuffer struct {
 	truncated bool
 }
 
+// Write appends up to the buffer's remaining limit, drops the rest, and always
+// reports len(p) so writers never observe a short write; dropped bytes set the
+// truncation flag.
 func (b *limitedBuffer) Write(p []byte) (int, error) {
 	remaining := b.limit - b.buf.Len()
 	if remaining > 0 {
@@ -134,10 +144,14 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// WriteString appends value through Write, subject to the same output limit and
+// truncation behavior.
 func (b *limitedBuffer) WriteString(value string) {
 	_, _ = b.Write([]byte(value))
 }
 
+// String returns the buffered output, appending a truncation marker when output
+// was dropped at the limit.
 func (b *limitedBuffer) String() string {
 	value := b.buf.String()
 	if b.truncated {

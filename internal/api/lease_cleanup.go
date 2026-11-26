@@ -60,6 +60,8 @@ func (s *Server) cleanupOrphanedLeases(ctx context.Context) {
 	reconcileOrphanedLeases(ctx, s.store, s.vnfs, s.logger)
 }
 
+// reconcileOrphanedLeases validates the concrete store and runtime before
+// running the orphaned-lease scan, returning without action when either is nil.
 func reconcileOrphanedLeases(ctx context.Context, st *store.Store, runtime leaseRuntime, logger zerolog.Logger) {
 	if st == nil || runtime == nil {
 		return
@@ -67,6 +69,9 @@ func reconcileOrphanedLeases(ctx context.Context, st *store.Store, runtime lease
 	reconcileOrphanedLeasesFor(ctx, st, runtime, logger)
 }
 
+// reconcileOrphanedLeasesFor removes active DHCPv4 leases whose client MAC no
+// longer belongs to an interface on the VNF's network, logging and continuing
+// past per-network and per-VNF read failures.
 func reconcileOrphanedLeasesFor(ctx context.Context, st leaseCleanupStore, runtime leaseRuntime, logger zerolog.Logger) {
 	interfaces, err := st.ListInterfaces(ctx)
 	if err != nil {
@@ -135,6 +140,9 @@ func (s *Server) RemoveLeasesForInterface(ctx context.Context, networkID int64, 
 	return removeLeasesForInterface(ctx, s.store, s.vnfs, networkID, mac)
 }
 
+// removeLeasesForInterface drops the normalized MAC's leases from every enabled
+// DHCPv4 VNF on networkID, returning nil without action while another interface
+// on the network still uses that MAC.
 func removeLeasesForInterface(ctx context.Context, st leaseCleanupStore, runtime leaseRuntime, networkID int64, mac string) error {
 	normalized, err := normalizeLeaseMAC(mac)
 	if err != nil {
@@ -168,6 +176,9 @@ func removeLeasesForInterface(ctx context.Context, st leaseCleanupStore, runtime
 	return errors.Join(errs...)
 }
 
+// staleLeaseClientIDs returns the normalized MACs of active leases that are
+// absent from known; inactive leases and non-MAC client IDs such as DHCPv6
+// DUIDs are skipped.
 func staleLeaseClientIDs(leases []store.VNFLease, known map[string]struct{}) []string {
 	stale := make([]string, 0, len(leases))
 	for _, lease := range leases {
@@ -186,6 +197,8 @@ func staleLeaseClientIDs(leases []store.VNFLease, known map[string]struct{}) []s
 	return stale
 }
 
+// normalizeLeaseMAC parses value as an Ethernet MAC address and returns it
+// lowercased, rejecting values that are not exactly six bytes long.
 func normalizeLeaseMAC(value string) (string, error) {
 	address, err := net.ParseMAC(strings.TrimSpace(value))
 	if err != nil {

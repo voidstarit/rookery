@@ -34,6 +34,10 @@ import (
 	"github.com/voidstarit/rookery/internal/vnfd"
 )
 
+// runServe loads configuration, opens the store, and starts the HTTP, gRPC,
+// gateway, and mTLS listeners plus background workers. It blocks until a
+// listener fails or a signal arrives, then shuts down gracefully; setup errors
+// return before listening.
 func runServe(args []string) error {
 	file, err := config.Load(config.Path(args))
 	if err != nil {
@@ -407,6 +411,8 @@ func runServe(args []string) error {
 	return nil
 }
 
+// httpURL renders a listen address as a clickable local URL, treating a leading
+// colon as localhost.
 func httpURL(addr string) string {
 	if strings.HasPrefix(addr, ":") {
 		return "http://localhost" + addr

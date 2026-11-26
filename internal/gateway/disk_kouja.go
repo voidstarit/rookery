@@ -16,6 +16,10 @@ import (
 	"github.com/voidstarit/rookery/internal/store"
 )
 
+// createKoujaDisk provisions a disk through the Kouja driver, rejecting template and
+// provisioning settings, recording the disk in the provisioning state before creating the
+// volume, and finalizing the record with the driver's metadata. Any failure after the
+// record exists queues cleanup and returns a gRPC error.
 func (s *diskService) createKoujaDisk(ctx context.Context, request *rookeryv1.CreateDiskRequest, name string, backend store.StorageBackend, sizeGB int, classID *int64) (*rookeryv1.Disk, error) {
 	if request.GetIsTemplate() || request.TemplateDiskId != nil {
 		return nil, status.Error(codes.InvalidArgument, "kouja disks cannot be templates or template clones")
@@ -97,6 +101,8 @@ func (s *diskService) createKoujaDisk(ctx context.Context, request *rookeryv1.Cr
 	return diskToProto(finalized), nil
 }
 
+// queueKoujaCleanup marks a disk for deferred deletion after a failed Kouja provision,
+// logging a warning instead of returning an error when the mark cannot be written.
 func (s *diskService) queueKoujaCleanup(ctx context.Context, id int64) {
 	if err := s.store.MarkDiskDeleting(ctx, id); err != nil && !errors.Is(err, store.ErrDiskNotFound) {
 		s.logger.Warn().Err(err).Int64("disk_id", id).Msg("could not queue kouja cleanup")

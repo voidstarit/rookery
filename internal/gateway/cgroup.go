@@ -31,8 +31,6 @@ func (s *systemService) GetCgroupSettings(ctx context.Context, _ *rookeryv1.GetC
 	return cgroupSettingsToProto(stored, s.cgroupStatus()), nil
 }
 
-// UpdateCgroupSettings validates, applies, and stores host-wide limits. If the
-// host rejects the settings, the previous configuration is restored.
 // GetCgroupUsage returns live resource usage for the cgroup hierarchy.
 func (s *systemService) GetCgroupUsage(context.Context, *rookeryv1.GetCgroupUsageRequest) (*rookeryv1.CgroupUsageResponse, error) {
 	if s.cgroup == nil {
@@ -67,6 +65,10 @@ func (s *systemService) GetCgroupUsage(context.Context, *rookeryv1.GetCgroupUsag
 	return response, nil
 }
 
+// UpdateCgroupSettings normalizes, validates, saves, and applies host-wide cgroup limits,
+// restoring the previous settings and VM placement if the host rejects them. When settings
+// are enabled it also re-places running VMs, reporting saved-but-unapplied limits as
+// FailedPrecondition.
 func (s *systemService) UpdateCgroupSettings(ctx context.Context, request *rookeryv1.UpdateCgroupSettingsRequest) (*rookeryv1.CgroupSettings, error) {
 	settings := cgroup.NormalizeSettings(cgroup.Settings{
 		Enabled:        request.GetEnabled(),
@@ -186,6 +188,9 @@ func (s *systemService) validateClassAssignments(ctx context.Context, before, af
 	return nil
 }
 
+// cgroupStatus returns the live status from the configured cgroup manager, or a
+// not-configured status populated with online CPUs and the CPU model when cgroup support
+// is absent.
 func (s *systemService) cgroupStatus() cgroup.Status {
 	if s.cgroup != nil {
 		return s.cgroup.Status()
@@ -201,6 +206,8 @@ func (s *systemService) cgroupStatus() cgroup.Status {
 	return current
 }
 
+// cgroupSettingsToProto combines stored settings with live runtime status into the proto
+// payload, letting the runtime's last error override the reason and listing online CPUs.
 func cgroupSettingsToProto(stored cgroup.CgroupSettings, runtime cgroup.Status) *rookeryv1.CgroupSettings {
 	result := &rookeryv1.CgroupSettings{
 		Enabled:        stored.Enabled,
@@ -227,6 +234,8 @@ func cgroupSettingsToProto(stored cgroup.CgroupSettings, runtime cgroup.Status) 
 	return result
 }
 
+// cgroupClassesFromProto converts proto classes into trimmed cgroup classes, skipping nil
+// entries and returning nil for an empty list.
 func cgroupClassesFromProto(classes []*rookeryv1.CgroupClass) []cgroup.Class {
 	if len(classes) == 0 {
 		return nil
@@ -247,6 +256,8 @@ func cgroupClassesFromProto(classes []*rookeryv1.CgroupClass) []cgroup.Class {
 	return result
 }
 
+// cgroupClassesToProto converts cgroup classes into proto messages, returning nil for an
+// empty list so the field stays unset.
 func cgroupClassesToProto(classes []cgroup.Class) []*rookeryv1.CgroupClass {
 	if len(classes) == 0 {
 		return nil
@@ -264,6 +275,8 @@ func cgroupClassesToProto(classes []cgroup.Class) []*rookeryv1.CgroupClass {
 	return result
 }
 
+// cgroupIOLimitsFromProto converts proto IO limits into trimmed cgroup IO limits, skipping
+// nil entries and returning nil for an empty list.
 func cgroupIOLimitsFromProto(limits []*rookeryv1.CgroupIOLimit) []cgroup.IOLimit {
 	if len(limits) == 0 {
 		return nil
@@ -285,6 +298,8 @@ func cgroupIOLimitsFromProto(limits []*rookeryv1.CgroupIOLimit) []cgroup.IOLimit
 	return result
 }
 
+// cgroupIOLimitsToProto converts cgroup IO limits into proto messages, returning nil for
+// an empty list so the field stays unset.
 func cgroupIOLimitsToProto(limits []cgroup.IOLimit) []*rookeryv1.CgroupIOLimit {
 	if len(limits) == 0 {
 		return nil

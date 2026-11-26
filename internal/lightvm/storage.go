@@ -173,6 +173,8 @@ func IsManaged(dir, path string) bool {
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
+// kindDir returns the managed subdirectory for an upload kind, wrapping
+// ErrUnsupportedKind for anything other than kernel or initramfs.
 func (s *Storage) kindDir(kind string) (string, error) {
 	switch strings.TrimSpace(kind) {
 	case KindKernel:
@@ -184,6 +186,9 @@ func (s *Storage) kindDir(kind string) (string, error) {
 	}
 }
 
+// sanitizeFileName replaces characters outside ASCII letters, digits, dot,
+// underscore, and dash with underscores, trims leading and trailing separators,
+// and returns "file" when nothing remains.
 func sanitizeFileName(name string) string {
 	var builder strings.Builder
 	for _, char := range name {

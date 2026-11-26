@@ -140,6 +140,8 @@ func (v *VPPNetwork) DumpFIBRoutes(ctx context.Context, tableID uint32, ipv6 boo
 	return routes, nil
 }
 
+// fibPathNextHop formats the next-hop address of a FIB path for IPv4 or IPv6
+// paths, returning an empty string for any other protocol or an all-zero address.
 func fibPathNextHop(proto fib_types.FibPathNhProto, address ip_types.AddressUnion) string {
 	switch proto {
 	case fib_types.FIB_API_PATH_NH_PROTO_IP4:
@@ -159,6 +161,8 @@ func fibPathNextHop(proto fib_types.FibPathNhProto, address ip_types.AddressUnio
 	}
 }
 
+// cleanFIBPathType strips VPP's FIB_API_PATH_TYPE_ prefix so path types read as
+// bare names such as NORMAL or LOCAL.
 func cleanFIBPathType(value string) string {
 	return strings.TrimPrefix(value, "FIB_API_PATH_TYPE_")
 }
@@ -250,6 +254,8 @@ func (v *VPPNetwork) DeleteBGPRoute(ctx context.Context, tableID uint32, prefix 
 	})
 }
 
+// changeRouteV2 applies a VPP route add or delete over a new connection. For
+// deletes, a route VPP does not know about is treated as already removed.
 func (v *VPPNetwork) changeRouteV2(ctx context.Context, isAdd bool, route ipapi.IPRouteV2) error {
 	conn, err := v.connect()
 	if err != nil {

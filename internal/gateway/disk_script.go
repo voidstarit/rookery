@@ -51,6 +51,8 @@ type diskScriptBackend struct {
 	Config store.StorageBackendConfig `json:"config"`
 }
 
+// diskScriptRecord converts a store disk into the JSON-friendly shape passed to
+// provisioning and preparation scripts, including template lineage fields.
 func diskScriptRecord(disk store.Disk) diskScriptDisk {
 	return diskScriptDisk{
 		ID: &disk.ID, Name: disk.Name, SizeGB: disk.SizeGB,
@@ -59,6 +61,10 @@ func diskScriptRecord(disk store.Disk) diskScriptDisk {
 	}
 }
 
+// runTemplateProvisioningScript runs the clone template's provisioning script with the
+// disk properties in ROOKERY_PROVISION_JSON, using the template timeout (default five
+// minutes). A nil template or empty properties skip the run, but supplied properties
+// without a script are an error.
 func (s *diskService) runTemplateProvisioningScript(ctx context.Context, backend store.StorageBackend, disk store.Disk, template *store.Disk, properties map[string]any) error {
 	if template == nil {
 		return nil
@@ -144,6 +150,9 @@ func (s *diskService) runTemplateProvisioningScript(ctx context.Context, backend
 	return nil
 }
 
+// runDiskPreparationScript runs the storage backend's preparation script with the request
+// details in ROOKERY_DISK_JSON and the configured timeout (default five minutes),
+// embedding captured output in the error when the script fails.
 func (s *diskService) runDiskPreparationScript(ctx context.Context, operation string, backend store.StorageBackend, disk store.Disk, template *store.Disk) error {
 	script := strings.TrimSpace(backend.Config.PreparationScript)
 	if script == "" {
