@@ -102,7 +102,7 @@ func (r *nat44VNFResource) Create(ctx context.Context, req resource.CreateReques
 	vnf, err := client.NAT44VNFs.CreateNAT44VNF(callCtx, &rookeryv1.CreateNAT44VNFRequest{
 		Name:             plan.Name.ValueString(),
 		NetworkId:        plan.NetworkID.ValueInt64(),
-		Enabled:          boolPointer(plan.Enabled),
+		Enabled:          boolPointerDefault(plan.Enabled, true),
 		Gateway:          stringValue(plan.Gateway),
 		OutsideInterface: stringValue(plan.OutsideInterface),
 		OutsideAddress:   stringValue(plan.OutsideAddress),

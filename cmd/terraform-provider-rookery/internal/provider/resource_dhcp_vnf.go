@@ -128,7 +128,7 @@ func (r *dhcpVNFResource) Create(ctx context.Context, req resource.CreateRequest
 		Name:       plan.Name.ValueString(),
 		NetworkId:  plan.NetworkID.ValueInt64(),
 		Family:     plan.Family.ValueString(),
-		Enabled:    boolPointer(plan.Enabled),
+		Enabled:    boolPointerDefault(plan.Enabled, true),
 		Gateway:    stringValue(plan.Gateway),
 		RangeStart: stringValue(plan.RangeStart),
 		RangeEnd:   stringValue(plan.RangeEnd),

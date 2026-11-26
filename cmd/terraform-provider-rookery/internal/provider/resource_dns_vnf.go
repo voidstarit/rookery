@@ -96,7 +96,7 @@ func (r *dnsVNFResource) Create(ctx context.Context, req resource.CreateRequest,
 	vnf, err := client.DNSVNFs.CreateDNSVNF(callCtx, &rookeryv1.CreateDNSVNFRequest{
 		Name:      plan.Name.ValueString(),
 		NetworkId: plan.NetworkID.ValueInt64(),
-		Enabled:   boolPointer(plan.Enabled),
+		Enabled:   boolPointerDefault(plan.Enabled, true),
 		Forward:   boolPointer(plan.Forward),
 	})
 	if err != nil {

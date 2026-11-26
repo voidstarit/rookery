@@ -50,7 +50,9 @@ four parent data sources; child resources require `vnf_id` (forces replacement) 
 Data sources: `rookery_dhcp_vnf`, `rookery_dns_vnf`, `rookery_nat44_vnf`, and `rookery_bgp_vnf`,
 each looked up by `id` or `name`. Parent resources expose computed `id`, `network_name`, status,
 tap metadata, counts, and timestamps; `network_id` and the DHCP `family` force replacement. There
-is no `config_json` and no `type` attribute.
+is no `config_json` and no `type` attribute. `enabled` defaults to `true` on create; set it to
+`false` when the parent should stay inert. A child write still reloads a running runtime rather
+than restarting it.
 
 ## VNF child reload behavior
 

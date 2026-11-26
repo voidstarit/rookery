@@ -120,7 +120,7 @@ func (r *bgpVNFResource) Create(ctx context.Context, req resource.CreateRequest,
 	vnf, err := client.BGPVNFs.CreateBGPVNF(callCtx, &rookeryv1.CreateBGPVNFRequest{
 		Name:          plan.Name.ValueString(),
 		NetworkId:     plan.NetworkID.ValueInt64(),
-		Enabled:       boolPointer(plan.Enabled),
+		Enabled:       boolPointerDefault(plan.Enabled, true),
 		Transport:     stringValue(plan.Transport),
 		LocalAs:       uint32Value(plan.LocalAS),
 		RouterId:      stringValue(plan.RouterID),

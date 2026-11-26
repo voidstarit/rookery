@@ -88,6 +88,17 @@ func boolPointer(v types.Bool) *bool {
 	return &value
 }
 
+// boolPointerDefault is boolPointer with an explicit fallback for a null or
+// unknown planned value, used where the schema documents a create default.
+func boolPointerDefault(v types.Bool, fallback bool) *bool {
+	if v.IsNull() || v.IsUnknown() {
+		value := fallback
+		return &value
+	}
+	value := v.ValueBool()
+	return &value
+}
+
 // timestampString formats ts as a UTC RFC 3339 string, returning a null string
 // for a nil or invalid timestamp.
 func timestampString(ts *timestamppb.Timestamp) types.String {
