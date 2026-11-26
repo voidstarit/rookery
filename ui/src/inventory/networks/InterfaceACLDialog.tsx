@@ -19,6 +19,11 @@ type ACLListEditorProps = {
   onChange: (next: string[]) => void;
 };
 
+/**
+ * ACLListEditor renders an ordered selector for ingress or egress ACL names, letting users add
+ * available ACLs, move entries up or down, and remove them; already-selected ACLs are excluded
+ * from the picker.
+ */
 function ACLListEditor({ label, hint, acls, selected, onChange }: ACLListEditorProps) {
   const [pending, setPending] = useState("");
   const available = acls.filter((acl) => !selected.includes(acl.name));
@@ -105,6 +110,11 @@ function ACLListEditor({ label, hint, acls, selected, onChange }: ACLListEditorP
   );
 }
 
+/**
+ * InterfaceACLDialog renders the per-interface ingress and egress ACL order editor with a
+ * formatted preview of the selected ACLs; it saves both ordered name lists through the interface
+ * ACLs endpoint and refuses to submit until VPP is ready.
+ */
 export function InterfaceACLDialog({
   iface,
   acls,

@@ -9,6 +9,11 @@ type NetworkPipeDialogProps = {
   onSaved: (pipe: NetworkPipe) => void;
 };
 
+/**
+ * NetworkPipeDialog renders a modal that connects two bridge domains with a VPP pipe pair; it
+ * rejects identical or missing networks, posts to network-pipes, saves labels, and disables
+ * submission until at least two networks exist.
+ */
 export function NetworkPipeDialog({ networks, onClose, onSaved }: NetworkPipeDialogProps) {
   const [networkA, setNetworkA] = useState(networks[0] ? String(networks[0].id) : "");
   const [networkB, setNetworkB] = useState(networks[1] ? String(networks[1].id) : "");

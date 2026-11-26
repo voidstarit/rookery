@@ -10,6 +10,11 @@ type AttachDialogProps = {
   onSaved: (iface: VirtualInterface) => void;
 };
 
+/**
+ * AttachDialog renders a modal for attaching a virtual interface to a VM or leaving it
+ * unattached, saving the attachment together with edited labels; it disables closing while the
+ * save is in flight and surfaces API errors inside the form.
+ */
 export function AttachDialog({ iface, vms, onClose, onSaved }: AttachDialogProps) {
   const [vmID, setVMID] = useState(iface.attached_vm_id || "");
   const [labels, setLabels] = useEntityLabelDraft("interface", iface.id);

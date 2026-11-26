@@ -23,6 +23,10 @@ type IssuedCertificate = {
   ca_pem: string;
 };
 
+/**
+ * formatDate renders an ISO timestamp as a localized medium date and short time, returning an
+ * em dash for missing or invalid values.
+ */
 function formatDate(value: string | undefined): string {
   if (!value) {
     return "—";
@@ -34,6 +38,10 @@ function formatDate(value: string | undefined): string {
   return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+/**
+ * downloadPEM triggers a browser download of PEM text under the given filename using a
+ * temporary Blob URL that is revoked immediately.
+ */
 function downloadPEM(name: string, content: string): void {
   const blob = new Blob([content], { type: "application/x-pem-file" });
   const url = URL.createObjectURL(blob);
@@ -44,6 +52,11 @@ function downloadPEM(name: string, content: string): void {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * ClientCertificates renders the sidebar entry and modal for issuing, listing, downloading, and
+ * revoking public mTLS client certificates. It fetches the client list directly so a disabled
+ * mTLS listener fails fast, and it shows each newly issued private key only once.
+ */
 export function ClientCertificates() {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const [open, setOpen] = useState(false);

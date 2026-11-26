@@ -12,6 +12,10 @@ export type EntityLabelMap = Record<string, string[]>;
 
 const MAX_LABELS = 64;
 
+/**
+ * useEntityLabels loads the label map for one entity type, exposes a reload function, and merges
+ * rookery:labels-changed events; any fetch failure falls back to an empty map.
+ */
 export function useEntityLabels(entityType: string) {
   const [labels, setLabelsState] = useState<EntityLabelMap>({});
 
@@ -60,6 +64,10 @@ export function useEntityLabels(entityType: string) {
   return { labels, reload, setEntityLabels };
 }
 
+/**
+ * useEntityLabelDraft fetches the labels for one entity into editable state and returns
+ * [labels, setLabels]; an absent entity ID yields an empty list and stale responses are ignored.
+ */
 export function useEntityLabelDraft(entityType: string, entityID?: string | number) {
   const [labels, setLabels] = useState<string[]>([]);
   useEffect(() => {
@@ -88,6 +96,10 @@ export function useEntityLabelDraft(entityType: string, entityID?: string | numb
   return [labels, setLabels] as const;
 }
 
+/**
+ * saveEntityLabels PUTs the full label list, broadcasts rookery:labels-changed with the server's
+ * normalized labels, and returns them to the caller.
+ */
 export async function saveEntityLabels(
   entityType: string,
   entityID: string | number,
@@ -109,6 +121,10 @@ export async function saveEntityLabels(
   return next;
 }
 
+/**
+ * saveEntityLabelsWithToast persists labels without throwing, reporting a failed update as an
+ * error toast instead.
+ */
 export async function saveEntityLabelsWithToast(
   entityType: string,
   entityID: string | number,
@@ -133,6 +149,10 @@ type LabelsInputProps = {
   disabled?: boolean;
 };
 
+/**
+ * LabelsInput renders a removable chip editor for a label list and calls onChange with the
+ * deduplicated result; comma- or newline-separated entries are added and the cap is 64 labels.
+ */
 export function LabelsInput({ labels, onChange, disabled = false }: LabelsInputProps) {
   const [input, setInput] = useState("");
   const values = Array.isArray(labels) ? labels : [];
@@ -216,6 +236,10 @@ type EntityLabelsProps = {
   onSaved: (labels: string[]) => void;
 };
 
+/**
+ * EntityLabels renders read-only label chips plus an edit button that opens LabelsDialog, and
+ * forwards a successful save through onSaved.
+ */
 export function EntityLabels({
   entityType,
   entityID,
@@ -266,6 +290,10 @@ type LabelsDialogProps = {
   onSaved: (labels: string[]) => void;
 };
 
+/**
+ * LabelsDialog renders the modal label editor, blocks closing while a save is in flight, and
+ * calls onSaved after the PUT succeeds; API failures appear inline instead of closing.
+ */
 function LabelsDialog({
   entityType,
   entityID,

@@ -49,6 +49,10 @@ const tabMeta: Record<TabName, TabMeta> = {
   },
 };
 
+/**
+ * required looks up a DOM element by id and throws a descriptive error when it is missing, casting
+ * the result to the requested element type.
+ */
 function required<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
   if (!element) {
@@ -57,6 +61,12 @@ function required<T extends HTMLElement>(id: string): T {
   return element as T;
 }
 
+/**
+ * startInventory wires the inventory shell: it resolves the tab, panel, and readiness elements,
+ * syncs the selected tab with the path route, handles tab keyboard navigation and legacy hash
+ * links, and renders readiness while polling /api/status every ten seconds when visible. Readiness
+ * changes are published as rookery:* events for the individual tab islands.
+ */
 export function startInventory(): void {
   const apiStatus = required<HTMLElement>("api-status");
   const apiStatusLabel = required<HTMLElement>("api-status-label");

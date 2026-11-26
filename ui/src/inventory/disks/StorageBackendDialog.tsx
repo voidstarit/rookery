@@ -11,6 +11,11 @@ type StorageBackendDialogProps = {
 
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
+/**
+ * StorageBackendDialog renders the create/edit form for an LVM-thin or Kouja backend, including
+ * pool and template settings or Kouja endpoint/TLS material. It can probe Kouja for storage
+ * classes, validates the form, and saves name, config, and labels via POST/PUT.
+ */
 export function StorageBackendDialog({ backend, onClose, onSaved }: StorageBackendDialogProps) {
   const editing = backend !== null;
   const [name, setName] = useState(backend?.name ?? "");

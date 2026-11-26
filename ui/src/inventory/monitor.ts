@@ -12,6 +12,10 @@ export type ChartSeries = {
   color: string;
 };
 
+/**
+ * formatBytes formats a byte count as B, KB, MB, or GB using 1024-based units, dropping the
+ * decimal for exact multiples; non-numeric input is treated as 0.
+ */
 export function formatBytes(bytes: number): string {
   const value = Number(bytes) || 0;
   if (value >= 1024 ** 3) {
@@ -26,6 +30,10 @@ export function formatBytes(bytes: number): string {
   return `${value} B`;
 }
 
+/**
+ * formatMemory formats a megabyte quantity as MB, switching to GB once it reaches 1024 MB with
+ * no decimal for whole gigabytes and one decimal otherwise.
+ */
 export function formatMemory(mb: number): string {
   if (mb >= 1024) {
     const gb = mb / 1024;
@@ -34,6 +42,10 @@ export function formatMemory(mb: number): string {
   return `${mb} MB`;
 }
 
+/**
+ * formatDuration renders a seconds count as the two most significant units ("1d 2h", "3h 4m",
+ * "5m 6s", or "7s"); negative and non-finite input is clamped to 0 and values are rounded.
+ */
 export function formatDuration(seconds: number): string {
   const value = Math.max(0, Math.round(Number(seconds) || 0));
   const days = Math.floor(value / 86400);
@@ -52,6 +64,11 @@ export function formatDuration(seconds: number): string {
   return `${secs}s`;
 }
 
+/**
+ * chartCanvas prepares a canvas for high-DPI chart drawing by sizing its backing store to the
+ * laid-out width and requested height and returning the 2D context with logical dimensions, or
+ * null when the canvas or its context is unavailable.
+ */
 function chartCanvas(canvas: HTMLCanvasElement | null, requestedHeight?: number) {
   if (!canvas || typeof canvas.getContext !== "function") {
     return null;
@@ -73,6 +90,11 @@ function chartCanvas(canvas: HTMLCanvasElement | null, requestedHeight?: number)
   return { context, width, height };
 }
 
+/**
+ * drawMetricChart plots metric series on a canvas with grid lines, y-axis labels, and an
+ * optional dashed threshold marker, auto-scaling to 15% above the data unless a maximum is
+ * given; non-finite samples break the line and a fully empty chart draws a placeholder.
+ */
 export function drawMetricChart(
   canvas: HTMLCanvasElement | null,
   series: ChartSeries[],

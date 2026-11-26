@@ -1,3 +1,7 @@
+/**
+ * formatDate renders an ISO timestamp as a locale medium date and short time, returning an em dash
+ * when the value is missing or unparseable.
+ */
 export function formatDate(value: string | undefined): string {
   if (!value) {
     return "—";

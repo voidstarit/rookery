@@ -7,6 +7,10 @@ import { useRoute } from "../router";
 
 const MIB = 1024 * 1024;
 
+/**
+ * bytesToMB converts a byte count into a rounded whole-megabyte input string; zero or undefined
+ * yields an empty field, which the form treats as unlimited.
+ */
 function bytesToMB(value: number | undefined): string {
   if (!value) {
     return "";
@@ -14,6 +18,10 @@ function bytesToMB(value: number | undefined): string {
   return String(Math.round(value / MIB));
 }
 
+/**
+ * mbToBytes parses a megabyte text field into whole bytes; blank, invalid, or non-positive input
+ * becomes 0, which clears the limit.
+ */
 function mbToBytes(value: string): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -22,10 +30,18 @@ function mbToBytes(value: string): number {
   return Math.round(parsed * MIB);
 }
 
+/**
+ * weightValue renders a cgroup CPU weight as an input string, leaving the field empty when the
+ * weight is unset so the kernel default applies.
+ */
 function weightValue(value: number | undefined): string {
   return value ? String(value) : "";
 }
 
+/**
+ * limitNumber floors a positive numeric field into an integer limit and returns 0 for blank,
+ * invalid, or non-positive input.
+ */
 function limitNumber(value: string): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
@@ -38,6 +54,10 @@ type UsageSample = {
   nodes: Record<string, { cpu: number; read: number; write: number }>;
 };
 
+/**
+ * formatBytes abbreviates a byte count with one decimal into B, KB, MB, or GB; undefined and NaN
+ * are treated as 0.
+ */
 function formatBytes(value: number | undefined): string {
   const bytes = Number(value) || 0;
   if (bytes >= 1024 ** 3) {
@@ -52,15 +72,27 @@ function formatBytes(value: number | undefined): string {
   return `${bytes} B`;
 }
 
+/**
+ * formatRate formats a bytes-per-second rate for the telemetry columns, showing an em dash when no
+ * rate has been sampled yet.
+ */
 function formatRate(value: number | undefined): string {
   return value === undefined ? "—" : `${formatBytes(value)}/s`;
 }
 
+/**
+ * usageMemoryText renders a node's memory as "current / max", substituting "unlimited" when
+ * memory.max is unset.
+ */
 function usageMemoryText(node: { memory_current_bytes: number; memory_max_bytes: number }): string {
   const current = formatBytes(node.memory_current_bytes);
   return node.memory_max_bytes > 0 ? `${current} / ${formatBytes(node.memory_max_bytes)}` : `${current} / unlimited`;
 }
 
+/**
+ * usagePercent computes a clamped 0-100 percentage of a maximum, returning 0 when the maximum is
+ * unset or non-positive.
+ */
 function usagePercent(current: number, maximum: number): number {
   if (maximum <= 0) {
     return 0;
@@ -68,6 +100,11 @@ function usagePercent(current: number, maximum: number): number {
   return Math.max(0, Math.min(100, (current / maximum) * 100));
 }
 
+/**
+ * CgroupSettingsPanel renders the host-wide cgroup v2 form (enablement, CPU set, memory, CPU
+ * weight, I/O limits, and the class editor) with live usage telemetry. It loads settings on mount
+ * and polls usage while the settings route is visible and the tab is not hidden.
+ */
 export function CgroupSettingsPanel() {
   const [settings, setSettings] = useState<CgroupSettings | null>(null);
   const [devices, setDevices] = useState<HostBlockDevice[]>([]);
@@ -521,6 +558,10 @@ export function CgroupSettingsPanel() {
   );
 }
 
+/**
+ * nextClassName returns the first unused "class-N" name below an optional parent path, giving new
+ * classes a unique default label.
+ */
 function nextClassName(classes: CgroupClass[], parent?: string): string {
   let index = 1;
   while (true) {
@@ -532,16 +573,29 @@ function nextClassName(classes: CgroupClass[], parent?: string): string {
   }
 }
 
+/**
+ * parentClass returns the slash-separated parent path of a class name, or an empty string for a
+ * top-level class.
+ */
 function parentClass(name: string): string {
   const index = name.lastIndexOf("/");
   return index > 0 ? name.slice(0, index) : "";
 }
 
+/**
+ * classSegment returns the final path segment of a class name, which is the editable portion in the
+ * tree.
+ */
 function classSegment(name: string): string {
   const index = name.lastIndexOf("/");
   return index >= 0 ? name.slice(index + 1) : name;
 }
 
+/**
+ * renameClass renames a class and every descendant path to match, rejecting an empty segment that
+ * contains a slash or a name that already exists by returning null. Renaming to the current name
+ * returns the list unchanged.
+ */
 function renameClass(classes: CgroupClass[], oldName: string, rawSegment: string): CgroupClass[] | null {
   const segment = rawSegment.trim();
   if (!segment || segment.includes("/")) {
@@ -566,6 +620,10 @@ function renameClass(classes: CgroupClass[], oldName: string, rawSegment: string
   });
 }
 
+/**
+ * classSummary condenses a class's CPU set, memory, weight, and I/O limit count into one line,
+ * falling back to "inherits host limits" when nothing is overridden.
+ */
 function classSummary(item: CgroupClass): string {
   const parts: string[] = [];
   if (item.cpus) {
@@ -591,6 +649,12 @@ type CgroupClassEditorProps = {
   onChange: (classes: CgroupClass[]) => void;
 };
 
+/**
+ * CgroupClassEditor renders the class tree under rookery-cgroup with inline name editing, add-child
+ * and remove actions, and collapsible per-class CPU, memory, weight, and I/O limit fields. Parents
+ * sort before children, classes are capped at three levels and 64 entries, and removing a class
+ * deletes its descendants as well.
+ */
 function CgroupClassEditor({ classes, devices, onlineCPUs, disabled, onChange }: CgroupClassEditorProps) {
   const update = (name: string, patch: Partial<CgroupClass>) => {
     onChange(classes.map((item) => (item.name === name ? { ...item, ...patch } : item)));

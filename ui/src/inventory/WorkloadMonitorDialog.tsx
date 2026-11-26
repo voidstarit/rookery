@@ -47,6 +47,9 @@ type MonitorState = {
   load: () => Promise<void>;
 };
 
+/**
+ * metricsEndpoint builds the VM or LightVM metrics URL for a workload ID, URL-encoding the ID.
+ */
 function metricsEndpoint(kind: WorkloadKind, id: string): string {
   const encoded = encodeURIComponent(id);
   return kind === "VM"
@@ -54,11 +57,19 @@ function metricsEndpoint(kind: WorkloadKind, id: string): string {
     : `/api/lightvm/instances/${encoded}/metrics`;
 }
 
+/**
+ * monitorPageHref builds the standalone monitor page URL used by the dialog's Full page link.
+ */
 function monitorPageHref(kind: WorkloadKind, id: string): string {
   const workloadKind = kind === "VM" ? "vm" : "lightvm";
   return `/monitor.html?kind=${workloadKind}&id=${encodeURIComponent(id)}`;
 }
 
+/**
+ * useMonitor polls workload metrics every two seconds while the document is visible, derives
+ * per-second CPU, disk, and network rates from counter deltas, and keeps the latest 60 samples.
+ * A stopped workload clears the history and per-device rates, and fetch failures surface in error.
+ */
 function useMonitor(kind: WorkloadKind, id: string): MonitorState {
   const [data, setData] = useState<WorkloadMetrics | null>(null);
   const [samples, setSamples] = useState<MonitorSample[]>([]);
@@ -199,6 +210,11 @@ type WorkloadMonitorBodyProps = {
   expanded: boolean;
 };
 
+/**
+ * WorkloadMonitorBody renders the status and counter cards, the four history charts, and the
+ * block-device table, redrawing the canvases whenever new samples arrive; page layout and the
+ * expanded dialog also show the full counter grid.
+ */
 function WorkloadMonitorBody({
   kind,
   monitor,
@@ -501,6 +517,10 @@ function WorkloadMonitorBody({
   );
 }
 
+/**
+ * MonitorDetails renders the full counter grid for the page and expanded dialog layouts,
+ * returning null until a sample is available.
+ */
 function MonitorDetails({ kind, data }: { kind: WorkloadKind; data: WorkloadMetrics | null }) {
   if (!data) {
     return null;
@@ -547,6 +567,10 @@ function MonitorDetails({ kind, data }: { kind: WorkloadKind; data: WorkloadMetr
   );
 }
 
+/**
+ * WorkloadMonitorDialog renders the modal live monitor for one workload with expand, full-page,
+ * refresh, and close actions, polling through useMonitor until it is dismissed.
+ */
 export function WorkloadMonitorDialog({
   kind,
   id,
@@ -635,6 +659,10 @@ export function WorkloadMonitorDialog({
   );
 }
 
+/**
+ * WorkloadMonitorPage renders the standalone monitor route for a kind and id, sets the document
+ * title, and shows a banner instead of metrics when no workload ID was supplied.
+ */
 export function WorkloadMonitorPage({ kind, id }: WorkloadMonitorPageProps) {
   const monitor = useMonitor(kind, id);
   const name = monitor.data?.name || "";

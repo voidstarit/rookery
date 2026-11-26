@@ -11,6 +11,11 @@ type NetworkDialogProps = {
 
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
+/**
+ * NetworkDialog renders the create/edit Rookery Network form for the name, IPv4 and IPv6 CIDRs,
+ * and labels; creating posts a new network while editing updates only the CIDRs because the name
+ * is immutable, then labels are saved and the result is reported back.
+ */
 export function NetworkDialog({ network, onClose, onSaved }: NetworkDialogProps) {
   const editing = Boolean(network);
   const [name, setName] = useState(network?.name || "");

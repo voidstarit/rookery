@@ -63,6 +63,10 @@ type FormState = {
 
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
+/**
+ * ipv4HostOffset adds a fixed offset to the IPv4 address in a CIDR string and returns the dotted
+ * quad, or an empty string when the input is missing or malformed.
+ */
 function ipv4HostOffset(cidr: string | undefined, offset: number): string {
   if (!cidr) {
     return "";
@@ -76,6 +80,11 @@ function ipv4HostOffset(cidr: string | undefined, offset: number): string {
   return `${(value >>> 24) & 255}.${(value >>> 16) & 255}.${(value >>> 8) & 255}.${value & 255}`;
 }
 
+/**
+ * ipv6HostOffset adds a fixed offset to the IPv6 address in a CIDR string using BigInt arithmetic
+ * and returns the full eight-group hex form, or an empty string when the address is missing,
+ * invalid, or has too many groups.
+ */
 function ipv6HostOffset(cidr: string | undefined, offset: number): string {
   if (!cidr) {
     return "";
@@ -112,6 +121,10 @@ function ipv6HostOffset(cidr: string | undefined, offset: number): string {
   return output.join(":");
 }
 
+/**
+ * firstIPv4Host returns the first usable IPv4 address of a network CIDR with its prefix length
+ * preserved, or an empty string when the CIDR is absent or unparseable.
+ */
 function firstIPv4Host(cidr: string | undefined): string {
   const host = ipv4HostOffset(cidr, 1);
   if (!host || !cidr) {
@@ -120,6 +133,11 @@ function firstIPv4Host(cidr: string | undefined): string {
   return `${host}/${cidr.trim().split("/")[1]}`;
 }
 
+/**
+ * defaultForm builds the initial or edit form state for a VNF, selecting the requested network,
+ * deriving a gateway from the network CIDR, and copying array-backed config so edits do not
+ * mutate the incoming VNF.
+ */
 function defaultForm(vnf: VNF | null, networks: Network[], vppReady: boolean, initialNetworkID?: number): FormState {
   const type = vnf?.type ?? "dhcpv4";
   const config = vnf?.config ?? {};
@@ -183,6 +201,10 @@ function defaultForm(vnf: VNF | null, networks: Network[], vppReady: boolean, in
   };
 }
 
+/**
+ * applyTypeDefaults resets the type-specific fields when the selected VNF type changes, leaving
+ * shared fields untouched and returning DHCPv4 defaults for any other type.
+ */
 function applyTypeDefaults(state: FormState, type: VNFType): FormState {
   if (type === "dns") {
     return {
@@ -252,6 +274,10 @@ function applyTypeDefaults(state: FormState, type: VNFType): FormState {
   };
 }
 
+/**
+ * outsideInterfaceHint describes the consequences of using a host interface as the NAT44 outside
+ * uplink, warning when it carries the default route or is virtual, VPP-managed, or wireless.
+ */
 function outsideInterfaceHint(interfaces: HostInterface[], selected: string): string {
   const iface = interfaces.find((item) => item.name === selected);
   if (iface?.default_route) {
@@ -268,6 +294,10 @@ function outsideInterfaceHint(interfaces: HostInterface[], selected: string): st
     : "The selected NIC will be taken over by VPP; its host addresses are flushed.";
 }
 
+/**
+ * typeHint returns a short explanation of the selected VNF type, summarising its protocol,
+ * transport, and addressing model, with DHCPv4 as the fallback.
+ */
 function typeHint(type: VNFType): string {
   if (type === "dns") {
     return "Local DNS server on the network service address (.2) over IPv4 and IPv6. Serve A/AAAA/CNAME/TXT/PTR records and optionally forward other names upstream.";
@@ -314,14 +344,28 @@ const DHCPV6_OPTION_PRESETS: DHCPOptionPreset[] = [
   { code: 60, label: "Bootfile parameters", format: "string", placeholder: "console=ttyS0" },
 ];
 
+/**
+ * dhcpOptionPresets returns the DHCPv6 preset option definitions for dhcpv6 VNFs and the DHCPv4
+ * presets for every other type.
+ */
 function dhcpOptionPresets(type: VNFType): DHCPOptionPreset[] {
   return type === "dhcpv6" ? DHCPV6_OPTION_PRESETS : DHCPV4_OPTION_PRESETS;
 }
 
+/**
+ * dhcpOptionPreset finds the preset definition for one DHCP option code and type, returning
+ * undefined when the code has no preset.
+ */
 function dhcpOptionPreset(type: VNFType, code: number): DHCPOptionPreset | undefined {
   return dhcpOptionPresets(type).find((preset) => preset.code === code);
 }
 
+/**
+ * VNFPage renders the full-page create or edit form for a network function, with type-specific
+ * DHCP, DNS, NAT44, and BGP sections and a locked network/type when editing. It loads host
+ * interfaces for NAT44, validates the form and confirms outside-NIC takeover before sending a
+ * POST or PUT to /api/vnfs, then saves labels and reports the result through onSaved.
+ */
 export function VNFPage({ vnf, networks, vnfs, vppReady, initialNetworkID, onClose, onSaved }: VNFPageProps) {
   const [form, setForm] = useState<FormState>(() => defaultForm(vnf, networks, vppReady, initialNetworkID));
   const [hostInterfaces, setHostInterfaces] = useState<HostInterface[]>([]);

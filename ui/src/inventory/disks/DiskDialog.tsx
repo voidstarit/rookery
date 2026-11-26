@@ -15,6 +15,11 @@ type DiskDialogProps = {
 
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
+/**
+ * DiskDialog renders the create-disk modal for either a provisioned LVM or kouja volume or a
+ * host passthrough device, loading attachable host block devices on demand. It validates
+ * provisioning JSON and template selection, POSTs the disk, and saves labels before reporting it.
+ */
 export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskDialogProps) {
   const defaultBackend = backends.find((item) => item.name === "default") || backends[0];
   const [storageKind, setStorageKind] = useState<"lvm" | "host">(backends.length === 0 ? "host" : "lvm");
@@ -507,6 +512,10 @@ export function DiskDialog({ backends, disks, classes, onClose, onSaved }: DiskD
   );
 }
 
+/**
+ * deviceKindLabel maps a host block-device kind to a human-readable label, falling back to
+ * "Block device" for unknown or missing kinds.
+ */
 function deviceKindLabel(kind: string | undefined): string {
   switch (kind) {
     case "disk":
@@ -528,6 +537,10 @@ function deviceKindLabel(kind: string | undefined): string {
   }
 }
 
+/**
+ * defaultHostDiskName derives a disk name from the device's last path segment, sanitizing
+ * unsupported characters and trimming to 127 characters while falling back to the device name.
+ */
 function defaultHostDiskName(device: HostAttachableBlockDevice): string {
   const base = device.path.split("/").filter(Boolean).pop() || device.name;
   const cleaned = base

@@ -10,6 +10,11 @@ type RouteTablePageProps = {
   onChanged: () => void;
 };
 
+/**
+ * routeOptions formats a route's optional VPP path attributes, such as count, next-hop table,
+ * weight, lookup tables, resolve flags, rx interfaces, out labels, and drop, into a compact
+ * " · "-joined string, returning an empty string when no options are set.
+ */
 function routeOptions(route: Route): string {
   const parts: string[] = [];
   if ((route.count || 0) > 1) parts.push(`count ${route.count}`);
@@ -28,6 +33,12 @@ function routeOptions(route: Route): string {
   return parts.join(" · ");
 }
 
+/**
+ * RouteTablePage renders one route table's Rookery-managed static routes and read-only dynamic
+ * routes read from the live VPP FIB, reloading both when the table ID or family changes. Static
+ * routes can be added, edited, and deleted (after confirmation); the FIB section has a manual
+ * refresh.
+ */
 export function RouteTablePage({ table, onBack, onChanged }: RouteTablePageProps) {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [fibRoutes, setFibRoutes] = useState<FIBRoute[]>([]);

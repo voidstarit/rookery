@@ -10,6 +10,12 @@ type DiskThrottleAssignmentDialogProps = {
   onSaved: (disk: Disk) => void;
 };
 
+/**
+ * DiskThrottleAssignmentDialog renders the throttle-class picker for one disk, offering only
+ * classes without validation errors and clearing the assignment when "Unlimited" is chosen. It
+ * saves through PUT /api/disks/{id} and reports the updated disk via onSaved; templates are shown
+ * read-only because they cannot carry a class.
+ */
 export function DiskThrottleAssignmentDialog({
   disk,
   classes,

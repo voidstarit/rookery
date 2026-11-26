@@ -1,5 +1,10 @@
 import type { ACL, ACLRule, VirtualInterface } from "../types";
 
+/**
+ * formatACLRuleText renders one ACL rule as "ACTION protocol source -> destination", appending
+ * source and destination port ranges for tcp/udp rules that set them and a trailing description
+ * when present; empty protocol, source, or destination fall back to any/0.0.0.0/0.
+ */
 export function formatACLRuleText(rule: ACLRule): string {
   const action = String(rule.action || "").toUpperCase();
   const protocol = String(rule.protocol || "any").toLowerCase();
@@ -22,6 +27,11 @@ export function formatACLRuleText(rule: ACLRule): string {
   return text;
 }
 
+/**
+ * formatACLText builds a multi-line summary of an ACL with its name, title, description, and
+ * numbered rules, noting "(no rules)" for an empty rule list and the implicit default DENY;
+ * missing fields render as placeholders.
+ */
 export function formatACLText(
   acl: Pick<ACL, "name" | "title" | "description" | "rules">,
   label = "ACL"
@@ -44,11 +54,20 @@ export function formatACLText(
   return lines.join("\n");
 }
 
+/**
+ * aclByName finds an ACL by name using a case-insensitive comparison, returning undefined when
+ * no ACL matches.
+ */
 export function aclByName(acls: ACL[], name: string): ACL | undefined {
   const lower = name.toLowerCase();
   return acls.find((acl) => acl.name.toLowerCase() === lower);
 }
 
+/**
+ * aclAssignments lists the interfaces that reference the given ACL in either direction,
+ * comparing names case-insensitively and falling back to the legacy single ingress/egress ACL
+ * name fields when the list fields are empty.
+ */
 export function aclAssignments(acl: ACL, interfaces: VirtualInterface[]): VirtualInterface[] {
   return interfaces.filter((iface) => {
     const names = [
@@ -59,6 +78,10 @@ export function aclAssignments(acl: ACL, interfaces: VirtualInterface[]): Virtua
   });
 }
 
+/**
+ * defaultACLRule returns a new permit-any rule from 0.0.0.0/0 to 0.0.0.0/0, the starting point
+ * for an added ACL entry.
+ */
 export function defaultACLRule(): ACLRule {
   return {
     action: "permit",

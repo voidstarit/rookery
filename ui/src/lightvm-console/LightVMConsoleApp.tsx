@@ -254,11 +254,17 @@ const KEY_CHORDS: KeyChord[] = [
   { label: "Tab", data: "\x09", title: "Tab completion" },
 ];
 
+/**
+ * storedTheme returns the theme saved in localStorage, falling back to "green-black" when unknown.
+ */
 function storedTheme(): ThemeID {
   const value = window.localStorage.getItem(THEME_KEY);
   return value && value in THEMES ? (value as ThemeID) : "green-black";
 }
 
+/**
+ * storedFontSize returns the saved terminal font size, falling back to 14 when it is not offered.
+ */
 function storedFontSize(): number {
   const value = Number(window.localStorage.getItem(FONT_KEY));
   return FONT_SIZES.includes(value as (typeof FONT_SIZES)[number]) ? value : 14;
@@ -280,6 +286,11 @@ const stateBadges: Record<ConnectionState, string> = {
   error: "error",
 };
 
+/**
+ * LightVMConsoleApp renders the full-page xterm console for the LightVM named in the URL: it shows
+ * the instance name, console, theme, and font pickers plus a key-chord bar, refuses to connect when
+ * access is disabled or the instance is not running, and reconnects over the console WebSocket.
+ */
 export function LightVMConsoleApp() {
   const [state, setState] = useState<ConnectionState>("connecting");
   const [message, setMessage] = useState("Connecting to the LightVM console…");

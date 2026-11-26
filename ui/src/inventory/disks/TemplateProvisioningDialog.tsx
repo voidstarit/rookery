@@ -8,6 +8,11 @@ type TemplateProvisioningDialogProps = {
   onSaved: (disk: Disk) => void;
 };
 
+/**
+ * TemplateProvisioningDialog edits a template disk's post-clone provisioning script path and
+ * timeout, persisting both trimmed values through PUT /api/disks/{id}. The save button stays
+ * disabled while a request is in flight and errors are shown inline.
+ */
 export function TemplateProvisioningDialog({ disk, onClose, onSaved }: TemplateProvisioningDialogProps) {
   const [script, setScript] = useState(disk.provisioning_script || "");
   const [timeout, setTimeoutValue] = useState(disk.provisioning_timeout || "");

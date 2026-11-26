@@ -16,6 +16,12 @@ type DialogState = {
   networkID?: number;
 };
 
+/**
+ * VNFsTab renders the VNF inventory table with status, lease counts, and row actions for
+ * monitoring, editing, starting, and deleting network functions, plus its monitor dialogs. It
+ * loads VNFs, networks, and VPP readiness on mount, keeps dialogs in sync with the path route, and
+ * reacts to rookery:* window events; start and delete actions refresh the list and show toasts.
+ */
 export function VNFsTab() {
   const [vnfs, setVnfs] = useState<VNF[]>([]);
   const [networks, setNetworks] = useState<Network[]>([]);

@@ -9,6 +9,10 @@ export type Route = {
 
 export const ROUTE_EVENT = "rookery:route-changed";
 
+/**
+ * currentRoute reads the browser's pathname, query string, and trailing-slash-trimmed path into a
+ * Route, falling back to "/" when the path is empty.
+ */
 export function currentRoute(): Route {
   const path = window.location.pathname.replace(/\/+$/, "") || "/";
   return {
@@ -19,6 +23,10 @@ export function currentRoute(): Route {
   };
 }
 
+/**
+ * navigate applies a same-origin path to the browser history and dispatches ROUTE_EVENT so route
+ * consumers re-render; it returns without side effects when the target equals the current URL.
+ */
 export function navigate(path: string, replace = false): void {
   const target = path.startsWith("/") ? path : `/${path}`;
   const current = `${window.location.pathname}${window.location.search}`;
@@ -33,6 +41,10 @@ export function navigate(path: string, replace = false): void {
   window.dispatchEvent(new CustomEvent(ROUTE_EVENT));
 }
 
+/**
+ * useRoute returns the current Route and re-renders the caller whenever the browser emits popstate
+ * or another component dispatches ROUTE_EVENT, removing both listeners on unmount.
+ */
 export function useRoute(): Route {
   const [route, setRoute] = useState(currentRoute);
   useEffect(() => {

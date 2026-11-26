@@ -26,6 +26,10 @@ type VMDialogProps = {
 
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
+/**
+ * vmDisks returns a VM's disks array, falling back to the legacy single disk field; a null VM
+ * or one with neither yields an empty array.
+ */
 function vmDisks(vm: VM | null): VMDisk[] {
   if (!vm) {
     return [];
@@ -42,10 +46,18 @@ function vmDisks(vm: VM | null): VMDisk[] {
   return [];
 }
 
+/**
+ * vmInterfaces returns the VM's network interfaces, or an empty array when the VM is null or
+ * has none.
+ */
 function vmInterfaces(vm: VM | null): VMInterface[] {
   return Array.isArray(vm?.interfaces) ? vm.interfaces : [];
 }
 
+/**
+ * diskSerialPayload builds a map from disk ID to trimmed serial for every disk that has a
+ * non-empty serial.
+ */
 function diskSerialPayload(disks: VMDisk[]): Record<string, string> {
   const serials: Record<string, string> = {};
   for (const disk of disks) {
@@ -57,6 +69,12 @@ function diskSerialPayload(disks: VMDisk[]): Record<string, string> {
   return serials;
 }
 
+/**
+ * VMDialog renders the create/edit VM modal with name, description, vCPU and memory sizing,
+ * console access, cgroup class, boot media, disks with serials, interfaces, and labels. It
+ * validates unique serials and creation readiness (VPP and thin pool), blocks disk and interface
+ * changes while the VM runs, then POSTs or PUTs the VM and saves its labels.
+ */
 export function VMDialog({
   vm,
   disks,

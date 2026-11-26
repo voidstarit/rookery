@@ -26,16 +26,27 @@ const IDEMPOTENT_METHODS = new Set(["GET", "HEAD", "PUT", "DELETE", "OPTIONS"]);
 // the same resource do not stack requests (or retry chains) on the server.
 const inFlight = new Map<string, Promise<unknown>>();
 
+/**
+ * methodOf returns the uppercased HTTP method for a request, defaulting to GET.
+ */
 function methodOf(options: RequestInit): string {
   return (options.method || "GET").toUpperCase();
 }
 
+/**
+ * abortError creates an AbortError, using DOMException when available so the retry loop can tell
+ * caller cancellation apart from a transport failure.
+ */
 function abortError(): Error {
   return typeof DOMException === "function"
     ? new DOMException("The request was aborted", "AbortError")
     : Object.assign(new Error("The request was aborted"), { name: "AbortError" });
 }
 
+/**
+ * wait resolves after the given delay, but rejects immediately with an AbortError and clears its
+ * timer if the signal aborts first.
+ */
 function wait(ms: number, signal?: AbortSignal | null): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -54,6 +65,10 @@ function wait(ms: number, signal?: AbortSignal | null): Promise<void> {
   });
 }
 
+/**
+ * shouldRetry decides whether a failed request may be repeated: aborted calls never retry,
+ * transport failures retry only for idempotent methods, and 429/503 retry for every method.
+ */
 function shouldRetry(method: string, error: APIError, signal?: AbortSignal | null): boolean {
   if (signal?.aborted) {
     return false;
@@ -69,6 +84,10 @@ function shouldRetry(method: string, error: APIError, signal?: AbortSignal | nul
   return IDEMPOTENT_METHODS.has(method) && IDEMPOTENT_RETRYABLE_STATUS.has(error.status);
 }
 
+/**
+ * exhaustedError wraps the last failure in an APIError that names the method, path, and attempt
+ * count while preserving the final HTTP status.
+ */
 function exhaustedError(method: string, path: string, last: APIError): APIError {
   const detail = last.status === undefined
     ? last.message || "network error"
@@ -79,6 +98,10 @@ function exhaustedError(method: string, path: string, last: APIError): APIError 
   );
 }
 
+/**
+ * requestOnce performs a single fetch, parses a JSON body (null for 204 or non-JSON), and throws
+ * an APIError carrying the server error message on non-2xx statuses; abort errors pass through.
+ */
 async function requestOnce<T>(path: string, options: RequestInit): Promise<T> {
   const headers = new Headers(options.headers || {});
   if (options.body !== undefined) {
@@ -122,6 +145,10 @@ async function requestOnce<T>(path: string, options: RequestInit): Promise<T> {
   return data as T;
 }
 
+/**
+ * requestWithRetry repeats a request after 1s, 2s, 4s, and 10s delays while shouldRetry allows,
+ * then throws an exhaustedError describing the attempt count.
+ */
 async function requestWithRetry<T>(path: string, options: RequestInit): Promise<T> {
   const method = methodOf(options);
   let last: APIError | undefined;
@@ -151,6 +178,10 @@ async function requestWithRetry<T>(path: string, options: RequestInit): Promise<
   throw exhaustedError(method, path, last ?? new APIError("request failed"));
 }
 
+/**
+ * api issues a typed request with the shared retry policy; concurrent GETs without a signal share
+ * one in-flight promise, while signal-carrying GETs and mutations get their own retry chain.
+ */
 export function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const method = methodOf(options);
   if (method !== "GET" || options.signal) {

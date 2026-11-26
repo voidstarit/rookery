@@ -19,6 +19,12 @@ type VPPAddressesDialogProps = {
   onClose: () => void;
 };
 
+/**
+ * VPPAddressesDialog edits a VPP interface's static address list and IPv4 DHCP client flag,
+ * loading the configured and live addresses on open and showing DHCP status. Submitting PUTs the
+ * newline-split addresses and toggle, updates the live view from the response, and toasts success;
+ * the status can also be refreshed without saving.
+ */
 export function VPPAddressesDialog({ name, label, hostAddresses, onClose }: VPPAddressesDialogProps) {
   const [text, setText] = useState("");
   const [dhcpEnabled, setDhcpEnabled] = useState(false);

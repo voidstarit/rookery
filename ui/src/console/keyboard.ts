@@ -16,6 +16,11 @@ export type KeyStroke = {
   shift?: boolean;
 };
 
+/**
+ * key builds a KeyDefinition from a display label, X11 keysym, and KeyboardEvent code, merging
+ * optional flags such as modifier, action, and tooltip title. It is the compact table entry used
+ * to populate KEY_DEFS.
+ */
 function key(
   label: string,
   keysym: number,
@@ -165,6 +170,11 @@ const SHIFTED_TEXT_KEY_CODES: Record<string, string> = {
   "?": "Slash",
 };
 
+/**
+ * textKeyStroke maps one character of pasted or typed text to the KeyboardEvent code that produces
+ * it on a US layout, marking shift for uppercase letters and shifted punctuation. Newline, tab, and
+ * space map to Enter, Tab, and Space; characters with no reachable key return null.
+ */
 export function textKeyStroke(char: string): KeyStroke | null {
   if (char === "\n") {
     return { code: "Enter" };

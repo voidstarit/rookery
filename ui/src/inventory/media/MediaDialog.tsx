@@ -10,6 +10,11 @@ type MediaDialogProps = {
 
 const NAME_PATTERN = "[A-Za-z0-9][A-Za-z0-9._\\-]*";
 
+/**
+ * MediaDialog renders the add-media form for a name, ISO path, and labels, focusing the name field
+ * on open and validating the form before submitting. It POSTs /api/media, saves the label draft,
+ * then calls onSaved with the created media; failures are shown inline.
+ */
 export function MediaDialog({ onClose, onSaved }: MediaDialogProps) {
   const [name, setName] = useState("");
   const [path, setPath] = useState("");

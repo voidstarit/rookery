@@ -6,6 +6,10 @@ import type { Media, VM } from "../types";
 import { MediaDialog } from "./MediaDialog";
 import { navigate, useRoute } from "../router";
 
+/**
+ * formatBytes formats a byte count as B, KB, MB, or GB, keeping one decimal only when the
+ * value is not a whole unit; non-numeric input is treated as zero.
+ */
 function formatBytes(bytes: number): string {
   const value = Number(bytes) || 0;
   if (value >= 1024 ** 3) {
@@ -20,6 +24,10 @@ function formatBytes(bytes: number): string {
   return `${value} B`;
 }
 
+/**
+ * formatDate renders an ISO timestamp as a localized medium date and short time, returning an
+ * em dash for missing or invalid values.
+ */
 function formatDate(value: string | undefined): string {
   if (!value) {
     return "—";
@@ -31,10 +39,18 @@ function formatDate(value: string | undefined): string {
   return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+/**
+ * usersFor returns the VMs that currently use the given media ID as their boot media.
+ */
 function usersFor(mediaID: number, vms: VM[]): VM[] {
   return vms.filter((vm) => vm.boot_media_id === mediaID);
 }
 
+/**
+ * MediaTab renders the installation-media inventory with size, boot-media usage, labels, and
+ * remove actions, and opens the add-media dialog from the route. It refreshes on tab activation
+ * and media-change events and blocks removal while a VM still boots from the media.
+ */
 export function MediaTab() {
   const [media, setMedia] = useState<Media[]>([]);
   const [vms, setVms] = useState<VM[]>([]);

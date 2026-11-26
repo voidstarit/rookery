@@ -13,6 +13,11 @@ type SessionsResponse = {
   sessions: string[];
 };
 
+/**
+ * VNFSessionsDialog renders a modal preformatted list of NAT44 sessions for one VNF. It fetches
+ * /api/vnfs/{id}/sessions on mount and Refresh, reports load errors in a banner, and falls back to
+ * loading or empty text while there are no sessions.
+ */
 export function VNFSessionsDialog({ vnf, onClose }: VNFSessionsDialogProps) {
   const [sessions, setSessions] = useState<string[]>([]);
   const [error, setError] = useState("");

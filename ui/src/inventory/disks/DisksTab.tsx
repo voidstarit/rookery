@@ -13,6 +13,10 @@ import { StorageBackendDialog } from "./StorageBackendDialog";
 import { TemplateProvisioningDialog } from "./TemplateProvisioningDialog";
 import { navigate, useRoute } from "../router";
 
+/**
+ * formatDate renders an ISO timestamp as a localized medium date and short time, returning an
+ * em dash for missing or invalid values.
+ */
 function formatDate(value: string | undefined): string {
   if (!value) {
     return "—";
@@ -24,11 +28,20 @@ function formatDate(value: string | undefined): string {
   return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+/**
+ * formatDiskSize formats a disk's size, preferring size_bytes and falling back to size_gb
+ * converted to bytes before delegating to formatByteSize.
+ */
 function formatDiskSize(disk: Disk): string {
   const bytes = Number(disk.size_bytes) || Number(disk.size_gb) * 1024 ** 3;
   return formatByteSize(bytes);
 }
 
+/**
+ * DisksTab renders the storage backend, disk, and throttling-class panels with their add and
+ * edit dialogs and per-row actions. It reloads data on tab changes, guards deletes and
+ * read-only toggles on attachments, and derives dialog state from the route.
+ */
 export function DisksTab() {
   const [disks, setDisks] = useState<Disk[]>([]);
   const [classes, setClasses] = useState<DiskThrottleClass[]>([]);

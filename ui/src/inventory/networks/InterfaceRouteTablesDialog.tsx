@@ -9,6 +9,11 @@ type InterfaceRouteTablesDialogProps = {
   onSaved: (iface: VirtualInterface) => void;
 };
 
+/**
+ * InterfaceRouteTablesDialog renders selectors for binding an interface to IPv4 and IPv6 FIB
+ * tables, defaulting to table 0 and listing only non-default tables of the matching family; it
+ * applies both bindings through the route-tables endpoint and shows failures inline.
+ */
 export function InterfaceRouteTablesDialog({
   iface,
   tables,

@@ -15,6 +15,11 @@ type TracePacket = {
 const tracePacketPattern = /^\s*Packet\s+(\d+)\s*$/;
 const traceNodePattern = /^\s*\d{2}:\d{2}:\d{2}:\d+:\s+(\S+)/;
 
+/**
+ * parseTracePackets splits raw VPP trace text into numbered packets holding their node paths and
+ * original lines; text without packet headers becomes a single packet when node lines exist, and
+ * an empty array is returned when nothing parses.
+ */
 function parseTracePackets(raw: string): TracePacket[] {
   const lines = raw.replace(/\r/g, "").split("\n");
   const packets: TracePacket[] = [];
@@ -53,6 +58,10 @@ function parseTracePackets(raw: string): TracePacket[] {
   return packets;
 }
 
+/**
+ * TracePathGraph renders one packet's VPP node path as an ordered list with arrows, marking drop
+ * nodes and showing an empty state when no path was parsed.
+ */
 function TracePathGraph({ packet }: { packet: TracePacket }) {
   if (packet.nodes.length === 0) {
     return <p class="empty-state">No VPP node path found for this packet.</p>;
@@ -81,6 +90,11 @@ function TracePathGraph({ packet }: { packet: TracePacket }) {
   );
 }
 
+/**
+ * PacketTracePanel renders the VPP packet-trace workflow: node picker, packet count, start, show,
+ * and clear actions, plus a selectable per-packet node-path visualization with the raw trace
+ * text; it loads graph nodes when the panel becomes active and keeps the latest trace result.
+ */
 export function PacketTracePanel({ active }: PacketTracePanelProps) {
   const [node, setNode] = useState("");
   const [count, setCount] = useState("100");

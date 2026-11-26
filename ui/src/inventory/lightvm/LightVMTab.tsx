@@ -27,6 +27,9 @@ const SECTIONS = [
 
 type Section = (typeof SECTIONS)[number]["id"];
 
+/**
+ * formatBytes renders a byte count in B, KB, MB, or GB, dropping the decimal for exact multiples.
+ */
 function formatBytes(bytes: number): string {
   const value = Number(bytes) || 0;
   if (value >= 1024 ** 3) {
@@ -41,6 +44,10 @@ function formatBytes(bytes: number): string {
   return `${value} B`;
 }
 
+/**
+ * formatDate renders a timestamp with a medium date and short time, or an em dash when unset or
+ * invalid.
+ */
 function formatDate(value: string | undefined): string {
   if (!value) {
     return "—";
@@ -52,20 +59,35 @@ function formatDate(value: string | undefined): string {
   return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+/**
+ * sortArtifacts returns a copy of the list sorted by name, ignoring case and mutating nothing.
+ */
 function sortArtifacts<T extends { name: string }>(items: T[]): T[] {
   return [...items].sort((a, b) =>
     a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
   );
 }
 
+/**
+ * sectionFor maps an artifact kind to the sub-tab section that lists it.
+ */
 function sectionFor(kind: LightVMArtifactKind): Section {
   return kind === "kernel" ? "kernels" : "initramfs";
 }
 
+/**
+ * endpointFor returns the REST collection path for a kernel or initramfs artifact kind.
+ */
 function endpointFor(kind: LightVMArtifactKind): string {
   return kind === "kernel" ? "/api/lightvm/kernels" : "/api/lightvm/initramfs";
 }
 
+/**
+ * LightVMTab renders the LightVM inventory as kernels, initramfs, and instance sub-tabs, refreshing
+ * on mount and when the lightvm tab becomes active; it opens the artifact and instance dialogs from
+ * the route, starts, stops, and opens consoles for instances, and mirrors changes as rookery:*
+ * events.
+ */
 export function LightVMTab() {
   const [kernels, setKernels] = useState<LightVMKernel[]>([]);
   const [initramfs, setInitramfs] = useState<LightVMInitramfs[]>([]);

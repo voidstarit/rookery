@@ -1,7 +1,11 @@
 import type { CgroupIOLimit, HostBlockDevice } from "./types";
 
-// parseCPUSet is deliberately forgiving: the text input is the source of truth
-// while the user types, and only valid entries are reflected in the chip grid.
+/**
+ * parseCPUSet is deliberately forgiving: the text input is the source of truth while the user
+ * types, and only valid entries are reflected in the chip grid. Accepts comma-separated numbers
+ * and ranges such as "0-3,7", skips malformed or negative entries, caps a single range at 4096
+ * CPUs, and returns the unique CPUs in ascending order.
+ */
 export function parseCPUSet(value: string | undefined): number[] {
   if (!value) {
     return [];
@@ -28,6 +32,11 @@ export function parseCPUSet(value: string | undefined): number[] {
   return [...cpus].sort((a, b) => a - b);
 }
 
+/**
+ * formatCPUSet renders a CPU list as compact comma-separated ranges, for example [0,1,2,3,7] as
+ * "0-3,7". Duplicates, non-integers, and negative values are dropped first; an empty list yields
+ * an empty string, which callers treat as "all CPUs".
+ */
 export function formatCPUSet(cpus: number[]): string {
   const sorted = [...new Set(cpus)].filter((cpu) => Number.isInteger(cpu) && cpu >= 0).sort((a, b) => a - b);
   const parts: string[] = [];
@@ -44,6 +53,10 @@ export function formatCPUSet(cpus: number[]): string {
   return parts.join(",");
 }
 
+/**
+ * toggleCPU adds or removes one CPU from a cpuset string and returns the renormalized text, so
+ * selecting a chip rewrites the field into canonical ranges.
+ */
 export function toggleCPU(value: string | undefined, cpu: number): string {
   const selected = new Set(parseCPUSet(value));
   if (selected.has(cpu)) {
@@ -62,6 +75,11 @@ type CPUSelectorProps = {
   disabled?: boolean;
 };
 
+/**
+ * CPUSelector renders a chip grid of allowed CPUs plus the free-form cpuset text field; clicking a
+ * chip toggles it through onChange and typing edits the raw value. The grid is omitted when no
+ * online CPUs are known, and an empty value means all CPUs.
+ */
 export function CPUSelector({ value, options, onChange, hint, disabled }: CPUSelectorProps) {
   const selected = new Set(parseCPUSet(value));
   return (
@@ -103,6 +121,10 @@ type IOLimitEditorProps = {
 
 const MIB = 1024 * 1024;
 
+/**
+ * bpsToMiB converts a bytes-per-second limit into a MiB/s input value rounded to one decimal;
+ * zero or undefined renders as an empty field so the placeholder marks the limit as unlimited.
+ */
 function bpsToMiB(value: number | undefined): string {
   if (!value) {
     return "";
@@ -110,6 +132,10 @@ function bpsToMiB(value: number | undefined): string {
   return String(Math.round((value / MIB) * 10) / 10);
 }
 
+/**
+ * mibToBps parses a MiB/s text field into whole bytes per second; blank, non-numeric, or
+ * non-positive input becomes 0, meaning no limit.
+ */
 function mibToBps(value: string): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -118,15 +144,28 @@ function mibToBps(value: string): number {
   return Math.round(parsed * MIB);
 }
 
+/**
+ * numberValue renders an optional numeric field value, collapsing undefined and 0 to an empty
+ * string so unset limits show their placeholder instead of a literal zero.
+ */
 function numberValue(value: number | string | undefined): string {
   return value === undefined || value === 0 ? "" : String(value);
 }
 
+/**
+ * parseNonNegative parses an integer input, flooring positive finite numbers and returning 0 for
+ * blank, invalid, or non-positive text.
+ */
 function parseNonNegative(value: string): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
 }
 
+/**
+ * IOLimitEditor renders an editable table of per-device I/O limits: each row picks a block device
+ * and sets read/write bandwidth, IOPS, and weight, and the add button appends the first device not
+ * already constrained. Devices already in use are disabled in other rows' selectors.
+ */
 export function IOLimitEditor({ limits, devices, onChange, disabled }: IOLimitEditorProps) {
   const byPath = new Map(devices.map((device) => [device.path, device]));
   const used = new Set(limits.map((limit) => limit.device));

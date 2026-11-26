@@ -15,6 +15,12 @@ type RouteFormPageProps = {
   onSaved: () => void;
 };
 
+/**
+ * RouteFormPage renders the add/edit route form, translating the fields into VPP ip route options;
+ * when routeID is set it loads and prefills the route from its table first. Submitting rejects a
+ * missing prefix, a missing path, or simultaneous rx-ip4/rx-ip6, then POSTs or PUTs the route and
+ * saves its labels before calling onSaved.
+ */
 export function RouteFormPage({
   table,
   routeID,
