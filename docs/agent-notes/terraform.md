@@ -65,6 +65,11 @@ static schema default (`300`), and a configured value outside the API range fail
 (`dnsRecordTTLPlanModifier`). Adding a normalizer for another field means moving it into a leaf
 package both sides import (`internal/dnsrecord`) instead of copying it.
 
+Provider plan behavior is checked without an acceptance harness: build the provider, point a
+`dev_overrides` CLI config at the binary, and run `terraform plan` on a throwaway config (the
+canonical `examples/complete` config is the control). A plan that rewrites a configured value fails
+with `Provider produced invalid plan`.
+
 ## VNF child reload behavior
 
 A child create, update, or delete reloads the running DHCP, DNS, or BGP runtime in place (or
