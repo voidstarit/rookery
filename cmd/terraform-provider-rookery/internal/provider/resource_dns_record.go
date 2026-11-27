@@ -3,6 +3,8 @@ package provider
 import (
 	"context"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
@@ -10,11 +12,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	rookeryv1 "github.com/voidstarit/rookery/design/gen/rookery/v1"
+	"github.com/voidstarit/rookery/internal/dnsrecord"
 )
 
 var (
 	_ resource.Resource                = (*dnsRecordResource)(nil)
 	_ resource.ResourceWithConfigure   = (*dnsRecordResource)(nil)
+	_ resource.ResourceWithModifyPlan  = (*dnsRecordResource)(nil)
 	_ resource.ResourceWithImportState = (*dnsRecordResource)(nil)
 )
 
@@ -52,16 +56,82 @@ func (r *dnsRecordResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Description:   "DNS VNF id.",
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()},
 			},
-			"name": schema.StringAttribute{Required: true, Description: "Fully qualified domain name; wildcards are supported."},
-			"type": schema.StringAttribute{Required: true, Description: "Record type: A, AAAA, CNAME, TXT, or PTR."},
+			"name": schema.StringAttribute{Required: true, Description: "Fully qualified domain name; wildcards are supported. Stored in canonical trailing-dot form."},
+			"type": schema.StringAttribute{Required: true, Description: "Record type: A, AAAA, CNAME, TXT, or PTR. Stored upper-case."},
 			"value": schema.StringAttribute{
 				Required:    true,
 				Sensitive:   true,
-				Description: "Record value; sensitive because TXT records can carry credentials.",
+				Description: "Record value; sensitive because TXT records can carry credentials. CNAME and PTR targets are stored in canonical trailing-dot form.",
 			},
-			"ttl": schema.Int64Attribute{Optional: true, Computed: true, Description: "Record TTL in seconds. Defaults to 300."},
+			"ttl": schema.Int64Attribute{Optional: true, Computed: true, Description: "Record TTL in seconds. Defaults to 300; a planned 0 becomes 300."},
 		},
 	}
+}
+
+// ModifyPlan rewrites the planned name, type, value, and TTL into the form the
+// API stores. Without it an apply whose name or CNAME/PTR target lacks the
+// trailing dot fails with "Provider produced inconsistent result after apply",
+// because the server returns the canonical record and Terraform compares it with
+// the planned one.
+func (r *dnsRecordResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+	var plan dnsRecordModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.Append(canonicalizeDNSRecordModel(&plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+}
+
+// canonicalizeDNSRecordModel rewrites the known fields of plan to the canonical
+// form the API stores: an upper-case type, a trailing-dot lower-case name and
+// CNAME/PTR target, a normalized address, a trimmed TXT value, and the API's
+// 300-second default for a zero TTL. Unknown values are left for the server,
+// and an unsupported type leaves the value untouched because it cannot be
+// normalized without one.
+func canonicalizeDNSRecordModel(plan *dnsRecordModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+	recordType := ""
+	if !plan.Type.IsNull() && !plan.Type.IsUnknown() {
+		normalized, err := dnsrecord.NormalizeType(plan.Type.ValueString())
+		if err != nil {
+			diags.AddAttributeError(path.Root("type"), "Invalid DNS record type", err.Error())
+		} else {
+			recordType = normalized
+			plan.Type = types.StringValue(normalized)
+		}
+	}
+	if !plan.Name.IsNull() && !plan.Name.IsUnknown() {
+		if normalized, err := dnsrecord.NormalizeName(plan.Name.ValueString()); err != nil {
+			diags.AddAttributeError(path.Root("name"), "Invalid DNS record name", err.Error())
+		} else {
+			plan.Name = types.StringValue(normalized)
+		}
+	}
+	if recordType != "" && !plan.Value.IsNull() && !plan.Value.IsUnknown() {
+		if normalized, err := dnsrecord.NormalizeValue(recordType, plan.Value.ValueString()); err != nil {
+			diags.AddAttributeError(path.Root("value"), "Invalid DNS record value", err.Error())
+		} else {
+			plan.Value = types.StringValue(normalized)
+		}
+	}
+	if !plan.TTL.IsNull() && !plan.TTL.IsUnknown() {
+		switch ttl := plan.TTL.ValueInt64(); {
+		case ttl == 0:
+			plan.TTL = types.Int64Value(300)
+		case ttl < 0:
+			diags.AddAttributeError(path.Root("ttl"), "Invalid DNS record TTL", "ttl must not be negative")
+		case ttl > 86400:
+			diags.AddAttributeError(path.Root("ttl"), "Invalid DNS record TTL", "ttl must be at most 86400")
+		}
+	}
+	return diags
 }
 
 // Create adds the record to its DNS VNF.

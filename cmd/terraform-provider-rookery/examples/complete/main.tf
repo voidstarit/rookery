@@ -237,6 +237,16 @@ resource "rookery_dns_record" "router" {
   ttl    = 300
 }
 
+# A CNAME owns its name alone and its target is planned and stored as
+# "router.lab.test." even though the trailing dot is omitted here.
+resource "rookery_dns_record" "router_alias" {
+  vnf_id = rookery_dns_vnf.app.id
+  name   = "gw.lab.test"
+  type   = "CNAME"
+  value  = "router.lab.test"
+  ttl    = 300
+}
+
 resource "rookery_dns_forwarder" "upstream" {
   vnf_id   = rookery_dns_vnf.app.id
   address  = "1.1.1.1"

@@ -9,8 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/miekg/dns"
-
+	"github.com/voidstarit/rookery/internal/dnsrecord"
 	"github.com/voidstarit/rookery/internal/store"
 )
 
@@ -20,12 +19,15 @@ func (s *Server) NormalizeDNSRecord(_ context.Context, vnf store.VNF, siblings [
 	if vnf.Type != store.VNFTypeDNS {
 		return store.DNSRecord{}, errors.New("DNS records are supported for DNS VNFs only")
 	}
-	name, err := normalizeDNSRecordName(item.Name)
+	name, err := dnsrecord.NormalizeName(item.Name)
 	if err != nil {
 		return store.DNSRecord{}, fmt.Errorf("name: %w", err)
 	}
-	recordType := strings.ToUpper(strings.TrimSpace(item.Type))
-	value, err := normalizeDNSRecordValue(recordType, item.Value)
+	recordType, err := dnsrecord.NormalizeType(item.Type)
+	if err != nil {
+		return store.DNSRecord{}, fmt.Errorf("type: %w", err)
+	}
+	value, err := dnsrecord.NormalizeValue(recordType, item.Value)
 	if err != nil {
 		return store.DNSRecord{}, fmt.Errorf("value: %w", err)
 	}
@@ -63,88 +65,6 @@ func (s *Server) NormalizeDNSForwarder(_ context.Context, vnf store.VNF, _ []sto
 		return store.DNSForwarder{}, errors.New("position must not be negative")
 	}
 	return store.DNSForwarder{Address: address, Position: item.Position}, nil
-}
-
-// normalizeDNSRecordName validates a DNS record owner name, allowing one
-// leading wildcard label (*.example.com), and returns the canonical name.
-func normalizeDNSRecordName(value string) (string, error) {
-	name := strings.TrimSpace(value)
-	if name == "" {
-		return "", errors.New("name is required")
-	}
-	wildcard := strings.HasPrefix(name, "*.")
-	if strings.Contains(name, "*") && !wildcard {
-		return "", errors.New("only a leading *. wildcard is supported")
-	}
-	if wildcard {
-		name = strings.TrimPrefix(name, "*.")
-		if name == "" {
-			return "", errors.New("wildcard name requires a domain suffix")
-		}
-	}
-	if strings.ContainsAny(name, " \t\r\n") {
-		return "", errors.New("name must not contain whitespace")
-	}
-	canonical := dns.CanonicalName(name)
-	if canonical == "." {
-		return "", errors.New("name must not be the DNS root")
-	}
-	if _, ok := dns.IsDomainName(canonical); !ok {
-		return "", errors.New("invalid DNS name")
-	}
-	if wildcard {
-		return "*." + canonical, nil
-	}
-	return canonical, nil
-}
-
-// normalizeDNSRecordValue validates and canonicalizes a record value for its
-// type: A and AAAA addresses, CNAME and PTR names without wildcards, or TXT up
-// to 255 bytes.
-func normalizeDNSRecordValue(recordType, value string) (string, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "", errors.New("value is required")
-	}
-	switch recordType {
-	case "A":
-		ip := net.ParseIP(value)
-		if ip == nil || ip.To4() == nil {
-			return "", errors.New("A records require an IPv4 address")
-		}
-		return ip.To4().String(), nil
-	case "AAAA":
-		ip := net.ParseIP(value)
-		if ip == nil || ip.To4() != nil {
-			return "", errors.New("AAAA records require an IPv6 address")
-		}
-		return ip.String(), nil
-	case "CNAME":
-		name, err := normalizeDNSRecordName(value)
-		if err != nil {
-			return "", err
-		}
-		if strings.HasPrefix(name, "*.") {
-			return "", errors.New("CNAME targets cannot be wildcards")
-		}
-		return name, nil
-	case "TXT":
-		if len(value) > 255 {
-			return "", errors.New("TXT values must be at most 255 bytes")
-		}
-		return value, nil
-	case "PTR":
-		name, err := normalizeDNSRecordName(value)
-		if err != nil {
-			return "", err
-		}
-		if strings.HasPrefix(name, "*.") {
-			return "", errors.New("PTR targets cannot be wildcards")
-		}
-		return name, nil
-	default:
-		return "", errors.New("type must be A, AAAA, CNAME, TXT, or PTR")
-	}
 }
 
 // normalizeDNSForwarder accepts an IP address or IP:port, defaulting the port

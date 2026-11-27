@@ -499,6 +499,37 @@ optionally `dns_ttl` (default `300`). The DNS VNF maintains A/AAAA and PTR
 records for active leases. Set the DHCP `dns` field to the DNS VNF's `.2`
 service address (IPv4 for DHCPv4, IPv6 for DHCPv6) so clients use it.
 
+`rookery_dns_record` accepts `A`, `AAAA`, `CNAME`, `TXT`, and `PTR`. A CNAME owns
+its name alone: the same `name` cannot also hold another record type. Names,
+CNAME targets, and PTR targets are stored lower-case with the trailing dot, so
+both spellings plan cleanly:
+
+```hcl
+resource "rookery_dns_vnf" "dns" {
+  name       = "lab-dns"
+  network_id = rookery_network.lab.id
+}
+
+resource "rookery_dns_record" "web" {
+  vnf_id = rookery_dns_vnf.dns.id
+  name   = "web.lab.test"
+  type   = "A"
+  value  = "10.20.0.50"
+}
+
+resource "rookery_dns_record" "alias" {
+  vnf_id = rookery_dns_vnf.dns.id
+  name   = "www.lab.test"
+  type   = "CNAME"
+  value  = "web.lab.test" # planned and stored as web.lab.test.
+}
+```
+
+The provider plans the canonical form the API stores, so an apply does not fail
+with `Provider produced inconsistent result after apply`: a DNS record `name` or
+CNAME/PTR target without the trailing dot plans as its fully qualified form, and
+a planned `ttl` of `0` becomes the API default `300`.
+
 The old `rookery_vnf` resource and its data source are retired with no
 compatibility shim. Remove the old state and import each object into the typed
 resources instead:

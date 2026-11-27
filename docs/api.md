@@ -657,7 +657,10 @@ typed scalars and computed counts:
 degraded runtime. The BGP `password` is write-only and sensitive: it is accepted
 on create and update and is never returned by a read. `lease_time` is
 canonicalized to a Go duration string, so a request value of `12h` reads back as
-`12h0m0s`.
+`12h0m0s`. A DNS record's `type` is upper-cased, and its `name` and any CNAME or
+PTR target are stored lower-case with the trailing dot (a leading `*.` wildcard is
+kept), so `alias.lab.test` reads back as `alias.lab.test.`; a CNAME cannot share
+its name with another record.
 
 Child rows are independent resources. Each collection supports `GET` and `POST`
 under `/{vnf_id}/...`; each item supports `GET`, `PUT`, and `DELETE` under

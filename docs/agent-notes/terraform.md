@@ -54,6 +54,15 @@ is no `config_json` and no `type` attribute. `enabled` defaults to `true` on cre
 `false` when the parent should stay inert. A child write still reloads a running runtime rather
 than restarting it.
 
+The provider plans the canonical form of the values the API rewrites, so an apply does not end in
+`Provider produced inconsistent result after apply`: a `rookery_dns_record` plans an upper-case
+`type`, a trailing-dot lower-case `name`/CNAME/PTR target, and the API's 300-second default for a
+zero `ttl`. Adding a canonicalizing plan modifier for another field means moving the API normalizer
+into a leaf package both sides import (`internal/dnsrecord`) instead of copying it. A per-attribute
+plan modifier cannot read a sibling attribute's planned value, so a field whose canonical form
+depends on another field is canonicalized in the resource's `ModifyPlan`
+(`dnsRecordResource.ModifyPlan` → `canonicalizeDNSRecordModel`).
+
 ## VNF child reload behavior
 
 A child create, update, or delete reloads the running DHCP, DNS, or BGP runtime in place (or
