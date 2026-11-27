@@ -54,6 +54,22 @@ is no `config_json` and no `type` attribute. `enabled` defaults to `true` on cre
 `false` when the parent should stay inert. A child write still reloads a running runtime rather
 than restarting it.
 
+The provider never rewrites a configured value in the plan. Terraform core only accepts a planned
+value that equals the configuration, the prior state, or an unknown computed value, so a plan
+modifier that canonicalizes a configured string fails the plan with `Provider produced invalid
+plan` instead of fixing the apply. A field the API normalizes is instead written in canonical form
+while state keeps the configured spelling, and `Read` preserves that spelling when it still
+canonicalizes to the server record, overwriting state only on real drift (`dnsRecordResource`:
+`canonicalDNSRecordFromModel`, `reconcileDNSRecordState`). An omitted `ttl` is planned through a
+static schema default (`300`), and a configured value outside the API range fails the plan
+(`dnsRecordTTLPlanModifier`). Adding a normalizer for another field means moving it into a leaf
+package both sides import (`internal/dnsrecord`) instead of copying it.
+
+Provider plan behavior is checked without an acceptance harness: build the provider, point a
+`dev_overrides` CLI config at the binary, and run `terraform plan` on a throwaway config (the
+canonical `examples/complete` config is the control). A plan that rewrites a configured value fails
+with `Provider produced invalid plan`.
+
 ## VNF child reload behavior
 
 A child create, update, or delete reloads the running DHCP, DNS, or BGP runtime in place (or
