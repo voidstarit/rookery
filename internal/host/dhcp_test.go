@@ -203,8 +203,10 @@ func TestCoreDHCPStaticAssignments(t *testing.T) {
 
 // TestCoreDHCPStaticAssignmentsWithOptions proves static assignments are
 // honored when the trailing options argument is present. That is the shape
-// buildDHCPv4Config always produces for a real VNF, so a reservation that
-// works here also works through the API, Terraform, and a runtime reload.
+// buildDHCPv4Config always produces for a real VNF, so a reservation that works
+// here also works through the API, Terraform, and a runtime reload. The dynamic
+// clients walk past both in-pool reservations, which also proves the allocator
+// skips reserved addresses instead of merely offering the next free one.
 func TestCoreDHCPStaticAssignmentsWithOptions(t *testing.T) {
 	staticArg := `[{"mac":"02:00:00:00:00:01","ip":"10.20.0.105"},{"mac":"02:00:00:00:00:02","ip":"10.20.0.102"}]`
 	optionsArg := `[{"code":15,"format":"string","value":"lab.test"}]`
@@ -234,10 +236,31 @@ func TestCoreDHCPStaticAssignmentsWithOptions(t *testing.T) {
 		t.Fatalf("domain name = %q, want lab.test from the options argument", got)
 	}
 
-	dynamicMAC := dhcpTestMAC(t, "02:00:00:00:00:03")
-	dynamicOffer, _ := dhcpTestExchange(t, h, dhcpTestRequest(t, dhcpv4.MessageTypeDiscover, dynamicMAC))
-	if dynamicOffer == nil || dynamicOffer.YourIPAddr.String() != "10.20.0.100" {
-		t.Fatalf("dynamic offer = %v, want 10.20.0.100 (reserved .102 and .105 skipped)", dynamicOffer)
+	reservedMAC := dhcpTestMAC(t, "02:00:00:00:00:02")
+	reservedOffer, stop := dhcpTestExchange(t, h, dhcpTestRequest(t, dhcpv4.MessageTypeDiscover, reservedMAC))
+	if stop || reservedOffer == nil || reservedOffer.YourIPAddr.String() != "10.20.0.102" {
+		t.Fatalf("reserved offer = %v, stop=%v, want 10.20.0.102", reservedOffer, stop)
+	}
+
+	// Five dynamic clients exhaust .100, .101, .103, .104, and .106, stepping
+	// over the reserved .102 and .105. A regression in the reservation loop would
+	// offer one of the reserved addresses here.
+	dynamicMACs := []string{
+		"02:00:00:00:00:11",
+		"02:00:00:00:00:12",
+		"02:00:00:00:00:13",
+		"02:00:00:00:00:14",
+		"02:00:00:00:00:15",
+	}
+	wantOffers := []string{"10.20.0.100", "10.20.0.101", "10.20.0.103", "10.20.0.104", "10.20.0.106"}
+	for i, macText := range dynamicMACs {
+		offer, stop := dhcpTestExchange(t, h, dhcpTestRequest(t, dhcpv4.MessageTypeDiscover, dhcpTestMAC(t, macText)))
+		if stop || offer == nil {
+			t.Fatalf("dynamic discover %s returned stop=%v response=%v", macText, stop, offer)
+		}
+		if got := offer.YourIPAddr.String(); got != wantOffers[i] {
+			t.Fatalf("dynamic offer %d = %s, want %s (reserved .102 and .105 skipped)", i, got, wantOffers[i])
+		}
 	}
 }
 
