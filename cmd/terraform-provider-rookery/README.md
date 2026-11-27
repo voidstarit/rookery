@@ -521,14 +521,14 @@ resource "rookery_dns_record" "alias" {
   vnf_id = rookery_dns_vnf.dns.id
   name   = "www.lab.test"
   type   = "CNAME"
-  value  = "web.lab.test" # planned and stored as web.lab.test.
+  value  = "web.lab.test" # the API stores web.lab.test.; state keeps this spelling
 }
 ```
 
-The provider plans the canonical form the API stores, so an apply does not fail
-with `Provider produced inconsistent result after apply`: a DNS record `name` or
-CNAME/PTR target without the trailing dot plans as its fully qualified form, and
-a planned `ttl` of `0` becomes the API default `300`.
+A `rookery_dns_record` is written to the API in canonical form while the
+configured spelling stays in state, so a `name` or CNAME/PTR target without the
+trailing dot neither fails the apply nor shows a diff. `ttl` defaults to 300; a
+configured value outside 1-86400 fails the plan instead of being rewritten.
 
 The old `rookery_vnf` resource and its data source are retired with no
 compatibility shim. Remove the old state and import each object into the typed

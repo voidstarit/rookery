@@ -110,3 +110,36 @@ func TestNormalizeValueTXTLength(t *testing.T) {
 		t.Fatal("256-byte TXT value accepted")
 	}
 }
+
+// TestNormalizeTTL covers the API default and the accepted range.
+func TestNormalizeTTL(t *testing.T) {
+	tests := []struct {
+		name    string
+		ttl     uint32
+		want    uint32
+		wantErr bool
+	}{
+		{name: "zero uses the default", ttl: 0, want: DefaultTTL},
+		{name: "default passes through", ttl: DefaultTTL, want: DefaultTTL},
+		{name: "minimum passes through", ttl: 1, want: 1},
+		{name: "maximum passes through", ttl: MaxTTL, want: MaxTTL},
+		{name: "above the maximum is rejected", ttl: MaxTTL + 1, wantErr: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := NormalizeTTL(test.ttl)
+			if test.wantErr {
+				if err == nil {
+					t.Fatalf("NormalizeTTL(%d) = %d, want an error", test.ttl, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("NormalizeTTL(%d): %v", test.ttl, err)
+			}
+			if got != test.want {
+				t.Fatalf("NormalizeTTL(%d) = %d, want %d", test.ttl, got, test.want)
+			}
+		})
+	}
+}

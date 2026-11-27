@@ -660,7 +660,7 @@ canonicalized to a Go duration string, so a request value of `12h` reads back as
 `12h0m0s`. A DNS record's `type` is upper-cased, and its `name` and any CNAME or
 PTR target are stored lower-case with the trailing dot (a leading `*.` wildcard is
 kept), so `alias.lab.test` reads back as `alias.lab.test.`; a CNAME cannot share
-its name with another record.
+its name with another record, and a `ttl` of `0` reads back as `300`.
 
 Child rows are independent resources. Each collection supports `GET` and `POST`
 under `/{vnf_id}/...`; each item supports `GET`, `PUT`, and `DELETE` under

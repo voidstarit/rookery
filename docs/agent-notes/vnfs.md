@@ -190,8 +190,9 @@ service addresses from the API.
 
 `dns_records` rows (name, type A/AAAA/CNAME/TXT/PTR, value, TTL; wildcard names such as
 `*.lab1.test` are supported) are authoritative. `internal/dnsrecord` canonicalizes the name, type,
-and value shared by the API and the Terraform provider: the owner name and any CNAME/PTR target are
-stored lower-case with the trailing dot, the type is upper-case, and a CNAME owns its name alone.
+value, and TTL shared by the API and the Terraform provider: the owner name and any CNAME/PTR target
+are stored lower-case with the trailing dot, the type is upper-case, `0` means the 300-second
+default, and a CNAME owns its name alone.
 The `dns_vnfs.forward` flag controls whether
 unknown names go to the `dns_forwarders` rows (IP or IP:port, default port 53). With forwarding
 enabled and no forwarders, the daemon reads `/etc/resolv.conf`; with forwarding disabled, unknown

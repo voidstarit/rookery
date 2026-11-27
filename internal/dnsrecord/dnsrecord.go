@@ -1,15 +1,23 @@
-// Package dnsrecord normalizes the name, type, and value of a DNS record. The
-// API validates writes with it, and the Terraform provider plans the same
-// canonical form, so an apply sends exactly what the server stores and returns.
+// Package dnsrecord normalizes the name, type, value, and TTL of a DNS record.
+// The API validates writes with it, and the Terraform provider sends the same
+// canonical form when it writes a record, so a non-canonical configuration does
+// not produce an inconsistent result after apply.
 package dnsrecord
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 
 	"github.com/miekg/dns"
 )
+
+// DefaultTTL is the TTL the API stores for a record that configures none.
+const DefaultTTL uint32 = 300
+
+// MaxTTL is the largest record TTL the API accepts, in seconds.
+const MaxTTL uint32 = 86400
 
 // NormalizeName validates a record owner name or a CNAME/PTR target, allowing
 // one leading wildcard label (*.example.com), and returns the canonical
@@ -109,4 +117,16 @@ func NormalizeValue(recordType, value string) (string, error) {
 	default:
 		return "", errors.New("type must be A, AAAA, CNAME, TXT, or PTR")
 	}
+}
+
+// NormalizeTTL validates a record TTL and substitutes DefaultTTL for zero, the
+// value the API receives when a write does not set one.
+func NormalizeTTL(ttl uint32) (uint32, error) {
+	if ttl > MaxTTL {
+		return 0, fmt.Errorf("ttl must be at most %d", MaxTTL)
+	}
+	if ttl == 0 {
+		return DefaultTTL, nil
+	}
+	return ttl, nil
 }

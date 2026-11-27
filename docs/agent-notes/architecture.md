@@ -81,6 +81,7 @@ SQLite uses the pure-Go `modernc.org/sqlite` driver, so builds need no CGO. The 
 | `internal/config` | YAML/environment/flag configuration loading. |
 | `internal/logging` | Process-wide zerolog setup. |
 | `internal/netutil` | Shared IP-prefix helpers. |
+| `internal/dnsrecord` | DNS record name, type, value, and TTL normalization shared by the API and the provider. |
 | `internal/labels` | Label validation and normalization. |
 | `internal/webui` | Embedded static UI assets and handler. |
 

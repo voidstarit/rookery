@@ -25,18 +25,17 @@ func (s *Server) NormalizeDNSRecord(_ context.Context, vnf store.VNF, siblings [
 	}
 	recordType, err := dnsrecord.NormalizeType(item.Type)
 	if err != nil {
-		return store.DNSRecord{}, fmt.Errorf("type: %w", err)
+		// The message already names the field, so wrapping it would read
+		// "type: type must be ...".
+		return store.DNSRecord{}, err
 	}
 	value, err := dnsrecord.NormalizeValue(recordType, item.Value)
 	if err != nil {
 		return store.DNSRecord{}, fmt.Errorf("value: %w", err)
 	}
-	ttl := item.TTL
-	if ttl == 0 {
-		ttl = 300
-	}
-	if ttl > 86400 {
-		return store.DNSRecord{}, errors.New("ttl must be at most 86400")
+	ttl, err := dnsrecord.NormalizeTTL(item.TTL)
+	if err != nil {
+		return store.DNSRecord{}, err
 	}
 	for _, sibling := range siblings {
 		if sibling.Name != name {
