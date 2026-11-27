@@ -155,7 +155,11 @@ address, an allocator, and a JSON lease file under `<run-dir>/vnfs/<id>.json`. D
 bitmap allocator; DHCPv6 is stateful IA_NA (no RA/PD). DHCPv4 also owns
 `/api/dhcp-vnfs/{vnf_id}/static-assignments` rows (unique MAC/IPv4 pairs): reserved addresses are
 excluded from the dynamic pool, may sit inside or outside the DHCP range, and must not be the
-gateway or service address. Static assignments are DHCPv4-only. Leases are surfaced by VNF ID
+gateway or service address. Static assignments are DHCPv4-only. `setupCoreDHCP` receives
+positional arguments with two optional trailing JSON arguments (static assignments at index 9,
+options at 10), and `buildDHCPv4Config` always sends both; parse each optional argument by its
+position, never by the total argument count, or reservations are silently dropped. Leases are
+surfaced by VNF ID
 through `ListDHCPLeases` and the public leases route; status is `running`, `disabled`, or
 `degraded`. Enabling/restarting needs VPP; a tap-backed runtime also needs UDP 67/547,
 `SO_BINDTODEVICE`, and tap configuration, so it needs root or `CAP_NET_ADMIN` +
