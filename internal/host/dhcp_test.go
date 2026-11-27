@@ -201,6 +201,46 @@ func TestCoreDHCPStaticAssignments(t *testing.T) {
 	}
 }
 
+// TestCoreDHCPStaticAssignmentsWithOptions proves static assignments are
+// honored when the trailing options argument is present. That is the shape
+// buildDHCPv4Config always produces for a real VNF, so a reservation that
+// works here also works through the API, Terraform, and a runtime reload.
+func TestCoreDHCPStaticAssignmentsWithOptions(t *testing.T) {
+	staticArg := `[{"mac":"02:00:00:00:00:01","ip":"10.20.0.105"},{"mac":"02:00:00:00:00:02","ip":"10.20.0.102"}]`
+	optionsArg := `[{"code":15,"format":"string","value":"lab.test"}]`
+	h, err := setupCoreDHCP(
+		testDHCPGateway,
+		testDHCPMask,
+		testDHCPStart,
+		testDHCPEnd,
+		testDHCPDNS,
+		filepath.Join(t.TempDir(), "1.coredhcp.json"),
+		coreDHCPLeaseTime.String(),
+		testDHCPBroad,
+		testDHCPGateway,
+		staticArg,
+		optionsArg,
+	)
+	if err != nil {
+		t.Fatalf("setup CoreDHCP: %v", err)
+	}
+
+	staticMAC := dhcpTestMAC(t, "02:00:00:00:00:01")
+	staticOffer, stop := dhcpTestExchange(t, h, dhcpTestRequest(t, dhcpv4.MessageTypeDiscover, staticMAC))
+	if stop || staticOffer == nil || staticOffer.YourIPAddr.String() != "10.20.0.105" {
+		t.Fatalf("static offer = %v, stop=%v, want 10.20.0.105", staticOffer, stop)
+	}
+	if got := staticOffer.DomainName(); got != "lab.test" {
+		t.Fatalf("domain name = %q, want lab.test from the options argument", got)
+	}
+
+	dynamicMAC := dhcpTestMAC(t, "02:00:00:00:00:03")
+	dynamicOffer, _ := dhcpTestExchange(t, h, dhcpTestRequest(t, dhcpv4.MessageTypeDiscover, dynamicMAC))
+	if dynamicOffer == nil || dynamicOffer.YourIPAddr.String() != "10.20.0.100" {
+		t.Fatalf("dynamic offer = %v, want 10.20.0.100 (reserved .102 and .105 skipped)", dynamicOffer)
+	}
+}
+
 func TestCoreDHCPExhaustion(t *testing.T) {
 	h, err := setupCoreDHCP(
 		testDHCPGateway,

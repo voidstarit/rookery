@@ -134,7 +134,11 @@ func setupCoreDHCP(args ...string) (handler.Handler4, error) {
 	}
 	static := make(map[string]net.IP)
 	reservedByIP := make(map[string]string)
-	if len(args) == 10 && strings.TrimSpace(args[9]) != "" {
+	// The options argument is optional, so a config built by
+	// buildDHCPv4Config always reaches here with 11 arguments. Gate on the
+	// static argument's position, not on the total count, or reservations are
+	// silently dropped whenever options are present.
+	if len(args) >= 10 && strings.TrimSpace(args[9]) != "" {
 		var assignments []store.DHCPStaticAssignment
 		if err := json.Unmarshal([]byte(args[9]), &assignments); err != nil {
 			return nil, fmt.Errorf("parse DHCP static assignments: %w", err)
